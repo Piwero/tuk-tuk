@@ -149,7 +149,9 @@ def test_assigning_an_unknown_tag_returns_not_found_envelope(client: TestClient)
     assert response.json()["error"]["code"] == "not_found"
 
 
-def test_task_cannot_join_a_section_of_another_list(client: TestClient) -> None:
+def test_section_assignment_rejects_other_lists_and_unknown_sections(
+    client: TestClient,
+) -> None:
     project = client.post("/api/v1/lists", json={"name": "Project"}).json()["id"]
     section = client.post("/api/v1/sections", json={"list_id": project, "name": "Doing"}).json()
     inbox_task = client.post("/api/v1/tasks", json={"title": "Homeless"}).json()

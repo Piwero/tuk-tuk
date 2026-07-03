@@ -239,6 +239,66 @@ describe("Task drag within the list view", () => {
     );
     expect(patch?.body).toEqual({ sort_order: 0 });
   });
+
+  it("dropping a section on empty space below moves it to the end", async () => {
+    const project = fakeList("Project");
+    const backlog = fakeSection("Backlog", project.id, { sort_order: 1024 });
+    const doing = fakeSection("Doing", project.id, { sort_order: 2048 });
+    const api = installFakeApi({ lists: [INBOX, project], sections: [backlog, doing] });
+    render(<App />);
+    await openList("Project");
+    await screen.findByRole("heading", { name: "Doing" });
+
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(
+      closestOrThrow(screen.getByRole("heading", { name: "Backlog" }), ".group-header"),
+      { dataTransfer },
+    );
+    fireEvent.drop(
+      closestOrThrow(screen.getByRole("main"), "main").querySelector(".task-groups")!,
+      {
+        dataTransfer,
+      },
+    );
+
+    const main = screen.getByRole("main");
+    await waitFor(() => {
+      const headings = within(main)
+        .getAllByRole("heading", { level: 2 })
+        .map((h) => h.textContent);
+      expect(headings).toEqual(["No section", "Doing", "Backlog"]);
+    });
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/sections/${backlog.id}`,
+    );
+    expect(patch?.body).toEqual({ sort_order: 3072 });
+  });
+
+  it("dropping a task on empty space in a sectionless list moves it to the end", async () => {
+    const project = fakeList("Project");
+    const first = fakeTask("First", { list_id: project.id, sort_order: 1024 });
+    const second = fakeTask("Second", { list_id: project.id, sort_order: 2048 });
+    const api = installFakeApi({ lists: [INBOX, project], tasks: [first, second] });
+    render(<App />);
+    await openList("Project");
+    await screen.findByText("Second");
+
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(taskRow("First"), { dataTransfer });
+    fireEvent.drop(screen.getByRole("main").querySelector(".task-groups")!, { dataTransfer });
+
+    const flat = screen.getByRole("list", { name: "Tasks" });
+    await waitFor(() => {
+      const titles = within(flat)
+        .getAllByRole("button", { name: /^Open details/ })
+        .map((b) => b.textContent);
+      expect(titles).toEqual(["Second", "First"]);
+    });
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${first.id}`,
+    );
+    expect(patch?.body).toEqual({ section_id: null, sort_order: 3072 });
+  });
 });
 
 describe("Group and sort controls", () => {

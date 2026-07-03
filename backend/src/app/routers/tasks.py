@@ -20,7 +20,10 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         if list_id is None:
             raise NotFoundError(f"List {payload.list_id} not found")
     # Initialize collections so serialization never triggers an async lazy load.
-    max_order = await session.scalar(select(func.max(Task.sort_order)))
+    # Append within the target List (mirrors create_section's per-List scope).
+    max_order = await session.scalar(
+        select(func.max(Task.sort_order)).where(Task.list_id == list_id)
+    )
     task = Task(
         title=payload.title,
         list_id=list_id,
