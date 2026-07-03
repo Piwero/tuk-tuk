@@ -1,0 +1,7 @@
+# Default owners for everything in this repo. Change to your team/handle.
+* @Piwero
+
+# Split ownership examples (uncomment / adjust):
+# backend/ @Piwero @your-backend-team
+# frontend/ @Piwero @your-frontend-team
+# .github/  @Piwero
