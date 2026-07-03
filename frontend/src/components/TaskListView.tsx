@@ -9,6 +9,7 @@ import {
   type Section,
   type Task,
 } from "../api";
+import { formatSchedule, isOverdue } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
@@ -143,6 +144,7 @@ export function TaskListView({
       <li
         key={task.id}
         data-priority={task.priority}
+        data-overdue={isOverdue(task) || undefined}
         draggable
         onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
         onDragOver={(event) => event.preventDefault()}
@@ -163,6 +165,11 @@ export function TaskListView({
           onClick={() => onSelect(task.id)}
         >
           <span className={task.completed ? "completed" : undefined}>{task.title}</span>
+          {task.due_date !== null && (
+            <span className={isOverdue(task) ? "date-chip overdue" : "date-chip"}>
+              {formatSchedule(task)}
+            </span>
+          )}
           {task.tags.map((tag) => (
             <span
               key={tag.id}

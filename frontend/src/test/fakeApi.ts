@@ -50,6 +50,10 @@ export interface FakeTask {
   list_id: number;
   section_id: number | null;
   sort_order: number;
+  start_date: string | null;
+  due_date: string | null;
+  is_all_day: boolean;
+  time_zone: string | null;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -100,6 +104,10 @@ export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): Fake
     list_id: INBOX.id,
     section_id: null,
     sort_order: id * SORT_GAP,
+    start_date: null,
+    due_date: null,
+    is_all_day: false,
+    time_zone: null,
     check_items: [],
     tags: [],
     created_at: "2026-07-03T10:00:00Z",

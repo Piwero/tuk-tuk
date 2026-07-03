@@ -1,14 +1,54 @@
 """Tasks collection endpoints."""
 
+from datetime import UTC, datetime, time, tzinfo
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.models import SORT_GAP, Section, Tag, Task, TaskList
-from app.schemas import Page, TaskCreate, TaskRead, TaskUpdate
+from app.schemas import Page, TaskCreate, TaskRead, TaskUpdate, as_utc
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
+
+
+def invalid_schedule(message: str) -> APIError:
+    return APIError(status_code=422, code="invalid_schedule", message=message)
+
+
+def validate_schedule(
+    start_date: datetime | None,
+    due_date: datetime | None,
+    is_all_day: bool,
+    time_zone: str | None,
+) -> None:
+    """The schedule invariants (per the PRD dates model):
+
+    a start needs a due; start precedes due; the timezone is a known IANA key;
+    all-day values are date-only (midnight UTC) with a due present; a timed
+    start+due duration stays within one calendar day of the task's timezone.
+    """
+    zone: tzinfo = UTC
+    if time_zone is not None:
+        try:
+            zone = ZoneInfo(time_zone)
+        except (KeyError, ValueError):
+            raise invalid_schedule(f"Unknown IANA timezone {time_zone!r}") from None
+    if start_date is not None and due_date is None:
+        raise invalid_schedule("A start date requires a due date")
+    if start_date is not None and due_date is not None and as_utc(start_date) > as_utc(due_date):
+        raise invalid_schedule("The start date must not be after the due date")
+    if is_all_day:
+        if due_date is None:
+            raise invalid_schedule("An all-day task requires a due date")
+        for value in (start_date, due_date):
+            if value is not None and as_utc(value).time() != time(0, 0):
+                raise invalid_schedule("All-day dates are date-only: use midnight UTC")
+    elif start_date is not None and due_date is not None:
+        if as_utc(start_date).astimezone(zone).date() != as_utc(due_date).astimezone(zone).date():
+            raise invalid_schedule("A timed start+due duration must stay within one day")
 
 
 async def resolve_section(session: SessionDep, section_id: int, list_id: int) -> Section:
@@ -37,6 +77,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         raise NotFoundError("Inbox not found")
     if payload.section_id is not None:
         await resolve_section(session, payload.section_id, list_id)
+    validate_schedule(payload.start_date, payload.due_date, payload.is_all_day, payload.time_zone)
     # Initialize collections so serialization never triggers an async lazy load.
     # Append within the target List (mirrors create_section's per-List scope).
     max_order = await session.scalar(
@@ -46,6 +87,10 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         title=payload.title,
         list_id=list_id,
         section_id=payload.section_id,
+        start_date=payload.start_date,
+        due_date=payload.due_date,
+        is_all_day=payload.is_all_day,
+        time_zone=payload.time_zone,
         sort_order=(max_order or 0) + SORT_GAP,
         check_items=[],
         tags=[],
@@ -97,6 +142,13 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
             changes["section_id"] = None
     if changes.get("section_id") is not None:
         await resolve_section(session, changes["section_id"], changes.get("list_id", task.list_id))
+    # Validate the schedule the task would end up with after this patch.
+    validate_schedule(
+        changes.get("start_date", task.start_date),
+        changes.get("due_date", task.due_date),
+        changes.get("is_all_day", task.is_all_day),
+        changes.get("time_zone", task.time_zone),
+    )
     if "tag_ids" in changes:
         tag_ids: list[int] = changes.pop("tag_ids")
         tags = list((await session.scalars(select(Tag).where(Tag.id.in_(tag_ids)))).all())

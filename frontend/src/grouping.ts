@@ -1,6 +1,7 @@
 /** Pure grouping and sorting for the List view. */
 
 import { type Priority, type Section, type Task } from "./api";
+import { addDays, dueDay, dueInstant, localDayOf } from "./dates";
 import { byOrder } from "./ordering";
 
 export type GroupBy = "section" | "date" | "priority";
@@ -39,12 +40,48 @@ export function sortTasks(tasks: Task[], sortBy: SortBy): Task[] {
     case "priority":
       sorted.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || byOrder(a, b));
       break;
-    case "date": // Tasks carry no dates yet; fall back to the custom order.
+    case "date": // Earliest due first; undated tasks keep their custom order at the end.
+      sorted.sort(
+        (a, b) => (dueInstant(a) ?? Infinity) - (dueInstant(b) ?? Infinity) || byOrder(a, b),
+      );
+      break;
     case "custom":
       sorted.sort(byOrder);
       break;
   }
   return sorted;
+}
+
+// Date buckets, in display order. "Next 7 Days" reuses the Smart List horizon:
+// due after tomorrow but within seven days of today.
+const DATE_BUCKETS = ["overdue", "today", "tomorrow", "next7", "later", "none"] as const;
+type DateBucket = (typeof DATE_BUCKETS)[number];
+
+const DATE_BUCKET_LABELS: Record<DateBucket, string> = {
+  overdue: "Overdue",
+  today: "Today",
+  tomorrow: "Tomorrow",
+  next7: "Next 7 Days",
+  later: "Later",
+  none: "No date",
+};
+
+/** Buckets by due day alone; the overdue *flag* separately ignores completed tasks. */
+function dateBucket(task: Task, today: string): DateBucket {
+  const day = dueDay(task);
+  if (day === null) {
+    return "none";
+  }
+  if (day < today) {
+    return "overdue";
+  }
+  if (day === today) {
+    return "today";
+  }
+  if (day === addDays(today, 1)) {
+    return "tomorrow";
+  }
+  return day <= addDays(today, 7) ? "next7" : "later";
 }
 
 export function groupTasks(
@@ -67,10 +104,16 @@ export function groupTasks(
       .filter((group) => group.tasks.length > 0);
   }
   if (groupBy === "date") {
-    // Tasks carry no dates yet (scheduling is a later slice): one bucket.
-    return [
-      { key: "date-none", label: "No date", sectionId: undefined, tasks: sortTasks(tasks, sortBy) },
-    ];
+    const today = localDayOf(new Date());
+    return DATE_BUCKETS.map((bucket) => ({
+      key: `date-${bucket}`,
+      label: DATE_BUCKET_LABELS[bucket],
+      sectionId: undefined,
+      tasks: sortTasks(
+        tasks.filter((task) => dateBucket(task, today) === bucket),
+        sortBy,
+      ),
+    })).filter((group) => group.tasks.length > 0);
   }
   const ordered = [...sections].sort(byOrder);
   if (ordered.length === 0) {

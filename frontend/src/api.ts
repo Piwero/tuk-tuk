@@ -52,6 +52,12 @@ export interface Task {
   list_id: number;
   section_id: number | null;
   sort_order: number;
+  /** Schedule: UTC instants; all-day values are date-only semantics at T00:00:00Z. */
+  start_date: string | null;
+  due_date: string | null;
+  is_all_day: boolean;
+  /** IANA timezone the task was scheduled in (v1 writes the browser timezone). */
+  time_zone: string | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
@@ -222,7 +228,8 @@ export function createTask(title: string, listId?: number, sectionId?: number): 
 }
 
 /** Absent fields stay unchanged; explicit null is rejected by the API,
- * except section_id, where null moves the task out of its Section.
+ * except section_id, where null moves the task out of its Section, and
+ * start_date / due_date / time_zone, where null clears the schedule.
  * tag_ids replaces the task's whole tag set. */
 export interface TaskPatch {
   title?: string;
@@ -233,6 +240,10 @@ export interface TaskPatch {
   tag_ids?: number[];
   section_id?: number | null;
   sort_order?: number;
+  start_date?: string | null;
+  due_date?: string | null;
+  is_all_day?: boolean;
+  time_zone?: string | null;
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {

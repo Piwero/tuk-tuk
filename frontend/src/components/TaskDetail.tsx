@@ -11,6 +11,17 @@ import {
   type Tag,
   type Task,
 } from "../api";
+import {
+  addDays,
+  allDaySchedule,
+  clearedSchedule,
+  formatSchedule,
+  isOverdue,
+  localDayOf,
+  localTimeOf,
+  nextMonday,
+  timedSchedule,
+} from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { PRIORITY_LABELS } from "../grouping";
 import { appendOrder, planInsertBefore } from "../ordering";
@@ -22,6 +33,43 @@ interface TaskDetailProps {
   onClose: () => void;
 }
 
+/** Draft state of the custom date editor; empty strings mean "not set". */
+interface DateDraft {
+  allDay: boolean;
+  startDay: string;
+  dueDay: string;
+  startTime: string;
+  dueTime: string;
+}
+
+function draftFrom(task: Task): DateDraft {
+  if (task.due_date === null) {
+    return {
+      allDay: false,
+      startDay: "",
+      dueDay: localDayOf(new Date()),
+      startTime: "",
+      dueTime: "",
+    };
+  }
+  if (task.is_all_day) {
+    return {
+      allDay: true,
+      startDay: task.start_date?.slice(0, 10) ?? "",
+      dueDay: task.due_date.slice(0, 10),
+      startTime: "",
+      dueTime: "",
+    };
+  }
+  return {
+    allDay: false,
+    startDay: "",
+    dueDay: localDayOf(new Date(task.due_date)),
+    startTime: task.start_date === null ? "" : localTimeOf(new Date(task.start_date)),
+    dueTime: localTimeOf(new Date(task.due_date)),
+  };
+}
+
 export function TaskDetail({
   task,
   allTags,
@@ -30,12 +78,14 @@ export function TaskDetail({
 }: TaskDetailProps): JSX.Element {
   const [title, setTitle] = useState(task.title);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
+  const [dateDraft, setDateDraft] = useState<DateDraft | null>(null);
   const [newItemTitle, setNewItemTitle] = useState("");
   const [itemEditor, setItemEditor] = useState<{ id: number; title: string } | null>(null);
 
   useEffect(() => {
     setTitle(task.title);
     setDescriptionDraft(null);
+    setDateDraft(null);
   }, [task.id, task.title]);
 
   async function saveTitle(): Promise<void> {
@@ -74,6 +124,50 @@ export function TaskDetail({
       ? task.tags.filter((t) => t.id !== tag.id).map((t) => t.id)
       : [...task.tags.map((t) => t.id), tag.id];
     onTaskChanged(await updateTask(task.id, { tag_ids: tagIds }));
+  }
+
+  async function quickPick(dueDay: string): Promise<void> {
+    onTaskChanged(await updateTask(task.id, allDaySchedule(null, dueDay)));
+    setDateDraft(null);
+  }
+
+  async function clearSchedule(): Promise<void> {
+    onTaskChanged(await updateTask(task.id, clearedSchedule()));
+    setDateDraft(null);
+  }
+
+  async function saveDateDraft(): Promise<void> {
+    if (dateDraft === null) {
+      return;
+    }
+    const { allDay, startDay, dueDay, startTime, dueTime } = dateDraft;
+    if (dueDay === "") {
+      return;
+    }
+    if (allDay) {
+      if (startDay !== "" && startDay > dueDay) {
+        return;
+      }
+      const start = startDay === "" || startDay === dueDay ? null : startDay;
+      onTaskChanged(await updateTask(task.id, allDaySchedule(start, dueDay)));
+    } else if (dueTime === "") {
+      // Time is optional: a bare date means the whole day.
+      if (startTime !== "") {
+        return;
+      }
+      onTaskChanged(await updateTask(task.id, allDaySchedule(null, dueDay)));
+    } else {
+      if (startTime !== "" && startTime >= dueTime) {
+        return;
+      }
+      onTaskChanged(
+        await updateTask(
+          task.id,
+          timedSchedule(dueDay, startTime === "" ? null : startTime, dueTime),
+        ),
+      );
+    }
+    setDateDraft(null);
   }
 
   async function renameCheckItem(): Promise<void> {
@@ -177,6 +271,116 @@ export function TaskDetail({
           ))}
         </select>
       </label>
+      <fieldset className="task-dates">
+        <legend>Date</legend>
+        {task.due_date !== null && dateDraft === null && (
+          <p className={isOverdue(task) ? "date-label overdue" : "date-label"}>
+            {formatSchedule(task)}
+          </p>
+        )}
+        {dateDraft === null ? (
+          <div className="date-actions">
+            <button type="button" onClick={() => void quickPick(localDayOf(new Date()))}>
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => void quickPick(addDays(localDayOf(new Date()), 1))}
+            >
+              Tomorrow
+            </button>
+            <button
+              type="button"
+              onClick={() => void quickPick(nextMonday(localDayOf(new Date())))}
+            >
+              Next Week
+            </button>
+            <button
+              type="button"
+              aria-label="Custom date"
+              onClick={() => setDateDraft(draftFrom(task))}
+            >
+              Custom…
+            </button>
+            {task.due_date !== null && (
+              <button type="button" onClick={() => void clearSchedule()}>
+                Clear date
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="date-editor">
+            <label>
+              <input
+                type="checkbox"
+                aria-label="All day"
+                checked={dateDraft.allDay}
+                onChange={(event) => setDateDraft({ ...dateDraft, allDay: event.target.checked })}
+              />
+              All day
+            </label>
+            {dateDraft.allDay ? (
+              <>
+                <label>
+                  Start day
+                  <input
+                    type="date"
+                    value={dateDraft.startDay}
+                    onChange={(event) =>
+                      setDateDraft({ ...dateDraft, startDay: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Due day
+                  <input
+                    type="date"
+                    value={dateDraft.dueDay}
+                    onChange={(event) => setDateDraft({ ...dateDraft, dueDay: event.target.value })}
+                  />
+                </label>
+              </>
+            ) : (
+              <>
+                <label>
+                  Day
+                  <input
+                    type="date"
+                    value={dateDraft.dueDay}
+                    onChange={(event) => setDateDraft({ ...dateDraft, dueDay: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Start time
+                  <input
+                    type="time"
+                    value={dateDraft.startTime}
+                    onChange={(event) =>
+                      setDateDraft({ ...dateDraft, startTime: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Due time
+                  <input
+                    type="time"
+                    value={dateDraft.dueTime}
+                    onChange={(event) =>
+                      setDateDraft({ ...dateDraft, dueTime: event.target.value })
+                    }
+                  />
+                </label>
+              </>
+            )}
+            <button type="button" onClick={() => void saveDateDraft()}>
+              Save date
+            </button>
+            <button type="button" onClick={() => setDateDraft(null)}>
+              Cancel
+            </button>
+          </div>
+        )}
+      </fieldset>
       <fieldset className="task-tags">
         <legend>Tags</legend>
         {allTags.length === 0 && <p className="hint">No tags yet — add one in the sidebar.</p>}
