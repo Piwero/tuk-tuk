@@ -56,6 +56,7 @@ export interface FakeTask {
   due_date: string | null;
   is_all_day: boolean;
   time_zone: string | null;
+  reminders: string[];
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -111,6 +112,7 @@ export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): Fake
     due_date: null,
     is_all_day: false,
     time_zone: null,
+    reminders: [],
     check_items: [],
     tags: [],
     created_at: "2026-07-03T10:00:00Z",
@@ -495,6 +497,25 @@ export function installFakeApi({
         // Mirror the backend: completion transitions stamp/clear completed_at.
         if (typeof rest.completed === "boolean" && rest.completed !== task.completed) {
           rest.completed_at = rest.completed ? new Date().toISOString() : null;
+        }
+        // Mirror the backend's reminder rules: no dateless Reminders, set
+        // semantics, and clearing the date sweeps the Reminders with it.
+        const effectiveDue = rest.due_date !== undefined ? rest.due_date : task.due_date;
+        if (Array.isArray(rest.reminders)) {
+          if (rest.reminders.length > 0 && effectiveDue === null) {
+            return json(
+              {
+                error: {
+                  code: "invalid_reminders",
+                  message: "A task without a date cannot hold Reminders",
+                },
+              },
+              422,
+            );
+          }
+          rest.reminders = [...new Set(rest.reminders as string[])];
+        } else if (effectiveDue === null && task.reminders.length > 0) {
+          rest.reminders = [];
         }
         if (
           typeof rest.list_id === "number" &&

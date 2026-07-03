@@ -60,6 +60,10 @@ export interface Task {
   is_all_day: boolean;
   /** IANA timezone the task was scheduled in (v1 writes the browser timezone). */
   time_zone: string | null;
+  /** Reminder offsets from the task's date: signed ISO-8601 durations
+   * (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
+   * Stored only — v1 delivers no notifications. */
+  reminders: string[];
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
@@ -253,7 +257,8 @@ export function createTask(title: string, listId?: number, sectionId?: number): 
 /** Absent fields stay unchanged; explicit null is rejected by the API,
  * except section_id, where null moves the task out of its Section, and
  * start_date / due_date / time_zone, where null clears the schedule.
- * tag_ids replaces the task's whole tag set. */
+ * tag_ids replaces the task's whole tag set; reminders replaces the whole
+ * reminder set ([] clears it). */
 export interface TaskPatch {
   title?: string;
   completed?: boolean;
@@ -267,6 +272,7 @@ export interface TaskPatch {
   due_date?: string | null;
   is_all_day?: boolean;
   time_zone?: string | null;
+  reminders?: string[];
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {

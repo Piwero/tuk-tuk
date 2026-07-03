@@ -25,6 +25,7 @@ import {
 import { readDragPayload, startDrag } from "../dnd";
 import { PRIORITY_LABELS } from "../grouping";
 import { appendOrder, planInsertBefore } from "../ordering";
+import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
 
 interface TaskDetailProps {
   task: Task;
@@ -79,6 +80,7 @@ export function TaskDetail({
   const [title, setTitle] = useState(task.title);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
   const [dateDraft, setDateDraft] = useState<DateDraft | null>(null);
+  const [offsetDraft, setOffsetDraft] = useState<{ amount: string; unit: OffsetUnit } | null>(null);
   const [newItemTitle, setNewItemTitle] = useState("");
   const [itemEditor, setItemEditor] = useState<{ id: number; title: string } | null>(null);
 
@@ -86,6 +88,7 @@ export function TaskDetail({
     setTitle(task.title);
     setDescriptionDraft(null);
     setDateDraft(null);
+    setOffsetDraft(null);
   }, [task.id, task.title]);
 
   async function saveTitle(): Promise<void> {
@@ -134,6 +137,32 @@ export function TaskDetail({
   async function clearSchedule(): Promise<void> {
     onTaskChanged(await updateTask(task.id, clearedSchedule()));
     setDateDraft(null);
+  }
+
+  async function addReminder(offset: string): Promise<void> {
+    if (!task.reminders.includes(offset)) {
+      onTaskChanged(await updateTask(task.id, { reminders: [...task.reminders, offset] }));
+    }
+    setOffsetDraft(null);
+  }
+
+  async function removeReminder(offset: string): Promise<void> {
+    onTaskChanged(
+      await updateTask(task.id, {
+        reminders: task.reminders.filter((existing) => existing !== offset),
+      }),
+    );
+  }
+
+  async function addCustomReminder(): Promise<void> {
+    if (offsetDraft === null) {
+      return;
+    }
+    const amount = Number(offsetDraft.amount);
+    if (!Number.isInteger(amount) || amount < 0) {
+      return;
+    }
+    await addReminder(customOffset(amount, offsetDraft.unit));
   }
 
   async function saveDateDraft(): Promise<void> {
@@ -379,6 +408,82 @@ export function TaskDetail({
               Cancel
             </button>
           </div>
+        )}
+      </fieldset>
+      <fieldset className="task-reminders">
+        <legend>Reminders</legend>
+        {task.due_date === null ? (
+          <p className="hint">Set a date to add Reminders.</p>
+        ) : (
+          <>
+            {task.reminders.length > 0 && (
+              <ul aria-label="Reminders">
+                {task.reminders.map((offset) => (
+                  <li key={offset}>
+                    {reminderLabel(offset)}
+                    <button
+                      type="button"
+                      aria-label={`Remove reminder ${reminderLabel(offset)}`}
+                      onClick={() => void removeReminder(offset)}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <select
+              aria-label="Add a reminder"
+              value=""
+              onChange={(event) => {
+                const choice = event.target.value;
+                if (choice === "custom") {
+                  setOffsetDraft({ amount: "1", unit: "hours" });
+                } else if (choice !== "") {
+                  void addReminder(choice);
+                }
+              }}
+            >
+              <option value="">Add a reminder…</option>
+              {REMINDER_PRESETS.map((preset) => (
+                <option key={preset.offset} value={preset.offset}>
+                  {preset.label}
+                </option>
+              ))}
+              <option value="custom">Custom…</option>
+            </select>
+            {offsetDraft !== null && (
+              <div className="offset-editor">
+                <input
+                  type="number"
+                  min={0}
+                  aria-label="Offset amount"
+                  value={offsetDraft.amount}
+                  onChange={(event) =>
+                    setOffsetDraft({ ...offsetDraft, amount: event.target.value })
+                  }
+                />
+                <select
+                  aria-label="Offset unit"
+                  value={offsetDraft.unit}
+                  onChange={(event) =>
+                    setOffsetDraft({ ...offsetDraft, unit: event.target.value as OffsetUnit })
+                  }
+                >
+                  <option value="minutes">minutes</option>
+                  <option value="hours">hours</option>
+                  <option value="days">days</option>
+                </select>
+                <span>before</span>
+                <button type="button" onClick={() => void addCustomReminder()}>
+                  Add reminder
+                </button>
+                <button type="button" onClick={() => setOffsetDraft(null)}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </>
         )}
       </fieldset>
       <fieldset className="task-tags">

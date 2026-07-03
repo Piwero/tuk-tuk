@@ -159,7 +159,8 @@ class TaskCreate(BaseModel):
 # PATCH fields: absent means "leave unchanged". An explicit null is rejected,
 # except section_id, where null moves the task out of its Section, and
 # start_date / due_date / time_zone, where null clears the schedule.
-# tag_ids replaces the task's whole tag set.
+# tag_ids replaces the task's whole tag set; reminders replaces the whole
+# reminder set ([] clears it).
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
     completed: bool | None = None
@@ -173,6 +174,7 @@ class TaskUpdate(BaseModel):
     due_date: datetime | None = None
     is_all_day: bool | None = None
     time_zone: str | None = Field(default=None, max_length=64)
+    reminders: list[str] | None = None
 
     _reject_nulls = field_validator(
         "title",
@@ -183,6 +185,7 @@ class TaskUpdate(BaseModel):
         "tag_ids",
         "sort_order",
         "is_all_day",
+        "reminders",
     )(reject_explicit_null)
     _normalize_dates = field_validator("start_date", "due_date")(normalize_to_utc)
 
@@ -225,6 +228,7 @@ class TaskRead(BaseModel):
     due_date: datetime | None
     is_all_day: bool
     time_zone: str | None
+    reminders: list[str]
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime
