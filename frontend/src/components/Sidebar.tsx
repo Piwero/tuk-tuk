@@ -3,12 +3,16 @@ import { useState } from "react";
 import {
   createFolder,
   createList,
+  createTag,
   deleteFolder,
   deleteList,
+  deleteTag,
   updateFolder,
   updateList,
+  updateTag,
   updateTask,
   type Folder,
+  type Tag,
   type Task,
   type TaskList,
 } from "../api";
@@ -16,21 +20,30 @@ import { readDragPayload, startDrag } from "../dnd";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { FolderForm } from "./FolderForm";
 import { ListForm, type ListFormValues } from "./ListForm";
+import { TagForm, type TagFormValues } from "./TagForm";
 
 type Editor =
   | { mode: "create-list" }
   | { mode: "edit-list"; listId: number }
   | { mode: "create-folder" }
   | { mode: "rename-folder"; folderId: number }
+  | { mode: "create-tag" }
+  | { mode: "edit-tag"; tagId: number }
   | null;
 
 interface SidebarProps {
   lists: TaskList[];
   folders: Folder[];
+  tags: Tag[];
   selectedListId: number | null;
+  selectedTagId: number | null;
   onSelect: (listId: number) => void;
+  onSelectTag: (tagId: number) => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
+  onTagCreated: (tag: Tag) => void;
+  onTagSaved: (tag: Tag) => void;
+  onTagDeleted: (tagId: number) => void;
   onTaskMoved: (task: Task) => void;
 }
 
@@ -57,10 +70,16 @@ function ListButton({ list, selected, onSelect }: ListButtonProps): JSX.Element 
 export function Sidebar({
   lists,
   folders,
+  tags,
   selectedListId,
+  selectedTagId,
   onSelect,
+  onSelectTag,
   onListsChanged,
   onFoldersChanged,
+  onTagCreated,
+  onTagSaved,
+  onTagDeleted,
   onTaskMoved,
 }: SidebarProps): JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
@@ -110,6 +129,27 @@ export function Sidebar({
     const created = await createFolder(name);
     onFoldersChanged((current) => [...current, created]);
     setEditor(null);
+  }
+
+  async function handleCreateTag(values: TagFormValues): Promise<void> {
+    onTagCreated(await createTag({ name: values.name, color: values.color }));
+    setEditor(null);
+  }
+
+  async function handleEditTag(tag: Tag, values: TagFormValues): Promise<void> {
+    onTagSaved(await updateTag(tag.id, { name: values.name, color: values.color }));
+    setEditor(null);
+  }
+
+  async function handleDeleteTag(tag: Tag): Promise<void> {
+    const confirmed = window.confirm(
+      `Delete the tag "${tag.name}"? It will be removed from all tasks; the tasks stay.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    await deleteTag(tag.id);
+    onTagDeleted(tag.id);
   }
 
   async function handleRenameFolder(folder: Folder, name: string): Promise<void> {
@@ -368,6 +408,65 @@ export function Sidebar({
           ))}
           {looseLists.map((list) => renderListItem(list))}
         </ul>
+      </nav>
+      <nav aria-label="Tags" className="tags-nav">
+        <h2>Tags</h2>
+        <ul>
+          {[...tags]
+            .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id)
+            .map((tag) =>
+              editor?.mode === "edit-tag" && editor.tagId === tag.id ? (
+                <li key={tag.id}>
+                  <TagForm
+                    initial={tag}
+                    onSubmit={(values) => void handleEditTag(tag, values)}
+                    onCancel={() => setEditor(null)}
+                  />
+                </li>
+              ) : (
+                <li key={tag.id}>
+                  <div className="list-row">
+                    <button
+                      type="button"
+                      className={tag.id === selectedTagId ? "list-button selected" : "list-button"}
+                      onClick={() => onSelectTag(tag.id)}
+                    >
+                      {tag.color !== null && (
+                        <span className="color-dot" style={{ background: tag.color }} />
+                      )}
+                      {tag.name}
+                    </button>
+                    <span className="row-actions">
+                      <button
+                        type="button"
+                        aria-label={`Edit tag ${tag.name}`}
+                        onClick={() => setEditor({ mode: "edit-tag", tagId: tag.id })}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete tag ${tag.name}`}
+                        onClick={() => void handleDeleteTag(tag)}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  </div>
+                </li>
+              ),
+            )}
+        </ul>
+        {editor?.mode === "create-tag" ? (
+          <TagForm
+            onSubmit={(values) => void handleCreateTag(values)}
+            onCancel={() => setEditor(null)}
+          />
+        ) : (
+          <button type="button" onClick={() => setEditor({ mode: "create-tag" })}>
+            Add Tag
+          </button>
+        )}
       </nav>
       <div className="sidebar-actions">
         {editor?.mode === "create-list" && (

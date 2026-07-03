@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -56,6 +56,26 @@ class TaskList(Base):
     )
 
 
+task_tags = Table(
+    "task_tags",
+    Base.metadata,
+    Column("task_id", ForeignKey("tasks.id"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id"), primary_key=True),
+)
+
+
+class Tag(Base):
+    """A Tag — a first-class label (name + color) applied to any number of Tasks."""
+
+    __tablename__ = "tags"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    color: Mapped[str | None] = mapped_column(String(32), default=None)
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -75,6 +95,13 @@ class Task(Base):
         back_populates="task",
         cascade="all, delete-orphan",
         order_by="CheckItem.sort_order, CheckItem.id",
+        lazy="selectin",
+    )
+    # Tags travel with their Task in every read, so load them eagerly too.
+    # One-directional: nothing navigates Tag -> Tasks in the ORM.
+    tags: Mapped[list[Tag]] = relationship(
+        secondary=task_tags,
+        order_by="Tag.name, Tag.id",
         lazy="selectin",
     )
 

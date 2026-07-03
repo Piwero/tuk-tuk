@@ -19,6 +19,12 @@ export interface Folder {
 
 export type Priority = "none" | "low" | "medium" | "high";
 
+export interface Tag {
+  id: number;
+  name: string;
+  color: string | null;
+}
+
 export interface CheckItem {
   id: number;
   title: string;
@@ -34,6 +40,7 @@ export interface Task {
   priority: Priority;
   list_id: number;
   check_items: CheckItem[];
+  tags: Tag[];
   created_at: string;
 }
 
@@ -130,6 +137,37 @@ export function fetchTasks(listId: number): Promise<Page<Task>> {
   return request(`/api/v1/tasks?list_id=${listId}`);
 }
 
+export function fetchTasksByTag(tagId: number): Promise<Page<Task>> {
+  return request(`/api/v1/tasks?tag_id=${tagId}`);
+}
+
+export function fetchTags(): Promise<Page<Tag>> {
+  return request("/api/v1/tags");
+}
+
+export interface TagCreateInput {
+  name: string;
+  color?: string;
+}
+
+export function createTag(input: TagCreateInput): Promise<Tag> {
+  return request("/api/v1/tags", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Absent fields stay unchanged; explicit null clears color. */
+export interface TagPatch {
+  name?: string;
+  color?: string | null;
+}
+
+export function updateTag(tagId: number, patch: TagPatch): Promise<Tag> {
+  return request(`/api/v1/tags/${tagId}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export function deleteTag(tagId: number): Promise<void> {
+  return request(`/api/v1/tags/${tagId}`, { method: "DELETE" });
+}
+
 export function createTask(title: string, listId?: number): Promise<Task> {
   return request("/api/v1/tasks", {
     method: "POST",
@@ -137,13 +175,15 @@ export function createTask(title: string, listId?: number): Promise<Task> {
   });
 }
 
-/** Absent fields stay unchanged; explicit null is rejected by the API. */
+/** Absent fields stay unchanged; explicit null is rejected by the API.
+ * tag_ids replaces the task's whole tag set. */
 export interface TaskPatch {
   title?: string;
   completed?: boolean;
   list_id?: number;
   description?: string;
   priority?: Priority;
+  tag_ids?: number[];
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {
