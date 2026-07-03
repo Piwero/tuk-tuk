@@ -44,6 +44,7 @@ repos:
           - fastapi>=0.115.0
           - sqlalchemy[asyncio]>=2.0.36
           - alembic>=1.14.0
+          - types-python-dateutil>=2.9.0
 
   # ---- Frontend: prettier ----
   - repo: https://github.com/pre-commit/mirrors-prettier

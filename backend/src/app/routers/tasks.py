@@ -6,11 +6,12 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import SORT_GAP, Section, Tag, Task, TaskList, utcnow
+from app.models import SORT_GAP, CompletedOccurrence, Section, Tag, Task, TaskList, utcnow
+from app.recurrence import advance_in_place, validate_recurrence
 from app.schemas import Page, TaskCreate, TaskRead, TaskUpdate, as_utc
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
@@ -106,6 +107,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
     if payload.section_id is not None:
         await resolve_section(session, payload.section_id, list_id)
     validate_schedule(payload.start_date, payload.due_date, payload.is_all_day, payload.time_zone)
+    validate_recurrence(payload.recurrence, payload.due_date)
     # Initialize collections so serialization never triggers an async lazy load.
     # Append within the target List (mirrors create_section's per-List scope).
     max_order = await session.scalar(
@@ -119,6 +121,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         due_date=payload.due_date,
         is_all_day=payload.is_all_day,
         time_zone=payload.time_zone,
+        recurrence=payload.recurrence,
         sort_order=(max_order or 0) + SORT_GAP,
         check_items=[],
         tags=[],
@@ -218,9 +221,9 @@ async def get_task_or_404(task_id: int, session: SessionDep) -> Task:
 async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) -> TaskRead:
     task = await get_task_or_404(task_id, session)
     changes = payload.model_dump(exclude_unset=True)
-    # Completion transitions stamp/clear completed_at (the completed view's order).
-    if "completed" in changes and changes["completed"] != task.completed:
-        changes["completed_at"] = utcnow() if changes["completed"] else None
+    # Completion is handled last, against the task the patch produces —
+    # completing a recurring task advances it in place instead (ADR 0003).
+    completing = changes.pop("completed", None)
     if "list_id" in changes:
         target = await session.scalar(select(TaskList.id).where(TaskList.id == changes["list_id"]))
         if target is None:
@@ -244,6 +247,11 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
     elif effective_due is None and task.reminders:
         # Clearing the date sweeps the Reminders with it: no dateless Reminders.
         changes["reminders"] = []
+    if "recurrence" in changes:
+        validate_recurrence(changes["recurrence"], effective_due)
+    elif effective_due is None and task.recurrence is not None:
+        # Clearing the date sweeps the recurrence with it: no dateless repeats.
+        changes["recurrence"] = None
     if "tag_ids" in changes:
         tag_ids: list[int] = changes.pop("tag_ids")
         tags = list((await session.scalars(select(Tag).where(Tag.id.in_(tag_ids)))).all())
@@ -253,6 +261,16 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
         task.tags = tags
     for field, value in changes.items():
         setattr(task, field, value)
+    if completing is not None and completing != task.completed:
+        occurrence = advance_in_place(task) if completing else None
+        if occurrence is not None:
+            session.add(occurrence)
+        else:
+            # Completion transitions stamp/clear completed_at (the completed
+            # view's order). A recurring task only gets here when its
+            # recurrence has ended: the completed row is the final history entry.
+            task.completed = completing
+            task.completed_at = utcnow() if completing else None
     await session.commit()
     await session.refresh(task)
     return TaskRead.model_validate(task)
@@ -261,5 +279,7 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
 @router.delete("/{task_id}", status_code=204)
 async def delete_task(task_id: int, session: SessionDep) -> None:
     task = await get_task_or_404(task_id, session)
+    # History travels with its Task (SQLite leaves ON DELETE CASCADE unenforced).
+    await session.execute(delete(CompletedOccurrence).where(CompletedOccurrence.task_id == task.id))
     await session.delete(task)
     await session.commit()

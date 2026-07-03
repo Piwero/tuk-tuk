@@ -64,6 +64,10 @@ export interface Task {
    * (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
    * Stored only — v1 delivers no notifications. */
   reminders: string[];
+  /** Recurrence: iCalendar RRULE content (e.g. "FREQ=WEEKLY;BYDAY=MO,TH"),
+   * anchored at the due date. Completing a recurring task advances its dates
+   * in place instead of completing it. */
+  recurrence: string | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
@@ -188,6 +192,27 @@ export function fetchCompletedTasks(listId: number | null): Promise<Page<Task>> 
   return request(`/api/v1/tasks?completed=true${scope}`);
 }
 
+/** A Completed Occurrence — the history record one completion of a recurring
+ * Task writes. The title and List are the owning task's current ones. */
+export interface CompletedOccurrence {
+  id: number;
+  task_id: number;
+  title: string;
+  list_id: number;
+  completed_at: string;
+  /** The occurrence the user completed: the task's date before it advanced. */
+  due_date: string;
+  is_all_day: boolean;
+}
+
+/** Completed Occurrences, newest first: per List, or across all Lists. */
+export function fetchCompletedOccurrences(
+  listId: number | null,
+): Promise<Page<CompletedOccurrence>> {
+  const scope = listId === null ? "" : `?list_id=${listId}`;
+  return request(`/api/v1/completed-occurrences${scope}`);
+}
+
 export function fetchSections(listId: number): Promise<Page<Section>> {
   return request(`/api/v1/sections?list_id=${listId}`);
 }
@@ -255,8 +280,9 @@ export function createTask(title: string, listId?: number, sectionId?: number): 
 }
 
 /** Absent fields stay unchanged; explicit null is rejected by the API,
- * except section_id, where null moves the task out of its Section, and
- * start_date / due_date / time_zone, where null clears the schedule.
+ * except section_id, where null moves the task out of its Section,
+ * start_date / due_date / time_zone, where null clears the schedule, and
+ * recurrence, where null stops the task repeating.
  * tag_ids replaces the task's whole tag set; reminders replaces the whole
  * reminder set ([] clears it). */
 export interface TaskPatch {
@@ -273,6 +299,7 @@ export interface TaskPatch {
   is_all_day?: boolean;
   time_zone?: string | null;
   reminders?: string[];
+  recurrence?: string | null;
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {

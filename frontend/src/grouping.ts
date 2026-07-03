@@ -5,9 +5,7 @@ import { addDays, dueDay, dueInstant, localDayOf } from "./dates";
 import { byOrder } from "./ordering";
 
 export type GroupBy = "section" | "date" | "priority";
-// "completion" is not offered in the sort select; the completed view uses it
-// to keep the server's newest-completed-first order.
-export type SortBy = "custom" | "date" | "priority" | "title" | "completion";
+export type SortBy = "custom" | "date" | "priority" | "title";
 
 export interface TaskGroup {
   key: string;
@@ -45,11 +43,6 @@ export function sortTasks(tasks: Task[], sortBy: SortBy): Task[] {
     case "date": // Earliest due first; undated tasks keep their custom order at the end.
       sorted.sort(
         (a, b) => (dueInstant(a) ?? Infinity) - (dueInstant(b) ?? Infinity) || byOrder(a, b),
-      );
-      break;
-    case "completion": // Completed view: newest completion first.
-      sorted.sort(
-        (a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? "") || byOrder(a, b),
       );
       break;
     case "custom":

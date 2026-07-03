@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  fetchCompletedOccurrences,
   fetchCompletedTasks,
   fetchFolders,
   fetchLists,
@@ -11,6 +12,7 @@ import {
   fetchTasksByTag,
   updateList,
   SMART_LABELS,
+  type CompletedOccurrence,
   type Folder,
   type Section,
   type SmartView,
@@ -20,6 +22,7 @@ import {
 } from "./api";
 import { localDayOf } from "./dates";
 import { type GroupBy, type SortBy } from "./grouping";
+import { CompletedView } from "./components/CompletedView";
 import { KanbanView } from "./components/KanbanView";
 import { QuickAdd } from "./components/QuickAdd";
 import { Sidebar } from "./components/Sidebar";
@@ -42,6 +45,8 @@ export function App(): JSX.Element {
   const [completedMode, setCompletedMode] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  // Completed Occurrences of recurring tasks, shown only in the completed view.
+  const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
@@ -79,10 +84,14 @@ export function App(): JSX.Element {
     if (view === null) {
       return;
     }
-    if (completedMode && view.kind === "list") {
-      setTasks((await fetchCompletedTasks(view.id)).items);
-    } else if (completedMode) {
-      setTasks((await fetchCompletedTasks(null)).items);
+    if (completedMode) {
+      const scope = view.kind === "list" ? view.id : null;
+      const [completedPage, occurrencePage] = await Promise.all([
+        fetchCompletedTasks(scope),
+        fetchCompletedOccurrences(scope),
+      ]);
+      setTasks(completedPage.items);
+      setOccurrences(occurrencePage.items);
     } else if (view.kind === "smart") {
       setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()))).items);
     } else if (view.kind === "list") {
@@ -267,7 +276,14 @@ export function App(): JSX.Element {
             </div>
           </>
         )}
-        {selectedList !== null && selectedList.view_mode === "kanban" && !completedMode ? (
+        {completedMode ? (
+          <CompletedView
+            tasks={tasks}
+            occurrences={occurrences}
+            onChanged={changeTasksAndRecompute}
+            onSelect={setSelectedTaskId}
+          />
+        ) : selectedList !== null && selectedList.view_mode === "kanban" ? (
           <KanbanView
             tasks={tasks}
             sections={sections}
@@ -280,10 +296,10 @@ export function App(): JSX.Element {
           <TaskListView
             tasks={tasks}
             sections={sections}
-            listId={isComputedView ? null : (selectedList?.id ?? null)}
-            groupBy={completedMode ? "section" : groupBy}
-            sortBy={completedMode ? "completion" : sortBy}
-            onChanged={isComputedView ? changeTasksAndRecompute : setTasks}
+            listId={smartView !== null ? null : (selectedList?.id ?? null)}
+            groupBy={groupBy}
+            sortBy={sortBy}
+            onChanged={smartView !== null ? changeTasksAndRecompute : setTasks}
             onSelect={setSelectedTaskId}
             onSectionsChanged={setSections}
           />

@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from app.db import SessionDep
 from app.errors import NotFoundError
 from app.models import SORT_GAP, CheckItem, Task, utcnow
+from app.recurrence import advance_in_place
 from app.routers.tasks import get_task_or_404
 from app.schemas import CheckItemCreate, CheckItemUpdate, TaskRead
 
@@ -45,12 +46,17 @@ async def update_check_item(
     ticked_open_item = changes.get("done") is True and not item.done
     for field, value in changes.items():
         setattr(item, field, value)
-    # Ticking the last open Check Item completes the parent Task. Un-ticking
+    # Ticking the last open Check Item completes the parent Task — which, for
+    # a recurring Task, means advancing it in place (ADR 0003). Un-ticking
     # never reopens it, and re-ticking an already-done item changes nothing —
     # the parent stays as the user set it.
     if ticked_open_item and all(sibling.done for sibling in task.check_items):
-        task.completed = True
-        task.completed_at = utcnow()
+        occurrence = advance_in_place(task)
+        if occurrence is not None:
+            session.add(occurrence)
+        else:
+            task.completed = True
+            task.completed_at = utcnow()
     await session.commit()
     await session.refresh(task)
     return TaskRead.model_validate(task)
