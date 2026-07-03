@@ -13,7 +13,7 @@ authors = [{ name = "Piwero" }]
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
-    "pydantic>=2.9.0",
+    "pydantic>=2.13.4",
     "pydantic-settings>=2.6.0",
     "sqlalchemy[asyncio]>=2.0.36",
     "aiosqlite>=0.20.0",
