@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, String, Table, Text
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -108,6 +108,10 @@ class Task(Base):
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     is_all_day: Mapped[bool] = mapped_column(default=False)
     time_zone: Mapped[str | None] = mapped_column(String(64), default=None)
+    # Reminders: signed ISO-8601 duration offsets from the task's date
+    # (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
+    # Stored only — v1 delivers no notifications (see the PRD).
+    reminders: Mapped[list[str]] = mapped_column(JSON, default=list)
     list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
     section_id: Mapped[int | None] = mapped_column(
         ForeignKey("sections.id"), index=True, default=None

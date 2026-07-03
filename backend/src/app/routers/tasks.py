@@ -1,5 +1,6 @@
 """Tasks collection endpoints."""
 
+import re
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -20,6 +21,29 @@ SmartView = Literal["today", "next7", "all"]
 
 def invalid_schedule(message: str) -> APIError:
     return APIError(status_code=422, code="invalid_schedule", message=message)
+
+
+# A signed ISO-8601 duration in the day/time subset reminders use (iCalendar
+# TRIGGER convention: "PT0S" at time, "-PT30M" 30 minutes before). Weeks,
+# months and years are excluded: months/years have no fixed length, and the
+# offset editor speaks minutes/hours/days, so weeks add nothing.
+DURATION_RE = re.compile(r"^-?P(?=\d|T\d)(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$")
+
+
+def invalid_reminders(message: str) -> APIError:
+    return APIError(status_code=422, code="invalid_reminders", message=message)
+
+
+def validate_reminders(reminders: list[str], due_date: datetime | None) -> list[str]:
+    """Reminders are duration offsets from the task's date: check each offset's
+    syntax, require a date while any exist, and collapse duplicates.
+    """
+    for offset in reminders:
+        if DURATION_RE.match(offset) is None:
+            raise invalid_reminders(f"Not an ISO-8601 duration offset: {offset!r}")
+    if reminders and due_date is None:
+        raise invalid_reminders("A task without a date cannot hold Reminders")
+    return list(dict.fromkeys(reminders))
 
 
 def validate_schedule(
@@ -214,6 +238,12 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
         changes.get("is_all_day", task.is_all_day),
         changes.get("time_zone", task.time_zone),
     )
+    effective_due = changes.get("due_date", task.due_date)
+    if "reminders" in changes:
+        changes["reminders"] = validate_reminders(changes["reminders"], effective_due)
+    elif effective_due is None and task.reminders:
+        # Clearing the date sweeps the Reminders with it: no dateless Reminders.
+        changes["reminders"] = []
     if "tag_ids" in changes:
         tag_ids: list[int] = changes.pop("tag_ids")
         tags = list((await session.scalars(select(Tag).where(Tag.id.in_(tag_ids)))).all())
