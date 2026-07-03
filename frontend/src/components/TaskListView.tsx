@@ -42,6 +42,15 @@ export function TaskListView({ tasks, onChanged, onSelect }: TaskListViewProps):
             onClick={() => onSelect(task.id)}
           >
             <span className={task.completed ? "completed" : undefined}>{task.title}</span>
+            {task.tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="tag-chip"
+                style={tag.color === null ? undefined : { borderColor: tag.color }}
+              >
+                {tag.name}
+              </span>
+            ))}
             {task.check_items.length > 0 && (
               <span className="check-progress">
                 {task.check_items.filter((item) => item.done).length}/{task.check_items.length}

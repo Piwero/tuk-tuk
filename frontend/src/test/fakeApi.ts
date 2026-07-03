@@ -20,6 +20,12 @@ export interface FakeFolder {
   sort_order: number;
 }
 
+export interface FakeTag {
+  id: number;
+  name: string;
+  color: string | null;
+}
+
 export interface FakeCheckItem {
   id: number;
   title: string;
@@ -35,6 +41,7 @@ export interface FakeTask {
   priority: Priority;
   list_id: number;
   check_items: FakeCheckItem[];
+  tags: FakeTag[];
   created_at: string;
 }
 
@@ -47,6 +54,7 @@ export interface RecordedRequest {
 interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
+  tags: FakeTag[];
   tasks: FakeTask[];
   requests: RecordedRequest[];
 }
@@ -66,6 +74,7 @@ let nextTaskId = 100;
 let nextListId = 10;
 let nextFolderId = 500;
 let nextCheckItemId = 900;
+let nextTagId = 700;
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
   return {
@@ -76,9 +85,14 @@ export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): Fake
     priority: "none",
     list_id: INBOX.id,
     check_items: [],
+    tags: [],
     created_at: "2026-07-03T10:00:00Z",
     ...overrides,
   };
+}
+
+export function fakeTag(name: string, overrides: Partial<FakeTag> = {}): FakeTag {
+  return { id: nextTagId++, name, color: null, ...overrides };
 }
 
 export function fakeCheckItem(
@@ -116,12 +130,23 @@ const nextOrder = (rows: { sort_order: number }[]): number =>
 export function installFakeApi({
   lists = [INBOX],
   folders = [],
+  tags = [],
   tasks = [],
-}: { lists?: FakeList[]; folders?: FakeFolder[]; tasks?: FakeTask[] } = {}): FakeApiState {
+}: {
+  lists?: FakeList[];
+  folders?: FakeFolder[];
+  tags?: FakeTag[];
+  tasks?: FakeTask[];
+} = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
     folders: folders.map((folder) => ({ ...folder })),
-    tasks: tasks.map((task) => ({ ...task, check_items: [...task.check_items] })),
+    tags: tags.map((tag) => ({ ...tag })),
+    tasks: tasks.map((task) => ({
+      ...task,
+      check_items: [...task.check_items],
+      tags: task.tags.map((tag) => ({ ...tag })),
+    })),
     requests: [],
   };
 
@@ -215,8 +240,11 @@ export function installFakeApi({
     }
     if (method === "GET" && url.pathname === "/api/v1/tasks") {
       const listId = url.searchParams.get("list_id");
+      const tagId = url.searchParams.get("tag_id");
       const items = state.tasks.filter(
-        (task) => listId === null || task.list_id === Number(listId),
+        (task) =>
+          (listId === null || task.list_id === Number(listId)) &&
+          (tagId === null || task.tags.some((tag) => tag.id === Number(tagId))),
       );
       return json(page(items));
     }
@@ -226,6 +254,45 @@ export function installFakeApi({
       });
       state.tasks.push(created);
       return json(created, 201);
+    }
+    if (method === "GET" && url.pathname === "/api/v1/tags") {
+      const items = [...state.tags].sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+      return json(page(items));
+    }
+    if (method === "POST" && url.pathname === "/api/v1/tags") {
+      const input = body as { name: string; color?: string | null };
+      if (state.tags.some((tag) => tag.name === input.name)) {
+        return json(
+          { error: { code: "tag_exists", message: `A tag named "${input.name}" already exists` } },
+          409,
+        );
+      }
+      const created = fakeTag(input.name, { color: input.color ?? null });
+      state.tags.push(created);
+      return json(created, 201);
+    }
+    const tagMatch = url.pathname.match(/^\/api\/v1\/tags\/(\d+)$/);
+    if (tagMatch) {
+      const tagId = Number(tagMatch[1]);
+      const tag = state.tags.find((t) => t.id === tagId);
+      if (!tag) {
+        return notFound(`Tag ${tagId} not found`);
+      }
+      if (method === "PATCH") {
+        Object.assign(tag, body);
+        // Mirror the backend: tasks reference the tag row, never a copy.
+        for (const task of state.tasks) {
+          task.tags = task.tags.map((t) => (t.id === tagId ? { ...tag } : t));
+        }
+        return json(tag);
+      }
+      if (method === "DELETE") {
+        state.tags = state.tags.filter((t) => t.id !== tagId);
+        for (const task of state.tasks) {
+          task.tags = task.tags.filter((t) => t.id !== tagId);
+        }
+        return new Response(null, { status: 204 });
+      }
     }
     const checkItemMatch = url.pathname.match(/^\/api\/v1\/tasks\/(\d+)\/check-items(?:\/(\d+))?$/);
     if (checkItemMatch) {
@@ -268,7 +335,18 @@ export function installFakeApi({
         return notFound(`Task ${taskId} not found`);
       }
       if (method === "PATCH") {
-        Object.assign(task, body);
+        const { tag_ids, ...rest } = body as { tag_ids?: number[] } & Record<string, unknown>;
+        Object.assign(task, rest);
+        if (tag_ids !== undefined) {
+          const missing = tag_ids.find((id) => !state.tags.some((tag) => tag.id === id));
+          if (missing !== undefined) {
+            return notFound(`Tag ${missing} not found`);
+          }
+          task.tags = state.tags
+            .filter((tag) => tag_ids.includes(tag.id))
+            .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id)
+            .map((tag) => ({ ...tag }));
+        }
         return json(task);
       }
       if (method === "DELETE") {

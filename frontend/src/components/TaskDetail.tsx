@@ -8,6 +8,7 @@ import {
   updateTask,
   type CheckItem,
   type Priority,
+  type Tag,
   type Task,
 } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
@@ -22,11 +23,17 @@ const PRIORITY_LABELS: Record<Priority, string> = {
 
 interface TaskDetailProps {
   task: Task;
+  allTags: Tag[];
   onTaskChanged: (task: Task) => void;
   onClose: () => void;
 }
 
-export function TaskDetail({ task, onTaskChanged, onClose }: TaskDetailProps): JSX.Element {
+export function TaskDetail({
+  task,
+  allTags,
+  onTaskChanged,
+  onClose,
+}: TaskDetailProps): JSX.Element {
   const [title, setTitle] = useState(task.title);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
   const [newItemTitle, setNewItemTitle] = useState("");
@@ -65,6 +72,14 @@ export function TaskDetail({ task, onTaskChanged, onClose }: TaskDetailProps): J
 
   async function tickCheckItem(item: CheckItem): Promise<void> {
     onTaskChanged(await updateCheckItem(task.id, item.id, { done: !item.done }));
+  }
+
+  async function toggleTag(tag: Tag): Promise<void> {
+    const assigned = task.tags.some((t) => t.id === tag.id);
+    const tagIds = assigned
+      ? task.tags.filter((t) => t.id !== tag.id).map((t) => t.id)
+      : [...task.tags.map((t) => t.id), tag.id];
+    onTaskChanged(await updateTask(task.id, { tag_ids: tagIds }));
   }
 
   async function renameCheckItem(): Promise<void> {
@@ -168,6 +183,21 @@ export function TaskDetail({ task, onTaskChanged, onClose }: TaskDetailProps): J
           ))}
         </select>
       </label>
+      <fieldset className="task-tags">
+        <legend>Tags</legend>
+        {allTags.length === 0 && <p className="hint">No tags yet — add one in the sidebar.</p>}
+        {allTags.map((tag) => (
+          <label key={tag.id}>
+            <input
+              type="checkbox"
+              checked={task.tags.some((t) => t.id === tag.id)}
+              aria-label={`Tag ${tag.name}`}
+              onChange={() => void toggleTag(tag)}
+            />
+            {tag.name}
+          </label>
+        ))}
+      </fieldset>
       <div className="task-description">
         {descriptionDraft === null ? (
           <>

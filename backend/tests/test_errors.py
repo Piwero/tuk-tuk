@@ -123,3 +123,27 @@ def test_check_item_title_may_not_be_null(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_duplicate_tag_names_are_rejected(client: TestClient) -> None:
+    client.post("/api/v1/tags", json={"name": "work"})
+
+    duplicate = client.post("/api/v1/tags", json={"name": "work"})
+
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["code"] == "tag_exists"
+
+    other = client.post("/api/v1/tags", json={"name": "home"}).json()
+    renamed_to_taken = client.patch(f"/api/v1/tags/{other['id']}", json={"name": "work"})
+
+    assert renamed_to_taken.status_code == 409
+    assert renamed_to_taken.json()["error"]["code"] == "tag_exists"
+
+
+def test_assigning_an_unknown_tag_returns_not_found_envelope(client: TestClient) -> None:
+    task_id = client.post("/api/v1/tasks", json={"title": "Mistagged"}).json()["id"]
+
+    response = client.patch(f"/api/v1/tasks/{task_id}", json={"tag_ids": [424242]})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

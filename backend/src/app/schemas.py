@@ -79,22 +79,46 @@ class ListRead(BaseModel):
     sort_order: int
 
 
+class TagCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    color: str | None = Field(default=None, max_length=32)
+
+
+# PATCH fields: absent means "leave unchanged". name may not be null;
+# an explicit null for color clears it.
+class TagUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    color: str | None = Field(default=None, max_length=32)
+
+    _reject_nulls = field_validator("name")(reject_explicit_null)
+
+
+class TagRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    color: str | None
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     list_id: int | None = None
 
 
 # PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
+# tag_ids replaces the task's whole tag set.
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
     completed: bool | None = None
     list_id: int | None = None
     description: str | None = None
     priority: Priority | None = None
+    tag_ids: list[int] | None = None
 
-    _reject_nulls = field_validator("title", "completed", "list_id", "description", "priority")(
-        reject_explicit_null
-    )
+    _reject_nulls = field_validator(
+        "title", "completed", "list_id", "description", "priority", "tag_ids"
+    )(reject_explicit_null)
 
 
 class CheckItemCreate(BaseModel):
@@ -129,6 +153,7 @@ class TaskRead(BaseModel):
     priority: Priority
     list_id: int
     check_items: list[CheckItemRead]
+    tags: list[TagRead]
     created_at: datetime
 
     @field_serializer("created_at")
