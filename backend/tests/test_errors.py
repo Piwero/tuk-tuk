@@ -52,3 +52,44 @@ def test_the_inbox_cannot_be_deleted(client: TestClient) -> None:
     assert response.json()["error"]["code"] == "inbox_undeletable"
     still_there = client.get("/api/v1/lists").json()["items"]
     assert any(item["is_inbox"] for item in still_there)
+
+
+def test_the_inbox_cannot_be_renamed_archived_or_foldered(client: TestClient) -> None:
+    folder_id = client.post("/api/v1/folders", json={"name": "Work"}).json()["id"]
+    inbox = next(item for item in client.get("/api/v1/lists").json()["items"] if item["is_inbox"])
+
+    payloads = ({"name": "Not the Inbox"}, {"is_archived": True}, {"folder_id": folder_id})
+    for payload in payloads:
+        response = client.patch(f"/api/v1/lists/{inbox['id']}", json=payload)
+
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "inbox_immutable"
+
+    untouched = next(
+        item for item in client.get("/api/v1/lists").json()["items"] if item["is_inbox"]
+    )
+    assert untouched["name"] == "Inbox"
+    assert untouched["is_archived"] is False
+    assert untouched["folder_id"] is None
+
+
+def test_moving_a_task_to_an_unknown_list_returns_not_found_envelope(
+    client: TestClient,
+) -> None:
+    task_id = client.post("/api/v1/tasks", json={"title": "Stranded"}).json()["id"]
+
+    response = client.patch(f"/api/v1/tasks/{task_id}", json={"list_id": 424242})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_moving_a_list_into_an_unknown_folder_returns_not_found_envelope(
+    client: TestClient,
+) -> None:
+    task_list = client.post("/api/v1/lists", json={"name": "Backend"}).json()
+
+    response = client.patch(f"/api/v1/lists/{task_list['id']}", json={"folder_id": 424242})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

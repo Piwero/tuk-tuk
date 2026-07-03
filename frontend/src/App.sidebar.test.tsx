@@ -1,0 +1,392 @@
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { App } from "./App";
+import { fakeFolder, fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("Sidebar structure", () => {
+  it("shows Inbox first, then folders with their lists, then loose lists", async () => {
+    const work = fakeFolder("Work");
+    installFakeApi({
+      folders: [work],
+      lists: [
+        INBOX,
+        fakeList("Groceries", { emoji: "🛒" }),
+        fakeList("Backend", { folder_id: work.id }),
+      ],
+    });
+
+    render(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Lists" });
+    const workLists = await within(nav).findByRole("list", { name: "Lists in Work" });
+    expect(within(workLists).getByRole("button", { name: "Backend" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "🛒 Groceries" })).toBeInTheDocument();
+    const buttons = within(nav).getAllByRole("button");
+    expect(buttons[0]).toHaveAccessibleName("Inbox");
+  });
+});
+
+describe("List management", () => {
+  it("creates a List with name, color, and emoji from the Add List form", async () => {
+    const api = installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Add List" }));
+    await user.type(screen.getByLabelText("Name"), "Groceries");
+    fireEvent.change(screen.getByLabelText("Color"), { target: { value: "#ff9800" } });
+    await user.type(screen.getByLabelText("Emoji"), "🛒");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const nav = screen.getByRole("navigation", { name: "Lists" });
+    expect(await within(nav).findByRole("button", { name: "🛒 Groceries" })).toBeInTheDocument();
+    const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/lists");
+    expect(post?.body).toEqual({ name: "Groceries", color: "#ff9800", emoji: "🛒" });
+  });
+
+  it("edits a List's name from the sidebar, keeping color and emoji", async () => {
+    const groceries = fakeList("Groceries", { color: "#ff9800", emoji: "🛒" });
+    const api = installFakeApi({ lists: [INBOX, groceries] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Edit Groceries" }));
+    const nameInput = screen.getByLabelText("Name");
+    expect(nameInput).toHaveValue("Groceries");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Food");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("button", { name: "🛒 Food" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "🛒 Groceries" })).not.toBeInTheDocument();
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${groceries.id}`,
+    );
+    expect(patch?.body).toEqual({ name: "Food", color: "#ff9800", emoji: "🛒" });
+  });
+
+  it("archiving a List moves it to the Archived section until unarchived", async () => {
+    const side = fakeList("Side project");
+    const api = installFakeApi({ lists: [INBOX, side] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Archive Side project" }));
+
+    const nav = screen.getByRole("navigation", { name: "Lists" });
+    expect(within(nav).queryByRole("button", { name: "Side project" })).not.toBeInTheDocument();
+    const archived = await screen.findByRole("region", { name: "Archived" });
+    expect(within(archived).getByText("Side project")).toBeInTheDocument();
+
+    await user.click(within(archived).getByRole("button", { name: "Unarchive Side project" }));
+
+    expect(await within(nav).findByRole("button", { name: "Side project" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Archived" })).not.toBeInTheDocument();
+    const patches = api.requests.filter((r) => r.method === "PATCH").map((r) => r.body);
+    expect(patches).toEqual([{ is_archived: true }, { is_archived: false }]);
+  });
+
+  it("deletes a List only after confirmation", async () => {
+    const side = fakeList("Side project");
+    const api = installFakeApi({ lists: [INBOX, side] });
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete list Side project" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Side project" })).toBeInTheDocument();
+    expect(api.requests.some((r) => r.method === "DELETE")).toBe(false);
+
+    confirmSpy.mockReturnValue(true);
+    await user.click(screen.getByRole("button", { name: "Delete list Side project" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Side project" })).not.toBeInTheDocument(),
+    );
+    expect(
+      api.requests.some((r) => r.method === "DELETE" && r.url === `/api/v1/lists/${side.id}`),
+    ).toBe(true);
+  });
+});
+
+describe("Folder management", () => {
+  it("creates a Folder from the Add Folder form", async () => {
+    const api = installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Add Folder" }));
+    await user.type(screen.getByLabelText("Folder name"), "Work");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("list", { name: "Lists in Work" })).toBeInTheDocument();
+    const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/folders");
+    expect(post?.body).toEqual({ name: "Work" });
+  });
+
+  it("renames a Folder in place", async () => {
+    const work = fakeFolder("Wrok");
+    const api = installFakeApi({ folders: [work] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Rename folder Wrok" }));
+    const input = screen.getByLabelText("Folder name");
+    expect(input).toHaveValue("Wrok");
+    await user.clear(input);
+    await user.type(input, "Work");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("list", { name: "Lists in Work" })).toBeInTheDocument();
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/folders/${work.id}`,
+    );
+    expect(patch?.body).toEqual({ name: "Work" });
+  });
+
+  it("deleting a Folder keeps its Lists, ungrouped", async () => {
+    const work = fakeFolder("Work");
+    const backend = fakeList("Backend", { folder_id: work.id });
+    const api = installFakeApi({ folders: [work], lists: [INBOX, backend] });
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete folder Work" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("list", { name: "Lists in Work" })).not.toBeInTheDocument(),
+    );
+    const nav = screen.getByRole("navigation", { name: "Lists" });
+    expect(within(nav).getByRole("button", { name: "Backend" })).toBeInTheDocument();
+    expect(
+      api.requests.some((r) => r.method === "DELETE" && r.url === `/api/v1/folders/${work.id}`),
+    ).toBe(true);
+  });
+});
+
+interface DragPayloadStore {
+  [type: string]: string;
+}
+
+function fakeDataTransfer(): Pick<DataTransfer, "setData" | "getData"> {
+  const store: DragPayloadStore = {};
+  return {
+    setData: (type: string, value: string) => {
+      store[type] = value;
+    },
+    getData: (type: string) => store[type] ?? "",
+  };
+}
+
+function rowOf(button: HTMLElement): HTMLElement {
+  const row = button.closest(".list-row");
+  if (!(row instanceof HTMLElement)) {
+    throw new Error("list row not found");
+  }
+  return row;
+}
+
+function folderRowOf(name: string): HTMLElement {
+  const row = screen.getByText(name).closest(".folder-row");
+  if (!(row instanceof HTMLElement)) {
+    throw new Error("folder row not found");
+  }
+  return row;
+}
+
+describe("Sidebar drag and drop", () => {
+  it("dragging a list onto another list inserts it before the target", async () => {
+    const alpha = fakeList("Alpha", { sort_order: 1024 });
+    const beta = fakeList("Beta", { sort_order: 2048 });
+    const gamma = fakeList("Gamma", { sort_order: 3072 });
+    const api = installFakeApi({ lists: [INBOX, alpha, beta, gamma] });
+    render(<App />);
+    await screen.findByRole("button", { name: "Gamma" });
+
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(rowOf(screen.getByRole("button", { name: "Gamma" })), { dataTransfer });
+    fireEvent.drop(rowOf(screen.getByRole("button", { name: "Beta" })), { dataTransfer });
+
+    const nav = screen.getByRole("navigation", { name: "Lists" });
+    await waitFor(() => {
+      const names = within(nav)
+        .getAllByRole("button", { name: /^(Inbox|Alpha|Beta|Gamma)$/ })
+        .map((button) => button.textContent);
+      expect(names).toEqual(["Inbox", "Alpha", "Gamma", "Beta"]);
+    });
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${gamma.id}`,
+    );
+    expect(patch?.body).toEqual({ folder_id: null, sort_order: 1536 });
+  });
+
+  it("reordering into an exhausted gap renumbers the group instead of colliding", async () => {
+    const alpha = fakeList("Alpha", { sort_order: 1000 });
+    const beta = fakeList("Beta", { sort_order: 1001 });
+    const gamma = fakeList("Gamma", { sort_order: 3000 });
+    const api = installFakeApi({ lists: [INBOX, alpha, beta, gamma] });
+    render(<App />);
+    await screen.findByRole("button", { name: "Gamma" });
+
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(rowOf(screen.getByRole("button", { name: "Gamma" })), { dataTransfer });
+    fireEvent.drop(rowOf(screen.getByRole("button", { name: "Beta" })), { dataTransfer });
+
+    const nav = screen.getByRole("navigation", { name: "Lists" });
+    await waitFor(() => {
+      const names = within(nav)
+        .getAllByRole("button", { name: /^(Inbox|Alpha|Beta|Gamma)$/ })
+        .map((button) => button.textContent);
+      expect(names).toEqual(["Inbox", "Alpha", "Gamma", "Beta"]);
+    });
+    // Persisted state must carry the same order with no duplicate sort_order values.
+    const stored = api.lists
+      .filter((list) => !list.is_inbox)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    expect(stored.map((list) => list.name)).toEqual(["Alpha", "Gamma", "Beta"]);
+    expect(new Set(stored.map((list) => list.sort_order)).size).toBe(stored.length);
+  });
+
+  it("dragging a list onto a folder header moves it into that folder", async () => {
+    const work = fakeFolder("Work");
+    const backend = fakeList("Backend", { folder_id: work.id, sort_order: 1024 });
+    const groceries = fakeList("Groceries", { sort_order: 5000 });
+    const api = installFakeApi({ folders: [work], lists: [INBOX, backend, groceries] });
+    render(<App />);
+    await screen.findByRole("button", { name: "Groceries" });
+
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(rowOf(screen.getByRole("button", { name: "Groceries" })), {
+      dataTransfer,
+    });
+    const folderRow = screen.getByText("Work").closest(".folder-row");
+    if (!(folderRow instanceof HTMLElement)) {
+      throw new Error("folder row not found");
+    }
+    fireEvent.drop(folderRow, { dataTransfer });
+
+    const workLists = screen.getByRole("list", { name: "Lists in Work" });
+    expect(await within(workLists).findByRole("button", { name: "Groceries" })).toBeInTheDocument();
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${groceries.id}`,
+    );
+    expect(patch?.body).toEqual({ folder_id: work.id, sort_order: 2048 });
+  });
+
+  it("dragging a list out of a folder onto a loose list ungroups it", async () => {
+    const work = fakeFolder("Work");
+    const backend = fakeList("Backend", { folder_id: work.id, sort_order: 1024 });
+    const groceries = fakeList("Groceries", { sort_order: 2048 });
+    const api = installFakeApi({ folders: [work], lists: [INBOX, backend, groceries] });
+    render(<App />);
+    await screen.findByRole("button", { name: "Backend" });
+
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(rowOf(screen.getByRole("button", { name: "Backend" })), { dataTransfer });
+    fireEvent.drop(rowOf(screen.getByRole("button", { name: "Groceries" })), { dataTransfer });
+
+    const workLists = screen.getByRole("list", { name: "Lists in Work" });
+    await waitFor(() =>
+      expect(within(workLists).queryByRole("button", { name: "Backend" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("navigation", { name: "Lists" })).toContainElement(
+      screen.getByRole("button", { name: "Backend" }),
+    );
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${backend.id}`,
+    );
+    expect(patch?.body).toEqual({ folder_id: null, sort_order: 1024 });
+  });
+
+  it("dragging a task onto a sidebar list moves it there and back", async () => {
+    const groceries = fakeList("Groceries");
+    const milk = fakeTask("Buy milk");
+    const api = installFakeApi({ lists: [INBOX, groceries], tasks: [milk] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Buy milk");
+
+    const dataTransfer = fakeDataTransfer();
+    const taskRow = screen.getByText("Buy milk").closest("li");
+    if (!(taskRow instanceof HTMLElement)) {
+      throw new Error("task row not found");
+    }
+    fireEvent.dragStart(taskRow, { dataTransfer });
+    fireEvent.drop(rowOf(screen.getByRole("button", { name: "Groceries" })), { dataTransfer });
+
+    await waitFor(() => expect(screen.queryByText("Buy milk")).not.toBeInTheDocument());
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${milk.id}`,
+    );
+    expect(patch?.body).toEqual({ list_id: groceries.id });
+
+    await user.click(screen.getByRole("button", { name: "Groceries" }));
+    const milkInGroceries = await screen.findByText("Buy milk");
+
+    const back = fakeDataTransfer();
+    const groceriesTaskRow = milkInGroceries.closest("li");
+    if (!(groceriesTaskRow instanceof HTMLElement)) {
+      throw new Error("task row not found");
+    }
+    fireEvent.dragStart(groceriesTaskRow, { dataTransfer: back });
+    fireEvent.drop(rowOf(screen.getByRole("button", { name: "Inbox" })), { dataTransfer: back });
+
+    await waitFor(() => expect(screen.queryByText("Buy milk")).not.toBeInTheDocument());
+    expect(api.tasks.find((t) => t.id === milk.id)?.list_id).toBe(INBOX.id);
+  });
+
+  it("dragging a folder onto another folder reorders them", async () => {
+    const work = fakeFolder("Work", { sort_order: 1024 });
+    const home = fakeFolder("Home", { sort_order: 2048 });
+    const api = installFakeApi({ folders: [work, home] });
+    render(<App />);
+    await screen.findByText("Home");
+
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(folderRowOf("Home"), { dataTransfer });
+    fireEvent.drop(folderRowOf("Work"), { dataTransfer });
+
+    const nav = screen.getByRole("navigation", { name: "Lists" });
+    await waitFor(() => {
+      const names = within(nav)
+        .getAllByText(/^(Work|Home)$/)
+        .map((el) => el.textContent);
+      expect(names).toEqual(["Home", "Work"]);
+    });
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/folders/${home.id}`,
+    );
+    expect(patch?.body).toEqual({ sort_order: 0 });
+  });
+});
+
+describe("Inbox protections", () => {
+  it("offers no edit, archive, delete, or drag affordances on the Inbox", async () => {
+    installFakeApi({ lists: [INBOX, fakeList("Groceries")] });
+    render(<App />);
+    await screen.findByRole("button", { name: "Groceries" });
+
+    expect(screen.queryByRole("button", { name: "Edit Inbox" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Archive Inbox" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete list Inbox" })).not.toBeInTheDocument();
+    expect(rowOf(screen.getByRole("button", { name: "Inbox" }))).not.toHaveAttribute(
+      "draggable",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Edit Groceries" })).toBeInTheDocument();
+    expect(rowOf(screen.getByRole("button", { name: "Groceries" }))).toHaveAttribute(
+      "draggable",
+      "true",
+    );
+  });
+});

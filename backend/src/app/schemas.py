@@ -12,12 +12,67 @@ class Page[T](BaseModel):
     offset: int
 
 
+class FolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+# PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
+class FolderUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    sort_order: int | None = None
+
+    @field_validator("name", "sort_order")
+    @classmethod
+    def reject_explicit_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("Field may not be null; omit it to leave it unchanged")
+        return value
+
+
+class FolderRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    sort_order: int
+
+
+class ListCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    color: str | None = Field(default=None, max_length=32)
+    emoji: str | None = Field(default=None, max_length=16)
+
+
+# PATCH fields: absent means "leave unchanged". name, is_archived, and sort_order
+# may not be null; an explicit null for color or emoji clears the attribute, and
+# an explicit null for folder_id moves the List out of its Folder.
+class ListUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    color: str | None = Field(default=None, max_length=32)
+    emoji: str | None = Field(default=None, max_length=16)
+    is_archived: bool | None = None
+    folder_id: int | None = None
+    sort_order: int | None = None
+
+    @field_validator("name", "is_archived", "sort_order")
+    @classmethod
+    def reject_explicit_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("Field may not be null; omit it to leave it unchanged")
+        return value
+
+
 class ListRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     name: str
     is_inbox: bool
+    color: str | None
+    emoji: str | None
+    is_archived: bool
+    folder_id: int | None
+    sort_order: int
 
 
 class TaskCreate(BaseModel):
@@ -30,8 +85,9 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
     completed: bool | None = None
+    list_id: int | None = None
 
-    @field_validator("title", "completed")
+    @field_validator("title", "completed", "list_id")
     @classmethod
     def reject_explicit_null(cls, value: object) -> object:
         if value is None:

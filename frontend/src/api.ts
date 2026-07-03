@@ -4,6 +4,17 @@ export interface TaskList {
   id: number;
   name: string;
   is_inbox: boolean;
+  color: string | null;
+  emoji: string | null;
+  is_archived: boolean;
+  folder_id: number | null;
+  sort_order: number;
+}
+
+export interface Folder {
+  id: number;
+  name: string;
+  sort_order: number;
 }
 
 export interface Task {
@@ -53,6 +64,53 @@ export function fetchLists(): Promise<Page<TaskList>> {
   return request("/api/v1/lists");
 }
 
+export interface ListCreateInput {
+  name: string;
+  color?: string;
+  emoji?: string;
+}
+
+export function createList(input: ListCreateInput): Promise<TaskList> {
+  return request("/api/v1/lists", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Absent fields stay unchanged; null clears color/emoji or moves the List out of its Folder. */
+export interface ListPatch {
+  name?: string;
+  color?: string | null;
+  emoji?: string | null;
+  is_archived?: boolean;
+  folder_id?: number | null;
+  sort_order?: number;
+}
+
+export function updateList(listId: number, patch: ListPatch): Promise<TaskList> {
+  return request(`/api/v1/lists/${listId}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export function deleteList(listId: number): Promise<void> {
+  return request(`/api/v1/lists/${listId}`, { method: "DELETE" });
+}
+
+export function fetchFolders(): Promise<Page<Folder>> {
+  return request("/api/v1/folders");
+}
+
+export function createFolder(name: string): Promise<Folder> {
+  return request("/api/v1/folders", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+export function updateFolder(
+  folderId: number,
+  patch: { name?: string; sort_order?: number },
+): Promise<Folder> {
+  return request(`/api/v1/folders/${folderId}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export function deleteFolder(folderId: number): Promise<void> {
+  return request(`/api/v1/folders/${folderId}`, { method: "DELETE" });
+}
+
 export function fetchTasks(listId: number): Promise<Page<Task>> {
   return request(`/api/v1/tasks?list_id=${listId}`);
 }
@@ -64,7 +122,10 @@ export function createTask(title: string, listId?: number): Promise<Task> {
   });
 }
 
-export function updateTask(taskId: number, patch: { completed?: boolean }): Promise<Task> {
+export function updateTask(
+  taskId: number,
+  patch: { completed?: boolean; list_id?: number },
+): Promise<Task> {
   return request(`/api/v1/tasks/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),

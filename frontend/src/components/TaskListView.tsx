@@ -1,4 +1,5 @@
 import { deleteTask, updateTask, type Task } from "../api";
+import { startDrag } from "../dnd";
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -19,7 +20,11 @@ export function TaskListView({ tasks, onChanged }: TaskListViewProps): JSX.Eleme
   return (
     <ul className="tasks">
       {tasks.map((task) => (
-        <li key={task.id}>
+        <li
+          key={task.id}
+          draggable
+          onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
+        >
           <label>
             <input
               type="checkbox"

@@ -42,6 +42,128 @@ body {
   background: #eaeef2;
 }
 
+.list-row {
+  display: flex;
+  align-items: center;
+}
+
+.list-row .list-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.list-button.selected {
+  background: #eaeef2;
+  font-weight: 600;
+}
+
+.color-dot {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+
+.row-actions {
+  display: flex;
+  visibility: hidden;
+}
+
+.list-row:hover .row-actions,
+.folder-row:hover .row-actions {
+  visibility: visible;
+}
+
+.row-actions button {
+  width: auto;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.8rem;
+  color: #57606a;
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.folder-name {
+  flex: 1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #57606a;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.folder-lists {
+  padding-left: 0.75rem;
+}
+
+.sidebar-actions {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #d0d7de;
+}
+
+.list-form {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.list-form label {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+  color: #57606a;
+}
+
+.list-form input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.list-form input[type="color"] {
+  padding: 0.1rem;
+  height: 2rem;
+}
+
+.list-form button {
+  border: 1px solid #d0d7de;
+  background: #ffffff;
+}
+
+.archived {
+  margin-top: 1rem;
+}
+
+.archived h2 {
+  margin: 0;
+  padding: 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8c959f;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.archived ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.archived .list-button {
+  color: #8c959f;
+}
+
 main {
   padding: 1.5rem 2rem;
   max-width: 640px;

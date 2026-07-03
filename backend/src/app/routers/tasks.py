@@ -51,7 +51,12 @@ async def get_task_or_404(task_id: int, session: SessionDep) -> Task:
 @router.patch("/{task_id}")
 async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) -> TaskRead:
     task = await get_task_or_404(task_id, session)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    if "list_id" in changes:
+        target = await session.scalar(select(TaskList.id).where(TaskList.id == changes["list_id"]))
+        if target is None:
+            raise NotFoundError(f"List {changes['list_id']} not found")
+    for field, value in changes.items():
         setattr(task, field, value)
     await session.commit()
     return TaskRead.model_validate(task)
