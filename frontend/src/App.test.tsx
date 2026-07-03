@@ -1,13 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
 import { fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+// Note: fetch stays stubbed across tests (each test installs a fresh fake).
+// Restoring the real fetch between tests would let a late in-flight request
+// from an unmounting App escape to the network and fail the run.
 
 describe("App", () => {
   it("shows the Inbox in the sidebar and renders its tasks", async () => {
