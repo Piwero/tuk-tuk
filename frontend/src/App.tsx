@@ -7,6 +7,7 @@ import {
   fetchTags,
   fetchTasks,
   fetchTasksByTag,
+  updateList,
   type Folder,
   type Section,
   type Tag,
@@ -14,6 +15,7 @@ import {
   type TaskList,
 } from "./api";
 import { type GroupBy, type SortBy } from "./grouping";
+import { KanbanView } from "./components/KanbanView";
 import { QuickAdd } from "./components/QuickAdd";
 import { Sidebar } from "./components/Sidebar";
 import { TaskDetail } from "./components/TaskDetail";
@@ -100,6 +102,13 @@ export function App(): JSX.Element {
     );
   }
 
+  async function toggleViewMode(list: TaskList): Promise<void> {
+    const updated = await updateList(list.id, {
+      view_mode: list.view_mode === "kanban" ? "list" : "kanban",
+    });
+    setLists((current) => current.map((l) => (l.id === updated.id ? updated : l)));
+  }
+
   function applyTagDeletion(tagId: number): void {
     setTags((current) => current.filter((tag) => tag.id !== tagId));
     setTasks((current) =>
@@ -134,8 +143,24 @@ export function App(): JSX.Element {
         }
       />
       <main>
-        <h1>{selectedList?.name ?? (selectedTag ? `#${selectedTag.name}` : "tuk-tuk")}</h1>
-        {selectedList !== null && (
+        <div className="main-header">
+          <h1>{selectedList?.name ?? (selectedTag ? `#${selectedTag.name}` : "tuk-tuk")}</h1>
+          {selectedList !== null && (
+            <button
+              type="button"
+              className="view-toggle"
+              aria-label={
+                selectedList.view_mode === "kanban"
+                  ? "Switch to list view"
+                  : "Switch to kanban view"
+              }
+              onClick={() => void toggleViewMode(selectedList)}
+            >
+              {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
+            </button>
+          )}
+        </div>
+        {selectedList !== null && selectedList.view_mode === "list" && (
           <>
             <QuickAdd
               listId={selectedList.id}
@@ -168,16 +193,26 @@ export function App(): JSX.Element {
             </div>
           </>
         )}
-        <TaskListView
-          tasks={tasks}
-          sections={sections}
-          listId={selectedList?.id ?? null}
-          groupBy={groupBy}
-          sortBy={sortBy}
-          onChanged={setTasks}
-          onSelect={setSelectedTaskId}
-          onSectionsChanged={setSections}
-        />
+        {selectedList !== null && selectedList.view_mode === "kanban" ? (
+          <KanbanView
+            tasks={tasks}
+            sections={sections}
+            listId={selectedList.id}
+            onChanged={setTasks}
+            onSelect={setSelectedTaskId}
+          />
+        ) : (
+          <TaskListView
+            tasks={tasks}
+            sections={sections}
+            listId={selectedList?.id ?? null}
+            groupBy={groupBy}
+            sortBy={sortBy}
+            onChanged={setTasks}
+            onSelect={setSelectedTaskId}
+            onSectionsChanged={setSections}
+          />
+        )}
       </main>
       {selectedTask !== null && (
         <TaskDetail

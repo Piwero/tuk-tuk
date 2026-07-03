@@ -97,3 +97,25 @@ def test_task_order_follows_sort_order_and_survives_reload(client: TestClient) -
     assert response.status_code == 200
     items = client.get("/api/v1/tasks", params={"list_id": project}).json()["items"]
     assert [task["title"] for task in items] == ["First", "Third", "Second"]
+
+
+def test_task_can_be_created_directly_in_a_section(client: TestClient) -> None:
+    project = make_list(client)
+    section = client.post("/api/v1/sections", json={"list_id": project, "name": "Doing"}).json()
+
+    created = client.post(
+        "/api/v1/tasks",
+        json={"title": "Born here", "list_id": project, "section_id": section["id"]},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["section_id"] == section["id"]
+
+    wrong_list = client.post("/api/v1/tasks", json={"title": "Stray", "section_id": section["id"]})
+    assert wrong_list.status_code == 409
+    assert wrong_list.json()["error"]["code"] == "section_list_mismatch"
+
+    unknown = client.post(
+        "/api/v1/tasks", json={"title": "Lost", "list_id": project, "section_id": 424242}
+    )
+    assert unknown.status_code == 404

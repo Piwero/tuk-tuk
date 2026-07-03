@@ -44,6 +44,7 @@ class TaskList(Base):
     emoji: Mapped[str | None] = mapped_column(String(16), default=None)
     is_archived: Mapped[bool] = mapped_column(default=False)
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    view_mode: Mapped[str] = mapped_column(String(6), default="list")
     folder_id: Mapped[int | None] = mapped_column(
         ForeignKey("folders.id"), index=True, default=None
     )

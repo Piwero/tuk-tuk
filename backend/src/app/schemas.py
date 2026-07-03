@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 # The four named Priority levels — named, not numbered, on the wire.
 Priority = Literal["none", "low", "medium", "high"]
 
+# How a List is displayed: flat or as a Kanban board of its Sections.
+ViewMode = Literal["list", "kanban"]
+
 
 def reject_explicit_null(value: object) -> object:
     """Shared PATCH-field rule: absent means "leave unchanged"; explicit null is rejected.
@@ -52,9 +55,9 @@ class ListCreate(BaseModel):
     emoji: str | None = Field(default=None, max_length=16)
 
 
-# PATCH fields: absent means "leave unchanged". name, is_archived, and sort_order
-# may not be null; an explicit null for color or emoji clears the attribute, and
-# an explicit null for folder_id moves the List out of its Folder.
+# PATCH fields: absent means "leave unchanged". name, is_archived, sort_order,
+# and view_mode may not be null; an explicit null for color or emoji clears the
+# attribute, and an explicit null for folder_id moves the List out of its Folder.
 class ListUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     color: str | None = Field(default=None, max_length=32)
@@ -62,8 +65,11 @@ class ListUpdate(BaseModel):
     is_archived: bool | None = None
     folder_id: int | None = None
     sort_order: int | None = None
+    view_mode: ViewMode | None = None
 
-    _reject_nulls = field_validator("name", "is_archived", "sort_order")(reject_explicit_null)
+    _reject_nulls = field_validator("name", "is_archived", "sort_order", "view_mode")(
+        reject_explicit_null
+    )
 
 
 class ListRead(BaseModel):
@@ -77,6 +83,7 @@ class ListRead(BaseModel):
     is_archived: bool
     folder_id: int | None
     sort_order: int
+    view_mode: ViewMode
 
 
 class TagCreate(BaseModel):
@@ -126,6 +133,7 @@ class SectionRead(BaseModel):
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     list_id: int | None = None
+    section_id: int | None = None
 
 
 # PATCH fields: absent means "leave unchanged". An explicit null is rejected,

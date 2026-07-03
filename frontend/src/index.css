@@ -454,6 +454,85 @@ main form input {
   font-size: 0.85rem;
 }
 
+.main-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.main-header h1 {
+  margin: 0;
+}
+
+.view-toggle {
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+  color: #57606a;
+  cursor: pointer;
+}
+
+.kanban {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+
+.kanban-column {
+  flex: 0 0 240px;
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem 0.6rem;
+}
+
+.kanban-column h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #57606a;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kanban-column ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-height: 1.5rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.kanban-card {
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  cursor: grab;
+}
+
+.kanban-card .task-title {
+  width: 100%;
+}
+
+.kanban-column form {
+  margin-top: 0.5rem;
+}
+
+.kanban-column input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px dashed #d0d7de;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.85rem;
+}
+
 .tasks li {
   display: flex;
   align-items: center;
