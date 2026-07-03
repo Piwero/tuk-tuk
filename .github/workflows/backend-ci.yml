@@ -26,29 +26,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
         with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
-          cache-dependency-path: backend/pyproject.toml
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+        run: uv sync --locked
 
       - name: Ruff (lint)
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Ruff (format check)
-        run: ruff format --check .
+        run: uv run ruff format --check .
 
       - name: Mypy
-        run: mypy src
+        run: uv run mypy src
 
       - name: Pytest
-        run: pytest --cov=app --cov-report=xml
+        run: uv run pytest --cov=app --cov-report=xml
 
       - name: Upload coverage
         if: always()

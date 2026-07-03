@@ -1,40 +1,73 @@
-# template-python-ts-app
+# tuk-tuk
 
-A reusable project template for apps that pair a **Python backend** with a
-**TypeScript frontend**. Fork or use this repository as a GitHub template
-to bootstrap new services with a consistent structure, tooling, and CI.
+An all-in-one personal productivity app — task management, calendar, habits,
+and focus — with a clean, conventional HTTP API.
 
-## What's included
+## Stack
 
-- **`backend/`** — Python package scaffolded with `pyproject.toml`, `ruff`,
-  `mypy`, and `pytest`. Uses [FastAPI](https://fastapi.tiangolo.com/) as a
-  default web framework; swap for Flask / Django / etc. as needed.
-- **`frontend/`** — TypeScript app scaffolded with [Vite](https://vitejs.dev/)
-  and React, linted with ESLint, formatted with Prettier.
-- **`.github/workflows/`** — CI pipelines for backend, frontend, and
-  pre-commit checks, plus Dependabot and PR / issue templates.
-- **`.pre-commit-config.yaml`** — Multi-language hooks (ruff, mypy, eslint,
-  prettier, hygiene checks) wired for both stacks.
-- **`docker-compose.yml`** — Local dev orchestration for backend + frontend.
-- **`Makefile`** — One-liner shortcuts (`make install`, `make dev`,
-  `make lint`, `make test`).
+- **`backend/`** — Python 3.12 / [FastAPI](https://fastapi.tiangolo.com/)
+  service managed with [uv](https://docs.astral.sh/uv/) (`ruff`, `mypy`,
+  `pytest`; SQLite via SQLAlchemy + Alembic).
+- **`frontend/`** — TypeScript / React app built with
+  [Vite](https://vitejs.dev/), linted with ESLint, formatted with Prettier,
+  tested with Vitest.
+- **`mise.toml`** — single dev interface: provisions tools (python, node, uv,
+  git-cliff) and defines every task (`mise tasks`).
+- **`docker-compose.yml`** — runs both dev servers in containers with bind
+  mounts and hot reload.
+- **`.github/workflows/`** — CI for backend, frontend, and pre-commit checks,
+  plus Dependabot and PR / issue templates.
+- **`.pre-commit-config.yaml`** — multi-language hooks (ruff, mypy, eslint,
+  prettier, hygiene checks, conventional commits) wired for both stacks.
+
+## Prerequisites
+
+- [mise](https://mise.jdx.dev/) — provisions all language tooling
+- [Docker](https://docs.docker.com/) with Compose v2 — runs the dev servers
 
 ## Quickstart
 
 ```bash
-# 1. Use this repo as a GitHub template, or:
-git clone https://github.com/piwero/template-python-ts-app my-app
-cd my-app
-
-# 2. Copy env defaults
+# 1. Copy env defaults
 cp .env.example .env
 
-# 3. Install everything (python venv + npm deps + pre-commit)
-make install
+# 2. Provision tools (python, node, uv, git-cliff)
+mise install
 
-# 4. Run backend + frontend in dev mode
-make dev
+# 3. Install dependencies + git hooks
+mise run setup
+
+# 4. Run backend + frontend in Docker with hot reload
+mise run dev
 ```
+
+Then open:
+
+- Frontend: http://localhost:5173
+- API: http://localhost:8000 (interactive docs at `/docs`, health at `/health`)
+
+## Development
+
+Dev servers run in Docker (source bind-mounted, hot reload on both sides).
+Install, lint, and test run natively via mise-provisioned uv/npm.
+
+| Task                     | Command                 |
+| ------------------------ | ----------------------- |
+| Install dependencies     | `mise run install`      |
+| Install deps + git hooks | `mise run setup`        |
+| Run backend + frontend   | `mise run dev`          |
+| Run backend only         | `mise run backend:dev`  |
+| Run frontend only        | `mise run frontend:dev` |
+| Stop all services        | `mise run down`         |
+| Lint all                 | `mise run lint`         |
+| Test all                 | `mise run test`         |
+| Fix backend lint/format  | `mise run backend:lint:fix` |
+| Format frontend          | `mise run frontend:format`  |
+| Tag a release            | `mise run release:tag <bump>` |
+
+Run `mise tasks` for the full list. Dependency changes are picked up
+automatically: `mise run dev` rebuilds images (`--build`) and re-seeds the
+frontend `node_modules` volume (`--renew-anon-volumes`).
 
 ## Project layout
 
@@ -42,16 +75,17 @@ make dev
 .
 ├── backend/                # Python service
 │   ├── src/app/            # Application code
+│   ├── migrations/         # Alembic migrations
 │   ├── tests/              # Pytest tests
 │   ├── pyproject.toml
-│   └── Dockerfile
+│   ├── uv.lock
+│   └── Dockerfile          # dev + prod stages
 ├── frontend/               # TypeScript app
 │   ├── src/                # App source
 │   ├── public/             # Static assets
 │   ├── package.json
-│   ├── tsconfig.json
 │   ├── vite.config.ts
-│   └── Dockerfile
+│   └── Dockerfile          # dev + build + runtime stages
 ├── .github/
 │   ├── workflows/          # CI pipelines
 │   ├── ISSUE_TEMPLATE/
@@ -60,31 +94,9 @@ make dev
 │   └── dependabot.yml
 ├── .pre-commit-config.yaml
 ├── docker-compose.yml
-├── Makefile
+├── mise.toml
 └── .env.example
 ```
-
-## Development
-
-| Task                | Command                     |
-| ------------------- | --------------------------- |
-| Install everything  | `make install`              |
-| Run backend + web   | `make dev`                  |
-| Run backend only    | `make dev-backend`          |
-| Run frontend only   | `make dev-frontend`         |
-| Lint all            | `make lint`                 |
-| Format all          | `make format`               |
-| Test all            | `make test`                 |
-| Build docker images | `docker compose build`      |
-
-## Using this as a template
-
-1. Click **Use this template → Create a new repository** on GitHub.
-2. Update the project name in `backend/pyproject.toml`, `frontend/package.json`,
-   this `README.md`, and the `LICENSE` copyright line.
-3. Replace `.github/CODEOWNERS` with the right owners for your team.
-4. Delete anything you don't need (e.g., drop `frontend/` if you're building
-   a Python-only service).
 
 ## License
 
