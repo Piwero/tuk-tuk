@@ -10,8 +10,9 @@ import {
   type Task,
 } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
-import { groupTasks, sortTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
+import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
+import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
 import { SectionNameForm } from "./SectionNameForm";
 
 interface TaskListViewProps {
@@ -87,37 +88,7 @@ export function TaskListView({
   // grouped List view; other groupings/sorts are computed projections.
   const canDragReorder = listId !== null && groupBy === "section" && sortBy === "custom";
 
-  function applyTaskUpdate(updated: Task): void {
-    onChanged((current) => current.map((t) => (t.id === updated.id ? updated : t)));
-  }
-
-  async function moveTaskBefore(taskId: number, target: Task): Promise<void> {
-    const moved = tasks.find((t) => t.id === taskId);
-    if (moved === undefined || taskId === target.id) {
-      return;
-    }
-    const siblings = sortTasks(
-      tasks.filter((t) => t.section_id === target.section_id && t.id !== taskId),
-      "custom",
-    );
-    const plan = planInsertBefore(siblings, moved, target.id);
-    if (plan.kind === "single") {
-      applyTaskUpdate(
-        await updateTask(taskId, { section_id: target.section_id, sort_order: plan.sort_order }),
-      );
-      return;
-    }
-    // Gap exhausted: renumber the group sparsely.
-    const updates = await Promise.all(
-      plan.rows.map(({ row, sort_order }) =>
-        updateTask(row.id, {
-          sort_order,
-          ...(row.id === taskId ? { section_id: target.section_id } : {}),
-        }),
-      ),
-    );
-    onChanged((current) => current.map((t) => updates.find((updated) => updated.id === t.id) ?? t));
-  }
+  const apply = applierFor(onChanged);
 
   function handleDropOnTaskRow(event: React.DragEvent, target: Task): void {
     if (!canDragReorder) {
@@ -127,19 +98,8 @@ export function TaskListView({
     event.stopPropagation();
     const payload = readDragPayload(event);
     if (payload?.kind === "task") {
-      void moveTaskBefore(payload.id, target);
+      void moveTaskBeforeTask(tasks, payload.id, target, apply);
     }
-  }
-
-  /** Dropping on a group header appends the task to that Section (null = ungroup). */
-  async function moveTaskIntoSection(taskId: number, sectionId: number | null): Promise<void> {
-    const siblings = sortTasks(
-      tasks.filter((t) => t.section_id === sectionId && t.id !== taskId),
-      "custom",
-    );
-    applyTaskUpdate(
-      await updateTask(taskId, { section_id: sectionId, sort_order: appendOrder(siblings) }),
-    );
   }
 
   async function moveSectionBefore(sectionId: number, target: Section): Promise<void> {
@@ -168,7 +128,7 @@ export function TaskListView({
     event.stopPropagation();
     const payload = readDragPayload(event);
     if (payload?.kind === "task") {
-      void moveTaskIntoSection(payload.id, sectionId);
+      void moveTaskToSectionEnd(tasks, payload.id, sectionId, apply);
     }
     if (payload?.kind === "section" && sectionId !== null && payload.id !== sectionId) {
       const target = sections.find((s) => s.id === sectionId);
@@ -306,7 +266,7 @@ export function TaskListView({
     const payload = readDragPayload(event);
     if (payload?.kind === "task") {
       // The space below the groups belongs to no Section.
-      void moveTaskIntoSection(payload.id, null);
+      void moveTaskToSectionEnd(tasks, payload.id, null, apply);
     }
     if (payload?.kind === "section") {
       void moveSectionToEnd(payload.id);

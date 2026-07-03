@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-import { type Priority } from "../api";
+import { type Priority, type ViewMode } from "../api";
 import { byName, SORT_GAP } from "../ordering";
 
 export interface FakeList {
@@ -12,7 +12,7 @@ export interface FakeList {
   is_archived: boolean;
   folder_id: number | null;
   sort_order: number;
-  view_mode: "list" | "kanban";
+  view_mode: ViewMode;
 }
 
 export interface FakeFolder {
@@ -195,6 +195,26 @@ export function installFakeApi({
   const notFound = (message: string): Response =>
     json({ error: { code: "not_found", message } }, 404);
 
+  /** Mirrors the backend's resolve_section rule: 404 unknown, 409 foreign. */
+  const sectionMismatch = (sectionId: number, listId: number): Response | null => {
+    const section = state.sections.find((s) => s.id === sectionId);
+    if (!section) {
+      return notFound(`Section ${sectionId} not found`);
+    }
+    if (section.list_id !== listId) {
+      return json(
+        {
+          error: {
+            code: "section_list_mismatch",
+            message: `Section ${section.id} belongs to another list`,
+          },
+        },
+        409,
+      );
+    }
+    return null;
+  };
+
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://localhost");
     const method = (init?.method ?? "GET").toUpperCase();
@@ -283,20 +303,9 @@ export function installFakeApi({
       const input = body as { title: string; list_id?: number; section_id?: number };
       const listId = input.list_id ?? INBOX.id;
       if (input.section_id !== undefined) {
-        const section = state.sections.find((s) => s.id === input.section_id);
-        if (!section) {
-          return notFound(`Section ${input.section_id} not found`);
-        }
-        if (section.list_id !== listId) {
-          return json(
-            {
-              error: {
-                code: "section_list_mismatch",
-                message: `Section ${section.id} belongs to another list`,
-              },
-            },
-            409,
-          );
+        const rejection = sectionMismatch(input.section_id, listId);
+        if (rejection) {
+          return rejection;
         }
       }
       const created = fakeTask(input.title, {
@@ -440,21 +449,10 @@ export function installFakeApi({
           rest.section_id = null;
         }
         if (typeof rest.section_id === "number") {
-          const section = state.sections.find((s) => s.id === rest.section_id);
-          if (!section) {
-            return notFound(`Section ${rest.section_id} not found`);
-          }
           const targetList = typeof rest.list_id === "number" ? rest.list_id : task.list_id;
-          if (section.list_id !== targetList) {
-            return json(
-              {
-                error: {
-                  code: "section_list_mismatch",
-                  message: `Section ${section.id} belongs to another list`,
-                },
-              },
-              409,
-            );
+          const rejection = sectionMismatch(rest.section_id, targetList);
+          if (rejection) {
+            return rejection;
           }
         }
         Object.assign(task, rest);

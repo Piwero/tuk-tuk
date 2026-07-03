@@ -33,7 +33,8 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         list_id = await session.scalar(select(TaskList.id).where(TaskList.id == payload.list_id))
         if list_id is None:
             raise NotFoundError(f"List {payload.list_id} not found")
-    assert list_id is not None
+    if list_id is None:  # unreachable while the Inbox is seeded at startup
+        raise NotFoundError("Inbox not found")
     if payload.section_id is not None:
         await resolve_section(session, payload.section_id, list_id)
     # Initialize collections so serialization never triggers an async lazy load.
