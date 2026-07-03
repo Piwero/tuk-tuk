@@ -200,6 +200,7 @@ export function App(): JSX.Element {
             listId={selectedList.id}
             onChanged={setTasks}
             onSelect={setSelectedTaskId}
+            onSectionsChanged={setSections}
           />
         ) : (
           <TaskListView

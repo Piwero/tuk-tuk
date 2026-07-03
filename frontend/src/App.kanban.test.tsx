@@ -186,4 +186,23 @@ describe("Kanban view", () => {
         .map((c) => c.getAttribute("aria-label")),
     ).toEqual(["Cards in Backlog"]);
   });
+
+  it("offers Add Section on an empty board so the first column can be created", async () => {
+    const board = fakeList("Board", { view_mode: "kanban" });
+    const api = installFakeApi({ lists: [INBOX, board] });
+    const user = userEvent.setup();
+    render(<App />);
+    await openList("Board");
+    const kanban = await screen.findByRole("region", { name: "Kanban board" });
+
+    await user.click(within(kanban).getByRole("button", { name: "Add Section" }));
+    await user.type(screen.getByLabelText("Section name"), "Backlog");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await within(kanban).findByRole("list", { name: "Cards in Backlog" }),
+    ).toBeInTheDocument();
+    const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/sections");
+    expect(post?.body).toEqual({ list_id: board.id, name: "Backlog" });
+  });
 });

@@ -1,9 +1,10 @@
 import { useState } from "react";
 
-import { createTask, updateTask, type Section, type Task } from "../api";
+import { createSection, createTask, type Section, type Task } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
-import { sortTasks } from "../grouping";
-import { appendOrder, byOrder, planInsertBefore } from "../ordering";
+import { groupTasks } from "../grouping";
+import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
+import { SectionNameForm } from "./SectionNameForm";
 
 interface KanbanViewProps {
   tasks: Task[];
@@ -11,14 +12,7 @@ interface KanbanViewProps {
   listId: number;
   onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
-}
-
-interface Column {
-  key: string;
-  label: string;
-  /** A Section id, or null for the ungrouped column. */
-  sectionId: number | null;
-  tasks: Task[];
+  onSectionsChanged: (update: (current: Section[]) => Section[]) => void;
 }
 
 export function KanbanView({
@@ -27,86 +21,45 @@ export function KanbanView({
   listId,
   onChanged,
   onSelect,
+  onSectionsChanged,
 }: KanbanViewProps): JSX.Element {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [addingSection, setAddingSection] = useState(false);
 
-  async function addCard(column: Column): Promise<void> {
-    const draft = (drafts[column.key] ?? "").trim();
+  const apply = applierFor(onChanged);
+
+  // The board is the Sections; the ungrouped column appears only while
+  // sectionless tasks exist, so nothing is ever hidden.
+  const columns = groupTasks(tasks, sections, "section", "custom")
+    .map((group) => ({
+      key: group.key,
+      label: group.label ?? "No section",
+      sectionId: group.sectionId ?? null,
+      tasks: group.tasks,
+    }))
+    .filter((column) => column.sectionId !== null || column.tasks.length > 0);
+
+  async function addCard(columnKey: string, sectionId: number | null): Promise<void> {
+    const draft = (drafts[columnKey] ?? "").trim();
     if (draft === "") {
       return;
     }
-    const created = await createTask(draft, listId, column.sectionId ?? undefined);
+    const created = await createTask(draft, listId, sectionId ?? undefined);
     onChanged((current) => [...current, created]);
-    setDrafts((current) => ({ ...current, [column.key]: "" }));
-  }
-  const ungrouped = sortTasks(
-    tasks.filter((task) => task.section_id === null),
-    "custom",
-  );
-  const columns: Column[] = [
-    // Ungrouped tasks must stay visible, but the board is the Sections.
-    ...(ungrouped.length > 0
-      ? [{ key: "none", label: "No section", sectionId: null, tasks: ungrouped }]
-      : []),
-    ...[...sections].sort(byOrder).map((section) => ({
-      key: `section-${section.id}`,
-      label: section.name,
-      sectionId: section.id,
-      tasks: sortTasks(
-        tasks.filter((task) => task.section_id === section.id),
-        "custom",
-      ),
-    })),
-  ];
-
-  function applyTaskUpdate(updated: Task): void {
-    onChanged((current) => current.map((t) => (t.id === updated.id ? updated : t)));
+    setDrafts((current) => ({ ...current, [columnKey]: "" }));
   }
 
-  /** Dropping on a column's body appends the card to that Section. */
-  async function moveTaskIntoColumn(taskId: number, sectionId: number | null): Promise<void> {
-    const siblings = sortTasks(
-      tasks.filter((t) => t.section_id === sectionId && t.id !== taskId),
-      "custom",
-    );
-    applyTaskUpdate(
-      await updateTask(taskId, { section_id: sectionId, sort_order: appendOrder(siblings) }),
-    );
-  }
-
-  async function moveTaskBeforeCard(taskId: number, target: Task): Promise<void> {
-    const moved = tasks.find((t) => t.id === taskId);
-    if (moved === undefined || taskId === target.id) {
-      return;
-    }
-    const siblings = sortTasks(
-      tasks.filter((t) => t.section_id === target.section_id && t.id !== taskId),
-      "custom",
-    );
-    const plan = planInsertBefore(siblings, moved, target.id);
-    if (plan.kind === "single") {
-      applyTaskUpdate(
-        await updateTask(taskId, { section_id: target.section_id, sort_order: plan.sort_order }),
-      );
-      return;
-    }
-    // Gap exhausted: renumber the column sparsely.
-    const updates = await Promise.all(
-      plan.rows.map(({ row, sort_order }) =>
-        updateTask(row.id, {
-          sort_order,
-          ...(row.id === taskId ? { section_id: target.section_id } : {}),
-        }),
-      ),
-    );
-    onChanged((current) => current.map((t) => updates.find((updated) => updated.id === t.id) ?? t));
+  async function addSection(name: string): Promise<void> {
+    const created = await createSection(listId, name);
+    onSectionsChanged((current) => [...current, created]);
+    setAddingSection(false);
   }
 
   function handleDropOnColumn(event: React.DragEvent, sectionId: number | null): void {
     event.preventDefault();
     const payload = readDragPayload(event);
     if (payload?.kind === "task") {
-      void moveTaskIntoColumn(payload.id, sectionId);
+      void moveTaskToSectionEnd(tasks, payload.id, sectionId, apply);
     }
   }
 
@@ -115,7 +68,7 @@ export function KanbanView({
     event.stopPropagation();
     const payload = readDragPayload(event);
     if (payload?.kind === "task") {
-      void moveTaskBeforeCard(payload.id, target);
+      void moveTaskBeforeTask(tasks, payload.id, target, apply);
     }
   }
 
@@ -158,7 +111,7 @@ export function KanbanView({
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              void addCard(column);
+              void addCard(column.key, column.sectionId);
             }}
           >
             <input
@@ -172,6 +125,18 @@ export function KanbanView({
           </form>
         </div>
       ))}
+      <div className="kanban-column kanban-add-column">
+        {addingSection ? (
+          <SectionNameForm
+            onSubmit={(name) => void addSection(name)}
+            onCancel={() => setAddingSection(false)}
+          />
+        ) : (
+          <button type="button" className="add-section" onClick={() => setAddingSection(true)}>
+            Add Section
+          </button>
+        )}
+      </div>
     </section>
   );
 }
