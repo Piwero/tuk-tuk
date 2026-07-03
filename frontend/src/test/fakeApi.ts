@@ -415,6 +415,24 @@ export function installFakeApi({
         ) {
           rest.section_id = null;
         }
+        if (typeof rest.section_id === "number") {
+          const section = state.sections.find((s) => s.id === rest.section_id);
+          if (!section) {
+            return notFound(`Section ${rest.section_id} not found`);
+          }
+          const targetList = typeof rest.list_id === "number" ? rest.list_id : task.list_id;
+          if (section.list_id !== targetList) {
+            return json(
+              {
+                error: {
+                  code: "section_list_mismatch",
+                  message: `Section ${section.id} belongs to another list`,
+                },
+              },
+              409,
+            );
+          }
+        }
         Object.assign(task, rest);
         if (tag_ids !== undefined) {
           const missing = tag_ids.find((id) => !state.tags.some((tag) => tag.id === id));

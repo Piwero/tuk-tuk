@@ -16,10 +16,17 @@ export interface TaskGroup {
 }
 
 const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2, none: 3 };
-const PRIORITY_GROUP_LABELS: Record<Priority, string> = {
-  high: "High",
-  medium: "Medium",
+
+/** Display names for the four named Priority levels. */
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  none: "None",
   low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+
+const PRIORITY_GROUP_LABELS: Record<Priority, string> = {
+  ...PRIORITY_LABELS,
   none: "No priority",
 };
 

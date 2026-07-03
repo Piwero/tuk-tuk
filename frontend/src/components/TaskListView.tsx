@@ -12,6 +12,7 @@ import {
 import { readDragPayload, startDrag } from "../dnd";
 import { groupTasks, sortTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
+import { SectionNameForm } from "./SectionNameForm";
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -37,8 +38,7 @@ export function TaskListView({
   onSectionsChanged,
 }: TaskListViewProps): JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
-  const [newSectionName, setNewSectionName] = useState("");
-  const [sectionEditor, setSectionEditor] = useState<{ id: number; name: string } | null>(null);
+  const [renamingSectionId, setRenamingSectionId] = useState<number | null>(null);
 
   async function toggle(task: Task): Promise<void> {
     const updated = await updateTask(task.id, { completed: !task.completed });
@@ -50,29 +50,21 @@ export function TaskListView({
     onChanged((current) => current.filter((t) => t.id !== task.id));
   }
 
-  async function addSection(): Promise<void> {
-    const trimmed = newSectionName.trim();
-    if (trimmed === "" || listId === null) {
+  async function addSection(name: string): Promise<void> {
+    if (listId === null) {
       return;
     }
-    const created = await createSection(listId, trimmed);
+    const created = await createSection(listId, name);
     onSectionsChanged((current) => [...current, created]);
-    setNewSectionName("");
     setAddingSection(false);
   }
 
-  async function renameSection(): Promise<void> {
-    if (sectionEditor === null) {
-      return;
-    }
-    const trimmed = sectionEditor.name.trim();
-    if (trimmed !== "") {
-      const updated = await updateSection(sectionEditor.id, { name: trimmed });
-      onSectionsChanged((current) =>
-        current.map((section) => (section.id === updated.id ? updated : section)),
-      );
-    }
-    setSectionEditor(null);
+  async function renameSection(sectionId: number, name: string): Promise<void> {
+    const updated = await updateSection(sectionId, { name });
+    onSectionsChanged((current) =>
+      current.map((section) => (section.id === updated.id ? updated : section)),
+    );
+    setRenamingSectionId(null);
   }
 
   async function removeSection(section: Section): Promise<void> {
@@ -241,28 +233,12 @@ export function TaskListView({
     return (
       <section key={group.key} className="task-group">
         {group.label !== null &&
-          (section !== null && sectionEditor?.id === section.id ? (
-            <form
-              className="list-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void renameSection();
-              }}
-            >
-              <label>
-                Section name
-                <input
-                  value={sectionEditor.name}
-                  onChange={(event) =>
-                    setSectionEditor({ id: section.id, name: event.target.value })
-                  }
-                />
-              </label>
-              <button type="submit">Save</button>
-              <button type="button" onClick={() => setSectionEditor(null)}>
-                Cancel
-              </button>
-            </form>
+          (section !== null && renamingSectionId === section.id ? (
+            <SectionNameForm
+              initialName={section.name}
+              onSubmit={(name) => void renameSection(section.id, name)}
+              onCancel={() => setRenamingSectionId(null)}
+            />
           ) : (
             <div
               className="group-header"
@@ -285,7 +261,7 @@ export function TaskListView({
                   <button
                     type="button"
                     aria-label={`Rename section ${section.name}`}
-                    onClick={() => setSectionEditor({ id: section.id, name: section.name })}
+                    onClick={() => setRenamingSectionId(section.id)}
                   >
                     ✎
                   </button>
@@ -312,31 +288,45 @@ export function TaskListView({
 
   const groups = groupTasks(tasks, listId === null ? [] : sections, groupBy, sortBy);
 
+  async function moveSectionToEnd(sectionId: number): Promise<void> {
+    const siblings = [...sections].sort(byOrder).filter((s) => s.id !== sectionId);
+    if (siblings.length === sections.length) {
+      return;
+    }
+    const updated = await updateSection(sectionId, { sort_order: appendOrder(siblings) });
+    onSectionsChanged((current) => current.map((s) => (s.id === updated.id ? updated : s)));
+  }
+
+  /** Dropping on empty container space moves the payload to the end. */
+  function handleDropOnContainer(event: React.DragEvent): void {
+    if (!canDragReorder) {
+      return;
+    }
+    event.preventDefault();
+    const payload = readDragPayload(event);
+    if (payload?.kind === "task") {
+      // The space below the groups belongs to no Section.
+      void moveTaskIntoSection(payload.id, null);
+    }
+    if (payload?.kind === "section") {
+      void moveSectionToEnd(payload.id);
+    }
+  }
+
   return (
-    <div className="task-groups">
+    <div
+      className="task-groups"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={handleDropOnContainer}
+    >
       {groups.map((group) => renderGroup(group))}
       {listId !== null &&
         groupBy === "section" &&
         (addingSection ? (
-          <form
-            className="list-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void addSection();
-            }}
-          >
-            <label>
-              Section name
-              <input
-                value={newSectionName}
-                onChange={(event) => setNewSectionName(event.target.value)}
-              />
-            </label>
-            <button type="submit">Save</button>
-            <button type="button" onClick={() => setAddingSection(false)}>
-              Cancel
-            </button>
-          </form>
+          <SectionNameForm
+            onSubmit={(name) => void addSection(name)}
+            onCancel={() => setAddingSection(false)}
+          />
         ) : (
           <button type="button" className="add-section" onClick={() => setAddingSection(true)}>
             Add Section

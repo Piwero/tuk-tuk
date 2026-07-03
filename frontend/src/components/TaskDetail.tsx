@@ -12,14 +12,8 @@ import {
   type Task,
 } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
+import { PRIORITY_LABELS } from "../grouping";
 import { appendOrder, planInsertBefore } from "../ordering";
-
-const PRIORITY_LABELS: Record<Priority, string> = {
-  none: "None",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-};
 
 interface TaskDetailProps {
   task: Task;
