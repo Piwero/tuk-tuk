@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Base: node + deps (shared by dev and build) ----
-FROM node:20-alpine AS base
+FROM node:26-alpine AS base
 WORKDIR /app
 
 COPY package*.json ./
@@ -22,7 +22,7 @@ COPY . .
 RUN npm run build
 
 # ---- Runtime stage (static server) ----
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 
 RUN npm install -g serve@14
