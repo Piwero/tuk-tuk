@@ -12,6 +12,7 @@ export interface FakeList {
   is_archived: boolean;
   folder_id: number | null;
   sort_order: number;
+  view_mode: "list" | "kanban";
 }
 
 export interface FakeFolder {
@@ -78,6 +79,7 @@ export const INBOX: FakeList = {
   is_archived: false,
   folder_id: null,
   sort_order: 0,
+  view_mode: "list",
 };
 
 let nextTaskId = 100;
@@ -137,6 +139,7 @@ export function fakeList(name: string, overrides: Partial<FakeList> = {}): FakeL
     is_archived: false,
     folder_id: null,
     sort_order: id * SORT_GAP,
+    view_mode: "list",
     ...overrides,
   };
 }
@@ -277,8 +280,29 @@ export function installFakeApi({
       return json(page(items));
     }
     if (method === "POST" && url.pathname === "/api/v1/tasks") {
-      const created = fakeTask((body as { title: string }).title, {
-        list_id: (body as { list_id?: number }).list_id ?? INBOX.id,
+      const input = body as { title: string; list_id?: number; section_id?: number };
+      const listId = input.list_id ?? INBOX.id;
+      if (input.section_id !== undefined) {
+        const section = state.sections.find((s) => s.id === input.section_id);
+        if (!section) {
+          return notFound(`Section ${input.section_id} not found`);
+        }
+        if (section.list_id !== listId) {
+          return json(
+            {
+              error: {
+                code: "section_list_mismatch",
+                message: `Section ${section.id} belongs to another list`,
+              },
+            },
+            409,
+          );
+        }
+      }
+      const created = fakeTask(input.title, {
+        list_id: listId,
+        section_id: input.section_id ?? null,
+        sort_order: nextOrder(state.tasks.filter((t) => t.list_id === listId)),
       });
       state.tasks.push(created);
       return json(created, 201);

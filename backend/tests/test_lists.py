@@ -124,3 +124,36 @@ def test_sidebar_list_order_follows_sort_order_with_inbox_pinned_first(
     assert response.status_code == 200
     items = client.get("/api/v1/lists").json()["items"]
     assert [item["name"] for item in items] == ["Inbox", "Beta", "Alpha"]
+
+
+def test_each_list_remembers_its_view_mode(client: TestClient) -> None:
+    board = client.post("/api/v1/lists", json={"name": "Board"}).json()
+    client.post("/api/v1/lists", json={"name": "Plain"})
+    assert board["view_mode"] == "list"
+
+    response = client.patch(f"/api/v1/lists/{board['id']}", json={"view_mode": "kanban"})
+
+    assert response.status_code == 200
+    assert response.json()["view_mode"] == "kanban"
+    items = client.get("/api/v1/lists").json()["items"]
+    modes = {item["name"]: item["view_mode"] for item in items}
+    assert modes["Board"] == "kanban"
+    assert modes["Plain"] == "list"
+
+    invalid = client.patch(f"/api/v1/lists/{board['id']}", json={"view_mode": "timeline"})
+    assert invalid.status_code == 422
+
+
+def test_the_inbox_view_mode_is_still_a_preference(client: TestClient) -> None:
+    inbox = next(item for item in client.get("/api/v1/lists").json()["items"] if item["is_inbox"])
+
+    allowed = client.patch(f"/api/v1/lists/{inbox['id']}", json={"view_mode": "kanban"})
+
+    assert allowed.status_code == 200
+    assert allowed.json()["view_mode"] == "kanban"
+
+    still_blocked = client.patch(
+        f"/api/v1/lists/{inbox['id']}", json={"view_mode": "list", "name": "Nope"}
+    )
+    assert still_blocked.status_code == 403
+    assert still_blocked.json()["error"]["code"] == "inbox_immutable"

@@ -47,11 +47,13 @@ async def update_list(list_id: int, payload: ListUpdate, session: SessionDep) ->
     task_list = await session.get(TaskList, list_id)
     if task_list is None:
         raise NotFoundError(f"List {list_id} not found")
-    if task_list.is_inbox:
+    changes = payload.model_dump(exclude_unset=True)
+    # view_mode is a display preference, not part of the Inbox's protected
+    # identity — it is the one field the Inbox accepts.
+    if task_list.is_inbox and set(changes) - {"view_mode"}:
         raise APIError(
             status_code=403, code="inbox_immutable", message="The Inbox cannot be modified"
         )
-    changes = payload.model_dump(exclude_unset=True)
     if changes.get("folder_id") is not None:
         folder = await session.get(Folder, changes["folder_id"])
         if folder is None:

@@ -9,6 +9,7 @@ export interface TaskList {
   is_archived: boolean;
   folder_id: number | null;
   sort_order: number;
+  view_mode: ViewMode;
 }
 
 export interface Folder {
@@ -18,6 +19,9 @@ export interface Folder {
 }
 
 export type Priority = "none" | "low" | "medium" | "high";
+
+/** How a List is displayed: flat or as a Kanban board of its Sections. */
+export type ViewMode = "list" | "kanban";
 
 export interface Tag {
   id: number;
@@ -110,6 +114,7 @@ export interface ListPatch {
   is_archived?: boolean;
   folder_id?: number | null;
   sort_order?: number;
+  view_mode?: ViewMode;
 }
 
 export function updateList(listId: number, patch: ListPatch): Promise<TaskList> {
@@ -205,10 +210,14 @@ export function deleteTag(tagId: number): Promise<void> {
   return request(`/api/v1/tags/${tagId}`, { method: "DELETE" });
 }
 
-export function createTask(title: string, listId?: number): Promise<Task> {
+export function createTask(title: string, listId?: number, sectionId?: number): Promise<Task> {
   return request("/api/v1/tasks", {
     method: "POST",
-    body: JSON.stringify(listId === undefined ? { title } : { title, list_id: listId }),
+    body: JSON.stringify({
+      title,
+      ...(listId === undefined ? {} : { list_id: listId }),
+      ...(sectionId === undefined ? {} : { section_id: sectionId }),
+    }),
   });
 }
 
