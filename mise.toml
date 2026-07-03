@@ -1,0 +1,199 @@
+[tools]
+python = "3.12"
+node = "20"
+uv = "latest"
+git-cliff = "2.13.1"
+
+[tasks."backend:install"]
+description = "Install backend dependencies (uv)"
+run = "uv sync"
+dir = "backend"
+
+[tasks."backend:dev"]
+description = "Start backend with hot-reload (docker compose)"
+run = "docker compose up --build backend"
+
+[tasks."backend:test"]
+description = "Run backend tests"
+run = "uv run pytest"
+dir = "backend"
+
+[tasks."backend:lint"]
+description = "Lint, format-check, and type-check backend code"
+run = "uv run ruff check . && uv run ruff format --check . && uv run mypy src"
+dir = "backend"
+
+[tasks."backend:lint:fix"]
+description = "Auto-fix backend lint issues and format code"
+run = "uv run ruff check --fix . && uv run ruff format ."
+dir = "backend"
+
+[tasks."frontend:install"]
+description = "Install frontend dependencies"
+run = "npm install"
+dir = "frontend"
+
+[tasks."frontend:dev"]
+description = "Start frontend dev server (docker compose)"
+run = "docker compose up --build frontend"
+
+[tasks."frontend:build"]
+description = "Build frontend for production"
+run = "npm run build"
+dir = "frontend"
+
+[tasks."frontend:test"]
+description = "Run frontend unit tests"
+run = "npm run test"
+dir = "frontend"
+
+[tasks."frontend:test:watch"]
+description = "Run frontend tests in watch mode"
+run = "npm run test:watch"
+dir = "frontend"
+
+[tasks."frontend:lint"]
+description = "Lint frontend code"
+run = "npm run lint"
+dir = "frontend"
+
+[tasks."frontend:format"]
+description = "Format frontend code"
+run = "npm run format"
+dir = "frontend"
+
+[tasks."setup:hooks"]
+description = "Install git hooks via pre-commit"
+depends = ["backend:install"]
+run = '''
+backend/.venv/bin/pre-commit install --install-hooks
+backend/.venv/bin/pre-commit install --hook-type commit-msg
+'''
+
+[tasks.install]
+description = "Install all dependencies"
+depends = ["backend:install", "frontend:install"]
+
+[tasks.setup]
+description = "Install dependencies and configure git hooks"
+depends = ["install", "setup:hooks"]
+
+[tasks.dev]
+description = "Start backend + frontend with hot-reload (docker compose)"
+run = "docker compose up --build"
+
+[tasks.down]
+description = "Stop all services"
+run = "docker compose down"
+
+[tasks.lint]
+description = "Lint both stacks"
+depends = ["backend:lint", "frontend:lint"]
+
+[tasks.test]
+description = "Run all tests"
+depends = ["backend:test", "frontend:test"]
+
+[tasks."release:tag"]
+description = "Bump version and push a release tag (major|minor|patch), triggering the Release workflow"
+usage = '''
+arg "<bump>" help="Which version component to bump" {
+  choices "major" "minor" "patch"
+}
+'''
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+bump="${usage_bump:?bump must be one of: major, minor, patch}"
+
+# Guard: git-cliff must be available (provisioned via mise)
+if ! command -v git-cliff >/dev/null 2>&1; then
+  echo "error: git-cliff not found; run 'mise install' to provision release tooling" >&2
+  exit 1
+fi
+
+# Guard: refresh remote refs and tags
+git fetch --tags --quiet origin
+
+# Guard: must be on main
+branch="$(git branch --show-current)"
+if [ "$branch" != "main" ]; then
+  echo "error: releases must be tagged from 'main' (currently on '$branch')" >&2
+  exit 1
+fi
+
+# Guard: working tree must be clean
+if [ -n "$(git status --porcelain)" ]; then
+  echo "error: working tree is dirty; commit or stash changes before tagging" >&2
+  exit 1
+fi
+
+# Guard: local main must match origin/main
+local_sha="$(git rev-parse main)"
+remote_sha="$(git rev-parse origin/main)"
+if [ "$local_sha" != "$remote_sha" ]; then
+  echo "error: local 'main' is out of sync with 'origin/main'; pull/push first" >&2
+  exit 1
+fi
+
+# Determine current version from the latest v* tag (seed at 0.0.0)
+latest="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
+current="${latest#v}"
+: "${current:=0.0.0}"
+
+IFS='.' read -r major minor patch <<EOF
+$current
+EOF
+major="${major:-0}"; minor="${minor:-0}"; patch="${patch:-0}"
+
+case "$bump" in
+  major) major=$((major + 1)); minor=0; patch=0 ;;
+  minor) minor=$((minor + 1)); patch=0 ;;
+  patch) patch=$((patch + 1)) ;;
+esac
+
+next="v${major}.${minor}.${patch}"
+
+# Guard: never overwrite an existing tag
+if git rev-parse -q --verify "refs/tags/${next}" >/dev/null; then
+  echo "error: tag ${next} already exists" >&2
+  exit 1
+fi
+
+# Confirmation: last chance before this publishes public images
+current_display="${latest:-<none>}"
+echo "Current version: ${current_display}"
+echo "New version:     ${next}"
+printf 'Create and push %s? This triggers the Release workflow and publishes images. [y/N] ' "$next"
+read -r reply
+case "$reply" in
+  y|Y) ;;
+  *) echo "aborted"; exit 1 ;;
+esac
+
+# Generate the changelog for the pending version and commit it, so the tag
+# points at a commit that already contains its own changelog entry.
+git-cliff --config cliff.toml --tag "$next" --unreleased --prepend CHANGELOG.md
+
+if [ -z "$(git status --porcelain CHANGELOG.md)" ]; then
+  echo "error: git-cliff produced no CHANGELOG.md change; aborting" >&2
+  exit 1
+fi
+
+git add CHANGELOG.md
+git commit -m "chore(release): $next"
+
+git tag -a "$next" -m "Release $next"
+
+# Push main and the tag atomically so origin/main and the tag never diverge.
+# If the push fails after the local commit+tag exist, local main is ahead of
+# origin; recover by re-running the exact push below once the cause is resolved.
+if ! git push --atomic origin main "$next"; then
+  echo "error: push failed. Local main and tag $next exist but were not pushed." >&2
+  echo "  Resolve the cause (e.g. 'git pull --rebase'), then re-run:" >&2
+  echo "    git push --atomic origin main $next" >&2
+  exit 1
+fi
+echo "Released $next (changelog updated, main + tag pushed)"
+'''
