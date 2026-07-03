@@ -215,6 +215,7 @@ class TaskRead(BaseModel):
     id: int
     title: str
     completed: bool
+    completed_at: datetime | None
     description: str
     priority: Priority
     list_id: int
@@ -232,6 +233,6 @@ class TaskRead(BaseModel):
     def serialize_created_at(self, value: datetime) -> str:
         return utc_z(value)
 
-    @field_serializer("start_date", "due_date")
+    @field_serializer("start_date", "due_date", "completed_at")
     def serialize_schedule_dates(self, value: datetime | None) -> str | None:
         return None if value is None else utc_z(value)

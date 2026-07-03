@@ -207,6 +207,18 @@ li[data-overdue] .date-chip {
   padding: 1rem 0.5rem;
 }
 
+.smart-lists {
+  display: grid;
+  gap: 0.15rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.completed-toggle {
+  margin-left: auto;
+}
+
 .sidebar ul {
   list-style: none;
   margin: 0;

@@ -11,7 +11,9 @@ import {
   updateList,
   updateTag,
   updateTask,
+  SMART_LABELS,
   type Folder,
+  type SmartView,
   type Tag,
   type Task,
   type TaskList,
@@ -37,8 +39,10 @@ interface SidebarProps {
   tags: Tag[];
   selectedListId: number | null;
   selectedTagId: number | null;
+  selectedSmart: SmartView | null;
   onSelect: (listId: number) => void;
   onSelectTag: (tagId: number) => void;
+  onSelectSmart: (view: SmartView) => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
@@ -73,8 +77,10 @@ export function Sidebar({
   tags,
   selectedListId,
   selectedTagId,
+  selectedSmart,
   onSelect,
   onSelectTag,
+  onSelectSmart,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
@@ -338,6 +344,18 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
+      <nav aria-label="Smart Lists" className="smart-lists">
+        {(Object.keys(SMART_LABELS) as SmartView[]).map((view) => (
+          <button
+            key={view}
+            type="button"
+            className={selectedSmart === view ? "list-button selected" : "list-button"}
+            onClick={() => onSelectSmart(view)}
+          >
+            {SMART_LABELS[view]}
+          </button>
+        ))}
+      </nav>
       <nav
         aria-label="Lists"
         onDragOver={(event) => event.preventDefault()}

@@ -96,6 +96,9 @@ class Task(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(500))
     completed: Mapped[bool] = mapped_column(default=False)
+    # When the task was last completed; drives the completed view's newest-first
+    # order. Cleared when the task is reopened.
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     description: Mapped[str] = mapped_column(Text, default="")
     priority: Mapped[str] = mapped_column(String(6), default="none")
     # Scheduling: due only, start+due duration, or all-day span (dates stored

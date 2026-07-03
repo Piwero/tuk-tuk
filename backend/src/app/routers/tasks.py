@@ -1,6 +1,7 @@
 """Tasks collection endpoints."""
 
-from datetime import UTC, datetime, time, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
@@ -8,10 +9,13 @@ from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import SORT_GAP, Section, Tag, Task, TaskList
+from app.models import SORT_GAP, Section, Tag, Task, TaskList, utcnow
 from app.schemas import Page, TaskCreate, TaskRead, TaskUpdate, as_utc
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
+
+# The built-in Smart Lists — computed queries, never storage.
+SmartView = Literal["today", "next7", "all"]
 
 
 def invalid_schedule(message: str) -> APIError:
@@ -103,22 +107,80 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
 @router.get("")
 async def read_tasks(
     session: SessionDep,
-    list_id: int | None = Query(default=None),
-    tag_id: int | None = Query(default=None),
+    list_id: int | None = None,
+    tag_id: int | None = None,
+    completed: bool | None = None,
+    view: SmartView | None = None,
+    today: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Page[TaskRead]:
+    """List tasks; `view` computes a Smart List (open tasks only, so it
+    overrides `completed`), judged against the caller's local day `today`.
+    `completed=true` is the completed view: newest completion first.
+    """
+    if view is not None:
+        completed = False
+    if view in ("today", "next7") and today is None:
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message=f"view={view} requires the today parameter (the caller's local day)",
+        )
     query = select(Task)
     if list_id is not None:
         query = query.where(Task.list_id == list_id)
     if tag_id is not None:
         query = query.where(Task.tags.any(Tag.id == tag_id))
-    total = await session.scalar(select(func.count()).select_from(query.subquery())) or 0
-    rows = await session.scalars(
-        query.order_by(Task.sort_order, Task.id).limit(limit).offset(offset)
+    if completed is not None:
+        query = query.where(Task.completed == completed)
+    order = (
+        (Task.completed_at.desc(), Task.id.desc())
+        if completed is True
+        else (Task.sort_order, Task.id)
     )
+    if view in ("today", "next7") and today is not None:
+        # Day membership needs each task's own timezone, which portable SQL
+        # can't reach — filter in Python and paginate the filtered rows.
+        rows = await session.scalars(query.order_by(*order))
+        matches = [task for task in rows if in_smart_view(task, view, today)]
+        items = [TaskRead.model_validate(task) for task in matches[offset : offset + limit]]
+        return Page(items=items, total=len(matches), limit=limit, offset=offset)
+    total = await session.scalar(select(func.count()).select_from(query.subquery())) or 0
+    rows = await session.scalars(query.order_by(*order).limit(limit).offset(offset))
     items = [TaskRead.model_validate(row) for row in rows]
     return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+def schedule_days(task: Task) -> tuple[date, date] | None:
+    """The calendar-day window [first, last] a task occupies, or None when
+    unscheduled. All-day values are date-only; timed instants are read in the
+    task's own timezone (UTC when it has none).
+    """
+    if task.due_date is None:
+        return None
+    if task.is_all_day:
+        due_day = as_utc(task.due_date).date()
+        first = as_utc(task.start_date).date() if task.start_date is not None else due_day
+        return (first, due_day)
+    zone: tzinfo = ZoneInfo(task.time_zone) if task.time_zone is not None else UTC
+    due_day = as_utc(task.due_date).astimezone(zone).date()
+    first = (
+        as_utc(task.start_date).astimezone(zone).date() if task.start_date is not None else due_day
+    )
+    return (first, due_day)
+
+
+def in_smart_view(task: Task, view: SmartView, today: date) -> bool:
+    window = schedule_days(task)
+    if window is None:
+        return False
+    first, last = window
+    if view == "today":
+        # Dated today (the window covers today) or overdue (window entirely in
+        # the past; only open tasks reach here) — both mean it started by today.
+        return first <= today
+    return first <= today + timedelta(days=6) and last >= today
 
 
 async def get_task_or_404(task_id: int, session: SessionDep) -> Task:
@@ -132,6 +194,9 @@ async def get_task_or_404(task_id: int, session: SessionDep) -> Task:
 async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) -> TaskRead:
     task = await get_task_or_404(task_id, session)
     changes = payload.model_dump(exclude_unset=True)
+    # Completion transitions stamp/clear completed_at (the completed view's order).
+    if "completed" in changes and changes["completed"] != task.completed:
+        changes["completed_at"] = utcnow() if changes["completed"] else None
     if "list_id" in changes:
         target = await session.scalar(select(TaskList.id).where(TaskList.id == changes["list_id"]))
         if target is None:
