@@ -45,7 +45,11 @@ export function KanbanView({
     if (draft === "") {
       return;
     }
-    const created = await createTask(draft, listId, sectionId ?? undefined);
+    const created = await createTask({
+      title: draft,
+      list_id: listId,
+      ...(sectionId === null ? {} : { section_id: sectionId }),
+    });
     onChanged((current) => [...current, created]);
     setDrafts((current) => ({ ...current, [columnKey]: "" }));
   }
