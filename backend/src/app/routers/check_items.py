@@ -8,7 +8,7 @@ from fastapi import APIRouter
 
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.models import SORT_GAP, CheckItem, Task
+from app.models import SORT_GAP, CheckItem, Task, utcnow
 from app.routers.tasks import get_task_or_404
 from app.schemas import CheckItemCreate, CheckItemUpdate, TaskRead
 
@@ -50,6 +50,7 @@ async def update_check_item(
     # the parent stays as the user set it.
     if ticked_open_item and all(sibling.done for sibling in task.check_items):
         task.completed = True
+        task.completed_at = utcnow()
     await session.commit()
     await session.refresh(task)
     return TaskRead.model_validate(task)

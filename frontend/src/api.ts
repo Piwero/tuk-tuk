@@ -47,6 +47,8 @@ export interface Task {
   id: number;
   title: string;
   completed: boolean;
+  /** When the task was last completed; orders the completed view, newest first. */
+  completed_at: string | null;
   description: string;
   priority: Priority;
   list_id: number;
@@ -159,6 +161,27 @@ export function fetchTasks(listId: number): Promise<Page<Task>> {
 
 export function fetchTasksByTag(tagId: number): Promise<Page<Task>> {
   return request(`/api/v1/tasks?tag_id=${tagId}`);
+}
+
+/** The built-in Smart Lists — computed queries, never storage. */
+export type SmartView = "today" | "next7" | "all";
+
+/** Display names of the built-in Smart Lists, in sidebar order. */
+export const SMART_LABELS: Record<SmartView, string> = {
+  today: "Today",
+  next7: "Next 7 Days",
+  all: "All",
+};
+
+/** `today` is the caller's local day (YYYY-MM-DD); Smart Lists are open tasks only. */
+export function fetchSmartTasks(view: SmartView, today: string): Promise<Page<Task>> {
+  return request(`/api/v1/tasks?view=${view}&today=${today}`);
+}
+
+/** The completed view: per List, or across all Lists when listId is null. */
+export function fetchCompletedTasks(listId: number | null): Promise<Page<Task>> {
+  const scope = listId === null ? "" : `&list_id=${listId}`;
+  return request(`/api/v1/tasks?completed=true${scope}`);
 }
 
 export function fetchSections(listId: number): Promise<Page<Section>> {

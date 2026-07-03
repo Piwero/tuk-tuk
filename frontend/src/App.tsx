@@ -1,19 +1,24 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
+  fetchCompletedTasks,
   fetchFolders,
   fetchLists,
   fetchSections,
+  fetchSmartTasks,
   fetchTags,
   fetchTasks,
   fetchTasksByTag,
   updateList,
+  SMART_LABELS,
   type Folder,
   type Section,
+  type SmartView,
   type Tag,
   type Task,
   type TaskList,
 } from "./api";
+import { localDayOf } from "./dates";
 import { type GroupBy, type SortBy } from "./grouping";
 import { KanbanView } from "./components/KanbanView";
 import { QuickAdd } from "./components/QuickAdd";
@@ -21,14 +26,20 @@ import { Sidebar } from "./components/Sidebar";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 
-/** What the main pane shows: one List, or one Tag across all Lists. */
-type View = { kind: "list"; id: number } | { kind: "tag"; id: number } | null;
+/** What the main pane shows: one List, one Tag, or one computed Smart List. */
+type View =
+  | { kind: "list"; id: number }
+  | { kind: "tag"; id: number }
+  | { kind: "smart"; view: SmartView }
+  | null;
 
 export function App(): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [view, setView] = useState<View>(null);
+  // The completed view of the current List (or of All): computed, newest first.
+  const [completedMode, setCompletedMode] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
@@ -48,6 +59,9 @@ export function App(): JSX.Element {
   // Keep a valid view: default to the Inbox, and fall back to it when the
   // viewed list or tag disappears (e.g. it was deleted).
   useEffect(() => {
+    if (view?.kind === "smart") {
+      return;
+    }
     if (view?.kind === "list" && lists.some((list) => list.id === view.id)) {
       return;
     }
@@ -55,35 +69,77 @@ export function App(): JSX.Element {
       return;
     }
     const fallback = lists.find((list) => list.is_inbox) ?? lists[0];
+    setCompletedMode(false);
     setView(fallback === undefined ? null : { kind: "list", id: fallback.id });
   }, [lists, tags, view]);
+
+  /** Fetch what the current view shows. Smart Lists and the completed view are
+   * computed queries, so edits re-run this rather than patching local state. */
+  const loadTasks = useCallback(async (): Promise<void> => {
+    if (view === null) {
+      return;
+    }
+    if (completedMode && view.kind === "list") {
+      setTasks((await fetchCompletedTasks(view.id)).items);
+    } else if (completedMode) {
+      setTasks((await fetchCompletedTasks(null)).items);
+    } else if (view.kind === "smart") {
+      setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()))).items);
+    } else if (view.kind === "list") {
+      setTasks((await fetchTasks(view.id)).items);
+    } else {
+      setTasks((await fetchTasksByTag(view.id)).items);
+    }
+  }, [view, completedMode]);
 
   useEffect(() => {
     if (view === null) {
       return;
     }
-    const load = view.kind === "list" ? fetchTasks(view.id) : fetchTasksByTag(view.id);
-    void load.then((page) => setTasks(page.items));
+    void loadTasks();
     if (view.kind === "list") {
       void fetchSections(view.id).then((page) => setSections(page.items));
     } else {
       setSections([]);
     }
-  }, [view]);
+  }, [view, loadTasks]);
 
   const selectedList =
     view?.kind === "list" ? (lists.find((list) => list.id === view.id) ?? null) : null;
   const selectedTag =
     view?.kind === "tag" ? (tags.find((tag) => tag.id === view.id) ?? null) : null;
+  const smartView = view?.kind === "smart" ? view.view : null;
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
+  // Computed views can't be patched locally: membership depends on the query.
+  const isComputedView = smartView !== null || completedMode;
+  // The completed view exists per List and for All (not Today / Next 7 Days).
+  const hasCompletedView = selectedList !== null || smartView === "all";
+
+  function switchView(next: View): void {
+    setCompletedMode(false);
+    setView(next);
+  }
+
+  /** In computed views, apply the optimistic update, then re-run the query —
+   * membership is the server's call, not local state's. */
+  function changeTasksAndRecompute(update: (current: Task[]) => Task[]): void {
+    setTasks(update);
+    void loadTasks();
+  }
 
   /** Apply a server response, evicting the task if it left the current view. */
   function applyTaskChange(updated: Task): void {
+    if (isComputedView) {
+      changeTasksAndRecompute((current) =>
+        current.map((task) => (task.id === updated.id ? updated : task)),
+      );
+      return;
+    }
     const stillInView =
       view === null ||
       (view.kind === "list"
         ? updated.list_id === view.id
-        : updated.tags.some((tag) => tag.id === view.id));
+        : view.kind === "tag" && updated.tags.some((tag) => tag.id === view.id));
     setTasks((current) =>
       stillInView
         ? current.map((task) => (task.id === updated.id ? updated : task))
@@ -127,8 +183,10 @@ export function App(): JSX.Element {
         tags={tags}
         selectedListId={view?.kind === "list" ? view.id : null}
         selectedTagId={view?.kind === "tag" ? view.id : null}
-        onSelect={(listId) => setView({ kind: "list", id: listId })}
-        onSelectTag={(tagId) => setView({ kind: "tag", id: tagId })}
+        selectedSmart={smartView}
+        onSelect={(listId) => switchView({ kind: "list", id: listId })}
+        onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
+        onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
         onListsChanged={setLists}
         onFoldersChanged={setFolders}
         onTagCreated={(tag) => setTags((current) => [...current, tag])}
@@ -144,8 +202,15 @@ export function App(): JSX.Element {
       />
       <main>
         <div className="main-header">
-          <h1>{selectedList?.name ?? (selectedTag ? `#${selectedTag.name}` : "tuk-tuk")}</h1>
-          {selectedList !== null && (
+          <h1>
+            {selectedList?.name ??
+              (selectedTag
+                ? `#${selectedTag.name}`
+                : smartView !== null
+                  ? SMART_LABELS[smartView]
+                  : "tuk-tuk")}
+          </h1>
+          {selectedList !== null && !completedMode && (
             <button
               type="button"
               className="view-toggle"
@@ -159,8 +224,17 @@ export function App(): JSX.Element {
               {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
             </button>
           )}
+          {hasCompletedView && (
+            <button
+              type="button"
+              className="completed-toggle"
+              onClick={() => setCompletedMode((current) => !current)}
+            >
+              {completedMode ? "Open tasks" : "Completed"}
+            </button>
+          )}
         </div>
-        {selectedList !== null && selectedList.view_mode === "list" && (
+        {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
           <>
             <QuickAdd
               listId={selectedList.id}
@@ -193,7 +267,7 @@ export function App(): JSX.Element {
             </div>
           </>
         )}
-        {selectedList !== null && selectedList.view_mode === "kanban" ? (
+        {selectedList !== null && selectedList.view_mode === "kanban" && !completedMode ? (
           <KanbanView
             tasks={tasks}
             sections={sections}
@@ -206,10 +280,10 @@ export function App(): JSX.Element {
           <TaskListView
             tasks={tasks}
             sections={sections}
-            listId={selectedList?.id ?? null}
-            groupBy={groupBy}
-            sortBy={sortBy}
-            onChanged={setTasks}
+            listId={isComputedView ? null : (selectedList?.id ?? null)}
+            groupBy={completedMode ? "section" : groupBy}
+            sortBy={completedMode ? "completion" : sortBy}
+            onChanged={isComputedView ? changeTasksAndRecompute : setTasks}
             onSelect={setSelectedTaskId}
             onSectionsChanged={setSections}
           />

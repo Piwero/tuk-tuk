@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 
 import { type Priority, type ViewMode } from "../api";
+import { addDays, localDayOf } from "../dates";
 import { byName, SORT_GAP } from "../ordering";
 
 export interface FakeList {
@@ -45,6 +46,7 @@ export interface FakeTask {
   id: number;
   title: string;
   completed: boolean;
+  completed_at: string | null;
   description: string;
   priority: Priority;
   list_id: number;
@@ -99,6 +101,7 @@ export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): Fake
     id,
     title,
     completed: false,
+    completed_at: null,
     description: "",
     priority: "none",
     list_id: INBOX.id,
@@ -223,6 +226,30 @@ export function installFakeApi({
     return null;
   };
 
+  /** Mirror of the backend's day-window rule. Tests schedule tasks in the
+   * browser timezone (all v1 writes), so timed instants are read locally. */
+  const dayWindow = (task: FakeTask): [string, string] | null => {
+    if (task.due_date === null) {
+      return null;
+    }
+    const dayOf = (iso: string): string =>
+      task.is_all_day ? iso.slice(0, 10) : localDayOf(new Date(iso));
+    const due = dayOf(task.due_date);
+    return [task.start_date === null ? due : dayOf(task.start_date), due];
+  };
+
+  const inSmartView = (task: FakeTask, view: string, today: string): boolean => {
+    const window = dayWindow(task);
+    if (window === null) {
+      return false;
+    }
+    const [first, last] = window;
+    if (view === "today") {
+      return first <= today;
+    }
+    return first <= addDays(today, 6) && last >= today;
+  };
+
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://localhost");
     const method = (init?.method ?? "GET").toUpperCase();
@@ -298,13 +325,28 @@ export function installFakeApi({
     if (method === "GET" && url.pathname === "/api/v1/tasks") {
       const listId = url.searchParams.get("list_id");
       const tagId = url.searchParams.get("tag_id");
-      const items = state.tasks
-        .filter(
-          (task) =>
-            (listId === null || task.list_id === Number(listId)) &&
-            (tagId === null || task.tags.some((tag) => tag.id === Number(tagId))),
-        )
-        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+      const view = url.searchParams.get("view");
+      const today = url.searchParams.get("today");
+      // Smart Lists are computed over open tasks only (mirrors the backend).
+      const completed = view !== null ? "false" : url.searchParams.get("completed");
+      let items = state.tasks.filter(
+        (task) =>
+          (listId === null || task.list_id === Number(listId)) &&
+          (tagId === null || task.tags.some((tag) => tag.id === Number(tagId))) &&
+          (completed === null || task.completed === (completed === "true")),
+      );
+      if (view === "today" || view === "next7") {
+        if (today === null) {
+          return json({ error: { code: "validation_error", message: "today is required" } }, 422);
+        }
+        items = items.filter((task) => inSmartView(task, view, today));
+      }
+      items =
+        completed === "true"
+          ? [...items].sort(
+              (a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? "") || b.id - a.id,
+            )
+          : [...items].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
       return json(page(items));
     }
     if (method === "POST" && url.pathname === "/api/v1/tasks") {
@@ -431,6 +473,7 @@ export function installFakeApi({
         // Mirror the backend rule: ticking the last open item completes the parent.
         if ((body as { done?: boolean }).done === true && task.check_items.every((i) => i.done)) {
           task.completed = true;
+          task.completed_at = new Date().toISOString();
         }
         task.check_items.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
         return json(task);
@@ -449,6 +492,10 @@ export function installFakeApi({
       }
       if (method === "PATCH") {
         const { tag_ids, ...rest } = body as { tag_ids?: number[] } & Record<string, unknown>;
+        // Mirror the backend: completion transitions stamp/clear completed_at.
+        if (typeof rest.completed === "boolean" && rest.completed !== task.completed) {
+          rest.completed_at = rest.completed ? new Date().toISOString() : null;
+        }
         if (
           typeof rest.list_id === "number" &&
           rest.list_id !== task.list_id &&
