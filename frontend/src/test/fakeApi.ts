@@ -406,7 +406,13 @@ export function installFakeApi({
       return json(page(items));
     }
     if (method === "POST" && url.pathname === "/api/v1/tasks") {
-      const input = body as { title: string; list_id?: number; section_id?: number };
+      const input = body as {
+        title: string;
+        list_id?: number;
+        section_id?: number;
+        priority?: Priority;
+        tag_ids?: number[];
+      };
       const listId = input.list_id ?? INBOX.id;
       if (input.section_id !== undefined) {
         const rejection = sectionMismatch(input.section_id, listId);
@@ -414,9 +420,19 @@ export function installFakeApi({
           return rejection;
         }
       }
+      const tagIds = input.tag_ids ?? [];
+      const missing = tagIds.find((id) => !state.tags.some((tag) => tag.id === id));
+      if (missing !== undefined) {
+        return notFound(`Tag ${missing} not found`);
+      }
       const created = fakeTask(input.title, {
         list_id: listId,
         section_id: input.section_id ?? null,
+        priority: input.priority ?? "none",
+        tags: state.tags
+          .filter((tag) => tagIds.includes(tag.id))
+          .sort(byName)
+          .map((tag) => ({ ...tag })),
         sort_order: nextOrder(state.tasks.filter((t) => t.list_id === listId)),
       });
       state.tasks.push(created);

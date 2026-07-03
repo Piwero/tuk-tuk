@@ -148,6 +148,8 @@ class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     list_id: int | None = None
     section_id: int | None = None
+    priority: Priority = "none"
+    tag_ids: list[int] = Field(default_factory=list)
     start_date: datetime | None = None
     due_date: datetime | None = None
     is_all_day: bool = False

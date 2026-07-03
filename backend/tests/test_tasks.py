@@ -114,3 +114,29 @@ def test_task_priority_must_be_a_named_level(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_task_can_be_created_with_priority_and_tags(client: TestClient) -> None:
+    finance = client.post("/api/v1/tags", json={"name": "finance"}).json()
+    urgent = client.post("/api/v1/tags", json={"name": "urgent"}).json()
+
+    response = client.post(
+        "/api/v1/tasks",
+        json={"title": "Pay rent", "priority": "high", "tag_ids": [urgent["id"], finance["id"]]},
+    )
+
+    assert response.status_code == 201, response.text
+    created = response.json()
+    assert created["priority"] == "high"
+    assert [tag["name"] for tag in created["tags"]] == ["finance", "urgent"]
+
+    read_back = client.get("/api/v1/tasks").json()["items"][0]
+    assert read_back["priority"] == "high"
+    assert [tag["name"] for tag in read_back["tags"]] == ["finance", "urgent"]
+
+
+def test_task_creation_with_an_unknown_tag_is_rejected(client: TestClient) -> None:
+    response = client.post("/api/v1/tasks", json={"title": "Ghost", "tag_ids": [999]})
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

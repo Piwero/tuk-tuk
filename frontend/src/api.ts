@@ -268,15 +268,16 @@ export function deleteTag(tagId: number): Promise<void> {
   return request(`/api/v1/tags/${tagId}`, { method: "DELETE" });
 }
 
-export function createTask(title: string, listId?: number, sectionId?: number): Promise<Task> {
-  return request("/api/v1/tasks", {
-    method: "POST",
-    body: JSON.stringify({
-      title,
-      ...(listId === undefined ? {} : { list_id: listId }),
-      ...(sectionId === undefined ? {} : { section_id: sectionId }),
-    }),
-  });
+export interface TaskCreateInput {
+  title: string;
+  list_id?: number;
+  section_id?: number;
+  priority?: Priority;
+  tag_ids?: number[];
+}
+
+export function createTask(input: TaskCreateInput): Promise<Task> {
+  return request("/api/v1/tasks", { method: "POST", body: JSON.stringify(input) });
 }
 
 /** Absent fields stay unchanged; explicit null is rejected by the API,

@@ -247,7 +247,15 @@ export function App(): JSX.Element {
           <>
             <QuickAdd
               listId={selectedList.id}
-              onCreated={(task) => setTasks((current) => [...current, task])}
+              lists={lists}
+              tags={tags}
+              onTagCreated={(tag) => setTags((current) => [...current, tag])}
+              onCreated={(task) => {
+                // A ~list token may have filed the task elsewhere.
+                if (task.list_id === selectedList.id) {
+                  setTasks((current) => [...current, task]);
+                }
+              }}
             />
             <div className="view-controls">
               <label>

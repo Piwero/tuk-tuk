@@ -1,22 +1,51 @@
 import { useState } from "react";
 
-import { createTask, type Task } from "../api";
+import { createTag, createTask, type Tag, type Task, type TaskList } from "../api";
+import { parseQuickAdd, sameName } from "../quickAdd";
 
 interface QuickAddProps {
+  /** The viewed List — the default target when no `~list` token matches. */
   listId: number;
+  lists: TaskList[];
+  tags: Tag[];
+  onTagCreated: (tag: Tag) => void;
   onCreated: (task: Task) => void;
 }
 
-export function QuickAdd({ listId, onCreated }: QuickAddProps): JSX.Element {
+export function QuickAdd({
+  listId,
+  lists,
+  tags,
+  onTagCreated,
+  onCreated,
+}: QuickAddProps): JSX.Element {
   const [title, setTitle] = useState("");
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
-    const trimmed = title.trim();
-    if (trimmed === "") {
+    const plan = parseQuickAdd(title, lists);
+    if (plan.title === "") {
       return;
     }
-    const task = await createTask(trimmed, listId);
+    // Unknown #tag names create the Tag on the fly; known ones match
+    // case-insensitively.
+    const tagIds: number[] = [];
+    for (const name of plan.tagNames) {
+      const existing = tags.find((tag) => sameName(tag.name, name));
+      if (existing !== undefined) {
+        tagIds.push(existing.id);
+      } else {
+        const created = await createTag({ name });
+        onTagCreated(created);
+        tagIds.push(created.id);
+      }
+    }
+    const task = await createTask({
+      title: plan.title,
+      list_id: plan.listId ?? listId,
+      ...(plan.priority === null ? {} : { priority: plan.priority }),
+      ...(tagIds.length === 0 ? {} : { tag_ids: tagIds }),
+    });
     onCreated(task);
     setTitle("");
   }

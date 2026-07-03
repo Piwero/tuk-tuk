@@ -94,6 +94,15 @@ async def resolve_section(session: SessionDep, section_id: int, list_id: int) ->
     return section
 
 
+async def resolve_tags(session: SessionDep, tag_ids: list[int]) -> list[Tag]:
+    """The Tag rows for an id set; 404 on the first unknown id."""
+    tags = list((await session.scalars(select(Tag).where(Tag.id.in_(tag_ids)))).all())
+    missing = set(tag_ids) - {tag.id for tag in tags}
+    if missing:
+        raise NotFoundError(f"Tag {min(missing)} not found")
+    return tags
+
+
 @router.post("", status_code=201)
 async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
     if payload.list_id is None:
@@ -108,6 +117,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         await resolve_section(session, payload.section_id, list_id)
     validate_schedule(payload.start_date, payload.due_date, payload.is_all_day, payload.time_zone)
     validate_recurrence(payload.recurrence, payload.due_date)
+    tags = await resolve_tags(session, payload.tag_ids) if payload.tag_ids else []
     # Initialize collections so serialization never triggers an async lazy load.
     # Append within the target List (mirrors create_section's per-List scope).
     max_order = await session.scalar(
@@ -117,6 +127,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         title=payload.title,
         list_id=list_id,
         section_id=payload.section_id,
+        priority=payload.priority,
         start_date=payload.start_date,
         due_date=payload.due_date,
         is_all_day=payload.is_all_day,
@@ -124,7 +135,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         recurrence=payload.recurrence,
         sort_order=(max_order or 0) + SORT_GAP,
         check_items=[],
-        tags=[],
+        tags=tags,
     )
     session.add(task)
     await session.commit()
@@ -253,12 +264,7 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
         # Clearing the date sweeps the recurrence with it: no dateless repeats.
         changes["recurrence"] = None
     if "tag_ids" in changes:
-        tag_ids: list[int] = changes.pop("tag_ids")
-        tags = list((await session.scalars(select(Tag).where(Tag.id.in_(tag_ids)))).all())
-        missing = set(tag_ids) - {tag.id for tag in tags}
-        if missing:
-            raise NotFoundError(f"Tag {min(missing)} not found")
-        task.tags = tags
+        task.tags = await resolve_tags(session, changes.pop("tag_ids"))
     for field, value in changes.items():
         setattr(task, field, value)
     if completing is not None and completing != task.completed:
