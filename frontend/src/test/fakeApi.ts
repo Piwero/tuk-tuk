@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 
 import { type Priority } from "../api";
-import { SORT_GAP } from "../ordering";
+import { byName, SORT_GAP } from "../ordering";
 
 export interface FakeList {
   id: number;
@@ -279,6 +279,13 @@ export function installFakeApi({
         return notFound(`Tag ${tagId} not found`);
       }
       if (method === "PATCH") {
+        const rename = (body as { name?: string }).name;
+        if (rename !== undefined && state.tags.some((t) => t.id !== tagId && t.name === rename)) {
+          return json(
+            { error: { code: "tag_exists", message: `A tag named "${rename}" already exists` } },
+            409,
+          );
+        }
         Object.assign(tag, body);
         // Mirror the backend: tasks reference the tag row, never a copy.
         for (const task of state.tasks) {
@@ -344,7 +351,7 @@ export function installFakeApi({
           }
           task.tags = state.tags
             .filter((tag) => tag_ids.includes(tag.id))
-            .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id)
+            .sort(byName)
             .map((tag) => ({ ...tag }));
         }
         return json(task);

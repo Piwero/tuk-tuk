@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { type TaskList } from "../api";
+import { DEFAULT_ACCENT } from "../theme";
 
 export interface ListFormValues {
   name: string;
@@ -16,7 +17,7 @@ export interface ListFormProps {
 
 export function ListForm({ initial, onSubmit, onCancel }: ListFormProps): JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
-  const [color, setColor] = useState(initial?.color ?? "#4772fa");
+  const [color, setColor] = useState(initial?.color ?? DEFAULT_ACCENT);
   const [emoji, setEmoji] = useState(initial?.emoji ?? "");
 
   return (

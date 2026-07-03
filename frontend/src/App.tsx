@@ -64,8 +64,18 @@ export function App(): JSX.Element {
     view?.kind === "tag" ? (tags.find((tag) => tag.id === view.id) ?? null) : null;
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
 
+  /** Apply a server response, evicting the task if it left the current view. */
   function applyTaskChange(updated: Task): void {
-    setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
+    const stillInView =
+      view === null ||
+      (view.kind === "list"
+        ? updated.list_id === view.id
+        : updated.tags.some((tag) => tag.id === view.id));
+    setTasks((current) =>
+      stillInView
+        ? current.map((task) => (task.id === updated.id ? updated : task))
+        : current.filter((task) => task.id !== updated.id),
+    );
   }
 
   /** A renamed/recolored Tag must also update the copies embedded in tasks. */

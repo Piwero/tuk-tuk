@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { type Tag } from "../api";
+import { ApiError, type Tag } from "../api";
+import { DEFAULT_ACCENT } from "../theme";
 
 export interface TagFormValues {
   name: string;
@@ -9,24 +10,34 @@ export interface TagFormValues {
 
 export interface TagFormProps {
   initial?: Pick<Tag, "name" | "color">;
-  onSubmit: (values: TagFormValues) => void;
+  /** Rejections (e.g. duplicate names) are shown to the user, keeping the form open. */
+  onSubmit: (values: TagFormValues) => Promise<void>;
   onCancel: () => void;
 }
 
 export function TagForm({ initial, onSubmit, onCancel }: TagFormProps): JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
-  const [color, setColor] = useState(initial?.color ?? "#4772fa");
+  const [color, setColor] = useState(initial?.color ?? DEFAULT_ACCENT);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(): Promise<void> {
+    const trimmed = name.trim();
+    if (trimmed === "") {
+      return;
+    }
+    try {
+      await onSubmit({ name: trimmed, color });
+    } catch (failure) {
+      setError(failure instanceof ApiError ? failure.message : "Something went wrong");
+    }
+  }
 
   return (
     <form
       className="list-form"
       onSubmit={(event) => {
         event.preventDefault();
-        const trimmed = name.trim();
-        if (trimmed === "") {
-          return;
-        }
-        onSubmit({ name: trimmed, color });
+        void submit();
       }}
     >
       <label>
@@ -37,6 +48,7 @@ export function TagForm({ initial, onSubmit, onCancel }: TagFormProps): JSX.Elem
         Tag color
         <input type="color" value={color} onChange={(event) => setColor(event.target.value)} />
       </label>
+      {error !== null && <p role="alert">{error}</p>}
       <button type="submit">Save</button>
       <button type="button" onClick={onCancel}>
         Cancel
