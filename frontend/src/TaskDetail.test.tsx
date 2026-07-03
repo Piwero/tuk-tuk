@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
+import { closestOrThrow, fakeDataTransfer } from "./test/dnd";
 import { fakeCheckItem, fakeTask, installFakeApi } from "./test/fakeApi";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
@@ -190,35 +191,50 @@ describe("Task detail panel", () => {
 
     const panel = await openDetail("Pack bags");
     const items = within(panel).getByRole("list", { name: "Check items" });
-    const dataTransfer = {
-      data: {} as Record<string, string>,
-      setData(type: string, value: string) {
-        this.data[type] = value;
-      },
-      getData(type: string) {
-        return this.data[type] ?? "";
-      },
-    };
-    const rowFor = (text: string): HTMLElement => {
-      const row = within(items).getByText(text).closest("li");
-      if (!(row instanceof HTMLElement)) {
-        throw new Error("check item row not found");
-      }
-      return row;
-    };
+    const dataTransfer = fakeDataTransfer();
+    const rowFor = (text: string): HTMLElement =>
+      closestOrThrow(within(items).getByText(text), "li");
     fireEvent.dragStart(rowFor("Passport"), { dataTransfer });
     fireEvent.drop(rowFor("Charger"), { dataTransfer });
 
     await waitFor(() => {
-      const titles = within(items)
-        .getAllByRole("listitem")
-        .map((li) => li.textContent);
-      expect(titles).toEqual(["Socks✎✕", "Passport✎✕", "Charger✎✕"]);
+      const ticks = within(items).getAllByRole("checkbox");
+      expect(ticks.map((box) => box.getAttribute("aria-label"))).toEqual([
+        "Tick Socks",
+        "Tick Passport",
+        "Tick Charger",
+      ]);
     });
     const patch = api.requests.find(
       (r) =>
         r.method === "PATCH" && r.url === `/api/v1/tasks/${trip.id}/check-items/${passport.id}`,
     );
     expect(patch?.body).toEqual({ sort_order: 1536 });
+  });
+
+  it("drops a Check Item on the list itself to move it to the end", async () => {
+    const socks = fakeCheckItem("Socks", { sort_order: 1024 });
+    const charger = fakeCheckItem("Charger", { sort_order: 2048 });
+    const trip = fakeTask("Pack bags", { check_items: [socks, charger] });
+    const api = installFakeApi({ tasks: [trip] });
+    render(<App />);
+
+    const panel = await openDetail("Pack bags");
+    const items = within(panel).getByRole("list", { name: "Check items" });
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(closestOrThrow(within(items).getByText("Socks"), "li"), { dataTransfer });
+    fireEvent.drop(items, { dataTransfer });
+
+    await waitFor(() => {
+      const ticks = within(items).getAllByRole("checkbox");
+      expect(ticks.map((box) => box.getAttribute("aria-label"))).toEqual([
+        "Tick Charger",
+        "Tick Socks",
+      ]);
+    });
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${trip.id}/check-items/${socks.id}`,
+    );
+    expect(patch?.body).toEqual({ sort_order: 3072 });
   });
 });

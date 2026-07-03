@@ -80,7 +80,11 @@ class Task(Base):
 
 
 class CheckItem(Base):
-    """A Check Item — one line in a Task's checklist; not a Task itself."""
+    """A Check Item — one line in a Task's checklist; not a Task itself.
+
+    Composition under a Task (not a root entity), so no owner column —
+    ownership flows through the parent Task.
+    """
 
     __tablename__ = "check_items"
 
@@ -89,7 +93,6 @@ class CheckItem(Base):
     title: Mapped[str] = mapped_column(String(500))
     done: Mapped[bool] = mapped_column(default=False)
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     task: Mapped[Task] = relationship(back_populates="check_items")

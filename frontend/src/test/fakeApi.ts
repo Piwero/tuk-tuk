@@ -1,5 +1,6 @@
 import { vi } from "vitest";
 
+import { type Priority } from "../api";
 import { SORT_GAP } from "../ordering";
 
 export interface FakeList {
@@ -31,7 +32,7 @@ export interface FakeTask {
   title: string;
   completed: boolean;
   description: string;
-  priority: "none" | "low" | "medium" | "high";
+  priority: Priority;
   list_id: number;
   check_items: FakeCheckItem[];
   created_at: string;

@@ -90,3 +90,17 @@ def test_check_item_can_be_deleted(client: TestClient) -> None:
     assert response.status_code == 204
     read_back = client.get("/api/v1/tasks").json()["items"][0]
     assert read_back["check_items"] == []
+
+
+def test_re_ticking_an_already_done_item_does_not_recomplete_a_reopened_task(
+    client: TestClient,
+) -> None:
+    task_id = make_task(client)
+    created = client.post(f"/api/v1/tasks/{task_id}/check-items", json={"title": "Only step"})
+    item_id = created.json()["check_items"][0]["id"]
+    client.patch(f"/api/v1/tasks/{task_id}/check-items/{item_id}", json={"done": True})
+    client.patch(f"/api/v1/tasks/{task_id}", json={"completed": False})  # user reopens
+
+    response = client.patch(f"/api/v1/tasks/{task_id}/check-items/{item_id}", json={"done": True})
+
+    assert response.json()["completed"] is False  # nothing open was ticked; stay as set
