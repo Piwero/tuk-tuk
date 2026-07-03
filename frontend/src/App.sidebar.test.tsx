@@ -308,6 +308,30 @@ describe("Sidebar drag and drop", () => {
     expect(patch?.body).toEqual({ folder_id: null, sort_order: 1024 });
   });
 
+  it("dragging a list onto empty sidebar space ungroups it even with no loose lists", async () => {
+    const work = fakeFolder("Work");
+    const backend = fakeList("Backend", { folder_id: work.id, sort_order: 1024 });
+    const api = installFakeApi({ folders: [work], lists: [INBOX, backend] });
+    render(<App />);
+    await screen.findByRole("button", { name: "Backend" });
+
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(rowOf(screen.getByRole("button", { name: "Backend" })), { dataTransfer });
+    fireEvent.drop(screen.getByRole("navigation", { name: "Lists" }), { dataTransfer });
+
+    const workLists = screen.getByRole("list", { name: "Lists in Work" });
+    await waitFor(() =>
+      expect(within(workLists).queryByRole("button", { name: "Backend" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("navigation", { name: "Lists" })).toContainElement(
+      screen.getByRole("button", { name: "Backend" }),
+    );
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${backend.id}`,
+    );
+    expect(patch?.body).toEqual({ folder_id: null, sort_order: 1024 });
+  });
+
   it("dragging a task onto a sidebar list moves it there and back", async () => {
     const groceries = fakeList("Groceries");
     const milk = fakeTask("Buy milk");

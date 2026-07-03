@@ -5,6 +5,16 @@ from datetime import UTC, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 
+def reject_explicit_null(value: object) -> object:
+    """Shared PATCH-field rule: absent means "leave unchanged"; explicit null is rejected.
+
+    Defaults are not validated, so the validator only fires on explicit nulls.
+    """
+    if value is None:
+        raise ValueError("Field may not be null; omit it to leave it unchanged")
+    return value
+
+
 class Page[T](BaseModel):
     items: list[T]
     total: int
@@ -21,12 +31,7 @@ class FolderUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     sort_order: int | None = None
 
-    @field_validator("name", "sort_order")
-    @classmethod
-    def reject_explicit_null(cls, value: object) -> object:
-        if value is None:
-            raise ValueError("Field may not be null; omit it to leave it unchanged")
-        return value
+    _reject_nulls = field_validator("name", "sort_order")(reject_explicit_null)
 
 
 class FolderRead(BaseModel):
@@ -54,12 +59,7 @@ class ListUpdate(BaseModel):
     folder_id: int | None = None
     sort_order: int | None = None
 
-    @field_validator("name", "is_archived", "sort_order")
-    @classmethod
-    def reject_explicit_null(cls, value: object) -> object:
-        if value is None:
-            raise ValueError("Field may not be null; omit it to leave it unchanged")
-        return value
+    _reject_nulls = field_validator("name", "is_archived", "sort_order")(reject_explicit_null)
 
 
 class ListRead(BaseModel):
@@ -81,18 +81,12 @@ class TaskCreate(BaseModel):
 
 
 # PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
-# Defaults are not validated, so the validator only fires on explicit nulls.
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
     completed: bool | None = None
     list_id: int | None = None
 
-    @field_validator("title", "completed", "list_id")
-    @classmethod
-    def reject_explicit_null(cls, value: object) -> object:
-        if value is None:
-            raise ValueError("Field may not be null; omit it to leave it unchanged")
-        return value
+    _reject_nulls = field_validator("title", "completed", "list_id")(reject_explicit_null)
 
 
 class TaskRead(BaseModel):
