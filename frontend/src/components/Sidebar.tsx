@@ -13,6 +13,9 @@ import {
   type TaskList,
 } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
+import { appendOrder, byOrder, planInsertBefore } from "../ordering";
+import { FolderForm } from "./FolderForm";
+import { ListForm, type ListFormValues } from "./ListForm";
 
 type Editor =
   | { mode: "create-list" }
@@ -31,25 +34,13 @@ interface SidebarProps {
   onTaskMoved: (task: Task) => void;
 }
 
-const byOrder = (a: { sort_order: number; id: number }, b: { sort_order: number; id: number }) =>
-  a.sort_order - b.sort_order || a.id - b.id;
-
-const SORT_GAP = 1024;
-
-/** Sparse-order value that lands the moved row before `next`. */
-function insertionOrder(prev: number | undefined, next: number): number {
-  return prev === undefined ? next - SORT_GAP : Math.floor((prev + next) / 2);
-}
-
-function ListButton({
-  list,
-  selected,
-  onSelect,
-}: {
+interface ListButtonProps {
   list: TaskList;
   selected: boolean;
   onSelect: (listId: number) => void;
-}): JSX.Element {
+}
+
+function ListButton({ list, selected, onSelect }: ListButtonProps): JSX.Element {
   return (
     <button
       type="button"
@@ -60,92 +51,6 @@ function ListButton({
       {list.emoji !== null && <span className="list-emoji">{list.emoji}</span>}
       {list.name}
     </button>
-  );
-}
-
-interface ListFormValues {
-  name: string;
-  color: string;
-  emoji: string;
-}
-
-function ListForm({
-  initial,
-  onSubmit,
-  onCancel,
-}: {
-  initial?: Pick<TaskList, "name" | "color" | "emoji">;
-  onSubmit: (values: ListFormValues) => void;
-  onCancel: () => void;
-}): JSX.Element {
-  const [name, setName] = useState(initial?.name ?? "");
-  const [color, setColor] = useState(initial?.color ?? "#4772fa");
-  const [emoji, setEmoji] = useState(initial?.emoji ?? "");
-
-  return (
-    <form
-      className="list-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const trimmed = name.trim();
-        if (trimmed === "") {
-          return;
-        }
-        onSubmit({ name: trimmed, color, emoji: emoji.trim() });
-      }}
-    >
-      <label>
-        Name
-        <input value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
-      <label>
-        Color
-        <input type="color" value={color} onChange={(event) => setColor(event.target.value)} />
-      </label>
-      <label>
-        Emoji
-        <input value={emoji} maxLength={8} onChange={(event) => setEmoji(event.target.value)} />
-      </label>
-      <button type="submit">Save</button>
-      <button type="button" onClick={onCancel}>
-        Cancel
-      </button>
-    </form>
-  );
-}
-
-function FolderForm({
-  initialName,
-  onSubmit,
-  onCancel,
-}: {
-  initialName?: string;
-  onSubmit: (name: string) => void;
-  onCancel: () => void;
-}): JSX.Element {
-  const [name, setName] = useState(initialName ?? "");
-
-  return (
-    <form
-      className="list-form"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const trimmed = name.trim();
-        if (trimmed === "") {
-          return;
-        }
-        onSubmit(trimmed);
-      }}
-    >
-      <label>
-        Folder name
-        <input value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
-      <button type="submit">Save</button>
-      <button type="button" onClick={onCancel}>
-        Cancel
-      </button>
-    </form>
   );
 }
 
@@ -167,6 +72,16 @@ export function Sidebar({
   const membersOf = (folderId: number): TaskList[] =>
     active.filter((list) => list.folder_id === folderId).sort(byOrder);
 
+  function applyListUpdate(updated: TaskList): void {
+    onListsChanged((current) => current.map((l) => (l.id === updated.id ? updated : l)));
+  }
+
+  function applyListUpdates(updates: TaskList[]): void {
+    onListsChanged((current) =>
+      current.map((l) => updates.find((updated) => updated.id === l.id) ?? l),
+    );
+  }
+
   async function handleCreateList(values: ListFormValues): Promise<void> {
     const created = await createList({
       name: values.name,
@@ -183,13 +98,12 @@ export function Sidebar({
       color: values.color,
       emoji: values.emoji === "" ? null : values.emoji,
     });
-    onListsChanged((current) => current.map((l) => (l.id === updated.id ? updated : l)));
+    applyListUpdate(updated);
     setEditor(null);
   }
 
   async function handleSetArchived(list: TaskList, isArchived: boolean): Promise<void> {
-    const updated = await updateList(list.id, { is_archived: isArchived });
-    onListsChanged((current) => current.map((l) => (l.id === updated.id ? updated : l)));
+    applyListUpdate(await updateList(list.id, { is_archived: isArchived }));
   }
 
   async function handleCreateFolder(name: string): Promise<void> {
@@ -237,31 +151,56 @@ export function Sidebar({
     const siblings = (target.folder_id === null ? looseLists : membersOf(target.folder_id)).filter(
       (list) => list.id !== listId,
     );
-    const targetIndex = siblings.findIndex((list) => list.id === target.id);
-    const prev = targetIndex > 0 ? siblings[targetIndex - 1] : undefined;
-    const sortOrder = insertionOrder(prev?.sort_order, target.sort_order);
-    if (prev !== undefined && sortOrder <= prev.sort_order) {
-      // The gap between neighbours is exhausted: renumber the whole group sparsely.
-      const arrangement = [...siblings];
-      arrangement.splice(targetIndex, 0, moved);
-      const updates = await Promise.all(
-        arrangement.map((row, index) =>
-          updateList(row.id, {
-            sort_order: (index + 1) * SORT_GAP,
-            ...(row.id === listId ? { folder_id: target.folder_id } : {}),
-          }),
-        ),
-      );
-      onListsChanged((current) =>
-        current.map((l) => updates.find((updated) => updated.id === l.id) ?? l),
+    const plan = planInsertBefore(siblings, moved, target.id);
+    if (plan.kind === "single") {
+      applyListUpdate(
+        await updateList(listId, { folder_id: target.folder_id, sort_order: plan.sort_order }),
       );
       return;
     }
-    const updated = await updateList(listId, {
-      folder_id: target.folder_id,
-      sort_order: sortOrder,
-    });
-    onListsChanged((current) => current.map((l) => (l.id === updated.id ? updated : l)));
+    applyListUpdates(
+      await Promise.all(
+        plan.rows.map(({ row, sort_order }) =>
+          updateList(row.id, {
+            sort_order,
+            ...(row.id === listId ? { folder_id: target.folder_id } : {}),
+          }),
+        ),
+      ),
+    );
+  }
+
+  async function moveListIntoFolder(listId: number, folder: Folder): Promise<void> {
+    const members = membersOf(folder.id).filter((list) => list.id !== listId);
+    applyListUpdate(
+      await updateList(listId, { folder_id: folder.id, sort_order: appendOrder(members) }),
+    );
+  }
+
+  /** Dropping on empty sidebar space moves a list out of its folder, to the end. */
+  async function moveListToTopLevelEnd(listId: number): Promise<void> {
+    const siblings = looseLists.filter((list) => list.id !== listId);
+    applyListUpdate(
+      await updateList(listId, { folder_id: null, sort_order: appendOrder(siblings) }),
+    );
+  }
+
+  async function moveFolderBefore(folderId: number, target: Folder): Promise<void> {
+    const moved = folders.find((folder) => folder.id === folderId);
+    if (moved === undefined) {
+      return;
+    }
+    const siblings = [...folders].sort(byOrder).filter((folder) => folder.id !== folderId);
+    const plan = planInsertBefore(siblings, moved, target.id);
+    const updates =
+      plan.kind === "single"
+        ? [await updateFolder(folderId, { sort_order: plan.sort_order })]
+        : await Promise.all(
+            plan.rows.map(({ row, sort_order }) => updateFolder(row.id, { sort_order })),
+          );
+    onFoldersChanged((current) =>
+      current.map((f) => updates.find((updated) => updated.id === f.id) ?? f),
+    );
   }
 
   async function moveTaskToList(taskId: number, listId: number): Promise<void> {
@@ -271,6 +210,7 @@ export function Sidebar({
 
   function handleDropOnList(event: React.DragEvent, target: TaskList): void {
     event.preventDefault();
+    event.stopPropagation();
     const payload = readDragPayload(event);
     if (payload === null) {
       return;
@@ -283,45 +223,9 @@ export function Sidebar({
     }
   }
 
-  async function moveListIntoFolder(listId: number, folder: Folder): Promise<void> {
-    const members = membersOf(folder.id).filter((list) => list.id !== listId);
-    const last = members[members.length - 1];
-    const updated = await updateList(listId, {
-      folder_id: folder.id,
-      sort_order: last === undefined ? SORT_GAP : last.sort_order + SORT_GAP,
-    });
-    onListsChanged((current) => current.map((l) => (l.id === updated.id ? updated : l)));
-  }
-
-  async function moveFolderBefore(folderId: number, target: Folder): Promise<void> {
-    const moved = folders.find((folder) => folder.id === folderId);
-    if (moved === undefined) {
-      return;
-    }
-    const siblings = [...folders].sort(byOrder).filter((folder) => folder.id !== folderId);
-    const targetIndex = siblings.findIndex((folder) => folder.id === target.id);
-    const prev = targetIndex > 0 ? siblings[targetIndex - 1] : undefined;
-    const sortOrder = insertionOrder(prev?.sort_order, target.sort_order);
-    if (prev !== undefined && sortOrder <= prev.sort_order) {
-      // The gap between neighbours is exhausted: renumber the folders sparsely.
-      const arrangement = [...siblings];
-      arrangement.splice(targetIndex, 0, moved);
-      const updates = await Promise.all(
-        arrangement.map((row, index) =>
-          updateFolder(row.id, { sort_order: (index + 1) * SORT_GAP }),
-        ),
-      );
-      onFoldersChanged((current) =>
-        current.map((f) => updates.find((updated) => updated.id === f.id) ?? f),
-      );
-      return;
-    }
-    const updated = await updateFolder(folderId, { sort_order: sortOrder });
-    onFoldersChanged((current) => current.map((f) => (f.id === updated.id ? updated : f)));
-  }
-
   function handleDropOnFolder(event: React.DragEvent, folder: Folder): void {
     event.preventDefault();
+    event.stopPropagation();
     const payload = readDragPayload(event);
     if (payload === null) {
       return;
@@ -331,6 +235,14 @@ export function Sidebar({
     }
     if (payload.kind === "folder" && payload.id !== folder.id) {
       void moveFolderBefore(payload.id, folder);
+    }
+  }
+
+  function handleDropOnNav(event: React.DragEvent): void {
+    event.preventDefault();
+    const payload = readDragPayload(event);
+    if (payload?.kind === "list") {
+      void moveListToTopLevelEnd(payload.id);
     }
   }
 
@@ -386,7 +298,11 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <nav aria-label="Lists">
+      <nav
+        aria-label="Lists"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={handleDropOnNav}
+      >
         <ul>
           {inbox && (
             <li>
@@ -395,6 +311,7 @@ export function Sidebar({
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => {
                   event.preventDefault();
+                  event.stopPropagation();
                   const payload = readDragPayload(event);
                   if (payload?.kind === "task") {
                     void moveTaskToList(payload.id, inbox.id);

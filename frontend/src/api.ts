@@ -100,10 +100,13 @@ export function createFolder(name: string): Promise<Folder> {
   return request("/api/v1/folders", { method: "POST", body: JSON.stringify({ name }) });
 }
 
-export function updateFolder(
-  folderId: number,
-  patch: { name?: string; sort_order?: number },
-): Promise<Folder> {
+/** Absent fields stay unchanged; explicit null is rejected by the API. */
+export interface FolderPatch {
+  name?: string;
+  sort_order?: number;
+}
+
+export function updateFolder(folderId: number, patch: FolderPatch): Promise<Folder> {
   return request(`/api/v1/folders/${folderId}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 

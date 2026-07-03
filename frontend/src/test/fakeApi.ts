@@ -1,5 +1,7 @@
 import { vi } from "vitest";
 
+import { SORT_GAP } from "../ordering";
+
 export interface FakeList {
   id: number;
   name: string;
@@ -74,18 +76,18 @@ export function fakeList(name: string, overrides: Partial<FakeList> = {}): FakeL
     emoji: null,
     is_archived: false,
     folder_id: null,
-    sort_order: id * 1024,
+    sort_order: id * SORT_GAP,
     ...overrides,
   };
 }
 
 export function fakeFolder(name: string, overrides: Partial<FakeFolder> = {}): FakeFolder {
   const id = nextFolderId++;
-  return { id, name, sort_order: id * 1024, ...overrides };
+  return { id, name, sort_order: id * SORT_GAP, ...overrides };
 }
 
 const nextOrder = (rows: { sort_order: number }[]): number =>
-  Math.max(0, ...rows.map((row) => row.sort_order)) + 1024;
+  Math.max(0, ...rows.map((row) => row.sort_order)) + SORT_GAP;
 
 /** Fakes the HTTP API at the fetch boundary and records every request. */
 export function installFakeApi({
