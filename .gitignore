@@ -63,3 +63,11 @@ coverage/
 # ---- Logs ----
 *.log
 logs/
+
+# AI-powered
+.opencode/
+skills-lock.json
+.agents/
+*/superpowers/*
+CLAUDE.md
+.claude/
