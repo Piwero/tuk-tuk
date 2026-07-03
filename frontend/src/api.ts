@@ -17,11 +17,23 @@ export interface Folder {
   sort_order: number;
 }
 
+export type Priority = "none" | "low" | "medium" | "high";
+
+export interface CheckItem {
+  id: number;
+  title: string;
+  done: boolean;
+  sort_order: number;
+}
+
 export interface Task {
   id: number;
   title: string;
   completed: boolean;
+  description: string;
+  priority: Priority;
   list_id: number;
+  check_items: CheckItem[];
   created_at: string;
 }
 
@@ -125,10 +137,16 @@ export function createTask(title: string, listId?: number): Promise<Task> {
   });
 }
 
-export function updateTask(
-  taskId: number,
-  patch: { completed?: boolean; list_id?: number },
-): Promise<Task> {
+/** Absent fields stay unchanged; explicit null is rejected by the API. */
+export interface TaskPatch {
+  title?: string;
+  completed?: boolean;
+  list_id?: number;
+  description?: string;
+  priority?: Priority;
+}
+
+export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {
   return request(`/api/v1/tasks/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
@@ -137,4 +155,34 @@ export function updateTask(
 
 export function deleteTask(taskId: number): Promise<void> {
   return request(`/api/v1/tasks/${taskId}`, { method: "DELETE" });
+}
+
+/** Check Item mutations return the full parent Task (composition). */
+export function createCheckItem(taskId: number, title: string): Promise<Task> {
+  return request(`/api/v1/tasks/${taskId}/check-items`, {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}
+
+/** Absent fields stay unchanged; explicit null is rejected by the API. */
+export interface CheckItemPatch {
+  title?: string;
+  done?: boolean;
+  sort_order?: number;
+}
+
+export function updateCheckItem(
+  taskId: number,
+  checkItemId: number,
+  patch: CheckItemPatch,
+): Promise<Task> {
+  return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteCheckItem(taskId: number, checkItemId: number): Promise<void> {
+  return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}`, { method: "DELETE" });
 }

@@ -1,8 +1,12 @@
 """Pydantic request/response models and the shared pagination envelope."""
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+
+# The four named Priority levels — named, not numbered, on the wire.
+Priority = Literal["none", "low", "medium", "high"]
 
 
 def reject_explicit_null(value: object) -> object:
@@ -85,8 +89,34 @@ class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
     completed: bool | None = None
     list_id: int | None = None
+    description: str | None = None
+    priority: Priority | None = None
 
-    _reject_nulls = field_validator("title", "completed", "list_id")(reject_explicit_null)
+    _reject_nulls = field_validator("title", "completed", "list_id", "description", "priority")(
+        reject_explicit_null
+    )
+
+
+class CheckItemCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+
+
+# PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
+class CheckItemUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    done: bool | None = None
+    sort_order: int | None = None
+
+    _reject_nulls = field_validator("title", "done", "sort_order")(reject_explicit_null)
+
+
+class CheckItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    done: bool
+    sort_order: int
 
 
 class TaskRead(BaseModel):
@@ -95,7 +125,10 @@ class TaskRead(BaseModel):
     id: int
     title: str
     completed: bool
+    description: str
+    priority: Priority
     list_id: int
+    check_items: list[CheckItemRead]
     created_at: datetime
 
     @field_serializer("created_at")

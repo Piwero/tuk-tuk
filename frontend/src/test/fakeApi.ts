@@ -19,11 +19,21 @@ export interface FakeFolder {
   sort_order: number;
 }
 
+export interface FakeCheckItem {
+  id: number;
+  title: string;
+  done: boolean;
+  sort_order: number;
+}
+
 export interface FakeTask {
   id: number;
   title: string;
   completed: boolean;
+  description: string;
+  priority: "none" | "low" | "medium" | "high";
   list_id: number;
+  check_items: FakeCheckItem[];
   created_at: string;
 }
 
@@ -54,16 +64,28 @@ export const INBOX: FakeList = {
 let nextTaskId = 100;
 let nextListId = 10;
 let nextFolderId = 500;
+let nextCheckItemId = 900;
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
   return {
     id: nextTaskId++,
     title,
     completed: false,
+    description: "",
+    priority: "none",
     list_id: INBOX.id,
+    check_items: [],
     created_at: "2026-07-03T10:00:00Z",
     ...overrides,
   };
+}
+
+export function fakeCheckItem(
+  title: string,
+  overrides: Partial<FakeCheckItem> = {},
+): FakeCheckItem {
+  const id = nextCheckItemId++;
+  return { id, title, done: false, sort_order: id * SORT_GAP, ...overrides };
 }
 
 export function fakeList(name: string, overrides: Partial<FakeList> = {}): FakeList {
@@ -98,7 +120,7 @@ export function installFakeApi({
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
     folders: folders.map((folder) => ({ ...folder })),
-    tasks: [...tasks],
+    tasks: tasks.map((task) => ({ ...task, check_items: [...task.check_items] })),
     requests: [],
   };
 
@@ -203,6 +225,39 @@ export function installFakeApi({
       });
       state.tasks.push(created);
       return json(created, 201);
+    }
+    const checkItemMatch = url.pathname.match(/^\/api\/v1\/tasks\/(\d+)\/check-items(?:\/(\d+))?$/);
+    if (checkItemMatch) {
+      const taskId = Number(checkItemMatch[1]);
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (!task) {
+        return notFound(`Task ${taskId} not found`);
+      }
+      if (method === "POST" && checkItemMatch[2] === undefined) {
+        const created = fakeCheckItem((body as { title: string }).title, {
+          sort_order: nextOrder(task.check_items),
+        });
+        task.check_items.push(created);
+        return json(task, 201);
+      }
+      const itemId = Number(checkItemMatch[2]);
+      const item = task.check_items.find((i) => i.id === itemId);
+      if (!item) {
+        return notFound(`Check item ${itemId} not found on task ${taskId}`);
+      }
+      if (method === "PATCH") {
+        Object.assign(item, body);
+        // Mirror the backend rule: ticking the last open item completes the parent.
+        if ((body as { done?: boolean }).done === true && task.check_items.every((i) => i.done)) {
+          task.completed = true;
+        }
+        task.check_items.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+        return json(task);
+      }
+      if (method === "DELETE") {
+        task.check_items = task.check_items.filter((i) => i.id !== itemId);
+        return new Response(null, { status: 204 });
+      }
     }
     const taskMatch = url.pathname.match(/^\/api\/v1\/tasks\/(\d+)$/);
     if (taskMatch) {

@@ -93,3 +93,33 @@ def test_moving_a_list_into_an_unknown_folder_returns_not_found_envelope(
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+def test_check_item_lookups_are_scoped_to_their_task(client: TestClient) -> None:
+    task_a = client.post("/api/v1/tasks", json={"title": "A"}).json()["id"]
+    task_b = client.post("/api/v1/tasks", json={"title": "B"}).json()["id"]
+    item_id = client.post(f"/api/v1/tasks/{task_a}/check-items", json={"title": "Step"}).json()[
+        "check_items"
+    ][0]["id"]
+
+    wrong_parent = client.patch(
+        f"/api/v1/tasks/{task_b}/check-items/{item_id}", json={"done": True}
+    )
+    assert wrong_parent.status_code == 404
+    assert wrong_parent.json()["error"]["code"] == "not_found"
+
+    unknown = client.delete(f"/api/v1/tasks/{task_a}/check-items/424242")
+    assert unknown.status_code == 404
+    assert unknown.json()["error"]["code"] == "not_found"
+
+
+def test_check_item_title_may_not_be_null(client: TestClient) -> None:
+    task_id = client.post("/api/v1/tasks", json={"title": "A"}).json()["id"]
+    item_id = client.post(f"/api/v1/tasks/{task_id}/check-items", json={"title": "Step"}).json()[
+        "check_items"
+    ][0]["id"]
+
+    response = client.patch(f"/api/v1/tasks/{task_id}/check-items/{item_id}", json={"title": None})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"

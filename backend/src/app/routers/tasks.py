@@ -19,7 +19,8 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         list_id = await session.scalar(select(TaskList.id).where(TaskList.id == payload.list_id))
         if list_id is None:
             raise NotFoundError(f"List {payload.list_id} not found")
-    task = Task(title=payload.title, list_id=list_id)
+    # Initialize the collection so serialization never triggers an async lazy load.
+    task = Task(title=payload.title, list_id=list_id, check_items=[])
     session.add(task)
     await session.commit()
     return TaskRead.model_validate(task)
