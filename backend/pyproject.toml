@@ -18,6 +18,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.51",
     "aiosqlite>=0.20.0",
     "alembic>=1.14.0",
+    "python-dateutil>=2.9.0",
 ]
 
 [dependency-groups]
@@ -29,6 +30,7 @@ dev = [
     "ruff>=0.7.4",
     "mypy>=1.13.0",
     "pre-commit>=4.0.0",
+    "types-python-dateutil>=2.9.0.20260518",
 ]
 
 [tool.hatch.build.targets.wheel]

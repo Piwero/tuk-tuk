@@ -3,6 +3,7 @@ import { vi } from "vitest";
 import { type Priority, type ViewMode } from "../api";
 import { addDays, localDayOf } from "../dates";
 import { byName, SORT_GAP } from "../ordering";
+import { decrementCount, nextOccurrenceISO } from "./fakeRecurrence";
 
 export interface FakeList {
   id: number;
@@ -57,6 +58,7 @@ export interface FakeTask {
   is_all_day: boolean;
   time_zone: string | null;
   reminders: string[];
+  recurrence: string | null;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -68,12 +70,23 @@ export interface RecordedRequest {
   body?: unknown;
 }
 
+export interface FakeCompletedOccurrence {
+  id: number;
+  task_id: number;
+  title: string;
+  list_id: number;
+  completed_at: string;
+  due_date: string;
+  is_all_day: boolean;
+}
+
 interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
   sections: FakeSection[];
   tags: FakeTag[];
   tasks: FakeTask[];
+  completedOccurrences: FakeCompletedOccurrence[];
   requests: RecordedRequest[];
 }
 
@@ -95,6 +108,7 @@ let nextFolderId = 500;
 let nextCheckItemId = 900;
 let nextTagId = 700;
 let nextSectionId = 800;
+let nextOccurrenceId = 950;
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
   const id = nextTaskId++;
@@ -113,6 +127,7 @@ export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): Fake
     is_all_day: false,
     time_zone: null,
     reminders: [],
+    recurrence: null,
     check_items: [],
     tags: [],
     created_at: "2026-07-03T10:00:00Z",
@@ -172,12 +187,14 @@ export function installFakeApi({
   sections = [],
   tags = [],
   tasks = [],
+  completedOccurrences = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
   sections?: FakeSection[];
   tags?: FakeTag[];
   tasks?: FakeTask[];
+  completedOccurrences?: FakeCompletedOccurrence[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -189,6 +206,7 @@ export function installFakeApi({
       check_items: [...task.check_items],
       tags: task.tags.map((tag) => ({ ...tag })),
     })),
+    completedOccurrences: completedOccurrences.map((occurrence) => ({ ...occurrence })),
     requests: [],
   };
 
@@ -252,6 +270,39 @@ export function installFakeApi({
     return first <= addDays(today, 6) && last >= today;
   };
 
+  /** Mirror of the backend's completion rule: a recurring task advances in
+   * place (occurrence recorded, dates shifted, checklist reset) and only
+   * completes for real when its recurrence has ended. */
+  const completeTask = (task: FakeTask): void => {
+    if (task.recurrence !== null && task.due_date !== null) {
+      const next = nextOccurrenceISO(task.recurrence, task.due_date, task.is_all_day);
+      if (next !== null) {
+        state.completedOccurrences.push({
+          id: nextOccurrenceId++,
+          task_id: task.id,
+          title: task.title,
+          list_id: task.list_id,
+          completed_at: new Date().toISOString(),
+          due_date: task.due_date,
+          is_all_day: task.is_all_day,
+        });
+        const delta = new Date(next).getTime() - new Date(task.due_date).getTime();
+        if (task.start_date !== null) {
+          const shifted = new Date(new Date(task.start_date).getTime() + delta);
+          task.start_date = `${shifted.toISOString().slice(0, 19)}Z`;
+        }
+        task.due_date = next;
+        task.recurrence = decrementCount(task.recurrence);
+        for (const item of task.check_items) {
+          item.done = false;
+        }
+        return;
+      }
+    }
+    task.completed = true;
+    task.completed_at = new Date().toISOString();
+  };
+
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://localhost");
     const method = (init?.method ?? "GET").toUpperCase();
@@ -289,6 +340,9 @@ export function installFakeApi({
       if (method === "DELETE") {
         state.lists = state.lists.filter((l) => l.id !== listId);
         state.tasks = state.tasks.filter((t) => t.list_id !== listId);
+        state.completedOccurrences = state.completedOccurrences.filter(
+          (occurrence) => occurrence.list_id !== listId,
+        );
         return new Response(null, { status: 204 });
       }
     }
@@ -367,6 +421,13 @@ export function installFakeApi({
       });
       state.tasks.push(created);
       return json(created, 201);
+    }
+    if (method === "GET" && url.pathname === "/api/v1/completed-occurrences") {
+      const listId = url.searchParams.get("list_id");
+      const items = state.completedOccurrences
+        .filter((occurrence) => listId === null || occurrence.list_id === Number(listId))
+        .sort((a, b) => b.completed_at.localeCompare(a.completed_at) || b.id - a.id);
+      return json(page(items));
     }
     if (method === "GET" && url.pathname === "/api/v1/sections") {
       const listId = url.searchParams.get("list_id");
@@ -472,10 +533,10 @@ export function installFakeApi({
       }
       if (method === "PATCH") {
         Object.assign(item, body);
-        // Mirror the backend rule: ticking the last open item completes the parent.
+        // Mirror the backend rule: ticking the last open item completes the
+        // parent — which advances a recurring parent in place instead.
         if ((body as { done?: boolean }).done === true && task.check_items.every((i) => i.done)) {
-          task.completed = true;
-          task.completed_at = new Date().toISOString();
+          completeTask(task);
         }
         task.check_items.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
         return json(task);
@@ -493,11 +554,10 @@ export function installFakeApi({
         return notFound(`Task ${taskId} not found`);
       }
       if (method === "PATCH") {
-        const { tag_ids, ...rest } = body as { tag_ids?: number[] } & Record<string, unknown>;
-        // Mirror the backend: completion transitions stamp/clear completed_at.
-        if (typeof rest.completed === "boolean" && rest.completed !== task.completed) {
-          rest.completed_at = rest.completed ? new Date().toISOString() : null;
-        }
+        const { tag_ids, completed, ...rest } = body as {
+          tag_ids?: number[];
+          completed?: boolean;
+        } & Record<string, unknown>;
         // Mirror the backend's reminder rules: no dateless Reminders, set
         // semantics, and clearing the date sweeps the Reminders with it.
         const effectiveDue = rest.due_date !== undefined ? rest.due_date : task.due_date;
@@ -516,6 +576,22 @@ export function installFakeApi({
           rest.reminders = [...new Set(rest.reminders as string[])];
         } else if (effectiveDue === null && task.reminders.length > 0) {
           rest.reminders = [];
+        }
+        // Mirror the backend's recurrence rules: a dateless task cannot recur,
+        // and clearing the date sweeps the recurrence with it.
+        if (typeof rest.recurrence === "string" && effectiveDue === null) {
+          return json(
+            {
+              error: {
+                code: "invalid_recurrence",
+                message: "A task without a date cannot recur",
+              },
+            },
+            422,
+          );
+        }
+        if (!("recurrence" in rest) && effectiveDue === null && task.recurrence !== null) {
+          rest.recurrence = null;
         }
         if (
           typeof rest.list_id === "number" &&
@@ -542,10 +618,23 @@ export function installFakeApi({
             .sort(byName)
             .map((tag) => ({ ...tag }));
         }
+        // Completion last, against the task the patch produced (mirrors the
+        // backend): completing a recurring task advances it in place.
+        if (typeof completed === "boolean" && completed !== task.completed) {
+          if (completed) {
+            completeTask(task);
+          } else {
+            task.completed = false;
+            task.completed_at = null;
+          }
+        }
         return json(task);
       }
       if (method === "DELETE") {
         state.tasks = state.tasks.filter((t) => t.id !== taskId);
+        state.completedOccurrences = state.completedOccurrences.filter(
+          (occurrence) => occurrence.task_id !== taskId,
+        );
         return new Response(null, { status: 204 });
       }
     }

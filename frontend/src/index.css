@@ -68,7 +68,8 @@ body {
 
 /* Shared frame for the detail panel's fieldsets. */
 .task-dates,
-.task-reminders {
+.task-reminders,
+.task-repeat {
   display: grid;
   gap: 0.4rem;
   border: 1px solid #d0d7de;
@@ -78,7 +79,8 @@ body {
 }
 
 .task-dates legend,
-.task-reminders legend {
+.task-reminders legend,
+.task-repeat legend {
   padding: 0 0.3rem;
   color: #57606a;
 }
@@ -117,6 +119,35 @@ body {
 
 .task-dates .date-label {
   margin: 0;
+}
+
+.task-repeat .repeat-editor,
+.task-repeat .repeat-summary,
+.task-repeat .repeat-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.task-repeat .repeat-summary p {
+  margin: 0;
+}
+
+.task-repeat input[type="number"] {
+  width: 4.5rem;
+}
+
+/* A Completed Occurrence row: plain history, no controls. */
+.completed-history .occurrence {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: #57606a;
+}
+
+.completed-history .repeat-glyph {
+  color: #4772fa;
 }
 
 .date-chip {

@@ -26,6 +26,7 @@ import { readDragPayload, startDrag } from "../dnd";
 import { PRIORITY_LABELS } from "../grouping";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
+import { RepeatFieldset } from "./RepeatFieldset";
 
 interface TaskDetailProps {
   task: Task;
@@ -486,6 +487,7 @@ export function TaskDetail({
           </>
         )}
       </fieldset>
+      <RepeatFieldset task={task} onTaskChanged={onTaskChanged} />
       <fieldset className="task-tags">
         <legend>Tags</legend>
         {allTags.length === 0 && <p className="hint">No tags yet — add one in the sidebar.</p>}

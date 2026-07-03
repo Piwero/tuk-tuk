@@ -152,13 +152,15 @@ class TaskCreate(BaseModel):
     due_date: datetime | None = None
     is_all_day: bool = False
     time_zone: str | None = Field(default=None, max_length=64)
+    recurrence: str | None = Field(default=None, max_length=255)
 
     _normalize_dates = field_validator("start_date", "due_date")(normalize_to_utc)
 
 
 # PATCH fields: absent means "leave unchanged". An explicit null is rejected,
-# except section_id, where null moves the task out of its Section, and
-# start_date / due_date / time_zone, where null clears the schedule.
+# except section_id, where null moves the task out of its Section,
+# start_date / due_date / time_zone, where null clears the schedule, and
+# recurrence, where null stops the task repeating.
 # tag_ids replaces the task's whole tag set; reminders replaces the whole
 # reminder set ([] clears it).
 class TaskUpdate(BaseModel):
@@ -175,6 +177,7 @@ class TaskUpdate(BaseModel):
     is_all_day: bool | None = None
     time_zone: str | None = Field(default=None, max_length=64)
     reminders: list[str] | None = None
+    recurrence: str | None = Field(default=None, max_length=255)
 
     _reject_nulls = field_validator(
         "title",
@@ -212,6 +215,24 @@ class CheckItemRead(BaseModel):
     sort_order: int
 
 
+class CompletedOccurrenceRead(BaseModel):
+    """One completed occurrence of a recurring Task, with the live task's
+    title and List joined in for the completed view.
+    """
+
+    id: int
+    task_id: int
+    title: str
+    list_id: int
+    completed_at: datetime
+    due_date: datetime
+    is_all_day: bool
+
+    @field_serializer("completed_at", "due_date")
+    def serialize_dates(self, value: datetime) -> str:
+        return utc_z(value)
+
+
 class TaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -229,6 +250,7 @@ class TaskRead(BaseModel):
     is_all_day: bool
     time_zone: str | None
     reminders: list[str]
+    recurrence: str | None
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime

@@ -112,6 +112,10 @@ class Task(Base):
     # (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
     # Stored only — v1 delivers no notifications (see the PRD).
     reminders: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Recurrence: iCalendar RRULE content (e.g. "FREQ=WEEKLY;BYDAY=MO,TH"),
+    # anchored at the task's due date. Completing a recurring task advances
+    # its dates in place instead of completing the row (ADR 0003).
+    recurrence: Mapped[str | None] = mapped_column(String(255), default=None)
     list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
     section_id: Mapped[int | None] = mapped_column(
         ForeignKey("sections.id"), index=True, default=None
@@ -155,3 +159,22 @@ class CheckItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     task: Mapped[Task] = relationship(back_populates="check_items")
+
+
+class CompletedOccurrence(Base):
+    """A Completed Occurrence — the history record written when one occurrence
+    of a recurring Task is completed (the Task itself stays open with its date
+    advanced). The completed view and statistics read these.
+
+    History under a Task (deleted with it), so no owner column — ownership
+    flows through the parent Task.
+    """
+
+    __tablename__ = "completed_occurrences"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # The occurrence the user completed: the task's dates before they advanced.
+    due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    is_all_day: Mapped[bool] = mapped_column(default=False)
