@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 import { fetchFolders, fetchLists, fetchTasks, type Folder, type Task, type TaskList } from "./api";
 import { QuickAdd } from "./components/QuickAdd";
 import { Sidebar } from "./components/Sidebar";
+import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 
 export function App(): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
@@ -36,9 +38,14 @@ export function App(): JSX.Element {
   }, [selectedListId]);
 
   const selectedList = lists.find((list) => list.id === selectedListId) ?? null;
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
+
+  function applyTaskChange(updated: Task): void {
+    setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
+  }
 
   return (
-    <div className="app">
+    <div className={selectedTask === null ? "app" : "app with-detail"}>
       <Sidebar
         lists={lists}
         folders={folders}
@@ -62,8 +69,15 @@ export function App(): JSX.Element {
             onCreated={(task) => setTasks((current) => [...current, task])}
           />
         )}
-        <TaskListView tasks={tasks} onChanged={setTasks} />
+        <TaskListView tasks={tasks} onChanged={setTasks} onSelect={setSelectedTaskId} />
       </main>
+      {selectedTask !== null && (
+        <TaskDetail
+          task={selectedTask}
+          onTaskChanged={applyTaskChange}
+          onClose={() => setSelectedTaskId(null)}
+        />
+      )}
     </div>
   );
 }

@@ -15,7 +15,7 @@ from app.config import settings as default_settings
 from app.db import run_migrations
 from app.errors import register_error_handlers
 from app.models import TaskList
-from app.routers import folders, lists, tasks
+from app.routers import check_items, folders, lists, tasks
 
 INBOX_NAME = "Inbox"
 
@@ -45,6 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     register_error_handlers(app)
+    app.include_router(check_items.router)
     app.include_router(folders.router)
     app.include_router(lists.router)
     app.include_router(tasks.router)

@@ -76,3 +76,41 @@ def test_task_moved_to_another_list_leaves_its_old_list(client: TestClient) -> N
     assert [t["title"] for t in in_errands] == ["Buy stamps"]
     in_inbox = client.get("/api/v1/tasks", params={"list_id": inbox_id(client)}).json()["items"]
     assert all(t["id"] != task["id"] for t in in_inbox)
+
+
+def test_new_task_has_empty_description_no_priority_and_no_check_items(
+    client: TestClient,
+) -> None:
+    created = client.post("/api/v1/tasks", json={"title": "Plain"}).json()
+
+    assert created["description"] == ""
+    assert created["priority"] == "none"
+    assert created["check_items"] == []
+
+    read_back = client.get("/api/v1/tasks").json()["items"][0]
+    assert read_back["description"] == ""
+    assert read_back["priority"] == "none"
+    assert read_back["check_items"] == []
+
+
+def test_task_description_and_priority_can_be_edited(client: TestClient) -> None:
+    task_id = client.post("/api/v1/tasks", json={"title": "Write report"}).json()["id"]
+
+    response = client.patch(
+        f"/api/v1/tasks/{task_id}",
+        json={"description": "## Outline\n\n- intro\n- body", "priority": "high"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["description"] == "## Outline\n\n- intro\n- body"
+    assert body["priority"] == "high"
+
+
+def test_task_priority_must_be_a_named_level(client: TestClient) -> None:
+    task_id = client.post("/api/v1/tasks", json={"title": "Precise"}).json()["id"]
+
+    response = client.patch(f"/api/v1/tasks/{task_id}", json={"priority": "urgent"})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"

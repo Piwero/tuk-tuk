@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -62,8 +62,34 @@ class Task(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(500))
     completed: Mapped[bool] = mapped_column(default=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    priority: Mapped[str] = mapped_column(String(6), default="none")
     list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
     owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     task_list: Mapped[TaskList] = relationship(back_populates="tasks")
+    # Check Items always travel with their Task (composition), so load them
+    # eagerly — async lazy loading would raise on serialization anyway.
+    check_items: Mapped[list["CheckItem"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="CheckItem.sort_order, CheckItem.id",
+        lazy="selectin",
+    )
+
+
+class CheckItem(Base):
+    """A Check Item — one line in a Task's checklist; not a Task itself."""
+
+    __tablename__ = "check_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), index=True)
+    title: Mapped[str] = mapped_column(String(500))
+    done: Mapped[bool] = mapped_column(default=False)
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    task: Mapped[Task] = relationship(back_populates="check_items")
