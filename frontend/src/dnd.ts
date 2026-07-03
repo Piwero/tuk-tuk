@@ -3,9 +3,7 @@
 export const DRAG_TYPE = "application/x-tuktuk";
 
 export type DragPayload =
-  | { kind: "list"; id: number }
-  | { kind: "folder"; id: number }
-  | { kind: "task"; id: number };
+  { kind: "list"; id: number } | { kind: "folder"; id: number } | { kind: "task"; id: number };
 
 export function startDrag(event: React.DragEvent, payload: DragPayload): void {
   event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload));
