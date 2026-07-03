@@ -25,7 +25,7 @@ export function localTimeOf(date: Date): string {
 }
 
 /** Parse YYYY-MM-DD into a local-midnight Date, without any clock math. */
-function fromDayIso(dayIso: string): Date {
+export function fromDayIso(dayIso: string): Date {
   const [year = 0, month = 1, day = 1] = dayIso.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
@@ -43,7 +43,52 @@ export function nextMonday(dayIso: string): string {
   return addDays(dayIso, (8 - weekday) % 7 || 7);
 }
 
-const allDayInstant = (dayIso: string): string => `${dayIso}T00:00:00Z`;
+export const allDayInstant = (dayIso: string): string => `${dayIso}T00:00:00Z`;
+
+// Fixed locales, deterministic output: en-CA renders YYYY-MM-DD, en-GB HH:mm.
+const zonedDayFormats = new Map<string, Intl.DateTimeFormat>();
+const zonedTimeFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** The calendar day of an instant, read in the given IANA timezone (the
+ * browser's when null) — the frontend mirror of the backend's day reading. */
+export function zonedDay(iso: string, timeZone: string | null): string {
+  const key = timeZone ?? "";
+  let format = zonedDayFormats.get(key);
+  if (format === undefined) {
+    format = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timeZone ?? undefined,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    zonedDayFormats.set(key, format);
+  }
+  return format.format(new Date(iso));
+}
+
+/** The wall-clock HH:MM of an instant in the given IANA timezone. */
+export function zonedTime(iso: string, timeZone: string | null): string {
+  const key = timeZone ?? "";
+  let format = zonedTimeFormats.get(key);
+  if (format === undefined) {
+    format = new Intl.DateTimeFormat("en-GB", {
+      timeZone: timeZone ?? undefined,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    zonedTimeFormats.set(key, format);
+  }
+  return format.format(new Date(iso));
+}
+
+/** The UTC instant of a local wall-clock time (HH:MM) on a local day. */
+export function instantOf(dayIso: string, time: string): string {
+  const [hours = 0, minutes = 0] = time.split(":").map(Number);
+  const date = fromDayIso(dayIso);
+  date.setHours(hours, minutes, 0, 0);
+  return date.toISOString();
+}
 
 /** A schedule patch always replaces the whole schedule, so saves are idempotent. */
 export function allDaySchedule(startDay: string | null, dueDay: string): TaskPatch {
@@ -61,15 +106,9 @@ export function timedSchedule(
   startTime: string | null,
   dueTime: string,
 ): TaskPatch {
-  const instant = (time: string): string => {
-    const [hours = 0, minutes = 0] = time.split(":").map(Number);
-    const date = fromDayIso(dayIso);
-    date.setHours(hours, minutes, 0, 0);
-    return date.toISOString();
-  };
   return {
-    start_date: startTime === null ? null : instant(startTime),
-    due_date: instant(dueTime),
+    start_date: startTime === null ? null : instantOf(dayIso, startTime),
+    due_date: instantOf(dayIso, dueTime),
     is_all_day: false,
     time_zone: browserTimeZone(),
   };
@@ -118,7 +157,8 @@ const TIME = new Intl.DateTimeFormat("en-US", {
   hour12: false,
 });
 
-function formatDay(dayIso: string): string {
+/** A short deterministic day label: "Jul 6". */
+export function shortDayLabel(dayIso: string): string {
   return MONTH_DAY.format(fromDayIso(dayIso));
 }
 
@@ -131,8 +171,8 @@ export function formatSchedule(task: Task): string | null {
     const due = task.due_date.slice(0, 10);
     const start = task.start_date?.slice(0, 10) ?? null;
     return start === null || start === due
-      ? formatDay(due)
-      : `${formatDay(start)} – ${formatDay(due)}`;
+      ? shortDayLabel(due)
+      : `${shortDayLabel(start)} – ${shortDayLabel(due)}`;
   }
   const due = new Date(task.due_date);
   const day = MONTH_DAY.format(due);
