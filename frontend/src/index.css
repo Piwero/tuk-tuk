@@ -66,6 +66,47 @@ body {
   border-radius: 6px;
 }
 
+.task-dates {
+  display: grid;
+  gap: 0.4rem;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.task-dates legend {
+  padding: 0 0.3rem;
+  color: #57606a;
+}
+
+.task-dates .date-actions,
+.task-dates .date-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.task-dates .date-label {
+  margin: 0;
+}
+
+.date-chip {
+  font-size: 0.78rem;
+  color: #4772fa;
+  white-space: nowrap;
+}
+
+.date-chip.overdue,
+.date-label.overdue {
+  color: #e03131;
+}
+
+li[data-overdue] .date-chip {
+  font-weight: 600;
+}
+
 .task-description {
   display: grid;
   gap: 0.4rem;

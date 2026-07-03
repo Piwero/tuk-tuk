@@ -22,6 +22,20 @@ def reject_explicit_null(value: object) -> object:
     return value
 
 
+def as_utc(value: datetime) -> datetime:
+    """Pin naive datetimes (SQLite roundtrips) to UTC — the storage convention."""
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def normalize_to_utc(value: datetime | None) -> datetime | None:
+    """Store schedule datetimes in UTC; naive input is taken as UTC by convention."""
+    return None if value is None else as_utc(value)
+
+
+def utc_z(value: datetime) -> str:
+    return as_utc(value).isoformat().replace("+00:00", "Z")
+
+
 class Page[T](BaseModel):
     items: list[T]
     total: int
@@ -134,10 +148,17 @@ class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     list_id: int | None = None
     section_id: int | None = None
+    start_date: datetime | None = None
+    due_date: datetime | None = None
+    is_all_day: bool = False
+    time_zone: str | None = Field(default=None, max_length=64)
+
+    _normalize_dates = field_validator("start_date", "due_date")(normalize_to_utc)
 
 
 # PATCH fields: absent means "leave unchanged". An explicit null is rejected,
-# except section_id, where null moves the task out of its Section.
+# except section_id, where null moves the task out of its Section, and
+# start_date / due_date / time_zone, where null clears the schedule.
 # tag_ids replaces the task's whole tag set.
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
@@ -148,10 +169,22 @@ class TaskUpdate(BaseModel):
     tag_ids: list[int] | None = None
     section_id: int | None = None
     sort_order: int | None = None
+    start_date: datetime | None = None
+    due_date: datetime | None = None
+    is_all_day: bool | None = None
+    time_zone: str | None = Field(default=None, max_length=64)
 
     _reject_nulls = field_validator(
-        "title", "completed", "list_id", "description", "priority", "tag_ids", "sort_order"
+        "title",
+        "completed",
+        "list_id",
+        "description",
+        "priority",
+        "tag_ids",
+        "sort_order",
+        "is_all_day",
     )(reject_explicit_null)
+    _normalize_dates = field_validator("start_date", "due_date")(normalize_to_utc)
 
 
 class CheckItemCreate(BaseModel):
@@ -187,14 +220,18 @@ class TaskRead(BaseModel):
     list_id: int
     section_id: int | None
     sort_order: int
+    start_date: datetime | None
+    due_date: datetime | None
+    is_all_day: bool
+    time_zone: str | None
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime
 
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:
-        # SQLite drops tzinfo on the roundtrip; timestamps are UTC by convention,
-        # so pin naive values to UTC and always emit the Z suffix.
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=UTC)
-        return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        return utc_z(value)
+
+    @field_serializer("start_date", "due_date")
+    def serialize_schedule_dates(self, value: datetime | None) -> str | None:
+        return None if value is None else utc_z(value)

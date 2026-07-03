@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { createSection, createTask, type Section, type Task } from "../api";
+import { formatSchedule, isOverdue } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { groupTasks } from "../grouping";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
@@ -86,6 +87,7 @@ export function KanbanView({
               <li
                 key={task.id}
                 className="kanban-card"
+                data-overdue={isOverdue(task) || undefined}
                 draggable
                 onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
                 onDragOver={(event) => event.preventDefault()}
@@ -98,6 +100,11 @@ export function KanbanView({
                   onClick={() => onSelect(task.id)}
                 >
                   <span className={task.completed ? "completed" : undefined}>{task.title}</span>
+                  {task.due_date !== null && (
+                    <span className={isOverdue(task) ? "date-chip overdue" : "date-chip"}>
+                      {formatSchedule(task)}
+                    </span>
+                  )}
                   {task.check_items.length > 0 && (
                     <span className="check-progress">
                       {task.check_items.filter((item) => item.done).length}/

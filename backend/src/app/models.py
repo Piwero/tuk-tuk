@@ -98,6 +98,13 @@ class Task(Base):
     completed: Mapped[bool] = mapped_column(default=False)
     description: Mapped[str] = mapped_column(Text, default="")
     priority: Mapped[str] = mapped_column(String(6), default="none")
+    # Scheduling: due only, start+due duration, or all-day span (dates stored
+    # as UTC; all-day values are date-only semantics at midnight UTC). The
+    # timezone is the IANA key the client scheduled in (v1: browser timezone).
+    start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    is_all_day: Mapped[bool] = mapped_column(default=False)
+    time_zone: Mapped[str | None] = mapped_column(String(64), default=None)
     list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
     section_id: Mapped[int | None] = mapped_column(
         ForeignKey("sections.id"), index=True, default=None
