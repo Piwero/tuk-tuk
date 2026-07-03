@@ -40,6 +40,10 @@ repos:
         args: ["--config-file=backend/pyproject.toml"]
         additional_dependencies:
           - pydantic>=2.0
+          - pydantic-settings>=2.6.0
+          - fastapi>=0.115.0
+          - sqlalchemy[asyncio]>=2.0.36
+          - alembic>=1.14.0
 
   # ---- Frontend: prettier ----
   - repo: https://github.com/pre-commit/mirrors-prettier
