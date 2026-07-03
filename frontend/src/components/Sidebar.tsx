@@ -17,7 +17,7 @@ import {
   type TaskList,
 } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
-import { appendOrder, byOrder, planInsertBefore } from "../ordering";
+import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
 import { FolderForm } from "./FolderForm";
 import { ListForm, type ListFormValues } from "./ListForm";
 import { TagForm, type TagFormValues } from "./TagForm";
@@ -412,54 +412,52 @@ export function Sidebar({
       <nav aria-label="Tags" className="tags-nav">
         <h2>Tags</h2>
         <ul>
-          {[...tags]
-            .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id)
-            .map((tag) =>
-              editor?.mode === "edit-tag" && editor.tagId === tag.id ? (
-                <li key={tag.id}>
-                  <TagForm
-                    initial={tag}
-                    onSubmit={(values) => void handleEditTag(tag, values)}
-                    onCancel={() => setEditor(null)}
-                  />
-                </li>
-              ) : (
-                <li key={tag.id}>
-                  <div className="list-row">
+          {[...tags].sort(byName).map((tag) =>
+            editor?.mode === "edit-tag" && editor.tagId === tag.id ? (
+              <li key={tag.id}>
+                <TagForm
+                  initial={tag}
+                  onSubmit={(values) => handleEditTag(tag, values)}
+                  onCancel={() => setEditor(null)}
+                />
+              </li>
+            ) : (
+              <li key={tag.id}>
+                <div className="list-row">
+                  <button
+                    type="button"
+                    className={tag.id === selectedTagId ? "list-button selected" : "list-button"}
+                    onClick={() => onSelectTag(tag.id)}
+                  >
+                    {tag.color !== null && (
+                      <span className="color-dot" style={{ background: tag.color }} />
+                    )}
+                    {tag.name}
+                  </button>
+                  <span className="row-actions">
                     <button
                       type="button"
-                      className={tag.id === selectedTagId ? "list-button selected" : "list-button"}
-                      onClick={() => onSelectTag(tag.id)}
+                      aria-label={`Edit tag ${tag.name}`}
+                      onClick={() => setEditor({ mode: "edit-tag", tagId: tag.id })}
                     >
-                      {tag.color !== null && (
-                        <span className="color-dot" style={{ background: tag.color }} />
-                      )}
-                      {tag.name}
+                      ✎
                     </button>
-                    <span className="row-actions">
-                      <button
-                        type="button"
-                        aria-label={`Edit tag ${tag.name}`}
-                        onClick={() => setEditor({ mode: "edit-tag", tagId: tag.id })}
-                      >
-                        ✎
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete tag ${tag.name}`}
-                        onClick={() => void handleDeleteTag(tag)}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  </div>
-                </li>
-              ),
-            )}
+                    <button
+                      type="button"
+                      aria-label={`Delete tag ${tag.name}`}
+                      onClick={() => void handleDeleteTag(tag)}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </div>
+              </li>
+            ),
+          )}
         </ul>
         {editor?.mode === "create-tag" ? (
           <TagForm
-            onSubmit={(values) => void handleCreateTag(values)}
+            onSubmit={(values) => handleCreateTag(values)}
             onCancel={() => setEditor(null)}
           />
         ) : (

@@ -14,6 +14,9 @@ interface Ordered {
 export const byOrder = (a: Ordered, b: Ordered): number =>
   a.sort_order - b.sort_order || a.id - b.id;
 
+export const byName = (a: { name: string; id: number }, b: { name: string; id: number }): number =>
+  a.name.localeCompare(b.name) || a.id - b.id;
+
 export type InsertionPlan<T extends Ordered> =
   | { kind: "single"; sort_order: number }
   | { kind: "renumber"; rows: { row: T; sort_order: number }[] };

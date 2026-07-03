@@ -32,6 +32,22 @@ describe("Tags in the sidebar", () => {
     expect(post?.body).toEqual({ name: "errand", color: "#00c853" });
   });
 
+  it("shows the API error when creating a duplicate Tag name", async () => {
+    installFakeApi({ tags: [fakeTag("work")] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Tags" });
+    await user.click(within(nav).getByRole("button", { name: "Add Tag" }));
+    await user.type(screen.getByLabelText("Tag name"), "work");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent('A tag named "work" already exists');
+    expect(screen.getByLabelText("Tag name")).toBeInTheDocument(); // form stays open
+    expect(within(nav).getAllByRole("button", { name: "work" })).toHaveLength(1);
+  });
+
   it("clicking a Tag shows its tasks from every List", async () => {
     const work = fakeTag("work");
     const errands = fakeList("Errands");
@@ -96,6 +112,24 @@ describe("Tags on a task", () => {
     await waitFor(() => expect(within(row).queryByText("work")).not.toBeInTheDocument());
     patch = api.requests.filter((r) => r.method === "PATCH").pop();
     expect(patch?.body).toEqual({ tag_ids: [errand.id] });
+  });
+
+  it("removing the viewed Tag from a task drops it from the tag view", async () => {
+    const work = fakeTag("work");
+    const report = fakeTask("Write report", { tags: [work] });
+    installFakeApi({ tags: [work], tasks: [report] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const tagsNav = await screen.findByRole("navigation", { name: "Tags" });
+    await user.click(within(tagsNav).getByRole("button", { name: "work" }));
+    await screen.findByRole("heading", { name: "#work" });
+    await user.click(screen.getByRole("button", { name: "Open details for Write report" }));
+    const panel = await screen.findByRole("complementary", { name: "Task details" });
+
+    await user.click(within(panel).getByRole("checkbox", { name: "Tag work" }));
+
+    await waitFor(() => expect(screen.queryByText("Write report")).not.toBeInTheDocument());
   });
 
   it("renaming a Tag updates the sidebar and every task chip", async () => {
