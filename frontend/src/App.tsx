@@ -3,14 +3,17 @@ import { useEffect, useState } from "react";
 import {
   fetchFolders,
   fetchLists,
+  fetchSections,
   fetchTags,
   fetchTasks,
   fetchTasksByTag,
   type Folder,
+  type Section,
   type Tag,
   type Task,
   type TaskList,
 } from "./api";
+import { type GroupBy, type SortBy } from "./grouping";
 import { QuickAdd } from "./components/QuickAdd";
 import { Sidebar } from "./components/Sidebar";
 import { TaskDetail } from "./components/TaskDetail";
@@ -26,6 +29,9 @@ export function App(): JSX.Element {
   const [view, setView] = useState<View>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [groupBy, setGroupBy] = useState<GroupBy>("section");
+  const [sortBy, setSortBy] = useState<SortBy>("custom");
 
   useEffect(() => {
     void Promise.all([fetchLists(), fetchFolders(), fetchTags()]).then(
@@ -56,6 +62,11 @@ export function App(): JSX.Element {
     }
     const load = view.kind === "list" ? fetchTasks(view.id) : fetchTasksByTag(view.id);
     void load.then((page) => setTasks(page.items));
+    if (view.kind === "list") {
+      void fetchSections(view.id).then((page) => setSections(page.items));
+    } else {
+      setSections([]);
+    }
   }, [view]);
 
   const selectedList =
@@ -125,12 +136,48 @@ export function App(): JSX.Element {
       <main>
         <h1>{selectedList?.name ?? (selectedTag ? `#${selectedTag.name}` : "tuk-tuk")}</h1>
         {selectedList !== null && (
-          <QuickAdd
-            listId={selectedList.id}
-            onCreated={(task) => setTasks((current) => [...current, task])}
-          />
+          <>
+            <QuickAdd
+              listId={selectedList.id}
+              onCreated={(task) => setTasks((current) => [...current, task])}
+            />
+            <div className="view-controls">
+              <label>
+                Group by
+                <select
+                  value={groupBy}
+                  onChange={(event) => setGroupBy(event.target.value as GroupBy)}
+                >
+                  <option value="section">Section</option>
+                  <option value="date">Date</option>
+                  <option value="priority">Priority</option>
+                </select>
+              </label>
+              <label>
+                Sort by
+                <select
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value as SortBy)}
+                >
+                  <option value="custom">Custom</option>
+                  <option value="date">Date</option>
+                  <option value="priority">Priority</option>
+                  <option value="title">Title</option>
+                </select>
+              </label>
+            </div>
+          </>
         )}
-        <TaskListView tasks={tasks} onChanged={setTasks} onSelect={setSelectedTaskId} />
+        <TaskListView
+          tasks={tasks}
+          sections={sections}
+          listId={selectedList?.id ?? null}
+          groupBy={groupBy}
+          sortBy={sortBy}
+          onChanged={setTasks}
+          onSelect={setSelectedTaskId}
+          onSectionsChanged={setSections}
+        />
       </main>
       {selectedTask !== null && (
         <TaskDetail

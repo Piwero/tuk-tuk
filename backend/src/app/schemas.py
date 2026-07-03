@@ -101,12 +101,35 @@ class TagRead(BaseModel):
     color: str | None
 
 
+class SectionCreate(BaseModel):
+    list_id: int
+    name: str = Field(min_length=1, max_length=255)
+
+
+# PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
+class SectionUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    sort_order: int | None = None
+
+    _reject_nulls = field_validator("name", "sort_order")(reject_explicit_null)
+
+
+class SectionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    list_id: int
+    name: str
+    sort_order: int
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     list_id: int | None = None
 
 
-# PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
+# PATCH fields: absent means "leave unchanged". An explicit null is rejected,
+# except section_id, where null moves the task out of its Section.
 # tag_ids replaces the task's whole tag set.
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=500)
@@ -115,9 +138,11 @@ class TaskUpdate(BaseModel):
     description: str | None = None
     priority: Priority | None = None
     tag_ids: list[int] | None = None
+    section_id: int | None = None
+    sort_order: int | None = None
 
     _reject_nulls = field_validator(
-        "title", "completed", "list_id", "description", "priority", "tag_ids"
+        "title", "completed", "list_id", "description", "priority", "tag_ids", "sort_order"
     )(reject_explicit_null)
 
 
@@ -152,6 +177,8 @@ class TaskRead(BaseModel):
     description: str
     priority: Priority
     list_id: int
+    section_id: int | None
+    sort_order: int
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime

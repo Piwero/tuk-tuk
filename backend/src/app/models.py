@@ -76,6 +76,19 @@ class Tag(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class Section(Base):
+    """A Section — a named, ordered sub-group inside a List (also a Kanban column)."""
+
+    __tablename__ = "sections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -85,6 +98,10 @@ class Task(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     priority: Mapped[str] = mapped_column(String(6), default="none")
     list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
+    section_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sections.id"), index=True, default=None
+    )
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
     owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

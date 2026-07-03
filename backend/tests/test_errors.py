@@ -147,3 +147,18 @@ def test_assigning_an_unknown_tag_returns_not_found_envelope(client: TestClient)
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+def test_task_cannot_join_a_section_of_another_list(client: TestClient) -> None:
+    project = client.post("/api/v1/lists", json={"name": "Project"}).json()["id"]
+    section = client.post("/api/v1/sections", json={"list_id": project, "name": "Doing"}).json()
+    inbox_task = client.post("/api/v1/tasks", json={"title": "Homeless"}).json()
+
+    response = client.patch(f"/api/v1/tasks/{inbox_task['id']}", json={"section_id": section["id"]})
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "section_list_mismatch"
+
+    unknown = client.patch(f"/api/v1/tasks/{inbox_task['id']}", json={"section_id": 424242})
+    assert unknown.status_code == 404
+    assert unknown.json()["error"]["code"] == "not_found"
