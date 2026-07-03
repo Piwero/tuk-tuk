@@ -11,11 +11,22 @@ npm install
 
 ## Run
 
+In Docker with HMR (from the repo root):
+
+```bash
+mise run frontend:dev
+```
+
+Or natively:
+
 ```bash
 npm run dev
 ```
 
 Then open http://localhost:5173.
+
+API calls go to `VITE_API_BASE_URL` (set in the repo-root `.env`, default
+`http://localhost:8000`).
 
 ## Common commands
 

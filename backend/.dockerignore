@@ -11,3 +11,5 @@ build
 *.egg-info
 .env
 .env.*
+*.db
+*.db-*

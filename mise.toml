@@ -35,7 +35,7 @@ dir = "frontend"
 
 [tasks."frontend:dev"]
 description = "Start frontend dev server (docker compose)"
-run = "docker compose up --build frontend"
+run = "docker compose up --build --renew-anon-volumes frontend"
 
 [tasks."frontend:build"]
 description = "Build frontend for production"
@@ -80,7 +80,7 @@ depends = ["install", "setup:hooks"]
 
 [tasks.dev]
 description = "Start backend + frontend with hot-reload (docker compose)"
-run = "docker compose up --build"
+run = "docker compose up --build --renew-anon-volumes"
 
 [tasks.down]
 description = "Stop all services"

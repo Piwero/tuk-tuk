@@ -13,8 +13,8 @@
 
 <!-- How was this verified? Commands run, screenshots, etc. -->
 
-- [ ] `make lint`
-- [ ] `make test`
+- [ ] `mise run lint`
+- [ ] `mise run test`
 
 ## Checklist
 
