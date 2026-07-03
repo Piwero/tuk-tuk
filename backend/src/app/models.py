@@ -2,16 +2,34 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
 DEFAULT_OWNER = "local"
 
+# Sparse gap between consecutive sort_order values, so a drag-reorder
+# writes one row (the moved one) instead of renumbering all siblings.
+SORT_GAP = 1024
+
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+class Folder(Base):
+    """A Folder — a user-created grouping of Lists in the sidebar."""
+
+    __tablename__ = "folders"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    lists: Mapped[list["TaskList"]] = relationship(back_populates="folder")
 
 
 class TaskList(Base):
@@ -22,9 +40,17 @@ class TaskList(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     is_inbox: Mapped[bool] = mapped_column(default=False)
+    color: Mapped[str | None] = mapped_column(String(32), default=None)
+    emoji: Mapped[str | None] = mapped_column(String(16), default=None)
+    is_archived: Mapped[bool] = mapped_column(default=False)
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    folder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("folders.id"), index=True, default=None
+    )
     owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
+    folder: Mapped[Folder | None] = relationship(back_populates="lists")
     tasks: Mapped[list["Task"]] = relationship(
         back_populates="task_list", cascade="all, delete-orphan"
     )

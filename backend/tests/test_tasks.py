@@ -62,3 +62,17 @@ def test_task_collection_paginates(client: TestClient) -> None:
 
     second_page = client.get("/api/v1/tasks", params={"limit": 2, "offset": 2}).json()
     assert [t["title"] for t in second_page["items"]] == ["Three"]
+
+
+def test_task_moved_to_another_list_leaves_its_old_list(client: TestClient) -> None:
+    errands = client.post("/api/v1/lists", json={"name": "Errands"}).json()
+    task = client.post("/api/v1/tasks", json={"title": "Buy stamps"}).json()
+
+    moved = client.patch(f"/api/v1/tasks/{task['id']}", json={"list_id": errands["id"]})
+
+    assert moved.status_code == 200
+    assert moved.json()["list_id"] == errands["id"]
+    in_errands = client.get("/api/v1/tasks", params={"list_id": errands["id"]}).json()["items"]
+    assert [t["title"] for t in in_errands] == ["Buy stamps"]
+    in_inbox = client.get("/api/v1/tasks", params={"list_id": inbox_id(client)}).json()["items"]
+    assert all(t["id"] != task["id"] for t in in_inbox)

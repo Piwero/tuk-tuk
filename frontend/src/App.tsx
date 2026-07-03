@@ -1,43 +1,59 @@
 import { useEffect, useState } from "react";
 
-import { fetchLists, fetchTasks, type Task, type TaskList } from "./api";
+import { fetchFolders, fetchLists, fetchTasks, type Folder, type Task, type TaskList } from "./api";
 import { QuickAdd } from "./components/QuickAdd";
+import { Sidebar } from "./components/Sidebar";
 import { TaskListView } from "./components/TaskListView";
 
 export function App(): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
-  const [selectedList, setSelectedList] = useState<TaskList | null>(null);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [selectedListId, setSelectedListId] = useState<number | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
-    void fetchLists().then((page) => {
-      setLists(page.items);
-      setSelectedList(page.items.find((list) => list.is_inbox) ?? page.items[0] ?? null);
+    void Promise.all([fetchLists(), fetchFolders()]).then(([listPage, folderPage]) => {
+      setLists(listPage.items);
+      setFolders(folderPage.items);
     });
   }, []);
 
+  // Keep a valid selection: default to the Inbox, and fall back to it when the
+  // selected list disappears (e.g. it was deleted).
   useEffect(() => {
-    if (selectedList === null) {
+    if (selectedListId !== null && lists.some((list) => list.id === selectedListId)) {
       return;
     }
-    void fetchTasks(selectedList.id).then((page) => setTasks(page.items));
-  }, [selectedList]);
+    const fallback = lists.find((list) => list.is_inbox) ?? lists[0];
+    setSelectedListId(fallback === undefined ? null : fallback.id);
+  }, [lists, selectedListId]);
+
+  useEffect(() => {
+    if (selectedListId === null) {
+      return;
+    }
+    void fetchTasks(selectedListId).then((page) => setTasks(page.items));
+  }, [selectedListId]);
+
+  const selectedList = lists.find((list) => list.id === selectedListId) ?? null;
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <nav aria-label="Lists">
-          <ul>
-            {lists.map((list) => (
-              <li key={list.id}>
-                <button type="button" onClick={() => setSelectedList(list)}>
-                  {list.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </aside>
+      <Sidebar
+        lists={lists}
+        folders={folders}
+        selectedListId={selectedListId}
+        onSelect={setSelectedListId}
+        onListsChanged={setLists}
+        onFoldersChanged={setFolders}
+        onTaskMoved={(moved) =>
+          setTasks((current) =>
+            moved.list_id === selectedListId
+              ? current.map((task) => (task.id === moved.id ? moved : task))
+              : current.filter((task) => task.id !== moved.id),
+          )
+        }
+      />
       <main>
         <h1>{selectedList?.name ?? "tuk-tuk"}</h1>
         {selectedList !== null && (
