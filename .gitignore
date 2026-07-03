@@ -64,6 +64,7 @@ coverage/
 *.log
 logs/
 
+docs/research/
 # AI-powered
 .opencode/
 skills-lock.json
