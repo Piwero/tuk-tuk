@@ -22,6 +22,7 @@ import {
 } from "./api";
 import { localDayOf } from "./dates";
 import { type GroupBy, type SortBy } from "./grouping";
+import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
 import { KanbanView } from "./components/KanbanView";
 import { QuickAdd } from "./components/QuickAdd";
@@ -29,11 +30,13 @@ import { Sidebar } from "./components/Sidebar";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 
-/** What the main pane shows: one List, one Tag, or one computed Smart List. */
+/** What the main pane shows: one List, one Tag, one computed Smart List, or
+ * the Calendar (which fetches its own window). */
 type View =
   | { kind: "list"; id: number }
   | { kind: "tag"; id: number }
   | { kind: "smart"; view: SmartView }
+  | { kind: "calendar" }
   | null;
 
 export function App(): JSX.Element {
@@ -64,7 +67,7 @@ export function App(): JSX.Element {
   // Keep a valid view: default to the Inbox, and fall back to it when the
   // viewed list or tag disappears (e.g. it was deleted).
   useEffect(() => {
-    if (view?.kind === "smart") {
+    if (view?.kind === "smart" || view?.kind === "calendar") {
       return;
     }
     if (view?.kind === "list" && lists.some((list) => list.id === view.id)) {
@@ -81,7 +84,7 @@ export function App(): JSX.Element {
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
   const loadTasks = useCallback(async (): Promise<void> => {
-    if (view === null) {
+    if (view === null || view.kind === "calendar") {
       return;
     }
     if (completedMode) {
@@ -193,9 +196,11 @@ export function App(): JSX.Element {
         selectedListId={view?.kind === "list" ? view.id : null}
         selectedTagId={view?.kind === "tag" ? view.id : null}
         selectedSmart={smartView}
+        calendarSelected={view?.kind === "calendar"}
         onSelect={(listId) => switchView({ kind: "list", id: listId })}
         onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
         onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
+        onSelectCalendar={() => switchView({ kind: "calendar" })}
         onListsChanged={setLists}
         onFoldersChanged={setFolders}
         onTagCreated={(tag) => setTags((current) => [...current, tag])}
@@ -217,7 +222,9 @@ export function App(): JSX.Element {
                 ? `#${selectedTag.name}`
                 : smartView !== null
                   ? SMART_LABELS[smartView]
-                  : "tuk-tuk")}
+                  : view?.kind === "calendar"
+                    ? "Calendar"
+                    : "tuk-tuk")}
           </h1>
           {selectedList !== null && !completedMode && (
             <button
@@ -284,7 +291,9 @@ export function App(): JSX.Element {
             </div>
           </>
         )}
-        {completedMode ? (
+        {view?.kind === "calendar" ? (
+          <CalendarView />
+        ) : completedMode ? (
           <CompletedView
             tasks={tasks}
             occurrences={occurrences}

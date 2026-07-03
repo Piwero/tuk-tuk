@@ -40,9 +40,11 @@ interface SidebarProps {
   selectedListId: number | null;
   selectedTagId: number | null;
   selectedSmart: SmartView | null;
+  calendarSelected: boolean;
   onSelect: (listId: number) => void;
   onSelectTag: (tagId: number) => void;
   onSelectSmart: (view: SmartView) => void;
+  onSelectCalendar: () => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
@@ -78,9 +80,11 @@ export function Sidebar({
   selectedListId,
   selectedTagId,
   selectedSmart,
+  calendarSelected,
   onSelect,
   onSelectTag,
   onSelectSmart,
+  onSelectCalendar,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
@@ -355,6 +359,15 @@ export function Sidebar({
             {SMART_LABELS[view]}
           </button>
         ))}
+      </nav>
+      <nav aria-label="Views" className="views-nav">
+        <button
+          type="button"
+          className={calendarSelected ? "list-button selected" : "list-button"}
+          onClick={onSelectCalendar}
+        >
+          Calendar
+        </button>
       </nav>
       <nav
         aria-label="Lists"

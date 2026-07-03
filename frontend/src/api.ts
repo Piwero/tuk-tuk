@@ -274,10 +274,23 @@ export interface TaskCreateInput {
   section_id?: number;
   priority?: Priority;
   tag_ids?: number[];
+  /** Schedule fields follow the same wire conventions as TaskPatch. */
+  start_date?: string;
+  due_date?: string;
+  is_all_day?: boolean;
+  time_zone?: string;
 }
 
 export function createTask(input: TaskCreateInput): Promise<Task> {
   return request("/api/v1/tasks", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Tasks whose scheduled days intersect the inclusive [start, end] day window
+ * — the calendar's query (open tasks only; the window shows plans, not history). */
+export function fetchCalendarTasks(rangeStart: string, rangeEnd: string): Promise<Page<Task>> {
+  return request(
+    `/api/v1/tasks?range_start=${rangeStart}&range_end=${rangeEnd}&completed=false&limit=200`,
+  );
 }
 
 /** Absent fields stay unchanged; explicit null is rejected by the API,

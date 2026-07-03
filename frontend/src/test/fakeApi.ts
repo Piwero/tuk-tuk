@@ -1,7 +1,8 @@
 import { vi } from "vitest";
 
 import { type Priority, type ViewMode } from "../api";
-import { addDays, localDayOf } from "../dates";
+import { taskDayWindow } from "../calendar";
+import { addDays } from "../dates";
 import { byName, SORT_GAP } from "../ordering";
 import { decrementCount, nextOccurrenceISO } from "./fakeRecurrence";
 
@@ -246,17 +247,9 @@ export function installFakeApi({
     return null;
   };
 
-  /** Mirror of the backend's day-window rule. Tests schedule tasks in the
-   * browser timezone (all v1 writes), so timed instants are read locally. */
-  const dayWindow = (task: FakeTask): [string, string] | null => {
-    if (task.due_date === null) {
-      return null;
-    }
-    const dayOf = (iso: string): string =>
-      task.is_all_day ? iso.slice(0, 10) : localDayOf(new Date(iso));
-    const due = dayOf(task.due_date);
-    return [task.start_date === null ? due : dayOf(task.start_date), due];
-  };
+  /** Mirror of the backend's day-window rule: days are read in each task's
+   * own timezone (taskDayWindow implements exactly that reading). */
+  const dayWindow = (task: FakeTask): [string, string] | null => taskDayWindow(task);
 
   const inSmartView = (task: FakeTask, view: string, today: string): boolean => {
     const window = dayWindow(task);
@@ -383,6 +376,8 @@ export function installFakeApi({
       const tagId = url.searchParams.get("tag_id");
       const view = url.searchParams.get("view");
       const today = url.searchParams.get("today");
+      const rangeStart = url.searchParams.get("range_start");
+      const rangeEnd = url.searchParams.get("range_end");
       // Smart Lists are computed over open tasks only (mirrors the backend).
       const completed = view !== null ? "false" : url.searchParams.get("completed");
       let items = state.tasks.filter(
@@ -396,6 +391,32 @@ export function installFakeApi({
           return json({ error: { code: "validation_error", message: "today is required" } }, 422);
         }
         items = items.filter((task) => inSmartView(task, view, today));
+      }
+      if ((rangeStart === null) !== (rangeEnd === null)) {
+        return json(
+          {
+            error: { code: "validation_error", message: "range_start and range_end come together" },
+          },
+          422,
+        );
+      }
+      if (rangeStart !== null && rangeEnd !== null) {
+        if (rangeStart > rangeEnd) {
+          return json(
+            {
+              error: {
+                code: "validation_error",
+                message: "range_start must not be after range_end",
+              },
+            },
+            422,
+          );
+        }
+        // Mirror the backend's calendar window: inclusive day intersection.
+        items = items.filter((task) => {
+          const window = dayWindow(task);
+          return window !== null && window[0] <= rangeEnd && window[1] >= rangeStart;
+        });
       }
       items =
         completed === "true"
@@ -412,6 +433,10 @@ export function installFakeApi({
         section_id?: number;
         priority?: Priority;
         tag_ids?: number[];
+        start_date?: string;
+        due_date?: string;
+        is_all_day?: boolean;
+        time_zone?: string;
       };
       const listId = input.list_id ?? INBOX.id;
       if (input.section_id !== undefined) {
@@ -429,6 +454,10 @@ export function installFakeApi({
         list_id: listId,
         section_id: input.section_id ?? null,
         priority: input.priority ?? "none",
+        start_date: input.start_date ?? null,
+        due_date: input.due_date ?? null,
+        is_all_day: input.is_all_day ?? false,
+        time_zone: input.time_zone ?? null,
         tags: state.tags
           .filter((tag) => tagIds.includes(tag.id))
           .sort(byName)

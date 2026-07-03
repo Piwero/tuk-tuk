@@ -150,11 +150,15 @@ async def read_tasks(
     completed: bool | None = None,
     view: SmartView | None = None,
     today: date | None = None,
+    range_start: date | None = None,
+    range_end: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Page[TaskRead]:
     """List tasks; `view` computes a Smart List (open tasks only, so it
     overrides `completed`), judged against the caller's local day `today`.
+    `range_start`/`range_end` (inclusive calendar days) keep tasks whose
+    scheduled days intersect the window — the calendar's query.
     `completed=true` is the completed view: newest completion first.
     """
     if view is not None:
@@ -164,6 +168,24 @@ async def read_tasks(
             status_code=422,
             code="validation_error",
             message=f"view={view} requires the today parameter (the caller's local day)",
+        )
+    if (range_start is None) != (range_end is None):
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message="range_start and range_end come together",
+        )
+    if view is not None and range_start is not None:
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message="view and range filters are exclusive",
+        )
+    if range_start is not None and range_end is not None and range_start > range_end:
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message="range_start must not be after range_end",
         )
     query = select(Task)
     if list_id is not None:
@@ -177,17 +199,26 @@ async def read_tasks(
         if completed is True
         else (Task.sort_order, Task.id)
     )
+    # Day membership needs each task's own timezone, which portable SQL
+    # can't reach — these filters run in Python and paginate the filtered rows.
     if view in ("today", "next7") and today is not None:
-        # Day membership needs each task's own timezone, which portable SQL
-        # can't reach — filter in Python and paginate the filtered rows.
         rows = await session.scalars(query.order_by(*order))
         matches = [task for task in rows if in_smart_view(task, view, today)]
-        items = [TaskRead.model_validate(task) for task in matches[offset : offset + limit]]
-        return Page(items=items, total=len(matches), limit=limit, offset=offset)
+        return page_of(matches, limit, offset)
+    if range_start is not None and range_end is not None:
+        rows = await session.scalars(query.order_by(*order))
+        matches = [task for task in rows if in_range_window(task, range_start, range_end)]
+        return page_of(matches, limit, offset)
     total = await session.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = await session.scalars(query.order_by(*order).limit(limit).offset(offset))
     items = [TaskRead.model_validate(row) for row in rows]
     return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+def page_of(matches: list[Task], limit: int, offset: int) -> Page[TaskRead]:
+    """One page of an already-filtered row list (Python-side filters)."""
+    items = [TaskRead.model_validate(task) for task in matches[offset : offset + limit]]
+    return Page(items=items, total=len(matches), limit=limit, offset=offset)
 
 
 def schedule_days(task: Task) -> tuple[date, date] | None:
@@ -219,6 +250,17 @@ def in_smart_view(task: Task, view: SmartView, today: date) -> bool:
         # the past; only open tasks reach here) — both mean it started by today.
         return first <= today
     return first <= today + timedelta(days=6) and last >= today
+
+
+def in_range_window(task: Task, range_start: date, range_end: date) -> bool:
+    """Calendar-window intersection: any scheduled day falls inside the
+    inclusive [range_start, range_end] span.
+    """
+    window = schedule_days(task)
+    if window is None:
+        return False
+    first, last = window
+    return first <= range_end and last >= range_start
 
 
 async def get_task_or_404(task_id: int, session: SessionDep) -> Task:

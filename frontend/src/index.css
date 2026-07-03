@@ -672,3 +672,181 @@ main form input {
   cursor: pointer;
   font-size: 0.85rem;
 }
+
+/* ---- Calendar ---- */
+.calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.calendar-toolbar h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.calendar-nav-buttons,
+.calendar-modes {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.calendar-modes button[aria-pressed="true"] {
+  background: #eaf1ff;
+  border-color: #4772fa;
+}
+
+.calendar-draft {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.month-weekday {
+  padding: 0.3rem 0.4rem;
+  font-size: 0.78rem;
+  color: #57606a;
+  border-bottom: 1px solid #d0d7de;
+}
+
+.month-cell {
+  min-height: 5.5rem;
+  padding: 0.25rem;
+  border-top: 1px solid #eef1f4;
+  border-left: 1px solid #eef1f4;
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.month-cell[data-outside] {
+  color: #8c959f;
+  background: #fafbfc;
+}
+
+.month-cell-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.month-cell-head button {
+  border: none;
+  background: none;
+  color: #8c959f;
+  cursor: pointer;
+}
+
+.calendar-banner {
+  background: #eaf1ff;
+  border-left: 3px solid #4772fa;
+  border-radius: 3px;
+  padding: 0 0.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-timed-entry {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-timed-entry .entry-time {
+  color: #4772fa;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-height: 0;
+}
+
+.all-day-lane {
+  display: flex;
+  gap: 0.4rem;
+  min-height: 1.6rem;
+  padding: 0.2rem 0.4rem 0.2rem 3.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.time-columns {
+  display: flex;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+.hour-gutter {
+  width: 3.5rem;
+  flex: none;
+  font-size: 0.7rem;
+  color: #57606a;
+}
+
+.hour-label,
+.hour-cell {
+  height: 2.2rem;
+  box-sizing: border-box;
+}
+
+.hour-label {
+  padding: 0 0.3rem;
+  text-align: right;
+}
+
+.day-column {
+  flex: 1;
+  position: relative;
+  border-left: 1px solid #eef1f4;
+}
+
+.hour-cell {
+  border-bottom: 1px solid #f3f5f7;
+}
+
+.hour-cell[data-selected] {
+  background: #eaf1ff;
+}
+
+.time-block {
+  position: absolute;
+  left: 0.2rem;
+  right: 0.2rem;
+  background: #eaf1ff;
+  border-left: 3px solid #4772fa;
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.75rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.time-block .block-time {
+  color: #57606a;
+  font-variant-numeric: tabular-nums;
+}
