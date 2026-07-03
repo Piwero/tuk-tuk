@@ -52,7 +52,9 @@ repos:
       - id: prettier
         files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|scss|md|yaml|yml|html)$
         additional_dependencies:
-          - prettier@3.3.3
+          # Keep in lock-step with frontend/package-lock.json, or the hook
+          # and `npm run format:check` fight over formatting.
+          - prettier@3.9.4
 
   # ---- Frontend: eslint ----
   - repo: https://github.com/pre-commit/mirrors-eslint
