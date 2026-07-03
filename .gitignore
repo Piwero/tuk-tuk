@@ -73,3 +73,9 @@ skills-lock.json
 */superpowers/*
 CLAUDE.md
 .claude/
+
+# SQLite runtime database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
