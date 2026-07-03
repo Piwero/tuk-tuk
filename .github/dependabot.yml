@@ -1,6 +1,8 @@
 version: 2
 updates:
-  - package-ecosystem: "pip"
+  # uv (not pip): keeps pyproject.toml and uv.lock in sync, which
+  # `uv sync --locked` in CI requires.
+  - package-ecosystem: "uv"
     directory: "/backend"
     schedule:
       interval: "weekly"
