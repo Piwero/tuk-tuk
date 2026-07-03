@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { fakeFolder, fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 
+// Note: fetch stays stubbed across tests (each test installs a fresh fake).
+// Restoring the real fetch between tests would let a late in-flight request
+// from an unmounting App escape to the network and fail the run.
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
