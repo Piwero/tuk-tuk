@@ -389,6 +389,71 @@ main form input {
   padding: 0;
 }
 
+.view-controls {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.view-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #57606a;
+}
+
+.view-controls select {
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+}
+
+.task-group {
+  margin-top: 0.5rem;
+}
+
+.task-group .tasks {
+  margin-top: 0.25rem;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid #d0d7de;
+}
+
+.group-header h2 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #57606a;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.group-header .row-actions {
+  visibility: hidden;
+}
+
+.group-header:hover .row-actions {
+  visibility: visible;
+}
+
+.add-section {
+  margin-top: 1rem;
+  border: 1px dashed #d0d7de;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0.4rem 0.75rem;
+  color: #57606a;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
 .tasks li {
   display: flex;
   align-items: center;

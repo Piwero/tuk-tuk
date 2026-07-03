@@ -4,8 +4,8 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.db import SessionDep
-from app.errors import NotFoundError
-from app.models import Tag, Task, TaskList
+from app.errors import APIError, NotFoundError
+from app.models import SORT_GAP, Section, Tag, Task, TaskList
 from app.schemas import Page, TaskCreate, TaskRead, TaskUpdate
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
@@ -20,7 +20,14 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         if list_id is None:
             raise NotFoundError(f"List {payload.list_id} not found")
     # Initialize collections so serialization never triggers an async lazy load.
-    task = Task(title=payload.title, list_id=list_id, check_items=[], tags=[])
+    max_order = await session.scalar(select(func.max(Task.sort_order)))
+    task = Task(
+        title=payload.title,
+        list_id=list_id,
+        sort_order=(max_order or 0) + SORT_GAP,
+        check_items=[],
+        tags=[],
+    )
     session.add(task)
     await session.commit()
     return TaskRead.model_validate(task)
@@ -40,7 +47,9 @@ async def read_tasks(
     if tag_id is not None:
         query = query.where(Task.tags.any(Tag.id == tag_id))
     total = await session.scalar(select(func.count()).select_from(query.subquery())) or 0
-    rows = await session.scalars(query.order_by(Task.id).limit(limit).offset(offset))
+    rows = await session.scalars(
+        query.order_by(Task.sort_order, Task.id).limit(limit).offset(offset)
+    )
     items = [TaskRead.model_validate(row) for row in rows]
     return Page(items=items, total=total, limit=limit, offset=offset)
 
@@ -60,6 +69,20 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
         target = await session.scalar(select(TaskList.id).where(TaskList.id == changes["list_id"]))
         if target is None:
             raise NotFoundError(f"List {changes['list_id']} not found")
+        # A Section belongs to one List: moving Lists drops the Section unless
+        # the caller assigns a valid one in the same request.
+        if changes["list_id"] != task.list_id and "section_id" not in changes:
+            changes["section_id"] = None
+    if changes.get("section_id") is not None:
+        section = await session.get(Section, changes["section_id"])
+        if section is None:
+            raise NotFoundError(f"Section {changes['section_id']} not found")
+        if section.list_id != changes.get("list_id", task.list_id):
+            raise APIError(
+                status_code=409,
+                code="section_list_mismatch",
+                message=f"Section {section.id} belongs to another list",
+            )
     if "tag_ids" in changes:
         tag_ids: list[int] = changes.pop("tag_ids")
         tags = list((await session.scalars(select(Tag).where(Tag.id.in_(tag_ids)))).all())

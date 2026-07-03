@@ -32,6 +32,13 @@ export interface CheckItem {
   sort_order: number;
 }
 
+export interface Section {
+  id: number;
+  list_id: number;
+  name: string;
+  sort_order: number;
+}
+
 export interface Task {
   id: number;
   title: string;
@@ -39,6 +46,8 @@ export interface Task {
   description: string;
   priority: Priority;
   list_id: number;
+  section_id: number | null;
+  sort_order: number;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
@@ -141,6 +150,34 @@ export function fetchTasksByTag(tagId: number): Promise<Page<Task>> {
   return request(`/api/v1/tasks?tag_id=${tagId}`);
 }
 
+export function fetchSections(listId: number): Promise<Page<Section>> {
+  return request(`/api/v1/sections?list_id=${listId}`);
+}
+
+export function createSection(listId: number, name: string): Promise<Section> {
+  return request("/api/v1/sections", {
+    method: "POST",
+    body: JSON.stringify({ list_id: listId, name }),
+  });
+}
+
+/** Absent fields stay unchanged; explicit null is rejected by the API. */
+export interface SectionPatch {
+  name?: string;
+  sort_order?: number;
+}
+
+export function updateSection(sectionId: number, patch: SectionPatch): Promise<Section> {
+  return request(`/api/v1/sections/${sectionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteSection(sectionId: number): Promise<void> {
+  return request(`/api/v1/sections/${sectionId}`, { method: "DELETE" });
+}
+
 export function fetchTags(): Promise<Page<Tag>> {
   return request("/api/v1/tags");
 }
@@ -175,7 +212,8 @@ export function createTask(title: string, listId?: number): Promise<Task> {
   });
 }
 
-/** Absent fields stay unchanged; explicit null is rejected by the API.
+/** Absent fields stay unchanged; explicit null is rejected by the API,
+ * except section_id, where null moves the task out of its Section.
  * tag_ids replaces the task's whole tag set. */
 export interface TaskPatch {
   title?: string;
@@ -184,6 +222,8 @@ export interface TaskPatch {
   description?: string;
   priority?: Priority;
   tag_ids?: number[];
+  section_id?: number | null;
+  sort_order?: number;
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {

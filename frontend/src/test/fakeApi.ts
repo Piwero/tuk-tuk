@@ -20,6 +20,13 @@ export interface FakeFolder {
   sort_order: number;
 }
 
+export interface FakeSection {
+  id: number;
+  list_id: number;
+  name: string;
+  sort_order: number;
+}
+
 export interface FakeTag {
   id: number;
   name: string;
@@ -40,6 +47,8 @@ export interface FakeTask {
   description: string;
   priority: Priority;
   list_id: number;
+  section_id: number | null;
+  sort_order: number;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -54,6 +63,7 @@ export interface RecordedRequest {
 interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
+  sections: FakeSection[];
   tags: FakeTag[];
   tasks: FakeTask[];
   requests: RecordedRequest[];
@@ -75,20 +85,33 @@ let nextListId = 10;
 let nextFolderId = 500;
 let nextCheckItemId = 900;
 let nextTagId = 700;
+let nextSectionId = 800;
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
+  const id = nextTaskId++;
   return {
-    id: nextTaskId++,
+    id,
     title,
     completed: false,
     description: "",
     priority: "none",
     list_id: INBOX.id,
+    section_id: null,
+    sort_order: id * SORT_GAP,
     check_items: [],
     tags: [],
     created_at: "2026-07-03T10:00:00Z",
     ...overrides,
   };
+}
+
+export function fakeSection(
+  name: string,
+  listId: number,
+  overrides: Partial<FakeSection> = {},
+): FakeSection {
+  const id = nextSectionId++;
+  return { id, list_id: listId, name, sort_order: id * SORT_GAP, ...overrides };
 }
 
 export function fakeTag(name: string, overrides: Partial<FakeTag> = {}): FakeTag {
@@ -130,17 +153,20 @@ const nextOrder = (rows: { sort_order: number }[]): number =>
 export function installFakeApi({
   lists = [INBOX],
   folders = [],
+  sections = [],
   tags = [],
   tasks = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
+  sections?: FakeSection[];
   tags?: FakeTag[];
   tasks?: FakeTask[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
     folders: folders.map((folder) => ({ ...folder })),
+    sections: sections.map((section) => ({ ...section })),
     tags: tags.map((tag) => ({ ...tag })),
     tasks: tasks.map((task) => ({
       ...task,
@@ -241,11 +267,13 @@ export function installFakeApi({
     if (method === "GET" && url.pathname === "/api/v1/tasks") {
       const listId = url.searchParams.get("list_id");
       const tagId = url.searchParams.get("tag_id");
-      const items = state.tasks.filter(
-        (task) =>
-          (listId === null || task.list_id === Number(listId)) &&
-          (tagId === null || task.tags.some((tag) => tag.id === Number(tagId))),
-      );
+      const items = state.tasks
+        .filter(
+          (task) =>
+            (listId === null || task.list_id === Number(listId)) &&
+            (tagId === null || task.tags.some((tag) => tag.id === Number(tagId))),
+        )
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
       return json(page(items));
     }
     if (method === "POST" && url.pathname === "/api/v1/tasks") {
@@ -254,6 +282,43 @@ export function installFakeApi({
       });
       state.tasks.push(created);
       return json(created, 201);
+    }
+    if (method === "GET" && url.pathname === "/api/v1/sections") {
+      const listId = url.searchParams.get("list_id");
+      const items = state.sections
+        .filter((section) => listId === null || section.list_id === Number(listId))
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+      return json(page(items));
+    }
+    if (method === "POST" && url.pathname === "/api/v1/sections") {
+      const input = body as { list_id: number; name: string };
+      const siblings = state.sections.filter((s) => s.list_id === input.list_id);
+      const created = fakeSection(input.name, input.list_id, {
+        sort_order: nextOrder(siblings),
+      });
+      state.sections.push(created);
+      return json(created, 201);
+    }
+    const sectionMatch = url.pathname.match(/^\/api\/v1\/sections\/(\d+)$/);
+    if (sectionMatch) {
+      const sectionId = Number(sectionMatch[1]);
+      const section = state.sections.find((s) => s.id === sectionId);
+      if (!section) {
+        return notFound(`Section ${sectionId} not found`);
+      }
+      if (method === "PATCH") {
+        Object.assign(section, body);
+        return json(section);
+      }
+      if (method === "DELETE") {
+        state.sections = state.sections.filter((s) => s.id !== sectionId);
+        for (const task of state.tasks) {
+          if (task.section_id === sectionId) {
+            task.section_id = null;
+          }
+        }
+        return new Response(null, { status: 204 });
+      }
     }
     if (method === "GET" && url.pathname === "/api/v1/tags") {
       const items = [...state.tags].sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
@@ -343,6 +408,13 @@ export function installFakeApi({
       }
       if (method === "PATCH") {
         const { tag_ids, ...rest } = body as { tag_ids?: number[] } & Record<string, unknown>;
+        if (
+          typeof rest.list_id === "number" &&
+          rest.list_id !== task.list_id &&
+          rest.section_id === undefined
+        ) {
+          rest.section_id = null;
+        }
         Object.assign(task, rest);
         if (tag_ids !== undefined) {
           const missing = tag_ids.find((id) => !state.tags.some((tag) => tag.id === id));

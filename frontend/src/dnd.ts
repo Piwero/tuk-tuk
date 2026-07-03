@@ -6,7 +6,8 @@ export type DragPayload =
   | { kind: "list"; id: number }
   | { kind: "folder"; id: number }
   | { kind: "task"; id: number }
-  | { kind: "check-item"; id: number };
+  | { kind: "check-item"; id: number }
+  | { kind: "section"; id: number };
 
 export function startDrag(event: React.DragEvent, payload: DragPayload): void {
   event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload));
