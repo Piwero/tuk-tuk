@@ -136,25 +136,28 @@ body {
   padding: 0;
 }
 
-.tasks li[data-priority="high"] input[type="checkbox"] {
-  accent-color: #e03131;
-  outline: 2px solid #e03131;
+.tasks li[data-priority="high"] {
+  --priority-color: #e03131;
+}
+
+.tasks li[data-priority="medium"] {
+  --priority-color: #f2a20d;
+}
+
+.tasks li[data-priority="low"] {
+  --priority-color: #4772fa;
+}
+
+.tasks li[data-priority] input[type="checkbox"] {
+  accent-color: var(--priority-color);
+  outline: 2px solid var(--priority-color);
   outline-offset: -2px;
   border-radius: 3px;
 }
 
-.tasks li[data-priority="medium"] input[type="checkbox"] {
-  accent-color: #f2a20d;
-  outline: 2px solid #f2a20d;
-  outline-offset: -2px;
-  border-radius: 3px;
-}
-
-.tasks li[data-priority="low"] input[type="checkbox"] {
-  accent-color: #4772fa;
-  outline: 2px solid #4772fa;
-  outline-offset: -2px;
-  border-radius: 3px;
+.tasks li[data-priority="none"] input[type="checkbox"] {
+  accent-color: initial;
+  outline: none;
 }
 
 .sidebar {

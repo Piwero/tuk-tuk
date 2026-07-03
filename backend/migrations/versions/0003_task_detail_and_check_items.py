@@ -25,7 +25,6 @@ def upgrade() -> None:
         sa.Column("title", sa.String(length=500), nullable=False),
         sa.Column("done", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("sort_order", sa.BigInteger(), nullable=False, server_default="0"),
-        sa.Column("owner", sa.String(length=64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_check_items_task_id", "check_items", ["task_id"])

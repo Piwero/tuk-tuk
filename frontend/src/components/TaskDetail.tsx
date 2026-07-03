@@ -10,6 +10,8 @@ import {
   type Priority,
   type Task,
 } from "../api";
+import { readDragPayload, startDrag } from "../dnd";
+import { appendOrder, planInsertBefore } from "../ordering";
 
 const PRIORITY_LABELS: Record<Priority, string> = {
   none: "None",
@@ -17,9 +19,6 @@ const PRIORITY_LABELS: Record<Priority, string> = {
   medium: "Medium",
   high: "High",
 };
-
-import { readDragPayload, startDrag } from "../dnd";
-import { planInsertBefore } from "../ordering";
 
 interface TaskDetailProps {
   task: Task;
@@ -108,9 +107,27 @@ export function TaskDetail({ task, onTaskChanged, onClose }: TaskDetailProps): J
 
   function handleDropOnCheckItem(event: React.DragEvent, target: CheckItem): void {
     event.preventDefault();
+    event.stopPropagation();
     const payload = readDragPayload(event);
     if (payload?.kind === "check-item") {
       void moveCheckItemBefore(payload.id, target);
+    }
+  }
+
+  /** Dropping on the list itself (below the rows) moves the item to the end. */
+  async function moveCheckItemToEnd(itemId: number): Promise<void> {
+    const siblings = task.check_items.filter((i) => i.id !== itemId);
+    if (siblings.length === task.check_items.length) {
+      return;
+    }
+    onTaskChanged(await updateCheckItem(task.id, itemId, { sort_order: appendOrder(siblings) }));
+  }
+
+  function handleDropOnList(event: React.DragEvent): void {
+    event.preventDefault();
+    const payload = readDragPayload(event);
+    if (payload?.kind === "check-item") {
+      void moveCheckItemToEnd(payload.id);
     }
   }
 
@@ -177,7 +194,11 @@ export function TaskDetail({ task, onTaskChanged, onClose }: TaskDetailProps): J
         )}
       </div>
       <section className="check-items">
-        <ul aria-label="Check items">
+        <ul
+          aria-label="Check items"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleDropOnList}
+        >
           {task.check_items.map((item) =>
             itemEditor?.id === item.id ? (
               <li key={item.id}>

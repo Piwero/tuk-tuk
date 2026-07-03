@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { closestOrThrow, fakeDataTransfer } from "./test/dnd";
 import { fakeFolder, fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
@@ -176,34 +177,12 @@ describe("Folder management", () => {
   });
 });
 
-interface DragPayloadStore {
-  [type: string]: string;
-}
-
-function fakeDataTransfer(): Pick<DataTransfer, "setData" | "getData"> {
-  const store: DragPayloadStore = {};
-  return {
-    setData: (type: string, value: string) => {
-      store[type] = value;
-    },
-    getData: (type: string) => store[type] ?? "",
-  };
-}
-
 function rowOf(button: HTMLElement): HTMLElement {
-  const row = button.closest(".list-row");
-  if (!(row instanceof HTMLElement)) {
-    throw new Error("list row not found");
-  }
-  return row;
+  return closestOrThrow(button, ".list-row");
 }
 
 function folderRowOf(name: string): HTMLElement {
-  const row = screen.getByText(name).closest(".folder-row");
-  if (!(row instanceof HTMLElement)) {
-    throw new Error("folder row not found");
-  }
-  return row;
+  return closestOrThrow(screen.getByText(name), ".folder-row");
 }
 
 describe("Sidebar drag and drop", () => {
