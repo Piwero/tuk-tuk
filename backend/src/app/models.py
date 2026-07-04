@@ -243,3 +243,27 @@ class CheckIn(Base):
     value: Mapped[float] = mapped_column(default=1.0)
 
     habit: Mapped[Habit] = relationship(back_populates="check_ins")
+
+
+class FocusSession(Base):
+    """A Focus Session — one persisted period of focused work, Pomo or
+    Stopwatch, optionally linked to a Task or Habit for statistics. Timers
+    tick client-side; this row records the finished (or retroactively
+    added) period only.
+    """
+
+    __tablename__ = "focus_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mode: Mapped[str] = mapped_column(String(9))
+    # At most one link: a session belongs to a Task or a Habit, never both.
+    # Deleting the linked row clears the link; the history stays.
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), index=True, default=None)
+    habit_id: Mapped[int | None] = mapped_column(ForeignKey("habits.id"), index=True, default=None)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Wall-clock seconds spent paused: recorded focus time stays honest.
+    pause_seconds: Mapped[int] = mapped_column(default=0)
+    note: Mapped[str] = mapped_column(Text, default="")
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

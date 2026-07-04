@@ -1144,3 +1144,84 @@ main form input {
 .heatmap-day.level-4 {
   background: #116329;
 }
+
+.focus-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.focus-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.focus-clock {
+  margin: 0;
+  font-size: 2.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-timer label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.focus-history h2 {
+  font-size: 0.9rem;
+  color: #57606a;
+}
+
+.focus-history ul {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.focus-session {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #eef1f4;
+  border-radius: 8px;
+}
+
+.focus-mode {
+  text-transform: capitalize;
+  font-weight: 600;
+}
+
+.focus-duration,
+.focus-note {
+  color: #57606a;
+  font-size: 0.85rem;
+}
+
+.focus-link {
+  border: 1px solid #d0d7de;
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.8rem;
+}
+
+.focus-session-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.focus-session-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}

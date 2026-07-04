@@ -25,6 +25,7 @@ import { localDayOf } from "./dates";
 import { type GroupBy, type SortBy } from "./grouping";
 import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
+import { FocusView } from "./components/FocusView";
 import { HabitsView } from "./components/HabitsView";
 import { KanbanView } from "./components/KanbanView";
 import { QuickAdd } from "./components/QuickAdd";
@@ -34,13 +35,15 @@ import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 
 /** What the main pane shows: one List, one Tag, one computed Smart List, the
- * Calendar or Habits screens (which fetch their own data), or Search results. */
+ * Calendar / Habits / Focus screens (which fetch their own data), or Search
+ * results. A focus view may carry the Task to start a Pomo against. */
 type View =
   | { kind: "list"; id: number }
   | { kind: "tag"; id: number }
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar" }
   | { kind: "habits" }
+  | { kind: "focus"; task?: Task }
   | { kind: "search"; search: SearchState }
   | null;
 
@@ -76,6 +79,7 @@ export function App(): JSX.Element {
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
       view?.kind === "habits" ||
+      view?.kind === "focus" ||
       view?.kind === "search"
     ) {
       return;
@@ -98,7 +102,12 @@ export function App(): JSX.Element {
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
   const loadTasks = useCallback(async (): Promise<void> => {
-    if (view === null || view.kind === "calendar" || view.kind === "habits") {
+    if (
+      view === null ||
+      view.kind === "calendar" ||
+      view.kind === "habits" ||
+      view.kind === "focus"
+    ) {
       return;
     }
     if (completedMode) {
@@ -219,11 +228,13 @@ export function App(): JSX.Element {
         selectedSmart={smartView}
         calendarSelected={view?.kind === "calendar"}
         habitsSelected={view?.kind === "habits"}
+        focusSelected={view?.kind === "focus"}
         onSelect={(listId) => switchView({ kind: "list", id: listId })}
         onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
         onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
         onSelectCalendar={() => switchView({ kind: "calendar" })}
         onSelectHabits={() => switchView({ kind: "habits" })}
+        onSelectFocus={() => switchView({ kind: "focus" })}
         onSearch={(query) =>
           switchView({
             kind: "search",
@@ -255,9 +266,11 @@ export function App(): JSX.Element {
                     ? "Calendar"
                     : view?.kind === "habits"
                       ? "Habits"
-                      : view?.kind === "search"
-                        ? "Search"
-                        : "tuk-tuk")}
+                      : view?.kind === "focus"
+                        ? "Focus"
+                        : view?.kind === "search"
+                          ? "Search"
+                          : "tuk-tuk")}
           </h1>
           {selectedList !== null && !completedMode && (
             <button
@@ -328,6 +341,8 @@ export function App(): JSX.Element {
           <CalendarView />
         ) : view?.kind === "habits" ? (
           <HabitsView />
+        ) : view?.kind === "focus" ? (
+          <FocusView key={view.task?.id ?? "focus"} initialTask={view.task ?? null} />
         ) : view?.kind === "search" ? (
           <SearchView
             tasks={tasks}
@@ -363,6 +378,7 @@ export function App(): JSX.Element {
             onChanged={smartView !== null ? changeTasksAndRecompute : setTasks}
             onSelect={setSelectedTaskId}
             onSectionsChanged={setSections}
+            onStartFocus={(task) => switchView({ kind: "focus", task })}
           />
         )}
       </main>

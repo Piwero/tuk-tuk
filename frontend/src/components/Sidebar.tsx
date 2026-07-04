@@ -42,11 +42,13 @@ interface SidebarProps {
   selectedSmart: SmartView | null;
   calendarSelected: boolean;
   habitsSelected: boolean;
+  focusSelected: boolean;
   onSelect: (listId: number) => void;
   onSelectTag: (tagId: number) => void;
   onSelectSmart: (view: SmartView) => void;
   onSelectCalendar: () => void;
   onSelectHabits: () => void;
+  onSelectFocus: () => void;
   onSearch: (query: string) => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
@@ -85,11 +87,13 @@ export function Sidebar({
   selectedSmart,
   calendarSelected,
   habitsSelected,
+  focusSelected,
   onSelect,
   onSelectTag,
   onSelectSmart,
   onSelectCalendar,
   onSelectHabits,
+  onSelectFocus,
   onSearch,
   onListsChanged,
   onFoldersChanged,
@@ -390,6 +394,13 @@ export function Sidebar({
           onClick={onSelectHabits}
         >
           Habits
+        </button>
+        <button
+          type="button"
+          className={focusSelected ? "list-button selected" : "list-button"}
+          onClick={onSelectFocus}
+        >
+          Focus
         </button>
       </nav>
       <nav

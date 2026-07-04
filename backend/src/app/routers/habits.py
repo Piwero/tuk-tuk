@@ -8,13 +8,13 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.habit_frequency import due_on, validate_frequency
 from app.habit_stats import current_streak, intensity
-from app.models import CheckIn, Habit
+from app.models import CheckIn, FocusSession, Habit
 from app.schemas import (
     CheckInPut,
     CheckInRead,
@@ -130,8 +130,12 @@ async def update_habit(habit_id: int, payload: HabitUpdate, session: SessionDep)
 
 @router.delete("/{habit_id}", status_code=204)
 async def delete_habit(habit_id: int, session: SessionDep) -> None:
-    """Delete the Habit and its whole Check-in history."""
+    """Delete the Habit and its whole Check-in history. Focus Sessions are
+    history of their own: they outlive the Habit, only the link goes."""
     habit = await get_habit_or_404(habit_id, session)
+    await session.execute(
+        update(FocusSession).where(FocusSession.habit_id == habit_id).values(habit_id=None)
+    )
     await session.delete(habit)
     await session.commit()
 

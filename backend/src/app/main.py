@@ -18,6 +18,7 @@ from app.models import TaskList
 from app.routers import (
     check_items,
     completed_occurrences,
+    focus_sessions,
     folders,
     habits,
     lists,
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(check_items.router)
     app.include_router(completed_occurrences.router)
     app.include_router(folders.router)
+    app.include_router(focus_sessions.router)
     app.include_router(habits.router)
     app.include_router(habits.check_ins_router)
     app.include_router(lists.router)
