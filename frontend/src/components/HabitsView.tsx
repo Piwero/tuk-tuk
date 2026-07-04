@@ -15,6 +15,7 @@ import {
 import { localDayOf } from "../dates";
 import { habitFrequencyLabel } from "../habitFrequency";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
+import { HabitHistory } from "./HabitHistory";
 
 type Editor = { mode: "create" } | { mode: "edit"; habitId: number } | null;
 
@@ -28,6 +29,8 @@ export function HabitsView(): JSX.Element {
   const [dueIds, setDueIds] = useState<Set<number>>(new Set());
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [editor, setEditor] = useState<Editor>(null);
+  // The habit whose history (grid + heatmap) is expanded, if any.
+  const [historyId, setHistoryId] = useState<number | null>(null);
   // Habits with a check-in write in flight (see addStep).
   const [pending, setPending] = useState<Set<number>>(new Set());
   const today = localDayOf(new Date());
@@ -48,7 +51,8 @@ export function HabitsView(): JSX.Element {
   }, [load]);
 
   const dueToday = habits.filter((habit) => dueIds.has(habit.id));
-  const others = habits.filter((habit) => !dueIds.has(habit.id));
+  const others = habits.filter((habit) => !dueIds.has(habit.id) && !habit.is_archived);
+  const archived = habits.filter((habit) => habit.is_archived);
   const checkInOf = (habit: Habit): CheckIn | undefined =>
     checkIns.find((checkIn) => checkIn.habit_id === habit.id);
 
@@ -110,6 +114,11 @@ export function HabitsView(): JSX.Element {
       frequency: input.frequency,
     });
     setEditor(null);
+    await load();
+  }
+
+  async function setArchived(habit: Habit, isArchived: boolean): Promise<void> {
+    await updateHabit(habit.id, { is_archived: isArchived });
     await load();
   }
 
@@ -181,10 +190,24 @@ export function HabitsView(): JSX.Element {
         <span className="row-actions">
           <button
             type="button"
+            aria-label={`History ${habit.name}`}
+            onClick={() => setHistoryId((current) => (current === habit.id ? null : habit.id))}
+          >
+            📊
+          </button>
+          <button
+            type="button"
             aria-label={`Edit ${habit.name}`}
             onClick={() => setEditor({ mode: "edit", habitId: habit.id })}
           >
             ✎
+          </button>
+          <button
+            type="button"
+            aria-label={habit.is_archived ? `Unarchive ${habit.name}` : `Archive ${habit.name}`}
+            onClick={() => void setArchived(habit, !habit.is_archived)}
+          >
+            {habit.is_archived ? "↩" : "🗄"}
           </button>
           <button
             type="button"
@@ -194,6 +217,7 @@ export function HabitsView(): JSX.Element {
             ✕
           </button>
         </span>
+        {historyId === habit.id && <HabitHistory habit={habit} onChanged={() => void load()} />}
       </li>
     );
   }
@@ -205,6 +229,12 @@ export function HabitsView(): JSX.Element {
         <section className="other-habits">
           <h2>Other habits</h2>
           <ul aria-label="Other habits">{others.map((habit) => renderHabit(habit, false))}</ul>
+        </section>
+      )}
+      {archived.length > 0 && (
+        <section className="archived-habits">
+          <h2>Archived</h2>
+          <ul aria-label="Archived habits">{archived.map((habit) => renderHabit(habit, false))}</ul>
         </section>
       )}
       {editor?.mode === "create" ? (

@@ -1046,3 +1046,101 @@ main form input {
   display: flex;
   gap: 0.4rem;
 }
+
+.habits-view .habit {
+  flex-wrap: wrap;
+}
+
+.habit-history {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #eef1f4;
+  margin-top: 0.5rem;
+}
+
+.habit-streak {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #57606a;
+}
+
+.habit-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.habit-month-nav button {
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  padding: 0.1rem 0.5rem;
+}
+
+.habit-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 2rem);
+  gap: 2px;
+  margin-top: 0.4rem;
+}
+
+.grid-day {
+  height: 2rem;
+  border: 1px solid #eef1f4;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.grid-day[aria-pressed="true"] {
+  background: #dafbe1;
+  border-color: #b7ebc6;
+}
+
+.grid-day.complete {
+  background: #aceebb;
+}
+
+.grid-day:disabled {
+  color: #d0d7de;
+  cursor: default;
+}
+
+.heatmap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 40rem;
+}
+
+.heatmap-day {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.heatmap-day.level-0 {
+  background: #ebedf0;
+}
+
+.heatmap-day.level-1 {
+  background: #dafbe1;
+}
+
+.heatmap-day.level-2 {
+  background: #aceebb;
+}
+
+.heatmap-day.level-3 {
+  background: #4ac26b;
+}
+
+.heatmap-day.level-4 {
+  background: #116329;
+}

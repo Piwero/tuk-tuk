@@ -287,3 +287,38 @@ class TestCheckIns:
         response = client.put(f"/api/v1/habits/{habit['id']}/check-ins/not-a-day", json={})
 
         assert response.status_code == 422
+
+
+class TestArchive:
+    def test_habits_are_active_by_default(self, client: TestClient) -> None:
+        assert make_habit(client, "Meditate")["is_archived"] is False
+
+    def test_archived_habits_leave_the_today_screen(self, client: TestClient) -> None:
+        habit = make_habit(client, "Meditate")
+
+        response = client.patch(f"/api/v1/habits/{habit['id']}", json={"is_archived": True})
+
+        assert response.status_code == 200
+        assert response.json()["is_archived"] is True
+        due = client.get("/api/v1/habits", params={"due": "2026-07-03"}).json()
+        assert due["total"] == 0
+
+    def test_archiving_preserves_history_and_the_habit_itself(self, client: TestClient) -> None:
+        habit = make_habit(client, "Meditate")
+        client.put(f"/api/v1/habits/{habit['id']}/check-ins/2026-07-02", json={})
+
+        client.patch(f"/api/v1/habits/{habit['id']}", json={"is_archived": True})
+
+        everything = client.get("/api/v1/habits").json()
+        assert [h["name"] for h in everything["items"]] == ["Meditate"]
+        check_ins = client.get("/api/v1/check-ins", params={"habit_id": habit["id"]}).json()
+        assert check_ins["total"] == 1
+
+    def test_unarchive_restores_the_habit_to_today(self, client: TestClient) -> None:
+        habit = make_habit(client, "Meditate")
+        client.patch(f"/api/v1/habits/{habit['id']}", json={"is_archived": True})
+
+        client.patch(f"/api/v1/habits/{habit['id']}", json={"is_archived": False})
+
+        due = client.get("/api/v1/habits", params={"due": "2026-07-03"}).json()
+        assert [h["name"] for h in due["items"]] == ["Meditate"]

@@ -264,10 +264,11 @@ class HabitUpdate(BaseModel):
     color: str | None = Field(default=None, max_length=32)
     encouragement: str | None = Field(default=None, max_length=255)
     frequency: str | None = Field(default=None, max_length=255)
+    is_archived: bool | None = None
 
-    _reject_nulls = field_validator("name", "type", "goal", "step", "encouragement", "frequency")(
-        reject_explicit_null
-    )
+    _reject_nulls = field_validator(
+        "name", "type", "goal", "step", "encouragement", "frequency", "is_archived"
+    )(reject_explicit_null)
 
 
 class HabitRead(BaseModel):
@@ -283,6 +284,7 @@ class HabitRead(BaseModel):
     color: str | None
     encouragement: str
     frequency: str
+    is_archived: bool
     created_at: datetime
 
     @field_serializer("created_at")
@@ -304,6 +306,23 @@ class CheckInRead(BaseModel):
     habit_id: int
     date: date
     value: float
+
+
+class HeatmapDay(BaseModel):
+    """One checked-in day of the yearly heatmap; intensity is the value's
+    share of the Goal (0..1], so Numeric habits render partial fills."""
+
+    date: date
+    value: float
+    intensity: float
+
+
+class HabitStats(BaseModel):
+    """The server-computed Habit statistics: the current Streak and one
+    calendar year of heatmap days (sparse — only days with Check-ins)."""
+
+    streak: int
+    heatmap: list[HeatmapDay]
 
 
 class TaskRead(BaseModel):
