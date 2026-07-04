@@ -585,3 +585,89 @@ export function deleteFocusSession(sessionId: number): Promise<void> {
 export function fetchOpenTasks(): Promise<Page<Task>> {
   return request("/api/v1/tasks?completed=false&limit=200");
 }
+
+/** A Timer — a saved Focus Session preset (name + mode + duration,
+ * optionally pre-linked to a Task or Habit), so recurring scenarios like
+ * "Reading 30m" start in one tap. */
+export interface Timer {
+  id: number;
+  name: string;
+  mode: FocusMode;
+  /** The Pomo countdown length; a Stopwatch preset has none. */
+  duration_seconds: number | null;
+  task_id: number | null;
+  habit_id: number | null;
+  created_at: string;
+}
+
+export function fetchTimers(): Promise<Page<Timer>> {
+  return request("/api/v1/timers");
+}
+
+export interface TimerCreateInput {
+  name: string;
+  mode: FocusMode;
+  duration_seconds?: number;
+  task_id?: number;
+  habit_id?: number;
+}
+
+export function createTimer(input: TimerCreateInput): Promise<Timer> {
+  return request("/api/v1/timers", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Absent fields stay unchanged; explicit null drops the duration (Stopwatch
+ * presets have none) or unlinks task_id / habit_id. */
+export interface TimerPatch {
+  name?: string;
+  mode?: FocusMode;
+  duration_seconds?: number | null;
+  task_id?: number | null;
+  habit_id?: number | null;
+}
+
+export function updateTimer(timerId: number, patch: TimerPatch): Promise<Timer> {
+  return request(`/api/v1/timers/${timerId}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export function deleteTimer(timerId: number): Promise<void> {
+  return request(`/api/v1/timers/${timerId}`, { method: "DELETE" });
+}
+
+export interface FocusDayTotal {
+  date: string;
+  seconds: number;
+}
+
+/** One Monday-started week's focus total. */
+export interface FocusWeekTotal {
+  start: string;
+  seconds: number;
+}
+
+export interface FocusTaskTotal {
+  task_id: number;
+  title: string;
+  seconds: number;
+}
+
+export interface FocusHabitTotal {
+  habit_id: number;
+  name: string;
+  seconds: number;
+}
+
+/** Server-computed focus statistics over an inclusive day range — sparse:
+ * only days / weeks / rows with focus appear. */
+export interface FocusStats {
+  days: FocusDayTotal[];
+  weeks: FocusWeekTotal[];
+  tasks: FocusTaskTotal[];
+  habits: FocusHabitTotal[];
+}
+
+/** Statistics over [start, end]; a session counts toward the local day it
+ * started in `tz` (the browser timezone). */
+export function fetchFocusStats(start: string, end: string, tz: string): Promise<FocusStats> {
+  return request(`/api/v1/focus-stats?start=${start}&end=${end}&tz=${encodeURIComponent(tz)}`);
+}

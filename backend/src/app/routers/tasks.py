@@ -19,6 +19,7 @@ from app.models import (
     Tag,
     Task,
     TaskList,
+    Timer,
     utcnow,
 )
 from app.recurrence import advance_in_place, validate_recurrence
@@ -383,9 +384,10 @@ async def delete_task(task_id: int, session: SessionDep) -> None:
     # History travels with its Task (SQLite leaves ON DELETE CASCADE unenforced).
     await session.execute(delete(CompletedOccurrence).where(CompletedOccurrence.task_id == task.id))
     # Focus Sessions are history too, but their own: they outlive the Task,
-    # only the link goes.
+    # only the link goes. Timer presets keep working the same way.
     await session.execute(
         update(FocusSession).where(FocusSession.task_id == task.id).values(task_id=None)
     )
+    await session.execute(update(Timer).where(Timer.task_id == task.id).values(task_id=None))
     await session.delete(task)
     await session.commit()

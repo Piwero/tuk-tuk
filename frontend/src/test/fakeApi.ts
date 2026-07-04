@@ -116,6 +116,16 @@ export interface FakeFocusSession {
   created_at: string;
 }
 
+export interface FakeTimer {
+  id: number;
+  name: string;
+  mode: "pomo" | "stopwatch";
+  duration_seconds: number | null;
+  task_id: number | null;
+  habit_id: number | null;
+  created_at: string;
+}
+
 export interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
@@ -126,6 +136,7 @@ export interface FakeApiState {
   habits: FakeHabit[];
   checkIns: FakeCheckIn[];
   focusSessions: FakeFocusSession[];
+  timers: FakeTimer[];
   requests: RecordedRequest[];
 }
 
@@ -151,6 +162,7 @@ let nextOccurrenceId = 950;
 let nextHabitId = 300;
 let nextCheckInId = 9000;
 let nextFocusSessionId = 400;
+let nextTimerId = 450;
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
   const id = nextTaskId++;
@@ -237,6 +249,19 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
   };
 }
 
+export function fakeTimer(name: string, overrides: Partial<FakeTimer> = {}): FakeTimer {
+  return {
+    id: nextTimerId++,
+    name,
+    mode: "pomo",
+    duration_seconds: 1500,
+    task_id: null,
+    habit_id: null,
+    created_at: "2026-07-03T10:00:00Z",
+    ...overrides,
+  };
+}
+
 export function fakeFocusSession(overrides: Partial<FakeFocusSession> = {}): FakeFocusSession {
   return {
     id: nextFocusSessionId++,
@@ -266,6 +291,7 @@ export function installFakeApi({
   habits = [],
   checkIns = [],
   focusSessions = [],
+  timers = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -276,6 +302,7 @@ export function installFakeApi({
   habits?: FakeHabit[];
   checkIns?: FakeCheckIn[];
   focusSessions?: FakeFocusSession[];
+  timers?: FakeTimer[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -291,6 +318,7 @@ export function installFakeApi({
     habits: habits.map((habit) => ({ ...habit })),
     checkIns: checkIns.map((checkIn) => ({ ...checkIn })),
     focusSessions: focusSessions.map((focusSession) => ({ ...focusSession })),
+    timers: timers.map((timer) => ({ ...timer })),
     requests: [],
   };
 
@@ -805,10 +833,16 @@ export function installFakeApi({
         state.completedOccurrences = state.completedOccurrences.filter(
           (occurrence) => occurrence.task_id !== taskId,
         );
-        // Mirror the backend: Focus Sessions outlive the Task, only the link goes.
+        // Mirror the backend: Focus Sessions and Timer presets outlive the
+        // Task, only the link goes.
         for (const focusSession of state.focusSessions) {
           if (focusSession.task_id === taskId) {
             focusSession.task_id = null;
+          }
+        }
+        for (const timer of state.timers) {
+          if (timer.task_id === taskId) {
+            timer.task_id = null;
           }
         }
         return new Response(null, { status: 204 });
@@ -858,10 +892,16 @@ export function installFakeApi({
       if (method === "DELETE") {
         state.habits = state.habits.filter((h) => h.id !== habitId);
         state.checkIns = state.checkIns.filter((c) => c.habit_id !== habitId);
-        // Mirror the backend: Focus Sessions outlive the Habit, only the link goes.
+        // Mirror the backend: Focus Sessions and Timer presets outlive the
+        // Habit, only the link goes.
         for (const focusSession of state.focusSessions) {
           if (focusSession.habit_id === habitId) {
             focusSession.habit_id = null;
+          }
+        }
+        for (const timer of state.timers) {
+          if (timer.habit_id === habitId) {
+            timer.habit_id = null;
           }
         }
         return new Response(null, { status: 204 });
@@ -1058,6 +1098,120 @@ export function installFakeApi({
         state.focusSessions = state.focusSessions.filter((s) => s.id !== sessionId);
         return new Response(null, { status: 204 });
       }
+    }
+    if (method === "GET" && url.pathname === "/api/v1/timers") {
+      const items = [...state.timers].sort((a, b) => a.id - b.id);
+      return json(page(items));
+    }
+    if (method === "POST" && url.pathname === "/api/v1/timers") {
+      const input = body as Partial<FakeTimer> & { name: string; mode: "pomo" | "stopwatch" };
+      // Mirror the backend: a Pomo preset needs a duration, a Stopwatch none.
+      const duration = input.duration_seconds ?? null;
+      if ((input.mode === "pomo") !== (duration !== null)) {
+        return json(
+          { error: { code: "invalid_timer", message: "A Timer's duration must match its mode" } },
+          422,
+        );
+      }
+      const created = fakeTimer(input.name, {
+        mode: input.mode,
+        duration_seconds: duration,
+        task_id: input.task_id ?? null,
+        habit_id: input.habit_id ?? null,
+      });
+      state.timers.push(created);
+      return json(created, 201);
+    }
+    const timerMatch = url.pathname.match(/^\/api\/v1\/timers\/(\d+)$/);
+    if (timerMatch) {
+      const timerId = Number(timerMatch[1]);
+      const timer = state.timers.find((t) => t.id === timerId);
+      if (!timer) {
+        return notFound(`Timer ${timerId} not found`);
+      }
+      if (method === "PATCH") {
+        const patch = body as Partial<FakeTimer>;
+        const candidate = { ...timer, ...patch };
+        // Mirror the backend: linking one side replaces the other.
+        if (candidate.task_id !== null && candidate.habit_id !== null) {
+          if ("task_id" in patch && !("habit_id" in patch)) {
+            candidate.habit_id = null;
+          } else if ("habit_id" in patch && !("task_id" in patch)) {
+            candidate.task_id = null;
+          }
+        }
+        if ((candidate.mode === "pomo") !== (candidate.duration_seconds !== null)) {
+          return json(
+            { error: { code: "invalid_timer", message: "A Timer's duration must match its mode" } },
+            422,
+          );
+        }
+        Object.assign(timer, candidate);
+        return json(timer);
+      }
+      if (method === "DELETE") {
+        state.timers = state.timers.filter((t) => t.id !== timerId);
+        return new Response(null, { status: 204 });
+      }
+    }
+    if (method === "GET" && url.pathname === "/api/v1/focus-stats") {
+      const start = url.searchParams.get("start");
+      const end = url.searchParams.get("end");
+      if (start === null || end === null || start > end) {
+        return json({ error: { code: "validation_error", message: "bad range" } }, 422);
+      }
+      // Mirror the backend: a session counts toward the local day it started
+      // (the UI always sends the browser timezone), totals are span - pause,
+      // and weeks start on Monday.
+      const focusSeconds = (s: FakeFocusSession): number =>
+        Math.round((new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 1000) -
+        s.pause_seconds;
+      const pad = (n: number): string => String(n).padStart(2, "0");
+      const dayIso = (d: Date): string =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const dayOf = (s: FakeFocusSession): string => dayIso(new Date(s.started_at));
+      const mondayOf = (day: string): string => {
+        const [y = 0, m = 1, dd = 1] = day.split("-").map(Number);
+        const d = new Date(y, m - 1, dd);
+        d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        return dayIso(d);
+      };
+      const inRange = state.focusSessions
+        .map((s) => ({ s, day: dayOf(s) }))
+        .filter(({ day }) => start <= day && day <= end);
+      const sum = (map: Map<string, number>, key: string, seconds: number): void => {
+        map.set(key, (map.get(key) ?? 0) + seconds);
+      };
+      const days = new Map<string, number>();
+      const weeks = new Map<string, number>();
+      const byTask = new Map<string, number>();
+      const byHabit = new Map<string, number>();
+      for (const { s, day } of inRange) {
+        sum(days, day, focusSeconds(s));
+        sum(weeks, mondayOf(day), focusSeconds(s));
+        if (s.task_id !== null) {
+          sum(byTask, String(s.task_id), focusSeconds(s));
+        }
+        if (s.habit_id !== null) {
+          sum(byHabit, String(s.habit_id), focusSeconds(s));
+        }
+      }
+      const sorted = (map: Map<string, number>): [string, number][] =>
+        [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      return json({
+        days: sorted(days).map(([date, seconds]) => ({ date, seconds })),
+        weeks: sorted(weeks).map(([weekStart, seconds]) => ({ start: weekStart, seconds })),
+        tasks: [...byTask.entries()].map(([id, seconds]) => ({
+          task_id: Number(id),
+          title: state.tasks.find((t) => t.id === Number(id))?.title ?? "",
+          seconds,
+        })),
+        habits: [...byHabit.entries()].map(([id, seconds]) => ({
+          habit_id: Number(id),
+          name: state.habits.find((h) => h.id === Number(id))?.name ?? "",
+          seconds,
+        })),
+      });
     }
     return notFound(`No route: ${method} ${url.pathname}`);
   });

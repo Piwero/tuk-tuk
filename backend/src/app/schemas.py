@@ -393,6 +393,81 @@ class FocusSessionRead(BaseModel):
         return utc_z(value)
 
 
+class TimerCreate(BaseModel):
+    """A Timer preset. A Pomo preset needs its countdown length; a Stopwatch
+    one has none (the router enforces both)."""
+
+    name: str = Field(min_length=1, max_length=255)
+    mode: FocusMode
+    duration_seconds: int | None = Field(default=None, gt=0)
+    task_id: int | None = None
+    habit_id: int | None = None
+
+
+# PATCH fields: absent means "leave unchanged". An explicit null is rejected,
+# except duration_seconds, where null drops it (a Stopwatch preset has none),
+# and task_id / habit_id, where null unlinks the preset.
+class TimerUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    mode: FocusMode | None = None
+    duration_seconds: int | None = Field(default=None, gt=0)
+    task_id: int | None = None
+    habit_id: int | None = None
+
+    _reject_nulls = field_validator("name", "mode")(reject_explicit_null)
+
+
+class TimerRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    mode: FocusMode
+    duration_seconds: int | None
+    task_id: int | None
+    habit_id: int | None
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        return utc_z(value)
+
+
+class FocusDayTotal(BaseModel):
+    date: date
+    seconds: int
+
+
+class FocusWeekTotal(BaseModel):
+    """One Monday-started week's focus total."""
+
+    start: date
+    seconds: int
+
+
+class FocusTaskTotal(BaseModel):
+    task_id: int
+    title: str
+    seconds: int
+
+
+class FocusHabitTotal(BaseModel):
+    habit_id: int
+    name: str
+    seconds: int
+
+
+class FocusStats(BaseModel):
+    """Server-computed focus statistics over an inclusive day range: totals
+    by day and by week, and the time attributed to each linked Task and
+    Habit. Sparse — only days / weeks / rows with focus appear."""
+
+    days: list[FocusDayTotal]
+    weeks: list[FocusWeekTotal]
+    tasks: list[FocusTaskTotal]
+    habits: list[FocusHabitTotal]
+
+
 class TaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

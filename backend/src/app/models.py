@@ -267,3 +267,25 @@ class FocusSession(Base):
     note: Mapped[str] = mapped_column(Text, default="")
     owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Timer(Base):
+    """A Timer — a saved Focus Session preset (name + mode + duration,
+    optionally pre-linked to a Task or Habit) for recurring scenarios like
+    "Reading 30m". The tap that starts it is client-side; this row is the
+    preset only, never running state.
+    """
+
+    __tablename__ = "timers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    mode: Mapped[str] = mapped_column(String(9))
+    # The Pomo countdown length; a Stopwatch preset has none (it counts up).
+    duration_seconds: Mapped[int | None] = mapped_column(default=None)
+    # At most one link, like the sessions the preset starts. Deleting the
+    # linked row clears the link; the preset stays.
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), index=True, default=None)
+    habit_id: Mapped[int | None] = mapped_column(ForeignKey("habits.id"), index=True, default=None)
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -1225,3 +1225,71 @@ main form input {
   flex-direction: column;
   gap: 0.15rem;
 }
+
+.focus-timers h2,
+.focus-stats h2 {
+  font-size: 0.9rem;
+  color: #57606a;
+}
+
+.focus-timers ul {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.focus-timer-preset {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.focus-timer-preset > button:first-child {
+  border: 1px solid #d0d7de;
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  background: none;
+  cursor: pointer;
+}
+
+.timer-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.timer-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.focus-stats h3 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.8rem;
+  color: #57606a;
+}
+
+.focus-stats ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+.focus-stats-range {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.focus-stats-range label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
