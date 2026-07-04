@@ -408,6 +408,8 @@ export interface Habit {
   /** RRULE frequency content: FREQ=DAILY, FREQ=WEEKLY;BYDAY=... or
    * FREQ=WEEKLY;TT_TIMES=N (N times per week). */
   frequency: string;
+  /** Archived Habits leave the today screen but keep their whole history. */
+  is_archived: boolean;
   created_at: string;
 }
 
@@ -455,6 +457,7 @@ export interface HabitPatch {
   color?: string | null;
   encouragement?: string;
   frequency?: string;
+  is_archived?: boolean;
 }
 
 export function updateHabit(habitId: number, patch: HabitPatch): Promise<Habit> {
@@ -484,4 +487,30 @@ export function removeCheckIn(habitId: number, date: string): Promise<void> {
 /** The day's Check-ins across every Habit — the today's-screen query. */
 export function fetchCheckIns(date: string): Promise<Page<CheckIn>> {
   return request(`/api/v1/check-ins?date=${date}`);
+}
+
+/** One checked-in day of the yearly heatmap; intensity is the value's share
+ * of the Goal (0..1], so Numeric habits render partial fills. */
+export interface HeatmapDay {
+  date: string;
+  value: number;
+  intensity: number;
+}
+
+/** The server-computed Habit statistics: the current Streak and one calendar
+ * year of heatmap days (sparse — only days with Check-ins). */
+export interface HabitStats {
+  streak: number;
+  heatmap: HeatmapDay[];
+}
+
+/** Statistics as of `today` (the caller's local day); `year` picks which
+ * calendar year the heatmap covers, defaulting to today's. */
+export function fetchHabitStats(
+  habitId: number,
+  today: string,
+  year?: number,
+): Promise<HabitStats> {
+  const scope = year === undefined ? "" : `&year=${year}`;
+  return request(`/api/v1/habits/${habitId}/stats?today=${today}${scope}`);
 }

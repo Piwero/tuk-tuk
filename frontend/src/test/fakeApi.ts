@@ -93,6 +93,7 @@ export interface FakeHabit {
   color: string | null;
   encouragement: string;
   frequency: string;
+  is_archived: boolean;
   created_at: string;
 }
 
@@ -103,7 +104,7 @@ export interface FakeCheckIn {
   value: number;
 }
 
-interface FakeApiState {
+export interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
   sections: FakeSection[];
@@ -216,6 +217,7 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
     color: null,
     encouragement: "",
     frequency: "FREQ=DAILY",
+    is_archived: false,
     created_at: "2026-07-03T10:00:00Z",
     ...overrides,
   };
@@ -777,9 +779,10 @@ export function installFakeApi({
     if (method === "GET" && url.pathname === "/api/v1/habits") {
       const due = url.searchParams.get("due");
       // Mirror the backend's due filter: daily and N-times-per-week habits
-      // are due every day; weekday habits only on their days.
+      // are due every day; weekday habits only on their days. Archived
+      // Habits leave the today screen.
       const items = state.habits.filter(
-        (habit) => due === null || habitDueOn(habit.frequency, due),
+        (habit) => due === null || (!habit.is_archived && habitDueOn(habit.frequency, due)),
       );
       return json(page(items));
     }
@@ -819,6 +822,50 @@ export function installFakeApi({
         state.checkIns = state.checkIns.filter((c) => c.habit_id !== habitId);
         return new Response(null, { status: 204 });
       }
+    }
+    const statsMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)\/stats$/);
+    if (statsMatch && method === "GET") {
+      const habitId = Number(statsMatch[1]);
+      const habit = state.habits.find((h) => h.id === habitId);
+      if (!habit) {
+        return notFound(`Habit ${habitId} not found`);
+      }
+      const today = url.searchParams.get("today");
+      if (today === null) {
+        return json({ error: { code: "validation_error", message: "today is required" } }, 422);
+      }
+      const year = url.searchParams.get("year") ?? today.slice(0, 4);
+      const habitCheckIns = state.checkIns.filter((checkIn) => checkIn.habit_id === habitId);
+      const checked = new Set(habitCheckIns.map((checkIn) => checkIn.date));
+      // Mirror the backend's streak rule: consecutive scheduled days checked
+      // in, walking back from today — a missed scheduled day resets it,
+      // unscheduled days are skipped, and an unticked today is graced.
+      let streak = 0;
+      if (checked.size > 0) {
+        let day = today;
+        if (habitDueOn(habit.frequency, day) && !checked.has(day)) {
+          day = addDays(day, -1);
+        }
+        const earliest = [...checked].sort()[0] as string;
+        while (day >= earliest) {
+          if (habitDueOn(habit.frequency, day)) {
+            if (!checked.has(day)) {
+              break;
+            }
+            streak += 1;
+          }
+          day = addDays(day, -1);
+        }
+      }
+      const heatmap = habitCheckIns
+        .filter((checkIn) => checkIn.date.slice(0, 4) === year)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((checkIn) => ({
+          date: checkIn.date,
+          value: checkIn.value,
+          intensity: Math.min(checkIn.value / habit.goal, 1),
+        }));
+      return json({ streak, heatmap });
     }
     const checkInMatch = url.pathname.match(
       /^\/api\/v1\/habits\/(\d+)\/check-ins\/(\d{4}-\d{2}-\d{2})$/,

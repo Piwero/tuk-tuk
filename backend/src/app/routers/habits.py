@@ -13,14 +13,17 @@ from sqlalchemy import func, select
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.habit_frequency import due_on, validate_frequency
+from app.habit_stats import current_streak, intensity
 from app.models import CheckIn, Habit
 from app.schemas import (
     CheckInPut,
     CheckInRead,
     HabitCreate,
     HabitRead,
+    HabitStats,
     HabitType,
     HabitUpdate,
+    HeatmapDay,
     Page,
 )
 
@@ -77,13 +80,18 @@ async def read_habits(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Page[HabitRead]:
-    """List Habits; `due` keeps those scheduled on that day (the caller's
-    local day) — the today's-Habits screen's query.
+    """List Habits; `due` keeps the active ones scheduled on that day (the
+    caller's local day) — the today's-Habits screen's query, which archived
+    Habits leave.
     """
     # The due filter parses each habit's frequency, which SQL can't reach —
     # it runs in Python and paginates the filtered rows (like the Smart Lists).
     rows = (await session.scalars(select(Habit).order_by(Habit.id))).all()
-    matches = [habit for habit in rows if due is None or due_on(habit.frequency, due)]
+    matches = [
+        habit
+        for habit in rows
+        if due is None or (not habit.is_archived and due_on(habit.frequency, due))
+    ]
     items = [HabitRead.model_validate(habit) for habit in matches[offset : offset + limit]]
     return Page(items=items, total=len(matches), limit=limit, offset=offset)
 
@@ -162,6 +170,31 @@ async def delete_check_in(habit_id: int, day: date, session: SessionDep) -> None
         raise NotFoundError(f"No check-in on {day.isoformat()} for habit {habit_id}")
     await session.delete(check_in)
     await session.commit()
+
+
+@router.get("/{habit_id}/stats")
+async def read_habit_stats(
+    habit_id: int,
+    today: date,
+    session: SessionDep,
+    year: int | None = Query(default=None, ge=1, le=9999),
+) -> HabitStats:
+    """The Habit's computed statistics (per the PRD: computed, never stored):
+    the current Streak as of `today` (the caller's local day), and the heatmap
+    of one calendar year's Check-ins — `year` picks which, defaulting to
+    today's. Sparse: only days with Check-ins appear.
+    """
+    habit = await get_habit_or_404(habit_id, session)
+    rows = (await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit_id))).all()
+    heatmap_year = year if year is not None else today.year
+    return HabitStats(
+        streak=current_streak(habit.frequency, {row.date for row in rows}, today),
+        heatmap=[
+            HeatmapDay(date=row.date, value=row.value, intensity=intensity(row.value, habit.goal))
+            for row in sorted(rows, key=lambda row: row.date)
+            if row.date.year == heatmap_year
+        ],
+    )
 
 
 check_ins_router = APIRouter(prefix="/api/v1/check-ins", tags=["check-ins"])

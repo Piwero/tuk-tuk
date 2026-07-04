@@ -220,4 +220,29 @@ describe("Managing Habits", () => {
     await waitFor(() => expect(screen.queryByText("Meditate")).not.toBeInTheDocument());
     expect(api.habits).toHaveLength(0);
   });
+
+  it("archiving moves a Habit out of today into Archived; unarchiving restores it", async () => {
+    const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Archive Meditate" }));
+
+    const archived = await screen.findByRole("list", { name: "Archived habits" });
+    expect(within(archived).getByText("Meditate")).toBeInTheDocument();
+    const today = screen.getByRole("list", { name: "Today's Habits" });
+    expect(within(today).queryByText("Meditate")).not.toBeInTheDocument();
+    expect(api.habits[0]?.is_archived).toBe(true);
+    // Archived habits keep no check-in controls — today is not their screen.
+    expect(screen.queryByRole("button", { name: "Check in Meditate" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Unarchive Meditate" }));
+
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("list", { name: "Today's Habits" })).getByText("Meditate"),
+      ).toBeInTheDocument(),
+    );
+    expect(api.habits[0]?.is_archived).toBe(false);
+  });
 });

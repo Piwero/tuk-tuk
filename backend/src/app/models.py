@@ -212,6 +212,9 @@ class Habit(Base):
     # RRULE frequency content: daily, chosen weekdays, or N times per week
     # (TickTick's TT_TIMES extension). See app.habit_frequency.
     frequency: Mapped[str] = mapped_column(String(255), default="FREQ=DAILY")
+    # Archived Habits leave the today screen but keep their whole Check-in
+    # history; unarchiving restores them.
+    is_archived: Mapped[bool] = mapped_column(default=False)
     owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
