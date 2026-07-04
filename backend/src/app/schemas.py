@@ -3,7 +3,14 @@
 from datetime import UTC, date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_serializer,
+    field_validator,
+)
 
 # The four named Priority levels — named, not numbered, on the wire.
 Priority = Literal["none", "low", "medium", "high"]
@@ -323,6 +330,67 @@ class HabitStats(BaseModel):
 
     streak: int
     heatmap: list[HeatmapDay]
+
+
+# The two Focus Session modes: a Pomo counts down, a Stopwatch counts up.
+FocusMode = Literal["pomo", "stopwatch"]
+
+
+class FocusSessionCreate(BaseModel):
+    """A finished (or retroactively added) Focus Session — timers tick
+    client-side, so the API only ever receives completed periods."""
+
+    mode: FocusMode
+    task_id: int | None = None
+    habit_id: int | None = None
+    started_at: datetime
+    ended_at: datetime
+    pause_seconds: int = Field(default=0, ge=0)
+    note: str = Field(default="", max_length=2000)
+
+    _normalize_dates = field_validator("started_at", "ended_at")(normalize_to_utc)
+
+
+# PATCH fields: absent means "leave unchanged". An explicit null is rejected,
+# except task_id / habit_id, where null unlinks the session (its history stays).
+class FocusSessionUpdate(BaseModel):
+    task_id: int | None = None
+    habit_id: int | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    pause_seconds: int | None = Field(default=None, ge=0)
+    note: str | None = Field(default=None, max_length=2000)
+
+    _reject_nulls = field_validator("started_at", "ended_at", "pause_seconds", "note")(
+        reject_explicit_null
+    )
+    _normalize_dates = field_validator("started_at", "ended_at")(normalize_to_utc)
+
+
+class FocusSessionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    mode: FocusMode
+    task_id: int | None
+    habit_id: int | None
+    started_at: datetime
+    ended_at: datetime
+    pause_seconds: int
+    note: str
+    created_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def duration_seconds(self) -> int:
+        """Honest focus time: the wall-clock span minus the paused part.
+        Derived, never stored — edits to the times can't desynchronize it."""
+        span = int((as_utc(self.ended_at) - as_utc(self.started_at)).total_seconds())
+        return span - self.pause_seconds
+
+    @field_serializer("started_at", "ended_at", "created_at")
+    def serialize_dates(self, value: datetime) -> str:
+        return utc_z(value)
 
 
 class TaskRead(BaseModel):

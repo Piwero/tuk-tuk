@@ -27,6 +27,8 @@ interface TaskListViewProps {
   onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
   onSectionsChanged: (update: (current: Section[]) => Section[]) => void;
+  /** The task row's "Start Focus" shortcut, when the app offers Focus here. */
+  onStartFocus?: (task: Task) => void;
 }
 
 export function TaskListView({
@@ -38,6 +40,7 @@ export function TaskListView({
   onChanged,
   onSelect,
   onSectionsChanged,
+  onStartFocus,
 }: TaskListViewProps): JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
   const [renamingSectionId, setRenamingSectionId] = useState<number | null>(null);
@@ -185,6 +188,15 @@ export function TaskListView({
             </span>
           )}
         </button>
+        {onStartFocus !== undefined && (
+          <button
+            type="button"
+            aria-label={`Start Focus for ${task.title}`}
+            onClick={() => onStartFocus(task)}
+          >
+            Focus
+          </button>
+        )}
         <button type="button" aria-label={`Delete ${task.title}`} onClick={() => void remove(task)}>
           Delete
         </button>

@@ -6,7 +6,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
@@ -14,6 +14,7 @@ from app.models import (
     SORT_GAP,
     CheckItem,
     CompletedOccurrence,
+    FocusSession,
     Section,
     Tag,
     Task,
@@ -381,5 +382,10 @@ async def delete_task(task_id: int, session: SessionDep) -> None:
     task = await get_task_or_404(task_id, session)
     # History travels with its Task (SQLite leaves ON DELETE CASCADE unenforced).
     await session.execute(delete(CompletedOccurrence).where(CompletedOccurrence.task_id == task.id))
+    # Focus Sessions are history too, but their own: they outlive the Task,
+    # only the link goes.
+    await session.execute(
+        update(FocusSession).where(FocusSession.task_id == task.id).values(task_id=None)
+    )
     await session.delete(task)
     await session.commit()

@@ -104,6 +104,18 @@ export interface FakeCheckIn {
   value: number;
 }
 
+export interface FakeFocusSession {
+  id: number;
+  mode: "pomo" | "stopwatch";
+  task_id: number | null;
+  habit_id: number | null;
+  started_at: string;
+  ended_at: string;
+  pause_seconds: number;
+  note: string;
+  created_at: string;
+}
+
 export interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
@@ -113,6 +125,7 @@ export interface FakeApiState {
   completedOccurrences: FakeCompletedOccurrence[];
   habits: FakeHabit[];
   checkIns: FakeCheckIn[];
+  focusSessions: FakeFocusSession[];
   requests: RecordedRequest[];
 }
 
@@ -137,6 +150,7 @@ let nextSectionId = 800;
 let nextOccurrenceId = 950;
 let nextHabitId = 300;
 let nextCheckInId = 9000;
+let nextFocusSessionId = 400;
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
   const id = nextTaskId++;
@@ -223,6 +237,21 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
   };
 }
 
+export function fakeFocusSession(overrides: Partial<FakeFocusSession> = {}): FakeFocusSession {
+  return {
+    id: nextFocusSessionId++,
+    mode: "stopwatch",
+    task_id: null,
+    habit_id: null,
+    started_at: "2026-07-03T09:00:00Z",
+    ended_at: "2026-07-03T09:30:00Z",
+    pause_seconds: 0,
+    note: "",
+    created_at: "2026-07-03T09:30:00Z",
+    ...overrides,
+  };
+}
+
 const nextOrder = (rows: { sort_order: number }[]): number =>
   Math.max(0, ...rows.map((row) => row.sort_order)) + SORT_GAP;
 
@@ -236,6 +265,7 @@ export function installFakeApi({
   completedOccurrences = [],
   habits = [],
   checkIns = [],
+  focusSessions = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -245,6 +275,7 @@ export function installFakeApi({
   completedOccurrences?: FakeCompletedOccurrence[];
   habits?: FakeHabit[];
   checkIns?: FakeCheckIn[];
+  focusSessions?: FakeFocusSession[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -259,6 +290,7 @@ export function installFakeApi({
     completedOccurrences: completedOccurrences.map((occurrence) => ({ ...occurrence })),
     habits: habits.map((habit) => ({ ...habit })),
     checkIns: checkIns.map((checkIn) => ({ ...checkIn })),
+    focusSessions: focusSessions.map((focusSession) => ({ ...focusSession })),
     requests: [],
   };
 
@@ -773,6 +805,12 @@ export function installFakeApi({
         state.completedOccurrences = state.completedOccurrences.filter(
           (occurrence) => occurrence.task_id !== taskId,
         );
+        // Mirror the backend: Focus Sessions outlive the Task, only the link goes.
+        for (const focusSession of state.focusSessions) {
+          if (focusSession.task_id === taskId) {
+            focusSession.task_id = null;
+          }
+        }
         return new Response(null, { status: 204 });
       }
     }
@@ -820,6 +858,12 @@ export function installFakeApi({
       if (method === "DELETE") {
         state.habits = state.habits.filter((h) => h.id !== habitId);
         state.checkIns = state.checkIns.filter((c) => c.habit_id !== habitId);
+        // Mirror the backend: Focus Sessions outlive the Habit, only the link goes.
+        for (const focusSession of state.focusSessions) {
+          if (focusSession.habit_id === habitId) {
+            focusSession.habit_id = null;
+          }
+        }
         return new Response(null, { status: 204 });
       }
     }
@@ -908,6 +952,112 @@ export function installFakeApi({
         )
         .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
       return json(page(items));
+    }
+    const spanSeconds = (s: { started_at: string; ended_at: string }): number =>
+      (new Date(s.ended_at).getTime() - new Date(s.started_at).getTime()) / 1000;
+
+    /** Mirror the backend's period and link rules for Focus Sessions. */
+    const sessionRejection = (candidate: FakeFocusSession): Response | null => {
+      if (spanSeconds(candidate) <= 0) {
+        return json(
+          { error: { code: "invalid_session", message: "The end must follow the start" } },
+          422,
+        );
+      }
+      if (candidate.pause_seconds >= spanSeconds(candidate)) {
+        return json(
+          {
+            error: {
+              code: "invalid_session",
+              message: "The pause cannot consume the whole session",
+            },
+          },
+          422,
+        );
+      }
+      if (candidate.task_id !== null && candidate.habit_id !== null) {
+        return json(
+          {
+            error: {
+              code: "invalid_session",
+              message: "A session links to a Task or a Habit, never both",
+            },
+          },
+          422,
+        );
+      }
+      if (candidate.task_id !== null && !state.tasks.some((t) => t.id === candidate.task_id)) {
+        return notFound(`Task ${candidate.task_id} not found`);
+      }
+      if (candidate.habit_id !== null && !state.habits.some((h) => h.id === candidate.habit_id)) {
+        return notFound(`Habit ${candidate.habit_id} not found`);
+      }
+      return null;
+    };
+
+    const withDuration = (s: FakeFocusSession): unknown => ({
+      ...s,
+      duration_seconds: Math.round(spanSeconds(s)) - s.pause_seconds,
+    });
+
+    if (method === "GET" && url.pathname === "/api/v1/focus-sessions") {
+      const items = [...state.focusSessions]
+        .sort((a, b) => b.started_at.localeCompare(a.started_at) || b.id - a.id)
+        .map(withDuration);
+      return json(page(items));
+    }
+    if (method === "POST" && url.pathname === "/api/v1/focus-sessions") {
+      const input = body as Partial<FakeFocusSession> & {
+        mode: "pomo" | "stopwatch";
+        started_at: string;
+        ended_at: string;
+      };
+      const created = fakeFocusSession({
+        mode: input.mode,
+        task_id: input.task_id ?? null,
+        habit_id: input.habit_id ?? null,
+        started_at: input.started_at,
+        ended_at: input.ended_at,
+        pause_seconds: input.pause_seconds ?? 0,
+        note: input.note ?? "",
+        created_at: new Date().toISOString(),
+      });
+      const rejection = sessionRejection(created);
+      if (rejection) {
+        return rejection;
+      }
+      state.focusSessions.push(created);
+      return json(withDuration(created), 201);
+    }
+    const focusSessionMatch = url.pathname.match(/^\/api\/v1\/focus-sessions\/(\d+)$/);
+    if (focusSessionMatch) {
+      const sessionId = Number(focusSessionMatch[1]);
+      const focusSession = state.focusSessions.find((s) => s.id === sessionId);
+      if (!focusSession) {
+        return notFound(`Focus session ${sessionId} not found`);
+      }
+      if (method === "PATCH") {
+        const patch = body as Partial<FakeFocusSession>;
+        const candidate = { ...focusSession, ...patch };
+        // Mirror the backend: linking one side replaces the other.
+        if (candidate.task_id !== null && candidate.habit_id !== null) {
+          if ("task_id" in patch && !("habit_id" in patch)) {
+            candidate.habit_id = null;
+          } else if ("habit_id" in patch && !("task_id" in patch)) {
+            candidate.task_id = null;
+          }
+        }
+        const rejection = sessionRejection(candidate);
+        if (rejection) {
+          return rejection;
+        }
+        Object.assign(focusSession, candidate);
+        return json(withDuration(focusSession));
+      }
+      if (method === "DELETE") {
+        state.focusSessions = state.focusSessions.filter((s) => s.id !== sessionId);
+        return new Response(null, { status: 204 });
+      }
     }
     return notFound(`No route: ${method} ${url.pathname}`);
   });

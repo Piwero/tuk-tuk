@@ -514,3 +514,74 @@ export function fetchHabitStats(
   const scope = year === undefined ? "" : `&year=${year}`;
   return request(`/api/v1/habits/${habitId}/stats?today=${today}${scope}`);
 }
+
+/** The two Focus Session modes: a Pomo counts down, a Stopwatch counts up. */
+export type FocusMode = "pomo" | "stopwatch";
+
+/** A Focus Session — one persisted period of focused work, optionally linked
+ * to a Task or Habit. Timers tick client-side; the API stores finished (or
+ * retroactively added) periods only. */
+export interface FocusSession {
+  id: number;
+  mode: FocusMode;
+  task_id: number | null;
+  habit_id: number | null;
+  started_at: string;
+  ended_at: string;
+  /** Wall-clock seconds spent paused: recorded focus time stays honest. */
+  pause_seconds: number;
+  /** Honest focus time: the wall-clock span minus the paused part (computed
+   * server-side, never stored). */
+  duration_seconds: number;
+  note: string;
+  created_at: string;
+}
+
+/** Focus Sessions, most recently started first — the history view. */
+export function fetchFocusSessions(): Promise<Page<FocusSession>> {
+  return request("/api/v1/focus-sessions");
+}
+
+export interface FocusSessionCreateInput {
+  mode: FocusMode;
+  task_id?: number;
+  habit_id?: number;
+  started_at: string;
+  ended_at: string;
+  pause_seconds?: number;
+  note?: string;
+}
+
+export function createFocusSession(input: FocusSessionCreateInput): Promise<FocusSession> {
+  return request("/api/v1/focus-sessions", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Absent fields stay unchanged; explicit null unlinks task_id / habit_id
+ * (linking one side clears the other — at most one link ever). */
+export interface FocusSessionPatch {
+  task_id?: number | null;
+  habit_id?: number | null;
+  started_at?: string;
+  ended_at?: string;
+  pause_seconds?: number;
+  note?: string;
+}
+
+export function updateFocusSession(
+  sessionId: number,
+  patch: FocusSessionPatch,
+): Promise<FocusSession> {
+  return request(`/api/v1/focus-sessions/${sessionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteFocusSession(sessionId: number): Promise<void> {
+  return request(`/api/v1/focus-sessions/${sessionId}`, { method: "DELETE" });
+}
+
+/** Open tasks across every List — the Focus link picker's choices. */
+export function fetchOpenTasks(): Promise<Page<Task>> {
+  return request("/api/v1/tasks?completed=false&limit=200");
+}
