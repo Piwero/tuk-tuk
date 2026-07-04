@@ -5,6 +5,7 @@ import {
   fetchCompletedTasks,
   fetchFolders,
   fetchLists,
+  fetchSearchTasks,
   fetchSections,
   fetchSmartTasks,
   fetchTags,
@@ -26,17 +27,19 @@ import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
 import { KanbanView } from "./components/KanbanView";
 import { QuickAdd } from "./components/QuickAdd";
+import { SearchView, type SearchState } from "./components/SearchView";
 import { Sidebar } from "./components/Sidebar";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 
-/** What the main pane shows: one List, one Tag, one computed Smart List, or
- * the Calendar (which fetches its own window). */
+/** What the main pane shows: one List, one Tag, one computed Smart List, the
+ * Calendar (which fetches its own window), or Search results. */
 type View =
   | { kind: "list"; id: number }
   | { kind: "tag"; id: number }
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar" }
+  | { kind: "search"; search: SearchState }
   | null;
 
 export function App(): JSX.Element {
@@ -67,7 +70,7 @@ export function App(): JSX.Element {
   // Keep a valid view: default to the Inbox, and fall back to it when the
   // viewed list or tag disappears (e.g. it was deleted).
   useEffect(() => {
-    if (view?.kind === "smart" || view?.kind === "calendar") {
+    if (view?.kind === "smart" || view?.kind === "calendar" || view?.kind === "search") {
       return;
     }
     if (view?.kind === "list" && lists.some((list) => list.id === view.id)) {
@@ -101,6 +104,13 @@ export function App(): JSX.Element {
       setOccurrences(occurrencePage.items);
     } else if (view.kind === "smart") {
       setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()))).items);
+    } else if (view.kind === "search") {
+      // An empty query shows nothing — without even asking the API.
+      setTasks(
+        view.search.query.trim() === ""
+          ? []
+          : (await fetchSearchTasks(view.search.query, view.search)).items,
+      );
     } else if (view.kind === "list") {
       setTasks((await fetchTasks(view.id)).items);
     } else {
@@ -127,7 +137,7 @@ export function App(): JSX.Element {
   const smartView = view?.kind === "smart" ? view.view : null;
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   // Computed views can't be patched locally: membership depends on the query.
-  const isComputedView = smartView !== null || completedMode;
+  const isComputedView = smartView !== null || completedMode || view?.kind === "search";
   // The completed view exists per List and for All (not Today / Next 7 Days).
   const hasCompletedView = selectedList !== null || smartView === "all";
 
@@ -205,6 +215,12 @@ export function App(): JSX.Element {
         onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
         onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
         onSelectCalendar={() => switchView({ kind: "calendar" })}
+        onSearch={(query) =>
+          switchView({
+            kind: "search",
+            search: { query, listId: null, tagId: null, priority: null, completed: null },
+          })
+        }
         onListsChanged={setLists}
         onFoldersChanged={setFolders}
         onTagCreated={(tag) => setTags((current) => [...current, tag])}
@@ -228,7 +244,9 @@ export function App(): JSX.Element {
                   ? SMART_LABELS[smartView]
                   : view?.kind === "calendar"
                     ? "Calendar"
-                    : "tuk-tuk")}
+                    : view?.kind === "search"
+                      ? "Search"
+                      : "tuk-tuk")}
           </h1>
           {selectedList !== null && !completedMode && (
             <button
@@ -297,6 +315,15 @@ export function App(): JSX.Element {
         )}
         {view?.kind === "calendar" ? (
           <CalendarView />
+        ) : view?.kind === "search" ? (
+          <SearchView
+            tasks={tasks}
+            lists={lists}
+            tags={tags}
+            state={view.search}
+            onStateChange={(search) => switchView({ kind: "search", search })}
+            onSelect={setSelectedTaskId}
+          />
         ) : completedMode ? (
           <CompletedView
             tasks={tasks}

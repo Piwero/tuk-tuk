@@ -20,3 +20,10 @@ def client(database_url: str) -> Iterator[TestClient]:
     app = create_app(Settings(database_url=database_url))
     with TestClient(app) as test_client:
         yield test_client
+
+
+def make_task(client: TestClient, title: str, **fields: object) -> dict:
+    """Create a task over the API and return its JSON body."""
+    response = client.post("/api/v1/tasks", json={"title": title, **fields})
+    assert response.status_code == 201, response.text
+    return response.json()

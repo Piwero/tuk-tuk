@@ -6,11 +6,7 @@ is read in its own timezone (the same rule the Smart Lists use).
 
 from fastapi.testclient import TestClient
 
-
-def make_task(client: TestClient, title: str, **fields: object) -> dict:
-    response = client.post("/api/v1/tasks", json={"title": title, **fields})
-    assert response.status_code == 201, response.text
-    return response.json()
+from tests.conftest import make_task
 
 
 def window(client: TestClient, start: str, end: str, extra: str = "") -> list[str]:

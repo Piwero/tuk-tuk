@@ -920,3 +920,40 @@ main form input {
 .resize-handle-bottom {
   bottom: 0;
 }
+
+.sidebar-search input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.search-results button {
+  width: 100%;
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #eef1f4;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.search-results button:hover {
+  background: #f6f8fa;
+}
+
+.search-hint {
+  color: #57606a;
+  font-size: 0.85rem;
+}

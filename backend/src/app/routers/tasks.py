@@ -6,13 +6,22 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import SORT_GAP, CompletedOccurrence, Section, Tag, Task, TaskList, utcnow
+from app.models import (
+    SORT_GAP,
+    CheckItem,
+    CompletedOccurrence,
+    Section,
+    Tag,
+    Task,
+    TaskList,
+    utcnow,
+)
 from app.recurrence import advance_in_place, validate_recurrence
-from app.schemas import Page, TaskCreate, TaskRead, TaskUpdate, as_utc
+from app.schemas import Page, Priority, TaskCreate, TaskRead, TaskUpdate, as_utc
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
@@ -142,13 +151,20 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
     return TaskRead.model_validate(task)
 
 
+def like_escaped(text: str) -> str:
+    """The text with LIKE wildcards escaped, so a query matches literally."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("")
 async def read_tasks(
     session: SessionDep,
     list_id: int | None = None,
     tag_id: int | None = None,
     completed: bool | None = None,
+    priority: Priority | None = None,
     scheduled: bool | None = None,
+    search: str | None = None,
     view: SmartView | None = None,
     today: date | None = None,
     range_start: date | None = None,
@@ -161,7 +177,11 @@ async def read_tasks(
     `range_start`/`range_end` (inclusive calendar days) keep tasks whose
     scheduled days intersect the window — the calendar's query.
     `scheduled=false` keeps only undated tasks — the unscheduled panel's query.
-    `completed=true` is the completed view: newest completion first.
+    `search` matches titles, descriptions and Check Item titles (an empty
+    query matches nothing); it combines with the List / Tag / Priority /
+    completion filters. `priority` also filters on its own, like `list_id`
+    and `tag_id`. `completed=true` is the completed view: newest
+    completion first.
     """
     if view is not None:
         completed = False
@@ -195,13 +215,35 @@ async def read_tasks(
             code="validation_error",
             message="the scheduled filter is exclusive with view and range filters",
         )
+    if search is not None and (
+        view is not None or range_start is not None or scheduled is not None
+    ):
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message="search is exclusive with view, range and scheduled filters",
+        )
+    if search is not None and search.strip() == "":
+        # An empty query matches nothing — never a full dump.
+        return page_of([], limit, offset)
     query = select(Task)
+    if search is not None:
+        pattern = f"%{like_escaped(search)}%"
+        query = query.where(
+            or_(
+                Task.title.ilike(pattern, escape="\\"),
+                Task.description.ilike(pattern, escape="\\"),
+                Task.check_items.any(CheckItem.title.ilike(pattern, escape="\\")),
+            )
+        )
     if list_id is not None:
         query = query.where(Task.list_id == list_id)
     if tag_id is not None:
         query = query.where(Task.tags.any(Tag.id == tag_id))
     if completed is not None:
         query = query.where(Task.completed == completed)
+    if priority is not None:
+        query = query.where(Task.priority == priority)
     if scheduled is not None:
         query = query.where(Task.due_date.is_not(None) if scheduled else Task.due_date.is_(None))
     order = (
