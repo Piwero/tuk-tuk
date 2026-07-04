@@ -957,3 +957,92 @@ main form input {
   color: #57606a;
   font-size: 0.85rem;
 }
+
+.habits-view ul {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.habits-view .habit {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #eef1f4;
+  border-radius: 8px;
+}
+
+.habits-view .habit.complete {
+  background: #f0fff4;
+  border-color: #b7ebc6;
+}
+
+.habit-body {
+  flex: 1;
+}
+
+.habit-body h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.habit-encouragement,
+.habit-frequency {
+  margin: 0;
+  color: #57606a;
+  font-size: 0.8rem;
+}
+
+.habit-check {
+  border: 1px solid #d0d7de;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  background: none;
+  cursor: pointer;
+}
+
+.habit-progress {
+  color: #57606a;
+  font-size: 0.85rem;
+}
+
+.habit-done {
+  color: #1a7f37;
+}
+
+.habit-step {
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  background: none;
+  cursor: pointer;
+}
+
+.other-habits h2 {
+  font-size: 0.9rem;
+  color: #57606a;
+}
+
+.habit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.habit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.habit-weekdays {
+  display: flex;
+  gap: 0.4rem;
+}

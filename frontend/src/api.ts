@@ -389,3 +389,99 @@ export function updateCheckItem(
 export function deleteCheckItem(taskId: number, checkItemId: number): Promise<void> {
   return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}`, { method: "DELETE" });
 }
+
+/** The two Habit types — named on the wire, like Priority. */
+export type HabitType = "boolean" | "numeric";
+
+/** A Habit — a recurring practice tracked by Check-ins rather than completion. */
+export interface Habit {
+  id: number;
+  name: string;
+  type: HabitType;
+  /** The Numeric target and one tap's increment; Boolean habits keep 1 / 1. */
+  goal: number;
+  step: number;
+  unit: string | null;
+  icon: string | null;
+  color: string | null;
+  encouragement: string;
+  /** RRULE frequency content: FREQ=DAILY, FREQ=WEEKLY;BYDAY=... or
+   * FREQ=WEEKLY;TT_TIMES=N (N times per week). */
+  frequency: string;
+  created_at: string;
+}
+
+/** A Check-in — one day's progress on a Habit, keyed by (habit, date). */
+export interface CheckIn {
+  id: number;
+  habit_id: number;
+  /** The local calendar day (YYYY-MM-DD) the user checked in. */
+  date: string;
+  value: number;
+}
+
+/** All Habits, or — with `due` (the caller's local day) — exactly the ones
+ * scheduled that day: the today's-Habits screen's query. */
+export function fetchHabits(due?: string): Promise<Page<Habit>> {
+  return request(due === undefined ? "/api/v1/habits" : `/api/v1/habits?due=${due}`);
+}
+
+export interface HabitCreateInput {
+  name: string;
+  type?: HabitType;
+  goal?: number;
+  step?: number;
+  unit?: string;
+  icon?: string;
+  color?: string;
+  encouragement?: string;
+  frequency?: string;
+}
+
+export function createHabit(input: HabitCreateInput): Promise<Habit> {
+  return request("/api/v1/habits", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Absent fields stay unchanged; explicit null clears unit / icon / color.
+ * Becoming Numeric requires a goal in the same patch; becoming Boolean
+ * sweeps goal / step / unit back to their defaults. */
+export interface HabitPatch {
+  name?: string;
+  type?: HabitType;
+  goal?: number;
+  step?: number;
+  unit?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  encouragement?: string;
+  frequency?: string;
+}
+
+export function updateHabit(habitId: number, patch: HabitPatch): Promise<Habit> {
+  return request(`/api/v1/habits/${habitId}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+/** Deletes the Habit and its whole Check-in history. */
+export function deleteHabit(habitId: number): Promise<void> {
+  return request(`/api/v1/habits/${habitId}`, { method: "DELETE" });
+}
+
+/** Upsert the day's Check-in — one row per (habit, date) however often it is
+ * called, so re-taps and corrections are idempotent. A Boolean check-in is
+ * always value 1; a Numeric one stores the day's accumulated value. */
+export function putCheckIn(habitId: number, date: string, value: number): Promise<CheckIn> {
+  return request(`/api/v1/habits/${habitId}/check-ins/${date}`, {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
+}
+
+/** Undo the day's Check-in (a Boolean re-tap, or a correction). */
+export function removeCheckIn(habitId: number, date: string): Promise<void> {
+  return request(`/api/v1/habits/${habitId}/check-ins/${date}`, { method: "DELETE" });
+}
+
+/** The day's Check-ins across every Habit — the today's-screen query. */
+export function fetchCheckIns(date: string): Promise<Page<CheckIn>> {
+  return request(`/api/v1/check-ins?date=${date}`);
+}

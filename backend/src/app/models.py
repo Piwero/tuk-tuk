@@ -1,8 +1,19 @@
 """SQLAlchemy models. Vocabulary per CONTEXT.md; owner column per ADR 0002."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, String, Table, Text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -178,3 +189,54 @@ class CompletedOccurrence(Base):
     # The occurrence the user completed: the task's dates before they advanced.
     due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     is_all_day: Mapped[bool] = mapped_column(default=False)
+
+
+class Habit(Base):
+    """A Habit — a recurring practice tracked by Check-ins rather than
+    completion: Boolean (done / not done) or Numeric (an amount toward a Goal).
+    """
+
+    __tablename__ = "habits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    type: Mapped[str] = mapped_column(String(7), default="boolean")
+    # The Numeric target and one tap's increment; Boolean habits keep the
+    # defaults (a check-in is the whole goal).
+    goal: Mapped[float] = mapped_column(default=1.0)
+    step: Mapped[float] = mapped_column(default=1.0)
+    unit: Mapped[str | None] = mapped_column(String(32), default=None)
+    icon: Mapped[str | None] = mapped_column(String(16), default=None)
+    color: Mapped[str | None] = mapped_column(String(32), default=None)
+    encouragement: Mapped[str] = mapped_column(String(255), default="")
+    # RRULE frequency content: daily, chosen weekdays, or N times per week
+    # (TickTick's TT_TIMES extension). See app.habit_frequency.
+    frequency: Mapped[str] = mapped_column(String(255), default="FREQ=DAILY")
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    check_ins: Mapped[list["CheckIn"]] = relationship(
+        back_populates="habit", cascade="all, delete-orphan"
+    )
+
+
+class CheckIn(Base):
+    """A Check-in — one day's progress on a Habit: a date stamp and, for
+    Numeric habits, the accumulated value. Keyed by (habit, date) and
+    upserted, so re-taps and backfill corrections are idempotent.
+
+    Composition under a Habit (deleted with it), so no owner column —
+    ownership flows through the parent Habit.
+    """
+
+    __tablename__ = "check_ins"
+    __table_args__ = (UniqueConstraint("habit_id", "date"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id"), index=True)
+    # The local calendar day the user checked in (the caller's day, like the
+    # Smart Lists' `today` parameter) — never a UTC instant.
+    date: Mapped[date] = mapped_column(Date)
+    value: Mapped[float] = mapped_column(default=1.0)
+
+    habit: Mapped[Habit] = relationship(back_populates="check_ins")

@@ -1,6 +1,6 @@
 """Pydantic request/response models and the shared pagination envelope."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
@@ -10,6 +10,9 @@ Priority = Literal["none", "low", "medium", "high"]
 
 # How a List is displayed: flat or as a Kanban board of its Sections.
 ViewMode = Literal["list", "kanban"]
+
+# The two Habit types — named on the wire, like Priority.
+HabitType = Literal["boolean", "numeric"]
 
 
 def reject_explicit_null(value: object) -> object:
@@ -233,6 +236,74 @@ class CompletedOccurrenceRead(BaseModel):
     @field_serializer("completed_at", "due_date")
     def serialize_dates(self, value: datetime) -> str:
         return utc_z(value)
+
+
+class HabitCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    type: HabitType = "boolean"
+    # Numeric habits: goal is required, step defaults to 1, unit is optional.
+    # Boolean habits may not carry any of them (the router enforces both).
+    goal: float | None = Field(default=None, gt=0)
+    step: float | None = Field(default=None, gt=0)
+    unit: str | None = Field(default=None, min_length=1, max_length=32)
+    icon: str | None = Field(default=None, max_length=16)
+    color: str | None = Field(default=None, max_length=32)
+    encouragement: str = Field(default="", max_length=255)
+    frequency: str = Field(default="FREQ=DAILY", max_length=255)
+
+
+# PATCH fields: absent means "leave unchanged". An explicit null is rejected,
+# except unit / icon / color, where null clears the attribute.
+class HabitUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    type: HabitType | None = None
+    goal: float | None = Field(default=None, gt=0)
+    step: float | None = Field(default=None, gt=0)
+    unit: str | None = Field(default=None, min_length=1, max_length=32)
+    icon: str | None = Field(default=None, max_length=16)
+    color: str | None = Field(default=None, max_length=32)
+    encouragement: str | None = Field(default=None, max_length=255)
+    frequency: str | None = Field(default=None, max_length=255)
+
+    _reject_nulls = field_validator("name", "type", "goal", "step", "encouragement", "frequency")(
+        reject_explicit_null
+    )
+
+
+class HabitRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    type: HabitType
+    goal: float
+    step: float
+    unit: str | None
+    icon: str | None
+    color: str | None
+    encouragement: str
+    frequency: str
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        return utc_z(value)
+
+
+class CheckInPut(BaseModel):
+    """The upsert body: the day's whole value (1 for a Boolean tap; the
+    accumulated amount for a Numeric habit)."""
+
+    value: float = Field(default=1, gt=0)
+
+
+class CheckInRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    habit_id: int
+    date: date
+    value: float
 
 
 class TaskRead(BaseModel):
