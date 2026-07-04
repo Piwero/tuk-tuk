@@ -293,6 +293,11 @@ export function fetchCalendarTasks(rangeStart: string, rangeEnd: string): Promis
   );
 }
 
+/** Undated open tasks — the unscheduled panel's query. */
+export function fetchUnscheduledTasks(): Promise<Page<Task>> {
+  return request("/api/v1/tasks?scheduled=false&completed=false&limit=200");
+}
+
 /** Absent fields stay unchanged; explicit null is rejected by the API,
  * except section_id, where null moves the task out of its Section,
  * start_date / due_date / time_zone, where null clears the schedule, and

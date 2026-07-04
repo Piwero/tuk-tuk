@@ -77,8 +77,12 @@ export function App(): JSX.Element {
       return;
     }
     const fallback = lists.find((list) => list.is_inbox) ?? lists[0];
+    const next: View = fallback === undefined ? null : { kind: "list", id: fallback.id };
     setCompletedMode(false);
-    setView(fallback === undefined ? null : { kind: "list", id: fallback.id });
+    // Guard against a stale closure: a view switch may land between this
+    // effect's render and it running (e.g. the user clicks Calendar just as
+    // the lists load). Never stomp a view that changed in the meantime.
+    setView((current) => (current === view ? next : current));
   }, [lists, tags, view]);
 
   /** Fetch what the current view shows. Smart Lists and the completed view are

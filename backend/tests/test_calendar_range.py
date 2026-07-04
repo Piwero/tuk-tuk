@@ -94,3 +94,38 @@ def test_a_smart_view_and_a_range_are_exclusive(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_scheduled_false_lists_only_undated_tasks(client: TestClient) -> None:
+    """The unscheduled panel's query: open tasks without a date."""
+    make_task(client, "Dated", due_date="2026-07-10T15:00:00Z")
+    make_task(client, "All-day", due_date="2026-07-12T00:00:00Z", is_all_day=True)
+    make_task(client, "Undated open")
+    done = make_task(client, "Undated done")
+    client.patch(f"/api/v1/tasks/{done['id']}", json={"completed": True})
+
+    response = client.get("/api/v1/tasks?scheduled=false&completed=false")
+
+    assert response.status_code == 200, response.text
+    assert [task["title"] for task in response.json()["items"]] == ["Undated open"]
+
+
+def test_scheduled_true_lists_only_dated_tasks(client: TestClient) -> None:
+    make_task(client, "Dated", due_date="2026-07-10T15:00:00Z")
+    make_task(client, "Undated")
+
+    response = client.get("/api/v1/tasks?scheduled=true")
+
+    assert response.status_code == 200, response.text
+    assert [task["title"] for task in response.json()["items"]] == ["Dated"]
+
+
+def test_the_scheduled_filter_is_exclusive_with_views_and_ranges(client: TestClient) -> None:
+    for query in (
+        "scheduled=false&view=all",
+        "scheduled=false&range_start=2026-07-01&range_end=2026-07-31",
+    ):
+        response = client.get(f"/api/v1/tasks?{query}")
+
+        assert response.status_code == 422, query
+        assert response.json()["error"]["code"] == "validation_error"

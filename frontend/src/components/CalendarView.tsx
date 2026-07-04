@@ -1,15 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { createTask, fetchCalendarTasks, type Task } from "../api";
+import {
+  createTask,
+  fetchCalendarTasks,
+  fetchUnscheduledTasks,
+  updateTask,
+  type Task,
+  type TaskPatch,
+} from "../api";
 import {
   allDayCreate,
   blockSpan,
   calendarTitle,
+  dropPatch,
   entryTime,
   hourLabel,
   isBanner,
+  laneBanners,
   monthGridDays,
   rangeOf,
+  resizePatch,
   shiftAnchor,
   tasksOn,
   timedCreate,
@@ -17,6 +27,7 @@ import {
   type CalendarMode,
 } from "../calendar";
 import { localDayOf } from "../dates";
+import { readDragPayload, startDrag } from "../dnd";
 
 const MODES: CalendarMode[] = ["month", "week", "day"];
 const MODE_LABELS: Record<CalendarMode, string> = { month: "Month", week: "Week", day: "Day" };
@@ -43,17 +54,33 @@ function byKindThenTime(a: Task, b: Task): number {
   );
 }
 
+/** The drag-source props every calendar entry shares: it drags as its task. */
+function taskDragProps(
+  task: Task,
+): Pick<React.HTMLAttributes<HTMLElement>, "draggable" | "onDragStart"> {
+  return {
+    draggable: true,
+    onDragStart: (event) => startDrag(event, { kind: "task", id: task.id }),
+  };
+}
+
 export function CalendarView(): JSX.Element {
   const [mode, setMode] = useState<CalendarMode>("month");
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [unscheduled, setUnscheduled] = useState<Task[]>([]);
   const [draft, setDraft] = useState<CreateDraft | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [drag, setDrag] = useState<HourDrag | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const [start, end] = rangeOf(mode, anchor);
-    setTasks((await fetchCalendarTasks(start, end)).items);
+    const [inWindow, undated] = await Promise.all([
+      fetchCalendarTasks(start, end),
+      fetchUnscheduledTasks(),
+    ]);
+    setTasks(inWindow.items);
+    setUnscheduled(undated.items);
   }, [mode, anchor]);
 
   useEffect(() => {
@@ -95,6 +122,35 @@ export function CalendarView(): JSX.Element {
     setDrag(null);
   }
 
+  async function handleDrop(
+    event: React.DragEvent,
+    day: string,
+    hour: number | null,
+  ): Promise<void> {
+    const payload = readDragPayload(event);
+    if (payload === null) {
+      return;
+    }
+    const task = [...tasks, ...unscheduled].find((candidate) => candidate.id === payload.id);
+    if (task === undefined) {
+      return;
+    }
+    let patch: TaskPatch | null = null;
+    if (payload.kind === "task") {
+      patch = dropPatch(task, day, hour);
+    } else if (
+      (payload.kind === "resize-start" || payload.kind === "resize-end") &&
+      hour !== null
+    ) {
+      patch = resizePatch(task, payload.kind === "resize-start" ? "start" : "end", day, hour);
+    }
+    if (patch === null) {
+      return;
+    }
+    await updateTask(task.id, patch);
+    void load();
+  }
+
   function renderMonth(): JSX.Element {
     const days = monthGridDays(anchor);
     const anchorMonth = anchor.slice(0, 7);
@@ -112,6 +168,8 @@ export function CalendarView(): JSX.Element {
             aria-label={day}
             data-outside={day.slice(0, 7) !== anchorMonth || undefined}
             onClick={() => openAllDayDraft(day)}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => void handleDrop(event, day, null)}
           >
             <div className="month-cell-head">
               <span>{Number(day.slice(8))}</span>
@@ -133,6 +191,7 @@ export function CalendarView(): JSX.Element {
                   <div
                     key={task.id}
                     className="calendar-banner"
+                    {...taskDragProps(task)}
                     onClick={(event) => event.stopPropagation()}
                   >
                     {task.title}
@@ -141,6 +200,7 @@ export function CalendarView(): JSX.Element {
                   <div
                     key={task.id}
                     className="calendar-timed-entry"
+                    {...taskDragProps(task)}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <span className="entry-time">{entryTime(task)}</span> {task.title}
@@ -155,15 +215,23 @@ export function CalendarView(): JSX.Element {
 
   function renderTimeGrid(): JSX.Element {
     const days = mode === "week" ? weekDays(anchor) : [anchor];
-    const banners = tasks.filter(
-      (task) => isBanner(task) && days.some((day) => tasksOn([task], day).length > 0),
-    );
+    const firstDay = days[0] ?? anchor;
     return (
       <div className="time-grid">
         <div className="all-day-lane" aria-label="All day">
-          {banners.map((task) => (
-            <div key={task.id} className="calendar-banner">
-              {task.title}
+          {days.map((day) => (
+            <div
+              key={day}
+              className="all-day-cell"
+              aria-label={`${day} all-day`}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => void handleDrop(event, day, null)}
+            >
+              {laneBanners(tasks, day, firstDay).map((task) => (
+                <div key={task.id} className="calendar-banner" {...taskDragProps(task)}>
+                  {task.title}
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -195,6 +263,8 @@ export function CalendarView(): JSX.Element {
                       current !== null && current.day === day ? { ...current, to: hour } : current,
                     )
                   }
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => void handleDrop(event, day, hour)}
                 />
               ))}
               {tasksOn(tasks, day)
@@ -216,11 +286,32 @@ export function CalendarView(): JSX.Element {
                       data-start={start}
                       data-end={end}
                       style={{ top: `${top}%`, height: `${height}%` }}
+                      {...taskDragProps(task)}
                     >
+                      <div
+                        className="resize-handle resize-handle-top"
+                        role="button"
+                        draggable
+                        aria-label={`Resize start of "${task.title}"`}
+                        onDragStart={(event) => {
+                          event.stopPropagation();
+                          startDrag(event, { kind: "resize-start", id: task.id });
+                        }}
+                      />
                       <span className="block-title">{task.title}</span>
                       <span className="block-time">
                         {start}–{end}
                       </span>
+                      <div
+                        className="resize-handle resize-handle-bottom"
+                        role="button"
+                        draggable
+                        aria-label={`Resize end of "${task.title}"`}
+                        onDragStart={(event) => {
+                          event.stopPropagation();
+                          startDrag(event, { kind: "resize-end", id: task.id });
+                        }}
+                      />
                     </div>
                   );
                 })}
@@ -293,7 +384,19 @@ export function CalendarView(): JSX.Element {
           </button>
         </form>
       )}
-      {mode === "month" ? renderMonth() : renderTimeGrid()}
+      <div className="calendar-body">
+        {mode === "month" ? renderMonth() : renderTimeGrid()}
+        <aside className="unscheduled-panel" aria-label="Unscheduled">
+          <h3>Unscheduled</h3>
+          <ul>
+            {unscheduled.map((task) => (
+              <li key={task.id} {...taskDragProps(task)}>
+                {task.title}
+              </li>
+            ))}
+          </ul>
+        </aside>
+      </div>
     </div>
   );
 }

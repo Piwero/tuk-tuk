@@ -37,6 +37,18 @@ export function addDays(dayIso: string, days: number): string {
   return localDayOf(date);
 }
 
+const MS_PER_DAY = 86_400_000;
+
+/** Whole days from one YYYY-MM-DD to another (positive when `to` is later). */
+export function diffDays(to: string, from: string): number {
+  return Math.round((fromDayIso(to).getTime() - fromDayIso(from).getTime()) / MS_PER_DAY);
+}
+
+/** An instant shifted by exact 24-hour days, as the wire's UTC string. */
+export function shiftInstant(iso: string, days: number): string {
+  return new Date(new Date(iso).getTime() + days * MS_PER_DAY).toISOString();
+}
+
 /** Quick pick "Next Week": the Monday after the given day. */
 export function nextMonday(dayIso: string): string {
   const weekday = fromDayIso(dayIso).getDay(); // 0 = Sunday
