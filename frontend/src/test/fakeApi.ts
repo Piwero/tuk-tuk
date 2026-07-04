@@ -1,8 +1,9 @@
 import { vi } from "vitest";
 
-import { type Priority, type ViewMode } from "../api";
+import { type HabitType, type Priority, type ViewMode } from "../api";
 import { taskDayWindow } from "../calendar";
 import { addDays } from "../dates";
+import { habitDueOn } from "../habitFrequency";
 import { byName, SORT_GAP } from "../ordering";
 import { decrementCount, nextOccurrenceISO } from "./fakeRecurrence";
 
@@ -81,6 +82,27 @@ export interface FakeCompletedOccurrence {
   is_all_day: boolean;
 }
 
+export interface FakeHabit {
+  id: number;
+  name: string;
+  type: HabitType;
+  goal: number;
+  step: number;
+  unit: string | null;
+  icon: string | null;
+  color: string | null;
+  encouragement: string;
+  frequency: string;
+  created_at: string;
+}
+
+export interface FakeCheckIn {
+  id: number;
+  habit_id: number;
+  date: string;
+  value: number;
+}
+
 interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
@@ -88,6 +110,8 @@ interface FakeApiState {
   tags: FakeTag[];
   tasks: FakeTask[];
   completedOccurrences: FakeCompletedOccurrence[];
+  habits: FakeHabit[];
+  checkIns: FakeCheckIn[];
   requests: RecordedRequest[];
 }
 
@@ -110,6 +134,8 @@ let nextCheckItemId = 900;
 let nextTagId = 700;
 let nextSectionId = 800;
 let nextOccurrenceId = 950;
+let nextHabitId = 300;
+let nextCheckInId = 9000;
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
   const id = nextTaskId++;
@@ -178,6 +204,23 @@ export function fakeFolder(name: string, overrides: Partial<FakeFolder> = {}): F
   return { id, name, sort_order: id * SORT_GAP, ...overrides };
 }
 
+export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): FakeHabit {
+  return {
+    id: nextHabitId++,
+    name,
+    type: "boolean",
+    goal: 1,
+    step: 1,
+    unit: null,
+    icon: null,
+    color: null,
+    encouragement: "",
+    frequency: "FREQ=DAILY",
+    created_at: "2026-07-03T10:00:00Z",
+    ...overrides,
+  };
+}
+
 const nextOrder = (rows: { sort_order: number }[]): number =>
   Math.max(0, ...rows.map((row) => row.sort_order)) + SORT_GAP;
 
@@ -189,6 +232,8 @@ export function installFakeApi({
   tags = [],
   tasks = [],
   completedOccurrences = [],
+  habits = [],
+  checkIns = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -196,6 +241,8 @@ export function installFakeApi({
   tags?: FakeTag[];
   tasks?: FakeTask[];
   completedOccurrences?: FakeCompletedOccurrence[];
+  habits?: FakeHabit[];
+  checkIns?: FakeCheckIn[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -208,6 +255,8 @@ export function installFakeApi({
       tags: task.tags.map((tag) => ({ ...tag })),
     })),
     completedOccurrences: completedOccurrences.map((occurrence) => ({ ...occurrence })),
+    habits: habits.map((habit) => ({ ...habit })),
+    checkIns: checkIns.map((checkIn) => ({ ...checkIn })),
     requests: [],
   };
 
@@ -724,6 +773,94 @@ export function installFakeApi({
         );
         return new Response(null, { status: 204 });
       }
+    }
+    if (method === "GET" && url.pathname === "/api/v1/habits") {
+      const due = url.searchParams.get("due");
+      // Mirror the backend's due filter: daily and N-times-per-week habits
+      // are due every day; weekday habits only on their days.
+      const items = state.habits.filter(
+        (habit) => due === null || habitDueOn(habit.frequency, due),
+      );
+      return json(page(items));
+    }
+    if (method === "POST" && url.pathname === "/api/v1/habits") {
+      const input = body as { name: string } & Partial<Omit<FakeHabit, "id" | "name">>;
+      const created = fakeHabit(input.name, input);
+      state.habits.push(created);
+      return json(created, 201);
+    }
+    const habitMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)$/);
+    if (habitMatch) {
+      const habitId = Number(habitMatch[1]);
+      const habit = state.habits.find((h) => h.id === habitId);
+      if (!habit) {
+        return notFound(`Habit ${habitId} not found`);
+      }
+      if (method === "PATCH") {
+        // Mirror the backend: becoming Numeric requires a goal in the same
+        // request, and becoming Boolean sweeps the goal fields back.
+        const patch = body as { type?: HabitType; goal?: number };
+        if (patch.type === "numeric" && habit.type === "boolean" && patch.goal === undefined) {
+          return json(
+            {
+              error: { code: "invalid_habit", message: "A Numeric habit requires a goal" },
+            },
+            422,
+          );
+        }
+        Object.assign(habit, body);
+        if (habit.type === "boolean") {
+          Object.assign(habit, { goal: 1, step: 1, unit: null });
+        }
+        return json(habit);
+      }
+      if (method === "DELETE") {
+        state.habits = state.habits.filter((h) => h.id !== habitId);
+        state.checkIns = state.checkIns.filter((c) => c.habit_id !== habitId);
+        return new Response(null, { status: 204 });
+      }
+    }
+    const checkInMatch = url.pathname.match(
+      /^\/api\/v1\/habits\/(\d+)\/check-ins\/(\d{4}-\d{2}-\d{2})$/,
+    );
+    if (checkInMatch) {
+      const habitId = Number(checkInMatch[1]);
+      const day = checkInMatch[2] as string;
+      if (!state.habits.some((h) => h.id === habitId)) {
+        return notFound(`Habit ${habitId} not found`);
+      }
+      const existing = state.checkIns.find((c) => c.habit_id === habitId && c.date === day);
+      if (method === "PUT") {
+        // Mirror the backend's upsert: one row per (habit, date), whatever
+        // the tap count — PUT replaces the day's whole value.
+        const value = (body as { value?: number }).value ?? 1;
+        if (existing) {
+          existing.value = value;
+          return json(existing);
+        }
+        const created: FakeCheckIn = { id: nextCheckInId++, habit_id: habitId, date: day, value };
+        state.checkIns.push(created);
+        return json(created);
+      }
+      if (method === "DELETE") {
+        if (!existing) {
+          return notFound(`No check-in on ${day} for habit ${habitId}`);
+        }
+        state.checkIns = state.checkIns.filter((c) => c !== existing);
+        return new Response(null, { status: 204 });
+      }
+    }
+    if (method === "GET" && url.pathname === "/api/v1/check-ins") {
+      const day = url.searchParams.get("date");
+      const habitId = url.searchParams.get("habit_id");
+      const items = state.checkIns
+        .filter(
+          (checkIn) =>
+            (day === null || checkIn.date === day) &&
+            (habitId === null || checkIn.habit_id === Number(habitId)),
+        )
+        .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+      return json(page(items));
     }
     return notFound(`No route: ${method} ${url.pathname}`);
   });

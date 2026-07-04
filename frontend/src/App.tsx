@@ -25,6 +25,7 @@ import { localDayOf } from "./dates";
 import { type GroupBy, type SortBy } from "./grouping";
 import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
+import { HabitsView } from "./components/HabitsView";
 import { KanbanView } from "./components/KanbanView";
 import { QuickAdd } from "./components/QuickAdd";
 import { SearchView, type SearchState } from "./components/SearchView";
@@ -33,12 +34,13 @@ import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 
 /** What the main pane shows: one List, one Tag, one computed Smart List, the
- * Calendar (which fetches its own window), or Search results. */
+ * Calendar or Habits screens (which fetch their own data), or Search results. */
 type View =
   | { kind: "list"; id: number }
   | { kind: "tag"; id: number }
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar" }
+  | { kind: "habits" }
   | { kind: "search"; search: SearchState }
   | null;
 
@@ -70,7 +72,12 @@ export function App(): JSX.Element {
   // Keep a valid view: default to the Inbox, and fall back to it when the
   // viewed list or tag disappears (e.g. it was deleted).
   useEffect(() => {
-    if (view?.kind === "smart" || view?.kind === "calendar" || view?.kind === "search") {
+    if (
+      view?.kind === "smart" ||
+      view?.kind === "calendar" ||
+      view?.kind === "habits" ||
+      view?.kind === "search"
+    ) {
       return;
     }
     if (view?.kind === "list" && lists.some((list) => list.id === view.id)) {
@@ -91,7 +98,7 @@ export function App(): JSX.Element {
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
   const loadTasks = useCallback(async (): Promise<void> => {
-    if (view === null || view.kind === "calendar") {
+    if (view === null || view.kind === "calendar" || view.kind === "habits") {
       return;
     }
     if (completedMode) {
@@ -211,10 +218,12 @@ export function App(): JSX.Element {
         selectedTagId={view?.kind === "tag" ? view.id : null}
         selectedSmart={smartView}
         calendarSelected={view?.kind === "calendar"}
+        habitsSelected={view?.kind === "habits"}
         onSelect={(listId) => switchView({ kind: "list", id: listId })}
         onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
         onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
         onSelectCalendar={() => switchView({ kind: "calendar" })}
+        onSelectHabits={() => switchView({ kind: "habits" })}
         onSearch={(query) =>
           switchView({
             kind: "search",
@@ -244,9 +253,11 @@ export function App(): JSX.Element {
                   ? SMART_LABELS[smartView]
                   : view?.kind === "calendar"
                     ? "Calendar"
-                    : view?.kind === "search"
-                      ? "Search"
-                      : "tuk-tuk")}
+                    : view?.kind === "habits"
+                      ? "Habits"
+                      : view?.kind === "search"
+                        ? "Search"
+                        : "tuk-tuk")}
           </h1>
           {selectedList !== null && !completedMode && (
             <button
@@ -315,6 +326,8 @@ export function App(): JSX.Element {
         )}
         {view?.kind === "calendar" ? (
           <CalendarView />
+        ) : view?.kind === "habits" ? (
+          <HabitsView />
         ) : view?.kind === "search" ? (
           <SearchView
             tasks={tasks}
