@@ -298,6 +298,34 @@ export function fetchUnscheduledTasks(): Promise<Page<Task>> {
   return request("/api/v1/tasks?scheduled=false&completed=false&limit=200");
 }
 
+/** The filters a search combines with its query — null means "any". */
+export interface SearchFilters {
+  listId: number | null;
+  tagId: number | null;
+  priority: Priority | null;
+  completed: boolean | null;
+}
+
+/** Tasks matching the query in title, description or Check Item titles,
+ * narrowed by the filters. Callers skip the call for a blank query — the
+ * API returns nothing for one. */
+export function fetchSearchTasks(query: string, filters: SearchFilters): Promise<Page<Task>> {
+  const params = new URLSearchParams({ search: query, limit: "200" });
+  if (filters.listId !== null) {
+    params.set("list_id", String(filters.listId));
+  }
+  if (filters.tagId !== null) {
+    params.set("tag_id", String(filters.tagId));
+  }
+  if (filters.priority !== null) {
+    params.set("priority", filters.priority);
+  }
+  if (filters.completed !== null) {
+    params.set("completed", String(filters.completed));
+  }
+  return request(`/api/v1/tasks?${params.toString()}`);
+}
+
 /** Absent fields stay unchanged; explicit null is rejected by the API,
  * except section_id, where null moves the task out of its Section,
  * start_date / due_date / time_zone, where null clears the schedule, and

@@ -45,6 +45,7 @@ interface SidebarProps {
   onSelectTag: (tagId: number) => void;
   onSelectSmart: (view: SmartView) => void;
   onSelectCalendar: () => void;
+  onSearch: (query: string) => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
@@ -85,6 +86,7 @@ export function Sidebar({
   onSelectTag,
   onSelectSmart,
   onSelectCalendar,
+  onSearch,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
@@ -348,6 +350,16 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
+      <form
+        role="search"
+        className="sidebar-search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSearch(new FormData(event.currentTarget).get("query")?.toString() ?? "");
+        }}
+      >
+        <input type="search" name="query" aria-label="Search tasks" placeholder="Search…" />
+      </form>
       <nav aria-label="Smart Lists" className="smart-lists">
         {(Object.keys(SMART_LABELS) as SmartView[]).map((view) => (
           <button

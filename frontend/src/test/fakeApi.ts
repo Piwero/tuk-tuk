@@ -379,13 +379,16 @@ export function installFakeApi({
       const rangeStart = url.searchParams.get("range_start");
       const rangeEnd = url.searchParams.get("range_end");
       const scheduled = url.searchParams.get("scheduled");
+      const search = url.searchParams.get("search");
+      const priority = url.searchParams.get("priority");
       // Smart Lists are computed over open tasks only (mirrors the backend).
       const completed = view !== null ? "false" : url.searchParams.get("completed");
       let items = state.tasks.filter(
         (task) =>
           (listId === null || task.list_id === Number(listId)) &&
           (tagId === null || task.tags.some((tag) => tag.id === Number(tagId))) &&
-          (completed === null || task.completed === (completed === "true")),
+          (completed === null || task.completed === (completed === "true")) &&
+          (priority === null || task.priority === priority),
       );
       if (scheduled !== null && (view !== null || rangeStart !== null)) {
         return json(
@@ -397,6 +400,30 @@ export function installFakeApi({
           },
           422,
         );
+      }
+      if (search !== null && (view !== null || rangeStart !== null || scheduled !== null)) {
+        return json(
+          {
+            error: {
+              code: "validation_error",
+              message: "search is exclusive with view, range and scheduled filters",
+            },
+          },
+          422,
+        );
+      }
+      if (search !== null) {
+        // Mirrors the backend: empty queries match nothing, others match
+        // titles, descriptions and Check Item titles case-insensitively.
+        const query = search.trim().toLowerCase();
+        items =
+          query === ""
+            ? []
+            : items.filter((task) =>
+                [task.title, task.description, ...task.check_items.map((item) => item.title)].some(
+                  (text) => text.toLowerCase().includes(query),
+                ),
+              );
       }
       if (scheduled !== null) {
         items = items.filter((task) => (task.due_date !== null) === (scheduled === "true"));

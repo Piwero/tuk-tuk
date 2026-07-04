@@ -2,11 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-
-def make_task(client: TestClient, title: str, **fields: object) -> dict:
-    response = client.post("/api/v1/tasks", json={"title": title, **fields})
-    assert response.status_code == 201, response.text
-    return response.json()
+from tests.conftest import make_task
 
 
 def titles(response_json: dict) -> list[str]:
