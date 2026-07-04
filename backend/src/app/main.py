@@ -25,6 +25,7 @@ from app.routers import (
     sections,
     tags,
     tasks,
+    timers,
 )
 
 INBOX_NAME = "Inbox"
@@ -59,12 +60,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(completed_occurrences.router)
     app.include_router(folders.router)
     app.include_router(focus_sessions.router)
+    app.include_router(focus_sessions.stats_router)
     app.include_router(habits.router)
     app.include_router(habits.check_ins_router)
     app.include_router(lists.router)
     app.include_router(sections.router)
     app.include_router(tags.router)
     app.include_router(tasks.router)
+    app.include_router(timers.router)
 
     @app.get("/health")
     def health() -> dict[str, str]:

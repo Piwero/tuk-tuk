@@ -6,18 +6,25 @@ mode, start/end, pause duration, optional note, and at most one link to a
 Task or Habit.
 """
 
-from datetime import datetime
+from datetime import UTC, date, datetime, tzinfo
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
+from app.focus_stats import daily_totals, linked_totals, session_day, weekly_totals
 from app.models import FocusSession, Habit, Task
 from app.schemas import (
+    FocusDayTotal,
+    FocusHabitTotal,
     FocusSessionCreate,
     FocusSessionRead,
     FocusSessionUpdate,
+    FocusStats,
+    FocusTaskTotal,
+    FocusWeekTotal,
     Page,
     as_utc,
 )
@@ -128,3 +135,69 @@ async def delete_focus_session(session_id: int, session: SessionDep) -> None:
     focus_session = await get_focus_session_or_404(session_id, session)
     await session.delete(focus_session)
     await session.commit()
+
+
+stats_router = APIRouter(prefix="/api/v1/focus-stats", tags=["focus-stats"])
+
+
+@stats_router.get("")
+async def read_focus_stats(
+    session: SessionDep,
+    start: date,
+    end: date,
+    tz: str | None = None,
+) -> FocusStats:
+    """Focus statistics over the inclusive [start, end] day range (per the
+    PRD: computed, never stored): totals by day and Monday-started week, and
+    per-Task / per-Habit attribution of linked time. A session counts toward
+    the day it started, read in `tz` (the caller's IANA timezone; UTC when
+    absent).
+    """
+    if start > end:
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message="start must not be after end",
+        )
+    zone: tzinfo = UTC
+    if tz is not None:
+        try:
+            zone = ZoneInfo(tz)
+        except (KeyError, ValueError):
+            raise APIError(
+                status_code=422,
+                code="validation_error",
+                message=f"Unknown IANA timezone {tz!r}",
+            ) from None
+    rows = (await session.scalars(select(FocusSession).order_by(FocusSession.id))).all()
+    # Day membership needs the caller's timezone, which portable SQL can't
+    # reach — the range filter runs in Python (like the Smart Lists).
+    in_range = [(row, day) for row in rows if start <= (day := session_day(row, zone)) <= end]
+    task_totals = linked_totals(in_range, "task_id")
+    habit_totals = linked_totals(in_range, "habit_id")
+    task_titles = {
+        task.id: task.title
+        for task in await session.scalars(select(Task).where(Task.id.in_(task_totals)))
+    }
+    habit_names = {
+        habit.id: habit.name
+        for habit in await session.scalars(select(Habit).where(Habit.id.in_(habit_totals)))
+    }
+    return FocusStats(
+        days=[
+            FocusDayTotal(date=day, seconds=seconds)
+            for day, seconds in daily_totals(in_range).items()
+        ],
+        weeks=[
+            FocusWeekTotal(start=monday, seconds=seconds)
+            for monday, seconds in weekly_totals(in_range).items()
+        ],
+        tasks=[
+            FocusTaskTotal(task_id=task_id, title=task_titles[task_id], seconds=seconds)
+            for task_id, seconds in task_totals.items()
+        ],
+        habits=[
+            FocusHabitTotal(habit_id=habit_id, name=habit_names[habit_id], seconds=seconds)
+            for habit_id, seconds in habit_totals.items()
+        ],
+    )

@@ -14,7 +14,7 @@ from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.habit_frequency import due_on, validate_frequency
 from app.habit_stats import current_streak, intensity
-from app.models import CheckIn, FocusSession, Habit
+from app.models import CheckIn, FocusSession, Habit, Timer
 from app.schemas import (
     CheckInPut,
     CheckInRead,
@@ -136,6 +136,7 @@ async def delete_habit(habit_id: int, session: SessionDep) -> None:
     await session.execute(
         update(FocusSession).where(FocusSession.habit_id == habit_id).values(habit_id=None)
     )
+    await session.execute(update(Timer).where(Timer.habit_id == habit_id).values(habit_id=None))
     await session.delete(habit)
     await session.commit()
 
