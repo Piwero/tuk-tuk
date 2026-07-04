@@ -5,14 +5,17 @@
  * always renders inside it.
  */
 
-import { type Task, type TaskCreateInput } from "./api";
+import { type Task, type TaskCreateInput, type TaskPatch } from "./api";
 import {
   addDays,
   allDayInstant,
+  allDaySchedule,
   browserTimeZone,
+  diffDays,
   fromDayIso,
   instantOf,
   localDayOf,
+  shiftInstant,
   shortDayLabel,
   zonedDay,
   zonedTime,
@@ -43,6 +46,22 @@ export function tasksOn(tasks: Task[], day: string): Task[] {
   return tasks.filter((task) => {
     const window = taskDayWindow(task);
     return window !== null && window[0] <= day && day <= window[1];
+  });
+}
+
+/** The banners rendered in one all-day lane cell: those whose window starts
+ * that day, or started before the visible range (they enter at its first
+ * day). Each banner appears in exactly one cell — its drag handle. */
+export function laneBanners(tasks: Task[], day: string, firstDay: string): Task[] {
+  return tasks.filter((task) => {
+    const window = taskDayWindow(task);
+    return (
+      isBanner(task) &&
+      window !== null &&
+      window[0] <= day &&
+      day <= window[1] &&
+      (window[0] === day || (window[0] < firstDay && day === firstDay))
+    );
   });
 }
 
@@ -142,6 +161,14 @@ export function calendarTitle(mode: CalendarMode, anchorDay: string): string {
 /** Zero-padded "HH:00" — hour-cell labels and drag-created times. */
 export const hourLabel = (hour: number): string => `${String(hour).padStart(2, "0")}:00`;
 
+/** The wall-clock time an hour-cell gesture ends at. Covering the last cell
+ * ends at 23:59 — midnight would leak into the next day, which the schedule
+ * invariant (a timed task stays within one calendar day) rejects. */
+const hourEndTime = (hour: number): string => (hour >= 24 ? "23:59" : hourLabel(hour));
+
+/** The last instant a timed task may end and still stay within its day. */
+const dayEnd = (dayIso: string): number => new Date(instantOf(dayIso, "23:59")).getTime();
+
 /** The create payload for a Month-cell click: an all-day task on that day. */
 export function allDayCreate(title: string, dayIso: string): TaskCreateInput {
   return {
@@ -162,8 +189,88 @@ export function timedCreate(
   return {
     title,
     start_date: instantOf(dayIso, hourLabel(startHour)),
-    due_date: instantOf(dayIso, hourLabel(endHour)),
+    due_date: instantOf(dayIso, hourEndTime(endHour)),
     is_all_day: false,
     time_zone: browserTimeZone(),
   };
+}
+
+/** The schedule patch for a task dropped on a calendar cell (hour is null on
+ * a Month cell).
+ *
+ * A dated task moves. A Month drop shifts its whole window so it starts on
+ * the target day — span and timezone preserved, times shifted by exact
+ * 24-hour days (across a DST transition the wall-clock hour drifts). An hour
+ * drop restarts it at that cell in the browser's timezone (duration
+ * preserved, capped at 23:59 to stay within the day; an all-day task becomes
+ * a one-hour block). An undated task gains a schedule: all-day on that day,
+ * or a one-hour block at that hour. */
+export function dropPatch(task: Task, dayIso: string, hour: number | null): TaskPatch {
+  if (hour === null) {
+    const window = taskDayWindow(task);
+    if (window === null || task.due_date === null) {
+      // Undated (both facts restate it): gains an all-day schedule that day.
+      return allDaySchedule(null, dayIso);
+    }
+    const days = diffDays(dayIso, window[0]);
+    if (task.is_all_day) {
+      return {
+        start_date:
+          task.start_date === null
+            ? undefined
+            : allDayInstant(addDays(task.start_date.slice(0, 10), days)),
+        due_date: allDayInstant(addDays(task.due_date.slice(0, 10), days)),
+      };
+    }
+    return {
+      start_date: task.start_date === null ? undefined : shiftInstant(task.start_date, days),
+      due_date: shiftInstant(task.due_date, days),
+    };
+  }
+  const duration =
+    task.start_date !== null && task.due_date !== null && !task.is_all_day
+      ? new Date(task.due_date).getTime() - new Date(task.start_date).getTime()
+      : 3_600_000;
+  const start = new Date(instantOf(dayIso, hourLabel(hour)));
+  const due = new Date(Math.min(start.getTime() + duration, dayEnd(dayIso)));
+  return {
+    start_date: start.toISOString(),
+    due_date: due.toISOString(),
+    is_all_day: false,
+    time_zone: browserTimeZone(),
+  };
+}
+
+/** The patch for a block edge dropped on an hour cell, or null when the drop
+ * is invalid: another day's column (a timed task stays within one day), or an
+ * edge crossing its opposite. Dropping the bottom edge on a cell extends the
+ * block through that cell; the top edge starts it there. A due-only block has
+ * no start to cross: its due simply moves. The new instant is built in the
+ * browser's timezone and the task's own is left untouched — the same thing
+ * for every v1 write, which always schedules in the browser's timezone. */
+export function resizePatch(
+  task: Task,
+  edge: "start" | "end",
+  dayIso: string,
+  hour: number,
+): TaskPatch | null {
+  if (task.due_date === null || task.is_all_day) {
+    return null;
+  }
+  if (zonedDay(task.due_date, task.time_zone) !== dayIso) {
+    return null;
+  }
+  if (edge === "start") {
+    const start = instantOf(dayIso, hourLabel(hour));
+    if (new Date(start).getTime() >= new Date(task.due_date).getTime()) {
+      return null;
+    }
+    return { start_date: start };
+  }
+  const due = instantOf(dayIso, hourEndTime(hour + 1));
+  const startMs = task.start_date === null ? null : new Date(task.start_date).getTime();
+  if (startMs !== null && new Date(due).getTime() <= startMs) {
+    return null;
+  }
+  return { due_date: due };
 }

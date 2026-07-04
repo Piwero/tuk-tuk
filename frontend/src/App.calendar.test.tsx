@@ -1,25 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
+import { openCalendar, pinCalendarClock } from "./test/calendar";
 import { fakeTask, installFakeApi, type RecordedRequest } from "./test/fakeApi";
 
-// All tests pin the clock to Friday 2026-07-03, local noon, so "today" and
-// every view window is deterministic in any timezone. (The suite runs in UTC,
-// so local wall-clock times equal the stored UTC instants.)
-beforeEach(() => {
-  vi.useFakeTimers({ shouldAdvanceTime: true });
-  vi.setSystemTime(new Date(2026, 6, 3, 12, 0, 0));
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
-async function openCalendar(): Promise<void> {
-  fireEvent.click(await screen.findByRole("button", { name: "Calendar" }));
-  await screen.findByRole("heading", { name: "July 2026" });
-}
+pinCalendarClock();
 
 const taskPosts = (requests: RecordedRequest[]): unknown[] =>
   requests.filter((r) => r.method === "POST" && r.url === "/api/v1/tasks").map((r) => r.body);
@@ -64,7 +50,11 @@ describe("The Month view", () => {
     const standupDay = screen.getByLabelText("2026-07-06");
     expect(within(standupDay).getByText("Standup")).toBeInTheDocument();
     expect(within(standupDay).getByText("09:00")).toBeInTheDocument();
-    expect(screen.queryByText("Someday")).not.toBeInTheDocument();
+    // Undated: listed once, in the unscheduled panel — never on the grid.
+    expect(
+      within(screen.getByRole("complementary", { name: "Unscheduled" })).getByText("Someday"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Someday")).toHaveLength(1);
   });
 
   it("navigates previous / next / today", async () => {
@@ -224,5 +214,26 @@ describe("The Week and Day views", () => {
     fireEvent.mouseUp(screen.getByText("14:00"));
 
     expect(await screen.findByRole("textbox", { name: "New task title" })).toBeInTheDocument();
+  });
+
+  it("caps a drag through the last hour cell at 23:59, within the day", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openCalendar();
+
+    fireEvent.click(screen.getByRole("button", { name: "Day" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
+
+    fireEvent.mouseDown(screen.getByLabelText("2026-07-03 23:00"));
+    fireEvent.mouseUp(screen.getByLabelText("2026-07-03 23:00"));
+    const input = await screen.findByRole("textbox", { name: "New task title" });
+    fireEvent.change(input, { target: { value: "Night owl" } });
+    fireEvent.submit(input);
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toMatchObject({
+      start_date: "2026-07-03T23:00:00.000Z",
+      due_date: "2026-07-03T23:59:00.000Z",
+    });
   });
 });

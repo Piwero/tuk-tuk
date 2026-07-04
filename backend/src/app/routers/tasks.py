@@ -148,6 +148,7 @@ async def read_tasks(
     list_id: int | None = None,
     tag_id: int | None = None,
     completed: bool | None = None,
+    scheduled: bool | None = None,
     view: SmartView | None = None,
     today: date | None = None,
     range_start: date | None = None,
@@ -159,6 +160,7 @@ async def read_tasks(
     overrides `completed`), judged against the caller's local day `today`.
     `range_start`/`range_end` (inclusive calendar days) keep tasks whose
     scheduled days intersect the window — the calendar's query.
+    `scheduled=false` keeps only undated tasks — the unscheduled panel's query.
     `completed=true` is the completed view: newest completion first.
     """
     if view is not None:
@@ -187,6 +189,12 @@ async def read_tasks(
             code="validation_error",
             message="range_start must not be after range_end",
         )
+    if scheduled is not None and (view is not None or range_start is not None):
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message="the scheduled filter is exclusive with view and range filters",
+        )
     query = select(Task)
     if list_id is not None:
         query = query.where(Task.list_id == list_id)
@@ -194,6 +202,8 @@ async def read_tasks(
         query = query.where(Task.tags.any(Tag.id == tag_id))
     if completed is not None:
         query = query.where(Task.completed == completed)
+    if scheduled is not None:
+        query = query.where(Task.due_date.is_not(None) if scheduled else Task.due_date.is_(None))
     order = (
         (Task.completed_at.desc(), Task.id.desc())
         if completed is True

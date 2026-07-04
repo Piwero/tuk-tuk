@@ -378,6 +378,7 @@ export function installFakeApi({
       const today = url.searchParams.get("today");
       const rangeStart = url.searchParams.get("range_start");
       const rangeEnd = url.searchParams.get("range_end");
+      const scheduled = url.searchParams.get("scheduled");
       // Smart Lists are computed over open tasks only (mirrors the backend).
       const completed = view !== null ? "false" : url.searchParams.get("completed");
       let items = state.tasks.filter(
@@ -386,6 +387,20 @@ export function installFakeApi({
           (tagId === null || task.tags.some((tag) => tag.id === Number(tagId))) &&
           (completed === null || task.completed === (completed === "true")),
       );
+      if (scheduled !== null && (view !== null || rangeStart !== null)) {
+        return json(
+          {
+            error: {
+              code: "validation_error",
+              message: "the scheduled filter is exclusive with view and range filters",
+            },
+          },
+          422,
+        );
+      }
+      if (scheduled !== null) {
+        items = items.filter((task) => (task.due_date !== null) === (scheduled === "true"));
+      }
       if (view === "today" || view === "next7") {
         if (today === null) {
           return json({ error: { code: "validation_error", message: "today is required" } }, 422);
