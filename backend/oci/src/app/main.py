@@ -15,7 +15,7 @@ from app.config import settings as default_settings
 from app.db import run_migrations
 from app.errors import register_error_handlers
 from app.models import TaskList
-from app.routers import (
+from app.routers.v1 import (
     check_items,
     completed_occurrences,
     focus_sessions,
