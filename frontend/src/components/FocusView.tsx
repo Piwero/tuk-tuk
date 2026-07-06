@@ -21,6 +21,7 @@ import {
 import { linkFields, linkOf, type FocusLink } from "../focusLink";
 import { FocusSessionForm, type FocusSessionFormValues } from "./FocusSessionForm";
 import { FocusStatsPanel } from "./FocusStatsPanel";
+import { Icon } from "./Icon";
 import { LinkSelect } from "./LinkSelect";
 import { TimerForm } from "./TimerForm";
 
@@ -346,14 +347,14 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
                     aria-label={`Edit timer ${timer.name}`}
                     onClick={() => setTimerEditor({ mode: "edit", id: timer.id })}
                   >
-                    ✎
+                    <Icon name="pencil" />
                   </button>
                   <button
                     type="button"
                     aria-label={`Delete timer ${timer.name}`}
                     onClick={() => void handleDeleteTimer(timer)}
                   >
-                    ✕
+                    <Icon name="x" />
                   </button>
                 </span>
               </li>
@@ -405,14 +406,14 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
                     aria-label="Edit session"
                     onClick={() => setEditor({ mode: "edit", id: session.id })}
                   >
-                    ✎
+                    <Icon name="pencil" />
                   </button>
                   <button
                     type="button"
                     aria-label="Delete session"
                     onClick={() => void handleDelete(session)}
                   >
-                    ✕
+                    <Icon name="x" />
                   </button>
                 </span>
               </li>

@@ -1,5 +1,6 @@
 import { deleteTask, updateTask, type CompletedOccurrence, type Task } from "../api";
 import { localDayOf } from "../dates";
+import { Icon } from "./Icon";
 
 interface CompletedViewProps {
   tasks: Task[];
@@ -86,7 +87,7 @@ export function CompletedView({
               aria-label={`Completed occurrence of ${row.occurrence.title}`}
             >
               <span className="repeat-glyph" aria-hidden="true">
-                ↻
+                <Icon name="repeat" size={14} />
               </span>
               <span className="completed">{row.occurrence.title}</span>
               <span className="date-chip">{localDayOf(new Date(row.occurrence.completed_at))}</span>

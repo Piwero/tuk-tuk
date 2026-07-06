@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { fetchHabitStats, putCheckIn, removeCheckIn, type Habit, type HabitStats } from "../api";
 import { localDayOf } from "../dates";
+import { Icon } from "./Icon";
 
 // Fixed locale, deterministic under test (matches the app's other labels).
 const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
@@ -74,11 +75,11 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Eleme
       <div className="habit-month">
         <div className="habit-month-nav">
           <button type="button" aria-label="Previous month" onClick={() => stepMonth(-1)}>
-            ‹
+            <Icon name="chevron-left" />
           </button>
           <span className="habit-month-label">{MONTH_YEAR.format(monthStart)}</span>
           <button type="button" aria-label="Next month" onClick={() => stepMonth(1)}>
-            ›
+            <Icon name="chevron-right" />
           </button>
         </div>
         <div className="habit-month-grid">

@@ -27,6 +27,7 @@ import { PRIORITY_LABELS } from "../grouping";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
 import { RepeatFieldset } from "./RepeatFieldset";
+import { Icon } from "./Icon";
 
 interface TaskDetailProps {
   task: Task;
@@ -281,7 +282,7 @@ export function TaskDetail({
           />
         </form>
         <button type="button" aria-label="Close details" onClick={onClose}>
-          ✕
+          <Icon name="x" />
         </button>
       </div>
       <label className="task-priority">
@@ -427,7 +428,7 @@ export function TaskDetail({
                       aria-label={`Remove reminder ${reminderLabel(offset)}`}
                       onClick={() => void removeReminder(offset)}
                     >
-                      ✕
+                      <Icon name="x" />
                     </button>
                   </li>
                 ))}
@@ -572,14 +573,14 @@ export function TaskDetail({
                     aria-label={`Edit check item ${item.title}`}
                     onClick={() => setItemEditor({ id: item.id, title: item.title })}
                   >
-                    ✎
+                    <Icon name="pencil" />
                   </button>
                   <button
                     type="button"
                     aria-label={`Delete check item ${item.title}`}
                     onClick={() => void removeCheckItem(item)}
                   >
-                    ✕
+                    <Icon name="x" />
                   </button>
                 </span>
               </li>
