@@ -19,6 +19,11 @@ spec:
       labels:
         app: backend
     spec:
+      # The Service is named "backend", so Kubernetes would inject
+      # BACKEND_PORT=tcp://<clusterIP>:8000 as a legacy service-link env var,
+      # which collides with the pydantic Settings.backend_port int field and
+      # crashes the app on startup.
+      enableServiceLinks: false
       imagePullSecrets:
         - name: tuk-tuk-ghcr
       affinity:
