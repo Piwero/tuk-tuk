@@ -289,4 +289,47 @@ describe("The Week view", () => {
       within(screen.getByRole("complementary", { name: "Unscheduled" })).getByText("Weekend plan"),
     ).toBeInTheDocument();
   });
+
+  it("displays task cards with time, icon, title, and duration", async () => {
+    installFakeApi({
+      tasks: [
+        // 30-minute task
+        fakeTask("Quick sync", {
+          start_date: "2026-07-03T09:00:00Z",
+          due_date: "2026-07-03T09:30:00Z",
+          time_zone: "UTC",
+        }),
+        // 1-hour task
+        fakeTask("Standup", {
+          start_date: "2026-07-03T10:00:00Z",
+          due_date: "2026-07-03T11:00:00Z",
+          time_zone: "UTC",
+        }),
+        // 1.5-hour task
+        fakeTask("Design review", {
+          start_date: "2026-07-04T14:00:00Z",
+          due_date: "2026-07-04T15:30:00Z",
+          time_zone: "UTC",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openWeek();
+
+    // Verify task cards display start time
+    expect(await screen.findByText("09:00")).toBeInTheDocument(); // Quick sync start
+    expect(await screen.findByText("10:00")).toBeInTheDocument(); // Standup start
+    expect(await screen.findByText("14:00")).toBeInTheDocument(); // Design review start
+
+    // Verify task titles are visible
+    expect(screen.getByText("Quick sync")).toBeInTheDocument();
+    expect(screen.getByText("Standup")).toBeInTheDocument();
+    expect(screen.getByText("Design review")).toBeInTheDocument();
+
+    // Verify durations are correctly formatted
+    expect(screen.getByText("30m")).toBeInTheDocument(); // 30 minutes
+    expect(screen.getAllByText("1h")).toHaveLength(1); // 1 hour (Standup)
+    expect(screen.getByText("1h 30m")).toBeInTheDocument(); // 1 hour 30 minutes
+  });
 });
