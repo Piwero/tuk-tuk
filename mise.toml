@@ -174,7 +174,12 @@ esac
 
 # Generate the changelog for the pending version and commit it, so the tag
 # points at a commit that already contains its own changelog entry.
-git-cliff --config cliff.toml --tag "$next" --unreleased --prepend CHANGELOG.md
+# --prepend requires an existing file; fall back to --output on first release.
+if [ -f CHANGELOG.md ]; then
+  git-cliff --config cliff.toml --tag "$next" --unreleased --prepend CHANGELOG.md
+else
+  git-cliff --config cliff.toml --tag "$next" --unreleased --output CHANGELOG.md
+fi
 
 if [ -z "$(git status --porcelain CHANGELOG.md)" ]; then
   echo "error: git-cliff produced no CHANGELOG.md change; aborting" >&2
