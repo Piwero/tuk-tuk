@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.models import Timer
-from app.routers.focus_sessions import validate_link
+from app.routers.v1.focus_sessions import validate_link
 from app.schemas import Page, TimerCreate, TimerRead, TimerUpdate
 
 router = APIRouter(prefix="/api/v1/timers", tags=["timers"])

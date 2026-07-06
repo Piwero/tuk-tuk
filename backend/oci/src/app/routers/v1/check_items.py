@@ -10,7 +10,7 @@ from app.db import SessionDep
 from app.errors import NotFoundError
 from app.models import SORT_GAP, CheckItem, Task, utcnow
 from app.recurrence import advance_in_place
-from app.routers.tasks import get_task_or_404
+from app.routers.v1.tasks import get_task_or_404
 from app.schemas import CheckItemCreate, CheckItemUpdate, TaskRead
 
 router = APIRouter(prefix="/api/v1/tasks/{task_id}/check-items", tags=["check-items"])
