@@ -107,10 +107,10 @@ export function monthGridDays(anchorDay: string): string[] {
   return days;
 }
 
-/** The seven days of the anchor's week, Monday first. */
+/** The five weekdays of the anchor's week (Monday–Friday). */
 export function weekDays(anchorDay: string): string[] {
   const monday = startOfWeekDay(anchorDay);
-  return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
+  return Array.from({ length: 5 }, (_, index) => addDays(monday, index));
 }
 
 /** The inclusive fetch window a view shows (the month view fetches its whole
@@ -122,7 +122,7 @@ export function rangeOf(mode: CalendarMode, anchorDay: string): [string, string]
   }
   if (mode === "week") {
     const monday = startOfWeekDay(anchorDay);
-    return [monday, addDays(monday, 6)];
+    return [monday, addDays(monday, 4)];
   }
   return [anchorDay, anchorDay];
 }

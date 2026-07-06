@@ -214,8 +214,79 @@ export function CalendarView(): JSX.Element {
     );
   }
 
+  function renderWeekView(): JSX.Element {
+    const days = weekDays(anchor);
+    const dayHeaderLabels = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
+    return (
+      <div className="week-view">
+        <div className="week-header">
+          {days.map((day, index) => {
+            const dayNum = Number(day.slice(8));
+            return (
+              <div key={day} className="week-day-header">
+                <span className="day-name">{dayHeaderLabels[index]}</span>
+                <span className="day-date">
+                  {dayNum}/{Number(day.slice(5, 7))}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="week-columns">
+          {days.map((day) => (
+            <div
+              key={day}
+              className="week-day-column"
+              data-day={day}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => void handleDrop(event, day, null)}
+            >
+              {tasksOn(tasks, day)
+                .sort(byKindThenTime)
+                .map((task) =>
+                  isBanner(task) ? (
+                    <div
+                      key={task.id}
+                      className="week-task-card banner"
+                      {...taskDragProps(task)}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {task.title}
+                    </div>
+                  ) : (
+                    <div
+                      key={task.id}
+                      className="week-task-card"
+                      {...taskDragProps(task)}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <span className="card-time">{entryTime(task)}</span>
+                      <span className="card-title">{task.title}</span>
+                      {blockSpan(task) && (
+                        <span className="card-duration">{blockSpan(task)?.[1]}</span>
+                      )}
+                    </div>
+                  ),
+                )}
+              <button
+                type="button"
+                className="week-add-task"
+                aria-label={`Add a task on ${day}`}
+                onClick={() => openAllDayDraft(day)}
+              >
+                <Icon name="plus" size={14} />
+                Add
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   function renderTimeGrid(): JSX.Element {
-    const days = mode === "week" ? weekDays(anchor) : [anchor];
+    const days = [anchor];
     const firstDay = days[0] ?? anchor;
     return (
       <div className="time-grid">
@@ -386,7 +457,7 @@ export function CalendarView(): JSX.Element {
         </form>
       )}
       <div className="calendar-body">
-        {mode === "month" ? renderMonth() : renderTimeGrid()}
+        {mode === "month" ? renderMonth() : mode === "week" ? renderWeekView() : renderTimeGrid()}
         <aside className="unscheduled-panel" aria-label="Unscheduled">
           <h3>Unscheduled</h3>
           <ul>
