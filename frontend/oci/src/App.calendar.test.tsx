@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
-import { openCalendar, pinCalendarClock } from "./test/calendar";
+import { openCalendar, openWeek, pinCalendarClock } from "./test/calendar";
 import { fakeTask, installFakeApi, type RecordedRequest } from "./test/fakeApi";
 
 pinCalendarClock();
@@ -235,5 +235,58 @@ describe("The Week and Day views", () => {
       start_date: "2026-07-03T23:00:00.000Z",
       due_date: "2026-07-03T23:59:00.000Z",
     });
+  });
+});
+
+describe("The Week view", () => {
+  it("displays 5 day columns starting from today with dynamic day names", async () => {
+    const api = installFakeApi({
+      tasks: [
+        fakeTask("Friday standup", {
+          start_date: "2026-07-03T10:00:00Z",
+          due_date: "2026-07-03T10:30:00Z",
+          time_zone: "UTC",
+        }),
+        fakeTask("Weekend plan"),
+      ],
+    });
+    render(<App />);
+
+    await openWeek();
+
+    // Verify heading shows correct date range (today + 4 days, not always Mon-Fri)
+    expect(screen.getByRole("heading", { name: "Jul 3 – Jul 7, 2026" })).toBeInTheDocument();
+
+    // Verify API fetches the correct 5-day range starting from today
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (r) =>
+            r.method === "GET" &&
+            r.url ===
+              "/api/v1/tasks?range_start=2026-07-03&range_end=2026-07-07&completed=false&limit=200",
+        ),
+      ).toBe(true),
+    );
+
+    // Verify all 5 day columns are rendered with correct day names (dynamic, not hardcoded)
+    // Today is Friday, so expect Fri, Sat, Sun, Mon, Tue
+    expect(screen.getByText("Fri")).toBeInTheDocument();
+    expect(screen.getByText("Sat")).toBeInTheDocument();
+    expect(screen.getByText("Sun")).toBeInTheDocument();
+    expect(screen.getByText("Mon")).toBeInTheDocument();
+    expect(screen.getByText("Tue")).toBeInTheDocument();
+
+    // Verify dates under day names (format: day/month)
+    const dateElements = screen.getAllByText(/^\d+\/7$/); // July dates: 3/7, 4/7, etc.
+    expect(dateElements).toHaveLength(5);
+
+    // Verify the task is displayed (it may be in a card or list item)
+    expect(await screen.findByText("Friday standup")).toBeInTheDocument();
+
+    // Verify undated task appears in Unscheduled panel
+    expect(
+      within(screen.getByRole("complementary", { name: "Unscheduled" })).getByText("Weekend plan"),
+    ).toBeInTheDocument();
   });
 });
