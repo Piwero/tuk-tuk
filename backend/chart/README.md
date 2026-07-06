@@ -26,6 +26,11 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
 - **Single replica, `Recreate` strategy.** The SQLite volume is `ReadWriteOnce`
   and the app is single-writer; the old pod must release the volume before the
   new one starts. Don't scale this deployment.
+- **`local-path` storage class, not the cluster default (`synology-nfs`).**
+  SQLite over NFS risks corruption (unreliable locking; WAL doesn't work over
+  NFS), so the database lives on node-local disk. The pod is pinned to the
+  volume's node, and deleting the PVC deletes the data — back up the SQLite
+  file if it matters.
 
 ## Prerequisites
 
