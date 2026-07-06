@@ -181,6 +181,11 @@ else
   git-cliff --config cliff.toml --tag "$next" --unreleased --output CHANGELOG.md
 fi
 
+# git-cliff's output doesn't end with exactly one newline; normalize it so
+# the end-of-file-fixer pre-commit hook doesn't abort the release commit.
+printf '%s\n' "$(cat CHANGELOG.md)" > CHANGELOG.md.tmp
+mv CHANGELOG.md.tmp CHANGELOG.md
+
 if [ -z "$(git status --porcelain CHANGELOG.md)" ]; then
   echo "error: git-cliff produced no CHANGELOG.md change; aborting" >&2
   exit 1
