@@ -171,9 +171,10 @@ describe("Completed view", () => {
       tasks: [fakeTask("Done", { completed: true, completed_at: "2026-07-02T10:00:00Z" })],
     });
     render(<App />);
-    await screen.findByRole("navigation", { name: "Smart Lists" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Completed" }));
+    // The Completed toggle only renders once the lists load and the default
+    // Inbox view is selected — await it rather than racing that fetch.
+    fireEvent.click(await screen.findByRole("button", { name: "Completed" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: "Complete Done" }));
 
     await waitFor(() =>
