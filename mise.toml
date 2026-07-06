@@ -7,7 +7,7 @@ git-cliff = "2.13.1"
 [tasks."backend:install"]
 description = "Install backend dependencies (uv)"
 run = "uv sync"
-dir = "backend"
+dir = "backend/oci"
 
 [tasks."backend:dev"]
 description = "Start backend with hot-reload (docker compose)"
@@ -16,22 +16,22 @@ run = "docker compose up --build backend"
 [tasks."backend:test"]
 description = "Run backend tests"
 run = "uv run pytest"
-dir = "backend"
+dir = "backend/oci"
 
 [tasks."backend:lint"]
 description = "Lint, format-check, and type-check backend code"
 run = "uv run ruff check . && uv run ruff format --check . && uv run mypy src"
-dir = "backend"
+dir = "backend/oci"
 
 [tasks."backend:lint:fix"]
 description = "Auto-fix backend lint issues and format code"
 run = "uv run ruff check --fix . && uv run ruff format ."
-dir = "backend"
+dir = "backend/oci"
 
 [tasks."frontend:install"]
 description = "Install frontend dependencies"
 run = "npm install"
-dir = "frontend"
+dir = "frontend/oci"
 
 [tasks."frontend:dev"]
 description = "Start frontend dev server (docker compose)"
@@ -40,34 +40,34 @@ run = "docker compose up --build --renew-anon-volumes frontend"
 [tasks."frontend:build"]
 description = "Build frontend for production"
 run = "npm run build"
-dir = "frontend"
+dir = "frontend/oci"
 
 [tasks."frontend:test"]
 description = "Run frontend unit tests"
 run = "npm run test"
-dir = "frontend"
+dir = "frontend/oci"
 
 [tasks."frontend:test:watch"]
 description = "Run frontend tests in watch mode"
 run = "npm run test:watch"
-dir = "frontend"
+dir = "frontend/oci"
 
 [tasks."frontend:lint"]
 description = "Lint frontend code"
 run = "npm run lint"
-dir = "frontend"
+dir = "frontend/oci"
 
 [tasks."frontend:format"]
 description = "Format frontend code"
 run = "npm run format"
-dir = "frontend"
+dir = "frontend/oci"
 
 [tasks."setup:hooks"]
 description = "Install git hooks via pre-commit"
 depends = ["backend:install"]
 run = '''
-backend/.venv/bin/pre-commit install --install-hooks
-backend/.venv/bin/pre-commit install --hook-type commit-msg
+backend/oci/.venv/bin/pre-commit install --install-hooks
+backend/oci/.venv/bin/pre-commit install --hook-type commit-msg
 '''
 
 [tasks.install]
