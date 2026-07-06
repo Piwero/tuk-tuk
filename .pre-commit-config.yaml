@@ -27,17 +27,17 @@ repos:
     hooks:
       - id: ruff
         args: ["--fix"]
-        files: ^backend/
+        files: ^backend/oci/
       - id: ruff-format
-        files: ^backend/
+        files: ^backend/oci/
 
   # ---- Python: mypy ----
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0
     hooks:
       - id: mypy
-        files: ^backend/src/
-        args: ["--config-file=backend/pyproject.toml"]
+        files: ^backend/oci/src/
+        args: ["--config-file=backend/oci/pyproject.toml"]
         additional_dependencies:
           - pydantic>=2.0
           - pydantic-settings>=2.6.0
@@ -51,9 +51,9 @@ repos:
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
-        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|scss|md|yaml|yml|html)$
+        files: ^frontend/oci/.*\.(ts|tsx|js|jsx|json|css|scss|md|yaml|yml|html)$
         additional_dependencies:
-          # Keep in lock-step with frontend/package-lock.json, or the hook
+          # Keep in lock-step with frontend/oci/package-lock.json, or the hook
           # and `npm run format:check` fight over formatting.
           - prettier@3.9.4
 
@@ -62,8 +62,8 @@ repos:
     rev: v9.14.0
     hooks:
       - id: eslint
-        files: ^frontend/.*\.(ts|tsx|js|jsx)$
-        args: ["--config", "frontend/eslint.config.js"]
+        files: ^frontend/oci/.*\.(ts|tsx|js|jsx)$
+        args: ["--config", "frontend/oci/eslint.config.js"]
         additional_dependencies:
           - eslint@9.14.0
           - typescript@5.6.3

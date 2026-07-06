@@ -20,12 +20,12 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: frontend/oci/package-lock.json
 
       # The eslint hook runs the repo's flat config, whose imports resolve
       # from frontend/node_modules — install them or the hook cannot load it.
       - name: Install frontend dependencies
         run: npm ci
-        working-directory: frontend
+        working-directory: frontend/oci
 
       - uses: pre-commit/action@v3.0.1

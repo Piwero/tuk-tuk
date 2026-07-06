@@ -3,25 +3,25 @@ name: tuk-tuk
 services:
   backend:
     build:
-      context: ./backend
+      context: ./backend/oci
       target: dev
     ports:
       - "8000:8000"
     env_file:
       - .env
     volumes:
-      - ./backend:/app
+      - ./backend/oci:/app
 
   frontend:
     build:
-      context: ./frontend
+      context: ./frontend/oci
       target: dev
     ports:
       - "5173:5173"
     env_file:
       - .env
     volumes:
-      - ./frontend:/app
+      - ./frontend/oci:/app
       - /app/node_modules
     depends_on:
       backend:

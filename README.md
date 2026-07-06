@@ -5,12 +5,13 @@ and focus — with a clean, conventional HTTP API.
 
 ## Stack
 
-- **`backend/`** — Python 3.12 / [FastAPI](https://fastapi.tiangolo.com/)
+- **`backend/oci/`** — Python 3.12 / [FastAPI](https://fastapi.tiangolo.com/)
   service managed with [uv](https://docs.astral.sh/uv/) (`ruff`, `mypy`,
-  `pytest`; SQLite via SQLAlchemy + Alembic).
-- **`frontend/`** — TypeScript / React app built with
+  `pytest`; SQLite via SQLAlchemy + Alembic). `backend/chart/` holds its
+  Kubernetes manifests.
+- **`frontend/oci/`** — TypeScript / React app built with
   [Vite](https://vitejs.dev/), linted with ESLint, formatted with Prettier,
-  tested with Vitest.
+  tested with Vitest. `frontend/chart/` holds its Kubernetes manifests.
 - **`mise.toml`** — single dev interface: provisions tools (python, node, uv,
   git-cliff) and defines every task (`mise tasks`).
 - **`docker-compose.yml`** — runs both dev servers in containers with bind
@@ -73,19 +74,23 @@ frontend `node_modules` volume (`--renew-anon-volumes`).
 
 ```
 .
-├── backend/                # Python service
-│   ├── src/app/            # Application code
-│   ├── migrations/         # Alembic migrations
-│   ├── tests/              # Pytest tests
-│   ├── pyproject.toml
-│   ├── uv.lock
-│   └── Dockerfile          # dev + prod stages
-├── frontend/               # TypeScript app
-│   ├── src/                # App source
-│   ├── public/             # Static assets
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── Dockerfile          # dev + build + runtime stages
+├── backend/
+│   ├── oci/                # Python service (the image)
+│   │   ├── src/app/        # Application code (routers/v1 = API endpoints)
+│   │   ├── migrations/     # Alembic migrations
+│   │   ├── tests/          # Pytest tests
+│   │   ├── pyproject.toml
+│   │   ├── uv.lock
+│   │   └── Dockerfile      # dev + prod stages
+│   └── chart/              # Kubernetes manifests (Kustomize + Flux)
+├── frontend/
+│   ├── oci/                # TypeScript app (the image)
+│   │   ├── src/            # App source
+│   │   ├── public/         # Static assets
+│   │   ├── package.json
+│   │   ├── vite.config.ts
+│   │   └── Dockerfile      # dev + build + runtime stages
+│   └── chart/              # Kubernetes manifests (Kustomize + Flux)
 ├── .github/
 │   ├── workflows/          # CI pipelines
 │   ├── ISSUE_TEMPLATE/

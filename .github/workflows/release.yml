@@ -30,11 +30,11 @@ jobs:
       matrix:
         include:
           - component: backend
-            context: backend
+            context: backend/oci
             target: prod
             build-args: ""
           - component: frontend
-            context: frontend
+            context: frontend/oci
             target: runtime
             # Empty base URL = relative /api/... requests, served same-origin
             # by the nginx proxy in frontend/chart.
