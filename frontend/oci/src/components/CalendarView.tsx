@@ -277,7 +277,7 @@ export function CalendarView(): JSX.Element {
                       onClick={(event) => event.stopPropagation()}
                     >
                       <span className="card-time">{entryTime(task)}</span>
-                      <Icon name="calendar" size={16} />
+                      <Icon name="calendar-days" size={16} />
                       <span className="card-title">{task.title}</span>
                       {blockSpan(task) && (
                         <span className="card-duration">
@@ -291,7 +291,7 @@ export function CalendarView(): JSX.Element {
                   ),
                 )}
               <div className="week-day-footer">
-                <Icon name="clock" size={18} />
+                <Icon name="timer" size={18} />
               </div>
               <button
                 type="button"
