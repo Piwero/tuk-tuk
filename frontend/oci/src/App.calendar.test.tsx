@@ -122,12 +122,12 @@ describe("The Month view", () => {
 });
 
 describe("The Week and Day views", () => {
-  it("shows the week's time grid with an all-day lane and timed blocks", async () => {
+  it("shows the day's time grid with an all-day lane and timed blocks", async () => {
     installFakeApi({
       tasks: [
         fakeTask("Conference", {
-          start_date: "2026-06-30T00:00:00Z",
-          due_date: "2026-07-02T00:00:00Z",
+          start_date: "2026-07-03T00:00:00Z",
+          due_date: "2026-07-03T00:00:00Z",
           is_all_day: true,
         }),
         fakeTask("Deep work", {
@@ -140,8 +140,8 @@ describe("The Week and Day views", () => {
     render(<App />);
     await openCalendar();
 
-    fireEvent.click(screen.getByRole("button", { name: "Week" }));
-    await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
+    fireEvent.click(screen.getByRole("button", { name: "Day" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
 
     const allDayLane = screen.getByLabelText("All day");
     expect(within(allDayLane).getByText("Conference")).toBeInTheDocument();
@@ -175,13 +175,13 @@ describe("The Week and Day views", () => {
     expect(screen.queryByText("Tomorrow's block")).not.toBeInTheDocument();
   });
 
-  it("creates a timed task by dragging across a time range", async () => {
+  it("creates a timed task by dragging across a time range in day view", async () => {
     const api = installFakeApi();
     render(<App />);
     await openCalendar();
 
-    fireEvent.click(screen.getByRole("button", { name: "Week" }));
-    await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
+    fireEvent.click(screen.getByRole("button", { name: "Day" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
 
     fireEvent.mouseDown(screen.getByLabelText("2026-07-03 09:00"));
     fireEvent.mouseEnter(screen.getByLabelText("2026-07-03 10:00"));
