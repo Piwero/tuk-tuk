@@ -1,4 +1,4 @@
-# git-cliff configuration for piwero-web
+# git-cliff configuration for tuk-tuk
 # Curated, user-facing changelog.
 # See docs/superpowers/specs/2026-07-02-automated-changelog-design.md
 
@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 """
 body = """
-{%- macro repo() -%}https://github.com/Piwero/piwero-web{%- endmacro -%}
+{%- macro repo() -%}https://github.com/Piwero/tuk-tuk{%- endmacro -%}
 {% if version %}\
     {% if previous.version %}\
         ## [{{ version | trim_start_matches(pat="v") }}]({{ self::repo() }}/compare/{{ previous.version }}...{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
