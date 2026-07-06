@@ -1,0 +1,11 @@
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: backend
+  namespace: tuk-tuk
+spec:
+  imageRepositoryRef:
+    name: backend
+  policy:
+    semver:
+      range: '>=0.0.1'

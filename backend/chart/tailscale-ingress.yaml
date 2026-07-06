@@ -1,0 +1,20 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tuk-tuk-backend-tailscale
+  namespace: tuk-tuk
+  annotations:
+    tailscale.com/tags: "tag:k8s-supernova,tag:services"
+    tailscale.com/http-endpoint: "enabled"
+    tailscale.com/funnel: "false"
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: backend
+      port:
+        number: 8000
+  tls:
+    - hosts:
+        - tuk-tuk-backend

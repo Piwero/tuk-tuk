@@ -1,0 +1,28 @@
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageUpdateAutomation
+metadata:
+  name: tuk-tuk
+  namespace: tuk-tuk
+spec:
+  # In tuk-tuk (not flux-system) so the `tuk-tuk:backend` / `tuk-tuk:frontend`
+  # setter markers resolve — image automation only reads ImagePolicies from its
+  # own namespace. Scans the whole repo, so it covers both backend/chart and
+  # frontend/chart deployment markers.
+  interval: 30m
+  sourceRef:
+    kind: GitRepository
+    name: tuk-tuk
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        email: fluxcdbot@users.noreply.github.com
+        name: fluxcdbot
+      messageTemplate: 'chore(deploy): bump images to {{range .Changed.Changes}}{{.NewValue}}{{end}}'
+    push:
+      branch: main
+  update:
+    path: ./
+    strategy: Setters
