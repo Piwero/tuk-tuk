@@ -216,16 +216,31 @@ export function CalendarView(): JSX.Element {
 
   function renderWeekView(): JSX.Element {
     const days = weekDays(anchor);
-    const dayHeaderLabels = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
+    const getDayName = (dayIso: string): string => {
+      const date = new Date(dayIso + "T00:00:00Z");
+      return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(date);
+    };
+
+    const formatDuration = (start: string, end: string): string => {
+      const startMs = new Date(start).getTime();
+      const endMs = new Date(end).getTime();
+      const minutes = Math.round((endMs - startMs) / 60000);
+      if (minutes < 60) return `${minutes}m`;
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    };
 
     return (
       <div className="week-view">
         <div className="week-header">
-          {days.map((day, index) => {
+          {days.map((day) => {
             const dayNum = Number(day.slice(8));
+            const dayName = getDayName(day);
             return (
               <div key={day} className="week-day-header">
-                <span className="day-name">{dayHeaderLabels[index]}</span>
+                <span className="day-name">{dayName}</span>
                 <span className="day-date">
                   {dayNum}/{Number(day.slice(5, 7))}
                 </span>
@@ -262,13 +277,22 @@ export function CalendarView(): JSX.Element {
                       onClick={(event) => event.stopPropagation()}
                     >
                       <span className="card-time">{entryTime(task)}</span>
+                      <Icon name="calendar" size={16} />
                       <span className="card-title">{task.title}</span>
                       {blockSpan(task) && (
-                        <span className="card-duration">{blockSpan(task)?.[1]}</span>
+                        <span className="card-duration">
+                          {formatDuration(
+                            task.start_date ?? task.due_date ?? "",
+                            task.due_date ?? "",
+                          )}
+                        </span>
                       )}
                     </div>
                   ),
                 )}
+              <div className="week-day-footer">
+                <Icon name="clock" size={18} />
+              </div>
               <button
                 type="button"
                 className="week-add-task"
