@@ -15,6 +15,7 @@ import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../groupi
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
 import { SectionNameForm } from "./SectionNameForm";
+import { Icon } from "./Icon";
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -242,14 +243,14 @@ export function TaskListView({
                     aria-label={`Rename section ${section.name}`}
                     onClick={() => setRenamingSectionId(section.id)}
                   >
-                    ✎
+                    <Icon name="pencil" />
                   </button>
                   <button
                     type="button"
                     aria-label={`Delete section ${section.name}`}
                     onClick={() => void removeSection(section)}
                   >
-                    ✕
+                    <Icon name="x" />
                   </button>
                 </span>
               )}

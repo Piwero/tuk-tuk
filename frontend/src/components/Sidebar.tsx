@@ -21,8 +21,15 @@ import {
 import { readDragPayload, startDrag } from "../dnd";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
 import { FolderForm } from "./FolderForm";
+import { Icon, type IconName } from "./Icon";
 import { ListForm, type ListFormValues } from "./ListForm";
 import { TagForm, type TagFormValues } from "./TagForm";
+
+const SMART_ICONS: Record<SmartView, IconName> = {
+  today: "sun",
+  next7: "calendar-range",
+  all: "layers",
+};
 
 type Editor =
   | { mode: "create-list" }
@@ -71,9 +78,38 @@ function ListButton({ list, selected, onSelect }: ListButtonProps): JSX.Element 
       className={selected ? "list-button selected" : "list-button"}
       onClick={() => onSelect(list.id)}
     >
-      {list.color !== null && <span className="color-dot" style={{ background: list.color }} />}
-      {list.emoji !== null && <span className="list-emoji">{list.emoji}</span>}
+      {list.is_inbox ? (
+        <Icon name="inbox" size={18} />
+      ) : (
+        <>
+          {list.color !== null && <span className="color-dot" style={{ background: list.color }} />}
+          {list.emoji !== null && <span className="list-emoji">{list.emoji}</span>}
+        </>
+      )}
       {list.name}
+    </button>
+  );
+}
+
+interface TopNavItemProps {
+  icon: IconName;
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}
+
+/** One item in the top feature row: selected = pill with icon + label, others icon-only. */
+function TopNavItem({ icon, label, selected, onClick }: TopNavItemProps): JSX.Element {
+  return (
+    <button
+      type="button"
+      className={selected ? "top-nav-item selected" : "top-nav-item"}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      <Icon name={icon} size={18} />
+      {selected && <span>{label}</span>}
     </button>
   );
 }
@@ -334,21 +370,21 @@ export function Sidebar({
               aria-label={`Edit ${list.name}`}
               onClick={() => setEditor({ mode: "edit-list", listId: list.id })}
             >
-              ✎
+              <Icon name="pencil" />
             </button>
             <button
               type="button"
               aria-label={`Archive ${list.name}`}
               onClick={() => void handleSetArchived(list, true)}
             >
-              🗄
+              <Icon name="archive" />
             </button>
             <button
               type="button"
               aria-label={`Delete list ${list.name}`}
               onClick={() => void handleDeleteList(list)}
             >
-              ✕
+              <Icon name="x" />
             </button>
           </span>
         </div>
@@ -356,8 +392,32 @@ export function Sidebar({
     );
   }
 
+  const tasksSelected = !calendarSelected && !habitsSelected && !focusSelected;
+
   return (
     <aside className="sidebar">
+      <div className="sidebar-brand">Tuk Tuk</div>
+      <nav aria-label="Views" className="top-nav">
+        <TopNavItem
+          icon="list-checks"
+          label="Tasks"
+          selected={tasksSelected}
+          onClick={() => onSelectSmart("today")}
+        />
+        <TopNavItem
+          icon="calendar-days"
+          label="Calendar"
+          selected={calendarSelected}
+          onClick={onSelectCalendar}
+        />
+        <TopNavItem
+          icon="repeat"
+          label="Habits"
+          selected={habitsSelected}
+          onClick={onSelectHabits}
+        />
+        <TopNavItem icon="timer" label="Focus" selected={focusSelected} onClick={onSelectFocus} />
+      </nav>
       <form
         role="search"
         className="sidebar-search"
@@ -376,32 +436,10 @@ export function Sidebar({
             className={selectedSmart === view ? "list-button selected" : "list-button"}
             onClick={() => onSelectSmart(view)}
           >
+            <Icon name={SMART_ICONS[view]} size={18} />
             {SMART_LABELS[view]}
           </button>
         ))}
-      </nav>
-      <nav aria-label="Views" className="views-nav">
-        <button
-          type="button"
-          className={calendarSelected ? "list-button selected" : "list-button"}
-          onClick={onSelectCalendar}
-        >
-          Calendar
-        </button>
-        <button
-          type="button"
-          className={habitsSelected ? "list-button selected" : "list-button"}
-          onClick={onSelectHabits}
-        >
-          Habits
-        </button>
-        <button
-          type="button"
-          className={focusSelected ? "list-button selected" : "list-button"}
-          onClick={onSelectFocus}
-        >
-          Focus
-        </button>
       </nav>
       <nav
         aria-label="Lists"
@@ -454,14 +492,14 @@ export function Sidebar({
                       aria-label={`Rename folder ${folder.name}`}
                       onClick={() => setEditor({ mode: "rename-folder", folderId: folder.id })}
                     >
-                      ✎
+                      <Icon name="pencil" />
                     </button>
                     <button
                       type="button"
                       aria-label={`Delete folder ${folder.name}`}
                       onClick={() => void handleDeleteFolder(folder)}
                     >
-                      ✕
+                      <Icon name="x" />
                     </button>
                   </span>
                 </div>
@@ -505,14 +543,14 @@ export function Sidebar({
                       aria-label={`Edit tag ${tag.name}`}
                       onClick={() => setEditor({ mode: "edit-tag", tagId: tag.id })}
                     >
-                      ✎
+                      <Icon name="pencil" />
                     </button>
                     <button
                       type="button"
                       aria-label={`Delete tag ${tag.name}`}
                       onClick={() => void handleDeleteTag(tag)}
                     >
-                      ✕
+                      <Icon name="x" />
                     </button>
                   </span>
                 </div>
@@ -526,7 +564,12 @@ export function Sidebar({
             onCancel={() => setEditor(null)}
           />
         ) : (
-          <button type="button" onClick={() => setEditor({ mode: "create-tag" })}>
+          <button
+            type="button"
+            className="sidebar-add"
+            onClick={() => setEditor({ mode: "create-tag" })}
+          >
+            <Icon name="plus" size={18} />
             Add Tag
           </button>
         )}
@@ -546,10 +589,20 @@ export function Sidebar({
         )}
         {(editor === null || editor.mode === "edit-list") && (
           <>
-            <button type="button" onClick={() => setEditor({ mode: "create-list" })}>
+            <button
+              type="button"
+              className="sidebar-add"
+              onClick={() => setEditor({ mode: "create-list" })}
+            >
+              <Icon name="plus" size={18} />
               Add List
             </button>
-            <button type="button" onClick={() => setEditor({ mode: "create-folder" })}>
+            <button
+              type="button"
+              className="sidebar-add"
+              onClick={() => setEditor({ mode: "create-folder" })}
+            >
+              <Icon name="folder-plus" size={18} />
               Add Folder
             </button>
           </>
@@ -573,7 +626,7 @@ export function Sidebar({
                       aria-label={`Unarchive ${list.name}`}
                       onClick={() => void handleSetArchived(list, false)}
                     >
-                      ↩
+                      <Icon name="archive-restore" />
                     </button>
                   </span>
                 </div>

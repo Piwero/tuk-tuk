@@ -27,6 +27,7 @@ import {
   type CalendarMode,
 } from "../calendar";
 import { localDayOf } from "../dates";
+import { Icon } from "./Icon";
 import { readDragPayload, startDrag } from "../dnd";
 
 const MODES: CalendarMode[] = ["month", "week", "day"];
@@ -181,7 +182,7 @@ export function CalendarView(): JSX.Element {
                   openAllDayDraft(day);
                 }}
               >
-                +
+                <Icon name="plus" size={14} />
               </button>
             </div>
             {tasksOn(tasks, day)
@@ -339,7 +340,7 @@ export function CalendarView(): JSX.Element {
             aria-label="Previous"
             onClick={() => setAnchor(shiftAnchor(mode, anchor, -1))}
           >
-            ‹
+            <Icon name="chevron-left" />
           </button>
           <button
             type="button"
@@ -353,7 +354,7 @@ export function CalendarView(): JSX.Element {
             aria-label="Next"
             onClick={() => setAnchor(shiftAnchor(mode, anchor, 1))}
           >
-            ›
+            <Icon name="chevron-right" />
           </button>
         </div>
         <div className="calendar-modes">

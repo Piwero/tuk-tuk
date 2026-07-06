@@ -16,6 +16,7 @@ import { localDayOf } from "../dates";
 import { habitFrequencyLabel } from "../habitFrequency";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
 import { HabitHistory } from "./HabitHistory";
+import { Icon } from "./Icon";
 
 type Editor = { mode: "create" } | { mode: "edit"; habitId: number } | null;
 
@@ -168,7 +169,7 @@ export function HabitsView(): JSX.Element {
               aria-pressed={complete}
               onClick={() => void toggleCheckIn(habit)}
             >
-              {complete ? "✓" : "○"}
+              {complete && <Icon name="check" size={18} />}
             </button>
           ) : (
             <>
@@ -193,28 +194,28 @@ export function HabitsView(): JSX.Element {
             aria-label={`History ${habit.name}`}
             onClick={() => setHistoryId((current) => (current === habit.id ? null : habit.id))}
           >
-            📊
+            <Icon name="chart-column" />
           </button>
           <button
             type="button"
             aria-label={`Edit ${habit.name}`}
             onClick={() => setEditor({ mode: "edit", habitId: habit.id })}
           >
-            ✎
+            <Icon name="pencil" />
           </button>
           <button
             type="button"
             aria-label={habit.is_archived ? `Unarchive ${habit.name}` : `Archive ${habit.name}`}
             onClick={() => void setArchived(habit, !habit.is_archived)}
           >
-            {habit.is_archived ? "↩" : "🗄"}
+            {habit.is_archived ? <Icon name="archive-restore" /> : <Icon name="archive" />}
           </button>
           <button
             type="button"
             aria-label={`Delete habit ${habit.name}`}
             onClick={() => void handleDelete(habit)}
           >
-            ✕
+            <Icon name="x" />
           </button>
         </span>
         {historyId === habit.id && <HabitHistory habit={habit} onChanged={() => void load()} />}
