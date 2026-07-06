@@ -107,10 +107,9 @@ export function monthGridDays(anchorDay: string): string[] {
   return days;
 }
 
-/** The five weekdays of the anchor's week (Monday–Friday). */
+/** The five days starting from the anchor day (today + 4 more days). */
 export function weekDays(anchorDay: string): string[] {
-  const monday = startOfWeekDay(anchorDay);
-  return Array.from({ length: 5 }, (_, index) => addDays(monday, index));
+  return Array.from({ length: 5 }, (_, index) => addDays(anchorDay, index));
 }
 
 /** The inclusive fetch window a view shows (the month view fetches its whole
@@ -121,8 +120,7 @@ export function rangeOf(mode: CalendarMode, anchorDay: string): [string, string]
     return [grid[0] ?? anchorDay, grid[grid.length - 1] ?? anchorDay];
   }
   if (mode === "week") {
-    const monday = startOfWeekDay(anchorDay);
-    return [monday, addDays(monday, 4)];
+    return [anchorDay, addDays(anchorDay, 4)];
   }
   return [anchorDay, anchorDay];
 }
