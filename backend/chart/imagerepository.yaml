@@ -1,0 +1,10 @@
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: backend
+  namespace: tuk-tuk
+spec:
+  image: ghcr.io/piwero/tuk-tuk/backend
+  interval: 5m
+  secretRef:
+    name: tuk-tuk-ghcr

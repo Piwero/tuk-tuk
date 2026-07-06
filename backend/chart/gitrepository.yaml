@@ -1,0 +1,16 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: tuk-tuk
+  namespace: tuk-tuk
+spec:
+  # Dedicated source for image automation, co-located with the ImagePolicies
+  # (image-automation setter markers resolve only within the
+  # ImageUpdateAutomation's own namespace). Separate from the flux-system
+  # GitRepository that applies the manifests.
+  interval: 5m
+  url: https://github.com/Piwero/tuk-tuk
+  ref:
+    branch: main
+  secretRef:
+    name: tuk-tuk-git-auth

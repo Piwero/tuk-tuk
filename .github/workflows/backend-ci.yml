@@ -10,6 +10,8 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+  # Reusable: release.yml calls this as a publish gate.
+  workflow_call:
 
 defaults:
   run:

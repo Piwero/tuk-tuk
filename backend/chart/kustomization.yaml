@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tuk-tuk
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - pvc.yaml
+  - ghcr-onepassworditem.yaml
+  - git-onepassworditem.yaml
+  - imagerepository.yaml
+  - imagepolicy.yaml
+  - gitrepository.yaml
+  - imageupdateautomation.yaml
+  - deployment.yaml
+  - service.yaml
+  - tailscale-ingress.yaml
