@@ -63,6 +63,24 @@ _Avoid_: Completion, log
 **Streak**:
 The count of consecutive scheduled days a Habit has been checked in without a miss.
 
+## Assist (v2)
+
+**Assist**:
+The optional AI capability family. Assist only ever proposes — every output is a Suggestion the user confirms or discards; it never changes data on its own. When no local model is available, Assist features are invisible, and the app is fully functional without them.
+_Avoid_: Copilot, AI assistant, agent
+
+**Suggestion**:
+One proposal produced by Assist (a parsed task draft, a proposed order, a proposed date). Ephemeral: computed on demand, shown inline, and gone once confirmed or discarded — never stored.
+_Avoid_: Recommendation, action (Assist takes no actions)
+
+**Assisted Capture**:
+The Assist feature on Quick-Add: on submit, free text (English or Spanish) is parsed into a proposed Task — date, recurrence, reminder, list, tags, priority shown as editable chips — for one confirmation beat before saving. Parsed words are stripped from the title; only existing Lists and Tags are matched, never invented. Replaces the deferred "Smart Recognition" idea.
+_Avoid_: Smart Recognition, NLP parsing
+
+**Overdue Triage**:
+The Assist feature over overdue Tasks: one action proposes a realistic new date per overdue Task, in batch; each Suggestion is accepted or discarded individually.
+_Avoid_: Auto-reschedule (nothing moves without confirmation)
+
 ## Focus
 
 **Focus Session**:
