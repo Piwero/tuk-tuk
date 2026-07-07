@@ -31,3 +31,10 @@ export async function openWeek(): Promise<void> {
   fireEvent.click(screen.getByRole("button", { name: "Week" }));
   await screen.findByRole("heading", { name: "Jul 3 – Jul 7, 2026" });
 }
+
+/** Opens the calendar in the Day view (Friday, July 3, 2026). */
+export async function openDay(): Promise<void> {
+  await openCalendar();
+  fireEvent.click(screen.getByRole("button", { name: "Day" }));
+  await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
+}
