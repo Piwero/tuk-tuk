@@ -17,7 +17,8 @@ afterEach(() => {
 async function openList(name: string): Promise<void> {
   const user = userEvent.setup();
   const nav = await screen.findByRole("navigation", { name: "Lists" });
-  await user.click(within(nav).getByRole("button", { name }));
+  // Custom lists load via a separate async fetch; wait for the button first.
+  await user.click(await within(nav).findByRole("button", { name }));
 }
 
 describe("Kanban view", () => {

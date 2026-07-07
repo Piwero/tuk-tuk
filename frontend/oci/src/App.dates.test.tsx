@@ -71,7 +71,9 @@ describe("Task dates in list views", () => {
     render(<App />);
 
     const nav = await screen.findByRole("navigation", { name: "Lists" });
-    fireEvent.click(within(nav).getByRole("button", { name: "Board" }));
+    // Custom lists load via a separate async fetch, so wait for the Board list
+    // button to render before clicking it (a bare getByRole races that fetch).
+    fireEvent.click(await within(nav).findByRole("button", { name: "Board" }));
     const card = (
       await screen.findByRole("button", { name: "Open details for Late card" })
     ).closest("li");
