@@ -17,7 +17,8 @@ afterEach(() => {
 
 async function openSmart(name: string): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
-  fireEvent.click(within(nav).getByRole("button", { name }));
+  // Smart lists load via a separate async fetch; wait for the button first.
+  fireEvent.click(await within(nav).findByRole("button", { name }));
 }
 
 describe("Smart Lists", () => {
