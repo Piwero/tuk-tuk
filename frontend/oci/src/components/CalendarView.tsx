@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createTask,
@@ -10,17 +10,20 @@ import {
 } from "../api";
 import {
   allDayCreate,
-  blockSpan,
+  blockMinutes,
   calendarTitle,
+  draggedEdgeMinute,
   dropPatch,
   entryTime,
   hourLabel,
   isBanner,
   laneBanners,
+  minuteLabel,
   monthGridDays,
   rangeOf,
   resizePatch,
   shiftAnchor,
+  SNAP_MINUTES,
   tasksOn,
   timedCreate,
   weekDays,
@@ -35,6 +38,13 @@ const MODE_LABELS: Record<CalendarMode, string> = { month: "Month", week: "Week"
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const WEEKDAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** One rendered hour of the time grid, in px — the scale every block position,
+ * resize delta, and the now-line are computed against. */
+const HOUR_PX = 36;
+
+/** Where the time grid first scrolls to: the start of the working morning. */
+const SCROLL_TO_HOUR = 8;
+
 /** What the click/drag gesture is about to create. */
 type CreateDraft =
   | { kind: "all-day"; day: string }
@@ -45,6 +55,19 @@ interface HourDrag {
   day: string;
   from: number;
   to: number;
+}
+
+/** An in-progress edge resize of a timed block. The pointer's travel from
+ * originY maps to minutes at HOUR_PX per hour; `minute` is the edge's current
+ * snapped, clamped position, rendered live until mouseup commits it. */
+interface EdgeDrag {
+  task: Task;
+  edge: "start" | "end";
+  day: string;
+  baseMinute: number;
+  otherMinute: number;
+  originY: number;
+  minute: number;
 }
 
 /** Banners first, then timed entries in wall-clock order. */
@@ -65,6 +88,13 @@ function taskDragProps(
   };
 }
 
+/** A short weekday name ("Fri") for a week-column header. */
+function shortWeekday(dayIso: string): string {
+  return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
+    new Date(dayIso + "T00:00:00Z"),
+  );
+}
+
 export function CalendarView(): JSX.Element {
   const [mode, setMode] = useState<CalendarMode>("month");
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
@@ -73,6 +103,9 @@ export function CalendarView(): JSX.Element {
   const [draft, setDraft] = useState<CreateDraft | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [drag, setDrag] = useState<HourDrag | null>(null);
+  const [edgeDrag, setEdgeDrag] = useState<EdgeDrag | null>(null);
+  const [now, setNow] = useState(() => new Date());
+  const timeColumnsRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const [start, end] = rangeOf(mode, anchor);
@@ -87,6 +120,135 @@ export function CalendarView(): JSX.Element {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The now-line's clock: one tick a minute while a time grid is shown.
+  useEffect(() => {
+    if (mode === "month") {
+      return;
+    }
+    setNow(new Date());
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, [mode]);
+
+  // Land the time grid on the working morning, not midnight.
+  useEffect(() => {
+    if (mode !== "month" && timeColumnsRef.current !== null) {
+      timeColumnsRef.current.scrollTop = SCROLL_TO_HOUR * HOUR_PX;
+    }
+  }, [mode]);
+
+  /** Commit a block edge's new minute: optimistic render, then PATCH. */
+  const applyResize = useCallback(
+    async (task: Task, edge: "start" | "end", day: string, minute: number): Promise<void> => {
+      const patch = resizePatch(task, edge, day, minute);
+      if (patch === null) {
+        return;
+      }
+      setTasks((current) =>
+        current.map((candidate) =>
+          candidate.id === task.id ? { ...candidate, ...patch } : candidate,
+        ),
+      );
+      await updateTask(task.id, patch);
+      void load();
+    },
+    [load],
+  );
+
+  // An active edge resize follows the pointer window-wide: the drag keeps
+  // working outside the column, mouseup commits, Escape cancels.
+  const resizing = edgeDrag !== null;
+  useEffect(() => {
+    if (!resizing) {
+      return;
+    }
+    const onMove = (event: MouseEvent): void => {
+      setEdgeDrag((current) => {
+        if (current === null) {
+          return current;
+        }
+        const deltaMinutes = ((event.clientY - current.originY) / HOUR_PX) * 60;
+        return {
+          ...current,
+          minute: draggedEdgeMinute(
+            current.edge,
+            current.baseMinute,
+            deltaMinutes,
+            current.otherMinute,
+          ),
+        };
+      });
+    };
+    const onUp = (): void => {
+      setEdgeDrag((current) => {
+        if (current !== null && current.minute !== current.baseMinute) {
+          void applyResize(current.task, current.edge, current.day, current.minute);
+        }
+        return null;
+      });
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setEdgeDrag(null);
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [resizing, applyResize]);
+
+  function beginEdgeDrag(
+    event: React.MouseEvent,
+    task: Task,
+    edge: "start" | "end",
+    day: string,
+  ): void {
+    const span = blockMinutes(task);
+    if (span === null) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const [startMin, endMin] = span;
+    const base = edge === "start" ? startMin : endMin;
+    setEdgeDrag({
+      task,
+      edge,
+      day,
+      baseMinute: base,
+      otherMinute: edge === "start" ? endMin : startMin,
+      originY: event.clientY,
+      minute: base,
+    });
+  }
+
+  /** Keyboard resize on a focused handle: one snap step per arrow press. */
+  function nudgeEdge(
+    event: React.KeyboardEvent,
+    task: Task,
+    edge: "start" | "end",
+    day: string,
+  ): void {
+    const delta =
+      event.key === "ArrowUp" ? -SNAP_MINUTES : event.key === "ArrowDown" ? SNAP_MINUTES : null;
+    const span = blockMinutes(task);
+    if (delta === null || span === null) {
+      return;
+    }
+    event.preventDefault();
+    const [startMin, endMin] = span;
+    const base = edge === "start" ? startMin : endMin;
+    const minute = draggedEdgeMinute(edge, base, delta, edge === "start" ? endMin : startMin);
+    if (minute !== base) {
+      void applyResize(task, edge, day, minute);
+    }
+  }
 
   async function submitDraft(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -129,25 +291,14 @@ export function CalendarView(): JSX.Element {
     hour: number | null,
   ): Promise<void> {
     const payload = readDragPayload(event);
-    if (payload === null) {
+    if (payload === null || payload.kind !== "task") {
       return;
     }
     const task = [...tasks, ...unscheduled].find((candidate) => candidate.id === payload.id);
     if (task === undefined) {
       return;
     }
-    let patch: TaskPatch | null = null;
-    if (payload.kind === "task") {
-      patch = dropPatch(task, day, hour);
-    } else if (
-      (payload.kind === "resize-start" || payload.kind === "resize-end") &&
-      hour !== null
-    ) {
-      patch = resizePatch(task, payload.kind === "resize-start" ? "start" : "end", day, hour);
-    }
-    if (patch === null) {
-      return;
-    }
+    const patch: TaskPatch = dropPatch(task, day, hour);
     await updateTask(task.id, patch);
     void load();
   }
@@ -214,127 +365,112 @@ export function CalendarView(): JSX.Element {
     );
   }
 
-  function renderWeekView(): JSX.Element {
-    const days = weekDays(anchor);
-
-    const getDayName = (dayIso: string): string => {
-      const date = new Date(dayIso + "T00:00:00Z");
-      return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(date);
-    };
-
-    const formatDuration = (start: string, end: string): string => {
-      const startMs = new Date(start).getTime();
-      const endMs = new Date(end).getTime();
-      const minutes = Math.round((endMs - startMs) / 60000);
-      if (minutes < 60) return `${minutes}m`;
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-    };
-
+  function renderBlock(task: Task, day: string): JSX.Element | null {
+    const span = blockMinutes(task);
+    if (span === null) {
+      return null;
+    }
+    const pending = edgeDrag !== null && edgeDrag.task.id === task.id ? edgeDrag : null;
+    const startMin = pending?.edge === "start" ? pending.minute : span[0];
+    const endMin = pending?.edge === "end" ? pending.minute : span[1];
+    const start = minuteLabel(startMin);
+    const end = minuteLabel(endMin);
     return (
-      <div className="week-view">
-        <div className="week-header">
-          {days.map((day) => {
-            const dayNum = Number(day.slice(8));
-            const dayName = getDayName(day);
-            return (
-              <div key={day} className="week-day-header">
-                <span className="day-name">{dayName}</span>
-                <span className="day-date">
-                  {dayNum}/{Number(day.slice(5, 7))}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="week-columns">
-          {days.map((day) => (
-            <div
-              key={day}
-              className="week-day-column"
-              data-day={day}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => void handleDrop(event, day, null)}
-            >
-              {tasksOn(tasks, day)
-                .sort(byKindThenTime)
-                .map((task) =>
-                  isBanner(task) ? (
-                    <div
-                      key={task.id}
-                      className="week-task-card banner"
-                      {...taskDragProps(task)}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {task.title}
-                    </div>
-                  ) : (
-                    <div
-                      key={task.id}
-                      className="week-task-card"
-                      {...taskDragProps(task)}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <span className="card-time">{entryTime(task)}</span>
-                      <Icon name="calendar-days" size={16} />
-                      <span className="card-title">{task.title}</span>
-                      {blockSpan(task) && (
-                        <span className="card-duration">
-                          {formatDuration(
-                            task.start_date ?? task.due_date ?? "",
-                            task.due_date ?? "",
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  ),
-                )}
-              <div className="week-day-footer">
-                <Icon name="timer" size={18} />
-              </div>
-              <button
-                type="button"
-                className="week-add-task"
-                aria-label={`Add a task on ${day}`}
-                onClick={() => openAllDayDraft(day)}
-              >
-                <Icon name="plus" size={14} />
-                Add
-              </button>
-            </div>
-          ))}
-        </div>
+      <div
+        key={task.id}
+        className="time-block"
+        data-start={start}
+        data-end={end}
+        data-resizing={pending !== null || undefined}
+        style={{
+          top: (startMin / 60) * HOUR_PX,
+          height: Math.max(((endMin - startMin) / 60) * HOUR_PX, HOUR_PX / 3),
+        }}
+        {...taskDragProps(task)}
+      >
+        <div
+          className="resize-handle resize-handle-top"
+          role="button"
+          tabIndex={0}
+          aria-label={`Resize start of "${task.title}"`}
+          onMouseDown={(event) => beginEdgeDrag(event, task, "start", day)}
+          onKeyDown={(event) => nudgeEdge(event, task, "start", day)}
+          onDragStart={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        />
+        <span className="block-title">{task.title}</span>
+        <span className="block-time">
+          {start}–{end}
+        </span>
+        <div
+          className="resize-handle resize-handle-bottom"
+          role="button"
+          tabIndex={0}
+          aria-label={`Resize end of "${task.title}"`}
+          onMouseDown={(event) => beginEdgeDrag(event, task, "end", day)}
+          onKeyDown={(event) => nudgeEdge(event, task, "end", day)}
+          onDragStart={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        />
       </div>
     );
   }
 
-  function renderTimeGrid(): JSX.Element {
-    const days = [anchor];
+  function renderTimeGrid(days: string[]): JSX.Element {
     const firstDay = days[0] ?? anchor;
+    const today = localDayOf(now);
+    const nowMinute = now.getHours() * 60 + now.getMinutes();
     return (
       <div className="time-grid">
+        {days.length > 1 && (
+          <div className="week-header">
+            <div className="week-header-gutter" />
+            {days.map((day) => (
+              <div key={day} className="week-day-header" data-today={day === today || undefined}>
+                <span className="day-name">{shortWeekday(day)}</span>
+                <span className="day-date">
+                  {Number(day.slice(8))}/{Number(day.slice(5, 7))}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="all-day-lane" aria-label="All day">
           {days.map((day) => (
             <div
               key={day}
               className="all-day-cell"
               aria-label={`${day} all-day`}
+              onClick={() => openAllDayDraft(day)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => void handleDrop(event, day, null)}
             >
               {laneBanners(tasks, day, firstDay).map((task) => (
-                <div key={task.id} className="calendar-banner" {...taskDragProps(task)}>
+                <div
+                  key={task.id}
+                  className="calendar-banner"
+                  {...taskDragProps(task)}
+                  onClick={(event) => event.stopPropagation()}
+                >
                   {task.title}
                 </div>
               ))}
             </div>
           ))}
         </div>
-        <div className="time-columns" onMouseUp={finishDrag} onMouseLeave={() => setDrag(null)}>
+        <div
+          ref={timeColumnsRef}
+          className="time-columns"
+          onMouseUp={finishDrag}
+          onMouseLeave={() => setDrag(null)}
+        >
           <div className="hour-gutter">
             {HOURS.map((hour) => (
-              <div key={hour} className="hour-label">
+              <div key={hour} className="hour-label" style={{ height: HOUR_PX }}>
                 {hourLabel(hour)}
               </div>
             ))}
@@ -346,6 +482,7 @@ export function CalendarView(): JSX.Element {
                   key={hour}
                   aria-label={`${day} ${hourLabel(hour)}`}
                   className="hour-cell"
+                  style={{ height: HOUR_PX }}
                   data-selected={
                     (drag !== null &&
                       drag.day === day &&
@@ -365,52 +502,14 @@ export function CalendarView(): JSX.Element {
               ))}
               {tasksOn(tasks, day)
                 .filter((task) => !isBanner(task))
-                .map((task) => {
-                  const span = blockSpan(task);
-                  if (span === null) {
-                    return null;
-                  }
-                  const [start, end] = span;
-                  const minutes = (time: string): number =>
-                    Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
-                  const top = (minutes(start) / 1440) * 100;
-                  const height = Math.max(((minutes(end) - minutes(start)) / 1440) * 100, 1.5);
-                  return (
-                    <div
-                      key={task.id}
-                      className="time-block"
-                      data-start={start}
-                      data-end={end}
-                      style={{ top: `${top}%`, height: `${height}%` }}
-                      {...taskDragProps(task)}
-                    >
-                      <div
-                        className="resize-handle resize-handle-top"
-                        role="button"
-                        draggable
-                        aria-label={`Resize start of "${task.title}"`}
-                        onDragStart={(event) => {
-                          event.stopPropagation();
-                          startDrag(event, { kind: "resize-start", id: task.id });
-                        }}
-                      />
-                      <span className="block-title">{task.title}</span>
-                      <span className="block-time">
-                        {start}–{end}
-                      </span>
-                      <div
-                        className="resize-handle resize-handle-bottom"
-                        role="button"
-                        draggable
-                        aria-label={`Resize end of "${task.title}"`}
-                        onDragStart={(event) => {
-                          event.stopPropagation();
-                          startDrag(event, { kind: "resize-end", id: task.id });
-                        }}
-                      />
-                    </div>
-                  );
-                })}
+                .map((task) => renderBlock(task, day))}
+              {day === today && (
+                <div
+                  className="now-line"
+                  aria-hidden="true"
+                  style={{ top: (nowMinute / 60) * HOUR_PX }}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -481,7 +580,9 @@ export function CalendarView(): JSX.Element {
         </form>
       )}
       <div className="calendar-body">
-        {mode === "month" ? renderMonth() : mode === "week" ? renderWeekView() : renderTimeGrid()}
+        {mode === "month"
+          ? renderMonth()
+          : renderTimeGrid(mode === "week" ? weekDays(anchor) : [anchor])}
         <aside className="unscheduled-panel" aria-label="Unscheduled">
           <h3>Unscheduled</h3>
           <ul>

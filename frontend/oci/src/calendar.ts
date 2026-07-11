@@ -159,6 +159,45 @@ export function calendarTitle(mode: CalendarMode, anchorDay: string): string {
 /** Zero-padded "HH:00" — hour-cell labels and drag-created times. */
 export const hourLabel = (hour: number): string => `${String(hour).padStart(2, "0")}:00`;
 
+/** Resize snap granularity: quarter-hour, the common calendar convention. */
+export const SNAP_MINUTES = 15;
+
+/** Minutes since midnight of an "HH:MM" wall-clock label. */
+export const timeMinutes = (time: string): number =>
+  Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+
+/** The "HH:MM" label of a minute of the day. Minute 1440 renders as 23:59 —
+ * midnight would leak into the next day, which the schedule invariant (a
+ * timed task stays within one calendar day) rejects. */
+export function minuteLabel(minute: number): string {
+  if (minute >= 1440) {
+    return "23:59";
+  }
+  const hours = String(Math.floor(minute / 60)).padStart(2, "0");
+  return `${hours}:${String(minute % 60).padStart(2, "0")}`;
+}
+
+/** A timed block's [start, end] as minutes of its day, or null when unscheduled. */
+export function blockMinutes(task: Task): [number, number] | null {
+  const span = blockSpan(task);
+  return span === null ? null : [timeMinutes(span[0]), timeMinutes(span[1])];
+}
+
+/** Where a dragged block edge lands: snapped to the grid and clamped so the
+ * block keeps at least one snap step and stays within its day. */
+export function draggedEdgeMinute(
+  edge: "start" | "end",
+  baseMinute: number,
+  deltaMinutes: number,
+  otherEdgeMinute: number,
+): number {
+  const snapped = Math.round((baseMinute + deltaMinutes) / SNAP_MINUTES) * SNAP_MINUTES;
+  if (edge === "start") {
+    return Math.max(0, Math.min(snapped, otherEdgeMinute - SNAP_MINUTES));
+  }
+  return Math.min(1440, Math.max(snapped, otherEdgeMinute + SNAP_MINUTES));
+}
+
 /** The wall-clock time an hour-cell gesture ends at. Covering the last cell
  * ends at 23:59 — midnight would leak into the next day, which the schedule
  * invariant (a timed task stays within one calendar day) rejects. */
@@ -239,33 +278,29 @@ export function dropPatch(task: Task, dayIso: string, hour: number | null): Task
   };
 }
 
-/** The patch for a block edge dropped on an hour cell, or null when the drop
- * is invalid: another day's column (a timed task stays within one day), or an
- * edge crossing its opposite. Dropping the bottom edge on a cell extends the
- * block through that cell; the top edge starts it there. A due-only block has
- * no start to cross: its due simply moves. The new instant is built in the
- * browser's timezone and the task's own is left untouched — the same thing
- * for every v1 write, which always schedules in the browser's timezone. */
+/** The patch for a block edge released at a minute of its day column, or null
+ * when the resize is invalid: an edge crossing its opposite in absolute time
+ * (possible when the task's timezone differs from the browser's). A due-only
+ * block has no start to cross: its due simply moves. The new instant is built
+ * in the browser's timezone and the task's own is left untouched — the same
+ * thing for every v1 write, which always schedules in the browser's timezone. */
 export function resizePatch(
   task: Task,
   edge: "start" | "end",
   dayIso: string,
-  hour: number,
+  minute: number,
 ): TaskPatch | null {
   if (task.due_date === null || task.is_all_day) {
     return null;
   }
-  if (zonedDay(task.due_date, task.time_zone) !== dayIso) {
-    return null;
-  }
   if (edge === "start") {
-    const start = instantOf(dayIso, hourLabel(hour));
+    const start = instantOf(dayIso, minuteLabel(minute));
     if (new Date(start).getTime() >= new Date(task.due_date).getTime()) {
       return null;
     }
     return { start_date: start };
   }
-  const due = instantOf(dayIso, hourEndTime(hour + 1));
+  const due = instantOf(dayIso, minuteLabel(minute));
   const startMs = task.start_date === null ? null : new Date(task.start_date).getTime();
   if (startMs !== null && new Date(due).getTime() <= startMs) {
     return null;
