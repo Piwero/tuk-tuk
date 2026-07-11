@@ -9,6 +9,8 @@ import { fakeFocusSession, fakeHabit, fakeTask, installFakeApi } from "./test/fa
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date(2026, 6, 3, 12, 0, 0));
+  // A running Focus session persists itself; tests must not inherit one.
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -167,6 +169,111 @@ describe("Linking", () => {
     await waitFor(() => expect(api.focusSessions).toHaveLength(1));
     expect(api.focusSessions[0]?.task_id).toBe(task.id);
     expect(api.focusSessions[0]?.mode).toBe("pomo");
+  });
+});
+
+describe("Run persistence", () => {
+  async function openHabits(): Promise<void> {
+    const nav = await screen.findByRole("navigation", { name: "Views" });
+    fireEvent.click(within(nav).getByRole("button", { name: "Habits" }));
+    await screen.findByRole("heading", { name: "Habits" });
+  }
+
+  it("keeps the countdown running across leaving and reopening the Focus view", async () => {
+    const task = fakeTask("Write report");
+    installFakeApi({ tasks: [task] });
+    render(<App />);
+    await openFocus();
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "Link" }), {
+      target: { value: `task:${task.id}` },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(60_000);
+
+    await openHabits();
+    tick(120_000); // Time keeps passing while the view is unmounted.
+    await openFocus();
+
+    expect(await screen.findByText("22:00")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+  });
+
+  it("keeps a pause frozen while the view is away", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(30_000);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+
+    await openHabits();
+    tick(90_000);
+    await openFocus();
+
+    expect(await screen.findByText("24:30")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+  });
+
+  it("keeps a stopwatch counting across view switches", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), {
+      target: { value: "stopwatch" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(90_000);
+
+    await openHabits();
+    tick(30_000);
+    await openFocus();
+
+    expect(await screen.findByText("02:00")).toBeInTheDocument();
+  });
+
+  it("restores a running pomo after a full remount, like a page reload", async () => {
+    installFakeApi();
+    const first = render(<App />);
+    await openFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(60_000);
+    first.unmount();
+
+    render(<App />);
+    await openFocus();
+
+    expect(await screen.findByText("24:00")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+  });
+
+  it("records the honest expiry when a pomo runs out while away", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+      target: { value: "1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(10_000);
+
+    await openHabits();
+    tick(300_000); // The pomo expired long before anyone looked.
+    await openFocus();
+
+    await waitFor(() => expect(api.focusSessions).toHaveLength(1));
+    const saved = api.focusSessions[0];
+    const wallSeconds =
+      (new Date(saved?.ended_at ?? 0).getTime() - new Date(saved?.started_at ?? 0).getTime()) /
+      1000;
+    expect(wallSeconds).toBe(60);
+    // Back to idle: the stored run is gone.
+    expect(await screen.findByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 });
 

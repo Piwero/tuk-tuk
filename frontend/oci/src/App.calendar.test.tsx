@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
 import { openCalendar, openWeek, pinCalendarClock } from "./test/calendar";
+import { closestOrThrow } from "./test/dnd";
 import { fakeTask, installFakeApi, type RecordedRequest } from "./test/fakeApi";
 
 pinCalendarClock();
@@ -290,22 +291,19 @@ describe("The Week view", () => {
     ).toBeInTheDocument();
   });
 
-  it("displays task cards with time, icon, title, and duration", async () => {
+  it("lays timed blocks out in their day columns, sized by their times", async () => {
     installFakeApi({
       tasks: [
-        // 30-minute task
         fakeTask("Quick sync", {
           start_date: "2026-07-03T09:00:00Z",
           due_date: "2026-07-03T09:30:00Z",
           time_zone: "UTC",
         }),
-        // 1-hour task
         fakeTask("Standup", {
           start_date: "2026-07-03T10:00:00Z",
           due_date: "2026-07-03T11:00:00Z",
           time_zone: "UTC",
         }),
-        // 1.5-hour task
         fakeTask("Design review", {
           start_date: "2026-07-04T14:00:00Z",
           due_date: "2026-07-04T15:30:00Z",
@@ -317,19 +315,68 @@ describe("The Week view", () => {
 
     await openWeek();
 
-    // Verify task cards display start time
-    expect(await screen.findByText("09:00")).toBeInTheDocument(); // Quick sync start
-    expect(await screen.findByText("10:00")).toBeInTheDocument(); // Standup start
-    expect(await screen.findByText("14:00")).toBeInTheDocument(); // Design review start
+    // Each task renders as a time block in its own day's column…
+    const quickSync = closestOrThrow(await screen.findByText("Quick sync"), ".time-block");
+    expect(quickSync).toHaveAttribute("data-start", "09:00");
+    expect(quickSync.closest("[data-day]")).toHaveAttribute("data-day", "2026-07-03");
+    const review = closestOrThrow(screen.getByText("Design review"), ".time-block");
+    expect(review.closest("[data-day]")).toHaveAttribute("data-day", "2026-07-04");
 
-    // Verify task titles are visible
-    expect(screen.getByText("Quick sync")).toBeInTheDocument();
-    expect(screen.getByText("Standup")).toBeInTheDocument();
-    expect(screen.getByText("Design review")).toBeInTheDocument();
+    // …labelled with its full time range.
+    expect(screen.getByText("09:00–09:30")).toBeInTheDocument();
+    expect(screen.getByText("10:00–11:00")).toBeInTheDocument();
+    expect(screen.getByText("14:00–15:30")).toBeInTheDocument();
+  });
 
-    // Verify durations are correctly formatted
-    expect(screen.getByText("30m")).toBeInTheDocument(); // 30 minutes
-    expect(screen.getAllByText("1h")).toHaveLength(1); // 1 hour (Standup)
-    expect(screen.getByText("1h 30m")).toBeInTheDocument(); // 1 hour 30 minutes
+  it("creates a timed task by dragging across hours in a week column", async () => {
+    const api = installFakeApi();
+    render(<App />);
+
+    await openWeek();
+
+    fireEvent.mouseDown(screen.getByLabelText("2026-07-04 09:00"));
+    fireEvent.mouseEnter(screen.getByLabelText("2026-07-04 10:00"));
+    fireEvent.mouseUp(screen.getByLabelText("2026-07-04 10:00"));
+
+    const input = await screen.findByRole("textbox", { name: "New task title" });
+    fireEvent.change(input, { target: { value: "Weekend prep" } });
+    fireEvent.submit(input);
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "Weekend prep",
+      start_date: "2026-07-04T09:00:00.000Z",
+      due_date: "2026-07-04T11:00:00.000Z",
+      is_all_day: false,
+      time_zone: "UTC",
+    });
+  });
+
+  it("resizes a block by dragging its bottom edge in the week grid", async () => {
+    const api = installFakeApi({
+      tasks: [
+        fakeTask("Standup", {
+          start_date: "2026-07-03T10:00:00Z",
+          due_date: "2026-07-03T10:30:00Z",
+          time_zone: "UTC",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openWeek();
+
+    fireEvent.mouseDown(await screen.findByLabelText('Resize end of "Standup"'), {
+      clientY: 400,
+    });
+    fireEvent.mouseMove(window, { clientY: 418 }); // +30 minutes at 36px per hour
+    fireEvent.mouseUp(window);
+
+    await waitFor(() =>
+      expect(api.tasks.find((task) => task.title === "Standup")).toMatchObject({
+        start_date: "2026-07-03T10:00:00Z",
+        due_date: "2026-07-03T11:00:00.000Z",
+      }),
+    );
   });
 });

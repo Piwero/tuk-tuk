@@ -9,6 +9,8 @@ import { fakeFocusSession, fakeHabit, fakeTask, fakeTimer, installFakeApi } from
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date(2026, 6, 3, 12, 0, 0));
+  // A running Focus session persists itself; tests must not inherit one.
+  localStorage.clear();
 });
 
 afterEach(() => {

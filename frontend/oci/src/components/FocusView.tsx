@@ -19,6 +19,7 @@ import {
   type TimerCreateInput,
 } from "../api";
 import { linkFields, linkOf, type FocusLink } from "../focusLink";
+import { clearStoredRun, loadStoredRun, saveStoredRun } from "../focusRun";
 import { FocusSessionForm, type FocusSessionFormValues } from "./FocusSessionForm";
 import { FocusStatsPanel } from "./FocusStatsPanel";
 import { Icon } from "./Icon";
@@ -52,10 +53,27 @@ interface FocusViewProps {
  * add and edit. Pause time is tracked separately — recorded focus time is
  * honest. */
 export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
-  const [mode, setMode] = useState<FocusMode>("pomo");
-  const [pomoMinutes, setPomoMinutes] = useState("25");
-  const [link, setLink] = useState<FocusLink>(initialTask ? `task:${initialTask.id}` : "");
-  const [running, setRunning] = useState<RunningSession | null>(null);
+  // A run persisted by a previous mount — another view, a closed tab, a
+  // reload — resumes here: elapsed time recomputes from its timestamps.
+  const [restored] = useState(loadStoredRun);
+  const [mode, setMode] = useState<FocusMode>(restored?.mode ?? "pomo");
+  const [pomoMinutes, setPomoMinutes] = useState(
+    restored !== null && restored.mode === "pomo" ? String(restored.pomoMs / 60_000) : "25",
+  );
+  const [link, setLink] = useState<FocusLink>(
+    restored !== null ? restored.link : initialTask ? `task:${initialTask.id}` : "",
+  );
+  const [running, setRunning] = useState<RunningSession | null>(
+    restored === null
+      ? null
+      : {
+          mode: restored.mode,
+          pomoMs: restored.pomoMs,
+          startedAtMs: restored.startedAtMs,
+          pausedMs: restored.pausedMs,
+          pauseStartedAtMs: restored.pauseStartedAtMs,
+        },
+  );
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -133,15 +151,29 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
     await loadTimers();
   }
 
-  // Start a Pomo against the passed task immediately — the task row's shortcut.
+  // Start a Pomo against the passed task immediately — the task row's
+  // shortcut. A restored run wins: it is real recorded focus time, so the
+  // shortcut must not silently discard it.
   const autostart = useRef(initialTask);
   useEffect(() => {
     if (autostart.current !== null) {
       autostart.current = null;
-      start();
+      if (running === null) {
+        start();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The run survives this component: every change is written through to
+  // storage, and finishing (or discarding) clears it.
+  useEffect(() => {
+    if (running === null) {
+      clearStoredRun();
+    } else {
+      saveStoredRun({ ...running, link });
+    }
+  }, [running, link]);
 
   // The clock: one tick a second while a timer runs.
   useEffect(() => {
@@ -151,6 +183,17 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [running]);
+
+  // Background tabs throttle intervals; returning re-syncs the clock at once.
+  useEffect(() => {
+    const sync = (): void => setNowMs(Date.now());
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("focus", sync);
+    };
+  }, []);
 
   const elapsedMs =
     running === null
@@ -163,7 +206,13 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
       return;
     }
     finishing.current = true;
-    const endMs = Date.now();
+    // A Pomo that ran out while nobody was watching (the view unmounted, the
+    // tab asleep) ends at its true expiry, not at whenever we noticed.
+    const expiryMs = running.startedAtMs + running.pausedMs + running.pomoMs;
+    const endMs =
+      running.mode === "pomo" && running.pauseStartedAtMs === null
+        ? Math.min(Date.now(), expiryMs)
+        : Date.now();
     const pausedTotalMs =
       running.pausedMs + (running.pauseStartedAtMs === null ? 0 : endMs - running.pauseStartedAtMs);
     try {

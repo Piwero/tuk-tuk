@@ -7,10 +7,7 @@ export type DragPayload =
   | { kind: "folder"; id: number }
   | { kind: "task"; id: number }
   | { kind: "check-item"; id: number }
-  | { kind: "section"; id: number }
-  /** A calendar block's edge, resized by dropping it on an hour cell. */
-  | { kind: "resize-start"; id: number }
-  | { kind: "resize-end"; id: number };
+  | { kind: "section"; id: number };
 
 export function startDrag(event: React.DragEvent, payload: DragPayload): void {
   event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload));
