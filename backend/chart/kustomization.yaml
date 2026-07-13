@@ -14,3 +14,4 @@ resources:
   - deployment.yaml
   - service.yaml
   - tailscale-ingress.yaml
+  - cf-ingressroute.yaml
