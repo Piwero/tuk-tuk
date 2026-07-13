@@ -1,0 +1,17 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: tuk-tuk
+  namespace: tuk-tuk
+spec:
+  entryPoints:
+    - websecure
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`tt.piwero.com`)
+      services:
+        - name: frontend
+          kind: Service
+          port: 80
