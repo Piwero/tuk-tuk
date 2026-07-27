@@ -20,7 +20,7 @@ spec:
         app: backend
     spec:
       # The Service is named "backend", so Kubernetes would inject
-      # BACKEND_PORT=tcp://<clusterIP>:8000 as a legacy service-link env var,
+      # BACKEND_PORT=tcp://<clusterIP>:8900 as a legacy service-link env var,
       # which collides with the pydantic Settings.backend_port int field and
       # crashes the app on startup.
       enableServiceLinks: false
@@ -40,20 +40,20 @@ spec:
           image: ghcr.io/piwero/tuk-tuk/backend:0.1.2 # {"$imagepolicy": "tuk-tuk:backend"}
           imagePullPolicy: Always
           ports:
-            - containerPort: 8000
+            - containerPort: 8900
           envFrom:
             - configMapRef:
                 name: backend-config
           readinessProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: 8900
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: 8900
             initialDelaySeconds: 15
             periodSeconds: 30
           volumeMounts:

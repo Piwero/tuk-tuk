@@ -44,8 +44,8 @@ mise run dev
 
 Then open:
 
-- Frontend: http://localhost:5173
-- API: http://localhost:8000 (interactive docs at `/docs`, health at `/health`)
+- Frontend: http://localhost:5900
+- API: http://localhost:8900 (interactive docs at `/docs`, health at `/health`)
 
 ## Development
 

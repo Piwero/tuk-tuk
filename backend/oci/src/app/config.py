@@ -12,10 +12,10 @@ class Settings(BaseSettings):
 
     app_name: str = "tuk-tuk"
     backend_host: str = "0.0.0.0"
-    backend_port: int = 8000
+    backend_port: int = 8900
     backend_log_level: str = "info"
     database_url: str = "sqlite+aiosqlite:///./tuk_tuk.db"
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:5900"]
 
 
 settings = Settings()
