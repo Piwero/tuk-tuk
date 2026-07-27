@@ -21,7 +21,7 @@ image-pull secret (`tuk-tuk-ghcr`), the Flux `GitRepository`, and the
 ## nginx proxy
 
 The `nginx.conf` in the ConfigMap proxies `/api/` requests to
-`http://backend:8000` — the backend Service in the same `tuk-tuk` namespace.
+`http://backend:8900` — the backend Service in the same `tuk-tuk` namespace.
 The image is built with `VITE_API_BASE_URL=""` (see the release workflow), so
 the app makes relative `/api/...` requests and everything stays same-origin;
 no CORS involved.

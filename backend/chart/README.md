@@ -15,7 +15,7 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
 | `imagerepository.yaml` / `imagepolicy.yaml` | ImageRepository / ImagePolicy | Scans GHCR for new semver backend images |
 | `imageupdateautomation.yaml` | ImageUpdateAutomation | Commits image bumps back to `main` (covers both charts) |
 | `deployment.yaml` | Deployment | Runs `ghcr.io/piwero/tuk-tuk/backend` |
-| `service.yaml` | Service | ClusterIP on port 8000, referenced by the frontend nginx proxy |
+| `service.yaml` | Service | ClusterIP on port 8900, referenced by the frontend nginx proxy |
 | `tailscale-ingress.yaml` | Ingress | Exposes the API on the tailnet as `tuk-tuk-backend` |
 
 ## Notes

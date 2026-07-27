@@ -26,7 +26,7 @@ Or natively:
 uv run uvicorn app.main:app --reload
 ```
 
-Then open http://localhost:8000/health (interactive docs at `/docs`).
+Then open http://localhost:8900/health (interactive docs at `/docs`).
 
 Alembic migrations (`migrations/`) run automatically at startup; the SQLite
 database lands at `./tuk_tuk.db` (gitignored).

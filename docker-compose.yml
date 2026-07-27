@@ -6,7 +6,7 @@ services:
       context: ./backend/oci
       target: dev
     ports:
-      - "8000:8000"
+      - "8900:8900"
     env_file:
       - .env
     volumes:
@@ -17,7 +17,7 @@ services:
       context: ./frontend/oci
       target: dev
     ports:
-      - "5173:5173"
+      - "5900:5900"
     env_file:
       - .env
     volumes:

@@ -23,10 +23,10 @@ Or natively:
 npm run dev
 ```
 
-Then open http://localhost:5173.
+Then open http://localhost:5900.
 
 API calls go to `VITE_API_BASE_URL` (set in the repo-root `.env`, default
-`http://localhost:8000`).
+`http://localhost:8900`).
 
 ## Common commands
 
