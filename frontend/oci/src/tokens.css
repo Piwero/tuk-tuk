@@ -108,15 +108,20 @@
   --heat-3: #2da44e;
   --heat-4: #176430;
 
-  /* List / Tag accent palette — curated choices offered in pickers */
+  /* List / Tag / Habit accent palette — the 12 choices offered in pickers.
+     Mirrored in ACCENT_PALETTE (theme.ts); keep the two in step. */
   --swatch-blue: #4772fa;
-  --swatch-teal: #12a594;
-  --swatch-green: #2da44e;
-  --swatch-amber: #eda812;
-  --swatch-orange: #f76b15;
-  --swatch-red: #e5484d;
-  --swatch-pink: #d6409f;
+  --swatch-indigo: #5b5bd6;
   --swatch-plum: #8b5cf6;
+  --swatch-pink: #d6409f;
+  --swatch-red: #e5484d;
+  --swatch-orange: #f76b15;
+  --swatch-amber: #eda812;
+  --swatch-lime: #99d52a;
+  --swatch-green: #2da44e;
+  --swatch-teal: #12a594;
+  --swatch-cyan: #00a2c7;
+  --swatch-slate: #8b8d98;
 
   --focus-ring: 0 0 0 3px var(--blue-100);
 
