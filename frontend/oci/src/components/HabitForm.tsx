@@ -7,6 +7,7 @@ import {
   type HabitFrequency,
 } from "../habitFrequency";
 import { WEEKDAY_LABELS, WEEKDAYS, type Weekday } from "../recurrence";
+import { ACCENT_PALETTE } from "../theme";
 
 export interface HabitFormValues {
   name: string;
@@ -159,14 +160,31 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
           onChange={(event) => setIcon(event.target.value)}
         />
       </label>
-      <label>
-        Color
-        <input
-          aria-label="Color"
-          value={color}
-          onChange={(event) => setColor(event.target.value)}
-        />
-      </label>
+      <fieldset className="color-palette">
+        <legend>Color</legend>
+        <label className="color-swatch none">
+          <input
+            type="radio"
+            name="habit-color"
+            aria-label="No colour"
+            checked={color === ""}
+            value=""
+            onChange={() => setColor("")}
+          />
+        </label>
+        {ACCENT_PALETTE.map((swatch) => (
+          <label key={swatch.value} className="color-swatch" style={{ background: swatch.value }}>
+            <input
+              type="radio"
+              name="habit-color"
+              aria-label={swatch.name}
+              checked={color === swatch.value}
+              value={swatch.value}
+              onChange={() => setColor(swatch.value)}
+            />
+          </label>
+        ))}
+      </fieldset>
       <label>
         Encouragement
         <input

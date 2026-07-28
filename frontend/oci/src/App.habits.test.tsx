@@ -162,6 +162,68 @@ describe("Managing Habits", () => {
     });
   });
 
+  it("creates a Habit with a colour chosen from the palette", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Habit" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Stretch" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Teal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/habits");
+      expect(post?.body).toMatchObject({ name: "Stretch", color: "#12a594" });
+    });
+  });
+
+  it("offers twelve colours and no way to type a colour code", async () => {
+    installFakeApi();
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Habit" }));
+
+    const palette = screen.getByRole("group", { name: "Color" });
+    const names = within(palette)
+      .getAllByRole("radio")
+      .map((radio) => radio.getAttribute("aria-label"));
+    expect(names).toEqual([
+      "No colour",
+      "Blue",
+      "Indigo",
+      "Plum",
+      "Pink",
+      "Red",
+      "Orange",
+      "Amber",
+      "Lime",
+      "Green",
+      "Teal",
+      "Cyan",
+      "Slate",
+    ]);
+    expect(within(palette).queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it("preselects the Habit's colour when editing and can clear it", async () => {
+    const api = installFakeApi({ habits: [fakeHabit("Meditate", { color: "#e5484d" })] });
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Meditate" }));
+    expect(screen.getByRole("radio", { name: "Red" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("radio", { name: "No colour" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const patch = api.requests.find((r) => r.method === "PATCH");
+      expect(patch?.body).toMatchObject({ color: null });
+    });
+  });
+
   it("edits a Habit in place", async () => {
     const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
     render(<App />);
