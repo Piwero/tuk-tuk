@@ -15,17 +15,19 @@ import {
   addDays,
   allDaySchedule,
   clearedSchedule,
+  draftFrom,
   formatSchedule,
   isOverdue,
   localDayOf,
-  localTimeOf,
   nextMonday,
-  timedSchedule,
+  scheduleFromDraft,
+  type DateDraft,
 } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { PRIORITY_LABELS } from "../grouping";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
+import { DateFieldset } from "./DateFieldset";
 import { RepeatFieldset } from "./RepeatFieldset";
 import { Icon } from "./Icon";
 
@@ -34,43 +36,6 @@ interface TaskDetailProps {
   allTags: Tag[];
   onTaskChanged: (task: Task) => void;
   onClose: () => void;
-}
-
-/** Draft state of the custom date editor; empty strings mean "not set". */
-interface DateDraft {
-  allDay: boolean;
-  startDay: string;
-  dueDay: string;
-  startTime: string;
-  dueTime: string;
-}
-
-function draftFrom(task: Task): DateDraft {
-  if (task.due_date === null) {
-    return {
-      allDay: false,
-      startDay: "",
-      dueDay: localDayOf(new Date()),
-      startTime: "",
-      dueTime: "",
-    };
-  }
-  if (task.is_all_day) {
-    return {
-      allDay: true,
-      startDay: task.start_date?.slice(0, 10) ?? "",
-      dueDay: task.due_date.slice(0, 10),
-      startTime: "",
-      dueTime: "",
-    };
-  }
-  return {
-    allDay: false,
-    startDay: "",
-    dueDay: localDayOf(new Date(task.due_date)),
-    startTime: task.start_date === null ? "" : localTimeOf(new Date(task.start_date)),
-    dueTime: localTimeOf(new Date(task.due_date)),
-  };
 }
 
 export function TaskDetail({
@@ -171,33 +136,11 @@ export function TaskDetail({
     if (dateDraft === null) {
       return;
     }
-    const { allDay, startDay, dueDay, startTime, dueTime } = dateDraft;
-    if (dueDay === "") {
+    const schedule = scheduleFromDraft(dateDraft);
+    if (schedule === null) {
       return;
     }
-    if (allDay) {
-      if (startDay !== "" && startDay > dueDay) {
-        return;
-      }
-      const start = startDay === "" || startDay === dueDay ? null : startDay;
-      onTaskChanged(await updateTask(task.id, allDaySchedule(start, dueDay)));
-    } else if (dueTime === "") {
-      // Time is optional: a bare date means the whole day.
-      if (startTime !== "") {
-        return;
-      }
-      onTaskChanged(await updateTask(task.id, allDaySchedule(null, dueDay)));
-    } else {
-      if (startTime !== "" && startTime >= dueTime) {
-        return;
-      }
-      onTaskChanged(
-        await updateTask(
-          task.id,
-          timedSchedule(dueDay, startTime === "" ? null : startTime, dueTime),
-        ),
-      );
-    }
+    onTaskChanged(await updateTask(task.id, schedule));
     setDateDraft(null);
   }
 
@@ -340,69 +283,8 @@ export function TaskDetail({
             )}
           </div>
         ) : (
-          <div className="date-editor">
-            <label>
-              <input
-                type="checkbox"
-                aria-label="All day"
-                checked={dateDraft.allDay}
-                onChange={(event) => setDateDraft({ ...dateDraft, allDay: event.target.checked })}
-              />
-              All day
-            </label>
-            {dateDraft.allDay ? (
-              <>
-                <label>
-                  Start day
-                  <input
-                    type="date"
-                    value={dateDraft.startDay}
-                    onChange={(event) =>
-                      setDateDraft({ ...dateDraft, startDay: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Due day
-                  <input
-                    type="date"
-                    value={dateDraft.dueDay}
-                    onChange={(event) => setDateDraft({ ...dateDraft, dueDay: event.target.value })}
-                  />
-                </label>
-              </>
-            ) : (
-              <>
-                <label>
-                  Day
-                  <input
-                    type="date"
-                    value={dateDraft.dueDay}
-                    onChange={(event) => setDateDraft({ ...dateDraft, dueDay: event.target.value })}
-                  />
-                </label>
-                <label>
-                  Start time
-                  <input
-                    type="time"
-                    value={dateDraft.startTime}
-                    onChange={(event) =>
-                      setDateDraft({ ...dateDraft, startTime: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Due time
-                  <input
-                    type="time"
-                    value={dateDraft.dueTime}
-                    onChange={(event) =>
-                      setDateDraft({ ...dateDraft, dueTime: event.target.value })
-                    }
-                  />
-                </label>
-              </>
-            )}
+          <div className="date-editor-actions">
+            <DateFieldset draft={dateDraft} onChange={setDateDraft} />
             <button type="button" onClick={() => void saveDateDraft()}>
               Save date
             </button>

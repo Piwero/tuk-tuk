@@ -1,0 +1,85 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { App } from "./App";
+import { fakeList, INBOX, installFakeApi } from "./test/fakeApi";
+
+// Note: fetch stays stubbed across tests (each test installs a fresh fake).
+// Restoring the real fetch between tests would let a late in-flight request
+// from an unmounting App escape to the network and fail the run.
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("Collapsing the sidebar", () => {
+  it("collapses to icons and back from the toggle beside the wordmark", async () => {
+    const errands = fakeList("Errands");
+    installFakeApi({ lists: [INBOX, errands] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    const sidebar = screen.getByRole("complementary");
+    expect(within(sidebar).getByRole("search")).toBeInTheDocument();
+
+    await user.click(within(sidebar).getByRole("button", { name: "Collapse sidebar" }));
+
+    // The rail keeps every destination reachable, by icon alone.
+    expect(within(sidebar).queryByRole("search")).not.toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Errands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Quick add" })).toBeInTheDocument();
+
+    await user.click(within(sidebar).getByRole("button", { name: "Expand sidebar" }));
+    expect(within(sidebar).getByRole("search")).toBeInTheDocument();
+  });
+
+  // Below the mobile breakpoint the sidebar is off-canvas, so the header
+  // carries its own control. jsdom applies no CSS, so the layout itself isn't
+  // observable here — the drawer's state and its dismissal are.
+  it("opens the navigation drawer from the header and closes it on a choice", async () => {
+    const errands = fakeList("Errands");
+    installFakeApi({ lists: [INBOX, errands] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    const menu = screen.getByRole("button", { name: "Show navigation" });
+    expect(menu).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(menu);
+    expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+
+    // Picking a destination gets the drawer out of the way.
+    const sidebar = screen.getByRole("complementary");
+    await user.click(within(sidebar).getByRole("button", { name: "Errands" }));
+
+    expect(await screen.findByRole("heading", { name: "Errands" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("remembers the choice across a reload", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    const first = render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    first.unmount();
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
+    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+  });
+});

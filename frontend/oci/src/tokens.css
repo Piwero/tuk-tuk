@@ -80,6 +80,8 @@
   --accent-hover: var(--blue-700);
   --accent-soft: var(--blue-50); /* selected rows, calendar blocks */
   --accent-border: var(--blue-200);
+  --accent-strong: var(--blue-700); /* filled primary actions on a light surface */
+  --accent-strong-hover: var(--blue-800);
 
   --danger: var(--red-500);
   --danger-hover: var(--red-600);
@@ -163,7 +165,9 @@
   --radius-full: 999px; /* pills, timer presets, habit checks */
 
   --sidebar-width: 248px;
+  --sidebar-rail: 56px; /* collapsed sidebar: icons only */
   --detail-width: 360px;
+  --modal-width: 460px;
   --content-max: 720px;
   --row-height: 40px; /* task rows, sidebar items */
   --control-height: 34px; /* inputs, buttons */
@@ -174,6 +178,8 @@
   --shadow-md: 0 4px 12px rgba(26, 29, 35, 0.09), 0 1px 3px rgba(26, 29, 35, 0.05);
   --shadow-lg: 0 12px 32px rgba(26, 29, 35, 0.14), 0 2px 6px rgba(26, 29, 35, 0.06);
   --shadow-drag: 0 8px 24px rgba(26, 29, 35, 0.16); /* picked-up kanban card */
+  --scrim: rgba(26, 29, 35, 0.4); /* the page behind a modal */
+  --z-modal: 100;
 
   --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
   --duration-fast: 120ms;
