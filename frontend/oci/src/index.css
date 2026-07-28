@@ -169,6 +169,15 @@ input[type="checkbox"]:checked {
   grid-template-columns: var(--sidebar-width) 1fr var(--detail-width);
 }
 
+/* Collapsed: the sidebar narrows to an icon rail and the width goes to main. */
+.app.sidebar-collapsed {
+  grid-template-columns: var(--sidebar-rail) 1fr;
+}
+
+.app.sidebar-collapsed.with-detail {
+  grid-template-columns: var(--sidebar-rail) 1fr var(--detail-width);
+}
+
 main {
   padding: var(--space-6) var(--space-8);
   min-width: 0;
@@ -1776,7 +1785,8 @@ li[data-overdue] .date-chip {
 }
 
 .task-dates .date-actions,
-.task-dates .date-editor {
+.task-dates .date-editor,
+.task-dates .date-editor-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -1878,4 +1888,318 @@ li[data-overdue] .date-chip {
 
 .completed-history .repeat-glyph {
   color: var(--text-accent);
+}
+
+/* ── Modal & Quick add dialog ────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  overflow-y: auto;
+  background: var(--scrim);
+}
+
+.modal {
+  width: 100%;
+  max-width: var(--modal-width);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.modal:focus {
+  outline: none;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.modal-close {
+  margin-left: auto;
+  color: var(--text-tertiary);
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+/* The sidebar's primary action, sitting under the search box. Inherits the
+   sidebar button's box and left alignment so it lines up with the Lists and
+   Smart Lists below it — only the filled accent sets it apart. Scoped under
+   .sidebar to outrank `.sidebar button`'s transparent background. */
+.sidebar .quick-add-trigger {
+  margin-bottom: var(--space-4);
+  background: var(--accent-strong);
+  font-weight: var(--weight-semibold);
+  color: var(--text-inverse);
+}
+
+.sidebar .quick-add-trigger:hover {
+  background: var(--accent-strong-hover);
+}
+
+.sidebar .quick-add-trigger .icon {
+  color: var(--text-inverse);
+}
+
+.quick-add-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.quick-add-dialog > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.quick-add-dialog fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.quick-add-dialog legend {
+  padding: 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.quick-add-dialog .date-actions,
+.quick-add-dialog .date-editor,
+.quick-add-dialog .quick-add-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.quick-add-dialog .quick-add-tags label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.quick-add-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.quick-add-dialog-actions button[type="submit"] {
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  font-weight: var(--weight-medium);
+  color: var(--text-inverse);
+}
+
+.quick-add-dialog-actions button[type="submit"]:hover {
+  background: var(--accent-hover);
+}
+
+/* ── Collapsed sidebar (icon rail) ───────────────────────────────── */
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sidebar-top .sidebar-brand {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar .sidebar-collapse {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.sidebar .sidebar-collapse:hover {
+  color: var(--text-primary);
+}
+
+/* The rail: every row shrinks to its glyph, and the labels step aside. */
+.sidebar.collapsed {
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+  align-items: center;
+}
+
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .sidebar-brand,
+.sidebar.collapsed .row-actions,
+.sidebar.collapsed .folder-row,
+.sidebar.collapsed .tags-nav h2,
+.sidebar.collapsed .archived h2 {
+  display: none;
+}
+
+.sidebar.collapsed button {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+.sidebar.collapsed .top-nav {
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 0 10px;
+  width: 100%;
+}
+
+.sidebar.collapsed .sidebar-top {
+  justify-content: center;
+}
+
+/* A List with no color or emoji still needs something to click. */
+.list-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+/* ── Mobile: the sidebar becomes an off-canvas drawer ────────────── */
+
+.drawer-toggle {
+  display: none; /* desktop keeps the sidebar in the grid */
+}
+
+@media (max-width: 720px) {
+  .app,
+  .app.with-detail,
+  .app.sidebar-collapsed,
+  .app.sidebar-collapsed.with-detail {
+    grid-template-columns: 1fr;
+  }
+
+  /* Off-canvas: full width of the sidebar, whatever the collapsed choice —
+     a phone drawer has the room for labels. */
+  .sidebar,
+  .sidebar.collapsed {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: calc(var(--z-modal) - 1);
+    width: var(--sidebar-width);
+    padding: 14px 10px;
+    align-items: stretch;
+    transform: translateX(-100%);
+    transition: transform var(--duration-base) var(--ease-out);
+  }
+
+  .app.drawer-open .sidebar {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Inside the drawer the rail rules are off: it is the full sidebar. Each
+     element is restored to the display it has when expanded — `revert` would
+     drop them to the UA default and break the flex rows. */
+  .sidebar.collapsed .nav-label {
+    display: inline;
+  }
+
+  .sidebar.collapsed .sidebar-brand,
+  .sidebar.collapsed .tags-nav h2,
+  .sidebar.collapsed .archived h2 {
+    display: block;
+  }
+
+  .sidebar.collapsed .row-actions,
+  .sidebar.collapsed .folder-row {
+    display: flex;
+  }
+
+  .sidebar.collapsed button {
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 10px;
+  }
+
+  .sidebar.collapsed .top-nav {
+    flex-direction: row;
+  }
+
+  .sidebar .sidebar-collapse {
+    display: none; /* the header's drawer toggle owns this on mobile */
+  }
+
+  .drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-modal) - 2);
+    background: var(--scrim);
+  }
+
+  .drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+  }
+
+  .drawer-toggle:hover {
+    background: var(--surface-hover);
+  }
+
+  main {
+    padding: var(--space-4);
+  }
+
+  /* The detail panel has no third column to sit in: it covers the screen. */
+  .task-detail {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    width: auto;
+    overflow-y: auto;
+  }
+
+  .modal-backdrop {
+    padding: var(--space-4) var(--space-2);
+  }
 }

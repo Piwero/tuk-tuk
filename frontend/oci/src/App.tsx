@@ -23,12 +23,16 @@ import {
 } from "./api";
 import { localDayOf } from "./dates";
 import { type GroupBy, type SortBy } from "./grouping";
+import { loadSidebarCollapsed, saveSidebarCollapsed } from "./layoutPrefs";
 import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
 import { FocusView } from "./components/FocusView";
 import { HabitsView } from "./components/HabitsView";
+import { Icon } from "./components/Icon";
 import { KanbanView } from "./components/KanbanView";
+import { Modal } from "./components/Modal";
 import { QuickAdd } from "./components/QuickAdd";
+import { QuickAddDialog } from "./components/QuickAddDialog";
 import { SearchView, type SearchState } from "./components/SearchView";
 import { Sidebar } from "./components/Sidebar";
 import { TaskDetail } from "./components/TaskDetail";
@@ -59,6 +63,11 @@ export function App(): JSX.Element {
   // Completed Occurrences of recurring tasks, shown only in the completed view.
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
+  // Mobile only: below the breakpoint the sidebar is off-canvas and this
+  // slides it over the content. Ignored by the desktop layout.
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
 
@@ -157,8 +166,16 @@ export function App(): JSX.Element {
   // The completed view exists per List and for All (not Today / Next 7 Days).
   const hasCompletedView = selectedList !== null || smartView === "all";
 
+  function toggleSidebar(): void {
+    setSidebarCollapsed((current) => {
+      saveSidebarCollapsed(!current);
+      return !current;
+    });
+  }
+
   function switchView(next: View): void {
     setCompletedMode(false);
+    setDrawerOpen(false);
     setView(next);
   }
 
@@ -187,6 +204,22 @@ export function App(): JSX.Element {
         ? current.map((task) => (task.id === updated.id ? updated : task))
         : current.filter((task) => task.id !== updated.id),
     );
+  }
+
+  /** Show a newly created task, but only where it belongs: the dialog can file
+   * it into another List, and computed views decide membership server-side. */
+  function addCreatedTask(created: Task): void {
+    if (isComputedView) {
+      changeTasksAndRecompute((current) => current);
+      return;
+    }
+    const inView =
+      view?.kind === "list"
+        ? created.list_id === view.id
+        : view?.kind === "tag" && created.tags.some((tag) => tag.id === view.id);
+    if (inView) {
+      setTasks((current) => [...current, created]);
+    }
   }
 
   /** A renamed/recolored Tag must also update the copies embedded in tasks. */
@@ -218,7 +251,16 @@ export function App(): JSX.Element {
   }
 
   return (
-    <div className={selectedTask === null ? "app" : "app with-detail"}>
+    <div
+      className={[
+        "app",
+        selectedTask === null ? "" : "with-detail",
+        sidebarCollapsed ? "sidebar-collapsed" : "",
+        drawerOpen ? "drawer-open" : "",
+      ]
+        .filter((name) => name !== "")
+        .join(" ")}
+    >
       <Sidebar
         lists={lists}
         folders={folders}
@@ -235,6 +277,9 @@ export function App(): JSX.Element {
         onSelectCalendar={() => switchView({ kind: "calendar" })}
         onSelectHabits={() => switchView({ kind: "habits" })}
         onSelectFocus={() => switchView({ kind: "focus" })}
+        onQuickAdd={() => setQuickAddOpen(true)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleSidebar}
         onSearch={(query) =>
           switchView({
             kind: "search",
@@ -254,8 +299,20 @@ export function App(): JSX.Element {
           )
         }
       />
+      {drawerOpen && (
+        <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
+      )}
       <main>
         <div className="main-header">
+          <button
+            type="button"
+            className="drawer-toggle"
+            aria-label="Show navigation"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen((current) => !current)}
+          >
+            <Icon name="menu" size={20} />
+          </button>
           <h1>
             {selectedList?.name ??
               (selectedTag
@@ -296,6 +353,18 @@ export function App(): JSX.Element {
             </button>
           )}
         </div>
+        {quickAddOpen && (
+          <Modal title="Quick add" onClose={() => setQuickAddOpen(false)}>
+            <QuickAddDialog
+              lists={lists}
+              tags={tags}
+              defaultListId={selectedList?.id ?? null}
+              onTagCreated={(tag) => setTags((current) => [...current, tag])}
+              onCreated={addCreatedTask}
+              onClose={() => setQuickAddOpen(false)}
+            />
+          </Modal>
+        )}
         {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
           <>
             <QuickAdd

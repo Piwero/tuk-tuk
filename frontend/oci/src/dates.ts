@@ -5,7 +5,7 @@
  * their calendar day is read from the string, never through the local clock.
  */
 
-import { type Task, type TaskPatch } from "./api";
+import { type Task, type TaskCreateInput, type TaskPatch } from "./api";
 
 /** The IANA timezone the task is scheduled in — v1 always writes the browser's. */
 export function browserTimeZone(): string {
@@ -128,6 +128,77 @@ export function timedSchedule(
 
 export function clearedSchedule(): TaskPatch {
   return { start_date: null, due_date: null, is_all_day: false, time_zone: null };
+}
+
+/** Draft state of the date editor; empty strings mean "not set". */
+export interface DateDraft {
+  allDay: boolean;
+  startDay: string;
+  dueDay: string;
+  startTime: string;
+  dueTime: string;
+}
+
+export function emptyDraft(): DateDraft {
+  return { allDay: false, startDay: "", dueDay: "", startTime: "", dueTime: "" };
+}
+
+/** The draft an existing task prefills the editor with. */
+export function draftFrom(task: Task): DateDraft {
+  if (task.due_date === null) {
+    return { ...emptyDraft(), dueDay: localDayOf(new Date()) };
+  }
+  if (task.is_all_day) {
+    return {
+      allDay: true,
+      startDay: task.start_date?.slice(0, 10) ?? "",
+      dueDay: task.due_date.slice(0, 10),
+      startTime: "",
+      dueTime: "",
+    };
+  }
+  return {
+    allDay: false,
+    startDay: "",
+    dueDay: localDayOf(new Date(task.due_date)),
+    startTime: task.start_date === null ? "" : localTimeOf(new Date(task.start_date)),
+    dueTime: localTimeOf(new Date(task.due_date)),
+  };
+}
+
+/** The schedule a draft describes, or null when it describes none — an unset
+ * day, or a start that doesn't precede its due. Callers treat null as "leave
+ * the schedule alone", which is what both editors want. */
+export function scheduleFromDraft(draft: DateDraft): TaskPatch | null {
+  const { allDay, startDay, dueDay, startTime, dueTime } = draft;
+  if (dueDay === "") {
+    return null;
+  }
+  if (allDay) {
+    if (startDay !== "" && startDay > dueDay) {
+      return null;
+    }
+    return allDaySchedule(startDay === "" || startDay === dueDay ? null : startDay, dueDay);
+  }
+  // Time is optional: a bare date means the whole day.
+  if (dueTime === "") {
+    return startTime === "" ? allDaySchedule(null, dueDay) : null;
+  }
+  if (startTime !== "" && startTime >= dueTime) {
+    return null;
+  }
+  return timedSchedule(dueDay, startTime === "" ? null : startTime, dueTime);
+}
+
+/** A schedule narrowed to a create payload: nulls become omissions, because
+ * TaskCreate has no "clear it" case — an absent field is already unset. */
+export function scheduleForCreate(patch: TaskPatch): Partial<TaskCreateInput> {
+  return {
+    ...(patch.start_date == null ? {} : { start_date: patch.start_date }),
+    ...(patch.due_date == null ? {} : { due_date: patch.due_date }),
+    ...(patch.is_all_day === undefined ? {} : { is_all_day: patch.is_all_day }),
+    ...(patch.time_zone == null ? {} : { time_zone: patch.time_zone }),
+  };
 }
 
 /** The local calendar day a task is due, or null when unscheduled. */

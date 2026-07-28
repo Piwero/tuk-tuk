@@ -57,6 +57,13 @@ interface SidebarProps {
   onSelectHabits: () => void;
   onSelectFocus: () => void;
   onSearch: (query: string) => void;
+  /** Opens the Quick add dialog; the sidebar is always there, so capture is
+   * reachable from every screen, including Habits and Focus. */
+  onQuickAdd: () => void;
+  /** Icons-only rail: labels, search and section headings step aside to give
+   * the main view its width back. */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
@@ -68,14 +75,22 @@ interface SidebarProps {
 interface ListButtonProps {
   list: TaskList;
   selected: boolean;
+  collapsed: boolean;
   onSelect: (listId: number) => void;
 }
 
-function ListButton({ list, selected, onSelect }: ListButtonProps): JSX.Element {
+function ListButton({ list, selected, collapsed, onSelect }: ListButtonProps): JSX.Element {
+  // Collapsed, the row is only as wide as its glyph — so a List with neither a
+  // color nor an emoji falls back to its initial rather than showing nothing.
+  const bare = list.color === null && list.emoji === null;
   return (
     <button
       type="button"
       className={selected ? "list-button selected" : "list-button"}
+      // Only on the rail: expanded, the name comes from the label itself —
+      // emoji included, which is the name the rest of the app expects.
+      aria-label={collapsed ? list.name : undefined}
+      title={collapsed ? list.name : undefined}
       onClick={() => onSelect(list.id)}
     >
       {list.is_inbox ? (
@@ -84,9 +99,10 @@ function ListButton({ list, selected, onSelect }: ListButtonProps): JSX.Element 
         <>
           {list.color !== null && <span className="color-dot" style={{ background: list.color }} />}
           {list.emoji !== null && <span className="list-emoji">{list.emoji}</span>}
+          {collapsed && bare && <span className="list-initial">{list.name.slice(0, 1)}</span>}
         </>
       )}
-      {list.name}
+      <span className="nav-label">{list.name}</span>
     </button>
   );
 }
@@ -95,11 +111,12 @@ interface TopNavItemProps {
   icon: IconName;
   label: string;
   selected: boolean;
+  collapsed: boolean;
   onClick: () => void;
 }
 
 /** One item in the top feature row: selected = pill with icon + label, others icon-only. */
-function TopNavItem({ icon, label, selected, onClick }: TopNavItemProps): JSX.Element {
+function TopNavItem({ icon, label, selected, collapsed, onClick }: TopNavItemProps): JSX.Element {
   return (
     <button
       type="button"
@@ -109,7 +126,7 @@ function TopNavItem({ icon, label, selected, onClick }: TopNavItemProps): JSX.El
       onClick={onClick}
     >
       <Icon name={icon} size={18} />
-      {selected && <span>{label}</span>}
+      {selected && !collapsed && <span>{label}</span>}
     </button>
   );
 }
@@ -131,6 +148,9 @@ export function Sidebar({
   onSelectHabits,
   onSelectFocus,
   onSearch,
+  onQuickAdd,
+  collapsed,
+  onToggleCollapsed,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
@@ -363,7 +383,12 @@ export function Sidebar({
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => handleDropOnList(event, list)}
         >
-          <ListButton list={list} selected={list.id === selectedListId} onSelect={onSelect} />
+          <ListButton
+            list={list}
+            selected={list.id === selectedListId}
+            collapsed={collapsed}
+            onSelect={onSelect}
+          />
           <span className="row-actions">
             <button
               type="button"
@@ -395,49 +420,84 @@ export function Sidebar({
   const tasksSelected = !calendarSelected && !habitsSelected && !focusSelected;
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">Tuk Tuk</div>
+    <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
+      <div className="sidebar-top">
+        <div className="sidebar-brand">Tuk Tuk</div>
+        <button
+          type="button"
+          className="sidebar-collapse"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          onClick={onToggleCollapsed}
+        >
+          <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={18} />
+        </button>
+      </div>
       <nav aria-label="Views" className="top-nav">
         <TopNavItem
           icon="list-checks"
           label="Tasks"
           selected={tasksSelected}
+          collapsed={collapsed}
           onClick={() => onSelectSmart("today")}
         />
         <TopNavItem
           icon="calendar-days"
           label="Calendar"
           selected={calendarSelected}
+          collapsed={collapsed}
           onClick={onSelectCalendar}
         />
         <TopNavItem
           icon="repeat"
           label="Habits"
           selected={habitsSelected}
+          collapsed={collapsed}
           onClick={onSelectHabits}
         />
-        <TopNavItem icon="timer" label="Focus" selected={focusSelected} onClick={onSelectFocus} />
+        <TopNavItem
+          icon="timer"
+          label="Focus"
+          selected={focusSelected}
+          collapsed={collapsed}
+          onClick={onSelectFocus}
+        />
       </nav>
-      <form
-        role="search"
-        className="sidebar-search"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSearch(new FormData(event.currentTarget).get("query")?.toString() ?? "");
-        }}
+      {!collapsed && (
+        <form
+          role="search"
+          className="sidebar-search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSearch(new FormData(event.currentTarget).get("query")?.toString() ?? "");
+          }}
+        >
+          <input type="search" name="query" aria-label="Search tasks" placeholder="Search…" />
+        </form>
+      )}
+      <button
+        type="button"
+        className="quick-add-trigger"
+        aria-label="Quick add"
+        title="Quick add"
+        onClick={onQuickAdd}
       >
-        <input type="search" name="query" aria-label="Search tasks" placeholder="Search…" />
-      </form>
+        <Icon name="plus" />
+        <span className="nav-label">Quick add</span>
+      </button>
       <nav aria-label="Smart Lists" className="smart-lists">
         {(Object.keys(SMART_LABELS) as SmartView[]).map((view) => (
           <button
             key={view}
             type="button"
             className={selectedSmart === view ? "list-button selected" : "list-button"}
+            aria-label={SMART_LABELS[view]}
+            title={SMART_LABELS[view]}
             onClick={() => onSelectSmart(view)}
           >
             <Icon name={SMART_ICONS[view]} size={18} />
-            {SMART_LABELS[view]}
+            <span className="nav-label">{SMART_LABELS[view]}</span>
           </button>
         ))}
       </nav>
@@ -464,6 +524,7 @@ export function Sidebar({
                 <ListButton
                   list={inbox}
                   selected={inbox.id === selectedListId}
+                  collapsed={collapsed}
                   onSelect={onSelect}
                 />
               </div>
@@ -530,12 +591,16 @@ export function Sidebar({
                   <button
                     type="button"
                     className={tag.id === selectedTagId ? "list-button selected" : "list-button"}
+                    aria-label={tag.name}
+                    title={tag.name}
                     onClick={() => onSelectTag(tag.id)}
                   >
-                    {tag.color !== null && (
+                    {tag.color !== null ? (
                       <span className="color-dot" style={{ background: tag.color }} />
+                    ) : (
+                      collapsed && <span className="list-initial">{tag.name.slice(0, 1)}</span>
                     )}
-                    {tag.name}
+                    <span className="nav-label">{tag.name}</span>
                   </button>
                   <span className="row-actions">
                     <button
@@ -567,10 +632,12 @@ export function Sidebar({
           <button
             type="button"
             className="sidebar-add"
+            aria-label="Add Tag"
+            title="Add Tag"
             onClick={() => setEditor({ mode: "create-tag" })}
           >
             <Icon name="plus" size={18} />
-            Add Tag
+            <span className="nav-label">Add Tag</span>
           </button>
         )}
       </nav>
@@ -592,18 +659,22 @@ export function Sidebar({
             <button
               type="button"
               className="sidebar-add"
+              aria-label="Add List"
+              title="Add List"
               onClick={() => setEditor({ mode: "create-list" })}
             >
               <Icon name="plus" size={18} />
-              Add List
+              <span className="nav-label">Add List</span>
             </button>
             <button
               type="button"
               className="sidebar-add"
+              aria-label="Add Folder"
+              title="Add Folder"
               onClick={() => setEditor({ mode: "create-folder" })}
             >
               <Icon name="folder-plus" size={18} />
-              Add Folder
+              <span className="nav-label">Add Folder</span>
             </button>
           </>
         )}
@@ -618,6 +689,7 @@ export function Sidebar({
                   <ListButton
                     list={list}
                     selected={list.id === selectedListId}
+                    collapsed={collapsed}
                     onSelect={onSelect}
                   />
                   <span className="row-actions">
