@@ -253,4 +253,96 @@ describe("Quick add dialog", () => {
     expect(screen.getByRole("dialog", { name: "Quick add" })).toBeInTheDocument();
     expect(api.requests.filter((r) => r.method === "POST")).toHaveLength(0);
   });
+
+  it("suggests lists from a ~ token in the title and files the task in the pick", async () => {
+    const expenses = fakeList("expenses");
+    const api = installFakeApi({ lists: [INBOX, expenses] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    await user.click(screen.getByRole("button", { name: "Quick add" }));
+    const title = await screen.findByRole("combobox", { name: "Title" });
+    await user.type(title, "Update linkedin ~expen");
+
+    const listbox = await screen.findByRole("listbox");
+    expect(
+      within(listbox)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["expenses", 'Create list "expen"']);
+
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    // The pick lands in the List select — this form's one home for it — and
+    // takes its token text out of the title.
+    expect(screen.getByLabelText("List")).toHaveValue(String(expenses.id));
+    expect(title).toHaveValue("Update linkedin ");
+
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+    const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks");
+    expect(post?.body).toEqual({ title: "Update linkedin", list_id: expenses.id });
+  });
+
+  it("honours a fully typed ~list token that was never picked", async () => {
+    const expenses = fakeList("expenses");
+    const api = installFakeApi({ lists: [INBOX, expenses] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    await user.click(screen.getByRole("button", { name: "Quick add" }));
+    await user.type(await screen.findByLabelText("Title"), "Ask Tomas for invoices ~expenses");
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+
+    const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks");
+    expect(post?.body).toEqual({ title: "Ask Tomas for invoices", list_id: expenses.id });
+  });
+
+  it("lets the List select override a ~list token left in the title", async () => {
+    const expenses = fakeList("expenses");
+    const errands = fakeList("Errands");
+    const api = installFakeApi({ lists: [INBOX, expenses, errands] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    await user.click(screen.getByRole("button", { name: "Quick add" }));
+    await user.type(await screen.findByLabelText("Title"), "Buy stamps ~expenses");
+    await user.selectOptions(screen.getByLabelText("List"), String(errands.id));
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+
+    // The deliberate choice wins, and the token it lost to stays visible in
+    // the title rather than being silently swallowed.
+    const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks");
+    expect(post?.body).toEqual({ title: "Buy stamps ~expenses", list_id: errands.id });
+  });
+
+  it("picking !priority and #tag fills the Priority select and ticks the tag", async () => {
+    const work = fakeTag("work");
+    const api = installFakeApi({ tags: [work] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    await user.click(screen.getByRole("button", { name: "Quick add" }));
+    const title = await screen.findByRole("combobox", { name: "Title" });
+    await user.type(title, "Email boss !hi");
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(screen.getByLabelText("Priority")).toHaveValue("high");
+
+    await user.type(title, "#wo");
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(screen.getByRole("checkbox", { name: "work" })).toBeChecked();
+    expect(title).toHaveValue("Email boss ");
+
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+    const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks");
+    expect(post?.body).toEqual({
+      title: "Email boss",
+      list_id: INBOX.id,
+      priority: "high",
+      tag_ids: [work.id],
+    });
+  });
 });
