@@ -1,4 +1,7 @@
-const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8900";
+/** Empty means same-origin: in dev the Vite server proxies /api to the backend
+ * (see vite.config.ts), and a deployment behind a single ingress needs no host
+ * either. Set VITE_API_BASE_URL only when the API lives on another origin. */
+const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export interface TaskList {
   id: number;
