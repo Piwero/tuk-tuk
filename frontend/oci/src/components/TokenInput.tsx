@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-import { type Tag } from "../api";
+import { createTag, type Tag } from "../api";
 import { applyTagPick, suggestTags } from "../tagSuggest";
 import { Icon } from "./Icon";
 
@@ -14,7 +14,15 @@ interface TokenInputProps {
   onChipsChange: (chips: Tag[]) => void;
   /** Candidates the `#` dropdown suggests from. */
   tags: Tag[];
+  /** Notified after the dropdown's "Create tag" row creates a tag, so the
+   * app-wide tag list picks it up immediately — same callback Quick-Add's
+   * submit-time silent create already reports through. */
+  onTagCreated: (tag: Tag) => void;
 }
+
+/** A row the dropdown can show: an existing tag, or the trailing offer to
+ * create one named after the query. */
+type Row = { kind: "tag"; tag: Tag } | { kind: "create"; name: string };
 
 /** A one-line text input that also owns a row of removable chips and a
  * `#tag`-triggered suggestion dropdown — the seam every later sigil (`~list`,
@@ -29,12 +37,22 @@ export function TokenInput({
   chips,
   onChipsChange,
   tags,
+  onTagCreated,
 }: TokenInputProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
   const [caret, setCaret] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const listboxId = useId();
+  // Read inside the async pick() below, after its createTag() await — refs
+  // (unlike the closed-over value/chips params) always hold what's current,
+  // so a chip added or removed while that request is in flight isn't clobbered.
+  const chipsRef = useRef(chips);
+  chipsRef.current = chips;
+  // Blocks a second createTag() for the same row while one is still in
+  // flight — a double-click or an Enter repeat before the first resolves
+  // would otherwise create two tags for one pick.
+  const creating = useRef(false);
 
   useEffect(() => {
     if (pendingCaret.current !== null && inputRef.current !== null) {
@@ -44,10 +62,18 @@ export function TokenInput({
   }, [value]);
 
   const suggestion = suggestTags(value, caret, tags);
-  // A query with zero matches is still "active" per suggestTags — nothing
-  // to pick from yet, so the popup itself stays closed rather than render
-  // an empty listbox.
-  const open = suggestion !== null && suggestion.options.length > 0;
+  const rows: Row[] =
+    suggestion === null
+      ? []
+      : [
+          ...suggestion.options.map((tag): Row => ({ kind: "tag", tag })),
+          ...(suggestion.create === null
+            ? []
+            : [{ kind: "create", name: suggestion.create } as const]),
+        ];
+  // A query with nothing to pick from — no matching tags, no create offer —
+  // leaves the popup closed rather than render an empty listbox.
+  const open = suggestion !== null && rows.length > 0;
 
   /** Reads the caret from the DOM — the source of truth for where the user's
    * typing cursor sits, which a controlled `value` alone doesn't capture. */
@@ -56,16 +82,34 @@ export function TokenInput({
     setActiveIndex(null);
   }
 
-  function pick(tag: Tag): void {
-    if (suggestion === null) {
+  async function pick(row: Row): Promise<void> {
+    if (suggestion === null || (row.kind === "create" && creating.current)) {
       return;
     }
-    const result = applyTagPick(value, suggestion, tag);
-    pendingCaret.current = result.caret;
-    setCaret(result.caret);
-    onValueChange(result.text);
-    if (!chips.some((chip) => chip.id === tag.id)) {
-      onChipsChange([...chips, tag]);
+    const valueAtPick = value;
+    let tag: Tag;
+    if (row.kind === "tag") {
+      tag = row.tag;
+    } else {
+      creating.current = true;
+      try {
+        tag = await createTag({ name: row.name });
+      } finally {
+        creating.current = false;
+      }
+      onTagCreated(tag);
+    }
+    // The text splice only makes sense against the text it was computed
+    // from — if the user kept typing while createTag() was in flight, leave
+    // the (now-stale) sigil/query text alone rather than corrupt it.
+    if (value === valueAtPick) {
+      const result = applyTagPick(value, suggestion, tag);
+      pendingCaret.current = result.caret;
+      setCaret(result.caret);
+      onValueChange(result.text);
+    }
+    if (!chipsRef.current.some((chip) => chip.id === tag.id)) {
+      onChipsChange([...chipsRef.current, tag]);
     }
     setActiveIndex(null);
   }
@@ -80,9 +124,7 @@ export function TokenInput({
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex((current) =>
-        current === null ? 0 : Math.min(current + 1, suggestion.options.length - 1),
-      );
+      setActiveIndex((current) => (current === null ? 0 : Math.min(current + 1, rows.length - 1)));
       return;
     }
     if (event.key === "ArrowUp") {
@@ -102,17 +144,20 @@ export function TokenInput({
     }
     if (event.key === "Enter" && activeIndex !== null) {
       event.preventDefault();
-      const picked = suggestion.options[activeIndex];
+      const picked = rows[activeIndex];
       if (picked !== undefined) {
-        pick(picked);
+        void pick(picked);
       }
       return;
     }
     if (event.key === "Tab") {
-      const first = suggestion.options[0];
+      // Tab completes an existing match, same as before the create row
+      // existed — it's a text-completion shortcut, not a deliberate pick, so
+      // it never creates a tag as a side effect.
+      const first = rows.find((row) => row.kind === "tag");
       if (first !== undefined) {
         event.preventDefault();
-        pick(first);
+        void pick(first);
       }
     }
   }
@@ -165,19 +210,19 @@ export function TokenInput({
       />
       {open && (
         <ul className="token-input-dropdown" role="listbox" id={listboxId}>
-          {suggestion.options.map((tag, index) => (
+          {rows.map((row, index) => (
             <li
-              key={tag.id}
+              key={row.kind === "tag" ? row.tag.id : `create:${row.name}`}
               id={`${listboxId}-option-${index}`}
               role="option"
               aria-selected={index === activeIndex}
               className={index === activeIndex ? "active" : undefined}
               onMouseDown={(event) => {
                 event.preventDefault();
-                pick(tag);
+                void pick(row);
               }}
             >
-              {tag.name}
+              {row.kind === "tag" ? row.tag.name : `Create tag "${row.name}"`}
             </li>
           ))}
         </ul>
