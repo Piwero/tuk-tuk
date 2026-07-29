@@ -57,7 +57,7 @@ describe("Smart Lists", () => {
     expect(
       screen.queryByRole("button", { name: "Open details for Future" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: "Add a task" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Add a task" })).not.toBeInTheDocument();
     expect(
       api.requests.some(
         (r) => r.method === "GET" && r.url === "/api/v1/tasks?view=today&today=2026-07-03",

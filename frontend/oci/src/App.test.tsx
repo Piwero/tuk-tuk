@@ -25,7 +25,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const input = await screen.findByRole("textbox", { name: "Add a task" });
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "Buy milk{Enter}");
 
     expect(await screen.findByText("Buy milk")).toBeInTheDocument();

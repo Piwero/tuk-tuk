@@ -9,7 +9,7 @@ import { fakeList, fakeTag, INBOX, installFakeApi, type RecordedRequest } from "
 
 async function quickAdd(text: string): Promise<void> {
   const user = userEvent.setup();
-  const input = await screen.findByRole("textbox", { name: "Add a task" });
+  const input = await screen.findByRole("combobox", { name: "Add a task" });
   await user.type(input, `${text}{Enter}`);
 }
 
