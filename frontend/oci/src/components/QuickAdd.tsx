@@ -29,6 +29,10 @@ export function QuickAdd({
     if (plan.title === "") {
       return;
     }
+    // Snapshots so a chip or title edit made while this submission is still
+    // awaiting the network isn't wiped out by the reset below.
+    const submittedTitle = title;
+    const submittedChips = chips;
     // Chips and any raw #tokens left in the title are unioned and
     // deduplicated case-insensitively by name — a chip and a typed token can
     // both name the same tag. Unknown names create the Tag on the fly.
@@ -61,8 +65,8 @@ export function QuickAdd({
       ...(tagIds.length === 0 ? {} : { tag_ids: tagIds }),
     });
     onCreated(task);
-    setTitle("");
-    setChips([]);
+    setTitle((current) => (current === submittedTitle ? "" : current));
+    setChips((current) => (current === submittedChips ? [] : current));
   }
 
   return (

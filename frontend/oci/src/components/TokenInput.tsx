@@ -62,6 +62,7 @@ export function TokenInput({
     }
     const result = applyTagPick(value, suggestion, tag);
     pendingCaret.current = result.caret;
+    setCaret(result.caret);
     onValueChange(result.text);
     if (!chips.some((chip) => chip.id === tag.id)) {
       onChipsChange([...chips, tag]);
