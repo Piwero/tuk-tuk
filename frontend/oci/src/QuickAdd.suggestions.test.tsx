@@ -44,7 +44,7 @@ describe("Quick-Add # suggestion dropdown", () => {
       within(listbox)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Boat", "Books"]);
+    ).toEqual(["Boat", "Books", 'Create tag "BO"']);
   });
 
   it("stays inert when the sigil follows a non-whitespace character", async () => {
@@ -185,5 +185,115 @@ describe("Quick-Add # suggestion dropdown", () => {
       list_id: INBOX.id,
       tag_ids: [books.id, fun?.id],
     });
+  });
+});
+
+describe("Quick-Add # dropdown create-tag row", () => {
+  it("offers to create the query when no tag matches it", async () => {
+    installFakeApi({ tags: [fakeTag("Books")] });
+    render(<App />);
+    const user = userEvent.setup();
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "#zzz");
+
+    expect(await screen.findByRole("option", { name: 'Create tag "zzz"' })).toBeInTheDocument();
+  });
+
+  it("is absent when the query is empty", async () => {
+    installFakeApi({ tags: [fakeTag("Books")] });
+    render(<App />);
+    const user = userEvent.setup();
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "#");
+
+    await screen.findByRole("listbox");
+    expect(screen.queryByRole("option", { name: /Create tag/ })).toBeNull();
+  });
+
+  it("is absent when an existing tag matches the query exactly, case-insensitively", async () => {
+    installFakeApi({ tags: [fakeTag("Books")] });
+    render(<App />);
+    const user = userEvent.setup();
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "#BOOKS");
+
+    await screen.findByRole("option", { name: "Books" });
+    expect(screen.queryByRole("option", { name: /Create tag/ })).toBeNull();
+  });
+
+  it("picking the row creates a name-only tag, chips it, and attaches it to the created task", async () => {
+    const api = installFakeApi({ tags: [] });
+    render(<App />);
+    const user = userEvent.setup();
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "read #zzz");
+    await user.click(await screen.findByRole("option", { name: 'Create tag "zzz"' }));
+
+    expect(await screen.findByRole("button", { name: "Remove zzz" })).toBeInTheDocument();
+    expect(input).toHaveValue("read ");
+
+    const tagPosts = api.requests.filter((r) => r.method === "POST" && r.url === "/api/v1/tags");
+    expect(tagPosts).toHaveLength(1);
+    expect(tagPosts[0]?.body).toEqual({ name: "zzz" });
+
+    await user.type(input, "{Enter}");
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    const created = api.tags.find((tag) => tag.name === "zzz");
+    expect(created).toBeDefined();
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "read",
+      list_id: INBOX.id,
+      tag_ids: [created?.id],
+    });
+  });
+
+  it("Tab completes an existing match rather than picking the create row", async () => {
+    const boat = fakeTag("Boat");
+    const api = installFakeApi({ tags: [boat] });
+    render(<App />);
+    const user = userEvent.setup();
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "#bo");
+    await screen.findByRole("option", { name: 'Create tag "bo"' });
+    await user.tab();
+
+    expect(await screen.findByRole("button", { name: "Remove Boat" })).toBeInTheDocument();
+    const tagPosts = api.requests.filter((r) => r.method === "POST" && r.url === "/api/v1/tags");
+    expect(tagPosts).toHaveLength(0);
+  });
+
+  it("Tab does nothing when only the create row is offered", async () => {
+    const api = installFakeApi({ tags: [] });
+    render(<App />);
+    const user = userEvent.setup();
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "#zzz");
+    await screen.findByRole("option", { name: 'Create tag "zzz"' });
+    await user.tab();
+
+    expect(input).toHaveValue("#zzz");
+    const tagPosts = api.requests.filter((r) => r.method === "POST" && r.url === "/api/v1/tags");
+    expect(tagPosts).toHaveLength(0);
+  });
+
+  it("makes the newly created tag available in the dropdown on a subsequent #, without a reload", async () => {
+    installFakeApi({ tags: [] });
+    render(<App />);
+    const user = userEvent.setup();
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "#zzz");
+    await user.click(await screen.findByRole("option", { name: 'Create tag "zzz"' }));
+    await user.type(input, "{Enter}");
+    await waitFor(() => expect(input).toHaveValue(""));
+
+    await user.type(input, "#");
+    expect(await screen.findByRole("option", { name: "zzz" })).toBeInTheDocument();
   });
 });

@@ -15,6 +15,9 @@ export interface TagSuggestion {
   query: string;
   /** Tags whose name starts with `query`, case-insensitively. */
   options: Tag[];
+  /** The query, offered for creation as a new tag — null when the query is
+   * empty or a tag already matches it exactly, case-insensitively. */
+  create: string | null;
 }
 
 /** Finds the start of the whitespace-delimited word touching the caret —
@@ -38,7 +41,8 @@ export function suggestTags(text: string, caret: number, tags: Tag[]): TagSugges
   }
   const query = text.slice(start + 1, caret);
   const options = tags.filter((tag) => sameName(tag.name.slice(0, query.length), query));
-  return { sigil: "#", start, query, options };
+  const create = query !== "" && !tags.some((tag) => sameName(tag.name, query)) ? query : null;
+  return { sigil: "#", start, query, options, create };
 }
 
 export interface TagPick {

@@ -8,7 +8,13 @@ describe("suggestTags", () => {
     const books = fakeTag("Books");
     const fun = fakeTag("Fun");
     const suggestion = suggestTags("#", 1, [books, fun]);
-    expect(suggestion).toEqual({ sigil: "#", start: 0, query: "", options: [books, fun] });
+    expect(suggestion).toEqual({
+      sigil: "#",
+      start: 0,
+      query: "",
+      options: [books, fun],
+      create: null,
+    });
   });
 
   it("narrows by case-insensitive prefix on the tag name", () => {
@@ -35,7 +41,13 @@ describe("suggestTags", () => {
   it("opens immediately after whitespace", () => {
     const books = fakeTag("Books");
     const suggestion = suggestTags("read #bo", 8, [books]);
-    expect(suggestion).toEqual({ sigil: "#", start: 5, query: "bo", options: [books] });
+    expect(suggestion).toEqual({
+      sigil: "#",
+      start: 5,
+      query: "bo",
+      options: [books],
+      create: "bo",
+    });
   });
 
   it("stays inert when the sigil follows a non-whitespace character (C#)", () => {
@@ -66,7 +78,13 @@ describe("suggestTags", () => {
     // Caret parked between "bo" and "oks" of "#books", with another token
     // later in the string — only the text up to the caret is the query.
     const suggestion = suggestTags("#books #fun", 3, [books, fun]);
-    expect(suggestion).toEqual({ sigil: "#", start: 0, query: "bo", options: [books] });
+    expect(suggestion).toEqual({
+      sigil: "#",
+      start: 0,
+      query: "bo",
+      options: [books],
+      create: "bo",
+    });
   });
 
   it("finds the # token the caret is inside, not the one at the end of the input", () => {
@@ -81,21 +99,71 @@ describe("suggestTags", () => {
   it("returns no options (but stays open) when nothing matches the prefix", () => {
     const books = fakeTag("Books");
     const suggestion = suggestTags("#zzz", 4, [books]);
-    expect(suggestion).toEqual({ sigil: "#", start: 0, query: "zzz", options: [] });
+    expect(suggestion).toEqual({
+      sigil: "#",
+      start: 0,
+      query: "zzz",
+      options: [],
+      create: "zzz",
+    });
+  });
+
+  it("offers to create the query when no tag matches it exactly", () => {
+    const books = fakeTag("Books");
+    const suggestion = suggestTags("#bo", 3, [books]);
+    expect(suggestion?.create).toBe("bo");
+  });
+
+  it("offers nothing to create when the query is empty", () => {
+    const books = fakeTag("Books");
+    const suggestion = suggestTags("#", 1, [books]);
+    expect(suggestion?.create).toBeNull();
+  });
+
+  it("offers nothing to create when a tag already matches the query exactly", () => {
+    const books = fakeTag("Books");
+    const suggestion = suggestTags("#books", 6, [books]);
+    expect(suggestion?.create).toBeNull();
+  });
+
+  it("offers nothing to create when the exact match differs only in case", () => {
+    const books = fakeTag("Books");
+    const suggestion = suggestTags("#BOOKS", 6, [books]);
+    expect(suggestion?.create).toBeNull();
+  });
+
+  it("offers to create even when the query matches other tags by prefix only", () => {
+    const boat = fakeTag("Boat");
+    const books = fakeTag("Books");
+    const suggestion = suggestTags("#bo", 3, [boat, books]);
+    expect(suggestion?.options).toEqual([boat, books]);
+    expect(suggestion?.create).toBe("bo");
   });
 });
 
 describe("applyTagPick", () => {
   it("removes the sigil+query text and reports the committed tag", () => {
     const books = fakeTag("Books");
-    const suggestion: TagSuggestion = { sigil: "#", start: 5, query: "bo", options: [books] };
+    const suggestion: TagSuggestion = {
+      sigil: "#",
+      start: 5,
+      query: "bo",
+      options: [books],
+      create: null,
+    };
     const result = applyTagPick("read #bo", suggestion, books);
     expect(result).toEqual({ text: "read ", caret: 5, tag: books });
   });
 
   it("leaves text after the caret untouched", () => {
     const books = fakeTag("Books");
-    const suggestion: TagSuggestion = { sigil: "#", start: 0, query: "bo", options: [books] };
+    const suggestion: TagSuggestion = {
+      sigil: "#",
+      start: 0,
+      query: "bo",
+      options: [books],
+      create: null,
+    };
     const result = applyTagPick("#books #fun", suggestion, books);
     // Only "#bo" (up to where the caret was) is removed; "oks #fun" survives.
     // Caret was at 3, matching the "caret mid-string" suggestTags case above.
@@ -104,7 +172,13 @@ describe("applyTagPick", () => {
 
   it("collapses a bare # at the start of the input to an empty string", () => {
     const books = fakeTag("Books");
-    const suggestion: TagSuggestion = { sigil: "#", start: 0, query: "", options: [books] };
+    const suggestion: TagSuggestion = {
+      sigil: "#",
+      start: 0,
+      query: "",
+      options: [books],
+      create: null,
+    };
     const result = applyTagPick("#", suggestion, books);
     expect(result).toEqual({ text: "", caret: 0, tag: books });
   });

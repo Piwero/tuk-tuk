@@ -79,6 +79,7 @@ export function QuickAdd({
         chips={chips}
         onChipsChange={setChips}
         tags={tags}
+        onTagCreated={onTagCreated}
       />
     </form>
   );
