@@ -1965,9 +1965,9 @@ li[data-overdue] .date-chip {
 
 /* ── Icon picker ─────────────────────────────────────────────────── */
 
-/* The Habit form's icon field: a square showing the current emoji, or a
-   placeholder glyph when unset. */
-.habit-form .icon-field {
+/* The icon field: a square showing the current emoji, or a placeholder glyph
+   when unset. Opens the picker. */
+.icon-field {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1982,8 +1982,16 @@ li[data-overdue] .date-chip {
   line-height: 1;
 }
 
-.habit-form .icon-field:hover {
+.icon-field:hover {
   border-color: var(--border-strong);
+}
+
+/* The List form pairs the free-text emoji input with the picker button. */
+.list-form .emoji-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: var(--space-2);
 }
 
 .icon-picker {

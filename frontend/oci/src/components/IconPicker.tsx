@@ -1,20 +1,41 @@
-import { HABIT_ICON_GROUPS } from "../habitIcons";
 import { Modal } from "./Modal";
 
+export interface PickerIcon {
+  name: string;
+  emoji: string;
+}
+
+export interface IconGroup {
+  name: string;
+  icons: readonly PickerIcon[];
+}
+
 export interface IconPickerProps {
+  /** Names the dialog; the caller phrases it for what it is picking. */
+  title: string;
+  /** The curated emojis on offer, grouped by theme. */
+  groups: readonly IconGroup[];
+  /** Label of the button that picks "no emoji at all". */
+  clearLabel: string;
   onSelect: (emoji: string) => void;
   onClose: () => void;
 }
 
-/** Overlay grid of the curated Habit emojis, grouped by theme. */
-export function IconPicker({ onSelect, onClose }: IconPickerProps): JSX.Element {
+/** Overlay grid of a curated emoji set, grouped by theme. */
+export function IconPicker({
+  title,
+  groups,
+  clearLabel,
+  onSelect,
+  onClose,
+}: IconPickerProps): JSX.Element {
   return (
-    <Modal title="Choose an icon" onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <div className="icon-picker">
         <button type="button" className="icon-picker-clear" onClick={() => onSelect("")}>
-          No icon
+          {clearLabel}
         </button>
-        {HABIT_ICON_GROUPS.map((group) => (
+        {groups.map((group) => (
           <section key={group.name}>
             <h3>{group.name}</h3>
             <div className="icon-picker-grid">

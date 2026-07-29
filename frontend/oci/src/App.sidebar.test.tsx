@@ -54,6 +54,28 @@ describe("List management", () => {
     expect(post?.body).toEqual({ name: "Groceries", color: "#ff9800", emoji: "🛒" });
   });
 
+  it("creates a List with an emoji chosen from the picker", async () => {
+    const api = installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Add List" }));
+    await user.type(screen.getByLabelText("Name"), "Groceries");
+
+    await user.click(screen.getByRole("button", { name: "Choose emoji" }));
+    const picker = await screen.findByRole("dialog", { name: "Choose an emoji" });
+    await user.click(within(picker).getByRole("button", { name: "shopping cart" }));
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const post = await waitFor(() => {
+      const request = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/lists");
+      expect(request).toBeDefined();
+      return request;
+    });
+    expect(post?.body).toMatchObject({ name: "Groceries", emoji: "🛒" });
+  });
+
   it("edits a List's name from the sidebar, keeping color and emoji", async () => {
     const groceries = fakeList("Groceries", { color: "#ff9800", emoji: "🛒" });
     const api = installFakeApi({ lists: [INBOX, groceries] });
@@ -73,6 +95,38 @@ describe("List management", () => {
       (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${groceries.id}`,
     );
     expect(patch?.body).toEqual({ name: "Food", color: "#ff9800", emoji: "🛒" });
+  });
+
+  it("replaces and removes an existing List's emoji from the picker", async () => {
+    const groceries = fakeList("Groceries", { color: "#ff9800", emoji: "🛒" });
+    const api = installFakeApi({ lists: [INBOX, groceries] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Edit Groceries" }));
+    await user.click(screen.getByRole("button", { name: "Choose emoji" }));
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Choose an emoji" })).getByRole("button", {
+        name: "briefcase",
+      }),
+    );
+    expect(screen.queryByRole("dialog", { name: "Choose an emoji" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Emoji")).toHaveValue("💼");
+
+    await user.click(screen.getByRole("button", { name: "Choose emoji" }));
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Choose an emoji" })).getByRole("button", {
+        name: "No emoji",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const patch = api.requests.find(
+        (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${groceries.id}`,
+      );
+      expect(patch?.body).toMatchObject({ emoji: null });
+    });
   });
 
   it("archiving a List moves it to the Archived section until unarchived", async () => {
