@@ -709,6 +709,82 @@ li[data-overdue] .date-chip {
   white-space: nowrap;
 }
 
+/* ── Token input (Quick-Add bar) ─────────────────────────────────── */
+
+.token-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+}
+
+.token-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.token-input input {
+  flex: 1;
+  min-width: 120px;
+  height: calc(var(--control-height) - 4px);
+  border: none;
+}
+
+.token-input input:focus {
+  box-shadow: none;
+}
+
+.token-input-chips {
+  display: contents;
+}
+
+.token-chip button {
+  display: inline-flex;
+  margin-left: var(--space-1);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+}
+
+.token-chip button:hover {
+  color: var(--text-danger);
+}
+
+.token-input-dropdown {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: var(--z-popover);
+  min-width: var(--popover-min-width);
+  max-height: var(--popover-max-height);
+  margin: 0;
+  padding: var(--space-1);
+  overflow-y: auto;
+  list-style: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.token-input-dropdown li {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.token-input-dropdown li:hover,
+.token-input-dropdown li.active {
+  background: var(--surface-selected);
+}
+
 .check-progress {
   flex: none;
   font-family: var(--font-mono);

@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { createTag, createTask, type Tag, type Task, type TaskList } from "../api";
 import { parseQuickAdd, sameName } from "../quickAdd";
+import { TokenInput } from "./TokenInput";
 
 interface QuickAddProps {
   /** The viewed List — the default target when no `~list` token matches. */
@@ -20,6 +21,7 @@ export function QuickAdd({
   onCreated,
 }: QuickAddProps): JSX.Element {
   const [title, setTitle] = useState("");
+  const [chips, setChips] = useState<Tag[]>([]);
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -27,10 +29,22 @@ export function QuickAdd({
     if (plan.title === "") {
       return;
     }
-    // Unknown #tag names create the Tag on the fly; known ones match
-    // case-insensitively.
+    // Chips and any raw #tokens left in the title are unioned and
+    // deduplicated case-insensitively by name — a chip and a typed token can
+    // both name the same tag. Unknown names create the Tag on the fly.
     const tagIds: number[] = [];
+    const seen: string[] = [];
+    for (const chip of chips) {
+      if (!seen.some((name) => sameName(name, chip.name))) {
+        seen.push(chip.name);
+        tagIds.push(chip.id);
+      }
+    }
     for (const name of plan.tagNames) {
+      if (seen.some((seenName) => sameName(seenName, name))) {
+        continue;
+      }
+      seen.push(name);
       const existing = tags.find((tag) => sameName(tag.name, name));
       if (existing !== undefined) {
         tagIds.push(existing.id);
@@ -48,15 +62,19 @@ export function QuickAdd({
     });
     onCreated(task);
     setTitle("");
+    setChips([]);
   }
 
   return (
     <form onSubmit={(event) => void submit(event)}>
-      <input
-        aria-label="Add a task"
+      <TokenInput
+        ariaLabel="Add a task"
         placeholder="Add a task…"
         value={title}
-        onChange={(event) => setTitle(event.target.value)}
+        onValueChange={setTitle}
+        chips={chips}
+        onChipsChange={setChips}
+        tags={tags}
       />
     </form>
   );

@@ -70,7 +70,7 @@ describe("Tags in the sidebar", () => {
     expect(screen.getByText("Email boss")).toBeInTheDocument();
     expect(screen.getByText("Print badge")).toBeInTheDocument();
     expect(screen.queryByText("Water plants")).not.toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: "Add a task" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Add a task" })).not.toBeInTheDocument();
     expect(
       api.requests.some((r) => r.method === "GET" && r.url === `/api/v1/tasks?tag_id=${work.id}`),
     ).toBe(true);
