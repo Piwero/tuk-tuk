@@ -47,6 +47,15 @@ interface TokenInputProps {
   value: string;
   onValueChange: (value: string) => void;
   channels: TokenChannel<unknown>[];
+  /** Whether picks render as a row of removable chips above the input.
+   * False where the host already shows the same state in its own controls —
+   * the Quick-Add dialog's List/Priority selects and tag checkboxes — so a
+   * pick has one visible home instead of two. Chips are still tracked, since
+   * that's what "already picked" dedupe reads. */
+  showChips?: boolean;
+  /** Focuses the text input on mount — how the Quick-Add dialog puts the
+   * caret in the title the moment it opens. */
+  autoFocus?: boolean;
 }
 
 /** A row the dropdown can show: an existing item, or the trailing offer to
@@ -65,6 +74,8 @@ export function TokenInput({
   value,
   onValueChange,
   channels,
+  showChips = true,
+  autoFocus = false,
 }: TokenInputProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
@@ -213,7 +224,7 @@ export function TokenInput({
 
   return (
     <div className="token-input">
-      {channels.some((channel) => channel.chips.length > 0) && (
+      {showChips && channels.some((channel) => channel.chips.length > 0) && (
         <div className="token-input-chips">
           {channels.flatMap((channel) =>
             channel.chips.map((item) => (
@@ -258,6 +269,7 @@ export function TokenInput({
           }
         }}
         onKeyDown={onKeyDown}
+        autoFocus={autoFocus}
       />
       {open && active !== null && (
         <ul className="token-input-dropdown" role="listbox" id={listboxId}>

@@ -360,6 +360,7 @@ export function App(): JSX.Element {
               tags={tags}
               defaultListId={selectedList?.id ?? null}
               onTagCreated={(tag) => setTags((current) => [...current, tag])}
+              onListCreated={(list) => setLists((current) => [...current, list])}
               onCreated={addCreatedTask}
               onClose={() => setQuickAddOpen(false)}
             />
