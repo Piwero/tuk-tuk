@@ -8,6 +8,8 @@ import {
 } from "../habitFrequency";
 import { WEEKDAY_LABELS, WEEKDAYS, type Weekday } from "../recurrence";
 import { ACCENT_PALETTE } from "../theme";
+import { Icon } from "./Icon";
+import { IconPicker } from "./IconPicker";
 
 export interface HabitFormValues {
   name: string;
@@ -52,6 +54,7 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
   const [icon, setIcon] = useState(initial?.icon ?? "");
   const [color, setColor] = useState(initial?.color ?? "");
   const [encouragement, setEncouragement] = useState(initial?.encouragement ?? "");
+  const [pickingIcon, setPickingIcon] = useState(false);
   const [frequency, setFrequency] = useState<FrequencyDraft>(
     frequencyDraftFrom(initial?.frequency),
   );
@@ -153,13 +156,24 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
       )}
       <label>
         Icon
-        <input
+        <button
+          type="button"
+          className="icon-field"
           aria-label="Icon"
-          maxLength={8}
-          value={icon}
-          onChange={(event) => setIcon(event.target.value)}
-        />
+          onClick={() => setPickingIcon(true)}
+        >
+          {icon === "" ? <Icon name="smile" /> : icon}
+        </button>
       </label>
+      {pickingIcon && (
+        <IconPicker
+          onSelect={(emoji) => {
+            setIcon(emoji);
+            setPickingIcon(false);
+          }}
+          onClose={() => setPickingIcon(false)}
+        />
+      )}
       <fieldset className="color-palette">
         <legend>Color</legend>
         <label className="color-swatch none">
