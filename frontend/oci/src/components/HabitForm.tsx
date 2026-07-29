@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { type Habit, type HabitType } from "../api";
+import { HABIT_ICON_GROUPS } from "../habitIcons";
 import {
   parseHabitFrequency,
   serializeHabitFrequency,
@@ -167,6 +168,9 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
       </label>
       {pickingIcon && (
         <IconPicker
+          title="Choose an icon"
+          groups={HABIT_ICON_GROUPS}
+          clearLabel="No icon"
           onSelect={(emoji) => {
             setIcon(emoji);
             setPickingIcon(false);
