@@ -135,7 +135,12 @@ describe("Managing Habits", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "Goal" }), { target: { value: "8" } });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Step" }), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText("Unit"), { target: { value: "glasses" } });
-    fireEvent.change(screen.getByLabelText("Icon"), { target: { value: "💧" } });
+    fireEvent.click(screen.getByRole("button", { name: "Icon" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog", { name: "Choose an icon" })).getByRole("button", {
+        name: "droplet",
+      }),
+    );
     fireEvent.change(screen.getByLabelText("Encouragement"), {
       target: { value: "Stay hydrated!" },
     });
@@ -159,6 +164,60 @@ describe("Managing Habits", () => {
       icon: "💧",
       encouragement: "Stay hydrated!",
       frequency: "FREQ=WEEKLY;BYDAY=MO,FR",
+    });
+  });
+
+  it("creates a Habit with an icon chosen from the emoji picker", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Habit" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Read" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Icon" }));
+    const picker = await screen.findByRole("dialog", { name: "Choose an icon" });
+    fireEvent.click(within(picker).getByRole("button", { name: "books" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/habits");
+      expect(post?.body).toMatchObject({ name: "Read", icon: "📚" });
+    });
+  });
+
+  it("shows the Habit's current icon on the field and swaps it for a new pick", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate", { icon: "🧘" })] });
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Meditate" }));
+    const field = screen.getByRole("button", { name: "Icon" });
+    expect(field).toHaveTextContent("🧘");
+
+    fireEvent.click(field);
+    const picker = await screen.findByRole("dialog", { name: "Choose an icon" });
+    fireEvent.click(within(picker).getByRole("button", { name: "books" }));
+
+    expect(screen.queryByRole("dialog", { name: "Choose an icon" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Icon" })).toHaveTextContent("📚");
+  });
+
+  it("removes a Habit's icon from the picker", async () => {
+    const api = installFakeApi({ habits: [fakeHabit("Meditate", { icon: "🧘" })] });
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Meditate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Icon" }));
+    const picker = await screen.findByRole("dialog", { name: "Choose an icon" });
+    fireEvent.click(within(picker).getByRole("button", { name: "No icon" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const patch = api.requests.find((r) => r.method === "PATCH");
+      expect(patch?.body).toMatchObject({ icon: null });
     });
   });
 
