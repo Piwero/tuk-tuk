@@ -36,7 +36,7 @@ One of four levels on a Task: None, Low, Medium, High. Levels are named, not num
 _Avoid_: Importance, urgency (Eisenhower Matrix concepts, out of v1)
 
 **Quick-Add**:
-The single-line capture bar that creates a Task from typed text, parsing structured shortcuts: `#tag`, `!priority`, `~list`. Natural-language date parsing is not part of v1 Quick-Add.
+The single-line capture bar that creates a Task from typed text, parsing structured shortcuts: `#tag`, `!priority`, `~list`. Each sigil also opens a suggestion dropdown as it's typed, narrowing by prefix; picking a suggestion swaps the typed text for a removable chip. `#tag` and `~list` additionally offer a "Create …" row when the query names nothing that exists yet — picking it is the only way Quick-Add brings a new List or Tag into being, so an unpicked token never creates one. `!priority`'s three non-default levels (High, Medium, Low — there is no `!none` token) are a closed set and offer no such row. Natural-language date parsing is not part of v1 Quick-Add.
 _Avoid_: Smart Recognition (NLP date parsing, deferred)
 
 **Tag**:

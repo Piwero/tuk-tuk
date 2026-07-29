@@ -1,11 +1,11 @@
 /** Quick-Add `#tag` suggestion dropdown: pure text/caret logic, kept separate
  * from rendering so every edge case is unit-tested directly. The
- * word-boundary sigil detection (`wordStart`) is the shape a later `~list`
- * suggestion module would repeat — not shared code yet, since only `#tags`
- * exist today. */
+ * word-boundary sigil detection (`wordStart`, in `./sigilText`) is shared
+ * with `listSuggest.ts` and `prioritySuggest.ts`. */
 
 import { type Tag } from "./api";
 import { sameName } from "./quickAdd";
+import { type SigilPosition, wordStart } from "./sigilText";
 
 export interface TagSuggestion {
   sigil: "#";
@@ -18,16 +18,6 @@ export interface TagSuggestion {
   /** The query, offered for creation as a new tag — null when the query is
    * empty or a tag already matches it exactly, case-insensitively. */
   create: string | null;
-}
-
-/** Finds the start of the whitespace-delimited word touching the caret —
- * scans left until a space or the start of the input. */
-function wordStart(text: string, caret: number): number {
-  let index = caret;
-  while (index > 0 && !/\s/.test(text[index - 1] as string)) {
-    index -= 1;
-  }
-  return index;
 }
 
 /** Locates the `#` token the caret sits inside, if any, and the tags whose
@@ -56,7 +46,7 @@ export interface TagPick {
 
 /** Applies a pick: strips the `#query` text the suggestion matched, leaving
  * anything typed after the caret untouched. */
-export function applyTagPick(text: string, suggestion: TagSuggestion, tag: Tag): TagPick {
+export function applyTagPick(text: string, suggestion: SigilPosition, tag: Tag): TagPick {
   const queryEnd = suggestion.start + 1 + suggestion.query.length;
   return {
     text: text.slice(0, suggestion.start) + text.slice(queryEnd),

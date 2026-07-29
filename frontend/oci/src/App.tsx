@@ -372,6 +372,7 @@ export function App(): JSX.Element {
               lists={lists}
               tags={tags}
               onTagCreated={(tag) => setTags((current) => [...current, tag])}
+              onListCreated={(list) => setLists((current) => [...current, list])}
               onCreated={(task) => {
                 // A ~list token may have filed the task elsewhere.
                 if (task.list_id === selectedList.id) {

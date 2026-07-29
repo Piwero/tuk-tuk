@@ -25,10 +25,23 @@ const PRIORITY_TOKENS: Record<string, Priority> = {
 /** Case-insensitive name equality — how tokens match Lists and Tags. */
 export const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
+export interface ParseQuickAddOptions {
+  /** True once a `~list` chip has already been picked from the dropdown —
+   * the deliberate pick wins, so a raw `~token` is left in the title
+   * untouched rather than silently claiming the slot too. */
+  skipListToken?: boolean;
+  /** Same, for a `!priority` chip already picked from the dropdown. */
+  skipPriorityToken?: boolean;
+}
+
 /** Tokens are consumed at most once (first wins); anything not consumed —
  * unknown `!word`, unmatched or repeated `~list` — stays in the title
  * verbatim, so nothing typed is silently lost. */
-export function parseQuickAdd(input: string, lists: TaskList[]): QuickAddPlan {
+export function parseQuickAdd(
+  input: string,
+  lists: TaskList[],
+  options: ParseQuickAddOptions = {},
+): QuickAddPlan {
   const plan: QuickAddPlan = { title: "", priority: null, listId: null, tagNames: [] };
   const rest: string[] = [];
   for (const word of input.split(/\s+/)) {
@@ -39,12 +52,14 @@ export function parseQuickAdd(input: string, lists: TaskList[]): QuickAddPlan {
       }
       continue;
     }
-    const priority = PRIORITY_TOKENS[word.toLowerCase()];
-    if (priority !== undefined && plan.priority === null) {
-      plan.priority = priority;
-      continue;
+    if (!options.skipPriorityToken) {
+      const priority = PRIORITY_TOKENS[word.toLowerCase()];
+      if (priority !== undefined && plan.priority === null) {
+        plan.priority = priority;
+        continue;
+      }
     }
-    if (word.startsWith("~") && word.length > 1 && plan.listId === null) {
+    if (!options.skipListToken && word.startsWith("~") && word.length > 1 && plan.listId === null) {
       const match = lists.find((list) => sameName(list.name, word.slice(1)));
       if (match !== undefined) {
         plan.listId = match.id;
