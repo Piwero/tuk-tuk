@@ -34,7 +34,7 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
         raise APIError(401, "invalid_credentials", "Incorrect password") from None
 
     throttle.record_success()
-    set_session_cookie(response, settings)
+    set_session_cookie(response, settings, request.app.state.clock)
 
 
 @router.get("/session", status_code=204)
