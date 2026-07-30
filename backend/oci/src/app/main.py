@@ -34,6 +34,13 @@ INBOX_NAME = "Inbox"
 def create_app(settings: Settings | None = None) -> FastAPI:
     app_settings = settings or default_settings
 
+    if not app_settings.auth_password_hash:
+        raise RuntimeError(
+            "AUTH_PASSWORD_HASH is not configured. The app refuses to start without a "
+            "password hash: run 'mise run backend:hash-password' and set the printed "
+            "hash as AUTH_PASSWORD_HASH in your .env or 1Password item."
+        )
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await asyncio.to_thread(run_migrations, app_settings.database_url)

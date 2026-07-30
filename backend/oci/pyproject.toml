@@ -19,6 +19,7 @@ dependencies = [
     "aiosqlite>=0.20.0",
     "alembic>=1.14.0",
     "python-dateutil>=2.9.0",
+    "argon2-cffi>=25.1.0",
 ]
 
 [dependency-groups]
