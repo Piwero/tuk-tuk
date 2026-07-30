@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     # Authentication (ADR 0005). No setting disables the gate; a missing hash
     # makes the app refuse to start rather than serve unauthenticated.
     auth_password_hash: str | None = None
+    # Signs the session cookie (app.session). Provisioned once in 1Password
+    # and synced into the cluster as SECRET_KEY (see backend/chart) — never
+    # generated at container start, since a per-boot key would log every
+    # device out on every deploy.
+    secret_key: str = "change-me"
     auth_cookie_secure: bool = True
     auth_login_delay_seconds: float = 1.0
     auth_session_lifetime_days: int = 30

@@ -47,3 +47,13 @@ def test_app_starts_with_a_password_hash_configured() -> None:
     settings = Settings(auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA")
 
     create_app(settings)
+
+
+def test_app_refuses_to_start_with_the_placeholder_secret_key() -> None:
+    settings = Settings(
+        auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA",
+        secret_key="change-me",
+    )
+
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        create_app(settings)

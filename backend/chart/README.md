@@ -61,10 +61,13 @@ must also have `contents:write` on `Piwero/tuk-tuk` for image-bump pushes).
 | Field | Value |
 |---|---|
 | `SECRET_KEY` | A long random value generated once, e.g. `openssl rand -base64 32`. This becomes the session signing key. |
-| `ADMIN_PASSWORD_HASH` | An obviously-fake placeholder (e.g. `PLACEHOLDER-REPLACE-BEFORE-GO-LIVE`) until the auth gate is implemented, then the real password hash. |
+| `AUTH_PASSWORD_HASH` | The Argon2id hash from `mise run backend:hash-password` (see ADR 0005 / #82). |
 
 The operator syncs these field labels directly as Secret keys, matching the
-env vars the backend will read.
+env vars the backend actually reads (`app.config.Settings`). If your
+`tuk-tuk-auth` 1Password item still has a field named `ADMIN_PASSWORD_HASH`
+from before the auth gate landed, rename it to `AUTH_PASSWORD_HASH` — the app
+looks for that name and won't start without it.
 
 ## Deploy
 
