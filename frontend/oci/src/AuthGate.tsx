@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { App } from "./App";
-import { ApiError, checkSession, login, onUnauthorized } from "./api";
+import { ApiError, checkSession, login, logout, onUnauthorized } from "./api";
 
 type GateState = "checking" | "locked" | "unlocked";
 
@@ -37,7 +37,11 @@ export function AuthGate(): JSX.Element | null {
     return null;
   }
   if (state === "unlocked") {
-    return <App />;
+    // Clearing the cookie server-side is what actually ends the session;
+    // locking regardless of the request's outcome just gets the password
+    // screen back up promptly, and unmounts App so no Task or List content
+    // is left sitting in component state behind it.
+    return <App onLogout={() => void logout().finally(() => setState("locked"))} />;
   }
   return <PasswordScreen onSuccess={() => setState("unlocked")} />;
 }

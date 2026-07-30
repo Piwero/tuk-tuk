@@ -70,6 +70,9 @@ interface SidebarProps {
   onTagSaved: (tag: Tag) => void;
   onTagDeleted: (tagId: number) => void;
   onTaskMoved: (task: Task) => void;
+  /** Absent when the sidebar is rendered without AuthGate (most tests) —
+   * the log out control only appears once there is somewhere for it to go. */
+  onLogout?: () => void;
 }
 
 interface ListButtonProps {
@@ -157,6 +160,7 @@ export function Sidebar({
   onTagSaved,
   onTagDeleted,
   onTaskMoved,
+  onLogout,
 }: SidebarProps): JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
 
@@ -706,6 +710,20 @@ export function Sidebar({
             ))}
           </ul>
         </section>
+      )}
+      {onLogout !== undefined && (
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className="sidebar-logout"
+            aria-label="Log out"
+            title="Log out"
+            onClick={onLogout}
+          >
+            <Icon name="log-out" size={18} />
+            <span className="nav-label">Log out</span>
+          </button>
+        </div>
       )}
     </aside>
   );

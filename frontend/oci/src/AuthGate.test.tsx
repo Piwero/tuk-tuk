@@ -66,4 +66,17 @@ describe("AuthGate", () => {
 
     expect(await screen.findByText("Buy milk")).toBeInTheDocument();
   });
+
+  it("returns to the password screen with no app content left after logging out", async () => {
+    const api = installFakeApi({ loggedIn: true, tasks: [fakeTask("Buy milk")] });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+    expect(await screen.findByText("Buy milk")).toBeInTheDocument();
+
+    await user.click(await screen.findByLabelText("Log out"));
+
+    expect(await screen.findByLabelText("Password")).toBeInTheDocument();
+    expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
+    expect(api.loggedIn).toBe(false);
+  });
 });

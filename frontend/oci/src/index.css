@@ -407,6 +407,16 @@ main > form,
   border-top: 1px solid var(--border-default);
 }
 
+.sidebar-footer {
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--border-default);
+}
+
+.sidebar .sidebar-logout .icon {
+  color: var(--text-secondary);
+}
+
 .list-form {
   display: grid;
   gap: var(--space-2);
