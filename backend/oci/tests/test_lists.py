@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from tests.conftest import TEST_PASSWORD
 
 
 def test_first_boot_creates_the_inbox(client: TestClient) -> None:
@@ -21,6 +22,7 @@ def test_restarting_does_not_duplicate_the_inbox(database_url: str) -> None:
             pass
 
     with TestClient(create_app(Settings(database_url=database_url))) as client:
+        client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
         items = client.get("/api/v1/lists").json()["items"]
         assert [item["name"] for item in items] == ["Inbox"]
 

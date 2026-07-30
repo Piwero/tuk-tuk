@@ -14,8 +14,11 @@ from app.config import Settings
 from app.config import settings as default_settings
 from app.db import run_migrations
 from app.errors import register_error_handlers
+from app.login_throttle import LoginThrottle
+from app.middleware import SessionAuthMiddleware
 from app.models import TaskList
 from app.routers.v1 import (
+    auth,
     check_items,
     completed_occurrences,
     focus_sessions,
@@ -40,6 +43,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "password hash: run 'mise run backend:hash-password' and set the printed "
             "hash as AUTH_PASSWORD_HASH in your .env or 1Password item."
         )
+    if app_settings.secret_key == "change-me":
+        raise RuntimeError(
+            "SECRET_KEY is not configured. The app refuses to start while it's left at "
+            "the placeholder value: generate one with 'openssl rand -base64 32' and set "
+            "it as SECRET_KEY in your .env or 1Password item."
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -56,6 +65,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await engine.dispose()
 
     app = FastAPI(title=app_settings.app_name, version=__version__, lifespan=lifespan)
+    app.state.settings = app_settings
+    app.state.login_throttle = LoginThrottle()
+    app.add_middleware(SessionAuthMiddleware, settings=app_settings)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,
@@ -63,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     register_error_handlers(app)
+    app.include_router(auth.router)
     app.include_router(check_items.router)
     app.include_router(completed_occurrences.router)
     app.include_router(folders.router)

@@ -11,11 +11,17 @@ from argon2.low_level import Type
 # ad-hoc `Settings(...)` construction across the suite pick it up too — the
 # app fails closed without a password hash, and this is the one place that
 # needs to know about test hashing cost.
+TEST_PASSWORD = "test-password"
+
 os.environ.setdefault(
     "AUTH_PASSWORD_HASH",
-    PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash("test-password"),
+    PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash(TEST_PASSWORD),
 )
 os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
+os.environ.setdefault("SECRET_KEY", "test-signing-key")
+# The delay is exercised (LoginThrottle still runs) but costs no wall-clock
+# time, so the escalation/reset tests don't sleep for real.
+os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0")
 
 from collections.abc import Iterator  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -33,10 +39,21 @@ def database_url(tmp_path: Path) -> str:
 
 
 @pytest.fixture
-def client(database_url: str) -> Iterator[TestClient]:
+def unauthenticated_client(database_url: str) -> Iterator[TestClient]:
     app = create_app(Settings(database_url=database_url))
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def client(unauthenticated_client: TestClient) -> TestClient:
+    """Logs in before yielding so every pre-existing test file exercises
+    authenticated requests without edits — each becomes an incidental test
+    that the session gate lets a real session through.
+    """
+    response = unauthenticated_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+    assert response.status_code == 204, response.text
+    return unauthenticated_client
 
 
 def make_task(client: TestClient, title: str, **fields: object) -> dict:
