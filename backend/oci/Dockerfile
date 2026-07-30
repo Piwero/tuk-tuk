@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Base: python + uv + runtime deps (no project) ----
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 
 # uv binary (exact pin; Dependabot bumps this)
 COPY --from=ghcr.io/astral-sh/uv:0.11.26 /uv /uvx /bin/
