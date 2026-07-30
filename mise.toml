@@ -28,6 +28,11 @@ description = "Auto-fix backend lint issues and format code"
 run = "uv run ruff check --fix . && uv run ruff format ."
 dir = "backend/oci"
 
+[tasks."backend:hash-password"]
+description = "Generate an Argon2id password hash for AUTH_PASSWORD_HASH (prompts on stdin)"
+run = "uv run python -m app.hash_password"
+dir = "backend/oci"
+
 [tasks."frontend:install"]
 description = "Install frontend dependencies"
 run = "npm install"
