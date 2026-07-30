@@ -24,6 +24,7 @@ os.environ.setdefault("SECRET_KEY", "test-signing-key")
 os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0")
 
 from collections.abc import Iterator  # noqa: E402
+from datetime import UTC, datetime, timedelta  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 import pytest  # noqa: E402
@@ -33,14 +34,34 @@ from app.config import Settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 
 
+class FakeClock:
+    """A settable clock for driving session expiry and reissue in tests
+    without sleeps or backdated tokens — see app.session.Clock.
+    """
+
+    def __init__(self, now: datetime) -> None:
+        self.now = now
+
+    def __call__(self) -> datetime:
+        return self.now
+
+    def advance(self, delta: timedelta) -> None:
+        self.now += delta
+
+
 @pytest.fixture
 def database_url(tmp_path: Path) -> str:
     return f"sqlite+aiosqlite:///{tmp_path / 'test.db'}"
 
 
 @pytest.fixture
-def unauthenticated_client(database_url: str) -> Iterator[TestClient]:
-    app = create_app(Settings(database_url=database_url))
+def fake_clock() -> FakeClock:
+    return FakeClock(datetime.now(UTC))
+
+
+@pytest.fixture
+def unauthenticated_client(database_url: str, fake_clock: FakeClock) -> Iterator[TestClient]:
+    app = create_app(Settings(database_url=database_url), clock=fake_clock)
     with TestClient(app) as test_client:
         yield test_client
 

@@ -30,12 +30,14 @@ from app.routers.v1 import (
     tasks,
     timers,
 )
+from app.session import Clock, real_clock
 
 INBOX_NAME = "Inbox"
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
     app_settings = settings or default_settings
+    app_clock = clock or real_clock
 
     if not app_settings.auth_password_hash:
         raise RuntimeError(
@@ -66,8 +68,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title=app_settings.app_name, version=__version__, lifespan=lifespan)
     app.state.settings = app_settings
+    app.state.clock = app_clock
     app.state.login_throttle = LoginThrottle()
-    app.add_middleware(SessionAuthMiddleware, settings=app_settings)
+    app.add_middleware(SessionAuthMiddleware, settings=app_settings, clock=app_clock)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,

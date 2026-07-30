@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     auth_cookie_secure: bool = True
     auth_login_delay_seconds: float = 1.0
     auth_session_lifetime_days: int = 30
+    # Minimum age before a session is refreshed (app.session.needs_reissue),
+    # not a distance from expiry: a session older than this is reissued on
+    # its next request, however long before expiry that falls.
     auth_session_reissue_threshold_days: int = 1
 
 
