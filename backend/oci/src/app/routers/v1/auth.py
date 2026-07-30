@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.auth import password_hasher
 from app.errors import APIError
-from app.session import set_session_cookie
+from app.session import SESSION_COOKIE_NAME, set_session_cookie
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -44,3 +44,19 @@ async def session_probe() -> None:
     one cheap request, rather than inferring login state from whether a
     data load happened to succeed.
     """
+
+
+@router.post("/logout", status_code=204)
+async def logout(request: Request, response: Response) -> None:
+    """Clears the session cookie. There is no server-side session store to
+    revoke (ADR 0005) — this is reached only with a currently-valid cookie
+    (SessionAuthMiddleware), and deleting it is the whole of "logging out".
+    """
+    settings = request.app.state.settings
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite="strict",
+    )

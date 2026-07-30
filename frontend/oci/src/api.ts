@@ -98,6 +98,7 @@ export class ApiError extends Error {
 
 const LOGIN_PATH = "/api/v1/auth/login";
 const SESSION_PATH = "/api/v1/auth/session";
+const LOGOUT_PATH = "/api/v1/auth/logout";
 
 type UnauthorizedListener = () => void;
 const unauthorizedListeners = new Set<UnauthorizedListener>();
@@ -140,6 +141,12 @@ export function checkSession(): Promise<void> {
 /** Exchanges the app password for a session cookie set by the response. */
 export function login(password: string): Promise<void> {
   return request(LOGIN_PATH, { method: "POST", body: JSON.stringify({ password }) });
+}
+
+/** Clears the session cookie server-side. The cookie is httpOnly, so this is
+ * the only way to end a session — client-side code can't delete it itself. */
+export function logout(): Promise<void> {
+  return request(LOGOUT_PATH, { method: "POST" });
 }
 
 export function fetchLists(): Promise<Page<TaskList>> {

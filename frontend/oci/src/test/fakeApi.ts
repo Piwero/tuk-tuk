@@ -440,6 +440,10 @@ export function installFakeApi({
     if (!state.loggedIn) {
       return unauthorized();
     }
+    if (method === "POST" && url.pathname === "/api/v1/auth/logout") {
+      state.loggedIn = false;
+      return new Response(null, { status: 204 });
+    }
 
     if (method === "GET" && url.pathname === "/api/v1/lists") {
       const items = [...state.lists].sort(

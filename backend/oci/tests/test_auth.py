@@ -140,6 +140,29 @@ class TestEnforcement:
         assert response.json()["error"]["code"] == "unauthorized"
 
 
+class TestLogout:
+    def test_returns_204_with_no_body_and_clears_the_cookie(self, client: TestClient) -> None:
+        response = client.post("/api/v1/auth/logout")
+
+        assert response.status_code == 204
+        assert response.content == b""
+        set_cookie = response.headers["set-cookie"].lower()
+        assert "tuktuk_session=" in set_cookie
+        assert "max-age=0" in set_cookie
+
+    def test_subsequent_requests_are_rejected(self, client: TestClient) -> None:
+        client.post("/api/v1/auth/logout")
+
+        response = client.get("/api/v1/tasks")
+
+        assert response.status_code == 401
+
+    def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
+        response = unauthenticated_client.post("/api/v1/auth/logout")
+
+        assert response.status_code == 401
+
+
 class TestRollingReissue:
     def test_a_session_older_than_the_threshold_is_reissued_with_a_fresh_cookie(
         self, unauthenticated_client: TestClient, fake_clock: FakeClock

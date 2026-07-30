@@ -51,7 +51,14 @@ type View =
   | { kind: "search"; search: SearchState }
   | null;
 
-export function App(): JSX.Element {
+interface AppProps {
+  /** Absent in tests that render App on its own — AuthGate is the only
+   * caller that supplies it, so App's bootstrap and tests never need to
+   * know authentication exists beyond forwarding this one callback. */
+  onLogout?: () => void;
+}
+
+export function App({ onLogout }: AppProps = {}): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -280,6 +287,7 @@ export function App(): JSX.Element {
         onQuickAdd={() => setQuickAddOpen(true)}
         collapsed={sidebarCollapsed}
         onToggleCollapsed={toggleSidebar}
+        onLogout={onLogout}
         onSearch={(query) =>
           switchView({
             kind: "search",
