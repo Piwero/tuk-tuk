@@ -16,3 +16,5 @@ resources:
   - service.yaml
   - tailscale-ingress.yaml
   - cf-ingressroute.yaml
+  - cf-ingressroute-web-redirect.yaml
+  - cf-middleware-redirect-to-https.yaml

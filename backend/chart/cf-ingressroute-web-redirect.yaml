@@ -1,0 +1,18 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: tuk-tuk-web-redirect
+  namespace: tuk-tuk
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`tt.piwero.com`)
+      middlewares:
+        - name: redirect-to-https
+      services:
+        - name: frontend
+          kind: Service
+          port: 80
