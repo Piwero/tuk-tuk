@@ -52,7 +52,7 @@ jobs:
 
       - name: Extract metadata (tags, labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           # Repo-scoped, lowercased automatically by the action.
           images: ghcr.io/${{ github.repository }}/${{ matrix.component }}
