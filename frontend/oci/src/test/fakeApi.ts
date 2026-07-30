@@ -138,7 +138,12 @@ export interface FakeApiState {
   focusSessions: FakeFocusSession[];
   timers: FakeTimer[];
   requests: RecordedRequest[];
+  /** Mutate directly to simulate a session lapsing mid-test. */
+  loggedIn: boolean;
 }
+
+/** The password installFakeApi's fake login route accepts. */
+export const FAKE_PASSWORD = "correct-password";
 
 export const INBOX: FakeList = {
   id: 1,
@@ -292,6 +297,7 @@ export function installFakeApi({
   checkIns = [],
   focusSessions = [],
   timers = [],
+  loggedIn = true,
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -303,6 +309,9 @@ export function installFakeApi({
   checkIns?: FakeCheckIn[];
   focusSessions?: FakeFocusSession[];
   timers?: FakeTimer[];
+  /** Start unauthenticated: every non-auth route is rejected until a fake
+   * login succeeds. */
+  loggedIn?: boolean;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -320,6 +329,7 @@ export function installFakeApi({
     focusSessions: focusSessions.map((focusSession) => ({ ...focusSession })),
     timers: timers.map((timer) => ({ ...timer })),
     requests: [],
+    loggedIn,
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -337,6 +347,9 @@ export function installFakeApi({
 
   const notFound = (message: string): Response =>
     json({ error: { code: "not_found", message } }, 404);
+
+  const unauthorized = (): Response =>
+    json({ error: { code: "unauthorized", message: "A valid session is required" } }, 401);
 
   /** Mirrors the backend's resolve_section rule: 404 unknown, 409 foreign. */
   const sectionMismatch = (sectionId: number, listId: number): Response | null => {
@@ -412,6 +425,21 @@ export function installFakeApi({
     const method = (init?.method ?? "GET").toUpperCase();
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     state.requests.push({ method, url: url.pathname + url.search, body });
+
+    if (method === "GET" && url.pathname === "/api/v1/auth/session") {
+      return state.loggedIn ? new Response(null, { status: 204 }) : unauthorized();
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/login") {
+      const input = body as { password: string };
+      if (input.password !== FAKE_PASSWORD) {
+        return json({ error: { code: "invalid_credentials", message: "Incorrect password" } }, 401);
+      }
+      state.loggedIn = true;
+      return new Response(null, { status: 204 });
+    }
+    if (!state.loggedIn) {
+      return unauthorized();
+    }
 
     if (method === "GET" && url.pathname === "/api/v1/lists") {
       const items = [...state.lists].sort(
