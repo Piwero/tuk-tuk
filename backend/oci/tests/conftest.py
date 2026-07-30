@@ -1,13 +1,30 @@
 """Shared fixtures: each test boots the real app against a throwaway SQLite file."""
 
-from collections.abc import Iterator
-from pathlib import Path
+import os
 
-import pytest
-from fastapi.testclient import TestClient
+from argon2 import PasswordHasher
+from argon2.low_level import Type
 
-from app.config import Settings
-from app.main import create_app
+# Minimal Argon2 cost parameters so verification costs microseconds, not the
+# ~200ms tuned for production (see app.auth). Set before the first import of
+# app.config/app.main below, so the module-level `app` singleton and every
+# ad-hoc `Settings(...)` construction across the suite pick it up too — the
+# app fails closed without a password hash, and this is the one place that
+# needs to know about test hashing cost.
+os.environ.setdefault(
+    "AUTH_PASSWORD_HASH",
+    PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash("test-password"),
+)
+os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
+
+from collections.abc import Iterator  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.config import Settings  # noqa: E402
+from app.main import create_app  # noqa: E402
 
 
 @pytest.fixture
