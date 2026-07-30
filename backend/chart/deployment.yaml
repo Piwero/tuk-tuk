@@ -44,6 +44,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: backend-config
+            - secretRef:
+                name: tuk-tuk-auth
           readinessProbe:
             httpGet:
               path: /health

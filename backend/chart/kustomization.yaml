@@ -7,6 +7,7 @@ resources:
   - pvc.yaml
   - ghcr-onepassworditem.yaml
   - git-onepassworditem.yaml
+  - auth-onepassworditem.yaml
   - imagerepository.yaml
   - imagepolicy.yaml
   - gitrepository.yaml
