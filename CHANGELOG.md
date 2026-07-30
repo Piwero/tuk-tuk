@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.1.3](https://github.com/Piwero/tuk-tuk/compare/v0.1.2...v0.1.3) - 2026-07-30
+
+### Features
+
+- Add quick-add dialog and sidebar collapse ([d97f547](https://github.com/Piwero/tuk-tuk/commit/d97f547403ffdee5ce32090b0a9450fb3e44a584))
+- **habits:** Pick habit colour from a 12-swatch palette ([8398786](https://github.com/Piwero/tuk-tuk/commit/8398786ca8f10e9618482bfecaf59ce403d5a526))
+- **habits:** Choose the habit icon from an emoji picker ([8a70290](https://github.com/Piwero/tuk-tuk/commit/8a70290116d28a1c12294fa63faa5630826a6362))
+- **lists:** Choose the list emoji from an emoji picker ([c8fd1e9](https://github.com/Piwero/tuk-tuk/commit/c8fd1e9fbd68ae1591c19d93c865386abd230e63))
+- **quick-add:** #tag suggestion dropdown ([c3567cf](https://github.com/Piwero/tuk-tuk/commit/c3567cfef2b8401c43377087ec4bbd1b22dcfd80))
+- **quick-add:** Create a missing tag from the #dropdown ([e2eb33a](https://github.com/Piwero/tuk-tuk/commit/e2eb33aba33184d919352cf76577fed284c079df))
+- **quick-add:** ~list and !priority suggestion dropdowns (#75, #76) ([c5c3c88](https://github.com/Piwero/tuk-tuk/commit/c5c3c881d9c5ce7929f6cd45361a269143e6e36a))
+- **quick-add:** Token suggestions in the Quick add dialog title ([990dc8f](https://github.com/Piwero/tuk-tuk/commit/990dc8f994bb80ae6c75933762c21acb0843b3f8))
+
+### Bug Fixes
+
+- Allow to cors with tunnel ([e798f75](https://github.com/Piwero/tuk-tuk/commit/e798f75bcf96f106904435d0929e70125c8d0c7e))
+- **quick-add:** Resync caret on pick, guard chip reset against races ([88231f9](https://github.com/Piwero/tuk-tuk/commit/88231f9b9f2314b1455059168454f4245ebf53d4))
+
 ## [0.1.2](https://github.com/Piwero/tuk-tuk/compare/v0.1.1...v0.1.2) - 2026-07-11
 
 ### Features
