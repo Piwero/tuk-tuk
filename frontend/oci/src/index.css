@@ -2400,3 +2400,65 @@ li[data-overdue] .date-chip {
     padding: var(--space-4) var(--space-2);
   }
 }
+
+/* ── Auth gate ───────────────────────────────────────────────────── */
+
+.auth-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+}
+
+.auth-gate-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 320px;
+  padding: var(--space-6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+
+.auth-gate-form h1 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.auth-gate-form label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.auth-gate-error {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-danger);
+}
+
+.auth-gate-form button {
+  height: var(--control-height);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent-strong);
+  color: var(--text-inverse);
+  font-weight: var(--weight-medium);
+}
+
+.auth-gate-form button:hover:not(:disabled) {
+  background: var(--accent-strong-hover);
+}
+
+.auth-gate-form button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}

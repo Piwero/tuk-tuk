@@ -96,6 +96,21 @@ export class ApiError extends Error {
   }
 }
 
+const LOGIN_PATH = "/api/v1/auth/login";
+const SESSION_PATH = "/api/v1/auth/session";
+
+type UnauthorizedListener = () => void;
+const unauthorizedListeners = new Set<UnauthorizedListener>();
+
+/** Notified whenever any request other than login itself comes back 401 —
+ * the session expired or was never there. Lets the auth gate hear about a
+ * lapsed session from requests made deep in the component tree, not just
+ * its own session probe. Returns an unsubscribe function. */
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener);
+  return () => unauthorizedListeners.delete(listener);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -103,12 +118,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = (await response.json()) as ApiErrorBody;
+    if (response.status === 401 && path !== LOGIN_PATH && path !== SESSION_PATH) {
+      for (const listener of unauthorizedListeners) {
+        listener();
+      }
+    }
     throw new ApiError(body.error.code, body.error.message);
   }
   if (response.status === 204) {
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+/** Asks whether the current session (if any) is still valid — the gate's
+ * mount-time probe. Resolves on a valid session, rejects (401) otherwise. */
+export function checkSession(): Promise<void> {
+  return request(SESSION_PATH);
+}
+
+/** Exchanges the app password for a session cookie set by the response. */
+export function login(password: string): Promise<void> {
+  return request(LOGIN_PATH, { method: "POST", body: JSON.stringify({ password }) });
 }
 
 export function fetchLists(): Promise<Page<TaskList>> {
