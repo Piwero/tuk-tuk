@@ -7,7 +7,6 @@ metadata:
 spec:
   entryPoints:
     - websecure
-    - web
   routes:
     - kind: Rule
       match: Host(`tt.piwero.com`)

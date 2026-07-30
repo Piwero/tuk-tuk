@@ -2,6 +2,8 @@
 
 An all-in-one personal productivity app — task management, calendar, habits, and focus — with a clean, conventional HTTP API.
 
+tuk-tuk is a single-user app: it is built for one person, not a household or team of distinct accounts.
+
 ## Language
 
 **List**:
