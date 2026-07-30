@@ -23,7 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12"]
+        # 3.12 is the floor declared by requires-python; 3.14 is what the
+        # runtime image ships (backend/oci/Dockerfile).
+        python-version: ["3.12", "3.14"]
 
     steps:
       - uses: actions/checkout@v7
