@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.2.1](https://github.com/Piwero/tuk-tuk/compare/v0.2.0...v0.2.1) - 2026-08-03
+
+### Features
+
+- **frontend:** Show a task's List next to its title in cross-list views ([755729b](https://github.com/Piwero/tuk-tuk/commit/755729b946d75b1e75245403acf85d7134c742c2))
+- **frontend:** Open task edit panel from calendar views ([74eb1dd](https://github.com/Piwero/tuk-tuk/commit/74eb1dddadb0270ab232c77781f8c503b6301dd4))
+
 ## [0.2.0](https://github.com/Piwero/tuk-tuk/compare/v0.1.3...v0.2.0) - 2026-08-03
 
 ### Features
