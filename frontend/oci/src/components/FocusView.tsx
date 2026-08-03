@@ -19,7 +19,7 @@ import {
   type TimerCreateInput,
 } from "../api";
 import { linkFields, linkOf, type FocusLink } from "../focusLink";
-import { clearStoredRun, loadStoredRun, saveStoredRun } from "../focusRun";
+import { useFocusRun } from "../focusRunContext";
 import { FocusSessionForm, type FocusSessionFormValues } from "./FocusSessionForm";
 import { FocusStatsPanel } from "./FocusStatsPanel";
 import { Icon } from "./Icon";
@@ -33,16 +33,6 @@ function formatClock(ms: number): string {
   return `${minutes}:${seconds}`;
 }
 
-interface RunningSession {
-  mode: FocusMode;
-  /** The Pomo length this run counts down from (frozen at start). */
-  pomoMs: number;
-  startedAtMs: number;
-  /** Completed pause time so far, excluding a pause still in progress. */
-  pausedMs: number;
-  pauseStartedAtMs: number | null;
-}
-
 interface FocusViewProps {
   /** Start a Pomo against this Task immediately (the task row's shortcut). */
   initialTask?: Task | null;
@@ -53,28 +43,26 @@ interface FocusViewProps {
  * add and edit. Pause time is tracked separately — recorded focus time is
  * honest. */
 export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
-  // A run persisted by a previous mount — another view, a closed tab, a
-  // reload — resumes here: elapsed time recomputes from its timestamps.
-  const [restored] = useState(loadStoredRun);
-  const [mode, setMode] = useState<FocusMode>(restored?.mode ?? "pomo");
+  // The live run (ticking clock, pause/resume/finish) is shared with the nav
+  // bar badge — this screen just supplies the pre-start configuration and
+  // the session history.
+  const {
+    running,
+    justFinished,
+    elapsedMs,
+    remainingMs,
+    start: startRun,
+    pause,
+    resume,
+    finish,
+  } = useFocusRun();
+  const [mode, setMode] = useState<FocusMode>(running?.mode ?? "pomo");
   const [pomoMinutes, setPomoMinutes] = useState(
-    restored !== null && restored.mode === "pomo" ? String(restored.pomoMs / 60_000) : "25",
+    running !== null && running.mode === "pomo" ? String(running.pomoMs / 60_000) : "25",
   );
   const [link, setLink] = useState<FocusLink>(
-    restored !== null ? restored.link : initialTask ? `task:${initialTask.id}` : "",
+    running !== null ? running.link : initialTask ? `task:${initialTask.id}` : "",
   );
-  const [running, setRunning] = useState<RunningSession | null>(
-    restored === null
-      ? null
-      : {
-          mode: restored.mode,
-          pomoMs: restored.pomoMs,
-          startedAtMs: restored.startedAtMs,
-          pausedMs: restored.pausedMs,
-          pauseStartedAtMs: restored.pauseStartedAtMs,
-        },
-  );
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -83,7 +71,6 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
   const [timerEditor, setTimerEditor] = useState<
     { mode: "add" } | { mode: "edit"; id: number } | null
   >(null);
-  const finishing = useRef(false);
 
   const loadSessions = useCallback(async (): Promise<void> => {
     setSessions((await fetchFocusSessions()).items);
@@ -101,14 +88,7 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
   }, [loadSessions, loadTimers]);
 
   function start(): void {
-    setRunning({
-      mode,
-      pomoMs: Number(pomoMinutes) * 60_000,
-      startedAtMs: Date.now(),
-      pausedMs: 0,
-      pauseStartedAtMs: null,
-    });
-    finishing.current = false;
+    startRun({ mode, pomoMs: Number(pomoMinutes) * 60_000, link });
   }
 
   /** One tap on a preset: adopt its mode / length / link and run. */
@@ -117,15 +97,9 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
     if (timer.mode === "pomo" && timer.duration_seconds !== null) {
       setPomoMinutes(String(timer.duration_seconds / 60));
     }
-    setLink(linkOf(timer));
-    setRunning({
-      mode: timer.mode,
-      pomoMs: (timer.duration_seconds ?? 0) * 1000,
-      startedAtMs: Date.now(),
-      pausedMs: 0,
-      pauseStartedAtMs: null,
-    });
-    finishing.current = false;
+    const timerLink = linkOf(timer);
+    setLink(timerLink);
+    startRun({ mode: timer.mode, pomoMs: (timer.duration_seconds ?? 0) * 1000, link: timerLink });
   }
 
   async function handleAddTimer(values: TimerCreateInput): Promise<void> {
@@ -165,95 +139,13 @@ export function FocusView({ initialTask = null }: FocusViewProps): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The run survives this component: every change is written through to
-  // storage, and finishing (or discarding) clears it.
+  // A session lands in the store the moment the run finishes (auto-expiry or
+  // the Finish button) — the history list must catch up either way.
   useEffect(() => {
-    if (running === null) {
-      clearStoredRun();
-    } else {
-      saveStoredRun({ ...running, link });
+    if (justFinished) {
+      void loadSessions();
     }
-  }, [running, link]);
-
-  // The clock: one tick a second while a timer runs.
-  useEffect(() => {
-    if (running === null) {
-      return;
-    }
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [running]);
-
-  // Background tabs throttle intervals; returning re-syncs the clock at once.
-  useEffect(() => {
-    const sync = (): void => setNowMs(Date.now());
-    document.addEventListener("visibilitychange", sync);
-    window.addEventListener("focus", sync);
-    return () => {
-      document.removeEventListener("visibilitychange", sync);
-      window.removeEventListener("focus", sync);
-    };
-  }, []);
-
-  const elapsedMs =
-    running === null
-      ? 0
-      : (running.pauseStartedAtMs ?? nowMs) - running.startedAtMs - running.pausedMs;
-  const remainingMs = running === null ? 0 : running.pomoMs - elapsedMs;
-
-  const finish = useCallback(async (): Promise<void> => {
-    if (running === null || finishing.current) {
-      return;
-    }
-    finishing.current = true;
-    // A Pomo that ran out while nobody was watching (the view unmounted, the
-    // tab asleep) ends at its true expiry, not at whenever we noticed.
-    const expiryMs = running.startedAtMs + running.pausedMs + running.pomoMs;
-    const endMs =
-      running.mode === "pomo" && running.pauseStartedAtMs === null
-        ? Math.min(Date.now(), expiryMs)
-        : Date.now();
-    const pausedTotalMs =
-      running.pausedMs + (running.pauseStartedAtMs === null ? 0 : endMs - running.pauseStartedAtMs);
-    try {
-      await createFocusSession({
-        mode: running.mode,
-        ...linkFields(link),
-        started_at: new Date(running.startedAtMs).toISOString(),
-        ended_at: new Date(endMs).toISOString(),
-        pause_seconds: Math.round(pausedTotalMs / 1000),
-      });
-      setRunning(null);
-      await loadSessions();
-    } finally {
-      // A failed save must not wedge the timer: the guard lifts so the next
-      // tick (or tap) retries the finish.
-      finishing.current = false;
-    }
-  }, [running, link, loadSessions]);
-
-  // A Pomo finishes itself when the countdown reaches zero.
-  useEffect(() => {
-    if (running !== null && running.mode === "pomo" && remainingMs <= 0) {
-      void finish();
-    }
-  }, [running, remainingMs, finish]);
-
-  function pause(): void {
-    if (running !== null && running.pauseStartedAtMs === null) {
-      setRunning({ ...running, pauseStartedAtMs: Date.now() });
-    }
-  }
-
-  function resume(): void {
-    if (running !== null && running.pauseStartedAtMs !== null) {
-      setRunning({
-        ...running,
-        pausedMs: running.pausedMs + (Date.now() - running.pauseStartedAtMs),
-        pauseStartedAtMs: null,
-      });
-    }
-  }
+  }, [justFinished, loadSessions]);
 
   const clockMs =
     running === null

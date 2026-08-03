@@ -2256,7 +2256,37 @@ li[data-overdue] .date-chip {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* Specificity has to beat `.sidebar button` (width: 100%, transparent
+   background) — matched here the same way `.sidebar .sidebar-collapse` does. */
+.sidebar .focus-nav-badge {
+  display: flex;
+  flex: none;
+  width: auto;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full, 999px);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-inverse);
+  background: var(--focus-accent);
+}
+
+.sidebar .focus-nav-badge:hover {
+  background: var(--plum-700);
+}
+
+.sidebar .focus-nav-badge.paused {
+  background: var(--text-tertiary);
+}
+
+.sidebar .focus-nav-badge.finished {
+  background: var(--success);
 }
 
 .sidebar .sidebar-collapse {
@@ -2282,6 +2312,7 @@ li[data-overdue] .date-chip {
 
 .sidebar.collapsed .nav-label,
 .sidebar.collapsed .sidebar-brand,
+.sidebar.collapsed .focus-nav-badge,
 .sidebar.collapsed .row-actions,
 .sidebar.collapsed .folder-row,
 .sidebar.collapsed .tags-nav h2,
@@ -2364,6 +2395,10 @@ li[data-overdue] .date-chip {
   .sidebar.collapsed .tags-nav h2,
   .sidebar.collapsed .archived h2 {
     display: block;
+  }
+
+  .sidebar.collapsed .focus-nav-badge {
+    display: flex;
   }
 
   .sidebar.collapsed .row-actions,

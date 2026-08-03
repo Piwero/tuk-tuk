@@ -20,6 +20,7 @@ import {
 } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
+import { FocusNavBadge } from "./FocusNavBadge";
 import { FolderForm } from "./FolderForm";
 import { Icon, type IconName } from "./Icon";
 import { ListForm, type ListFormValues } from "./ListForm";
@@ -427,6 +428,7 @@ export function Sidebar({
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
       <div className="sidebar-top">
         <div className="sidebar-brand">Tuk Tuk</div>
+        <FocusNavBadge onOpen={onSelectFocus} />
         <button
           type="button"
           className="sidebar-collapse"
