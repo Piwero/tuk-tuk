@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.2.0](https://github.com/Piwero/tuk-tuk/compare/v0.1.3...v0.2.0) - 2026-08-03
+
+### Features
+
+- **chart:** Provision auth secrets via 1Password (#79) (#88) ([eed8c0e](https://github.com/Piwero/tuk-tuk/commit/eed8c0e5ad2ff65c7429b5755838af68def2b717))
+- **backend:** Authentication settings and password-hash generation task (#82) (#91) ([46ae426](https://github.com/Piwero/tuk-tuk/commit/46ae426c4b604eb2c8497e3dd8573be198af573c))
+- **backend:** Require a session on every endpoint by default (#83, #84) ([1dbd88a](https://github.com/Piwero/tuk-tuk/commit/1dbd88ad55c2592f168bb9a0e4c84f692f1b8ae5))
+- **frontend:** Add password gate above App (#86) ([e776236](https://github.com/Piwero/tuk-tuk/commit/e776236f27803a017b431b277db3c97e1144a537))
+- Add log out action (#87) ([a2ed6d5](https://github.com/Piwero/tuk-tuk/commit/a2ed6d51c05a69bb9b36a2ed6a035092d772e46f))
+
+### Bug Fixes
+
+- **deploy:** Redirect plain-HTTP public traffic to HTTPS (#89) ([a81a221](https://github.com/Piwero/tuk-tuk/commit/a81a221317f69f25ee32e68969e3fea3c00a6eb5))
+- **backend:** Refresh sessions by age since issue, not distance to expiry (#85) ([7dcac1e](https://github.com/Piwero/tuk-tuk/commit/7dcac1e65e5643663c01dc7b7620925710f724d6))
+- **compose:** Stop Compose interpolating $ out of the password hash ([52f8fa0](https://github.com/Piwero/tuk-tuk/commit/52f8fa0f2306c8145798137eda9f09181ca8520f))
+
 ## [0.1.3](https://github.com/Piwero/tuk-tuk/compare/v0.1.2...v0.1.3) - 2026-07-30
 
 ### Features
