@@ -22,6 +22,7 @@ import {
   type TaskList,
 } from "./api";
 import { localDayOf } from "./dates";
+import { FocusRunProvider } from "./focusRunContext";
 import { type GroupBy, type SortBy } from "./grouping";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "./layoutPrefs";
 import { CalendarView } from "./components/CalendarView";
@@ -264,226 +265,228 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   }
 
   return (
-    <div
-      className={[
-        "app",
-        selectedTask === null ? "" : "with-detail",
-        sidebarCollapsed ? "sidebar-collapsed" : "",
-        drawerOpen ? "drawer-open" : "",
-      ]
-        .filter((name) => name !== "")
-        .join(" ")}
-    >
-      <Sidebar
-        lists={lists}
-        folders={folders}
-        tags={tags}
-        selectedListId={view?.kind === "list" ? view.id : null}
-        selectedTagId={view?.kind === "tag" ? view.id : null}
-        selectedSmart={smartView}
-        calendarSelected={view?.kind === "calendar"}
-        habitsSelected={view?.kind === "habits"}
-        focusSelected={view?.kind === "focus"}
-        onSelect={(listId) => switchView({ kind: "list", id: listId })}
-        onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
-        onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
-        onSelectCalendar={() => switchView({ kind: "calendar" })}
-        onSelectHabits={() => switchView({ kind: "habits" })}
-        onSelectFocus={() => switchView({ kind: "focus" })}
-        onQuickAdd={() => setQuickAddOpen(true)}
-        collapsed={sidebarCollapsed}
-        onToggleCollapsed={toggleSidebar}
-        onLogout={onLogout}
-        onSearch={(query) =>
-          switchView({
-            kind: "search",
-            search: { query, listId: null, tagId: null, priority: null, completed: null },
-          })
-        }
-        onListsChanged={setLists}
-        onFoldersChanged={setFolders}
-        onTagCreated={(tag) => setTags((current) => [...current, tag])}
-        onTagSaved={applyTagChange}
-        onTagDeleted={applyTagDeletion}
-        onTaskMoved={(moved) =>
-          setTasks((current) =>
-            view?.kind === "list" && moved.list_id !== view.id
-              ? current.filter((task) => task.id !== moved.id)
-              : current.map((task) => (task.id === moved.id ? moved : task)),
-          )
-        }
-      />
-      {drawerOpen && (
-        <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
-      )}
-      <main>
-        <div className="main-header">
-          <button
-            type="button"
-            className="drawer-toggle"
-            aria-label="Show navigation"
-            aria-expanded={drawerOpen}
-            onClick={() => setDrawerOpen((current) => !current)}
-          >
-            <Icon name="menu" size={20} />
-          </button>
-          <h1>
-            {selectedList?.name ??
-              (selectedTag
-                ? `#${selectedTag.name}`
-                : smartView !== null
-                  ? SMART_LABELS[smartView]
-                  : view?.kind === "calendar"
-                    ? "Calendar"
-                    : view?.kind === "habits"
-                      ? "Habits"
-                      : view?.kind === "focus"
-                        ? "Focus"
-                        : view?.kind === "search"
-                          ? "Search"
-                          : "tuk-tuk")}
-          </h1>
-          {selectedList !== null && !completedMode && (
-            <button
-              type="button"
-              className="view-toggle"
-              aria-label={
-                selectedList.view_mode === "kanban"
-                  ? "Switch to list view"
-                  : "Switch to kanban view"
-              }
-              onClick={() => void toggleViewMode(selectedList)}
-            >
-              {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
-            </button>
-          )}
-          {hasCompletedView && (
-            <button
-              type="button"
-              className="completed-toggle"
-              onClick={() => setCompletedMode((current) => !current)}
-            >
-              {completedMode ? "Open tasks" : "Completed"}
-            </button>
-          )}
-        </div>
-        {quickAddOpen && (
-          <Modal title="Quick add" onClose={() => setQuickAddOpen(false)}>
-            <QuickAddDialog
-              lists={lists}
-              tags={tags}
-              defaultListId={selectedList?.id ?? null}
-              onTagCreated={(tag) => setTags((current) => [...current, tag])}
-              onListCreated={(list) => setLists((current) => [...current, list])}
-              onCreated={addCreatedTask}
-              onClose={() => setQuickAddOpen(false)}
-            />
-          </Modal>
+    <FocusRunProvider>
+      <div
+        className={[
+          "app",
+          selectedTask === null ? "" : "with-detail",
+          sidebarCollapsed ? "sidebar-collapsed" : "",
+          drawerOpen ? "drawer-open" : "",
+        ]
+          .filter((name) => name !== "")
+          .join(" ")}
+      >
+        <Sidebar
+          lists={lists}
+          folders={folders}
+          tags={tags}
+          selectedListId={view?.kind === "list" ? view.id : null}
+          selectedTagId={view?.kind === "tag" ? view.id : null}
+          selectedSmart={smartView}
+          calendarSelected={view?.kind === "calendar"}
+          habitsSelected={view?.kind === "habits"}
+          focusSelected={view?.kind === "focus"}
+          onSelect={(listId) => switchView({ kind: "list", id: listId })}
+          onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
+          onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
+          onSelectCalendar={() => switchView({ kind: "calendar" })}
+          onSelectHabits={() => switchView({ kind: "habits" })}
+          onSelectFocus={() => switchView({ kind: "focus" })}
+          onQuickAdd={() => setQuickAddOpen(true)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={toggleSidebar}
+          onLogout={onLogout}
+          onSearch={(query) =>
+            switchView({
+              kind: "search",
+              search: { query, listId: null, tagId: null, priority: null, completed: null },
+            })
+          }
+          onListsChanged={setLists}
+          onFoldersChanged={setFolders}
+          onTagCreated={(tag) => setTags((current) => [...current, tag])}
+          onTagSaved={applyTagChange}
+          onTagDeleted={applyTagDeletion}
+          onTaskMoved={(moved) =>
+            setTasks((current) =>
+              view?.kind === "list" && moved.list_id !== view.id
+                ? current.filter((task) => task.id !== moved.id)
+                : current.map((task) => (task.id === moved.id ? moved : task)),
+            )
+          }
+        />
+        {drawerOpen && (
+          <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
         )}
-        {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
-          <>
-            <QuickAdd
-              listId={selectedList.id}
-              lists={lists}
-              tags={tags}
-              onTagCreated={(tag) => setTags((current) => [...current, tag])}
-              onListCreated={(list) => setLists((current) => [...current, list])}
-              onCreated={(task) => {
-                // A ~list token may have filed the task elsewhere.
-                if (task.list_id === selectedList.id) {
-                  setTasks((current) => [...current, task]);
+        <main>
+          <div className="main-header">
+            <button
+              type="button"
+              className="drawer-toggle"
+              aria-label="Show navigation"
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen((current) => !current)}
+            >
+              <Icon name="menu" size={20} />
+            </button>
+            <h1>
+              {selectedList?.name ??
+                (selectedTag
+                  ? `#${selectedTag.name}`
+                  : smartView !== null
+                    ? SMART_LABELS[smartView]
+                    : view?.kind === "calendar"
+                      ? "Calendar"
+                      : view?.kind === "habits"
+                        ? "Habits"
+                        : view?.kind === "focus"
+                          ? "Focus"
+                          : view?.kind === "search"
+                            ? "Search"
+                            : "tuk-tuk")}
+            </h1>
+            {selectedList !== null && !completedMode && (
+              <button
+                type="button"
+                className="view-toggle"
+                aria-label={
+                  selectedList.view_mode === "kanban"
+                    ? "Switch to list view"
+                    : "Switch to kanban view"
                 }
+                onClick={() => void toggleViewMode(selectedList)}
+              >
+                {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
+              </button>
+            )}
+            {hasCompletedView && (
+              <button
+                type="button"
+                className="completed-toggle"
+                onClick={() => setCompletedMode((current) => !current)}
+              >
+                {completedMode ? "Open tasks" : "Completed"}
+              </button>
+            )}
+          </div>
+          {quickAddOpen && (
+            <Modal title="Quick add" onClose={() => setQuickAddOpen(false)}>
+              <QuickAddDialog
+                lists={lists}
+                tags={tags}
+                defaultListId={selectedList?.id ?? null}
+                onTagCreated={(tag) => setTags((current) => [...current, tag])}
+                onListCreated={(list) => setLists((current) => [...current, list])}
+                onCreated={addCreatedTask}
+                onClose={() => setQuickAddOpen(false)}
+              />
+            </Modal>
+          )}
+          {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
+            <>
+              <QuickAdd
+                listId={selectedList.id}
+                lists={lists}
+                tags={tags}
+                onTagCreated={(tag) => setTags((current) => [...current, tag])}
+                onListCreated={(list) => setLists((current) => [...current, list])}
+                onCreated={(task) => {
+                  // A ~list token may have filed the task elsewhere.
+                  if (task.list_id === selectedList.id) {
+                    setTasks((current) => [...current, task]);
+                  }
+                }}
+              />
+              <div className="view-controls">
+                <label>
+                  Group by
+                  <select
+                    value={groupBy}
+                    onChange={(event) => setGroupBy(event.target.value as GroupBy)}
+                  >
+                    <option value="section">Section</option>
+                    <option value="date">Date</option>
+                    <option value="priority">Priority</option>
+                  </select>
+                </label>
+                <label>
+                  Sort by
+                  <select
+                    value={sortBy}
+                    onChange={(event) => setSortBy(event.target.value as SortBy)}
+                  >
+                    <option value="custom">Custom</option>
+                    <option value="date">Date</option>
+                    <option value="priority">Priority</option>
+                    <option value="title">Title</option>
+                  </select>
+                </label>
+              </div>
+            </>
+          )}
+          {view?.kind === "calendar" ? (
+            <CalendarView
+              onSelect={(task) => {
+                setCalendarTask(task);
+                setSelectedTaskId(task.id);
               }}
             />
-            <div className="view-controls">
-              <label>
-                Group by
-                <select
-                  value={groupBy}
-                  onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-                >
-                  <option value="section">Section</option>
-                  <option value="date">Date</option>
-                  <option value="priority">Priority</option>
-                </select>
-              </label>
-              <label>
-                Sort by
-                <select
-                  value={sortBy}
-                  onChange={(event) => setSortBy(event.target.value as SortBy)}
-                >
-                  <option value="custom">Custom</option>
-                  <option value="date">Date</option>
-                  <option value="priority">Priority</option>
-                  <option value="title">Title</option>
-                </select>
-              </label>
-            </div>
-          </>
-        )}
-        {view?.kind === "calendar" ? (
-          <CalendarView
-            onSelect={(task) => {
-              setCalendarTask(task);
-              setSelectedTaskId(task.id);
+          ) : view?.kind === "habits" ? (
+            <HabitsView />
+          ) : view?.kind === "focus" ? (
+            <FocusView key={view.task?.id ?? "focus"} initialTask={view.task ?? null} />
+          ) : view?.kind === "search" ? (
+            <SearchView
+              tasks={tasks}
+              lists={lists}
+              tags={tags}
+              state={view.search}
+              onStateChange={(search) => switchView({ kind: "search", search })}
+              onSelect={setSelectedTaskId}
+            />
+          ) : completedMode ? (
+            <CompletedView
+              tasks={tasks}
+              occurrences={occurrences}
+              onChanged={changeTasksAndRecompute}
+              onSelect={setSelectedTaskId}
+            />
+          ) : selectedList !== null && selectedList.view_mode === "kanban" ? (
+            <KanbanView
+              tasks={tasks}
+              sections={sections}
+              listId={selectedList.id}
+              onChanged={setTasks}
+              onSelect={setSelectedTaskId}
+              onSectionsChanged={setSections}
+            />
+          ) : (
+            <TaskListView
+              tasks={tasks}
+              sections={sections}
+              listId={smartView !== null ? null : (selectedList?.id ?? null)}
+              lists={lists}
+              groupBy={groupBy}
+              sortBy={sortBy}
+              onChanged={smartView !== null ? changeTasksAndRecompute : setTasks}
+              onSelect={setSelectedTaskId}
+              onSectionsChanged={setSections}
+              onStartFocus={(task) => switchView({ kind: "focus", task })}
+            />
+          )}
+        </main>
+        {selectedTask !== null && (
+          <TaskDetail
+            task={selectedTask}
+            allTags={tags}
+            onTaskChanged={applyTaskChange}
+            onClose={() => {
+              setSelectedTaskId(null);
+              setCalendarTask(null);
             }}
           />
-        ) : view?.kind === "habits" ? (
-          <HabitsView />
-        ) : view?.kind === "focus" ? (
-          <FocusView key={view.task?.id ?? "focus"} initialTask={view.task ?? null} />
-        ) : view?.kind === "search" ? (
-          <SearchView
-            tasks={tasks}
-            lists={lists}
-            tags={tags}
-            state={view.search}
-            onStateChange={(search) => switchView({ kind: "search", search })}
-            onSelect={setSelectedTaskId}
-          />
-        ) : completedMode ? (
-          <CompletedView
-            tasks={tasks}
-            occurrences={occurrences}
-            onChanged={changeTasksAndRecompute}
-            onSelect={setSelectedTaskId}
-          />
-        ) : selectedList !== null && selectedList.view_mode === "kanban" ? (
-          <KanbanView
-            tasks={tasks}
-            sections={sections}
-            listId={selectedList.id}
-            onChanged={setTasks}
-            onSelect={setSelectedTaskId}
-            onSectionsChanged={setSections}
-          />
-        ) : (
-          <TaskListView
-            tasks={tasks}
-            sections={sections}
-            listId={smartView !== null ? null : (selectedList?.id ?? null)}
-            lists={lists}
-            groupBy={groupBy}
-            sortBy={sortBy}
-            onChanged={smartView !== null ? changeTasksAndRecompute : setTasks}
-            onSelect={setSelectedTaskId}
-            onSectionsChanged={setSections}
-            onStartFocus={(task) => switchView({ kind: "focus", task })}
-          />
         )}
-      </main>
-      {selectedTask !== null && (
-        <TaskDetail
-          task={selectedTask}
-          allTags={tags}
-          onTaskChanged={applyTaskChange}
-          onClose={() => {
-            setSelectedTaskId(null);
-            setCalendarTask(null);
-          }}
-        />
-      )}
-    </div>
+      </div>
+    </FocusRunProvider>
   );
 }

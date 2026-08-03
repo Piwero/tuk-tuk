@@ -23,6 +23,18 @@ async function openFocus(): Promise<void> {
   await screen.findByRole("heading", { name: "Focus" });
 }
 
+async function openHabits(): Promise<void> {
+  const nav = await screen.findByRole("navigation", { name: "Views" });
+  fireEvent.click(within(nav).getByRole("button", { name: "Habits" }));
+  await screen.findByRole("heading", { name: "Habits" });
+}
+
+// A running Pomo also shows its clock in the nav badge, so once a run is in
+// progress the clock text is scoped to the main pane to stay unambiguous.
+function main(): ReturnType<typeof within> {
+  return within(screen.getByRole("main"));
+}
+
 function tick(ms: number): void {
   act(() => {
     vi.advanceTimersByTime(ms);
@@ -45,12 +57,12 @@ describe("Pomo timer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     tick(30_000);
-    expect(screen.getByText("00:30")).toBeInTheDocument();
+    expect(main().getByText("00:30")).toBeInTheDocument();
 
     // Paused time never counts as focus.
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     tick(20_000);
-    expect(screen.getByText("00:30")).toBeInTheDocument();
+    expect(main().getByText("00:30")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
 
     // The countdown finishes and the session persists itself.
@@ -99,13 +111,13 @@ describe("Stopwatch", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     tick(90_000);
-    expect(screen.getByText("01:30")).toBeInTheDocument();
+    expect(main().getByText("01:30")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     tick(10_000);
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     tick(30_000);
-    expect(screen.getByText("02:00")).toBeInTheDocument();
+    expect(main().getByText("02:00")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
 
@@ -173,12 +185,6 @@ describe("Linking", () => {
 });
 
 describe("Run persistence", () => {
-  async function openHabits(): Promise<void> {
-    const nav = await screen.findByRole("navigation", { name: "Views" });
-    fireEvent.click(within(nav).getByRole("button", { name: "Habits" }));
-    await screen.findByRole("heading", { name: "Habits" });
-  }
-
   it("keeps the countdown running across leaving and reopening the Focus view", async () => {
     const task = fakeTask("Write report");
     installFakeApi({ tasks: [task] });
@@ -195,7 +201,7 @@ describe("Run persistence", () => {
     tick(120_000); // Time keeps passing while the view is unmounted.
     await openFocus();
 
-    expect(await screen.findByText("22:00")).toBeInTheDocument();
+    expect(await main().findByText("22:00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
   });
@@ -213,7 +219,7 @@ describe("Run persistence", () => {
     tick(90_000);
     await openFocus();
 
-    expect(await screen.findByText("24:30")).toBeInTheDocument();
+    expect(await main().findByText("24:30")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
   });
 
@@ -232,7 +238,7 @@ describe("Run persistence", () => {
     tick(30_000);
     await openFocus();
 
-    expect(await screen.findByText("02:00")).toBeInTheDocument();
+    expect(await main().findByText("02:00")).toBeInTheDocument();
   });
 
   it("restores a running pomo after a full remount, like a page reload", async () => {
@@ -247,7 +253,7 @@ describe("Run persistence", () => {
     render(<App />);
     await openFocus();
 
-    expect(await screen.findByText("24:00")).toBeInTheDocument();
+    expect(await main().findByText("24:00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
   });
 
@@ -274,6 +280,64 @@ describe("Run persistence", () => {
     expect(wallSeconds).toBe(60);
     // Back to idle: the stored run is gone.
     expect(await screen.findByRole("button", { name: "Start" })).toBeInTheDocument();
+  });
+});
+
+describe("Nav badge", () => {
+  it("shows the running countdown next to the brand, from any screen", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(60_000);
+
+    expect(
+      screen.getByRole("button", { name: "Focus timer running, 24:00 left" }),
+    ).toBeInTheDocument();
+
+    // Still there after navigating away — it isn't part of the Focus screen.
+    await openHabits();
+    expect(
+      screen.getByRole("button", { name: "Focus timer running, 24:00 left" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a paused state distinctly from running", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+
+    const badge = screen.getByRole("button", { name: "Focus timer paused, 25:00 left" });
+    expect(badge).toHaveClass("paused");
+  });
+
+  it("keeps announcing a finished Pomo until the badge is dismissed", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+      target: { value: "1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(60_000);
+    await waitFor(() => expect(api.focusSessions).toHaveLength(1));
+
+    // Gone from the Focus screen (back to idle), but the nav still says so.
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Focus timer finished" })).toBeInTheDocument();
+
+    await openHabits();
+    expect(screen.getByRole("button", { name: "Focus timer finished" })).toBeInTheDocument();
+
+    // Tapping it clears the notice and returns to the Focus screen.
+    fireEvent.click(screen.getByRole("button", { name: "Focus timer finished" }));
+    await screen.findByRole("heading", { name: "Focus" });
+    expect(screen.queryByRole("button", { name: "Focus timer finished" })).not.toBeInTheDocument();
   });
 });
 

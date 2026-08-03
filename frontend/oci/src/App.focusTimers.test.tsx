@@ -23,6 +23,12 @@ async function openFocus(): Promise<void> {
   await screen.findByRole("heading", { name: "Focus" });
 }
 
+// A running Pomo also shows its clock in the nav badge, so once a run is in
+// progress the clock text is scoped to the main pane to stay unambiguous.
+function main(): ReturnType<typeof within> {
+  return within(screen.getByRole("main"));
+}
+
 function tick(ms: number): void {
   act(() => {
     vi.advanceTimersByTime(ms);
@@ -41,12 +47,12 @@ describe("Timers", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Start timer Reading 30m" }));
 
-    expect(screen.getByText("30:00")).toBeInTheDocument();
+    expect(main().getByText("30:00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Link" })).toHaveValue(`habit:${habit.id}`);
 
     tick(60_000);
-    expect(screen.getByText("29:00")).toBeInTheDocument();
+    expect(main().getByText("29:00")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     await waitFor(() => expect(api.focusSessions).toHaveLength(1));
@@ -64,7 +70,7 @@ describe("Timers", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Start timer Deep work" }));
     tick(90_000);
 
-    expect(screen.getByText("01:30")).toBeInTheDocument();
+    expect(main().getByText("01:30")).toBeInTheDocument();
   });
 
   it("creates a Timer from the form", async () => {
