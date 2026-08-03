@@ -188,6 +188,15 @@ messages.
 Changing `SECRET_KEY` invalidates the cookie you already have, so you'll be
 asked for the password again on the next load.
 
+### In production
+
+There is no `.env` in the cluster: both values live in the `tuk-tuk-auth`
+1Password item and reach the backend as a Secret, so the Compose
+interpolation caveat above doesn't apply. `AUTH_PASSWORD_HASH` still holds
+the hash and never the plaintext password — see
+[`backend/chart/README.md`](backend/chart/README.md) for the field names,
+pasting rules, and how to verify the value that reached the pod.
+
 ## Development
 
 Dev servers run in Docker (source bind-mounted, hot reload on both sides).
