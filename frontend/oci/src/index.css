@@ -719,6 +719,20 @@ li[data-overdue] .date-chip {
   white-space: nowrap;
 }
 
+.list-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  white-space: nowrap;
+}
+
 /* ── Token input (Quick-Add bar) ─────────────────────────────────── */
 
 .token-input {

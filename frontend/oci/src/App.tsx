@@ -452,6 +452,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             tasks={tasks}
             sections={sections}
             listId={smartView !== null ? null : (selectedList?.id ?? null)}
+            lists={lists}
             groupBy={groupBy}
             sortBy={sortBy}
             onChanged={smartView !== null ? changeTasksAndRecompute : setTasks}

@@ -8,6 +8,7 @@ import {
   updateTask,
   type Section,
   type Task,
+  type TaskList,
 } from "../api";
 import { formatSchedule, isOverdue } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
@@ -23,6 +24,8 @@ interface TaskListViewProps {
   sections: Section[];
   /** The viewed List, or null when the view is not a List (no section affordances). */
   listId: number | null;
+  /** All Lists, used to label each task's List when the view spans multiple Lists. */
+  lists: TaskList[];
   groupBy: GroupBy;
   sortBy: SortBy;
   onChanged: (update: (current: Task[]) => Task[]) => void;
@@ -36,6 +39,7 @@ export function TaskListView({
   tasks,
   sections,
   listId,
+  lists,
   groupBy,
   sortBy,
   onChanged,
@@ -169,6 +173,19 @@ export function TaskListView({
           onClick={() => onSelect(task.id)}
         >
           <span className={task.completed ? "completed" : undefined}>{task.title}</span>
+          {listId === null &&
+            (() => {
+              const taskList = lists.find((list) => list.id === task.list_id);
+              return taskList !== undefined ? (
+                <span
+                  className="list-chip"
+                  style={taskList.color === null ? undefined : { borderColor: taskList.color }}
+                >
+                  {taskList.emoji !== null ? `${taskList.emoji} ` : ""}
+                  {taskList.name}
+                </span>
+              ) : null;
+            })()}
           {task.due_date !== null && (
             <span className={isOverdue(task) ? "date-chip overdue" : "date-chip"}>
               {formatSchedule(task)}
