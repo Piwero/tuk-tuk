@@ -95,7 +95,11 @@ function shortWeekday(dayIso: string): string {
   );
 }
 
-export function CalendarView(): JSX.Element {
+interface CalendarViewProps {
+  onSelect?: (task: Task) => void;
+}
+
+export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element {
   const [mode, setMode] = useState<CalendarMode>("month");
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -344,7 +348,10 @@ export function CalendarView(): JSX.Element {
                     key={task.id}
                     className="calendar-banner"
                     {...taskDragProps(task)}
-                    onClick={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect?.(task);
+                    }}
                   >
                     {task.title}
                   </div>
@@ -353,7 +360,10 @@ export function CalendarView(): JSX.Element {
                     key={task.id}
                     className="calendar-timed-entry"
                     {...taskDragProps(task)}
-                    onClick={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect?.(task);
+                    }}
                   >
                     <span className="entry-time">{entryTime(task)}</span> {task.title}
                   </div>
@@ -387,6 +397,7 @@ export function CalendarView(): JSX.Element {
           height: Math.max(((endMin - startMin) / 60) * HOUR_PX, HOUR_PX / 3),
         }}
         {...taskDragProps(task)}
+        onClick={() => onSelect?.(task)}
       >
         <div
           className="resize-handle resize-handle-top"
@@ -395,6 +406,7 @@ export function CalendarView(): JSX.Element {
           aria-label={`Resize start of "${task.title}"`}
           onMouseDown={(event) => beginEdgeDrag(event, task, "start", day)}
           onKeyDown={(event) => nudgeEdge(event, task, "start", day)}
+          onClick={(event) => event.stopPropagation()}
           onDragStart={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -411,6 +423,7 @@ export function CalendarView(): JSX.Element {
           aria-label={`Resize end of "${task.title}"`}
           onMouseDown={(event) => beginEdgeDrag(event, task, "end", day)}
           onKeyDown={(event) => nudgeEdge(event, task, "end", day)}
+          onClick={(event) => event.stopPropagation()}
           onDragStart={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -454,7 +467,10 @@ export function CalendarView(): JSX.Element {
                   key={task.id}
                   className="calendar-banner"
                   {...taskDragProps(task)}
-                  onClick={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect?.(task);
+                  }}
                 >
                   {task.title}
                 </div>

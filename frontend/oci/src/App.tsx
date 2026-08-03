@@ -66,6 +66,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // The completed view of the current List (or of All): computed, newest first.
   const [completedMode, setCompletedMode] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  // The Calendar view keeps its own task list (App's `tasks` isn't populated
+  // for it), so a task selected there is stashed here to resolve selectedTask.
+  const [calendarTask, setCalendarTask] = useState<Task | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   // Completed Occurrences of recurring tasks, shown only in the completed view.
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
@@ -167,7 +170,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const selectedTag =
     view?.kind === "tag" ? (tags.find((tag) => tag.id === view.id) ?? null) : null;
   const smartView = view?.kind === "smart" ? view.view : null;
-  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
+  const selectedTask =
+    tasks.find((task) => task.id === selectedTaskId) ??
+    (calendarTask?.id === selectedTaskId ? calendarTask : null);
   // Computed views can't be patched locally: membership depends on the query.
   const isComputedView = smartView !== null || completedMode || view?.kind === "search";
   // The completed view exists per List and for All (not Today / Next 7 Days).
@@ -195,6 +200,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
 
   /** Apply a server response, evicting the task if it left the current view. */
   function applyTaskChange(updated: Task): void {
+    setCalendarTask((current) => (current?.id === updated.id ? updated : current));
     if (isComputedView) {
       changeTasksAndRecompute((current) =>
         current.map((task) => (task.id === updated.id ? updated : task)),
@@ -417,7 +423,12 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           </>
         )}
         {view?.kind === "calendar" ? (
-          <CalendarView />
+          <CalendarView
+            onSelect={(task) => {
+              setCalendarTask(task);
+              setSelectedTaskId(task.id);
+            }}
+          />
         ) : view?.kind === "habits" ? (
           <HabitsView />
         ) : view?.kind === "focus" ? (
@@ -467,7 +478,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           task={selectedTask}
           allTags={tags}
           onTaskChanged={applyTaskChange}
-          onClose={() => setSelectedTaskId(null)}
+          onClose={() => {
+            setSelectedTaskId(null);
+            setCalendarTask(null);
+          }}
         />
       )}
     </div>
