@@ -8,7 +8,8 @@ services:
     ports:
       - "8900:8900"
     env_file:
-      - .env
+      - path: .env
+        format: raw
     volumes:
       - ./backend/oci:/app
 
@@ -19,7 +20,8 @@ services:
     ports:
       - "5900:5900"
     env_file:
-      - .env
+      - path: .env
+        format: raw
     volumes:
       - ./frontend/oci:/app
       - /app/node_modules

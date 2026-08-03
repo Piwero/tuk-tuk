@@ -138,8 +138,9 @@ openssl rand -base64 32
 # FkxEDVctIH4zGFh13EvwA…
 ```
 
-**3. Paste both into `.env`.** Leave the hash unquoted — `.env` values aren't
-shell-expanded, so its `$` characters are literal:
+**3. Paste both into `.env`,** exactly as printed — no quotes, no escaping of
+the hash's `$` separators. `docker-compose.yml` loads `.env` with
+`format: raw` precisely so those `$` characters survive:
 
 ```dotenv
 AUTH_PASSWORD_HASH=$argon2id$v=19$m=262144,t=5,p=4$LAqzXoCJXzpJEIPnC6copg$tPs0LHku…
@@ -164,6 +165,16 @@ curl -i -X POST localhost:8900/api/v1/auth/login \
 `204` with a `set-cookie: tuktuk_session=…` header means both values are wired
 up. A `401` means the hash doesn't match the password; a backend that won't
 boot means `SECRET_KEY` is still `change-me`.
+
+A `500` means the backend received a malformed hash — check what actually
+reached the container, which is not always what's in `.env`:
+
+```bash
+docker compose exec backend printenv AUTH_PASSWORD_HASH
+```
+
+If the `$` separators are missing, Compose interpolated them away; make sure
+the `env_file` entries in `docker-compose.yml` still carry `format: raw`.
 
 The hash and key above are truncated illustrations, never copy them — use
 your own command output. Argon2id salts randomly, so hashing the same password
