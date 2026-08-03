@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.2.2](https://github.com/Piwero/tuk-tuk/compare/v0.2.1...v0.2.2) - 2026-08-03
+
+### Features
+
+- **frontend:** Show the Focus timer in the nav bar ([a882b1f](https://github.com/Piwero/tuk-tuk/commit/a882b1ff680fc6b17ead98bae8421064571dad2a))
+
 ## [0.2.1](https://github.com/Piwero/tuk-tuk/compare/v0.2.0...v0.2.1) - 2026-08-03
 
 ### Features
