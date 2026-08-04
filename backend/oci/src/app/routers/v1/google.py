@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
 from app.calendar_source import CalendarSource, CalendarSourceError
-from app.config import Settings
+from app.config import Settings, google_configured
 from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
@@ -104,10 +104,6 @@ class GoogleCalendarUpdate(BaseModel):
 
     _reject_nulls = field_validator("enabled", "color")(reject_explicit_null)
     _reject_off_palette = field_validator("color")(_reject_off_palette_color)
-
-
-def google_configured(settings: Settings) -> bool:
-    return bool(settings.google_client_id) and bool(settings.google_client_secret)
 
 
 def require_google_configured(settings: Settings) -> None:

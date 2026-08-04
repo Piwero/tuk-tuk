@@ -5,7 +5,7 @@
  * always renders inside it.
  */
 
-import { type Task, type TaskCreateInput, type TaskPatch } from "./api";
+import { type Event, type Task, type TaskCreateInput, type TaskPatch } from "./api";
 import {
   addDays,
   allDayInstant,
@@ -39,14 +39,20 @@ export interface TaskEntry {
   readonly task: Task;
 }
 
-/** Anything that can occupy calendar space in Month/Week/Day. Task is the
- * only arm today; future arms (e.g. Google events) add to this union
- * without the layout functions above needing to change, since they depend
- * only on EntryTimeShape. Every mutating path (create/move/resize/patch)
- * takes a Task directly rather than an Entry, so the type system — not
- * reviewer vigilance — keeps a write from ever targeting an unwritable
- * future arm. */
-export type Entry = TaskEntry;
+/** A read-only Google Calendar Event occupying calendar space (issue #107).
+ * Never draggable, resizable, or completable — every mutating path in this
+ * module takes a Task, never an Entry, so nothing here can even attempt to
+ * write to one. */
+export interface EventEntry {
+  readonly kind: "event";
+  readonly event: Event;
+}
+
+/** Anything that can occupy calendar space in Month/Week/Day. Every mutating
+ * path (create/move/resize/patch) takes a Task directly rather than an
+ * Entry, so the type system — not reviewer vigilance — keeps a write from
+ * ever targeting an unwritable arm (an Event has none). */
+export type Entry = TaskEntry | EventEntry;
 
 /** The only place a TaskEntry gets built, so every future arm gets a
  * construction site just like it. */
@@ -54,11 +60,21 @@ export function taskEntry(task: Task): TaskEntry {
   return { kind: "task", task };
 }
 
-/** An entry's minimal time-shape, regardless of kind. */
+/** The only place an EventEntry gets built. */
+export function eventEntry(event: Event): EventEntry {
+  return { kind: "event", event };
+}
+
+/** An entry's minimal time-shape, regardless of kind. An Event carries no
+ * timezone of its own on the wire — `time_zone: null` reads it in the
+ * *viewer's* timezone (see zonedDay/zonedTime), deliberately asymmetric
+ * with a Task, which renders in the timezone it was scheduled in. */
 export function entryTimeShape(entry: Entry): EntryTimeShape {
   switch (entry.kind) {
     case "task":
       return entry.task;
+    case "event":
+      return { ...entry.event, time_zone: null };
   }
 }
 

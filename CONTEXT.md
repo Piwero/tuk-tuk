@@ -19,8 +19,10 @@ The core unit of work: has a title, optional dates/reminders/recurrence, priorit
 _Avoid_: Todo, item
 
 **Entry**:
-Anything occupying calendar space in the Calendar view (Month/Week/Day). A discriminated union; Task is its only arm today. The Calendar view's layout code (day-window membership, banner-vs-block classification, block spans, ordering) depends only on an entry's minimal time-shape — start, end, all-day flag, timezone — not on Task-specific fields, so a future arm (e.g. a Google event) slots in without changing layout code. Mutating paths (create, move, resize, patch) always take a Task directly, never a bare Entry.
-_Avoid_: Calendar item, event (reserved for a future non-Task arm)
+Anything occupying calendar space in the Calendar view (Month/Week/Day). A discriminated union of Task and Event (issue #107). The Calendar view's layout code (day-window membership, banner-vs-block classification, block spans, ordering) depends only on an entry's minimal time-shape — start, end, all-day flag, timezone — not on kind-specific fields, which is why an Event arm slotted in without changing any of that code. Mutating paths (create, move, resize, patch) always take a Task directly, never a bare Entry — the type system, not reviewer vigilance, keeps a write from ever targeting an Event, which has no such path. At equal start times an Event sorts before a Task: the immovable obligation reads first.
+_Avoid_: Calendar item
+
+Entries render in different timezones by kind, and this is deliberate, not a bug: a Task renders in whatever timezone it was scheduled in (a commitment the user made), while an Event renders in the **viewer's own** timezone, whatever timezone it was organised in (an artefact of whoever set it up). Rendering a Tokyo-organised meeting at its Tokyo hour would place it in the wrong row of the grid and cause a missed meeting. This asymmetry is the single most likely thing for a future reader to mistake for a bug — do not "fix" it into symmetry.
 
 **Check Item**:
 A lightweight line in a task's checklist — a title with its own done/undone state and optional reminder. Belongs to exactly one Task and is not a Task itself (no tags, priority, or list). The only nesting mechanism in v1.
@@ -106,3 +108,7 @@ _Avoid_: Google connection, integration
 **Google Calendar**:
 One calendar exposed by a connected Google Account (issue #106) — primary, secondary, shared, or a subscribed feed. Carries a Google-side id, a cosmetic `summary` refreshed on demand, an `enabled` flag controlling whether its Events appear in the Calendar view, and a `color` chosen from tuk-tuk's own palette (never Google's, so it can't clash with the app's theme). `enabled` is seeded once, on first read, from Google's own per-calendar `selected` flag; from then on it is purely local state that a manual refresh never overwrites for calendars that still exist. Disconnecting the owning Google Account removes its Google Calendars.
 _Avoid_: Calendar (ambiguous with the Calendar view itself)
+
+**Event**:
+One occurrence on a Google Calendar (issue #107), read live for the Calendar view's visible window and never persisted (ADR 0006) — an Entry arm alongside Task, but read-only: it cannot be dragged, resized, or completed, and offers no affordance suggesting otherwise. A recurring series always arrives already expanded into concrete Events, never as a rule tuk-tuk interprets itself. Declined Events (the authenticated user's own RSVP) are hidden; a pending invitation (needs-action) or a tentative response stays visible, since an unanswered invite must not be invisible. Disabling its owning Google Calendar removes its Events from the view. See the Entry glossary entry above for the deliberate viewer-timezone rendering asymmetry with Task.
+_Avoid_: Calendar item, meeting

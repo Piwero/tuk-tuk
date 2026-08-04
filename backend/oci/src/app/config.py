@@ -51,4 +51,11 @@ class Settings(BaseSettings):
     google_encryption_key: str | None = None
 
 
+def google_configured(settings: Settings) -> bool:
+    """Whether the Google Calendar integration is set up at all — both
+    settings present. Shared by every route that needs to answer or gate on
+    this (google.py's settings routes, events.py's read-only feed)."""
+    return bool(settings.google_client_id) and bool(settings.google_client_secret)
+
+
 settings = Settings()

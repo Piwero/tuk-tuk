@@ -143,6 +143,15 @@ export interface FakeGoogleCalendar {
   enabled: boolean;
 }
 
+export interface FakeEvent {
+  id: string;
+  title: string;
+  start_date: string;
+  due_date: string;
+  is_all_day: boolean;
+  color: string;
+}
+
 export interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
@@ -162,6 +171,7 @@ export interface FakeApiState {
   googleConfigured: boolean;
   googleAccounts: FakeGoogleAccount[];
   googleCalendars: FakeGoogleCalendar[];
+  events: FakeEvent[];
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -276,6 +286,20 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
   };
 }
 
+let nextEventId = 1;
+
+export function fakeEvent(title: string, overrides: Partial<FakeEvent> = {}): FakeEvent {
+  return {
+    id: `evt-${nextEventId++}`,
+    title,
+    start_date: "2026-07-03T13:00:00Z",
+    due_date: "2026-07-03T14:00:00Z",
+    is_all_day: false,
+    color: "#4772fa",
+    ...overrides,
+  };
+}
+
 export function fakeTimer(name: string, overrides: Partial<FakeTimer> = {}): FakeTimer {
   return {
     id: nextTimerId++,
@@ -323,6 +347,7 @@ export function installFakeApi({
   googleConfigured = false,
   googleAccounts = [],
   googleCalendars = [],
+  events = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -344,6 +369,12 @@ export function installFakeApi({
    * this from a Google-side `selected` flag; that seeding rule is the
    * backend's, exercised in the backend suite. */
   googleCalendars?: FakeGoogleCalendar[];
+  /** Google Calendar Events (issue #107) the calendar's own read-only
+   * endpoint answers with — never filtered by calendar `enabled` here,
+   * since that filtering is the backend's job (exercised in the backend
+   * suite); a test that wants a disabled-calendar's Events hidden simply
+   * doesn't seed them here. */
+  events?: FakeEvent[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -365,6 +396,7 @@ export function installFakeApi({
     googleConfigured,
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
     googleCalendars: googleCalendars.map((calendar) => ({ ...calendar })),
+    events: events.map((event) => ({ ...event })),
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -761,6 +793,34 @@ export function installFakeApi({
             )
           : [...items].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
       return json(page(items));
+    }
+    if (method === "GET" && url.pathname === "/api/v1/events") {
+      const rangeStart = url.searchParams.get("range_start");
+      const rangeEnd = url.searchParams.get("range_end");
+      if (rangeStart === null || rangeEnd === null) {
+        return json(
+          {
+            error: { code: "validation_error", message: "range_start and range_end are required" },
+          },
+          422,
+        );
+      }
+      if (rangeStart > rangeEnd) {
+        return json(
+          {
+            error: {
+              code: "validation_error",
+              message: "range_start must not be after range_end",
+            },
+          },
+          422,
+        );
+      }
+      const items = state.events.filter((event) => {
+        const window = entryDayWindow({ ...event, time_zone: null });
+        return window !== null && window[0] <= rangeEnd && window[1] >= rangeStart;
+      });
+      return json(items);
     }
     if (method === "POST" && url.pathname === "/api/v1/tasks") {
       const input = body as {

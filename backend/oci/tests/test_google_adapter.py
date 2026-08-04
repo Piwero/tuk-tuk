@@ -88,3 +88,226 @@ class TestRefresh:
 
         with pytest.raises(CalendarSourceError):
             await adapter(httpx.MockTransport(handle)).refresh("revoked-token")
+
+
+class TestListEvents:
+    async def test_returns_a_timed_event_converted_to_utc(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/calendar/v3/calendars/cal-1/events"
+            assert request.headers["Authorization"] == "Bearer at-1"
+            assert request.url.params["singleEvents"] == "true"
+            assert request.url.params["timeMin"] == "2026-07-01T00:00:00Z"
+            assert request.url.params["timeMax"] == "2026-07-02T00:00:00Z"
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-1",
+                            "status": "confirmed",
+                            "summary": "Standup",
+                            "start": {
+                                "dateTime": "2026-07-01T09:00:00-04:00",
+                                "timeZone": "America/New_York",
+                            },
+                            "end": {
+                                "dateTime": "2026-07-01T09:30:00-04:00",
+                                "timeZone": "America/New_York",
+                            },
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+        )
+
+        assert len(events) == 1
+        assert events[0].google_event_id == "evt-1"
+        assert events[0].summary == "Standup"
+        assert events[0].is_all_day is False
+        assert events[0].start == "2026-07-01T13:00:00Z"
+        assert events[0].end == "2026-07-01T13:30:00Z"
+
+    async def test_url_encodes_a_calendar_id_containing_special_characters(self) -> None:
+        seen_paths = []
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            seen_paths.append(request.url.path)
+            return httpx.Response(200, json={"items": []})
+
+        await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1",
+            "someone@example.com",
+            time_min="2026-07-01T00:00:00Z",
+            time_max="2026-07-02T00:00:00Z",
+        )
+
+        assert seen_paths == ["/calendar/v3/calendars/someone@example.com/events"]
+
+    async def test_normalises_googles_exclusive_all_day_end_date(self) -> None:
+        """A 3-day all-day trip Jul 10-12 comes back from Google as
+        start=2026-07-10, end=2026-07-13 (exclusive); without normalising,
+        it would read as spanning 4 days instead of 3."""
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-trip",
+                            "status": "confirmed",
+                            "summary": "Trip",
+                            "start": {"date": "2026-07-10"},
+                            "end": {"date": "2026-07-13"},
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-31T00:00:00Z"
+        )
+
+        assert events[0].is_all_day is True
+        assert events[0].start == "2026-07-10T00:00:00Z"
+        assert events[0].end == "2026-07-12T00:00:00Z"
+
+    async def test_follows_pagination_across_multiple_pages(self) -> None:
+        pages = {
+            None: httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-1",
+                            "status": "confirmed",
+                            "summary": "First",
+                            "start": {"date": "2026-07-01"},
+                            "end": {"date": "2026-07-02"},
+                        }
+                    ],
+                    "nextPageToken": "page-2",
+                },
+            ),
+            "page-2": httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-2",
+                            "status": "confirmed",
+                            "summary": "Second",
+                            "start": {"date": "2026-07-05"},
+                            "end": {"date": "2026-07-06"},
+                        }
+                    ]
+                },
+            ),
+        }
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            token = request.url.params.get("pageToken")
+            return pages[token]
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-31T00:00:00Z"
+        )
+
+        assert [event.google_event_id for event in events] == ["evt-1", "evt-2"]
+
+    async def test_drops_a_cancelled_event(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-cancelled",
+                            "status": "cancelled",
+                            "summary": "Cancelled",
+                            "start": {"date": "2026-07-01"},
+                            "end": {"date": "2026-07-02"},
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+        )
+
+        assert events == []
+
+    async def test_drops_an_event_declined_by_the_authenticated_attendee(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-declined",
+                            "status": "confirmed",
+                            "summary": "Declined",
+                            "start": {"date": "2026-07-01"},
+                            "end": {"date": "2026-07-02"},
+                            "attendees": [
+                                {
+                                    "email": "me@example.com",
+                                    "self": True,
+                                    "responseStatus": "declined",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+        )
+
+        assert events == []
+
+    async def test_keeps_a_needs_action_event_visible(self) -> None:
+        """A pending invitation must not be invisible."""
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-pending",
+                            "status": "confirmed",
+                            "summary": "Pending",
+                            "start": {"date": "2026-07-01"},
+                            "end": {"date": "2026-07-02"},
+                            "attendees": [
+                                {
+                                    "email": "me@example.com",
+                                    "self": True,
+                                    "responseStatus": "needsAction",
+                                }
+                            ],
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+        )
+
+        assert len(events) == 1
+
+    async def test_raises_when_google_rejects_the_events_request(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(500, text="server error")
+
+        with pytest.raises(CalendarSourceError):
+            await adapter(httpx.MockTransport(handle)).list_events(
+                "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+            )

@@ -31,6 +31,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.calendar_source import (  # noqa: E402
+    CalendarEventEntry,
     CalendarListEntry,
     CalendarSourceError,
     ExchangedCredential,
@@ -76,6 +77,7 @@ class FakeCalendarSource:
     def __init__(self) -> None:
         self._codes: dict[str, ExchangedCredential] = {}
         self._calendars: dict[str, list[CalendarListEntry]] = {}
+        self._events: dict[tuple[str, str], list[CalendarEventEntry]] = {}
 
     def register_code(
         self, code: str, *, google_account_id: str, email: str, refresh_token: str
@@ -100,6 +102,18 @@ class FakeCalendarSource:
 
     async def list_calendars(self, access_token: str) -> list[CalendarListEntry]:
         return self._calendars.get(access_token, [])
+
+    def register_events(
+        self, refresh_token: str, google_calendar_id: str, entries: list[CalendarEventEntry]
+    ) -> None:
+        """The Events `list_events` returns for the access token that
+        `refresh_token` resolves to, on the named calendar."""
+        self._events[(f"access-for-{refresh_token}", google_calendar_id)] = entries
+
+    async def list_events(
+        self, access_token: str, google_calendar_id: str, time_min: str, time_max: str
+    ) -> list[CalendarEventEntry]:
+        return self._events.get((access_token, google_calendar_id), [])
 
 
 @pytest.fixture

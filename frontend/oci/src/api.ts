@@ -409,6 +409,29 @@ export function fetchCalendarTasks(rangeStart: string, rangeEnd: string): Promis
   );
 }
 
+/** A read-only Google Calendar Event (issue #107): fetched live for the
+ * visible window, never stored. Unlike a Task, an Event has no timezone of
+ * its own on the wire — it always renders at its true hour in the
+ * *viewer's* timezone, deliberately asymmetric with a Task's own stored
+ * timezone (see the Entry glossary entry). */
+export interface Event {
+  id: string;
+  title: string;
+  start_date: string;
+  due_date: string;
+  is_all_day: boolean;
+  color: string;
+}
+
+/** Events from every enabled Google Calendar whose window intersects the
+ * inclusive [start, end] day window — the same day-window contract as
+ * fetchCalendarTasks, on Events' own endpoint so Google's reachability never
+ * slows down Task rendering. Empty when Google isn't configured or
+ * connected, never an error. */
+export function fetchCalendarEvents(rangeStart: string, rangeEnd: string): Promise<Event[]> {
+  return request(`/api/v1/events?range_start=${rangeStart}&range_end=${rangeEnd}`);
+}
+
 /** Undated open tasks — the unscheduled panel's query. */
 export function fetchUnscheduledTasks(): Promise<Page<Task>> {
   return request("/api/v1/tasks?scheduled=false&completed=false&limit=200");
