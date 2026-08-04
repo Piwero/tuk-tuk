@@ -35,6 +35,7 @@ import { Modal } from "./components/Modal";
 import { QuickAdd } from "./components/QuickAdd";
 import { QuickAddDialog } from "./components/QuickAddDialog";
 import { SearchView, type SearchState } from "./components/SearchView";
+import { SettingsView } from "./components/SettingsView";
 import { Sidebar } from "./components/Sidebar";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
@@ -50,6 +51,7 @@ type View =
   | { kind: "habits" }
   | { kind: "focus"; task?: Task }
   | { kind: "search"; search: SearchState }
+  | { kind: "settings" }
   | null;
 
 interface AppProps {
@@ -100,7 +102,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       view?.kind === "calendar" ||
       view?.kind === "habits" ||
       view?.kind === "focus" ||
-      view?.kind === "search"
+      view?.kind === "search" ||
+      view?.kind === "settings"
     ) {
       return;
     }
@@ -126,7 +129,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       view === null ||
       view.kind === "calendar" ||
       view.kind === "habits" ||
-      view.kind === "focus"
+      view.kind === "focus" ||
+      view.kind === "settings"
     ) {
       return;
     }
@@ -286,12 +290,14 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           calendarSelected={view?.kind === "calendar"}
           habitsSelected={view?.kind === "habits"}
           focusSelected={view?.kind === "focus"}
+          settingsSelected={view?.kind === "settings"}
           onSelect={(listId) => switchView({ kind: "list", id: listId })}
           onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
           onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
           onSelectCalendar={() => switchView({ kind: "calendar" })}
           onSelectHabits={() => switchView({ kind: "habits" })}
           onSelectFocus={() => switchView({ kind: "focus" })}
+          onSelectSettings={() => switchView({ kind: "settings" })}
           onQuickAdd={() => setQuickAddOpen(true)}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={toggleSidebar}
@@ -343,7 +349,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                           ? "Focus"
                           : view?.kind === "search"
                             ? "Search"
-                            : "tuk-tuk")}
+                            : view?.kind === "settings"
+                              ? "Settings"
+                              : "tuk-tuk")}
             </h1>
             {selectedList !== null && !completedMode && (
               <button
@@ -424,7 +432,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               </div>
             </>
           )}
-          {view?.kind === "calendar" ? (
+          {view?.kind === "settings" ? (
+            <SettingsView />
+          ) : view?.kind === "calendar" ? (
             <CalendarView
               onSelect={(task) => {
                 setCalendarTask(task);

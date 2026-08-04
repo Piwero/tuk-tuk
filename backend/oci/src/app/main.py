@@ -23,6 +23,7 @@ from app.routers.v1 import (
     completed_occurrences,
     focus_sessions,
     folders,
+    google,
     habits,
     lists,
     sections,
@@ -84,6 +85,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app.include_router(folders.router)
     app.include_router(focus_sessions.router)
     app.include_router(focus_sessions.stats_router)
+    app.include_router(google.router)
     app.include_router(habits.router)
     app.include_router(habits.check_ins_router)
     app.include_router(lists.router)
