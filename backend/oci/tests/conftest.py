@@ -23,9 +23,11 @@ os.environ.setdefault("SECRET_KEY", "test-signing-key")
 # time, so the escalation/reset tests don't sleep for real.
 os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0")
 
+import shutil  # noqa: E402
 from collections.abc import Iterator  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
 from pathlib import Path  # noqa: E402
+from tempfile import TemporaryDirectory  # noqa: E402
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -38,6 +40,7 @@ from app.calendar_source import (  # noqa: E402
     RefreshedAccessToken,
 )
 from app.config import Settings  # noqa: E402
+from app.db import run_migrations  # noqa: E402
 from app.main import create_app  # noqa: E402
 
 
@@ -56,9 +59,25 @@ class FakeClock:
         self.now += delta
 
 
+@pytest.fixture(scope="session")
+def migrated_template_db() -> Iterator[Path]:
+    """Run the full Alembic chain against an empty file exactly once per test
+    session, so individual tests can start from a cheap file copy instead of
+    each replaying ~1.5-2s of migrations (see issue #113). The chain itself
+    is still exercised end-to-end — see test_migrations.py for a test that
+    runs it in isolation, independent of this caching.
+    """
+    with TemporaryDirectory() as tmp_dir:
+        template_path = Path(tmp_dir) / "template.db"
+        run_migrations(f"sqlite:///{template_path}")
+        yield template_path
+
+
 @pytest.fixture
-def database_url(tmp_path: Path) -> str:
-    return f"sqlite+aiosqlite:///{tmp_path / 'test.db'}"
+def database_url(tmp_path: Path, migrated_template_db: Path) -> str:
+    db_path = tmp_path / "test.db"
+    shutil.copyfile(migrated_template_db, db_path)
+    return f"sqlite+aiosqlite:///{db_path}"
 
 
 @pytest.fixture
