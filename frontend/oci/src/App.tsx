@@ -84,6 +84,23 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
 
+  // Lands here after the Google OAuth round trip (app.routers.v1.google
+  // redirects to this origin with one of these markers): open Settings
+  // straight away so the result is visible without an extra click, and
+  // strip the marker so it doesn't linger in the address bar.
+  const [googleOAuthError, setGoogleOAuthError] = useState(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("googleConnected") || params.has("googleError")) {
+      setView({ kind: "settings" });
+      setGoogleOAuthError(params.has("googleError"));
+      params.delete("googleConnected");
+      params.delete("googleError");
+      const query = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
+    }
+  }, []);
+
   useEffect(() => {
     void Promise.all([fetchLists(), fetchFolders(), fetchTags()]).then(
       ([listPage, folderPage, tagPage]) => {
@@ -433,7 +450,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             </>
           )}
           {view?.kind === "settings" ? (
-            <SettingsView />
+            <SettingsView googleOAuthError={googleOAuthError} />
           ) : view?.kind === "calendar" ? (
             <CalendarView
               onSelect={(task) => {

@@ -161,6 +161,30 @@ export function fetchGoogleStatus(): Promise<GoogleStatus> {
   return request("/api/v1/google/status");
 }
 
+export interface GoogleAccount {
+  id: number;
+  google_account_id: string;
+  email: string;
+  connection_state: string;
+  created_at: string;
+}
+
+export function fetchGoogleAccounts(): Promise<GoogleAccount[]> {
+  return request("/api/v1/google/accounts");
+}
+
+export function disconnectGoogleAccount(accountId: number): Promise<void> {
+  return request(`/api/v1/google/accounts/${accountId}`, { method: "DELETE" });
+}
+
+/** The URL a "Connect" button navigates the whole page to (not a fetch —
+ * the consent flow is a full browser round trip through Google). The
+ * backend performs the redirect, handles Google's callback, and sends the
+ * browser back here; the client secret never reaches this code. */
+export function googleConnectUrl(): string {
+  return `${BASE_URL}/api/v1/google/connect`;
+}
+
 export function fetchLists(): Promise<Page<TaskList>> {
   return request("/api/v1/lists");
 }

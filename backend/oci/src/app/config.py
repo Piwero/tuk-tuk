@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     # all, it just never shows Google Calendar anywhere.
     google_client_id: str | None = None
     google_client_secret: str | None = None
+    # Encrypts stored Google refresh credentials at rest (issue #105).
+    # Deliberately its own setting rather than derived from secret_key:
+    # secret_key's documented rotation procedure is the "log every device
+    # out" lever, and coupling the two would make a routine logout-everywhere
+    # silently destroy every calendar connection. Required (app.main refuses
+    # to start without it) only when the Google integration is itself
+    # configured — an unconfigured deployment needs no encryption key at all.
+    google_encryption_key: str | None = None
 
 
 settings = Settings()

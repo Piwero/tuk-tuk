@@ -30,6 +30,11 @@ from pathlib import Path  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.calendar_source import (  # noqa: E402
+    CalendarSourceError,
+    ExchangedCredential,
+    RefreshedAccessToken,
+)
 from app.config import Settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 
@@ -59,9 +64,46 @@ def fake_clock() -> FakeClock:
     return FakeClock(datetime.now(UTC))
 
 
+class FakeCalendarSource:
+    """A fake CalendarSource (issue #105), injected through the application
+    factory alongside the settable clock — the same pattern used to drive
+    session expiry without sleeping. Tests register what an authorization
+    code exchanges to; nothing above this seam ever speaks Google's
+    vocabulary or touches the network.
+    """
+
+    def __init__(self) -> None:
+        self._codes: dict[str, ExchangedCredential] = {}
+
+    def register_code(
+        self, code: str, *, google_account_id: str, email: str, refresh_token: str
+    ) -> None:
+        self._codes[code] = ExchangedCredential(
+            google_account_id=google_account_id, email=email, refresh_token=refresh_token
+        )
+
+    async def exchange_code(self, code: str, redirect_uri: str) -> ExchangedCredential:
+        try:
+            return self._codes[code]
+        except KeyError:
+            raise CalendarSourceError(f"Unrecognized authorization code: {code}") from None
+
+    async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
+        return RefreshedAccessToken(access_token=f"access-for-{refresh_token}")
+
+
 @pytest.fixture
-def unauthenticated_client(database_url: str, fake_clock: FakeClock) -> Iterator[TestClient]:
-    app = create_app(Settings(database_url=database_url), clock=fake_clock)
+def fake_calendar_source() -> FakeCalendarSource:
+    return FakeCalendarSource()
+
+
+@pytest.fixture
+def unauthenticated_client(
+    database_url: str, fake_clock: FakeClock, fake_calendar_source: FakeCalendarSource
+) -> Iterator[TestClient]:
+    app = create_app(
+        Settings(database_url=database_url), clock=fake_clock, calendar_source=fake_calendar_source
+    )
     with TestClient(app) as test_client:
         yield test_client
 

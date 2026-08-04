@@ -96,3 +96,9 @@ _Avoid_: Focus record, Pomodoro record, Timing
 **Timer**:
 A saved Focus Session preset (name + mode + duration) for recurring scenarios like "Reading".
 _Avoid_: Preset
+
+## Google Calendar
+
+**Google Account**:
+A connected Google identity (issue #105): its Google-side id, email, and a refresh credential stored encrypted at rest under its own dedicated key — deliberately not derived from `secret_key`, so rotating the session signing key never disconnects it. Several can be connected at once; each is identified in the UI by its email.
+_Avoid_: Google connection, integration
