@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 
 import { type HabitType, type Priority, type ViewMode } from "../api";
-import { taskDayWindow } from "../calendar";
+import { entryDayWindow } from "../calendar";
 import { addDays } from "../dates";
 import { habitDueOn } from "../habitFrequency";
 import { byName, SORT_GAP } from "../ordering";
@@ -372,8 +372,8 @@ export function installFakeApi({
   };
 
   /** Mirror of the backend's day-window rule: days are read in each task's
-   * own timezone (taskDayWindow implements exactly that reading). */
-  const dayWindow = (task: FakeTask): [string, string] | null => taskDayWindow(task);
+   * own timezone (entryDayWindow implements exactly that reading). */
+  const dayWindow = (task: FakeTask): [string, string] | null => entryDayWindow(task);
 
   const inSmartView = (task: FakeTask, view: string, today: string): boolean => {
     const window = dayWindow(task);

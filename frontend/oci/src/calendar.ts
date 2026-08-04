@@ -23,28 +23,67 @@ import {
 
 export type CalendarMode = "month" | "week" | "day";
 
+/** The minimal time-shape a calendar entry has: enough for the pure layout
+ * functions (day-window membership, banner-vs-block, block spans, ordering)
+ * to place it on the grid, whatever kind of entry it turns out to be. */
+export interface EntryTimeShape {
+  readonly start_date: string | null;
+  readonly due_date: string | null;
+  readonly is_all_day: boolean;
+  readonly time_zone: string | null;
+}
+
+/** A Task occupying calendar space. */
+export interface TaskEntry {
+  readonly kind: "task";
+  readonly task: Task;
+}
+
+/** Anything that can occupy calendar space in Month/Week/Day. Task is the
+ * only arm today; future arms (e.g. Google events) add to this union
+ * without the layout functions above needing to change, since they depend
+ * only on EntryTimeShape. Every mutating path (create/move/resize/patch)
+ * takes a Task directly rather than an Entry, so the type system — not
+ * reviewer vigilance — keeps a write from ever targeting an unwritable
+ * future arm. */
+export type Entry = TaskEntry;
+
+/** The only place a TaskEntry gets built, so every future arm gets a
+ * construction site just like it. */
+export function taskEntry(task: Task): TaskEntry {
+  return { kind: "task", task };
+}
+
+/** An entry's minimal time-shape, regardless of kind. */
+export function entryTimeShape(entry: Entry): EntryTimeShape {
+  switch (entry.kind) {
+    case "task":
+      return entry.task;
+  }
+}
+
 /** Monday of the week containing the day (WKST=MO, matching recurrence). */
 export function startOfWeekDay(dayIso: string): string {
   const weekday = fromDayIso(dayIso).getDay(); // 0 = Sunday
   return addDays(dayIso, -((weekday + 6) % 7));
 }
 
-/** The calendar days a task occupies, read in its own timezone, or null when
- * unscheduled — the frontend mirror of the backend's schedule_days. */
-export function taskDayWindow(task: Task): [string, string] | null {
-  if (task.due_date === null) {
+/** The calendar days an entry occupies, read in its own timezone, or null
+ * when unscheduled — the frontend mirror of the backend's schedule_days. */
+export function entryDayWindow(entry: EntryTimeShape): [string, string] | null {
+  if (entry.due_date === null) {
     return null;
   }
   const dayOf = (iso: string): string =>
-    task.is_all_day ? iso.slice(0, 10) : zonedDay(iso, task.time_zone);
-  const due = dayOf(task.due_date);
-  return [task.start_date === null ? due : dayOf(task.start_date), due];
+    entry.is_all_day ? iso.slice(0, 10) : zonedDay(iso, entry.time_zone);
+  const due = dayOf(entry.due_date);
+  return [entry.start_date === null ? due : dayOf(entry.start_date), due];
 }
 
-/** The tasks whose scheduled days cover the given day. */
-export function tasksOn(tasks: Task[], day: string): Task[] {
-  return tasks.filter((task) => {
-    const window = taskDayWindow(task);
+/** The entries whose scheduled days cover the given day. */
+export function entriesOn(entries: Entry[], day: string): Entry[] {
+  return entries.filter((entry) => {
+    const window = entryDayWindow(entryTimeShape(entry));
     return window !== null && window[0] <= day && day <= window[1];
   });
 }
@@ -52,11 +91,12 @@ export function tasksOn(tasks: Task[], day: string): Task[] {
 /** The banners rendered in one all-day lane cell: those whose window starts
  * that day, or started before the visible range (they enter at its first
  * day). Each banner appears in exactly one cell — its drag handle. */
-export function laneBanners(tasks: Task[], day: string, firstDay: string): Task[] {
-  return tasks.filter((task) => {
-    const window = taskDayWindow(task);
+export function laneBanners(entries: Entry[], day: string, firstDay: string): Entry[] {
+  return entries.filter((entry) => {
+    const shape = entryTimeShape(entry);
+    const window = entryDayWindow(shape);
     return (
-      isBanner(task) &&
+      isBanner(shape) &&
       window !== null &&
       window[0] <= day &&
       day <= window[1] &&
@@ -66,31 +106,31 @@ export function laneBanners(tasks: Task[], day: string, firstDay: string): Task[
 }
 
 /** Banners are all-day or multi-day; anything else renders as a timed block. */
-export function isBanner(task: Task): boolean {
-  const window = taskDayWindow(task);
-  return task.is_all_day || (window !== null && window[0] !== window[1]);
+export function isBanner(entry: EntryTimeShape): boolean {
+  const window = entryDayWindow(entry);
+  return entry.is_all_day || (window !== null && window[0] !== window[1]);
 }
 
-/** A timed block's wall-clock [start, end] in the task's timezone, or null
- * when unscheduled. A due-only task shows as the hour ending at its due. */
-export function blockSpan(task: Task): [string, string] | null {
-  if (task.due_date === null) {
+/** A timed block's wall-clock [start, end] in the entry's timezone, or null
+ * when unscheduled. A due-only entry shows as the hour ending at its due. */
+export function blockSpan(entry: EntryTimeShape): [string, string] | null {
+  if (entry.due_date === null) {
     return null;
   }
-  const due = zonedTime(task.due_date, task.time_zone);
-  if (task.start_date !== null) {
-    return [zonedTime(task.start_date, task.time_zone), due];
+  const due = zonedTime(entry.due_date, entry.time_zone);
+  if (entry.start_date !== null) {
+    return [zonedTime(entry.start_date, entry.time_zone), due];
   }
-  const hourBefore = new Date(new Date(task.due_date).getTime() - 3_600_000);
-  return [zonedTime(hourBefore.toISOString(), task.time_zone), due];
+  const hourBefore = new Date(new Date(entry.due_date).getTime() - 3_600_000);
+  return [zonedTime(hourBefore.toISOString(), entry.time_zone), due];
 }
 
-/** The wall-clock time a timed task happens (its start, or bare due). */
-export function entryTime(task: Task): string | null {
-  if (task.due_date === null) {
+/** The wall-clock time a timed entry happens (its start, or bare due). */
+export function entryTime(entry: EntryTimeShape): string | null {
+  if (entry.due_date === null) {
     return null;
   }
-  return zonedTime(task.start_date ?? task.due_date, task.time_zone);
+  return zonedTime(entry.start_date ?? entry.due_date, entry.time_zone);
 }
 
 /** The Monday-first grid of days covering the anchor's month. */
@@ -178,8 +218,8 @@ export function minuteLabel(minute: number): string {
 }
 
 /** A timed block's [start, end] as minutes of its day, or null when unscheduled. */
-export function blockMinutes(task: Task): [number, number] | null {
-  const span = blockSpan(task);
+export function blockMinutes(entry: EntryTimeShape): [number, number] | null {
+  const span = blockSpan(entry);
   return span === null ? null : [timeMinutes(span[0]), timeMinutes(span[1])];
 }
 
@@ -244,7 +284,7 @@ export function timedCreate(
  * or a one-hour block at that hour. */
 export function dropPatch(task: Task, dayIso: string, hour: number | null): TaskPatch {
   if (hour === null) {
-    const window = taskDayWindow(task);
+    const window = entryDayWindow(task);
     if (window === null || task.due_date === null) {
       // Undated (both facts restate it): gains an all-day schedule that day.
       return allDaySchedule(null, dayIso);
