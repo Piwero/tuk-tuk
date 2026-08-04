@@ -33,5 +33,14 @@ class Settings(BaseSettings):
     # its next request, however long before expiry that falls.
     auth_session_reissue_threshold_days: int = 1
 
+    # Google Calendar integration (issue #103; ADR 0006). Both absent by
+    # default, which is what disables the whole feature: no setting turns it
+    # off explicitly, the same "missing means off" convention used elsewhere
+    # in this file. Unlike auth_password_hash, a missing value here is not
+    # fatal — the app starts and runs normally with no Google integration at
+    # all, it just never shows Google Calendar anywhere.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+
 
 settings = Settings()
