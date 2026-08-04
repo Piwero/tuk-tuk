@@ -14,7 +14,9 @@ import {
   calendarTitle,
   draggedEdgeMinute,
   dropPatch,
+  entriesOn,
   entryTime,
+  entryTimeShape,
   hourLabel,
   isBanner,
   laneBanners,
@@ -24,10 +26,11 @@ import {
   resizePatch,
   shiftAnchor,
   SNAP_MINUTES,
-  tasksOn,
+  taskEntry,
   timedCreate,
   weekDays,
   type CalendarMode,
+  type Entry,
 } from "../calendar";
 import { localDayOf } from "../dates";
 import { Icon } from "./Icon";
@@ -71,10 +74,12 @@ interface EdgeDrag {
 }
 
 /** Banners first, then timed entries in wall-clock order. */
-function byKindThenTime(a: Task, b: Task): number {
+function byKindThenTime(a: Entry, b: Entry): number {
+  const shapeA = entryTimeShape(a);
+  const shapeB = entryTimeShape(b);
   return (
-    Number(isBanner(b)) - Number(isBanner(a)) ||
-    (entryTime(a) ?? "").localeCompare(entryTime(b) ?? "")
+    Number(isBanner(shapeB)) - Number(isBanner(shapeA)) ||
+    (entryTime(shapeA) ?? "").localeCompare(entryTime(shapeB) ?? "")
   );
 }
 
@@ -307,6 +312,8 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
     void load();
   }
 
+  const entries: Entry[] = tasks.map(taskEntry);
+
   function renderMonth(): JSX.Element {
     const days = monthGridDays(anchor);
     const anchorMonth = anchor.slice(0, 7);
@@ -340,10 +347,11 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
                 <Icon name="plus" size={14} />
               </button>
             </div>
-            {tasksOn(tasks, day)
+            {entriesOn(entries, day)
               .sort(byKindThenTime)
-              .map((task) =>
-                isBanner(task) ? (
+              .map((entry) => {
+                const task = entry.task;
+                return isBanner(entryTimeShape(entry)) ? (
                   <div
                     key={task.id}
                     className="calendar-banner"
@@ -365,18 +373,20 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
                       onSelect?.(task);
                     }}
                   >
-                    <span className="entry-time">{entryTime(task)}</span> {task.title}
+                    <span className="entry-time">{entryTime(entryTimeShape(entry))}</span>{" "}
+                    {task.title}
                   </div>
-                ),
-              )}
+                );
+              })}
           </div>
         ))}
       </div>
     );
   }
 
-  function renderBlock(task: Task, day: string): JSX.Element | null {
-    const span = blockMinutes(task);
+  function renderBlock(entry: Entry, day: string): JSX.Element | null {
+    const task = entry.task;
+    const span = blockMinutes(entryTimeShape(entry));
     if (span === null) {
       return null;
     }
@@ -462,19 +472,22 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => void handleDrop(event, day, null)}
             >
-              {laneBanners(tasks, day, firstDay).map((task) => (
-                <div
-                  key={task.id}
-                  className="calendar-banner"
-                  {...taskDragProps(task)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelect?.(task);
-                  }}
-                >
-                  {task.title}
-                </div>
-              ))}
+              {laneBanners(entries, day, firstDay).map((entry) => {
+                const task = entry.task;
+                return (
+                  <div
+                    key={task.id}
+                    className="calendar-banner"
+                    {...taskDragProps(task)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelect?.(task);
+                    }}
+                  >
+                    {task.title}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -516,9 +529,9 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
                   onDrop={(event) => void handleDrop(event, day, hour)}
                 />
               ))}
-              {tasksOn(tasks, day)
-                .filter((task) => !isBanner(task))
-                .map((task) => renderBlock(task, day))}
+              {entriesOn(entries, day)
+                .filter((entry) => !isBanner(entryTimeShape(entry)))
+                .map((entry) => renderBlock(entry, day))}
               {day === today && (
                 <div
                   className="now-line"

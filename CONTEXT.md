@@ -18,6 +18,10 @@ _Avoid_: Group, project group
 The core unit of work: has a title, optional dates/reminders/recurrence, priority, tags, and completion state.
 _Avoid_: Todo, item
 
+**Entry**:
+Anything occupying calendar space in the Calendar view (Month/Week/Day). A discriminated union; Task is its only arm today. The Calendar view's layout code (day-window membership, banner-vs-block classification, block spans, ordering) depends only on an entry's minimal time-shape — start, end, all-day flag, timezone — not on Task-specific fields, so a future arm (e.g. a Google event) slots in without changing layout code. Mutating paths (create, move, resize, patch) always take a Task directly, never a bare Entry.
+_Avoid_: Calendar item, event (reserved for a future non-Task arm)
+
 **Check Item**:
 A lightweight line in a task's checklist — a title with its own done/undone state and optional reminder. Belongs to exactly one Task and is not a Task itself (no tags, priority, or list). The only nesting mechanism in v1.
 _Avoid_: Subtask (a separate recursive-task concept, out of v1), checklist item

@@ -149,6 +149,18 @@ export function logout(): Promise<void> {
   return request(LOGOUT_PATH, { method: "POST" });
 }
 
+export interface GoogleStatus {
+  configured: boolean;
+}
+
+/** Whether the Google Calendar integration is configured server-side (the
+ * two settings present) — never the credential values themselves. Settings
+ * asks this once to decide whether to show the Google Calendar section at
+ * all; when false, no Google wording appears anywhere in the app. */
+export function fetchGoogleStatus(): Promise<GoogleStatus> {
+  return request("/api/v1/google/status");
+}
+
 export function fetchLists(): Promise<Page<TaskList>> {
   return request("/api/v1/lists");
 }

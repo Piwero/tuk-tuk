@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 
 import { type HabitType, type Priority, type ViewMode } from "../api";
-import { taskDayWindow } from "../calendar";
+import { entryDayWindow } from "../calendar";
 import { addDays } from "../dates";
 import { habitDueOn } from "../habitFrequency";
 import { byName, SORT_GAP } from "../ordering";
@@ -140,6 +140,9 @@ export interface FakeApiState {
   requests: RecordedRequest[];
   /** Mutate directly to simulate a session lapsing mid-test. */
   loggedIn: boolean;
+  /** Mirrors the backend's google_client_id/secret gate: whether the Google
+   * integration is configured server-side. */
+  googleConfigured: boolean;
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -298,6 +301,7 @@ export function installFakeApi({
   focusSessions = [],
   timers = [],
   loggedIn = true,
+  googleConfigured = false,
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -312,6 +316,8 @@ export function installFakeApi({
   /** Start unauthenticated: every non-auth route is rejected until a fake
    * login succeeds. */
   loggedIn?: boolean;
+  /** Absent (false) by default, matching the backend's default-off gate. */
+  googleConfigured?: boolean;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -330,6 +336,7 @@ export function installFakeApi({
     timers: timers.map((timer) => ({ ...timer })),
     requests: [],
     loggedIn,
+    googleConfigured,
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -372,8 +379,8 @@ export function installFakeApi({
   };
 
   /** Mirror of the backend's day-window rule: days are read in each task's
-   * own timezone (taskDayWindow implements exactly that reading). */
-  const dayWindow = (task: FakeTask): [string, string] | null => taskDayWindow(task);
+   * own timezone (entryDayWindow implements exactly that reading). */
+  const dayWindow = (task: FakeTask): [string, string] | null => entryDayWindow(task);
 
   const inSmartView = (task: FakeTask, view: string, today: string): boolean => {
     const window = dayWindow(task);
@@ -428,6 +435,12 @@ export function installFakeApi({
 
     if (method === "GET" && url.pathname === "/api/v1/auth/session") {
       return state.loggedIn ? new Response(null, { status: 204 }) : unauthorized();
+    }
+    if (method === "GET" && url.pathname === "/api/v1/google/status") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      return json({ configured: state.googleConfigured });
     }
     if (method === "POST" && url.pathname === "/api/v1/auth/login") {
       const input = body as { password: string };

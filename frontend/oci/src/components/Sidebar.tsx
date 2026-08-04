@@ -51,12 +51,14 @@ interface SidebarProps {
   calendarSelected: boolean;
   habitsSelected: boolean;
   focusSelected: boolean;
+  settingsSelected: boolean;
   onSelect: (listId: number) => void;
   onSelectTag: (tagId: number) => void;
   onSelectSmart: (view: SmartView) => void;
   onSelectCalendar: () => void;
   onSelectHabits: () => void;
   onSelectFocus: () => void;
+  onSelectSettings: () => void;
   onSearch: (query: string) => void;
   /** Opens the Quick add dialog; the sidebar is always there, so capture is
    * reachable from every screen, including Habits and Focus. */
@@ -145,12 +147,14 @@ export function Sidebar({
   calendarSelected,
   habitsSelected,
   focusSelected,
+  settingsSelected,
   onSelect,
   onSelectTag,
   onSelectSmart,
   onSelectCalendar,
   onSelectHabits,
   onSelectFocus,
+  onSelectSettings,
   onSearch,
   onQuickAdd,
   collapsed,
@@ -422,7 +426,7 @@ export function Sidebar({
     );
   }
 
-  const tasksSelected = !calendarSelected && !habitsSelected && !focusSelected;
+  const tasksSelected = !calendarSelected && !habitsSelected && !focusSelected && !settingsSelected;
 
   return (
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
@@ -713,8 +717,18 @@ export function Sidebar({
           </ul>
         </section>
       )}
-      {onLogout !== undefined && (
-        <div className="sidebar-footer">
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className={settingsSelected ? "sidebar-settings selected" : "sidebar-settings"}
+          aria-label="Settings"
+          title="Settings"
+          onClick={onSelectSettings}
+        >
+          <Icon name="settings" size={18} />
+          <span className="nav-label">Settings</span>
+        </button>
+        {onLogout !== undefined && (
           <button
             type="button"
             className="sidebar-logout"
@@ -725,8 +739,8 @@ export function Sidebar({
             <Icon name="log-out" size={18} />
             <span className="nav-label">Log out</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   );
 }
