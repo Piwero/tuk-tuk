@@ -31,6 +31,7 @@ def configured_client(database_url: str, fake_clock: FakeClock) -> Iterator[Test
         fake_clock,
         google_client_id="a-client-id",
         google_client_secret="a-client-secret",
+        google_encryption_key="a-dedicated-key",
     ) as test_client:
         yield test_client
 

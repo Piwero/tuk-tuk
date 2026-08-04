@@ -269,6 +269,31 @@ class FocusSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class GoogleAccount(Base):
+    """A Google Account — a connected Google identity (issue #105): the
+    Google-side account id, its email, and its refresh credential encrypted
+    at rest (app.crypto, keyed by the dedicated google_encryption_key
+    setting). `connection_state` is "connected" or "needs_reconnect"; #105
+    only ever writes "connected" — the latter is set once event/calendar
+    reads can fail terminally, in a later ticket.
+
+    No owner column: this app has exactly one owner, and a Google Account
+    is itself a login credential, not owned data.
+    """
+
+    __tablename__ = "google_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    google_account_id: Mapped[str] = mapped_column(String(255), unique=True)
+    email: Mapped[str] = mapped_column(String(320))
+    encrypted_refresh_token: Mapped[str] = mapped_column(Text)
+    connection_state: Mapped[str] = mapped_column(String(16), default="connected")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class Timer(Base):
     """A Timer — a saved Focus Session preset (name + mode + duration,
     optionally pre-linked to a Task or Habit) for recurring scenarios like

@@ -126,6 +126,14 @@ export interface FakeTimer {
   created_at: string;
 }
 
+export interface FakeGoogleAccount {
+  id: number;
+  google_account_id: string;
+  email: string;
+  connection_state: string;
+  created_at: string;
+}
+
 export interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
@@ -143,6 +151,7 @@ export interface FakeApiState {
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
+  googleAccounts: FakeGoogleAccount[];
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -302,6 +311,7 @@ export function installFakeApi({
   timers = [],
   loggedIn = true,
   googleConfigured = false,
+  googleAccounts = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -318,6 +328,7 @@ export function installFakeApi({
   loggedIn?: boolean;
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
+  googleAccounts?: FakeGoogleAccount[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -337,6 +348,7 @@ export function installFakeApi({
     requests: [],
     loggedIn,
     googleConfigured,
+    googleAccounts: googleAccounts.map((account) => ({ ...account })),
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -441,6 +453,30 @@ export function installFakeApi({
         return unauthorized();
       }
       return json({ configured: state.googleConfigured });
+    }
+    if (method === "GET" && url.pathname === "/api/v1/google/accounts") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      if (!state.googleConfigured) {
+        return notFound("Google Calendar integration is not configured");
+      }
+      return json([...state.googleAccounts].sort((a, b) => a.id - b.id));
+    }
+    const googleAccountMatch = url.pathname.match(/^\/api\/v1\/google\/accounts\/(\d+)$/);
+    if (googleAccountMatch && method === "DELETE") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      if (!state.googleConfigured) {
+        return notFound("Google Calendar integration is not configured");
+      }
+      const accountId = Number(googleAccountMatch[1]);
+      if (!state.googleAccounts.some((account) => account.id === accountId)) {
+        return notFound(`Google Account ${accountId} not found`);
+      }
+      state.googleAccounts = state.googleAccounts.filter((account) => account.id !== accountId);
+      return new Response(null, { status: 204 });
     }
     if (method === "POST" && url.pathname === "/api/v1/auth/login") {
       const input = body as { password: string };

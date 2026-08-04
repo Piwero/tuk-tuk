@@ -49,6 +49,35 @@ def test_app_starts_with_a_password_hash_configured() -> None:
     create_app(settings)
 
 
+def test_app_refuses_to_start_when_google_is_configured_without_an_encryption_key() -> None:
+    settings = Settings(
+        auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA",
+        google_client_id="a-client-id",
+        google_client_secret="a-client-secret",
+        google_encryption_key=None,
+    )
+
+    with pytest.raises(RuntimeError, match="GOOGLE_ENCRYPTION_KEY"):
+        create_app(settings)
+
+
+def test_app_starts_without_google_configured_at_all() -> None:
+    settings = Settings(auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA")
+
+    create_app(settings)
+
+
+def test_app_starts_with_google_fully_configured() -> None:
+    settings = Settings(
+        auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA",
+        google_client_id="a-client-id",
+        google_client_secret="a-client-secret",
+        google_encryption_key="a-dedicated-key",
+    )
+
+    create_app(settings)
+
+
 def test_app_refuses_to_start_with_the_placeholder_secret_key() -> None:
     settings = Settings(
         auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA",

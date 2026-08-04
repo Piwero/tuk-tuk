@@ -10,10 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app import __version__
+from app.calendar_source import CalendarSource
 from app.config import Settings
 from app.config import settings as default_settings
 from app.db import run_migrations
 from app.errors import register_error_handlers
+from app.google_adapter import GoogleCalendarSource
 from app.login_throttle import LoginThrottle
 from app.middleware import SessionAuthMiddleware
 from app.models import TaskList
@@ -36,9 +38,17 @@ from app.session import Clock, real_clock
 INBOX_NAME = "Inbox"
 
 
-def create_app(settings: Settings | None = None, clock: Clock | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    clock: Clock | None = None,
+    calendar_source: CalendarSource | None = None,
+) -> FastAPI:
     app_settings = settings or default_settings
     app_clock = clock or real_clock
+    app_calendar_source = calendar_source or GoogleCalendarSource(
+        client_id=app_settings.google_client_id or "",
+        client_secret=app_settings.google_client_secret or "",
+    )
 
     if not app_settings.auth_password_hash:
         raise RuntimeError(
@@ -51,6 +61,16 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
             "SECRET_KEY is not configured. The app refuses to start while it's left at "
             "the placeholder value: generate one with 'openssl rand -base64 32' and set "
             "it as SECRET_KEY in your .env or 1Password item."
+        )
+    google_configured = bool(app_settings.google_client_id) and bool(
+        app_settings.google_client_secret
+    )
+    if google_configured and not app_settings.google_encryption_key:
+        raise RuntimeError(
+            "GOOGLE_ENCRYPTION_KEY is not configured. GOOGLE_CLIENT_ID/SECRET are set, so "
+            "the app refuses to start without a dedicated key to encrypt stored Google "
+            "credentials: generate one with 'openssl rand -base64 32' and set it as "
+            "GOOGLE_ENCRYPTION_KEY in your .env or 1Password item."
         )
 
     @asynccontextmanager
@@ -70,6 +90,7 @@ def create_app(settings: Settings | None = None, clock: Clock | None = None) -> 
     app = FastAPI(title=app_settings.app_name, version=__version__, lifespan=lifespan)
     app.state.settings = app_settings
     app.state.clock = app_clock
+    app.state.calendar_source = app_calendar_source
     app.state.login_throttle = LoginThrottle()
     app.add_middleware(SessionAuthMiddleware, settings=app_settings, clock=app_clock)
     app.add_middleware(
