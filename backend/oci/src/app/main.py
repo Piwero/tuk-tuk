@@ -23,6 +23,7 @@ from app.routers.v1 import (
     auth,
     check_items,
     completed_occurrences,
+    events,
     focus_sessions,
     folders,
     google,
@@ -103,6 +104,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(check_items.router)
     app.include_router(completed_occurrences.router)
+    app.include_router(events.router)
     app.include_router(folders.router)
     app.include_router(focus_sessions.router)
     app.include_router(focus_sessions.stats_router)

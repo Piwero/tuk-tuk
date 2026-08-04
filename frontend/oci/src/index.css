@@ -1040,6 +1040,14 @@ li[data-overdue] .date-chip {
   font-variant-numeric: tabular-nums;
 }
 
+/* Events are read-only Google context: a dashed border and default cursor
+ * mark them as visually distinct from a draggable Task at a glance. */
+.calendar-banner[data-kind="event"],
+.calendar-timed-entry[data-kind="event"] {
+  border-left-style: dashed;
+  cursor: default;
+}
+
 .week-header {
   display: flex;
   border: 1px solid var(--border-default);
@@ -1171,6 +1179,13 @@ li[data-overdue] .date-chip {
   box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.15));
   border-left-color: var(--accent-hover, var(--accent));
   z-index: 2;
+}
+
+/* Events are read-only Google context: no drag/resize affordance, marked
+ * with a dashed border so it never reads as a draggable Task. */
+.time-block[data-kind="event"] {
+  border-left-style: dashed;
+  cursor: default;
 }
 
 .time-block .block-time {

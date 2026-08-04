@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Query
 from sqlalchemy import delete, func, or_, select, update
 
+from app.calendar_window import validate_range_pair
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.models import (
@@ -193,23 +194,12 @@ async def read_tasks(
             code="validation_error",
             message=f"view={view} requires the today parameter (the caller's local day)",
         )
-    if (range_start is None) != (range_end is None):
-        raise APIError(
-            status_code=422,
-            code="validation_error",
-            message="range_start and range_end come together",
-        )
+    validate_range_pair(range_start, range_end)
     if view is not None and range_start is not None:
         raise APIError(
             status_code=422,
             code="validation_error",
             message="view and range filters are exclusive",
-        )
-    if range_start is not None and range_end is not None and range_start > range_end:
-        raise APIError(
-            status_code=422,
-            code="validation_error",
-            message="range_start must not be after range_end",
         )
     if scheduled is not None and (view is not None or range_start is not None):
         raise APIError(

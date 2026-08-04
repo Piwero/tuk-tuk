@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createTask,
+  fetchCalendarEvents,
   fetchCalendarTasks,
   fetchUnscheduledTasks,
   updateTask,
+  type Event,
   type Task,
   type TaskPatch,
 } from "../api";
@@ -17,6 +19,7 @@ import {
   entriesOn,
   entryTime,
   entryTimeShape,
+  eventEntry,
   hourLabel,
   isBanner,
   laneBanners,
@@ -73,17 +76,29 @@ interface EdgeDrag {
   minute: number;
 }
 
-/** Banners first, then timed entries in wall-clock order. */
+/** Banners first, then timed entries in wall-clock order; an Event sorts
+ * before a Task at an equal time — the immovable obligation reads first. */
 function byKindThenTime(a: Entry, b: Entry): number {
   const shapeA = entryTimeShape(a);
   const shapeB = entryTimeShape(b);
   return (
     Number(isBanner(shapeB)) - Number(isBanner(shapeA)) ||
-    (entryTime(shapeA) ?? "").localeCompare(entryTime(shapeB) ?? "")
+    (entryTime(shapeA) ?? "").localeCompare(entryTime(shapeB) ?? "") ||
+    Number(a.kind === "task") - Number(b.kind === "task")
   );
 }
 
-/** The drag-source props every calendar entry shares: it drags as its task. */
+/** A React list key unique across both Tasks and Events sharing one list. */
+function entryKey(entry: Entry): string {
+  return entry.kind === "task" ? `task-${entry.task.id}` : `event-${entry.event.id}`;
+}
+
+/** The title text every entry renders, regardless of kind. */
+function entryTitle(entry: Entry): string {
+  return entry.kind === "task" ? entry.task.title : entry.event.title;
+}
+
+/** The drag-source props a Task-backed row shares: it drags as its task. */
 function taskDragProps(
   task: Task,
 ): Pick<React.HTMLAttributes<HTMLElement>, "draggable" | "onDragStart"> {
@@ -91,6 +106,24 @@ function taskDragProps(
     draggable: true,
     onDragStart: (event) => startDrag(event, { kind: "task", id: task.id }),
   };
+}
+
+/** The same drag-source props, for whichever kind of Entry a calendar row
+ * renders: a Task drags as itself; an Event has nothing to drag — it's
+ * read-only Google context, never a write target. The one place that
+ * branch is made, so every rendering site shares it. */
+function entryDragProps(
+  entry: Entry,
+): Pick<React.HTMLAttributes<HTMLElement>, "draggable" | "onDragStart"> {
+  return entry.kind === "task" ? taskDragProps(entry.task) : {};
+}
+
+/** Selects the Task an entry represents, or does nothing for a read-only
+ * Event — the one place that branch is made for every click handler. */
+function selectEntry(entry: Entry, onSelect?: (task: Task) => void): void {
+  if (entry.kind === "task") {
+    onSelect?.(entry.task);
+  }
 }
 
 /** A short weekday name ("Fri") for a week-column header. */
@@ -108,6 +141,7 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
   const [mode, setMode] = useState<CalendarMode>("month");
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [unscheduled, setUnscheduled] = useState<Task[]>([]);
   const [draft, setDraft] = useState<CreateDraft | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
@@ -124,6 +158,13 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
     ]);
     setTasks(inWindow.items);
     setUnscheduled(undated.items);
+    // Its own endpoint, kicked off separately rather than awaited alongside
+    // Tasks above: Google's reachability must never slow down Task
+    // rendering (ADR 0006), so a slow or failed Events fetch never holds up
+    // the Task state that just landed.
+    void fetchCalendarEvents(start, end)
+      .then(setEvents)
+      .catch(() => setEvents([]));
   }, [mode, anchor]);
 
   useEffect(() => {
@@ -312,7 +353,7 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
     void load();
   }
 
-  const entries: Entry[] = tasks.map(taskEntry);
+  const entries: Entry[] = [...tasks.map(taskEntry), ...events.map(eventEntry)];
 
   function renderMonth(): JSX.Element {
     const days = monthGridDays(anchor);
@@ -349,35 +390,36 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
             </div>
             {entriesOn(entries, day)
               .sort(byKindThenTime)
-              .map((entry) => {
-                const task = entry.task;
-                return isBanner(entryTimeShape(entry)) ? (
+              .map((entry) =>
+                isBanner(entryTimeShape(entry)) ? (
                   <div
-                    key={task.id}
+                    key={entryKey(entry)}
                     className="calendar-banner"
-                    {...taskDragProps(task)}
+                    data-kind={entry.kind}
+                    {...entryDragProps(entry)}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onSelect?.(task);
+                      selectEntry(entry, onSelect);
                     }}
                   >
-                    {task.title}
+                    {entryTitle(entry)}
                   </div>
                 ) : (
                   <div
-                    key={task.id}
+                    key={entryKey(entry)}
                     className="calendar-timed-entry"
-                    {...taskDragProps(task)}
+                    data-kind={entry.kind}
+                    {...entryDragProps(entry)}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onSelect?.(task);
+                      selectEntry(entry, onSelect);
                     }}
                   >
                     <span className="entry-time">{entryTime(entryTimeShape(entry))}</span>{" "}
-                    {task.title}
+                    {entryTitle(entry)}
                   </div>
-                );
-              })}
+                ),
+              )}
           </div>
         ))}
       </div>
@@ -385,20 +427,23 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
   }
 
   function renderBlock(entry: Entry, day: string): JSX.Element | null {
-    const task = entry.task;
     const span = blockMinutes(entryTimeShape(entry));
     if (span === null) {
       return null;
     }
-    const pending = edgeDrag !== null && edgeDrag.task.id === task.id ? edgeDrag : null;
+    const task = entry.kind === "task" ? entry.task : null;
+    const pending =
+      edgeDrag !== null && task !== null && edgeDrag.task.id === task.id ? edgeDrag : null;
     const startMin = pending?.edge === "start" ? pending.minute : span[0];
     const endMin = pending?.edge === "end" ? pending.minute : span[1];
     const start = minuteLabel(startMin);
     const end = minuteLabel(endMin);
+    const title = entryTitle(entry);
     return (
       <div
-        key={task.id}
+        key={entryKey(entry)}
         className="time-block"
+        data-kind={entry.kind}
         data-start={start}
         data-end={end}
         data-resizing={pending !== null || undefined}
@@ -406,39 +451,43 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
           top: (startMin / 60) * HOUR_PX,
           height: Math.max(((endMin - startMin) / 60) * HOUR_PX, HOUR_PX / 3),
         }}
-        {...taskDragProps(task)}
-        onClick={() => onSelect?.(task)}
+        {...entryDragProps(entry)}
+        onClick={() => selectEntry(entry, onSelect)}
       >
-        <div
-          className="resize-handle resize-handle-top"
-          role="button"
-          tabIndex={0}
-          aria-label={`Resize start of "${task.title}"`}
-          onMouseDown={(event) => beginEdgeDrag(event, task, "start", day)}
-          onKeyDown={(event) => nudgeEdge(event, task, "start", day)}
-          onClick={(event) => event.stopPropagation()}
-          onDragStart={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        />
-        <span className="block-title">{task.title}</span>
+        {task !== null && (
+          <div
+            className="resize-handle resize-handle-top"
+            role="button"
+            tabIndex={0}
+            aria-label={`Resize start of "${title}"`}
+            onMouseDown={(event) => beginEdgeDrag(event, task, "start", day)}
+            onKeyDown={(event) => nudgeEdge(event, task, "start", day)}
+            onClick={(event) => event.stopPropagation()}
+            onDragStart={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          />
+        )}
+        <span className="block-title">{title}</span>
         <span className="block-time">
           {start}–{end}
         </span>
-        <div
-          className="resize-handle resize-handle-bottom"
-          role="button"
-          tabIndex={0}
-          aria-label={`Resize end of "${task.title}"`}
-          onMouseDown={(event) => beginEdgeDrag(event, task, "end", day)}
-          onKeyDown={(event) => nudgeEdge(event, task, "end", day)}
-          onClick={(event) => event.stopPropagation()}
-          onDragStart={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        />
+        {task !== null && (
+          <div
+            className="resize-handle resize-handle-bottom"
+            role="button"
+            tabIndex={0}
+            aria-label={`Resize end of "${title}"`}
+            onMouseDown={(event) => beginEdgeDrag(event, task, "end", day)}
+            onKeyDown={(event) => nudgeEdge(event, task, "end", day)}
+            onClick={(event) => event.stopPropagation()}
+            onDragStart={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -472,22 +521,20 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => void handleDrop(event, day, null)}
             >
-              {laneBanners(entries, day, firstDay).map((entry) => {
-                const task = entry.task;
-                return (
-                  <div
-                    key={task.id}
-                    className="calendar-banner"
-                    {...taskDragProps(task)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelect?.(task);
-                    }}
-                  >
-                    {task.title}
-                  </div>
-                );
-              })}
+              {laneBanners(entries, day, firstDay).map((entry) => (
+                <div
+                  key={entryKey(entry)}
+                  className="calendar-banner"
+                  data-kind={entry.kind}
+                  {...entryDragProps(entry)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectEntry(entry, onSelect);
+                  }}
+                >
+                  {entryTitle(entry)}
+                </div>
+              ))}
             </div>
           ))}
         </div>
