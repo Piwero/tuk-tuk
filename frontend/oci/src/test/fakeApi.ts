@@ -134,6 +134,15 @@ export interface FakeGoogleAccount {
   created_at: string;
 }
 
+export interface FakeGoogleCalendar {
+  id: number;
+  account_id: number;
+  google_calendar_id: string;
+  summary: string;
+  color: string;
+  enabled: boolean;
+}
+
 export interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
@@ -152,6 +161,7 @@ export interface FakeApiState {
    * integration is configured server-side. */
   googleConfigured: boolean;
   googleAccounts: FakeGoogleAccount[];
+  googleCalendars: FakeGoogleCalendar[];
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -312,6 +322,7 @@ export function installFakeApi({
   loggedIn = true,
   googleConfigured = false,
   googleAccounts = [],
+  googleCalendars = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -329,6 +340,10 @@ export function installFakeApi({
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
   googleAccounts?: FakeGoogleAccount[];
+  /** Pre-seeded as if already fetched once — the fake never re-derives
+   * this from a Google-side `selected` flag; that seeding rule is the
+   * backend's, exercised in the backend suite. */
+  googleCalendars?: FakeGoogleCalendar[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -349,6 +364,7 @@ export function installFakeApi({
     loggedIn,
     googleConfigured,
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
+    googleCalendars: googleCalendars.map((calendar) => ({ ...calendar })),
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -362,6 +378,16 @@ export function installFakeApi({
     total: items.length,
     limit: 50,
     offset: 0,
+  });
+
+  const withoutAccountId = (
+    calendar: FakeGoogleCalendar,
+  ): Omit<FakeGoogleCalendar, "account_id"> => ({
+    id: calendar.id,
+    google_calendar_id: calendar.google_calendar_id,
+    summary: calendar.summary,
+    color: calendar.color,
+    enabled: calendar.enabled,
   });
 
   const notFound = (message: string): Response =>
@@ -476,7 +502,83 @@ export function installFakeApi({
         return notFound(`Google Account ${accountId} not found`);
       }
       state.googleAccounts = state.googleAccounts.filter((account) => account.id !== accountId);
+      // A disconnected account's calendars go with it.
+      state.googleCalendars = state.googleCalendars.filter(
+        (calendar) => calendar.account_id !== accountId,
+      );
       return new Response(null, { status: 204 });
+    }
+    const googleCalendarsMatch = url.pathname.match(
+      /^\/api\/v1\/google\/accounts\/(\d+)\/calendars$/,
+    );
+    if (googleCalendarsMatch && method === "GET") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      if (!state.googleConfigured) {
+        return notFound("Google Calendar integration is not configured");
+      }
+      const accountId = Number(googleCalendarsMatch[1]);
+      if (!state.googleAccounts.some((account) => account.id === accountId)) {
+        return notFound(`Google Account ${accountId} not found`);
+      }
+      return json(
+        state.googleCalendars
+          .filter((calendar) => calendar.account_id === accountId)
+          .sort((a, b) => a.id - b.id)
+          .map(withoutAccountId),
+      );
+    }
+    const googleCalendarsRefreshMatch = url.pathname.match(
+      /^\/api\/v1\/google\/accounts\/(\d+)\/calendars\/refresh$/,
+    );
+    if (googleCalendarsRefreshMatch && method === "POST") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      if (!state.googleConfigured) {
+        return notFound("Google Calendar integration is not configured");
+      }
+      const accountId = Number(googleCalendarsRefreshMatch[1]);
+      if (!state.googleAccounts.some((account) => account.id === accountId)) {
+        return notFound(`Google Account ${accountId} not found`);
+      }
+      // Real backend re-reads Google here; the fake just returns whatever
+      // the test has arranged in state.googleCalendars by this point,
+      // exactly as if that read had happened.
+      return json(
+        state.googleCalendars
+          .filter((calendar) => calendar.account_id === accountId)
+          .sort((a, b) => a.id - b.id)
+          .map(withoutAccountId),
+      );
+    }
+    const googleCalendarMatch = url.pathname.match(
+      /^\/api\/v1\/google\/accounts\/(\d+)\/calendars\/(\d+)$/,
+    );
+    if (googleCalendarMatch && method === "PATCH") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      if (!state.googleConfigured) {
+        return notFound("Google Calendar integration is not configured");
+      }
+      const accountId = Number(googleCalendarMatch[1]);
+      const calendarId = Number(googleCalendarMatch[2]);
+      const calendar = state.googleCalendars.find(
+        (c) => c.id === calendarId && c.account_id === accountId,
+      );
+      if (!calendar) {
+        return notFound(`Google Calendar ${calendarId} not found`);
+      }
+      const input = body as { enabled?: boolean; color?: string };
+      if (input.enabled !== undefined) {
+        calendar.enabled = input.enabled;
+      }
+      if (input.color !== undefined) {
+        calendar.color = input.color;
+      }
+      return json(withoutAccountId(calendar));
     }
     if (method === "POST" && url.pathname === "/api/v1/auth/login") {
       const input = body as { password: string };

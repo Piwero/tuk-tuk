@@ -4,10 +4,16 @@ Google's OAuth wire format (issue #105).
 
 import httpx
 
-from app.calendar_source import CalendarSourceError, ExchangedCredential, RefreshedAccessToken
+from app.calendar_source import (
+    CalendarListEntry,
+    CalendarSourceError,
+    ExchangedCredential,
+    RefreshedAccessToken,
+)
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
+CALENDAR_LIST_URL = "https://www.googleapis.com/calendar/v3/users/me/calendarList"
 
 
 class GoogleCalendarSource:
@@ -76,3 +82,30 @@ class GoogleCalendarSource:
             if response.status_code != 200:
                 raise CalendarSourceError(f"Failed to refresh the access token: {response.text}")
             return RefreshedAccessToken(access_token=response.json()["access_token"])
+
+    async def list_calendars(self, access_token: str) -> list[CalendarListEntry]:
+        entries: list[CalendarListEntry] = []
+        page_token: str | None = None
+        async with httpx.AsyncClient(transport=self._transport) as client:
+            while True:
+                params = {"pageToken": page_token} if page_token else {}
+                response = await client.get(
+                    CALENDAR_LIST_URL,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    params=params,
+                )
+                if response.status_code != 200:
+                    raise CalendarSourceError(f"Failed to list calendars: {response.text}")
+                body = response.json()
+                for item in body.get("items", []):
+                    entries.append(
+                        CalendarListEntry(
+                            google_calendar_id=item["id"],
+                            summary=item.get("summary", item["id"]),
+                            selected=item.get("selected", False),
+                        )
+                    )
+                page_token = body.get("nextPageToken")
+                if not page_token:
+                    break
+        return entries

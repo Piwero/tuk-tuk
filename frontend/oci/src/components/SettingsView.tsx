@@ -3,10 +3,15 @@ import { useEffect, useState } from "react";
 import {
   disconnectGoogleAccount,
   fetchGoogleAccounts,
+  fetchGoogleCalendars,
   fetchGoogleStatus,
   googleConnectUrl,
+  refreshGoogleCalendars,
+  updateGoogleCalendar,
   type GoogleAccount,
+  type GoogleCalendar,
 } from "../api";
+import { ACCENT_PALETTE } from "../theme";
 
 type GoogleStatusState = "checking" | "configured" | "unconfigured";
 
@@ -15,6 +20,103 @@ interface SettingsViewProps {
    * trip that failed (backend redirected with ?googleError=1) — e.g. the
    * user declined consent, or the authorization code exchange failed. */
   googleOAuthError?: boolean;
+}
+
+interface GoogleAccountCalendarsProps {
+  account: GoogleAccount;
+}
+
+/** A connected account's calendar list — fetched (and seeded server-side
+ * from Google's own per-calendar selection flag) the first time it's
+ * expanded, never before. Toggling visibility or changing a calendar's
+ * colour is a purely local write; nothing here ever reaches Google. */
+function GoogleAccountCalendars({ account }: GoogleAccountCalendarsProps): JSX.Element {
+  const [calendars, setCalendars] = useState<GoogleCalendar[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  function handleOpen(): void {
+    if (loaded) {
+      return;
+    }
+    setLoaded(true);
+    fetchGoogleCalendars(account.id)
+      .then(setCalendars)
+      .catch(() => setLoaded(false));
+  }
+
+  async function handleToggle(calendar: GoogleCalendar): Promise<void> {
+    const updated = await updateGoogleCalendar(account.id, calendar.id, {
+      enabled: !calendar.enabled,
+    });
+    setCalendars((current) => (current ?? []).map((c) => (c.id === updated.id ? updated : c)));
+  }
+
+  async function handleColor(calendar: GoogleCalendar, color: string): Promise<void> {
+    const updated = await updateGoogleCalendar(account.id, calendar.id, { color });
+    setCalendars((current) => (current ?? []).map((c) => (c.id === updated.id ? updated : c)));
+  }
+
+  async function handleRefresh(): Promise<void> {
+    setRefreshing(true);
+    try {
+      setCalendars(await refreshGoogleCalendars(account.id));
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return (
+    <details onToggle={(event) => event.currentTarget.open && handleOpen()}>
+      <summary>{account.email}</summary>
+      {calendars === null ? (
+        <p>Loading calendars…</p>
+      ) : (
+        <>
+          {calendars.length === 0 ? (
+            <p>No calendars found.</p>
+          ) : (
+            <ul>
+              {calendars.map((calendar) => (
+                <li key={calendar.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={calendar.enabled}
+                      onChange={() => void handleToggle(calendar)}
+                    />
+                    {calendar.summary}
+                  </label>
+                  <fieldset className="color-palette">
+                    <legend>Color for {calendar.summary}</legend>
+                    {ACCENT_PALETTE.map((swatch) => (
+                      <label
+                        key={swatch.value}
+                        className="color-swatch"
+                        style={{ background: swatch.value }}
+                      >
+                        <input
+                          type="radio"
+                          name={`google-calendar-color-${calendar.id}`}
+                          aria-label={swatch.name}
+                          checked={calendar.color === swatch.value}
+                          value={swatch.value}
+                          onChange={() => void handleColor(calendar, swatch.value)}
+                        />
+                      </label>
+                    ))}
+                  </fieldset>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button type="button" onClick={() => void handleRefresh()} disabled={refreshing}>
+            {refreshing ? "Refreshing…" : "Refresh calendars"}
+          </button>
+        </>
+      )}
+    </details>
+  );
 }
 
 /** The Settings screen. Asks the Google status endpoint once on mount and
@@ -71,7 +173,7 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
             <ul>
               {accounts.map((account) => (
                 <li key={account.id}>
-                  <span>{account.email}</span>
+                  <GoogleAccountCalendars account={account} />
                   <button type="button" onClick={() => void handleDisconnect(account.id)}>
                     Disconnect
                   </button>

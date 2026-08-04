@@ -177,6 +177,45 @@ export function disconnectGoogleAccount(accountId: number): Promise<void> {
   return request(`/api/v1/google/accounts/${accountId}`, { method: "DELETE" });
 }
 
+export interface GoogleCalendar {
+  id: number;
+  google_calendar_id: string;
+  summary: string;
+  color: string;
+  enabled: boolean;
+}
+
+/** Lists an account's calendars, seeding them from Google's own
+ * per-calendar selection flag the first time this is called for the
+ * account. */
+export function fetchGoogleCalendars(accountId: number): Promise<GoogleCalendar[]> {
+  return request(`/api/v1/google/accounts/${accountId}/calendars`);
+}
+
+/** Re-reads the account's calendar list from Google, picking up calendars
+ * created since connecting while preserving the visibility and colour
+ * already chosen for calendars that still exist. */
+export function refreshGoogleCalendars(accountId: number): Promise<GoogleCalendar[]> {
+  return request(`/api/v1/google/accounts/${accountId}/calendars/refresh`, { method: "POST" });
+}
+
+export interface GoogleCalendarUpdateInput {
+  enabled?: boolean;
+  color?: string;
+}
+
+/** A purely local write: never changes anything in Google. */
+export function updateGoogleCalendar(
+  accountId: number,
+  calendarId: number,
+  input: GoogleCalendarUpdateInput,
+): Promise<GoogleCalendar> {
+  return request(`/api/v1/google/accounts/${accountId}/calendars/${calendarId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 /** The URL a "Connect" button navigates the whole page to (not a fetch —
  * the consent flow is a full browser round trip through Google). The
  * backend performs the redirect, handles Google's callback, and sends the

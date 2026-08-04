@@ -102,3 +102,7 @@ _Avoid_: Preset
 **Google Account**:
 A connected Google identity (issue #105): its Google-side id, email, and a refresh credential stored encrypted at rest under its own dedicated key — deliberately not derived from `secret_key`, so rotating the session signing key never disconnects it. Several can be connected at once; each is identified in the UI by its email.
 _Avoid_: Google connection, integration
+
+**Google Calendar**:
+One calendar exposed by a connected Google Account (issue #106) — primary, secondary, shared, or a subscribed feed. Carries a Google-side id, a cosmetic `summary` refreshed on demand, an `enabled` flag controlling whether its Events appear in the Calendar view, and a `color` chosen from tuk-tuk's own palette (never Google's, so it can't clash with the app's theme). `enabled` is seeded once, on first read, from Google's own per-calendar `selected` flag; from then on it is purely local state that a manual refresh never overwrites for calendars that still exist. Disconnecting the owning Google Account removes its Google Calendars.
+_Avoid_: Calendar (ambiguous with the Calendar view itself)
