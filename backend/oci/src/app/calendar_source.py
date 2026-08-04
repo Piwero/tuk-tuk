@@ -2,9 +2,9 @@
 
 Injected through the application factory alongside the clock collaborator
 already injected there (see app.main.create_app), so every backend test can
-run against a fake and never touch the network. Issue #105 exercises only
-credential exchange and refresh; later tickets add calendar and event reads
-to the same port.
+run against a fake and never touch the network. Issue #105 exercised only
+credential exchange and refresh; issue #106 adds calendar enumeration. Later
+tickets add event reads to the same port.
 """
 
 from dataclasses import dataclass
@@ -25,6 +25,18 @@ class RefreshedAccessToken:
     access_token: str
 
 
+@dataclass(frozen=True)
+class CalendarListEntry:
+    """One calendar from an account's Google calendar list. `selected` is
+    Google's own per-calendar visibility flag on the *authenticated user's*
+    calendar list — the seed for tuk-tuk's `enabled` flag on first connect,
+    never consulted again afterwards."""
+
+    google_calendar_id: str
+    summary: str
+    selected: bool
+
+
 class CalendarSourceError(Exception):
     """Google rejected a code exchange or credential refresh outright (an
     invalid/expired code, or a revoked refresh token)."""
@@ -38,4 +50,8 @@ class CalendarSource(Protocol):
 
     async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
         """Mint a fresh access token from a stored refresh credential."""
+        ...
+
+    async def list_calendars(self, access_token: str) -> list[CalendarListEntry]:
+        """Enumerate the calendars the authenticated account exposes."""
         ...

@@ -31,6 +31,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.calendar_source import (  # noqa: E402
+    CalendarListEntry,
     CalendarSourceError,
     ExchangedCredential,
     RefreshedAccessToken,
@@ -74,6 +75,7 @@ class FakeCalendarSource:
 
     def __init__(self) -> None:
         self._codes: dict[str, ExchangedCredential] = {}
+        self._calendars: dict[str, list[CalendarListEntry]] = {}
 
     def register_code(
         self, code: str, *, google_account_id: str, email: str, refresh_token: str
@@ -90,6 +92,14 @@ class FakeCalendarSource:
 
     async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
         return RefreshedAccessToken(access_token=f"access-for-{refresh_token}")
+
+    def register_calendars(self, refresh_token: str, entries: list[CalendarListEntry]) -> None:
+        """The calendars `list_calendars` returns for the access token that
+        `refresh_token` resolves to (see `refresh` above)."""
+        self._calendars[f"access-for-{refresh_token}"] = entries
+
+    async def list_calendars(self, access_token: str) -> list[CalendarListEntry]:
+        return self._calendars.get(access_token, [])
 
 
 @pytest.fixture

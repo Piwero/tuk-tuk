@@ -18,17 +18,36 @@ from urllib.parse import urlencode, urlparse
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
 from app.calendar_source import CalendarSource, CalendarSourceError
 from app.config import Settings
-from app.crypto import encrypt_credential
+from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import GoogleAccount
+from app.models import GoogleAccount, GoogleCalendar
+from app.schemas import reject_explicit_null
 
 router = APIRouter(prefix="/api/v1/google", tags=["google"])
+
+# Mirrors ACCENT_PALETTE in frontend/oci/src/theme.ts. Calendars are coloured
+# from tuk-tuk's own palette, never Google's — Google's colours are chosen
+# against Google's own interface and clash with this app's theme.
+CALENDAR_COLOR_PALETTE = [
+    "#4772fa",  # Blue
+    "#5b5bd6",  # Indigo
+    "#8b5cf6",  # Plum
+    "#d6409f",  # Pink
+    "#e5484d",  # Red
+    "#f76b15",  # Orange
+    "#eda812",  # Amber
+    "#99d52a",  # Lime
+    "#2da44e",  # Green
+    "#12a594",  # Teal
+    "#00a2c7",  # Cyan
+    "#8b8d98",  # Slate
+]
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 # Read-only, sufficient to identify the account (email) and, in later
@@ -58,6 +77,33 @@ class GoogleAccountRead(BaseModel):
     email: str
     connection_state: str
     created_at: datetime
+
+
+class GoogleCalendarRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    google_calendar_id: str
+    summary: str
+    color: str
+    enabled: bool
+
+
+def _reject_off_palette_color(value: object) -> object:
+    if value is not None and value not in CALENDAR_COLOR_PALETTE:
+        raise ValueError("color must be one of tuk-tuk's own palette values")
+    return value
+
+
+# PATCH fields: absent means "leave unchanged"; neither may be set to null.
+# `color` is further restricted to CALENDAR_COLOR_PALETTE — calendars are
+# coloured from tuk-tuk's own palette, never an arbitrary value.
+class GoogleCalendarUpdate(BaseModel):
+    enabled: bool | None = None
+    color: str | None = Field(default=None, max_length=32)
+
+    _reject_nulls = field_validator("enabled", "color")(reject_explicit_null)
+    _reject_off_palette = field_validator("color")(_reject_off_palette_color)
 
 
 def google_configured(settings: Settings) -> bool:
@@ -207,3 +253,118 @@ async def disconnect_account(account_id: int, request: Request, session: Session
         raise NotFoundError(f"Google Account {account_id} not found")
     await session.delete(account)
     await session.commit()
+
+
+async def _get_account_or_404(session: SessionDep, account_id: int) -> GoogleAccount:
+    account = await session.get(GoogleAccount, account_id)
+    if account is None:
+        raise NotFoundError(f"Google Account {account_id} not found")
+    return account
+
+
+async def _calendars_for(session: SessionDep, account_id: int) -> list[GoogleCalendar]:
+    rows = await session.scalars(
+        select(GoogleCalendar)
+        .where(GoogleCalendar.google_account_id == account_id)
+        .order_by(GoogleCalendar.id)
+    )
+    return list(rows)
+
+
+async def _sync_calendars(
+    session: SessionDep,
+    calendar_source: CalendarSource,
+    settings: Settings,
+    account: GoogleAccount,
+) -> list[GoogleCalendar]:
+    """Re-reads Google's calendar list for `account` and upserts it:
+    calendars already known keep their locally-chosen `enabled`/`color` and
+    only pick up a fresh `summary`; calendars seen for the first time are
+    seeded from Google's own `selected` flag and given the next unused
+    palette colour. Existing rows are never removed here — a calendar
+    dropping out of one fetch is not treated as evidence it's gone for
+    good."""
+    assert settings.google_encryption_key is not None
+    refresh_token = decrypt_credential(
+        account.encrypted_refresh_token, key=settings.google_encryption_key
+    )
+    access_token = (await calendar_source.refresh(refresh_token)).access_token
+    entries = await calendar_source.list_calendars(access_token)
+
+    existing_by_google_id = {
+        row.google_calendar_id: row for row in await _calendars_for(session, account.id)
+    }
+    used_colors = {row.color for row in existing_by_google_id.values()}
+
+    for entry in entries:
+        calendar = existing_by_google_id.get(entry.google_calendar_id)
+        if calendar is not None:
+            calendar.summary = entry.summary
+        else:
+            color = next(
+                (c for c in CALENDAR_COLOR_PALETTE if c not in used_colors),
+                CALENDAR_COLOR_PALETTE[len(used_colors) % len(CALENDAR_COLOR_PALETTE)],
+            )
+            used_colors.add(color)
+            session.add(
+                GoogleCalendar(
+                    google_account_id=account.id,
+                    google_calendar_id=entry.google_calendar_id,
+                    summary=entry.summary,
+                    color=color,
+                    enabled=entry.selected,
+                )
+            )
+    await session.commit()
+    return await _calendars_for(session, account.id)
+
+
+@router.get("/accounts/{account_id}/calendars")
+async def list_calendars(
+    account_id: int, request: Request, session: SessionDep
+) -> list[GoogleCalendarRead]:
+    require_google_configured(request.app.state.settings)
+    account = await _get_account_or_404(session, account_id)
+
+    calendars = await _calendars_for(session, account.id)
+    if not calendars:
+        # First-ever look at this account's calendars: seed from Google.
+        calendars = await _sync_calendars(
+            session, request.app.state.calendar_source, request.app.state.settings, account
+        )
+    return [GoogleCalendarRead.model_validate(row) for row in calendars]
+
+
+@router.post("/accounts/{account_id}/calendars/refresh")
+async def refresh_calendars(
+    account_id: int, request: Request, session: SessionDep
+) -> list[GoogleCalendarRead]:
+    require_google_configured(request.app.state.settings)
+    account = await _get_account_or_404(session, account_id)
+
+    calendars = await _sync_calendars(
+        session, request.app.state.calendar_source, request.app.state.settings, account
+    )
+    return [GoogleCalendarRead.model_validate(row) for row in calendars]
+
+
+@router.patch("/accounts/{account_id}/calendars/{calendar_id}")
+async def update_calendar(
+    account_id: int,
+    calendar_id: int,
+    payload: GoogleCalendarUpdate,
+    request: Request,
+    session: SessionDep,
+) -> GoogleCalendarRead:
+    require_google_configured(request.app.state.settings)
+    await _get_account_or_404(session, account_id)
+
+    calendar = await session.get(GoogleCalendar, calendar_id)
+    if calendar is None or calendar.google_account_id != account_id:
+        raise NotFoundError(f"Google Calendar {calendar_id} not found")
+
+    changes = payload.model_dump(exclude_unset=True)
+    for field, value in changes.items():
+        setattr(calendar, field, value)
+    await session.commit()
+    return GoogleCalendarRead.model_validate(calendar)

@@ -115,6 +115,220 @@ describe("Google Calendar gate", () => {
     expect(window.location.search).toBe("");
   });
 
+  it("lists an account's calendars by name once expanded", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "work@example.com",
+          connection_state: "connected",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+      googleCalendars: [
+        {
+          id: 10,
+          account_id: 1,
+          google_calendar_id: "cal-1",
+          summary: "Work",
+          color: "#4772fa",
+          enabled: true,
+        },
+        {
+          id: 11,
+          account_id: 1,
+          google_calendar_id: "cal-2",
+          summary: "Holidays",
+          color: "#e5484d",
+          enabled: false,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByText("work@example.com"));
+
+    expect(await screen.findByText("Work")).toBeInTheDocument();
+    expect(screen.getByText("Holidays")).toBeInTheDocument();
+  });
+
+  it("toggling a calendar's visibility persists across reloads", async () => {
+    const state = installFakeApi({
+      googleConfigured: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "work@example.com",
+          connection_state: "connected",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+      googleCalendars: [
+        {
+          id: 10,
+          account_id: 1,
+          google_calendar_id: "cal-1",
+          summary: "Work",
+          color: "#4772fa",
+          enabled: true,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByText("work@example.com"));
+    const checkbox = await screen.findByRole("checkbox", { name: "Work" });
+    expect(checkbox).toBeChecked();
+
+    await user.click(checkbox);
+
+    await waitFor(() => expect(checkbox).not.toBeChecked());
+    expect(
+      state.requests.some(
+        (r) =>
+          r.method === "PATCH" &&
+          r.url === "/api/v1/google/accounts/1/calendars/10" &&
+          (r.body as { enabled?: boolean }).enabled === false,
+      ),
+    ).toBe(true);
+  });
+
+  it("changing a calendar's colour picks from tuk-tuk's own palette", async () => {
+    const state = installFakeApi({
+      googleConfigured: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "work@example.com",
+          connection_state: "connected",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+      googleCalendars: [
+        {
+          id: 10,
+          account_id: 1,
+          google_calendar_id: "cal-1",
+          summary: "Work",
+          color: "#4772fa",
+          enabled: true,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByText("work@example.com"));
+    await screen.findByText("Work");
+
+    await user.click(screen.getByRole("radio", { name: "Red" }));
+
+    await waitFor(() => {
+      expect(
+        state.requests.some(
+          (r) =>
+            r.method === "PATCH" &&
+            r.url === "/api/v1/google/accounts/1/calendars/10" &&
+            (r.body as { color?: string }).color === "#e5484d",
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it("a manual refresh picks up a calendar created since connecting", async () => {
+    const state = installFakeApi({
+      googleConfigured: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "work@example.com",
+          connection_state: "connected",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+      googleCalendars: [
+        {
+          id: 10,
+          account_id: 1,
+          google_calendar_id: "cal-1",
+          summary: "Work",
+          color: "#4772fa",
+          enabled: true,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByText("work@example.com"));
+    await screen.findByText("Work");
+
+    // A calendar created in Google since connecting, discovered on refresh.
+    state.googleCalendars.push({
+      id: 11,
+      account_id: 1,
+      google_calendar_id: "cal-2",
+      summary: "New Calendar",
+      color: "#e5484d",
+      enabled: true,
+    });
+    await user.click(screen.getByRole("button", { name: "Refresh calendars" }));
+
+    expect(await screen.findByText("New Calendar")).toBeInTheDocument();
+    expect(
+      state.requests.some(
+        (r) => r.method === "POST" && r.url === "/api/v1/google/accounts/1/calendars/refresh",
+      ),
+    ).toBe(true);
+  });
+
+  it("disconnecting an account removes its calendars", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "work@example.com",
+          connection_state: "connected",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+      googleCalendars: [
+        {
+          id: 10,
+          account_id: 1,
+          google_calendar_id: "cal-1",
+          summary: "Work",
+          color: "#4772fa",
+          enabled: true,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await screen.findByText("work@example.com");
+    await user.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("work@example.com")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText("Work")).not.toBeInTheDocument();
+  });
+
   it("opens Settings after a successful Google consent round trip", async () => {
     installFakeApi({
       googleConfigured: true,

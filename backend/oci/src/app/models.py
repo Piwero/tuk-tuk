@@ -293,6 +293,38 @@ class GoogleAccount(Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
+    calendars: Mapped[list["GoogleCalendar"]] = relationship(
+        back_populates="account", cascade="all, delete-orphan"
+    )
+
+
+class GoogleCalendar(Base):
+    """A Google Calendar exposed by a connected Google Account (issue #106)
+    — one of possibly several a single account offers (primary, secondary,
+    shared, holiday/birthday feeds). `enabled` controls whether its Events
+    appear in the Calendar view: seeded on connect from Google's own
+    per-calendar `selected` flag, then purely local — toggling it here never
+    reaches Google. `color` is chosen from tuk-tuk's own palette, never
+    Google's, so a calendar's colour never clashes with the app's theme.
+    `summary` is cosmetic metadata refreshed on demand; staleness here is
+    harmless, unlike stale Events (never persisted — see ADR 0006).
+    """
+
+    __tablename__ = "google_calendars"
+    __table_args__ = (UniqueConstraint("google_account_id", "google_calendar_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    google_account_id: Mapped[int] = mapped_column(
+        ForeignKey("google_accounts.id", ondelete="CASCADE"), index=True
+    )
+    google_calendar_id: Mapped[str] = mapped_column(String(255))
+    summary: Mapped[str] = mapped_column(String(255))
+    color: Mapped[str] = mapped_column(String(32))
+    enabled: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    account: Mapped[GoogleAccount] = relationship(back_populates="calendars")
+
 
 class Timer(Base):
     """A Timer — a saved Focus Session preset (name + mode + duration,
