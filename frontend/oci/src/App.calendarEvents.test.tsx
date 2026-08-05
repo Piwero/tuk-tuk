@@ -197,7 +197,7 @@ describe("Midnight-crossing Events (issue #108)", () => {
 
     const segments = await screen.findAllByText("Flight");
     expect(segments).toHaveLength(1);
-    const block = segments[0].closest(".time-block");
+    const block = segments[0]?.closest(".time-block");
     expect(block).toHaveAttribute("data-start", "23:00");
     expect(block).toHaveAttribute("data-end", "23:59");
   });
@@ -345,7 +345,7 @@ describe("Per-account failure handling and Event refresh (issue #109)", () => {
     const [, secondRequest] = api.requests.filter((r) => r.url.startsWith("/api/v1/events"));
     // Forces past the cache: a focus refetch that's still cache-eligible
     // could serve a stale answer, defeating the point of the refetch.
-    expect(secondRequest.url).toContain("force=true");
+    expect(secondRequest?.url).toContain("force=true");
   });
 
   it("forces a fresh fetch when the manual refresh control is used", async () => {
