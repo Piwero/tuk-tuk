@@ -134,6 +134,16 @@ class Task(Base):
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
     owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Provenance of a Task converted from a Google Event (issue #111): which
+    # Event it came from, remembered here since Google access is read-only
+    # and no Event storage exists to hang this off instead (ADR 0006). Both
+    # null for an ordinary Task. Set together; a disconnected calendar SETs
+    # NULL on the FK rather than deleting the Task — converting never costs
+    # the user the Task itself.
+    source_google_calendar_id: Mapped[int | None] = mapped_column(
+        ForeignKey("google_calendars.id", ondelete="SET NULL"), default=None
+    )
+    source_google_event_id: Mapped[str | None] = mapped_column(String(255), default=None)
 
     task_list: Mapped[TaskList] = relationship(back_populates="tasks")
     # Check Items always travel with their Task (composition), so load them

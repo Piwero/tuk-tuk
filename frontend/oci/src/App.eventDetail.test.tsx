@@ -190,3 +190,189 @@ describe("Event detail popover (issue #110)", () => {
     expect(screen.queryByRole("dialog", { name: "A task" })).toBeNull();
   });
 });
+
+describe("Convert an Event to a Task (issue #111)", () => {
+  it("offers a Convert to task action", async () => {
+    installFakeApi({ googleConfigured: true, events: [fakeEvent("Standup")] });
+    render(<App />);
+
+    await openCalendar();
+    fireEvent.click(await screen.findByText("Standup"));
+
+    const dialog = await screen.findByRole("dialog", { name: "Standup" });
+    expect(within(dialog).getByRole("button", { name: "Convert to task" })).toBeInTheDocument();
+  });
+
+  it("shows a preview before confirming, and issues no write until confirmed", async () => {
+    const api = installFakeApi({
+      googleConfigured: true,
+      events: [
+        fakeEvent("Standup", {
+          start_date: "2026-07-06T09:00:00Z",
+          due_date: "2026-07-06T09:30:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+    fireEvent.click(await screen.findByText("Standup"));
+    const dialog = await screen.findByRole("dialog", { name: "Standup" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Convert to task" }));
+
+    expect(within(dialog).getByText(/09:00/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/09:30/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Confirm" })).toBeInTheDocument();
+    expect(api.requests.some((r) => r.method !== "GET")).toBe(false);
+  });
+
+  it("cancelling the preview leaves the Event untouched", async () => {
+    const api = installFakeApi({
+      googleConfigured: true,
+      events: [fakeEvent("Standup")],
+    });
+    render(<App />);
+
+    await openCalendar();
+    fireEvent.click(await screen.findByText("Standup"));
+    const dialog = await screen.findByRole("dialog", { name: "Standup" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Convert to task" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(within(dialog).getByRole("button", { name: "Convert to task" })).toBeInTheDocument();
+    expect(api.requests.some((r) => r.method !== "GET")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByText("Standup")).toBeInTheDocument();
+  });
+
+  it("confirming creates the Task, closes the popover, and removes the Event from the Calendar", async () => {
+    const api = installFakeApi({
+      googleConfigured: true,
+      events: [
+        fakeEvent("Standup", {
+          start_date: "2026-07-06T09:00:00Z",
+          due_date: "2026-07-06T09:30:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+    fireEvent.click(await screen.findByText("Standup"));
+    const dialog = await screen.findByRole("dialog", { name: "Standup" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Convert to task" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+
+    await screen.findByText("Standup"); // the Task, once the Event it replaces is gone
+    expect(screen.queryByRole("dialog", { name: "Standup" })).toBeNull();
+    const created = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks")
+      ?.body as { title: string; start_date: string; due_date: string };
+    expect(created.title).toBe("Standup");
+    expect(created.start_date).toBe("2026-07-06T09:00:00Z");
+    expect(created.due_date).toBe("2026-07-06T09:30:00Z");
+  });
+
+  it("carries the Event's provenance so the Task can hide it, and lands in the Inbox at default priority", async () => {
+    const api = installFakeApi({
+      googleConfigured: true,
+      events: [fakeEvent("Standup", { calendar_id: 3, google_event_id: "evt-42" })],
+    });
+    render(<App />);
+
+    await openCalendar();
+    fireEvent.click(await screen.findByText("Standup"));
+    const dialog = await screen.findByRole("dialog", { name: "Standup" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Convert to task" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+    await screen.findByText("Standup");
+
+    const created = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks")
+      ?.body as {
+      source_google_calendar_id: number;
+      source_google_event_id: string;
+      priority?: string;
+      list_id?: number;
+    };
+    expect(created.source_google_calendar_id).toBe(3);
+    expect(created.source_google_event_id).toBe("evt-42");
+    expect(created.priority).toBeUndefined();
+    expect(created.list_id).toBeUndefined();
+  });
+
+  it("carries the Event's description and location into the Task, with a link back", async () => {
+    const api = installFakeApi({
+      googleConfigured: true,
+      events: [fakeEvent("Standup", { description: "Daily sync", location: "Room 4B" })],
+    });
+    render(<App />);
+
+    await openCalendar();
+    fireEvent.click(await screen.findByText("Standup"));
+    const dialog = await screen.findByRole("dialog", { name: "Standup" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Convert to task" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+    await screen.findByText("Standup");
+
+    const created = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks")
+      ?.body as { description: string };
+    expect(created.description).toContain("Daily sync");
+    expect(created.description).toContain("Room 4B");
+    expect(created.description).toContain("https://calendar.google.com/calendar/event?eid=fake");
+  });
+
+  it("converts an all-day Event into an all-day Task covering the same days", async () => {
+    const api = installFakeApi({
+      googleConfigured: true,
+      events: [
+        fakeEvent("Offsite", {
+          is_all_day: true,
+          start_date: "2026-07-10T00:00:00Z",
+          due_date: "2026-07-12T00:00:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+    fireEvent.click((await screen.findAllByText("Offsite"))[0] as HTMLElement);
+    const dialog = await screen.findByRole("dialog", { name: "Offsite" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Convert to task" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+    await screen.findAllByText("Offsite");
+
+    const created = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks")
+      ?.body as { is_all_day: boolean; start_date: string; due_date: string };
+    expect(created.is_all_day).toBe(true);
+    expect(created.start_date).toBe("2026-07-10T00:00:00Z");
+    expect(created.due_date).toBe("2026-07-12T00:00:00Z");
+  });
+
+  it("shows a midnight-crossing Event's clamp before confirming, and preserves its true end", async () => {
+    const api = installFakeApi({
+      googleConfigured: true,
+      events: [
+        fakeEvent("Red-eye flight", {
+          start_date: "2026-07-06T23:00:00Z",
+          due_date: "2026-07-07T00:45:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+    fireEvent.click((await screen.findAllByText("Red-eye flight"))[0] as HTMLElement);
+    const dialog = await screen.findByRole("dialog", { name: "Red-eye flight" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Convert to task" }));
+
+    expect(within(dialog).getAllByText(/Originally ends/).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(/00:45/).length).toBeGreaterThan(0);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
+    await screen.findByText("Red-eye flight");
+
+    const created = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tasks")
+      ?.body as { due_date: string; description: string };
+    expect(created.due_date).toBe("2026-07-06T23:59:00.000Z");
+    expect(created.description).toContain("Originally ends");
+  });
+});

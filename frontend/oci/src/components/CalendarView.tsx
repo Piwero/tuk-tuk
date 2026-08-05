@@ -148,9 +148,18 @@ function shortWeekday(dayIso: string): string {
 interface CalendarViewProps {
   onSelect?: (task: Task) => void;
   onSelectEvent?: (event: Event) => void;
+  /** Bumped by the caller to force a fresh read past the cache — e.g. right
+   * after "Convert to task" (issue #111), so the converted Event disappears
+   * and the new Task appears immediately rather than on the next natural
+   * refetch (a mode/anchor change, or the window regaining focus). */
+  refreshToken?: number;
 }
 
-export function CalendarView({ onSelect, onSelectEvent }: CalendarViewProps = {}): JSX.Element {
+export function CalendarView({
+  onSelect,
+  onSelectEvent,
+  refreshToken,
+}: CalendarViewProps = {}): JSX.Element {
   const [mode, setMode] = useState<CalendarMode>("month");
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -202,6 +211,19 @@ export function CalendarView({ onSelect, onSelectEvent }: CalendarViewProps = {}
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A caller-driven forced refresh (issue #111's "Convert to task"): skips
+  // its own first run, since mount is already covered by the effect above —
+  // only a later change of refreshToken means the caller actually wants one.
+  const skipNextRefreshToken = useRef(true);
+  useEffect(() => {
+    if (skipNextRefreshToken.current) {
+      skipNextRefreshToken.current = false;
+      return;
+    }
+    void load(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshToken]);
 
   // Exactly the moment a Calendar left open in a background tab is most
   // likely stale: the user just came back from Google Calendar or their

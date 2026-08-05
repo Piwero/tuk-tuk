@@ -156,6 +156,7 @@ class SectionRead(BaseModel):
 
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
+    description: str = ""
     list_id: int | None = None
     section_id: int | None = None
     priority: Priority = "none"
@@ -165,6 +166,10 @@ class TaskCreate(BaseModel):
     is_all_day: bool = False
     time_zone: str | None = Field(default=None, max_length=64)
     recurrence: str | None = Field(default=None, max_length=255)
+    # Provenance of a Task converted from a Google Event (issue #111);
+    # absent for an ordinary Task.
+    source_google_calendar_id: int | None = None
+    source_google_event_id: str | None = Field(default=None, max_length=255)
 
     _normalize_dates = field_validator("start_date", "due_date")(normalize_to_utc)
 
@@ -486,6 +491,8 @@ class TaskRead(BaseModel):
     time_zone: str | None
     reminders: list[str]
     recurrence: str | None
+    source_google_calendar_id: int | None
+    source_google_event_id: str | None
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime

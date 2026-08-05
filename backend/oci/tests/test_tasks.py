@@ -93,6 +93,24 @@ def test_new_task_has_empty_description_no_priority_and_no_check_items(
     assert read_back["check_items"] == []
 
 
+def test_task_can_be_created_with_a_description(client: TestClient) -> None:
+    """A Task converted from an Event (issue #111) is created with its full
+    description in one step — never a create-then-patch race."""
+    created = client.post(
+        "/api/v1/tasks", json={"title": "Standup", "description": "Daily sync\n\nRoom 4B"}
+    ).json()
+
+    assert created["description"] == "Daily sync\n\nRoom 4B"
+
+
+def test_an_ordinary_task_has_no_event_provenance(client: TestClient) -> None:
+    """A Task not converted from an Event (issue #111) carries no provenance."""
+    created = client.post("/api/v1/tasks", json={"title": "Plain"}).json()
+
+    assert created["source_google_calendar_id"] is None
+    assert created["source_google_event_id"] is None
+
+
 def test_task_description_and_priority_can_be_edited(client: TestClient) -> None:
     task_id = client.post("/api/v1/tasks", json={"title": "Write report"}).json()["id"]
 

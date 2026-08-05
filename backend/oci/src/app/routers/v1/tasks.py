@@ -137,6 +137,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
     )
     task = Task(
         title=payload.title,
+        description=payload.description,
         list_id=list_id,
         section_id=payload.section_id,
         priority=payload.priority,
@@ -145,6 +146,8 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         is_all_day=payload.is_all_day,
         time_zone=payload.time_zone,
         recurrence=payload.recurrence,
+        source_google_calendar_id=payload.source_google_calendar_id,
+        source_google_event_id=payload.source_google_event_id,
         sort_order=(max_order or 0) + SORT_GAP,
         check_items=[],
         tags=tags,

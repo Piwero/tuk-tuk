@@ -2166,6 +2166,43 @@ li[data-overdue] .date-chip {
   color: var(--text-accent);
 }
 
+.event-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.event-convert-intro {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.event-convert-clamp {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font-size: var(--text-sm);
+}
+
+.event-convert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.event-convert-confirm {
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  font-weight: var(--weight-medium);
+  color: var(--text-inverse);
+}
+
+.event-convert-confirm:hover {
+  background: var(--accent-hover);
+}
+
 /* ── Icon picker ─────────────────────────────────────────────────── */
 
 /* The icon field: a square showing the current emoji, or a placeholder glyph

@@ -61,6 +61,8 @@ export interface FakeTask {
   time_zone: string | null;
   reminders: string[];
   recurrence: string | null;
+  source_google_calendar_id: number | null;
+  source_google_event_id: string | null;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -162,6 +164,8 @@ export interface FakeEvent {
   html_link: string;
   account_email: string;
   calendar_summary: string;
+  calendar_id: number;
+  google_event_id: string;
 }
 
 /** A per-account Events failure (issue #109) the fake `/api/v1/events`
@@ -244,6 +248,8 @@ export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): Fake
     time_zone: null,
     reminders: [],
     recurrence: null,
+    source_google_calendar_id: null,
+    source_google_event_id: null,
     check_items: [],
     tags: [],
     created_at: "2026-07-03T10:00:00Z",
@@ -314,8 +320,9 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
 let nextEventId = 1;
 
 export function fakeEvent(title: string, overrides: Partial<FakeEvent> = {}): FakeEvent {
+  const n = nextEventId++;
   return {
-    id: `evt-${nextEventId++}`,
+    id: `evt-${n}`,
     title,
     start_date: "2026-07-03T13:00:00Z",
     due_date: "2026-07-03T14:00:00Z",
@@ -328,6 +335,8 @@ export function fakeEvent(title: string, overrides: Partial<FakeEvent> = {}): Fa
     html_link: "https://calendar.google.com/calendar/event?eid=fake",
     account_email: "me@example.com",
     calendar_summary: "Work",
+    calendar_id: 1,
+    google_event_id: `google-evt-${n}`,
     ...overrides,
   };
 }
@@ -855,7 +864,18 @@ export function installFakeApi({
           422,
         );
       }
+      // Mirrors the backend: an Event already converted to a Task (issue
+      // #111) is hidden — matched by the Task's own provenance columns,
+      // since no Event storage exists for a flag to live on instead.
+      const converted = new Set(
+        state.tasks
+          .filter((task) => task.source_google_calendar_id !== null)
+          .map((task) => `${task.source_google_calendar_id}:${task.source_google_event_id}`),
+      );
       const items = state.events.filter((event) => {
+        if (converted.has(`${event.calendar_id}:${event.google_event_id}`)) {
+          return false;
+        }
         const window = entryDayWindow({ ...event, time_zone: null });
         return window !== null && window[0] <= rangeEnd && window[1] >= rangeStart;
       });
@@ -864,6 +884,7 @@ export function installFakeApi({
     if (method === "POST" && url.pathname === "/api/v1/tasks") {
       const input = body as {
         title: string;
+        description?: string;
         list_id?: number;
         section_id?: number;
         priority?: Priority;
@@ -872,6 +893,8 @@ export function installFakeApi({
         due_date?: string;
         is_all_day?: boolean;
         time_zone?: string;
+        source_google_calendar_id?: number;
+        source_google_event_id?: string;
       };
       const listId = input.list_id ?? INBOX.id;
       if (input.section_id !== undefined) {
@@ -886,6 +909,7 @@ export function installFakeApi({
         return notFound(`Tag ${missing} not found`);
       }
       const created = fakeTask(input.title, {
+        description: input.description ?? "",
         list_id: listId,
         section_id: input.section_id ?? null,
         priority: input.priority ?? "none",
@@ -893,6 +917,8 @@ export function installFakeApi({
         due_date: input.due_date ?? null,
         is_all_day: input.is_all_day ?? false,
         time_zone: input.time_zone ?? null,
+        source_google_calendar_id: input.source_google_calendar_id ?? null,
+        source_google_event_id: input.source_google_event_id ?? null,
         tags: state.tags
           .filter((tag) => tagIds.includes(tag.id))
           .sort(byName)

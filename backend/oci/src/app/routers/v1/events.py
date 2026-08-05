@@ -52,7 +52,7 @@ from app.crypto import decrypt_credential
 from app.db import SessionDep
 from app.errors import APIError
 from app.event_cache import EventCache
-from app.models import GoogleAccount, GoogleCalendar
+from app.models import GoogleAccount, GoogleCalendar, Task
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
@@ -78,6 +78,11 @@ class EventRead(BaseModel):
     html_link: str
     account_email: str
     calendar_summary: str
+    # The local calendar row id and Google's own event id, split out of `id`
+    # (issue #111): what "Convert to task" sends back as the Task's
+    # provenance, so a later read can recognise this exact occurrence again.
+    calendar_id: int
+    google_event_id: str
 
 
 class EventFailureRead(BaseModel):
@@ -102,6 +107,19 @@ async def _enabled_calendars(session: SessionDep) -> list[GoogleCalendar]:
         select(GoogleCalendar).where(GoogleCalendar.enabled).order_by(GoogleCalendar.id)
     )
     return list(rows)
+
+
+async def _converted_events(session: SessionDep) -> set[tuple[int, str]]:
+    """(calendar id, Google event id) pairs already converted to a Task
+    (issue #111) — hidden from every subsequent read regardless of Google's
+    own cache, since no Event storage exists for a flag to live on instead
+    (ADR 0006); the Task's provenance columns are the only record of it."""
+    rows = await session.execute(
+        select(Task.source_google_calendar_id, Task.source_google_event_id).where(
+            Task.source_google_calendar_id.is_not(None)
+        )
+    )
+    return {(calendar_id, event_id) for calendar_id, event_id in rows if event_id is not None}
 
 
 def _attendee_read(attendee: CalendarEventAttendee) -> EventAttendeeRead:
@@ -134,6 +152,8 @@ async def read_events(
     calendars = await _enabled_calendars(session)
     if not calendars:
         return EventsRead(events=[], failures=[])
+
+    converted = await _converted_events(session)
 
     accounts_by_id = {
         account.id: account
@@ -189,6 +209,8 @@ async def read_events(
                 else:
                     entries = cached
                 for entry in entries:
+                    if (calendar.id, entry.google_event_id) in converted:
+                        continue
                     events.append(
                         EventRead(
                             id=f"{calendar.id}:{entry.google_event_id}",
@@ -206,6 +228,8 @@ async def read_events(
                             html_link=entry.html_link,
                             account_email=account.email,
                             calendar_summary=calendar.summary,
+                            calendar_id=calendar.id,
+                            google_event_id=entry.google_event_id,
                         )
                     )
         except TerminalCalendarSourceError as exc:
