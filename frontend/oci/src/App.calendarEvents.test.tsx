@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
@@ -225,5 +225,151 @@ describe("Midnight-crossing Events (issue #108)", () => {
     const middleBlock = within(middleColumn).getByText("Conference").closest(".time-block");
     expect(middleBlock).toHaveAttribute("data-start", "00:00");
     expect(middleBlock).toHaveAttribute("data-end", "23:59");
+  });
+});
+
+describe("Per-account failure handling and Event refresh (issue #109)", () => {
+  it("still renders every other account's Events when one account fails", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      events: [
+        fakeEvent("Standup", {
+          start_date: "2026-07-06T09:00:00Z",
+          due_date: "2026-07-06T09:30:00Z",
+        }),
+      ],
+      eventFailures: [
+        { account_id: 1, email: "broken@example.com", kind: "transient", message: "server error" },
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+
+    expect(await screen.findByText("Standup")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/broken@example.com/);
+  });
+
+  it("names the failed account in the banner", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      eventFailures: [
+        { account_id: 1, email: "broken@example.com", kind: "transient", message: "server error" },
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("broken@example.com");
+  });
+
+  it("offers Retry (not Reconnect) for a transient failure", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      eventFailures: [
+        { account_id: 1, email: "broken@example.com", kind: "transient", message: "server error" },
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("link", { name: "Reconnect" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh Events" })).toBeInTheDocument();
+  });
+
+  it("offers Reconnect for a terminal failure", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      eventFailures: [
+        {
+          account_id: 1,
+          email: "revoked@example.com",
+          kind: "terminal",
+          message: "invalid_grant",
+        },
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+
+    const reconnectLink = await screen.findByRole("link", { name: "Reconnect" });
+    expect(reconnectLink).toHaveAttribute("href", "/api/v1/google/connect");
+  });
+
+  it("refetches Events when the window changes", async () => {
+    const api = installFakeApi({ googleConfigured: true });
+    render(<App />);
+
+    await openCalendar();
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (r) => r.method === "GET" && r.url.startsWith("/api/v1/events?range_start=2026-06-29"),
+        ),
+      ).toBe(true),
+    );
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Next" }).click();
+    });
+
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (r) => r.method === "GET" && r.url.startsWith("/api/v1/events?range_start=2026-07-27"),
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("refetches Events when the browser tab regains focus", async () => {
+    const api = installFakeApi({ googleConfigured: true });
+    render(<App />);
+
+    await openCalendar();
+    await waitFor(() =>
+      expect(api.requests.filter((r) => r.url.startsWith("/api/v1/events")).length).toBe(1),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await waitFor(() =>
+      expect(api.requests.filter((r) => r.url.startsWith("/api/v1/events")).length).toBe(2),
+    );
+    const [, secondRequest] = api.requests.filter((r) => r.url.startsWith("/api/v1/events"));
+    // Forces past the cache: a focus refetch that's still cache-eligible
+    // could serve a stale answer, defeating the point of the refetch.
+    expect(secondRequest.url).toContain("force=true");
+  });
+
+  it("forces a fresh fetch when the manual refresh control is used", async () => {
+    const api = installFakeApi({ googleConfigured: true });
+    render(<App />);
+
+    await openCalendar();
+    await waitFor(() =>
+      expect(api.requests.some((r) => r.url.startsWith("/api/v1/events"))).toBe(true),
+    );
+
+    await act(async () => {
+      screen.getByRole("button", { name: "Refresh Events" }).click();
+    });
+
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (r) =>
+            r.method === "GET" &&
+            r.url.startsWith("/api/v1/events") &&
+            r.url.includes("force=true"),
+        ),
+      ).toBe(true),
+    );
   });
 });

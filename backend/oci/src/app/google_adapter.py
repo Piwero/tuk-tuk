@@ -2,6 +2,8 @@
 Google's OAuth and Calendar wire format (issue #105, events issue #107).
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -11,9 +13,10 @@ import httpx
 from app.calendar_source import (
     CalendarEventEntry,
     CalendarListEntry,
-    CalendarSourceError,
     ExchangedCredential,
     RefreshedAccessToken,
+    TerminalCalendarSourceError,
+    TransientCalendarSourceError,
 )
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -41,6 +44,28 @@ def _is_declined(item: dict[str, Any]) -> bool:
 def _as_utc_instant(value: str) -> str:
     """An RFC3339 dateTime with any offset, rendered as a UTC "Z" instant."""
     return datetime.fromisoformat(value).astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _is_invalid_grant(response: httpx.Response) -> bool:
+    """Google's shape for a revoked or expired refresh token / authorization
+    code: a 400 with an `invalid_grant` error code in the body."""
+    if response.status_code != 400:
+        return False
+    try:
+        return bool(response.json().get("error") == "invalid_grant")
+    except ValueError:
+        return False
+
+
+def _raise_for_error_response(response: httpx.Response, message: str) -> None:
+    """Classifies a non-200 Google response (issue #109): terminal when the
+    credential itself is no good (a revoked/expired grant, or Google no
+    longer honouring the access token at all), transient for everything
+    else — a server error, rate limiting, or any other rejection that isn't
+    about the grant."""
+    if _is_invalid_grant(response) or response.status_code in (401, 403):
+        raise TerminalCalendarSourceError(f"{message}: {response.text}")
+    raise TransientCalendarSourceError(f"{message}: {response.text}")
 
 
 def _parse_event(item: dict[str, Any]) -> CalendarEventEntry:
@@ -77,8 +102,20 @@ class GoogleCalendarSource:
         # code never passes one and gets httpx's real network transport.
         self._transport = transport
 
+    @asynccontextmanager
+    async def _client(self, action: str) -> AsyncIterator[httpx.AsyncClient]:
+        """Every request below shares this: a network-level failure (as
+        opposed to a non-200 response, which each caller classifies itself
+        via `_raise_for_error_response`) is always transient — the
+        credential is fine, only the request didn't land."""
+        try:
+            async with httpx.AsyncClient(transport=self._transport) as client:
+                yield client
+        except httpx.HTTPError as exc:
+            raise TransientCalendarSourceError(f"Network error {action}: {exc}") from exc
+
     async def exchange_code(self, code: str, redirect_uri: str) -> ExchangedCredential:
-        async with httpx.AsyncClient(transport=self._transport) as client:
+        async with self._client("exchanging the authorization code") as client:
             token_response = await client.post(
                 TOKEN_URL,
                 data={
@@ -90,13 +127,11 @@ class GoogleCalendarSource:
                 },
             )
             if token_response.status_code != 200:
-                raise CalendarSourceError(
-                    f"Google rejected the authorization code: {token_response.text}"
-                )
+                _raise_for_error_response(token_response, "Google rejected the authorization code")
             token_body = token_response.json()
             refresh_token = token_body.get("refresh_token")
             if not refresh_token:
-                raise CalendarSourceError(
+                raise TerminalCalendarSourceError(
                     "Google granted no refresh token; reconnect to force re-consent"
                 )
             access_token = token_body["access_token"]
@@ -105,8 +140,8 @@ class GoogleCalendarSource:
                 USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"}
             )
             if userinfo_response.status_code != 200:
-                raise CalendarSourceError(
-                    f"Failed to fetch the connected account's identity: {userinfo_response.text}"
+                _raise_for_error_response(
+                    userinfo_response, "Failed to fetch the connected account's identity"
                 )
             userinfo = userinfo_response.json()
 
@@ -117,7 +152,7 @@ class GoogleCalendarSource:
         )
 
     async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
-        async with httpx.AsyncClient(transport=self._transport) as client:
+        async with self._client("refreshing the access token") as client:
             response = await client.post(
                 TOKEN_URL,
                 data={
@@ -128,13 +163,13 @@ class GoogleCalendarSource:
                 },
             )
             if response.status_code != 200:
-                raise CalendarSourceError(f"Failed to refresh the access token: {response.text}")
+                _raise_for_error_response(response, "Failed to refresh the access token")
             return RefreshedAccessToken(access_token=response.json()["access_token"])
 
     async def list_calendars(self, access_token: str) -> list[CalendarListEntry]:
         entries: list[CalendarListEntry] = []
         page_token: str | None = None
-        async with httpx.AsyncClient(transport=self._transport) as client:
+        async with self._client("listing calendars") as client:
             while True:
                 params = {"pageToken": page_token} if page_token else {}
                 response = await client.get(
@@ -143,7 +178,7 @@ class GoogleCalendarSource:
                     params=params,
                 )
                 if response.status_code != 200:
-                    raise CalendarSourceError(f"Failed to list calendars: {response.text}")
+                    _raise_for_error_response(response, "Failed to list calendars")
                 body = response.json()
                 for item in body.get("items", []):
                     entries.append(
@@ -163,7 +198,7 @@ class GoogleCalendarSource:
     ) -> list[CalendarEventEntry]:
         entries: list[CalendarEventEntry] = []
         page_token: str | None = None
-        async with httpx.AsyncClient(transport=self._transport) as client:
+        async with self._client("listing events") as client:
             while True:
                 params = {
                     # Recurring series expanded into concrete occurrences,
@@ -180,7 +215,7 @@ class GoogleCalendarSource:
                     params=params,
                 )
                 if response.status_code != 200:
-                    raise CalendarSourceError(f"Failed to list events: {response.text}")
+                    _raise_for_error_response(response, "Failed to list events")
                 body = response.json()
                 for item in body.get("items", []):
                     if item.get("status") == "cancelled" or _is_declined(item):

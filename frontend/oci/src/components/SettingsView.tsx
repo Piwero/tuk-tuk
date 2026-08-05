@@ -174,6 +174,15 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
               {accounts.map((account) => (
                 <li key={account.id}>
                   <GoogleAccountCalendars account={account} />
+                  {account.connection_state === "needs_reconnect" && (
+                    <p role="alert">
+                      This account needs to be reconnected — its Events and calendars can't be read
+                      until then.{" "}
+                      <a href={googleConnectUrl()} className="button">
+                        Reconnect
+                      </a>
+                    </p>
+                  )}
                   <button type="button" onClick={() => void handleDisconnect(account.id)}>
                     Disconnect
                   </button>

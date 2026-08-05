@@ -948,6 +948,44 @@ li[data-overdue] .date-chip {
   font-weight: var(--weight-semibold);
 }
 
+.calendar-refresh-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  width: 28px;
+  margin-left: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.calendar-refresh-button:hover {
+  background: var(--ink-50);
+}
+
+.calendar-refresh-button:disabled {
+  opacity: 0.6;
+}
+
+.calendar-event-failures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--text-danger);
+  font-size: var(--text-sm);
+}
+
+.calendar-event-failures p {
+  margin: 0;
+}
+
 .calendar-draft {
   display: flex;
   gap: var(--space-2);

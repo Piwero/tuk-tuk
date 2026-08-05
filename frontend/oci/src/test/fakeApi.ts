@@ -152,6 +152,18 @@ export interface FakeEvent {
   color: string;
 }
 
+/** A per-account Events failure (issue #109) the fake `/api/v1/events`
+ * route answers alongside whatever `events` it has — the fake never
+ * derives this from a simulated Google outage (that's the backend's job,
+ * exercised in the backend suite); a test that wants one simply seeds it
+ * here directly. */
+export interface FakeEventFailure {
+  account_id: number;
+  email: string;
+  kind: "transient" | "terminal";
+  message: string;
+}
+
 export interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
@@ -172,6 +184,7 @@ export interface FakeApiState {
   googleAccounts: FakeGoogleAccount[];
   googleCalendars: FakeGoogleCalendar[];
   events: FakeEvent[];
+  eventFailures: FakeEventFailure[];
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -348,6 +361,7 @@ export function installFakeApi({
   googleAccounts = [],
   googleCalendars = [],
   events = [],
+  eventFailures = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -375,6 +389,11 @@ export function installFakeApi({
    * suite); a test that wants a disabled-calendar's Events hidden simply
    * doesn't seed them here. */
   events?: FakeEvent[];
+  /** Per-account Events failures (issue #109) the fake reports on every
+   * `/api/v1/events` read — never cleared or derived by the fake itself; a
+   * test simulating Retry/refresh recovering seeds a fresh `installFakeApi`
+   * (or mutates `api.eventFailures` directly) instead. */
+  eventFailures?: FakeEventFailure[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -397,6 +416,7 @@ export function installFakeApi({
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
     googleCalendars: googleCalendars.map((calendar) => ({ ...calendar })),
     events: events.map((event) => ({ ...event })),
+    eventFailures: eventFailures.map((failure) => ({ ...failure })),
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -820,7 +840,7 @@ export function installFakeApi({
         const window = entryDayWindow({ ...event, time_zone: null });
         return window !== null && window[0] <= rangeEnd && window[1] >= rangeStart;
       });
-      return json(items);
+      return json({ events: items, failures: state.eventFailures });
     }
     if (method === "POST" && url.pathname === "/api/v1/tasks") {
       const input = body as {

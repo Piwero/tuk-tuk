@@ -6,7 +6,7 @@ HTTP transport; no test in the suite ever contacts Google for real.
 import httpx
 import pytest
 
-from app.calendar_source import CalendarSourceError
+from app.calendar_source import TerminalCalendarSourceError, TransientCalendarSourceError
 from app.google_adapter import GoogleCalendarSource
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -37,11 +37,11 @@ class TestExchangeCode:
         assert credential.email == "a@example.com"
         assert credential.refresh_token == "rt-1"
 
-    async def test_raises_when_google_rejects_the_code(self) -> None:
+    async def test_raises_terminal_when_google_rejects_the_code(self) -> None:
         def handle(request: httpx.Request) -> httpx.Response:
             return httpx.Response(400, json={"error": "invalid_grant"})
 
-        with pytest.raises(CalendarSourceError):
+        with pytest.raises(TerminalCalendarSourceError):
             await adapter(httpx.MockTransport(handle)).exchange_code(
                 "bad-code", redirect_uri="https://tuk-tuk.example/api/v1/google/callback"
             )
@@ -54,18 +54,18 @@ class TestExchangeCode:
         def handle(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json={"access_token": "at-1"})
 
-        with pytest.raises(CalendarSourceError):
+        with pytest.raises(TerminalCalendarSourceError):
             await adapter(httpx.MockTransport(handle)).exchange_code(
                 "auth-code", redirect_uri="https://tuk-tuk.example/api/v1/google/callback"
             )
 
-    async def test_raises_when_userinfo_lookup_fails(self) -> None:
+    async def test_raises_transient_when_userinfo_lookup_fails(self) -> None:
         def handle(request: httpx.Request) -> httpx.Response:
             if request.url == TOKEN_URL:
                 return httpx.Response(200, json={"access_token": "at-1", "refresh_token": "rt-1"})
             return httpx.Response(500, text="server error")
 
-        with pytest.raises(CalendarSourceError):
+        with pytest.raises(TransientCalendarSourceError):
             await adapter(httpx.MockTransport(handle)).exchange_code(
                 "auth-code", redirect_uri="https://tuk-tuk.example/api/v1/google/callback"
             )
@@ -82,12 +82,44 @@ class TestRefresh:
 
         assert token.access_token == "at-2"
 
-    async def test_raises_when_the_refresh_token_is_revoked(self) -> None:
+    async def test_raises_terminal_when_the_refresh_token_is_revoked(self) -> None:
+        """Adapter-level coverage (issue #109): a revoked grant maps to
+        TerminalCalendarSourceError, never the retry-safe transient kind —
+        retrying a revoked refresh token can never succeed."""
+
         def handle(request: httpx.Request) -> httpx.Response:
             return httpx.Response(400, json={"error": "invalid_grant"})
 
-        with pytest.raises(CalendarSourceError):
+        with pytest.raises(TerminalCalendarSourceError):
             await adapter(httpx.MockTransport(handle)).refresh("revoked-token")
+
+    async def test_raises_transient_when_google_returns_a_server_error(self) -> None:
+        """Adapter-level coverage (issue #109): a 5xx maps to
+        TransientCalendarSourceError — the credential is fine, only the
+        request failed."""
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(500, text="server error")
+
+        with pytest.raises(TransientCalendarSourceError):
+            await adapter(httpx.MockTransport(handle)).refresh("rt-1")
+
+    async def test_a_credential_refreshed_mid_request_is_not_served_stale(self) -> None:
+        """Adapter-level coverage (issue #109): the adapter caches nothing
+        across calls, so two refreshes in sequence — as events.py issues
+        when re-checking a credential mid-request — each return whatever
+        Google answers with at that moment, never a token minted earlier."""
+        tokens = iter(["at-first", "at-second"])
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"access_token": next(tokens)})
+
+        source = adapter(httpx.MockTransport(handle))
+        first = await source.refresh("rt-1")
+        second = await source.refresh("rt-1")
+
+        assert first.access_token == "at-first"
+        assert second.access_token == "at-second"
 
 
 class TestListEvents:
@@ -336,11 +368,24 @@ class TestListEvents:
 
         assert len(events) == 1
 
-    async def test_raises_when_google_rejects_the_events_request(self) -> None:
+    async def test_raises_transient_when_google_rejects_the_events_request(self) -> None:
         def handle(request: httpx.Request) -> httpx.Response:
             return httpx.Response(500, text="server error")
 
-        with pytest.raises(CalendarSourceError):
+        with pytest.raises(TransientCalendarSourceError):
+            await adapter(httpx.MockTransport(handle)).list_events(
+                "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+            )
+
+    async def test_raises_terminal_when_the_access_token_is_rejected(self) -> None:
+        """A 401 on the events call itself (as opposed to on refresh) still
+        means the credential is no good — e.g. the grant was revoked after
+        the access token was minted but before this call landed."""
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": "invalid_credentials"})
+
+        with pytest.raises(TerminalCalendarSourceError):
             await adapter(httpx.MockTransport(handle)).list_events(
                 "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
             )
