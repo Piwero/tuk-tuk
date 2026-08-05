@@ -14,6 +14,7 @@ import {
   updateList,
   SMART_LABELS,
   type CompletedOccurrence,
+  type Event,
   type Folder,
   type Section,
   type SmartView,
@@ -27,6 +28,7 @@ import { type GroupBy, type SortBy } from "./grouping";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "./layoutPrefs";
 import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
+import { EventDetail } from "./components/EventDetail";
 import { FocusView } from "./components/FocusView";
 import { HabitsView } from "./components/HabitsView";
 import { Icon } from "./components/Icon";
@@ -72,6 +74,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // The Calendar view keeps its own task list (App's `tasks` isn't populated
   // for it), so a task selected there is stashed here to resolve selectedTask.
   const [calendarTask, setCalendarTask] = useState<Task | null>(null);
+  // The read-only Event detail popover (issue #110): its own state, never
+  // mixed with selectedTaskId — clicking an Event must never open the
+  // (editable) Task detail panel.
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   // Completed Occurrences of recurring tasks, shown only in the completed view.
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
@@ -457,6 +463,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 setCalendarTask(task);
                 setSelectedTaskId(task.id);
               }}
+              onSelectEvent={setSelectedEvent}
             />
           ) : view?.kind === "habits" ? (
             <HabitsView />
@@ -512,6 +519,11 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               setCalendarTask(null);
             }}
           />
+        )}
+        {selectedEvent !== null && (
+          <Modal title={selectedEvent.title} onClose={() => setSelectedEvent(null)}>
+            <EventDetail event={selectedEvent} />
+          </Modal>
         )}
       </div>
     </FocusRunProvider>

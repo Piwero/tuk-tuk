@@ -121,11 +121,20 @@ function entryDragProps(
   return entry.kind === "task" ? taskDragProps(entry.task) : {};
 }
 
-/** Selects the Task an entry represents, or does nothing for a read-only
- * Event — the one place that branch is made for every click handler. */
-function selectEntry(entry: Entry, onSelect?: (task: Task) => void): void {
+/** Routes a click to whichever handler its entry kind takes — a Task opens
+ * the (editable) task detail panel, an Event opens its own read-only detail
+ * popover (issue #110). The one place that branch is made for every click
+ * handler, so no rendering site can accidentally wire an Event to a Task
+ * affordance or vice versa. */
+function selectEntry(
+  entry: Entry,
+  onSelect?: (task: Task) => void,
+  onSelectEvent?: (event: Event) => void,
+): void {
   if (entry.kind === "task") {
     onSelect?.(entry.task);
+  } else {
+    onSelectEvent?.(entry.event);
   }
 }
 
@@ -138,9 +147,10 @@ function shortWeekday(dayIso: string): string {
 
 interface CalendarViewProps {
   onSelect?: (task: Task) => void;
+  onSelectEvent?: (event: Event) => void;
 }
 
-export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element {
+export function CalendarView({ onSelect, onSelectEvent }: CalendarViewProps = {}): JSX.Element {
   const [mode, setMode] = useState<CalendarMode>("month");
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -446,7 +456,7 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
                     {...entryDragProps(entry)}
                     onClick={(event) => {
                       event.stopPropagation();
-                      selectEntry(entry, onSelect);
+                      selectEntry(entry, onSelect, onSelectEvent);
                     }}
                   >
                     {entryTitle(entry)}
@@ -459,7 +469,7 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
                     {...entryDragProps(entry)}
                     onClick={(event) => {
                       event.stopPropagation();
-                      selectEntry(entry, onSelect);
+                      selectEntry(entry, onSelect, onSelectEvent);
                     }}
                   >
                     <span className="entry-time">{entryTime(entryTimeShape(entry))}</span>{" "}
@@ -502,7 +512,7 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
           height: Math.max(((endMin - startMin) / 60) * HOUR_PX, HOUR_PX / 3),
         }}
         {...entryDragProps(entry)}
-        onClick={() => selectEntry(entry, onSelect)}
+        onClick={() => selectEntry(entry, onSelect, onSelectEvent)}
       >
         {task !== null && (
           <div
@@ -579,7 +589,7 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
                   {...entryDragProps(entry)}
                   onClick={(event) => {
                     event.stopPropagation();
-                    selectEntry(entry, onSelect);
+                    selectEntry(entry, onSelect, onSelectEvent);
                   }}
                 >
                   {entryTitle(entry)}

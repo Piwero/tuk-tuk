@@ -5,7 +5,13 @@
  * always renders inside it.
  */
 
-import { type Event, type Task, type TaskCreateInput, type TaskPatch } from "./api";
+import {
+  type Event,
+  type EventAttendee,
+  type Task,
+  type TaskCreateInput,
+  type TaskPatch,
+} from "./api";
 import {
   addDays,
   allDayInstant,
@@ -395,4 +401,15 @@ export function resizePatch(
     return null;
   }
   return { due_date: due };
+}
+
+/** An Event's people for the detail popover (issue #110): the organiser
+ * first (deduplicated, since Google often lists them in `attendees` too),
+ * then everyone else. Empty when the Event has neither. */
+export function eventAttendees(event: Event): EventAttendee[] {
+  if (event.organizer === null) {
+    return event.attendees;
+  }
+  const organizer = event.organizer;
+  return [organizer, ...event.attendees.filter((attendee) => attendee.email !== organizer.email)];
 }
