@@ -314,6 +314,13 @@ async def _sync_calendars(
             502, "google_unavailable", f"Google Calendar is temporarily unavailable: {exc}"
         ) from exc
 
+    if account.connection_state == "needs_reconnect":
+        # A sync that reaches here just refreshed the token and listed
+        # calendars successfully, so a stale "needs_reconnect" from an
+        # earlier failure (e.g. the API being disabled, since fixed) no
+        # longer describes this account.
+        account.connection_state = "connected"
+
     existing_by_google_id = {
         row.google_calendar_id: row for row in await _calendars_for(session, account.id)
     }

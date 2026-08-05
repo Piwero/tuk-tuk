@@ -294,6 +294,34 @@ class TestRefresh:
         )
         assert account["connection_state"] == "needs_reconnect"
 
+    def test_a_later_successful_refresh_clears_a_stale_reconnect_flag(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """The underlying problem (e.g. a disabled Calendar API) can be
+        fixed without the user ever going through a fresh OAuth consent —
+        the next successful refresh must clear "needs_reconnect" on its
+        own, or the banner would lie about the account being broken
+        forever."""
+        account_id = connect_account(configured_client, fake_calendar_source)
+        fake_calendar_source.register_refresh_error(
+            "rt-1", TerminalCalendarSourceError("invalid_grant")
+        )
+        failing_response = configured_client.post(
+            f"/api/v1/google/accounts/{account_id}/calendars/refresh"
+        )
+        assert failing_response.status_code == 409
+
+        fake_calendar_source.clear_refresh_error("rt-1")
+        response = configured_client.post(f"/api/v1/google/accounts/{account_id}/calendars/refresh")
+
+        assert response.status_code == 200
+        account = next(
+            a
+            for a in configured_client.get("/api/v1/google/accounts").json()
+            if a["id"] == account_id
+        )
+        assert account["connection_state"] == "connected"
+
     def test_a_transient_failure_leaves_the_account_connected(
         self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
     ) -> None:
