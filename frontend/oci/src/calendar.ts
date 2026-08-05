@@ -121,10 +121,12 @@ export function laneBanners(entries: Entry[], day: string, firstDay: string): En
   });
 }
 
-/** Banners are all-day or multi-day; anything else renders as a timed block. */
+/** Banners are all-day entries. A timed entry whose window spans more than
+ * one day — only reachable by an Event; the schedule invariant keeps a
+ * timed Task inside one calendar day — renders as a clipped segment in
+ * each day's column instead (see blockSegment), not a banner. */
 export function isBanner(entry: EntryTimeShape): boolean {
-  const window = entryDayWindow(entry);
-  return entry.is_all_day || (window !== null && window[0] !== window[1]);
+  return entry.is_all_day;
 }
 
 /** A timed block's wall-clock [start, end] in the entry's timezone, or null
@@ -237,6 +239,37 @@ export function minuteLabel(minute: number): string {
 export function blockMinutes(entry: EntryTimeShape): [number, number] | null {
   const span = blockSpan(entry);
   return span === null ? null : [timeMinutes(span[0]), timeMinutes(span[1])];
+}
+
+/** One day's clipped view of a timed block: its [start, end] minutes for
+ * that day, and whether the true block continues past that day's start/end
+ * boundary — set whenever the entry's window spans more than one day, which
+ * is only reachable by an Event (the Task schedule invariant keeps a timed
+ * Task inside one calendar day). */
+export interface BlockSegment {
+  readonly minutes: [number, number];
+  readonly continuesBefore: boolean;
+  readonly continuesAfter: boolean;
+}
+
+/** A timed block's clipped view for one day of its window, or null when
+ * unscheduled or the day isn't in its window. A multi-day window clips: its
+ * first day ends at 1440, its last day begins at 0, and any day strictly
+ * between spans the full day. A single-day window is unaffected — its
+ * minutes are identical to blockMinutes and neither flag is set. */
+export function blockSegment(entry: EntryTimeShape, day: string): BlockSegment | null {
+  const window = entryDayWindow(entry);
+  const minutes = blockMinutes(entry);
+  if (window === null || minutes === null || day < window[0] || day > window[1]) {
+    return null;
+  }
+  const start = day === window[0] ? minutes[0] : 0;
+  const end = day === window[1] ? minutes[1] : 1440;
+  return {
+    minutes: [start, end],
+    continuesBefore: day !== window[0],
+    continuesAfter: day !== window[1],
+  };
 }
 
 /** Where a dragged block edge lands: snapped to the grid and clamped so the

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
-import { openCalendar, openWeek, pinCalendarClock } from "./test/calendar";
+import { openCalendar, openDay, openWeek, pinCalendarClock } from "./test/calendar";
 import { fakeEvent, fakeTask, installFakeApi } from "./test/fakeApi";
 
 pinCalendarClock();
@@ -146,5 +146,84 @@ describe("Events in the Calendar view (issue #107)", () => {
     const block = (await screen.findByText("Standup")).closest(".time-block") as HTMLElement;
     expect(block).toHaveAttribute("data-kind", "event");
     expect(within(block).queryByRole("button", { name: /Resize/ })).toBeNull();
+  });
+});
+
+describe("Midnight-crossing Events (issue #108)", () => {
+  it("splits an overnight Event into a segment in each day's column in Week view", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      events: [
+        fakeEvent("Flight", {
+          start_date: "2026-07-03T23:00:00Z",
+          due_date: "2026-07-04T01:00:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openWeek();
+
+    await screen.findAllByText("Flight");
+    const firstColumn = document.querySelector('.day-column[data-day="2026-07-03"]') as HTMLElement;
+    const secondColumn = document.querySelector(
+      '.day-column[data-day="2026-07-04"]',
+    ) as HTMLElement;
+
+    const firstBlock = within(firstColumn).getByText("Flight").closest(".time-block");
+    expect(firstBlock).toHaveAttribute("data-start", "23:00");
+    expect(firstBlock).toHaveAttribute("data-end", "23:59");
+    expect(firstBlock).toHaveAttribute("data-kind", "event");
+
+    const secondBlock = within(secondColumn).getByText("Flight").closest(".time-block");
+    expect(secondBlock).toHaveAttribute("data-start", "00:00");
+    expect(secondBlock).toHaveAttribute("data-end", "01:00");
+    expect(secondBlock).toHaveAttribute("data-kind", "event");
+  });
+
+  it("shows only the segment for the viewed day in Day view", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      events: [
+        fakeEvent("Flight", {
+          start_date: "2026-07-03T23:00:00Z",
+          due_date: "2026-07-04T01:00:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openDay();
+
+    const segments = await screen.findAllByText("Flight");
+    expect(segments).toHaveLength(1);
+    const block = segments[0].closest(".time-block");
+    expect(block).toHaveAttribute("data-start", "23:00");
+    expect(block).toHaveAttribute("data-end", "23:59");
+  });
+
+  it("segments an Event spanning more than two days across every day it touches", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      events: [
+        fakeEvent("Conference", {
+          start_date: "2026-07-03T23:00:00Z",
+          due_date: "2026-07-05T01:00:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openWeek();
+
+    const segments = await screen.findAllByText("Conference");
+    expect(segments).toHaveLength(3);
+
+    const middleColumn = document.querySelector(
+      '.day-column[data-day="2026-07-04"]',
+    ) as HTMLElement;
+    const middleBlock = within(middleColumn).getByText("Conference").closest(".time-block");
+    expect(middleBlock).toHaveAttribute("data-start", "00:00");
+    expect(middleBlock).toHaveAttribute("data-end", "23:59");
   });
 });
