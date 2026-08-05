@@ -153,11 +153,15 @@ def _resolve_return_origin(settings: Settings, referer: str | None) -> str:
     return settings.cors_origins[0] if settings.cors_origins else "/"
 
 
-def _callback_redirect_uri(request: Request) -> str:
+def _callback_redirect_uri(origin: str) -> str:
     """The backend's own callback URL, matching the exact per-origin
     redirect URI an operator registers with the Google Cloud OAuth client
-    (see the spec's operator prerequisite)."""
-    return str(request.url_for("google_callback"))
+    (see the spec's operator prerequisite). Built from the verified
+    `origin` (see `_resolve_return_origin`/`_read_return_to`), not
+    `request.url_for` — the frontend dev proxy rewrites the Host header to
+    the docker-internal backend service name when forwarding, which is
+    neither registered with Google nor reachable by the browser."""
+    return f"{origin}/api/v1/google/callback"
 
 
 @router.get("/status")
@@ -173,7 +177,7 @@ async def connect(request: Request) -> RedirectResponse:
     return_to = _resolve_return_origin(settings, request.headers.get("referer"))
     params = {
         "client_id": settings.google_client_id,
-        "redirect_uri": _callback_redirect_uri(request),
+        "redirect_uri": _callback_redirect_uri(return_to),
         "response_type": "code",
         "scope": SCOPE,
         "access_type": "offline",
@@ -206,7 +210,7 @@ async def callback(
     calendar_source: CalendarSource = request.app.state.calendar_source
     try:
         credential = await calendar_source.exchange_code(
-            code, redirect_uri=_callback_redirect_uri(request)
+            code, redirect_uri=_callback_redirect_uri(return_to)
         )
     except CalendarSourceError:
         return RedirectResponse(f"{return_to}?googleError=1", status_code=302)
