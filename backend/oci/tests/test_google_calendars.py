@@ -13,7 +13,11 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from app.calendar_source import CalendarListEntry
+from app.calendar_source import (
+    CalendarListEntry,
+    TerminalCalendarSourceError,
+    TransientCalendarSourceError,
+)
 from app.routers.v1.google import CALENDAR_COLOR_PALETTE
 from tests.conftest import FakeCalendarSource, FakeClock
 from tests.test_google_accounts import connect_and_authorize, make_client
@@ -267,6 +271,47 @@ class TestRefresh:
         response = configured_client.post("/api/v1/google/accounts/999/calendars/refresh")
 
         assert response.status_code == 404
+
+    def test_a_terminal_failure_marks_the_account_as_needing_reconnection(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """Issue #109: the same connection_state flip the Events endpoint
+        performs on a revoked grant, exercised from the Settings-driven
+        refresh path too."""
+        account_id = connect_account(configured_client, fake_calendar_source)
+        fake_calendar_source.register_refresh_error(
+            "rt-1", TerminalCalendarSourceError("invalid_grant")
+        )
+
+        response = configured_client.post(f"/api/v1/google/accounts/{account_id}/calendars/refresh")
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "google_reconnect_required"
+        account = next(
+            a
+            for a in configured_client.get("/api/v1/google/accounts").json()
+            if a["id"] == account_id
+        )
+        assert account["connection_state"] == "needs_reconnect"
+
+    def test_a_transient_failure_leaves_the_account_connected(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id = connect_account(configured_client, fake_calendar_source)
+        fake_calendar_source.register_refresh_error(
+            "rt-1", TransientCalendarSourceError("server error")
+        )
+
+        response = configured_client.post(f"/api/v1/google/accounts/{account_id}/calendars/refresh")
+
+        assert response.status_code == 502
+        assert response.json()["error"]["code"] == "google_unavailable"
+        account = next(
+            a
+            for a in configured_client.get("/api/v1/google/accounts").json()
+            if a["id"] == account_id
+        )
+        assert account["connection_state"] == "connected"
 
 
 class TestDisconnectRemovesCalendars:

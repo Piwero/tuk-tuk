@@ -21,7 +21,12 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
-from app.calendar_source import CalendarSource, CalendarSourceError
+from app.calendar_source import (
+    CalendarSource,
+    CalendarSourceError,
+    TerminalCalendarSourceError,
+    TransientCalendarSourceError,
+)
 from app.config import Settings, google_configured
 from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
@@ -279,13 +284,31 @@ async def _sync_calendars(
     seeded from Google's own `selected` flag and given the next unused
     palette colour. Existing rows are never removed here — a calendar
     dropping out of one fetch is not treated as evidence it's gone for
-    good."""
+    good.
+
+    A terminal failure (issue #109) additionally flips `connection_state` to
+    "needs_reconnect" before surfacing as an APIError — the same state the
+    Events endpoint sets, so Settings and the Calendar banner never
+    disagree about which accounts need reconnecting."""
     assert settings.google_encryption_key is not None
     refresh_token = decrypt_credential(
         account.encrypted_refresh_token, key=settings.google_encryption_key
     )
-    access_token = (await calendar_source.refresh(refresh_token)).access_token
-    entries = await calendar_source.list_calendars(access_token)
+    try:
+        access_token = (await calendar_source.refresh(refresh_token)).access_token
+        entries = await calendar_source.list_calendars(access_token)
+    except TerminalCalendarSourceError as exc:
+        account.connection_state = "needs_reconnect"
+        await session.commit()
+        raise APIError(
+            409,
+            "google_reconnect_required",
+            f"{account.email} needs to be reconnected: {exc}",
+        ) from exc
+    except TransientCalendarSourceError as exc:
+        raise APIError(
+            502, "google_unavailable", f"Google Calendar is temporarily unavailable: {exc}"
+        ) from exc
 
     existing_by_google_id = {
         row.google_calendar_id: row for row in await _calendars_for(session, account.id)

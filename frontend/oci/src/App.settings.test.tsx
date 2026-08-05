@@ -351,3 +351,51 @@ describe("Google Calendar gate", () => {
     expect(window.location.search).toBe("");
   });
 });
+
+describe("Per-account failure handling (issue #109)", () => {
+  it("offers a Reconnect action for an account needing reconnection", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "me@example.com",
+          connection_state: "needs_reconnect",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/needs to be reconnected/i);
+    const reconnectLinks = screen.getAllByRole("link", { name: "Reconnect" });
+    expect(reconnectLinks[0]).toHaveAttribute("href", "/api/v1/google/connect");
+  });
+
+  it("shows no reconnection notice for a normally connected account", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "me@example.com",
+          connection_state: "connected",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await screen.findByText("me@example.com");
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Reconnect" })).not.toBeInTheDocument();
+  });
+});

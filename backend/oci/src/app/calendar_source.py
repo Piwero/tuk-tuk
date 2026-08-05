@@ -55,8 +55,24 @@ class CalendarEventEntry:
 
 
 class CalendarSourceError(Exception):
-    """Google rejected a code exchange or credential refresh outright (an
-    invalid/expired code, or a revoked refresh token)."""
+    """Base for any failure reading from or authenticating against Google.
+    Never raised directly — callers catch one of the two subclasses below,
+    which is deliberately exhaustive (issue #109): every failure this port
+    can raise is either retry-safe or isn't, and a caller needs to know
+    which before it can decide what to show the user."""
+
+
+class TransientCalendarSourceError(CalendarSourceError):
+    """Network trouble, a server error, or rate limiting — Google (or the
+    path to it) is temporarily unavailable, but the stored credential is
+    still good. Safe to retry; the account stays connected."""
+
+
+class TerminalCalendarSourceError(CalendarSourceError):
+    """The stored credential itself is no good any more: a revoked or
+    expired refresh token, or a code/grant Google rejects outright. Retrying
+    can never succeed on its own — the account needs to be reconnected
+    through a fresh consent flow."""
 
 
 class CalendarSource(Protocol):

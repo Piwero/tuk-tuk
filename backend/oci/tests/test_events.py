@@ -9,7 +9,12 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from app.calendar_source import CalendarEventEntry, CalendarListEntry
+from app.calendar_source import (
+    CalendarEventEntry,
+    CalendarListEntry,
+    TerminalCalendarSourceError,
+    TransientCalendarSourceError,
+)
 from tests.conftest import FakeCalendarSource, FakeClock
 from tests.test_google_accounts import connect_and_authorize, make_client
 from tests.test_google_calendars import connect_account
@@ -53,10 +58,17 @@ def seed_one_enabled_calendar(
     return account_id, "cal-1"
 
 
-def window(client: TestClient, start: str, end: str) -> list[dict]:
-    response = client.get(f"/api/v1/events?range_start={start}&range_end={end}")
+def read_events(client: TestClient, start: str, end: str, *, force: bool = False) -> dict:
+    query = f"range_start={start}&range_end={end}"
+    if force:
+        query += "&force=true"
+    response = client.get(f"/api/v1/events?{query}")
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def window(client: TestClient, start: str, end: str) -> list[dict]:
+    return read_events(client, start, end)["events"]
 
 
 class TestListEvents:
@@ -238,3 +250,218 @@ class TestListEvents:
         events = window(configured_client, "2026-07-01", "2026-07-31")
 
         assert events[0]["color"] == calendar["color"]
+
+
+def connect_second_account(
+    client: TestClient,
+    fake_calendar_source: FakeCalendarSource,
+    *,
+    refresh_token: str = "rt-2",
+    email: str = "second@example.com",
+) -> int:
+    connect_and_authorize(
+        client,
+        fake_calendar_source,
+        code=f"code-for-{refresh_token}",
+        google_account_id=f"google-{refresh_token}",
+        email=email,
+        refresh_token=refresh_token,
+    )
+    return next(
+        account["id"]
+        for account in client.get("/api/v1/google/accounts").json()
+        if account["email"] == email
+    )
+
+
+class TestPerAccountFailures:
+    """Issue #109: one account's failure to read never blanks the Calendar
+    view of every other account's Events, and the two kinds of failure —
+    transient and terminal — are told apart and reported differently."""
+
+    def test_a_transient_failure_on_one_account_still_renders_the_others(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        seed_one_enabled_calendar(configured_client, fake_calendar_source, refresh_token="rt-1")
+        second_account_id = connect_second_account(configured_client, fake_calendar_source)
+        fake_calendar_source.register_calendars(
+            "rt-2",
+            [CalendarListEntry(google_calendar_id="cal-2", summary="Personal", selected=True)],
+        )
+        configured_client.get(f"/api/v1/google/accounts/{second_account_id}/calendars")
+        fake_calendar_source.register_events(
+            "rt-2",
+            "cal-2",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-2",
+                    summary="Dentist",
+                    start="2026-07-11T13:00:00Z",
+                    end="2026-07-11T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+        fake_calendar_source.register_refresh_error(
+            "rt-1", TransientCalendarSourceError("server error")
+        )
+
+        body = read_events(configured_client, "2026-07-01", "2026-07-31")
+
+        assert [event["title"] for event in body["events"]] == ["Dentist"]
+        assert len(body["failures"]) == 1
+        assert body["failures"][0]["kind"] == "transient"
+        assert "email" in body["failures"][0]
+
+    def test_a_transient_failure_names_the_failed_account_and_leaves_it_connected(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_refresh_error(
+            "rt-1", TransientCalendarSourceError("rate limited")
+        )
+
+        body = read_events(configured_client, "2026-07-01", "2026-07-31")
+
+        assert body["failures"] == [
+            {
+                "account_id": account_id,
+                "email": "me@example.com",
+                "kind": "transient",
+                "message": "rate limited",
+            }
+        ]
+        account = next(
+            a
+            for a in configured_client.get("/api/v1/google/accounts").json()
+            if a["id"] == account_id
+        )
+        assert account["connection_state"] == "connected"
+
+    def test_a_terminal_failure_marks_the_account_as_needing_reconnection(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_refresh_error(
+            "rt-1", TerminalCalendarSourceError("invalid_grant")
+        )
+
+        body = read_events(configured_client, "2026-07-01", "2026-07-31")
+
+        assert body["failures"][0]["kind"] == "terminal"
+        account = next(
+            a
+            for a in configured_client.get("/api/v1/google/accounts").json()
+            if a["id"] == account_id
+        )
+        assert account["connection_state"] == "needs_reconnect"
+
+    def test_a_failure_on_one_calendar_is_reported_against_its_account(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_list_events_error(
+            "rt-1", "cal-1", TransientCalendarSourceError("server error")
+        )
+
+        body = read_events(configured_client, "2026-07-01", "2026-07-31")
+
+        assert body["events"] == []
+        assert body["failures"][0]["account_id"] == account_id
+        assert body["failures"][0]["kind"] == "transient"
+
+
+class TestEventCaching:
+    """Issue #109: a short-lived cache at the CalendarSource boundary
+    absorbs rapid navigation across the calendar window without re-reading
+    Google on every request; `force=true` bypasses it."""
+
+    def test_a_second_read_of_a_fully_cached_account_does_not_even_refresh_the_credential(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """A credential refresh is itself a request to Google (the token
+        endpoint) — rapid navigation within the cache window must not
+        re-issue it either, not just skip the events read itself."""
+        seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_events("rt-1", "cal-1", [])
+
+        window(configured_client, "2026-07-01", "2026-07-31")
+        refreshes_after_first_read = fake_calendar_source.refresh_calls.count("rt-1")
+
+        window(configured_client, "2026-07-01", "2026-07-31")
+        assert fake_calendar_source.refresh_calls.count("rt-1") == refreshes_after_first_read
+
+    def test_a_second_read_of_the_same_window_does_not_refetch(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+        assert [e["title"] for e in window(configured_client, "2026-07-01", "2026-07-31")] == [
+            "Standup"
+        ]
+
+        # A stale registration would only be seen by the fake if the route
+        # actually re-called list_events instead of serving the cache.
+        fake_calendar_source.register_events("rt-1", "cal-1", [])
+
+        assert [e["title"] for e in window(configured_client, "2026-07-01", "2026-07-31")] == [
+            "Standup"
+        ]
+
+    def test_force_bypasses_the_cache(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+        window(configured_client, "2026-07-01", "2026-07-31")
+        fake_calendar_source.register_events("rt-1", "cal-1", [])
+
+        body = read_events(configured_client, "2026-07-01", "2026-07-31", force=True)
+
+        assert body["events"] == []
+
+    def test_a_different_window_is_not_served_from_the_others_cache(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+        window(configured_client, "2026-07-01", "2026-07-31")
+        fake_calendar_source.register_events("rt-1", "cal-1", [])
+
+        assert window(configured_client, "2026-08-01", "2026-08-31") == []

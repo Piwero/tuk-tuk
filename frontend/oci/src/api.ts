@@ -423,13 +423,38 @@ export interface Event {
   color: string;
 }
 
+/** One connected Google Account whose Events couldn't be read this time
+ * (issue #109). `kind` tells apart a retry-safe failure ("transient": a
+ * network hiccup, a server error, rate limiting — the account stays
+ * connected) from one that never can succeed on its own ("terminal": the
+ * grant was revoked or expired — the account needs reconnecting). */
+export interface EventFailure {
+  account_id: number;
+  email: string;
+  kind: "transient" | "terminal";
+  message: string;
+}
+
+export interface EventsResult {
+  events: Event[];
+  failures: EventFailure[];
+}
+
 /** Events from every enabled Google Calendar whose window intersects the
  * inclusive [start, end] day window — the same day-window contract as
  * fetchCalendarTasks, on Events' own endpoint so Google's reachability never
- * slows down Task rendering. Empty when Google isn't configured or
- * connected, never an error. */
-export function fetchCalendarEvents(rangeStart: string, rangeEnd: string): Promise<Event[]> {
-  return request(`/api/v1/events?range_start=${rangeStart}&range_end=${rangeEnd}`);
+ * slows down Task rendering. Never blank on a failure: `failures` names
+ * whichever accounts didn't answer while `events` still carries every
+ * account that did. `force` bypasses the backend's short-lived cache — the
+ * Calendar toolbar's manual refresh, which doubles as the Retry affordance
+ * for a failed account (issue #109). */
+export function fetchCalendarEvents(
+  rangeStart: string,
+  rangeEnd: string,
+  force = false,
+): Promise<EventsResult> {
+  const forceParam = force ? "&force=true" : "";
+  return request(`/api/v1/events?range_start=${rangeStart}&range_end=${rangeEnd}${forceParam}`);
 }
 
 /** Undated open tasks — the unscheduled panel's query. */

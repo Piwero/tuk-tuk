@@ -15,6 +15,7 @@ from app.config import Settings
 from app.config import settings as default_settings
 from app.db import run_migrations
 from app.errors import register_error_handlers
+from app.event_cache import EventCache
 from app.google_adapter import GoogleCalendarSource
 from app.login_throttle import LoginThrottle
 from app.middleware import SessionAuthMiddleware
@@ -92,6 +93,7 @@ def create_app(
     app.state.settings = app_settings
     app.state.clock = app_clock
     app.state.calendar_source = app_calendar_source
+    app.state.event_cache = EventCache(clock=app_clock)
     app.state.login_throttle = LoginThrottle()
     app.add_middleware(SessionAuthMiddleware, settings=app_settings, clock=app_clock)
     app.add_middleware(

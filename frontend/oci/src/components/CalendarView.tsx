@@ -5,8 +5,10 @@ import {
   fetchCalendarEvents,
   fetchCalendarTasks,
   fetchUnscheduledTasks,
+  googleConnectUrl,
   updateTask,
   type Event,
+  type EventFailure,
   type Task,
   type TaskPatch,
 } from "../api";
@@ -143,6 +145,8 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [eventFailures, setEventFailures] = useState<EventFailure[]>([]);
+  const [refreshingEvents, setRefreshingEvents] = useState(false);
   const [unscheduled, setUnscheduled] = useState<Task[]>([]);
   const [draft, setDraft] = useState<CreateDraft | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
@@ -151,26 +155,68 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
   const [now, setNow] = useState(() => new Date());
   const timeColumnsRef = useRef<HTMLDivElement | null>(null);
 
-  const load = useCallback(async (): Promise<void> => {
-    const [start, end] = rangeOf(mode, anchor);
-    const [inWindow, undated] = await Promise.all([
-      fetchCalendarTasks(start, end),
-      fetchUnscheduledTasks(),
-    ]);
-    setTasks(inWindow.items);
-    setUnscheduled(undated.items);
-    // Its own endpoint, kicked off separately rather than awaited alongside
-    // Tasks above: Google's reachability must never slow down Task
-    // rendering (ADR 0006), so a slow or failed Events fetch never holds up
-    // the Task state that just landed.
-    void fetchCalendarEvents(start, end)
-      .then(setEvents)
-      .catch(() => setEvents([]));
-  }, [mode, anchor]);
+  const load = useCallback(
+    async (force = false): Promise<void> => {
+      const [start, end] = rangeOf(mode, anchor);
+      const [inWindow, undated] = await Promise.all([
+        fetchCalendarTasks(start, end),
+        fetchUnscheduledTasks(),
+      ]);
+      setTasks(inWindow.items);
+      setUnscheduled(undated.items);
+      // Google's own fetch, kept on its own endpoint rather than folded into
+      // the Promise.all above: Tasks are already set and rendered by the
+      // time this line runs, so Google's reachability never slows down Task
+      // rendering (ADR 0006) regardless of how long this await takes. It's
+      // awaited (rather than fire-and-forget) only so a caller of `load`
+      // itself — the manual refresh button — can tell when the fresh read
+      // has actually landed and stop showing its own "refreshing" state.
+      // A per-account failure (issue #109) still lands here as `failures`
+      // alongside whatever `events` the rest of the accounts answered —
+      // only a total request failure (Google unconfigured is never an
+      // error, so this is a genuine network/parse failure reaching this
+      // client) blanks the Calendar's Events outright.
+      await fetchCalendarEvents(start, end, force)
+        .then((result) => {
+          setEvents(result.events);
+          setEventFailures(result.failures);
+        })
+        .catch(() => {
+          setEvents([]);
+          setEventFailures([]);
+        });
+    },
+    [mode, anchor],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Exactly the moment a Calendar left open in a background tab is most
+  // likely stale: the user just came back from Google Calendar or their
+  // mail (issue #109). Forces past the backend's short-lived cache — a
+  // plain refetch could still be served yesterday's cached answer if focus
+  // lands within the cache's TTL, defeating the point of refetching here.
+  useEffect(() => {
+    function handleFocus(): void {
+      void load(true);
+    }
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [load]);
+
+  /** The Calendar toolbar's one refresh control: forces a fresh read past
+   * the backend's short-lived cache, and doubles as the Retry affordance
+   * for any account currently reported in `eventFailures` (issue #109). */
+  async function handleRefreshEvents(): Promise<void> {
+    setRefreshingEvents(true);
+    try {
+      await load(true);
+    } finally {
+      setRefreshingEvents(false);
+    }
+  }
 
   // The now-line's clock: one tick a minute while a time grid is shown.
   useEffect(() => {
@@ -643,7 +689,34 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          aria-label="Refresh Events"
+          className="calendar-refresh-button"
+          onClick={() => void handleRefreshEvents()}
+          disabled={refreshingEvents}
+        >
+          <Icon name="refresh-cw" />
+        </button>
       </div>
+      {eventFailures.length > 0 && (
+        <div className="calendar-event-failures" role="alert">
+          {eventFailures.map((failure) => (
+            <p key={failure.account_id}>
+              {failure.kind === "terminal" ? (
+                <>
+                  {failure.email} needs to be reconnected before its Events can show again.{" "}
+                  <a href={googleConnectUrl()} className="button">
+                    Reconnect
+                  </a>
+                </>
+              ) : (
+                <>{failure.email} didn't respond — showing Events from every other account.</>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
       {draft !== null && (
         <form className="calendar-draft" onSubmit={(event) => void submitDraft(event)}>
           <span>{draftLabel}</span>

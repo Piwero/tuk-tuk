@@ -102,7 +102,7 @@ _Avoid_: Preset
 ## Google Calendar
 
 **Google Account**:
-A connected Google identity (issue #105): its Google-side id, email, and a refresh credential stored encrypted at rest under its own dedicated key — deliberately not derived from `secret_key`, so rotating the session signing key never disconnects it. Several can be connected at once; each is identified in the UI by its email.
+A connected Google identity (issue #105): its Google-side id, email, and a refresh credential stored encrypted at rest under its own dedicated key — deliberately not derived from `secret_key`, so rotating the session signing key never disconnects it. Several can be connected at once; each is identified in the UI by its email. Carries a `connection_state` of "connected" or "needs_reconnect" (issue #109): a terminal failure reading this account's Events or calendars — the grant was revoked or expired — flips it to "needs_reconnect", surfaced identically in the Calendar view's failure banner and in Settings, both offering Reconnect (the same consent flow as first connecting; it restores the account in place rather than removing and re-adding it). A transient failure (network trouble, a server error, rate limiting) never touches `connection_state` — it's retry-safe, and the account stays connected throughout.
 _Avoid_: Google connection, integration
 
 **Google Calendar**:

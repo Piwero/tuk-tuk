@@ -97,6 +97,12 @@ class FakeCalendarSource:
         self._codes: dict[str, ExchangedCredential] = {}
         self._calendars: dict[str, list[CalendarListEntry]] = {}
         self._events: dict[tuple[str, str], list[CalendarEventEntry]] = {}
+        self._refresh_errors: dict[str, Exception] = {}
+        self._list_events_errors: dict[tuple[str, str], Exception] = {}
+        # Every refresh_token a `refresh` call was actually made for — lets a
+        # test assert a credential refresh was (or wasn't) re-issued, e.g. to
+        # prove a fully-cached account's Events read skips it (issue #109).
+        self.refresh_calls: list[str] = []
 
     def register_code(
         self, code: str, *, google_account_id: str, email: str, refresh_token: str
@@ -111,7 +117,18 @@ class FakeCalendarSource:
         except KeyError:
             raise CalendarSourceError(f"Unrecognized authorization code: {code}") from None
 
+    def register_refresh_error(self, refresh_token: str, error: Exception) -> None:
+        """The next (and every subsequent) `refresh` for this token raises
+        `error` instead of minting an access token — simulates a revoked
+        grant (TerminalCalendarSourceError) or a transient failure
+        (TransientCalendarSourceError), issue #109."""
+        self._refresh_errors[refresh_token] = error
+
     async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
+        self.refresh_calls.append(refresh_token)
+        error = self._refresh_errors.get(refresh_token)
+        if error is not None:
+            raise error
         return RefreshedAccessToken(access_token=f"access-for-{refresh_token}")
 
     def register_calendars(self, refresh_token: str, entries: list[CalendarListEntry]) -> None:
@@ -129,9 +146,20 @@ class FakeCalendarSource:
         `refresh_token` resolves to, on the named calendar."""
         self._events[(f"access-for-{refresh_token}", google_calendar_id)] = entries
 
+    def register_list_events_error(
+        self, refresh_token: str, google_calendar_id: str, error: Exception
+    ) -> None:
+        """The next `list_events` call on this calendar, for the access
+        token that `refresh_token` resolves to, raises `error` instead of
+        answering a list (issue #109)."""
+        self._list_events_errors[(f"access-for-{refresh_token}", google_calendar_id)] = error
+
     async def list_events(
         self, access_token: str, google_calendar_id: str, time_min: str, time_max: str
     ) -> list[CalendarEventEntry]:
+        error = self._list_events_errors.get((access_token, google_calendar_id))
+        if error is not None:
+            raise error
         return self._events.get((access_token, google_calendar_id), [])
 
 
