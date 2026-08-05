@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.calendar_source import (
     CalendarEventEntry,
     CalendarListEntry,
+    EventAttendee,
     TerminalCalendarSourceError,
     TransientCalendarSourceError,
 )
@@ -250,6 +251,95 @@ class TestListEvents:
         events = window(configured_client, "2026-07-01", "2026-07-31")
 
         assert events[0]["color"] == calendar["color"]
+
+    def test_each_event_carries_the_account_email_and_calendar_name(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        calendar = configured_client.get(f"/api/v1/google/accounts/{account_id}/calendars").json()[
+            0
+        ]
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+
+        events = window(configured_client, "2026-07-01", "2026-07-31")
+
+        assert events[0]["account_email"] == "me@example.com"
+        assert events[0]["calendar_summary"] == calendar["summary"]
+
+    def test_an_events_full_detail_passes_through_to_the_frontend(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                    location="Room 4B",
+                    description="Daily sync",
+                    attendees=[
+                        EventAttendee(email="me@example.com", display_name="Me"),
+                        EventAttendee(email="other@example.com", display_name=None),
+                    ],
+                    organizer=EventAttendee(email="boss@example.com", display_name="Boss"),
+                    html_link="https://www.google.com/calendar/event?eid=abc",
+                )
+            ],
+        )
+
+        events = window(configured_client, "2026-07-01", "2026-07-31")
+
+        assert events[0]["location"] == "Room 4B"
+        assert events[0]["description"] == "Daily sync"
+        assert events[0]["attendees"] == [
+            {"email": "me@example.com", "display_name": "Me"},
+            {"email": "other@example.com", "display_name": None},
+        ]
+        assert events[0]["organizer"] == {"email": "boss@example.com", "display_name": "Boss"}
+        assert events[0]["html_link"] == "https://www.google.com/calendar/event?eid=abc"
+
+    def test_an_events_optional_detail_defaults_to_empty(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+
+        events = window(configured_client, "2026-07-01", "2026-07-31")
+
+        assert events[0]["location"] is None
+        assert events[0]["description"] is None
+        assert events[0]["attendees"] == []
+        assert events[0]["organizer"] is None
+        assert events[0]["html_link"] == ""
 
 
 def connect_second_account(

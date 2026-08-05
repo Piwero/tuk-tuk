@@ -245,8 +245,13 @@ export function shortDayLabel(dayIso: string): string {
   return MONTH_DAY.format(fromDayIso(dayIso));
 }
 
+/** The minimal schedule shape formatSchedule needs — a Task has it
+ * directly; an Event (issue #110) satisfies it too, since both render in
+ * the same wall-clock convention when no explicit timezone applies. */
+type Scheduled = Pick<Task, "start_date" | "due_date" | "is_all_day">;
+
 /** A compact human label: "Jul 6", "Jul 6 – Jul 8", "Jul 10, 14:00–15:30". */
-export function formatSchedule(task: Task): string | null {
+export function formatSchedule(task: Scheduled): string | null {
   if (task.due_date === null) {
     return null;
   }

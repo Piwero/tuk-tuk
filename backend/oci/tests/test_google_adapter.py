@@ -368,6 +368,98 @@ class TestListEvents:
 
         assert len(events) == 1
 
+    async def test_parses_location_description_and_html_link(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-1",
+                            "status": "confirmed",
+                            "summary": "Standup",
+                            "location": "Room 4B",
+                            "description": "Daily sync",
+                            "htmlLink": "https://www.google.com/calendar/event?eid=abc",
+                            "start": {"dateTime": "2026-07-01T09:00:00Z"},
+                            "end": {"dateTime": "2026-07-01T09:30:00Z"},
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+        )
+
+        assert events[0].location == "Room 4B"
+        assert events[0].description == "Daily sync"
+        assert events[0].html_link == "https://www.google.com/calendar/event?eid=abc"
+
+    async def test_parses_attendees_and_organizer(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-1",
+                            "status": "confirmed",
+                            "summary": "Standup",
+                            "organizer": {"email": "boss@example.com", "displayName": "Boss"},
+                            "attendees": [
+                                {
+                                    "email": "me@example.com",
+                                    "displayName": "Me",
+                                    "self": True,
+                                    "responseStatus": "accepted",
+                                },
+                                {"email": "other@example.com", "responseStatus": "needsAction"},
+                            ],
+                            "start": {"dateTime": "2026-07-01T09:00:00Z"},
+                            "end": {"dateTime": "2026-07-01T09:30:00Z"},
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+        )
+
+        assert events[0].organizer is not None
+        assert events[0].organizer.email == "boss@example.com"
+        assert events[0].organizer.display_name == "Boss"
+        assert [a.email for a in events[0].attendees] == ["me@example.com", "other@example.com"]
+        assert events[0].attendees[1].display_name is None
+
+    async def test_leaves_optional_fields_at_their_defaults_when_absent(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-1",
+                            "status": "confirmed",
+                            "summary": "Standup",
+                            "start": {"dateTime": "2026-07-01T09:00:00Z"},
+                            "end": {"dateTime": "2026-07-01T09:30:00Z"},
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-02T00:00:00Z"
+        )
+
+        assert events[0].location is None
+        assert events[0].description is None
+        assert events[0].organizer is None
+        assert events[0].attendees == []
+        assert events[0].html_link == ""
+
     async def test_raises_transient_when_google_rejects_the_events_request(self) -> None:
         def handle(request: httpx.Request) -> httpx.Response:
             return httpx.Response(500, text="server error")

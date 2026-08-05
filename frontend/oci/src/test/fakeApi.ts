@@ -143,6 +143,11 @@ export interface FakeGoogleCalendar {
   enabled: boolean;
 }
 
+export interface FakeEventAttendee {
+  email: string;
+  display_name: string | null;
+}
+
 export interface FakeEvent {
   id: string;
   title: string;
@@ -150,6 +155,13 @@ export interface FakeEvent {
   due_date: string;
   is_all_day: boolean;
   color: string;
+  location: string | null;
+  description: string | null;
+  attendees: FakeEventAttendee[];
+  organizer: FakeEventAttendee | null;
+  html_link: string;
+  account_email: string;
+  calendar_summary: string;
 }
 
 /** A per-account Events failure (issue #109) the fake `/api/v1/events`
@@ -309,6 +321,13 @@ export function fakeEvent(title: string, overrides: Partial<FakeEvent> = {}): Fa
     due_date: "2026-07-03T14:00:00Z",
     is_all_day: false,
     color: "#4772fa",
+    location: null,
+    description: null,
+    attendees: [],
+    organizer: null,
+    html_link: "https://calendar.google.com/calendar/event?eid=fake",
+    account_email: "me@example.com",
+    calendar_summary: "Work",
     ...overrides,
   };
 }

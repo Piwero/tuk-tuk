@@ -45,6 +45,7 @@ from app.calendar_source import (
     TerminalCalendarSourceError,
     TransientCalendarSourceError,
 )
+from app.calendar_source import EventAttendee as CalendarEventAttendee
 from app.calendar_window import validate_range_pair
 from app.config import Settings, google_configured
 from app.crypto import decrypt_credential
@@ -56,6 +57,11 @@ from app.models import GoogleAccount, GoogleCalendar
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
 
+class EventAttendeeRead(BaseModel):
+    email: str
+    display_name: str | None
+
+
 class EventRead(BaseModel):
     id: str
     title: str
@@ -63,6 +69,15 @@ class EventRead(BaseModel):
     due_date: str
     is_all_day: bool
     color: str
+    # Everything below exists only for the read-only Event detail popover
+    # (issue #110) — no other part of tuk-tuk reads it.
+    location: str | None
+    description: str | None
+    attendees: list[EventAttendeeRead]
+    organizer: EventAttendeeRead | None
+    html_link: str
+    account_email: str
+    calendar_summary: str
 
 
 class EventFailureRead(BaseModel):
@@ -87,6 +102,10 @@ async def _enabled_calendars(session: SessionDep) -> list[GoogleCalendar]:
         select(GoogleCalendar).where(GoogleCalendar.enabled).order_by(GoogleCalendar.id)
     )
     return list(rows)
+
+
+def _attendee_read(attendee: CalendarEventAttendee) -> EventAttendeeRead:
+    return EventAttendeeRead(email=attendee.email, display_name=attendee.display_name)
 
 
 @router.get("")
@@ -178,6 +197,15 @@ async def read_events(
                             due_date=entry.end,
                             is_all_day=entry.is_all_day,
                             color=calendar.color,
+                            location=entry.location,
+                            description=entry.description,
+                            attendees=[_attendee_read(a) for a in entry.attendees],
+                            organizer=(
+                                None if entry.organizer is None else _attendee_read(entry.organizer)
+                            ),
+                            html_link=entry.html_link,
+                            account_email=account.email,
+                            calendar_summary=calendar.summary,
                         )
                     )
         except TerminalCalendarSourceError as exc:

@@ -13,6 +13,7 @@ import httpx
 from app.calendar_source import (
     CalendarEventEntry,
     CalendarListEntry,
+    EventAttendee,
     ExchangedCredential,
     RefreshedAccessToken,
     TerminalCalendarSourceError,
@@ -68,6 +69,10 @@ def _raise_for_error_response(response: httpx.Response, message: str) -> None:
     raise TransientCalendarSourceError(f"{message}: {response.text}")
 
 
+def _parse_attendee(item: dict[str, Any]) -> EventAttendee:
+    return EventAttendee(email=item["email"], display_name=item.get("displayName"))
+
+
 def _parse_event(item: dict[str, Any]) -> CalendarEventEntry:
     start, end = item["start"], item["end"]
     is_all_day = "date" in start
@@ -80,12 +85,18 @@ def _parse_event(item: dict[str, Any]) -> CalendarEventEntry:
     else:
         start_instant = _as_utc_instant(start["dateTime"])
         end_instant = _as_utc_instant(end["dateTime"])
+    organizer = item.get("organizer")
     return CalendarEventEntry(
         google_event_id=item["id"],
         summary=item.get("summary", "(No title)"),
         start=start_instant,
         end=end_instant,
         is_all_day=is_all_day,
+        location=item.get("location"),
+        description=item.get("description"),
+        attendees=[_parse_attendee(attendee) for attendee in item.get("attendees", [])],
+        organizer=None if organizer is None else _parse_attendee(organizer),
+        html_link=item.get("htmlLink", ""),
     )
 
 

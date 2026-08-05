@@ -409,11 +409,23 @@ export function fetchCalendarTasks(rangeStart: string, rangeEnd: string): Promis
   );
 }
 
+/** One person on an Event — an attendee, or its organiser (issue #110).
+ * `display_name` is Google's optional friendly name; render `email` when
+ * it's absent. */
+export interface EventAttendee {
+  email: string;
+  display_name: string | null;
+}
+
 /** A read-only Google Calendar Event (issue #107): fetched live for the
  * visible window, never stored. Unlike a Task, an Event has no timezone of
  * its own on the wire — it always renders at its true hour in the
  * *viewer's* timezone, deliberately asymmetric with a Task's own stored
- * timezone (see the Entry glossary entry). */
+ * timezone (see the Entry glossary entry).
+ *
+ * `location`, `description`, `attendees`, `organizer`, `html_link`,
+ * `account_email` and `calendar_summary` (issue #110) exist only for the
+ * read-only Event detail popover — nothing else in tuk-tuk reads them. */
 export interface Event {
   id: string;
   title: string;
@@ -421,6 +433,13 @@ export interface Event {
   due_date: string;
   is_all_day: boolean;
   color: string;
+  location: string | null;
+  description: string | null;
+  attendees: EventAttendee[];
+  organizer: EventAttendee | null;
+  html_link: string;
+  account_email: string;
+  calendar_summary: string;
 }
 
 /** One connected Google Account whose Events couldn't be read this time

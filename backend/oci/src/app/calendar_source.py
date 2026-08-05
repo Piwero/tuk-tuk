@@ -7,7 +7,7 @@ credential exchange and refresh; issue #106 adds calendar enumeration;
 issue #107 adds event reads.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 
@@ -38,6 +38,16 @@ class CalendarListEntry:
 
 
 @dataclass(frozen=True)
+class EventAttendee:
+    """One person on an Event — an attendee, or its organiser (issue #110).
+    `display_name` is Google's optional friendly name; a caller falls back
+    to `email` when it's absent."""
+
+    email: str
+    display_name: str | None
+
+
+@dataclass(frozen=True)
 class CalendarEventEntry:
     """One expanded Event occurrence read from a single Google Calendar.
     `start`/`end` are UTC instants on the wire, already normalised by the
@@ -45,13 +55,23 @@ class CalendarEventEntry:
     been converted to the inclusive last day this Event covers, mirroring
     how a Task's own all-day `due_date` is read. Declined and cancelled
     Events never reach this dataclass — the adapter drops them itself, since
-    only it knows Google's attendee/status wire shape."""
+    only it knows Google's attendee/status wire shape.
+
+    `location`, `description`, `attendees`, `organizer` and `html_link`
+    (issue #110) exist only for the read-only Event detail popover — nothing
+    else in tuk-tuk reads them, so they default to empty/absent for every
+    caller that doesn't care."""
 
     google_event_id: str
     summary: str
     start: str
     end: str
     is_all_day: bool
+    location: str | None = None
+    description: str | None = None
+    attendees: list[EventAttendee] = field(default_factory=list)
+    organizer: EventAttendee | None = None
+    html_link: str = ""
 
 
 class CalendarSourceError(Exception):
