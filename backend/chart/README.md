@@ -12,6 +12,7 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
 | `ghcr-onepassworditem.yaml`                 | OnePasswordItem               | Syncs the GHCR image-pull secret (`tuk-tuk-ghcr`)                                     |
 | `git-onepassworditem.yaml`                  | OnePasswordItem               | Syncs Git credentials for Flux image automation (`tuk-tuk-git-auth`)                  |
 | `auth-onepassworditem.yaml`                 | OnePasswordItem               | Syncs the backend auth secrets — session signing key + password hash (`tuk-tuk-auth`) |
+| `google-onepassworditem.yaml`               | OnePasswordItem               | Syncs the Google Calendar integration's secrets, if enabled (`tuk-tuk-google`)        |
 | `gitrepository.yaml`                        | GitRepository                 | Flux source used by image automation                                                  |
 | `imagerepository.yaml` / `imagepolicy.yaml` | ImageRepository / ImagePolicy | Scans GHCR for new semver backend images                                              |
 | `imageupdateautomation.yaml`                | ImageUpdateAutomation         | Commits image bumps back to `main` (covers both charts)                               |
@@ -110,6 +111,45 @@ kubectl -n tuk-tuk exec deploy/backend -- printenv AUTH_PASSWORD_HASH
 
 It should begin `$argon2id$v=19$m=…`. Missing `$` separators or a plaintext
 value is the `500` waiting to happen.
+
+## Google Calendar integration (optional)
+
+Unlike `tuk-tuk-auth`, `tuk-tuk-google` is genuinely optional (issue
+#103/#105; ADR 0006): the Deployment's `secretRef` for it sets
+`optional: true`, so the backend starts and runs normally — with the Google
+Calendar section and wording absent everywhere — whether or not this Secret,
+or the `tuk-tuk-google` 1Password item behind it, exists at all. There is
+nothing to do here unless you actually want the integration enabled in the
+cluster.
+
+To enable it, create a `tuk-tuk-google` item in the `homelab-supernova`
+vault (same vault as `tuk-tuk-auth`) with three fields:
+
+| Field                   | Value                                                                                                                                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GOOGLE_CLIENT_ID`      | From a Google Cloud OAuth client, with an exact redirect URI registered for the cluster's origin, and publishing status "In production" (unverified-app refresh tokens expire after 7 days). |
+| `GOOGLE_CLIENT_SECRET`  | The matching OAuth client secret.                                                                                                                                                            |
+| `GOOGLE_ENCRYPTION_KEY` | A long random value generated once, e.g. `openssl rand -base64 32`. Encrypts stored Google refresh credentials at rest.                                                                      |
+
+As with `AUTH_PASSWORD_HASH`, the operator syncs these field labels directly
+as Secret keys — the names must match `app.config.Settings` exactly
+(`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ENCRYPTION_KEY`), no
+quotes or trailing whitespace.
+
+`GOOGLE_ENCRYPTION_KEY` is deliberately independent of `SECRET_KEY`: rotating
+the session signing key logs every device out, and must never also destroy a
+connected Google account by making its stored refresh credential
+undecryptable. Once `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are both set,
+`GOOGLE_ENCRYPTION_KEY` becomes required — the backend refuses to start
+without it — so all three fields go in together.
+
+Apply the item, then restart the pod to pick it up (`optional: true` means an
+existing pod won't be restarted automatically just because the Secret
+appeared):
+
+```bash
+kubectl -n tuk-tuk rollout restart deployment/backend
+```
 
 ## Deploy
 

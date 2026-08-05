@@ -8,6 +8,7 @@ resources:
   - ghcr-onepassworditem.yaml
   - git-onepassworditem.yaml
   - auth-onepassworditem.yaml
+  - google-onepassworditem.yaml
   - imagerepository.yaml
   - imagepolicy.yaml
   - gitrepository.yaml
