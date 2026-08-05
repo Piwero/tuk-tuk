@@ -23,7 +23,7 @@ class TestLogin:
         assert response.content == b""
         assert "tuktuk_session" in response.cookies
 
-    def test_the_cookie_is_httponly_and_samesite_strict(
+    def test_the_cookie_is_httponly_and_samesite_lax(
         self, unauthenticated_client: TestClient
     ) -> None:
         response = unauthenticated_client.post(
@@ -32,7 +32,7 @@ class TestLogin:
 
         set_cookie = response.headers["set-cookie"].lower()
         assert "httponly" in set_cookie
-        assert "samesite=strict" in set_cookie
+        assert "samesite=lax" in set_cookie
         assert "path=/" in set_cookie
 
     def test_the_wrong_password_is_rejected_with_the_error_envelope(
@@ -242,5 +242,5 @@ class TestRollingReissue:
 
         set_cookie = response.headers["set-cookie"].lower()
         assert "httponly" in set_cookie
-        assert "samesite=strict" in set_cookie
+        assert "samesite=lax" in set_cookie
         assert "path=/" in set_cookie

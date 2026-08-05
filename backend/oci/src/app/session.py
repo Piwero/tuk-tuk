@@ -42,6 +42,15 @@ def set_session_cookie(
     Task notes render as Markdown, a more interesting scripting surface than
     most apps have, which makes JS-readability of the credential especially
     worth denying.
+
+    `SameSite=Lax`, not `Strict`: the Google Calendar integration's OAuth
+    callback (routers/v1/google.py) is a top-level GET navigation initiated
+    by accounts.google.com landing back on this site — a cross-site
+    context that `Strict` cookies are never sent on, which would make
+    SessionAuthMiddleware reject the callback as unauthenticated even for
+    an already-logged-in user. `Lax` still withholds the cookie from
+    cross-site subresource requests and non-GET requests, which is what
+    matters for CSRF.
     """
     token = issue_session_token(settings, issued_at or clock())
     response.set_cookie(
@@ -50,7 +59,7 @@ def set_session_cookie(
         max_age=settings.auth_session_lifetime_days * 86400,
         httponly=True,
         secure=settings.auth_cookie_secure,
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
 
