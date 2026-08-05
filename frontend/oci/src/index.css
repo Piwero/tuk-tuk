@@ -1188,6 +1188,19 @@ li[data-overdue] .date-chip {
   cursor: default;
 }
 
+/* A midnight-crossing Event's segments (issue #108): squaring off the
+ * clipped edge reads as "continues past this boundary", so the two
+ * segments look like one Event split by the day column, not two. */
+.time-block[data-continues-before] {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.time-block[data-continues-after] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .time-block .block-time {
   font-family: var(--font-mono);
   color: var(--text-secondary);

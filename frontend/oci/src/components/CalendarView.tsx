@@ -13,6 +13,7 @@ import {
 import {
   allDayCreate,
   blockMinutes,
+  blockSegment,
   calendarTitle,
   draggedEdgeMinute,
   dropPatch,
@@ -427,25 +428,28 @@ export function CalendarView({ onSelect }: CalendarViewProps = {}): JSX.Element 
   }
 
   function renderBlock(entry: Entry, day: string): JSX.Element | null {
-    const span = blockMinutes(entryTimeShape(entry));
-    if (span === null) {
+    const segment = blockSegment(entryTimeShape(entry), day);
+    if (segment === null) {
       return null;
     }
+    const { continuesBefore, continuesAfter } = segment;
     const task = entry.kind === "task" ? entry.task : null;
     const pending =
       edgeDrag !== null && task !== null && edgeDrag.task.id === task.id ? edgeDrag : null;
-    const startMin = pending?.edge === "start" ? pending.minute : span[0];
-    const endMin = pending?.edge === "end" ? pending.minute : span[1];
+    const startMin = pending?.edge === "start" ? pending.minute : segment.minutes[0];
+    const endMin = pending?.edge === "end" ? pending.minute : segment.minutes[1];
     const start = minuteLabel(startMin);
     const end = minuteLabel(endMin);
     const title = entryTitle(entry);
     return (
       <div
-        key={entryKey(entry)}
+        key={`${entryKey(entry)}-${day}`}
         className="time-block"
         data-kind={entry.kind}
         data-start={start}
         data-end={end}
+        data-continues-before={continuesBefore || undefined}
+        data-continues-after={continuesAfter || undefined}
         data-resizing={pending !== null || undefined}
         style={{
           top: (startMin / 60) * HOUR_PX,

@@ -130,6 +130,39 @@ class TestListEvents:
         assert events[0].start == "2026-07-01T13:00:00Z"
         assert events[0].end == "2026-07-01T13:30:00Z"
 
+    async def test_returns_a_midnight_crossing_event_with_start_and_end_on_different_days(
+        self,
+    ) -> None:
+        """A flight departing 23:00 and landing 01:00 the next day — the
+        adapter passes the crossing through untouched; splitting it into a
+        per-day segment is a Calendar-view rendering concern (issue #108),
+        not something this normalisation layer does."""
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "id": "evt-flight",
+                            "status": "confirmed",
+                            "summary": "Flight",
+                            "start": {"dateTime": "2026-07-01T23:00:00Z"},
+                            "end": {"dateTime": "2026-07-02T01:00:00Z"},
+                        }
+                    ]
+                },
+            )
+
+        events = await adapter(httpx.MockTransport(handle)).list_events(
+            "at-1", "cal-1", time_min="2026-07-01T00:00:00Z", time_max="2026-07-03T00:00:00Z"
+        )
+
+        assert len(events) == 1
+        assert events[0].is_all_day is False
+        assert events[0].start == "2026-07-01T23:00:00Z"
+        assert events[0].end == "2026-07-02T01:00:00Z"
+
     async def test_url_encodes_a_calendar_id_containing_special_characters(self) -> None:
         seen_paths = []
 
