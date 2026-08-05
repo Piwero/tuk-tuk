@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import {
+  ApiError,
   disconnectGoogleAccount,
   fetchGoogleAccounts,
   fetchGoogleCalendars,
@@ -24,15 +25,25 @@ interface SettingsViewProps {
 
 interface GoogleAccountCalendarsProps {
   account: GoogleAccount;
+  /** Re-fetches the account list — called after a failed calendar load so
+   * a `google_reconnect_required` error (the backend flips the account to
+   * "needs_reconnect" as part of raising it) shows up as the same
+   * Reconnect banner the rest of Settings uses, rather than this
+   * component inventing its own. */
+  onReconnectRequired: () => void;
 }
 
 /** A connected account's calendar list — fetched (and seeded server-side
  * from Google's own per-calendar selection flag) the first time it's
  * expanded, never before. Toggling visibility or changing a calendar's
  * colour is a purely local write; nothing here ever reaches Google. */
-function GoogleAccountCalendars({ account }: GoogleAccountCalendarsProps): JSX.Element {
+function GoogleAccountCalendars({
+  account,
+  onReconnectRequired,
+}: GoogleAccountCalendarsProps): JSX.Element {
   const [calendars, setCalendars] = useState<GoogleCalendar[] | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   function handleOpen(): void {
@@ -40,9 +51,20 @@ function GoogleAccountCalendars({ account }: GoogleAccountCalendarsProps): JSX.E
       return;
     }
     setLoaded(true);
+    setError(null);
     fetchGoogleCalendars(account.id)
       .then(setCalendars)
-      .catch(() => setLoaded(false));
+      .catch((err: unknown) => {
+        setLoaded(false);
+        if (err instanceof ApiError && err.code === "google_reconnect_required") {
+          onReconnectRequired();
+        }
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "Couldn't load calendars for this account. Please try again.",
+        );
+      });
   }
 
   async function handleToggle(calendar: GoogleCalendar): Promise<void> {
@@ -69,7 +91,14 @@ function GoogleAccountCalendars({ account }: GoogleAccountCalendarsProps): JSX.E
   return (
     <details onToggle={(event) => event.currentTarget.open && handleOpen()}>
       <summary>{account.email}</summary>
-      {calendars === null ? (
+      {error ? (
+        <p role="alert">
+          {error}{" "}
+          <button type="button" onClick={handleOpen}>
+            Retry
+          </button>
+        </p>
+      ) : calendars === null ? (
         <p>Loading calendars…</p>
       ) : (
         <>
@@ -159,6 +188,10 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
     setAccounts((current) => current.filter((account) => account.id !== accountId));
   }
 
+  async function refreshAccounts(): Promise<void> {
+    setAccounts(await fetchGoogleAccounts());
+  }
+
   return (
     <div className="settings-view">
       {googleStatus === "configured" && (
@@ -173,7 +206,10 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
             <ul>
               {accounts.map((account) => (
                 <li key={account.id}>
-                  <GoogleAccountCalendars account={account} />
+                  <GoogleAccountCalendars
+                    account={account}
+                    onReconnectRequired={() => void refreshAccounts()}
+                  />
                   {account.connection_state === "needs_reconnect" && (
                     <p role="alert">
                       This account needs to be reconnected — its Events and calendars can't be read
