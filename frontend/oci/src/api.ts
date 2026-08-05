@@ -71,6 +71,11 @@ export interface Task {
    * anchored at the due date. Completing a recurring task advances its dates
    * in place instead of completing it. */
   recurrence: string | null;
+  /** Provenance of a Task converted from a Google Event (issue #111): the
+   * calendar row id and Google's own event id it came from. Both null for
+   * an ordinary Task. */
+  source_google_calendar_id: number | null;
+  source_google_event_id: string | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
@@ -386,6 +391,7 @@ export function deleteTag(tagId: number): Promise<void> {
 
 export interface TaskCreateInput {
   title: string;
+  description?: string;
   list_id?: number;
   section_id?: number;
   priority?: Priority;
@@ -395,6 +401,9 @@ export interface TaskCreateInput {
   due_date?: string;
   is_all_day?: boolean;
   time_zone?: string;
+  /** Set only when creating a Task by converting an Event (issue #111). */
+  source_google_calendar_id?: number;
+  source_google_event_id?: string;
 }
 
 export function createTask(input: TaskCreateInput): Promise<Task> {
@@ -440,6 +449,10 @@ export interface Event {
   html_link: string;
   account_email: string;
   calendar_summary: string;
+  /** The local calendar row id and Google's own event id (issue #111):
+   * what "Convert to task" sends back as the Task's provenance. */
+  calendar_id: number;
+  google_event_id: string;
 }
 
 /** One connected Google Account whose Events couldn't be read this time

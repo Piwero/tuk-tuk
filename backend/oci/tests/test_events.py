@@ -555,3 +555,181 @@ class TestEventCaching:
         fake_calendar_source.register_events("rt-1", "cal-1", [])
 
         assert window(configured_client, "2026-08-01", "2026-08-31") == []
+
+
+class TestConvertedEventsAreHidden:
+    """Issue #111: an Event converted to a Task is remembered as provenance
+    on the Task (no Event storage exists — ADR 0006), and filtered out of
+    every subsequent read by matching that provenance against the live
+    Google Event it would otherwise be reported as.
+    """
+
+    def test_an_events_id_and_calendar_id_are_exposed_for_conversion(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        calendar_id = configured_client.get(
+            f"/api/v1/google/accounts/{account_id}/calendars"
+        ).json()[0]["id"]
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+
+        events = window(configured_client, "2026-07-01", "2026-07-31")
+
+        assert events[0]["calendar_id"] == calendar_id
+        assert events[0]["google_event_id"] == "evt-1"
+
+    def test_converting_an_event_hides_it(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        calendar_id = configured_client.get(
+            f"/api/v1/google/accounts/{account_id}/calendars"
+        ).json()[0]["id"]
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+
+        configured_client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Standup",
+                "source_google_calendar_id": calendar_id,
+                "source_google_event_id": "evt-1",
+            },
+        )
+
+        assert window(configured_client, "2026-07-01", "2026-07-31") == []
+
+    def test_hiding_survives_rescheduling_the_task(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        calendar_id = configured_client.get(
+            f"/api/v1/google/accounts/{account_id}/calendars"
+        ).json()[0]["id"]
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+        task_id = configured_client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Standup",
+                "source_google_calendar_id": calendar_id,
+                "source_google_event_id": "evt-1",
+            },
+        ).json()["id"]
+
+        configured_client.patch(
+            f"/api/v1/tasks/{task_id}",
+            json={"due_date": "2026-07-15T13:30:00Z"},
+        )
+
+        assert window(configured_client, "2026-07-01", "2026-07-31") == []
+
+    def test_deleting_the_task_reveals_the_event_again(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        calendar_id = configured_client.get(
+            f"/api/v1/google/accounts/{account_id}/calendars"
+        ).json()[0]["id"]
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Standup",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                )
+            ],
+        )
+        task_id = configured_client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Standup",
+                "source_google_calendar_id": calendar_id,
+                "source_google_event_id": "evt-1",
+            },
+        ).json()["id"]
+        assert window(configured_client, "2026-07-01", "2026-07-31") == []
+
+        configured_client.delete(f"/api/v1/tasks/{task_id}")
+
+        assert [e["title"] for e in window(configured_client, "2026-07-01", "2026-07-31")] == [
+            "Standup"
+        ]
+
+    def test_converting_one_occurrence_of_a_series_leaves_the_others_showing(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        calendar_id = configured_client.get(
+            f"/api/v1/google/accounts/{account_id}/calendars"
+        ).json()[0]["id"]
+        fake_calendar_source.register_events(
+            "rt-1",
+            "cal-1",
+            [
+                CalendarEventEntry(
+                    google_event_id="evt-1",
+                    summary="Weekly sync",
+                    start="2026-07-10T13:00:00Z",
+                    end="2026-07-10T13:30:00Z",
+                    is_all_day=False,
+                ),
+                CalendarEventEntry(
+                    google_event_id="evt-2",
+                    summary="Weekly sync",
+                    start="2026-07-17T13:00:00Z",
+                    end="2026-07-17T13:30:00Z",
+                    is_all_day=False,
+                ),
+            ],
+        )
+
+        configured_client.post(
+            "/api/v1/tasks",
+            json={
+                "title": "Weekly sync",
+                "source_google_calendar_id": calendar_id,
+                "source_google_event_id": "evt-1",
+            },
+        )
+
+        events = window(configured_client, "2026-07-01", "2026-07-31")
+        assert [e["google_event_id"] for e in events] == ["evt-2"]

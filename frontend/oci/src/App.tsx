@@ -78,6 +78,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // mixed with selectedTaskId — clicking an Event must never open the
   // (editable) Task detail panel.
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  // Bumped after "Convert to task" (issue #111) so the Calendar force-reloads:
+  // the converted Event disappears and the new Task appears immediately.
+  const [calendarRefresh, setCalendarRefresh] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   // Completed Occurrences of recurring tasks, shown only in the completed view.
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
@@ -261,6 +264,14 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     if (inView) {
       setTasks((current) => [...current, created]);
     }
+  }
+
+  /** "Convert to task" (issue #111) already created the Task by the time
+   * this runs — close the popover the conversion happened from, and force
+   * the Calendar to reload so the Event it replaces disappears immediately. */
+  function handleEventConverted(): void {
+    setSelectedEvent(null);
+    setCalendarRefresh((current) => current + 1);
   }
 
   /** A renamed/recolored Tag must also update the copies embedded in tasks. */
@@ -464,6 +475,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 setSelectedTaskId(task.id);
               }}
               onSelectEvent={setSelectedEvent}
+              refreshToken={calendarRefresh}
             />
           ) : view?.kind === "habits" ? (
             <HabitsView />
@@ -522,7 +534,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
         )}
         {selectedEvent !== null && (
           <Modal title={selectedEvent.title} onClose={() => setSelectedEvent(null)}>
-            <EventDetail event={selectedEvent} />
+            <EventDetail event={selectedEvent} onConverted={handleEventConverted} />
           </Modal>
         )}
       </div>
