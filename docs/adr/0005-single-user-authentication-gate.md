@@ -62,6 +62,24 @@ happens in the application itself, not at the edge/ingress.
   costume of a real feature. The column stays exactly as ADR 0002 left it:
   present, defaulted, and dormant.
 
+## Decision: the session cookie is `SameSite=Lax`, not `Strict`
+
+The cookie is `HttpOnly`, `Secure`, and `SameSite=Lax`. `Lax` still denies
+the cookie to cross-site subresource requests and to any non-GET
+request — the cases CSRF actually exploits — so this is not a weakening of
+the gate.
+
+`Strict` was tried first and had to be abandoned: the Google Calendar
+integration's OAuth callback (ADR 0006, `routers/v1/google.py`) is a
+top-level GET navigation that Google's own server initiates by redirecting
+the browser from `accounts.google.com` back to this app. That redirect is
+a cross-site top-level navigation, and browsers never attach a `Strict`
+cookie to one — so `SessionAuthMiddleware` saw no cookie at all and
+rejected the callback as unauthenticated, even for a user who was already
+logged in. `Lax` is the standard, narrowest setting that still allows a
+cookie on a top-level cross-site GET, which is exactly what a
+redirect-based OAuth return leg requires.
+
 ## Accepted trade-offs
 
 - The SPA shell (static HTML/JS/CSS) stays publicly served; only the API
@@ -74,6 +92,11 @@ happens in the application itself, not at the edge/ingress.
 - Revocation is key rotation: rotating the signing secret invalidates every
   outstanding cookie at once, logging out every device simultaneously.
   There is no way to revoke a single device's cookie without the others.
+- The `SameSite` attribute a cookie was issued with does not change on its
+  own — a cookie issued under an older `Strict` build stays `Strict` in the
+  browser until it's reissued. Any deployment that ships the `Lax` change
+  needs every already-logged-in device to log out and back in once before
+  the Google Calendar connect flow will work there.
 
 ## Future work
 
