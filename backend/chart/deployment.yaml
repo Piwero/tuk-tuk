@@ -46,6 +46,14 @@ spec:
                 name: backend-config
             - secretRef:
                 name: tuk-tuk-auth
+            # Optional, unlike tuk-tuk-auth: the Google Calendar integration
+            # is meant to run absent (issue #103/#105; ADR 0006), so a
+            # tuk-tuk-google Secret that doesn't exist yet must never
+            # crash-loop the pod — it's provisioned only once the integration
+            # is actually wanted (see backend/chart/README.md).
+            - secretRef:
+                name: tuk-tuk-google
+                optional: true
           readinessProbe:
             httpGet:
               path: /health
