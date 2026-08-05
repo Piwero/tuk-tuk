@@ -124,6 +124,12 @@ class FakeCalendarSource:
         (TransientCalendarSourceError), issue #109."""
         self._refresh_errors[refresh_token] = error
 
+    def clear_refresh_error(self, refresh_token: str) -> None:
+        """Undoes `register_refresh_error` — simulates the underlying
+        problem (e.g. a disabled API, since re-enabled) going away without
+        the user having gone through a fresh OAuth consent."""
+        self._refresh_errors.pop(refresh_token, None)
+
     async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
         self.refresh_calls.append(refresh_token)
         error = self._refresh_errors.get(refresh_token)

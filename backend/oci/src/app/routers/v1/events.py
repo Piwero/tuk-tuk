@@ -246,4 +246,12 @@ async def read_events(
                     account_id=account.id, email=account.email, kind="transient", message=str(exc)
                 )
             )
+        else:
+            # A read that makes it here touched Google successfully (or hit
+            # the cache and had nothing to touch) — either way the account
+            # is not currently broken, so a stale "needs_reconnect" from an
+            # earlier failure no longer describes it.
+            if account.connection_state == "needs_reconnect":
+                account.connection_state = "connected"
+                await session.commit()
     return EventsRead(events=events, failures=failures)

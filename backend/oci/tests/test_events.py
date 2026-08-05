@@ -446,6 +446,30 @@ class TestPerAccountFailures:
         )
         assert account["connection_state"] == "needs_reconnect"
 
+    def test_a_later_successful_read_clears_a_stale_reconnect_flag(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """The underlying problem (e.g. a disabled Calendar API) can be
+        fixed without a fresh OAuth consent — the next successful Events
+        read must clear "needs_reconnect" on its own, or the banner would
+        lie about the account being broken forever."""
+        account_id, _ = seed_one_enabled_calendar(configured_client, fake_calendar_source)
+        fake_calendar_source.register_refresh_error(
+            "rt-1", TerminalCalendarSourceError("invalid_grant")
+        )
+        read_events(configured_client, "2026-07-01", "2026-07-31")
+
+        fake_calendar_source.clear_refresh_error("rt-1")
+        body = read_events(configured_client, "2026-07-01", "2026-07-31")
+
+        assert body["failures"] == []
+        account = next(
+            a
+            for a in configured_client.get("/api/v1/google/accounts").json()
+            if a["id"] == account_id
+        )
+        assert account["connection_state"] == "connected"
+
     def test_a_failure_on_one_calendar_is_reported_against_its_account(
         self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
     ) -> None:
