@@ -7,6 +7,7 @@ revealing their values either way.
 """
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,12 +17,18 @@ from app.main import create_app
 from tests.conftest import TEST_PASSWORD, FakeClock
 
 
-def make_client(database_url: str, fake_clock: FakeClock, **overrides: object) -> TestClient:
+@contextmanager
+def make_client(
+    database_url: str, fake_clock: FakeClock, **overrides: object
+) -> Iterator[TestClient]:
     app = create_app(Settings(database_url=database_url, **overrides), clock=fake_clock)  # type: ignore[arg-type]
-    test_client = TestClient(app)
-    response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-    assert response.status_code == 204, response.text
-    return test_client
+    # Login needs the DB (the password hash and session key both live in
+    # `settings` now, ADR 0008), so it must happen only once the lifespan's
+    # startup — which bootstraps that row — has actually run.
+    with TestClient(app) as test_client:
+        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+        assert response.status_code == 204, response.text
+        yield test_client
 
 
 @pytest.fixture
@@ -31,7 +38,6 @@ def configured_client(database_url: str, fake_clock: FakeClock) -> Iterator[Test
         fake_clock,
         google_client_id="a-client-id",
         google_client_secret="a-client-secret",
-        google_encryption_key="a-dedicated-key",
     ) as test_client:
         yield test_client
 

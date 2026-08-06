@@ -9,6 +9,7 @@ router's internals to fabricate a state token.
 import sqlite3
 import time as time_module
 from collections.abc import Iterator
+from contextlib import contextmanager
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -20,21 +21,25 @@ from app.main import create_app
 from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock
 
 
+@contextmanager
 def make_client(
     database_url: str,
     fake_clock: FakeClock,
     fake_calendar_source: FakeCalendarSource,
     **overrides: object,
-) -> TestClient:
+) -> Iterator[TestClient]:
     app = create_app(
         Settings(database_url=database_url, **overrides),  # type: ignore[arg-type]
         clock=fake_clock,
         calendar_source=fake_calendar_source,
     )
-    test_client = TestClient(app, follow_redirects=False)
-    response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-    assert response.status_code == 204, response.text
-    return test_client
+    # Login needs the DB (the password hash and session key both live in
+    # `settings` now, ADR 0008), so it must happen only once the lifespan's
+    # startup — which bootstraps that row — has actually run.
+    with TestClient(app, follow_redirects=False) as test_client:
+        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+        assert response.status_code == 204, response.text
+        yield test_client
 
 
 @pytest.fixture
@@ -47,7 +52,6 @@ def configured_client(
         fake_calendar_source,
         google_client_id="a-client-id",
         google_client_secret="a-client-secret",
-        google_encryption_key="a-dedicated-key",
         cors_origins=["http://localhost:5900"],
     ) as test_client:
         yield test_client
@@ -335,21 +339,25 @@ class TestAccountsAndDisconnect:
         assert unconfigured_client.delete("/api/v1/google/accounts/1").status_code == 404
 
 
-class TestCredentialSurvivesSecretKeyRotation:
+class TestCredentialSurvivesSessionKeyRotation:
     def test_rotating_the_session_signing_key_leaves_the_account_working(
         self,
         database_url: str,
         fake_clock: FakeClock,
         fake_calendar_source: FakeCalendarSource,
     ) -> None:
+        """Google refresh tokens are encrypted with APP_MASTER_KEY, never
+        the DB-backed session signing key (ADR 0008) — rotating the latter
+        (issue #116's "change password" lever, simulated here by writing
+        directly to `settings`, since #116 hasn't landed yet) must not make
+        a stored credential undecryptable.
+        """
         with make_client(
             database_url,
             fake_clock,
             fake_calendar_source,
             google_client_id="a-client-id",
             google_client_secret="a-client-secret",
-            google_encryption_key="a-dedicated-key",
-            secret_key="original-signing-key",
         ) as client:
             connect_and_authorize(
                 client,
@@ -360,16 +368,19 @@ class TestCredentialSurvivesSecretKeyRotation:
                 refresh_token="rt-1",
             )
 
-        # A fresh app, as if the signing key were rotated (the "log every
-        # device out" lever) — same database, same encryption key.
+        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
+        connection = sqlite3.connect(db_path)
+        connection.execute("UPDATE settings SET session_key = 'rotated-signing-key'")
+        connection.commit()
+
+        # A fresh app, as if the signing key were rotated — same database,
+        # same master key.
         with make_client(
             database_url,
             fake_clock,
             FakeCalendarSource(),
             google_client_id="a-client-id",
             google_client_secret="a-client-secret",
-            google_encryption_key="a-dedicated-key",
-            secret_key="rotated-signing-key",
         ) as rotated_client:
             accounts = rotated_client.get("/api/v1/google/accounts").json()
 

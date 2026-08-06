@@ -6,10 +6,11 @@ from app.config import Settings
 from app.session import issue_session_token, needs_reissue, verify_session_token
 from tests.conftest import FakeClock
 
+KEY = "test-signing-key"
+
 
 def settings(**overrides: object) -> Settings:
     defaults: dict[str, object] = {
-        "secret_key": "test-signing-key",
         "auth_session_lifetime_days": 30,
         "auth_session_reissue_threshold_days": 1,
     }
@@ -20,47 +21,44 @@ def settings(**overrides: object) -> Settings:
 class TestIssueAndVerify:
     def test_a_freshly_issued_token_verifies(self, fake_clock: FakeClock) -> None:
         s = settings()
-        token = issue_session_token(s, issued_at=fake_clock.now)
+        token = issue_session_token(KEY, issued_at=fake_clock.now)
 
-        assert verify_session_token(token, s, fake_clock) is not None
+        assert verify_session_token(token, KEY, s, fake_clock) is not None
 
     def test_verify_returns_the_issued_at_time(self, fake_clock: FakeClock) -> None:
         s = settings()
         issued_at = fake_clock.now
-        token = issue_session_token(s, issued_at=issued_at)
+        token = issue_session_token(KEY, issued_at=issued_at)
         fake_clock.advance(timedelta(days=1))
 
-        assert verify_session_token(token, s, fake_clock) == issued_at
+        assert verify_session_token(token, KEY, s, fake_clock) == issued_at
 
     def test_a_malformed_token_is_rejected(self, fake_clock: FakeClock) -> None:
-        assert verify_session_token("not-a-real-token", settings(), fake_clock) is None
+        assert verify_session_token("not-a-real-token", KEY, settings(), fake_clock) is None
 
     def test_an_absent_token_is_rejected(self, fake_clock: FakeClock) -> None:
-        assert verify_session_token(None, settings(), fake_clock) is None
+        assert verify_session_token(None, KEY, settings(), fake_clock) is None
 
     def test_a_token_signed_with_a_different_key_is_rejected(self, fake_clock: FakeClock) -> None:
-        issuing_settings = settings(secret_key="key-one")
-        token = issue_session_token(issuing_settings, issued_at=fake_clock.now)
+        token = issue_session_token("key-one", issued_at=fake_clock.now)
 
-        verifying_settings = settings(secret_key="key-two")
-
-        assert verify_session_token(token, verifying_settings, fake_clock) is None
+        assert verify_session_token(token, "key-two", settings(), fake_clock) is None
 
     def test_an_expired_token_is_rejected(self, fake_clock: FakeClock) -> None:
         s = settings(auth_session_lifetime_days=30)
         issued_at = fake_clock.now
-        token = issue_session_token(s, issued_at=issued_at)
+        token = issue_session_token(KEY, issued_at=issued_at)
         fake_clock.advance(timedelta(days=31))
 
-        assert verify_session_token(token, s, fake_clock) is None
+        assert verify_session_token(token, KEY, s, fake_clock) is None
 
     def test_a_token_within_the_lifetime_is_accepted(self, fake_clock: FakeClock) -> None:
         s = settings(auth_session_lifetime_days=30)
         issued_at = fake_clock.now
-        token = issue_session_token(s, issued_at=issued_at)
+        token = issue_session_token(KEY, issued_at=issued_at)
         fake_clock.advance(timedelta(days=29))
 
-        assert verify_session_token(token, s, fake_clock) is not None
+        assert verify_session_token(token, KEY, s, fake_clock) is not None
 
 
 class TestReissue:

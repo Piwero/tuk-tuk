@@ -1,7 +1,9 @@
-"""Encryption of stored Google refresh credentials at rest (issue #105).
+"""Encryption of sensitive `settings` columns and stored Google refresh
+credentials at rest (issue #105; ADR 0008).
 
-Deliberately keyed by its own setting, never secret_key — the whole point
-is that rotating the session signing key must not affect this.
+Deliberately keyed by APP_MASTER_KEY, never the session signing key — the
+whole point is that rotating the session key (e.g. on a password change)
+must not affect this.
 """
 
 import pytest
@@ -27,8 +29,8 @@ class TestEncryptDecrypt:
             decrypt_credential(ciphertext, key="key-two")
 
     def test_two_different_keys_of_any_shape_both_work(self) -> None:
-        """The key setting is an arbitrary operator-chosen string (like
-        secret_key), not a pre-formatted Fernet key — any string must work.
+        """APP_MASTER_KEY is an arbitrary operator-chosen string, not a
+        pre-formatted Fernet key — any string must work.
         """
         ciphertext = encrypt_credential("token", key="short")
 

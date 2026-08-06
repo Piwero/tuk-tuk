@@ -17,14 +17,15 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./tuk_tuk.db"
     cors_origins: list[str] = ["http://localhost:5900"]
 
-    # Authentication (ADR 0005). No setting disables the gate; a missing hash
-    # makes the app refuse to start rather than serve unauthenticated.
+    # Authentication (ADR 0005/0008). The password hash and the session
+    # signing key now live in the DB-backed `settings` table (see
+    # app.app_settings), not here — auth_password_hash below is consulted
+    # only once, on the very first boot, to import an existing deployment's
+    # `.env` value (ADR 0008's one-time upgrade path); it is never read
+    # again once that row exists, even if left in `.env`. A fresh
+    # deployment leaves it unset and sets a password through `/setup`
+    # instead.
     auth_password_hash: str | None = None
-    # Signs the session cookie (app.session). Provisioned once in 1Password
-    # and synced into the cluster as SECRET_KEY (see backend/chart) — never
-    # generated at container start, since a per-boot key would log every
-    # device out on every deploy.
-    secret_key: str = "change-me"
     auth_cookie_secure: bool = True
     auth_login_delay_seconds: float = 1.0
     auth_session_lifetime_days: int = 30
@@ -33,22 +34,28 @@ class Settings(BaseSettings):
     # its next request, however long before expiry that falls.
     auth_session_reissue_threshold_days: int = 1
 
+    # Encrypts sensitive columns of the DB-backed `settings` table (ADR
+    # 0008) — the Google client secret, and (app.routers.v1.google /
+    # app.routers.v1.events) stored Google refresh tokens. The password hash
+    # needs no such protection (Argon2id is one-way). Generated once at
+    # deploy time the same way SECRET_KEY was before it, and required
+    # unconditionally: the app refuses to start without it, the same
+    # fail-closed posture SECRET_KEY had. Never read from or written to any
+    # API response — a copy of the SQLite file must not disclose what it
+    # protects.
+    app_master_key: str | None = None
+
     # Google Calendar integration (issue #103; ADR 0006). Both absent by
     # default, which is what disables the whole feature: no setting turns it
     # off explicitly, the same "missing means off" convention used elsewhere
-    # in this file. Unlike auth_password_hash, a missing value here is not
-    # fatal — the app starts and runs normally with no Google integration at
-    # all, it just never shows Google Calendar anywhere.
+    # in this file. A missing value here is not fatal — the app starts and
+    # runs normally with no Google integration at all, it just never shows
+    # Google Calendar anywhere. Consulted for the initial GoogleCalendarSource
+    # wiring and, like auth_password_hash above, the one-time settings
+    # import on first boot (ADR 0008) — a fresh deployment instead sets
+    # these through Settings' Google credentials step (issue #117).
     google_client_id: str | None = None
     google_client_secret: str | None = None
-    # Encrypts stored Google refresh credentials at rest (issue #105).
-    # Deliberately its own setting rather than derived from secret_key:
-    # secret_key's documented rotation procedure is the "log every device
-    # out" lever, and coupling the two would make a routine logout-everywhere
-    # silently destroy every calendar connection. Required (app.main refuses
-    # to start without it) only when the Google integration is itself
-    # configured — an unconfigured deployment needs no encryption key at all.
-    google_encryption_key: str | None = None
 
 
 def google_configured(settings: Settings) -> bool:

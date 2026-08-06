@@ -1,4 +1,4 @@
-"""Authentication settings and the fail-closed startup guarantee."""
+"""Authentication settings and the fail-closed startup guarantee (ADR 0008)."""
 
 import pytest
 
@@ -36,53 +36,32 @@ def test_settings_default_cookie_secure_to_true(monkeypatch: pytest.MonkeyPatch)
     assert settings.auth_cookie_secure is True
 
 
-def test_app_refuses_to_start_without_a_password_hash() -> None:
-    settings = Settings(auth_password_hash=None)
+def test_app_refuses_to_start_without_an_app_master_key() -> None:
+    settings = Settings(app_master_key=None)
 
-    with pytest.raises(RuntimeError, match="AUTH_PASSWORD_HASH"):
+    with pytest.raises(RuntimeError, match="APP_MASTER_KEY"):
         create_app(settings)
 
 
-def test_app_starts_with_a_password_hash_configured() -> None:
-    settings = Settings(auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA")
+def test_app_starts_with_an_app_master_key_configured() -> None:
+    settings = Settings(app_master_key="a-master-key")
 
     create_app(settings)
 
 
-def test_app_refuses_to_start_when_google_is_configured_without_an_encryption_key() -> None:
+def test_app_starts_with_no_password_hash_configured() -> None:
+    """A fresh deployment has no AUTH_PASSWORD_HASH at all — the app starts
+    fine and gates behind /setup instead of refusing to boot (ADR 0008)."""
+    settings = Settings(app_master_key="a-master-key", auth_password_hash=None)
+
+    create_app(settings)
+
+
+def test_app_starts_with_google_configured() -> None:
     settings = Settings(
-        auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA",
+        app_master_key="a-master-key",
         google_client_id="a-client-id",
         google_client_secret="a-client-secret",
-        google_encryption_key=None,
-    )
-
-    with pytest.raises(RuntimeError, match="GOOGLE_ENCRYPTION_KEY"):
-        create_app(settings)
-
-
-def test_app_starts_without_google_configured_at_all() -> None:
-    settings = Settings(auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA")
-
-    create_app(settings)
-
-
-def test_app_starts_with_google_fully_configured() -> None:
-    settings = Settings(
-        auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA",
-        google_client_id="a-client-id",
-        google_client_secret="a-client-secret",
-        google_encryption_key="a-dedicated-key",
     )
 
     create_app(settings)
-
-
-def test_app_refuses_to_start_with_the_placeholder_secret_key() -> None:
-    settings = Settings(
-        auth_password_hash="$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$aGFzaA",
-        secret_key="change-me",
-    )
-
-    with pytest.raises(RuntimeError, match="SECRET_KEY"):
-        create_app(settings)

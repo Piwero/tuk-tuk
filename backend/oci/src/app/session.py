@@ -25,17 +25,21 @@ def real_clock() -> datetime:
     return datetime.now(UTC)
 
 
-def _serializer(settings: Settings) -> URLSafeSerializer:
-    return URLSafeSerializer(settings.secret_key, salt=_SALT)
+def _serializer(session_key: str) -> URLSafeSerializer:
+    return URLSafeSerializer(session_key, salt=_SALT)
 
 
-def issue_session_token(settings: Settings, issued_at: datetime) -> str:
-    token: str = _serializer(settings).dumps({"iat": issued_at.timestamp()})
+def issue_session_token(session_key: str, issued_at: datetime) -> str:
+    token: str = _serializer(session_key).dumps({"iat": issued_at.timestamp()})
     return token
 
 
 def set_session_cookie(
-    response: Response, settings: Settings, clock: Clock, issued_at: datetime | None = None
+    response: Response,
+    session_key: str,
+    settings: Settings,
+    clock: Clock,
+    issued_at: datetime | None = None,
 ) -> None:
     """Sign and attach the session cookie to `response`. Inaccessible to
     JavaScript, sent only to this site, and `Secure` per configuration —
@@ -52,7 +56,7 @@ def set_session_cookie(
     cross-site subresource requests and non-GET requests, which is what
     matters for CSRF.
     """
-    token = issue_session_token(settings, issued_at or clock())
+    token = issue_session_token(session_key, issued_at or clock())
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,
@@ -64,14 +68,16 @@ def set_session_cookie(
     )
 
 
-def verify_session_token(token: str | None, settings: Settings, clock: Clock) -> datetime | None:
+def verify_session_token(
+    token: str | None, session_key: str, settings: Settings, clock: Clock
+) -> datetime | None:
     """Return the token's issued-at time if it is validly signed and not
     past the configured session lifetime, else None.
     """
     if not token:
         return None
     try:
-        payload = _serializer(settings).loads(token)
+        payload = _serializer(session_key).loads(token)
     except BadSignature:
         return None
     iat = payload.get("iat") if isinstance(payload, dict) else None

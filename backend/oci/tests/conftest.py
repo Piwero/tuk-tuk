@@ -8,9 +8,11 @@ from argon2.low_level import Type
 # Minimal Argon2 cost parameters so verification costs microseconds, not the
 # ~200ms tuned for production (see app.auth). Set before the first import of
 # app.config/app.main below, so the module-level `app` singleton and every
-# ad-hoc `Settings(...)` construction across the suite pick it up too — the
-# app fails closed without a password hash, and this is the one place that
-# needs to know about test hashing cost.
+# ad-hoc `Settings(...)` construction across the suite pick it up too. This
+# is imported into the DB-backed `settings` table on each app's first boot
+# (ADR 0008's upgrade path — see app.app_settings), which is what gives
+# every test's `client` fixture a password to log in with without each test
+# having to drive `/setup` itself.
 TEST_PASSWORD = "test-password"
 
 os.environ.setdefault(
@@ -18,11 +20,12 @@ os.environ.setdefault(
     PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash(TEST_PASSWORD),
 )
 os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
-os.environ.setdefault("SECRET_KEY", "test-signing-key")
+os.environ.setdefault("APP_MASTER_KEY", "test-master-key")
 # The delay is exercised (LoginThrottle still runs) but costs no wall-clock
 # time, so the escalation/reset tests don't sleep for real.
 os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0")
 
+import asyncio  # noqa: E402
 import shutil  # noqa: E402
 from collections.abc import Iterator  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
@@ -30,8 +33,10 @@ from pathlib import Path  # noqa: E402
 from tempfile import TemporaryDirectory  # noqa: E402
 
 import pytest  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.app_settings import get_app_settings  # noqa: E402
 from app.calendar_source import (  # noqa: E402
     CalendarEventEntry,
     CalendarListEntry,
@@ -42,6 +47,25 @@ from app.calendar_source import (  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.db import run_migrations  # noqa: E402
 from app.main import create_app  # noqa: E402
+from app.models import AppSettings  # noqa: E402
+
+
+def app_settings_row(app: FastAPI) -> AppSettings:
+    """Synchronously fetches the DB-backed `settings` singleton for a
+    test's app. Tests that need the real session-signing key — forging a
+    cookie, asserting rotation — can't read it off `Settings` anymore now
+    that it lives in the database (ADR 0008), so they fetch the row
+    directly instead.
+    """
+    session_factory = app.state.session_factory
+
+    async def _fetch() -> AppSettings:
+        async with session_factory() as session:
+            row = await get_app_settings(session)
+            assert row is not None
+            return row
+
+    return asyncio.run(_fetch())
 
 
 class FakeClock:

@@ -170,7 +170,7 @@ async def read_events(
 
     calendar_source: CalendarSource = request.app.state.calendar_source
     event_cache: EventCache = request.app.state.event_cache
-    assert settings.google_encryption_key is not None
+    assert settings.app_master_key is not None
     time_min = f"{range_start - timedelta(days=1)}T00:00:00Z"
     time_max = f"{range_end + timedelta(days=2)}T00:00:00Z"
 
@@ -192,7 +192,7 @@ async def read_events(
             access_token = None
             if any(entries is None for entries in cached_by_calendar.values()):
                 refresh_token = decrypt_credential(
-                    account.encrypted_refresh_token, key=settings.google_encryption_key
+                    account.encrypted_refresh_token, key=settings.app_master_key
                 )
                 access_token = (await calendar_source.refresh(refresh_token)).access_token
             for calendar in account_calendars:

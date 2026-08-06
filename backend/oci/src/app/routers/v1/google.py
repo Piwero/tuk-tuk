@@ -21,6 +21,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
+from app.app_settings import require_app_settings
 from app.calendar_source import (
     CalendarSource,
     CalendarSourceError,
@@ -116,23 +117,23 @@ def require_google_configured(settings: Settings) -> None:
         raise NotFoundError("Google Calendar integration is not configured")
 
 
-def _state_serializer(settings: Settings) -> URLSafeTimedSerializer:
-    return URLSafeTimedSerializer(settings.secret_key, salt=_STATE_SALT)
+def _state_serializer(session_key: str) -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(session_key, salt=_STATE_SALT)
 
 
-def _build_state(settings: Settings, return_to: str) -> str:
-    token: str = _state_serializer(settings).dumps({"return_to": return_to})
+def _build_state(session_key: str, return_to: str) -> str:
+    token: str = _state_serializer(session_key).dumps({"return_to": return_to})
     return token
 
 
-def _read_return_to(settings: Settings, state: str) -> str:
+def _read_return_to(session_key: str, state: str) -> str:
     """Verifies `state` was minted by this server within the last
     `_STATE_MAX_AGE_SECONDS` (never trusted from the request alone) and
     returns the frontend origin to send the browser back to. Raises on a
     missing, tampered, or expired state — there is then no verified origin
     left to redirect to."""
     try:
-        payload = _state_serializer(settings).loads(state, max_age=_STATE_MAX_AGE_SECONDS)
+        payload = _state_serializer(session_key).loads(state, max_age=_STATE_MAX_AGE_SECONDS)
     except (BadSignature, SignatureExpired):
         raise _invalid_state_error() from None
     return_to = payload.get("return_to") if isinstance(payload, dict) else None
@@ -170,9 +171,10 @@ async def google_status(request: Request) -> GoogleStatus:
 
 
 @router.get("/connect")
-async def connect(request: Request) -> RedirectResponse:
+async def connect(request: Request, session: SessionDep) -> RedirectResponse:
     settings = request.app.state.settings
     require_google_configured(settings)
+    app_settings = await require_app_settings(session)
 
     return_to = _resolve_return_origin(settings, request.headers.get("referer"))
     params = {
@@ -185,7 +187,7 @@ async def connect(request: Request) -> RedirectResponse:
         # an already-authorized account — without it Google omits
         # refresh_token on a repeat consent.
         "prompt": "consent",
-        "state": _build_state(settings, return_to),
+        "state": _build_state(app_settings.session_key, return_to),
     }
     return RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
 
@@ -199,10 +201,11 @@ async def callback(
 ) -> RedirectResponse:
     settings = request.app.state.settings
     require_google_configured(settings)
+    app_settings = await require_app_settings(session)
 
     if state is None:
         raise _invalid_state_error()
-    return_to = _read_return_to(settings, state)
+    return_to = _read_return_to(app_settings.session_key, state)
 
     if code is None:
         return RedirectResponse(f"{return_to}?googleError=1", status_code=302)
@@ -215,11 +218,10 @@ async def callback(
     except CalendarSourceError:
         return RedirectResponse(f"{return_to}?googleError=1", status_code=302)
 
-    # `settings.google_encryption_key` is guaranteed present here: the app
-    # refuses to start with Google configured but no encryption key set
-    # (app.main.create_app).
-    assert settings.google_encryption_key is not None
-    encrypted = encrypt_credential(credential.refresh_token, key=settings.google_encryption_key)
+    # `settings.app_master_key` is unconditionally required (app.main
+    # refuses to start without it), unlike the Google settings above.
+    assert settings.app_master_key is not None
+    encrypted = encrypt_credential(credential.refresh_token, key=settings.app_master_key)
 
     existing = await session.scalar(
         select(GoogleAccount).where(GoogleAccount.google_account_id == credential.google_account_id)
@@ -294,10 +296,8 @@ async def _sync_calendars(
     "needs_reconnect" before surfacing as an APIError — the same state the
     Events endpoint sets, so Settings and the Calendar banner never
     disagree about which accounts need reconnecting."""
-    assert settings.google_encryption_key is not None
-    refresh_token = decrypt_credential(
-        account.encrypted_refresh_token, key=settings.google_encryption_key
-    )
+    assert settings.app_master_key is not None
+    refresh_token = decrypt_credential(account.encrypted_refresh_token, key=settings.app_master_key)
     try:
         access_token = (await calendar_source.refresh(refresh_token)).access_token
         entries = await calendar_source.list_calendars(access_token)

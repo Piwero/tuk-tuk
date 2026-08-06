@@ -33,7 +33,6 @@ def configured_client(
         fake_calendar_source,
         google_client_id="a-client-id",
         google_client_secret="a-client-secret",
-        google_encryption_key="a-dedicated-key",
         cors_origins=["http://localhost:5900"],
     ) as test_client:
         yield test_client
