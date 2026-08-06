@@ -4,6 +4,33 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.3.0](https://github.com/Piwero/tuk-tuk/compare/v0.2.2...v0.3.0) - 2026-08-06
+
+### Features
+
+- Connect and disconnect Google accounts (issue #105) ([8d3cafa](https://github.com/Piwero/tuk-tuk/commit/8d3cafad83dbe0d70a4691220138873326807133))
+- Choose which Google calendars are visible (issue #106) ([688dd98](https://github.com/Piwero/tuk-tuk/commit/688dd98bdf00fef4c6699fe41263a43dffcef7dd))
+- Render Google Calendar Events in the Calendar view (issue #107) ([54f4419](https://github.com/Piwero/tuk-tuk/commit/54f4419b50913b273957b96a53cf2a9e518efedd))
+- Split midnight-crossing Events into per-day segments (issue #108) ([2e012d3](https://github.com/Piwero/tuk-tuk/commit/2e012d3fc9d0493dde6ea488b448466fefc83ac4))
+- Per-account Google Calendar failure handling and Event refresh (issue #109) ([734d57b](https://github.com/Piwero/tuk-tuk/commit/734d57bf3c85d672a3d168c026171b2dcc3771aa))
+- Event detail popover (issue #110) ([62067c4](https://github.com/Piwero/tuk-tuk/commit/62067c4581824a4fa2cc77fdc46fdd858f204c70))
+- Convert an Event to a Task (issue #111) ([b997fdf](https://github.com/Piwero/tuk-tuk/commit/b997fdfe705eaaccebbd820bde0644ca2059eeb4))
+- **auth:** Move password and session key into a DB-backed settings table ([517339e](https://github.com/Piwero/tuk-tuk/commit/517339e2eddafa968a64341965abc7e4dd3e003d))
+- **auth:** Add change-password flow with session key rotation ([9a4cdbb](https://github.com/Piwero/tuk-tuk/commit/9a4cdbb95f4346e5b75a08ffbd27ae1ddbfe699d))
+- **auth:** Require a matching confirmation for new passwords ([46feb45](https://github.com/Piwero/tuk-tuk/commit/46feb45fac6a9dab7516cb6f701e988f92f2ba89))
+- **google:** Manage Google API credentials from Settings ([c50d3b3](https://github.com/Piwero/tuk-tuk/commit/c50d3b34e8153a58369c8756f609ebd41ca311df))
+
+### Bug Fixes
+
+- Satisfy noUncheckedIndexedAccess in calendar Event tests ([7c4177a](https://github.com/Piwero/tuk-tuk/commit/7c4177afe4cade679bad7b7050dff5fa3e3c008d))
+- **google:** Make OAuth callback reachable through the dev proxy ([ee58e7e](https://github.com/Piwero/tuk-tuk/commit/ee58e7e8dcdc6c9f7d6cb228c55964dd77e5798d))
+- **google:** Surface a failed calendar load instead of hanging ([1784fa0](https://github.com/Piwero/tuk-tuk/commit/1784fa0119cb2013d838d7279bc3512792c9bd2c))
+- **google:** Clear needs_reconnect once a sync or read succeeds ([ceb7bfd](https://github.com/Piwero/tuk-tuk/commit/ceb7bfd48c993b8486e21fbaa363eb860794a784))
+
+### Performance
+
+- **backend:** Build the migrated test DB once per session, not per test ([b89e3c6](https://github.com/Piwero/tuk-tuk/commit/b89e3c69f4ca1f3e7b41bc69dc327a11e9c08542))
+
 ## [0.2.2](https://github.com/Piwero/tuk-tuk/compare/v0.2.1...v0.2.2) - 2026-08-03
 
 ### Features
