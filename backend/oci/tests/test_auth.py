@@ -1,5 +1,5 @@
-"""Login, the session probe, and default-deny enforcement (ADR 0005,
-issues #83 and #84).
+"""Login, the session probe, default-deny enforcement (ADR 0005, issues
+#83 and #84), and the change-password flow (ADR 0008, issue #116).
 """
 
 from datetime import UTC, datetime, timedelta
@@ -244,3 +244,130 @@ class TestRollingReissue:
         assert "httponly" in set_cookie
         assert "samesite=lax" in set_cookie
         assert "path=/" in set_cookie
+
+
+NEW_PASSWORD = "a-new-password"
+
+
+class TestChangePassword:
+    def test_the_correct_current_password_updates_the_hash_and_returns_204_with_a_fresh_cookie(
+        self, client: TestClient
+    ) -> None:
+        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
+
+        response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+
+        assert response.status_code == 204
+        assert response.content == b""
+        assert "tuktuk_session" in response.cookies
+        assert app_settings_row(client.app).password_hash != old_hash  # type: ignore[arg-type]
+
+    def test_the_session_key_is_rotated(self, client: TestClient) -> None:
+        old_key = app_settings_row(client.app).session_key  # type: ignore[arg-type]
+
+        client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+
+        assert app_settings_row(client.app).session_key != old_key  # type: ignore[arg-type]
+
+    def test_the_device_that_changed_the_password_stays_logged_in(self, client: TestClient) -> None:
+        change_response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+        client.cookies.set("tuktuk_session", change_response.cookies["tuktuk_session"])
+
+        response = client.get("/api/v1/tasks")
+
+        assert response.status_code == 200
+
+    def test_a_second_devices_session_is_rejected_after_the_change(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        first_login = unauthenticated_client.post(
+            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
+        )
+        second_device_cookie = first_login.cookies["tuktuk_session"]
+
+        unauthenticated_client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+
+        unauthenticated_client.cookies.set("tuktuk_session", second_device_cookie)
+        response = unauthenticated_client.get("/api/v1/tasks")
+
+        assert response.status_code == 401
+
+    def test_the_new_password_logs_in_after_the_change(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        unauthenticated_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+        unauthenticated_client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+        unauthenticated_client.cookies.clear()
+
+        response = unauthenticated_client.post(
+            "/api/v1/auth/login", json={"password": NEW_PASSWORD}
+        )
+
+        assert response.status_code == 204
+
+    def test_the_wrong_current_password_is_rejected_and_changes_nothing(
+        self, client: TestClient
+    ) -> None:
+        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
+        old_key = app_settings_row(client.app).session_key  # type: ignore[arg-type]
+
+        response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": "wrong", "new_password": NEW_PASSWORD},
+        )
+
+        assert response.status_code != 204
+        assert response.json()["error"]["code"] == "invalid_current_password"
+        row = app_settings_row(client.app)  # type: ignore[arg-type]
+        assert row.password_hash == old_hash
+        assert row.session_key == old_key
+
+    def test_consecutive_wrong_current_password_failures_escalate_and_success_resets(
+        self, client: TestClient
+    ) -> None:
+        for _ in range(3):
+            failed = client.post(
+                "/api/v1/auth/password",
+                json={"current_password": "wrong", "new_password": NEW_PASSWORD},
+            )
+            assert failed.status_code != 204
+
+        success = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+        assert success.status_code == 204
+
+    def test_an_empty_new_password_is_rejected(self, client: TestClient) -> None:
+        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
+
+        response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": ""},
+        )
+
+        assert response.status_code == 422
+        assert app_settings_row(client.app).password_hash == old_hash  # type: ignore[arg-type]
+
+    def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
+        response = unauthenticated_client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+
+        assert response.status_code == 401

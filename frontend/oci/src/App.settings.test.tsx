@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { installFakeApi } from "./test/fakeApi";
+import { FAKE_PASSWORD, installFakeApi } from "./test/fakeApi";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
 afterEach(() => {
@@ -349,6 +349,50 @@ describe("Google Calendar gate", () => {
     expect(await screen.findByText("me@example.com")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(window.location.search).toBe("");
+  });
+});
+
+describe("Change password (issue #116)", () => {
+  it("shows a Security section with a change-password form", async () => {
+    installFakeApi({});
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByRole("heading", { name: "Security" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Current password")).toBeInTheDocument();
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
+  });
+
+  it("submitting with the correct current password succeeds and clears the form", async () => {
+    const state = installFakeApi({});
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
+    await user.type(screen.getByLabelText("New password"), "a-new-password");
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(await screen.findByText(/password changed/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Current password")).toHaveValue("");
+    expect(screen.getByLabelText("New password")).toHaveValue("");
+    expect(state.password).toBe("a-new-password");
+  });
+
+  it("submitting with an incorrect current password shows an error and changes nothing", async () => {
+    const state = installFakeApi({});
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.type(screen.getByLabelText("Current password"), "wrong-password");
+    await user.type(screen.getByLabelText("New password"), "a-new-password");
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/incorrect/i);
+    expect(state.password).toBe(FAKE_PASSWORD);
   });
 });
 

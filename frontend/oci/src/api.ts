@@ -167,6 +167,19 @@ export function logout(): Promise<void> {
   return request(LOGOUT_PATH, { method: "POST" });
 }
 
+/** Changes the password and rotates the session signing key server-side
+ * (ADR 0008), which invalidates every other device's cookie. The response
+ * re-issues a fresh cookie for this device, so the caller stays logged in —
+ * nothing else to do here on success. A wrong current password rejects with
+ * `invalid_current_password` at 400, not 401, so it isn't mistaken for a
+ * lapsed session by the global onUnauthorized listener. */
+export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  return request("/api/v1/auth/password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}
+
 export interface GoogleStatus {
   configured: boolean;
 }

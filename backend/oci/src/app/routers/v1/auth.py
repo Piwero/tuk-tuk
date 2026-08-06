@@ -1,7 +1,8 @@
-"""First-run setup, login, and session-probe endpoints (ADR 0005, issue #83;
-ADR 0008, issue #115)."""
+"""First-run setup, login, session-probe, and change-password endpoints
+(ADR 0005, issue #83; ADR 0008, issues #115 and #116)."""
 
 import asyncio
+import secrets
 
 from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, Request, Response
@@ -22,6 +23,11 @@ class LoginRequest(BaseModel):
 
 class SetupRequest(BaseModel):
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 @router.post("/setup", status_code=204)
@@ -72,6 +78,49 @@ async def login(
         raise APIError(401, "invalid_credentials", "Incorrect password") from None
 
     throttle.record_success()
+    set_session_cookie(response, app_settings.session_key, settings, request.app.state.clock)
+
+
+@router.post("/password", status_code=204)
+async def change_password(
+    payload: ChangePasswordRequest, request: Request, response: Response, session: SessionDep
+) -> None:
+    """Changes the password and rotates the session signing key (ADR 0008),
+    which invalidates every outstanding session cookie — deliberately
+    including the one on this request, since a stale settings row could
+    otherwise be read mid-request. A fresh cookie signed with the new key is
+    issued below so the device making the change stays logged in; every
+    other device's cookie is rejected on its next request.
+
+    Reached only with a valid session (SessionAuthMiddleware; this path is
+    not in PUBLIC_PATHS), so the current password itself is what's being
+    checked here, not whether the caller is logged in.
+    """
+    settings = request.app.state.settings
+    throttle = request.app.state.login_throttle
+
+    app_settings = await require_app_settings(session)
+    assert app_settings.password_hash is not None  # a session exists only once one is set
+
+    try:
+        password_hasher.verify(app_settings.password_hash, payload.current_password)
+    except VerifyMismatchError:
+        delay = throttle.record_failure(base=settings.auth_login_delay_seconds)
+        await asyncio.sleep(delay)
+        raise APIError(400, "invalid_current_password", "Current password is incorrect") from None
+
+    # The current password was correct, so this resets the throttle
+    # regardless of what happens next — an empty new password shouldn't
+    # leave a prior bad-guess streak counted against a later, valid attempt.
+    throttle.record_success()
+
+    if not payload.new_password:
+        raise APIError(422, "invalid_password", "Password must not be empty")
+
+    app_settings.password_hash = password_hasher.hash(payload.new_password)
+    app_settings.session_key = secrets.token_urlsafe(32)
+    await session.commit()
+
     set_session_cookie(response, app_settings.session_key, settings, request.app.state.clock)
 
 
