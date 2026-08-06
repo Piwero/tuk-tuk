@@ -118,6 +118,11 @@ class FakeCalendarSource:
     """
 
     def __init__(self) -> None:
+        # Set by `configure` (issue #117) — recorded so a test can assert
+        # Settings' credentials save actually reached the calendar source,
+        # not just the DB row.
+        self.client_id = ""
+        self.client_secret = ""
         self._codes: dict[str, ExchangedCredential] = {}
         self._calendars: dict[str, list[CalendarListEntry]] = {}
         self._events: dict[tuple[str, str], list[CalendarEventEntry]] = {}
@@ -127,6 +132,10 @@ class FakeCalendarSource:
         # test assert a credential refresh was (or wasn't) re-issued, e.g. to
         # prove a fully-cached account's Events read skips it (issue #109).
         self.refresh_calls: list[str] = []
+
+    def configure(self, client_id: str, client_secret: str) -> None:
+        self.client_id = client_id
+        self.client_secret = client_secret
 
     def register_code(
         self, code: str, *, google_account_id: str, email: str, refresh_token: str

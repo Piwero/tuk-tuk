@@ -55,7 +55,11 @@ class TestGoogleStatus:
         response = configured_client.get("/api/v1/google/status")
 
         assert response.status_code == 200
-        assert response.json() == {"configured": True}
+        assert response.json() == {
+            "configured": True,
+            "client_id": "a-client-id",
+            "client_secret_set": True,
+        }
 
     def test_reports_configured_false_when_credentials_are_absent(
         self, unconfigured_client: TestClient
@@ -63,14 +67,22 @@ class TestGoogleStatus:
         response = unconfigured_client.get("/api/v1/google/status")
 
         assert response.status_code == 200
-        assert response.json() == {"configured": False}
+        assert response.json() == {
+            "configured": False,
+            "client_id": None,
+            "client_secret_set": False,
+        }
 
-    def test_never_reveals_the_credential_values(self, configured_client: TestClient) -> None:
+    def test_reports_the_client_id_but_never_the_client_secret_value(
+        self, configured_client: TestClient
+    ) -> None:
+        """The client ID isn't sensitive — Settings' credentials form shows
+        it back to the operator — but the secret must never round-trip,
+        only whether one is set (issue #117)."""
         response = configured_client.get("/api/v1/google/status")
 
-        body_text = response.text
-        assert "a-client-id" not in body_text
-        assert "a-client-secret" not in body_text
+        assert response.json()["client_id"] == "a-client-id"
+        assert "a-client-secret" not in response.text
 
     def test_is_rejected_without_a_session(self, database_url: str, fake_clock: FakeClock) -> None:
         app = create_app(Settings(database_url=database_url), clock=fake_clock)

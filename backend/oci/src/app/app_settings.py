@@ -28,6 +28,16 @@ async def require_app_settings(session: AsyncSession) -> AppSettings:
     return row
 
 
+def google_configured(app_settings: AppSettings) -> bool:
+    """Whether the Google Calendar integration is set up at all (issue
+    #117) — both DB-stored settings present. This is the source of truth
+    every route needs to answer or gate on (google.py's settings routes,
+    events.py's read-only feed), not the one-time-import env vars in
+    app.config, which are consulted only by `bootstrap_app_settings` below.
+    """
+    return bool(app_settings.google_client_id) and bool(app_settings.encrypted_google_client_secret)
+
+
 async def bootstrap_app_settings(session: AsyncSession, settings: Settings) -> AppSettings:
     """Ensures the singleton settings row exists, run once from app.main's
     lifespan before the app serves any request.

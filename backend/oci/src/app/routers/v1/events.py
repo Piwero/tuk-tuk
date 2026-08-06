@@ -40,6 +40,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.app_settings import google_configured, require_app_settings
 from app.calendar_source import (
     CalendarSource,
     TerminalCalendarSourceError,
@@ -47,7 +48,7 @@ from app.calendar_source import (
 )
 from app.calendar_source import EventAttendee as CalendarEventAttendee
 from app.calendar_window import validate_range_pair
-from app.config import Settings, google_configured
+from app.config import Settings
 from app.crypto import decrypt_credential
 from app.db import SessionDep
 from app.errors import APIError
@@ -146,7 +147,8 @@ async def read_events(
         )
 
     settings: Settings = request.app.state.settings
-    if not google_configured(settings):
+    app_settings = await require_app_settings(session)
+    if not google_configured(app_settings):
         return EventsRead(events=[], failures=[])
 
     calendars = await _enabled_calendars(session)
