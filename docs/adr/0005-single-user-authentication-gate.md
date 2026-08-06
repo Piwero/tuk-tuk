@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted. Where the password hash and session signing key are stored is
+superseded by [0008](0008-ui-managed-settings.md) — they move from `.env`
+into the database, managed from the UI. Everything else here (stateless
+signed cookie, fail-closed, `SameSite=Lax`, global failure delay) still
+stands.
 
 ## Context
 

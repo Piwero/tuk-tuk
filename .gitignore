@@ -64,7 +64,6 @@ coverage/
 *.log
 logs/
 
-docs/ADR/
 docs/research/
 # AI-powered
 .opencode/

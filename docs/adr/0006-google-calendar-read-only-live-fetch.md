@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Accepted. Where the OAuth client credentials and the token-encryption key
+are stored is superseded by [0008](0008-ui-managed-settings.md) —
+`GOOGLE_CLIENT_ID`/`SECRET` move from `.env` into the database, managed
+from the UI, and `GOOGLE_ENCRYPTION_KEY` is retired in favor of a single
+root `APP_MASTER_KEY`. The read-only scope and live-fetch decisions below
+are unaffected.
 
 ## Context
 
