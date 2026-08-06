@@ -156,6 +156,7 @@ function GoogleAccountCalendars({
 function ChangePasswordForm(): JSX.Element {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -165,13 +166,21 @@ function ChangePasswordForm(): JSX.Element {
     if (pending) {
       return;
     }
+    setSuccess(false);
+    // Caught here, before any request: a mismatch is never worth spending
+    // a throttled attempt on (a wrong current password shares one counter
+    // with /login), and it isn't something the backend needs to know.
+    if (newPassword !== confirmPassword) {
+      setError("New password and confirmation don't match.");
+      return;
+    }
     setPending(true);
     setError(null);
-    setSuccess(false);
     changePassword(currentPassword, newPassword)
       .then(() => {
         setCurrentPassword("");
         setNewPassword("");
+        setConfirmPassword("");
         setSuccess(true);
         setPending(false);
       })
@@ -202,6 +211,16 @@ function ChangePasswordForm(): JSX.Element {
         value={newPassword}
         disabled={pending}
         onChange={(event) => setNewPassword(event.target.value)}
+      />
+      <label htmlFor="settings-confirm-password">Confirm new password</label>
+      <input
+        id="settings-confirm-password"
+        name="confirm-password"
+        type="password"
+        autoComplete="new-password"
+        value={confirmPassword}
+        disabled={pending}
+        onChange={(event) => setConfirmPassword(event.target.value)}
       />
       {error !== null && <p role="alert">{error}</p>}
       {success && <p>Password changed. Other devices will need to log in again.</p>}
