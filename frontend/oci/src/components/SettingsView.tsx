@@ -91,7 +91,10 @@ function GoogleAccountCalendars({
   }
 
   return (
-    <details onToggle={(event) => event.currentTarget.open && handleOpen()}>
+    <details
+      className="google-account-calendars"
+      onToggle={(event) => event.currentTarget.open && handleOpen()}
+    >
       <summary>{account.email}</summary>
       {error ? (
         <p role="alert">
@@ -101,15 +104,15 @@ function GoogleAccountCalendars({
           </button>
         </p>
       ) : calendars === null ? (
-        <p>Loading calendars…</p>
+        <p className="settings-hint">Loading calendars…</p>
       ) : (
         <>
           {calendars.length === 0 ? (
-            <p>No calendars found.</p>
+            <p className="settings-hint">No calendars found.</p>
           ) : (
-            <ul>
+            <ul className="google-calendar-list">
               {calendars.map((calendar) => (
-                <li key={calendar.id}>
+                <li key={calendar.id} className="google-calendar-row">
                   <label>
                     <input
                       type="checkbox"
@@ -192,40 +195,50 @@ function ChangePasswordForm(): JSX.Element {
   }
 
   return (
-    <form className="change-password-form" onSubmit={handleSubmit}>
-      <label htmlFor="settings-current-password">Current password</label>
-      <input
-        id="settings-current-password"
-        name="current-password"
-        type="password"
-        autoComplete="current-password"
-        value={currentPassword}
-        disabled={pending}
-        onChange={(event) => setCurrentPassword(event.target.value)}
-      />
-      <label htmlFor="settings-new-password">New password</label>
-      <input
-        id="settings-new-password"
-        name="new-password"
-        type="password"
-        autoComplete="new-password"
-        value={newPassword}
-        disabled={pending}
-        onChange={(event) => setNewPassword(event.target.value)}
-      />
-      <label htmlFor="settings-confirm-password">Confirm new password</label>
-      <input
-        id="settings-confirm-password"
-        name="confirm-password"
-        type="password"
-        autoComplete="new-password"
-        value={confirmPassword}
-        disabled={pending}
-        onChange={(event) => setConfirmPassword(event.target.value)}
-      />
+    <form className="change-password-form settings-form" onSubmit={handleSubmit}>
+      <div className="settings-field">
+        <label htmlFor="settings-current-password">Current password</label>
+        <input
+          id="settings-current-password"
+          name="current-password"
+          type="password"
+          autoComplete="current-password"
+          value={currentPassword}
+          disabled={pending}
+          onChange={(event) => setCurrentPassword(event.target.value)}
+        />
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-new-password">New password</label>
+        <input
+          id="settings-new-password"
+          name="new-password"
+          type="password"
+          autoComplete="new-password"
+          value={newPassword}
+          disabled={pending}
+          onChange={(event) => setNewPassword(event.target.value)}
+        />
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-confirm-password">Confirm new password</label>
+        <input
+          id="settings-confirm-password"
+          name="confirm-password"
+          type="password"
+          autoComplete="new-password"
+          value={confirmPassword}
+          disabled={pending}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+        />
+      </div>
       {error !== null && <p role="alert">{error}</p>}
-      {success && <p>Password changed. Other devices will need to log in again.</p>}
-      <button type="submit" disabled={pending}>
+      {success && (
+        <p className="settings-success">
+          Password changed. Other devices will need to log in again.
+        </p>
+      )}
+      <button type="submit" className="settings-primary-action" disabled={pending}>
         {pending ? "Changing…" : "Change password"}
       </button>
     </form>
@@ -285,44 +298,50 @@ function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps):
   }
 
   return (
-    <form className="google-credentials-form" onSubmit={handleSubmit}>
-      <label htmlFor="settings-google-client-id">Client ID</label>
-      <input
-        id="settings-google-client-id"
-        name="google-client-id"
-        type="text"
-        value={clientId}
-        disabled={pending}
-        onChange={(event) => setClientId(event.target.value)}
-      />
-      <label htmlFor="settings-google-client-secret">Client secret</label>
-      {status.client_secret_set && !overwriteSecret ? (
-        <p>
-          A client secret is already saved.{" "}
-          <button type="button" onClick={() => setOverwriteSecret(true)} disabled={pending}>
-            Replace it
-          </button>
-        </p>
-      ) : (
+    <form className="google-credentials-form settings-form" onSubmit={handleSubmit}>
+      <div className="settings-field">
+        <label htmlFor="settings-google-client-id">Client ID</label>
         <input
-          id="settings-google-client-secret"
-          name="google-client-secret"
-          type="password"
-          autoComplete="off"
-          value={clientSecret}
+          id="settings-google-client-id"
+          name="google-client-id"
+          type="text"
+          value={clientId}
           disabled={pending}
-          onChange={(event) => setClientSecret(event.target.value)}
+          onChange={(event) => setClientId(event.target.value)}
         />
-      )}
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-google-client-secret">Client secret</label>
+        {status.client_secret_set && !overwriteSecret ? (
+          <p className="settings-hint">
+            A client secret is already saved.{" "}
+            <button type="button" onClick={() => setOverwriteSecret(true)} disabled={pending}>
+              Replace it
+            </button>
+          </p>
+        ) : (
+          <input
+            id="settings-google-client-secret"
+            name="google-client-secret"
+            type="password"
+            autoComplete="off"
+            value={clientSecret}
+            disabled={pending}
+            onChange={(event) => setClientSecret(event.target.value)}
+          />
+        )}
+      </div>
       {error !== null && <p role="alert">{error}</p>}
-      <button type="submit" disabled={pending}>
-        {pending ? "Saving…" : "Save Google credentials"}
-      </button>
-      {status.configured && (
-        <button type="button" onClick={() => void handleRemove()} disabled={pending}>
-          Remove Google integration
+      <div className="settings-form-actions">
+        <button type="submit" className="settings-primary-action" disabled={pending}>
+          {pending ? "Saving…" : "Save Google credentials"}
         </button>
-      )}
+        {status.configured && (
+          <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+            Remove Google integration
+          </button>
+        )}
+      </div>
     </form>
   );
 }
@@ -391,19 +410,21 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
       {googleStatus !== null && (
         <section aria-label="Google Calendar" className="settings-section">
           <h2>Google Calendar</h2>
-          <h3>Google API credentials</h3>
-          <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
+          <div className="settings-subsection">
+            <h3>Google API credentials</h3>
+            <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
+          </div>
           {googleStatus.configured && (
-            <>
+            <div className="settings-subsection">
               {googleOAuthError && (
                 <p role="alert">Connecting to Google didn't complete. Please try again.</p>
               )}
               {accounts.length === 0 ? (
-                <p>No accounts connected.</p>
+                <p className="settings-hint">No accounts connected.</p>
               ) : (
-                <ul>
+                <ul className="google-accounts">
                   {accounts.map((account) => (
-                    <li key={account.id}>
+                    <li key={account.id} className="google-account">
                       <GoogleAccountCalendars
                         account={account}
                         onReconnectRequired={() => void refreshAccounts()}
@@ -430,7 +451,7 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
               <a href={googleConnectUrl()} className="button">
                 Connect
               </a>
-            </>
+            </div>
           )}
         </section>
       )}
