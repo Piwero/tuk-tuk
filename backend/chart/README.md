@@ -122,26 +122,33 @@ or the `tuk-tuk-google` 1Password item behind it, exists at all. There is
 nothing to do here unless you actually want the integration enabled in the
 cluster.
 
-To enable it, create a `tuk-tuk-google` item in the `homelab-supernova`
-vault (same vault as `tuk-tuk-auth`) with three fields:
+As of ADR 0008 (issue #117), this Secret is migration-only: Google
+credentials live in the DB-backed `settings` table and are entered and
+edited from the app's own Settings screen, not provisioned here. Populating
+`tuk-tuk-google` only matters for carrying an existing Google connection
+through the upgrade to ADR 0008 — a deployment that's already past that
+upgrade (or starting fresh) never needs this Secret at all; use Settings
+instead.
 
-| Field                   | Value                                                                                                                                                                                        |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GOOGLE_CLIENT_ID`      | From a Google Cloud OAuth client, with an exact redirect URI registered for the cluster's origin, and publishing status "In production" (unverified-app refresh tokens expire after 7 days). |
-| `GOOGLE_CLIENT_SECRET`  | The matching OAuth client secret.                                                                                                                                                            |
-| `GOOGLE_ENCRYPTION_KEY` | A long random value generated once, e.g. `openssl rand -base64 32`. Encrypts stored Google refresh credentials at rest.                                                                      |
+To carry an existing connection through the upgrade, create a `tuk-tuk-google`
+item in the `homelab-supernova` vault (same vault as `tuk-tuk-auth`) with two
+fields, **before** the first post-upgrade boot:
 
-As with `AUTH_PASSWORD_HASH`, the operator syncs these field labels directly
-as Secret keys — the names must match `app.config.Settings` exactly
-(`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_ENCRYPTION_KEY`), no
-quotes or trailing whitespace.
+| Field                  | Value                                                                                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GOOGLE_CLIENT_ID`     | From a Google Cloud OAuth client, with an exact redirect URI registered for the cluster's origin, and publishing status "In production" (unverified-app refresh tokens expire after 7 days). |
+| `GOOGLE_CLIENT_SECRET` | The matching OAuth client secret.                                                                                                                                                            |
 
-`GOOGLE_ENCRYPTION_KEY` is deliberately independent of `SECRET_KEY`: rotating
-the session signing key logs every device out, and must never also destroy a
-connected Google account by making its stored refresh credential
-undecryptable. Once `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are both set,
-`GOOGLE_ENCRYPTION_KEY` becomes required — the backend refuses to start
-without it — so all three fields go in together.
+The operator syncs these field labels directly as Secret keys — the names
+must match `app.config.Settings` exactly (`GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET`), no quotes or trailing whitespace. The former third
+field, `GOOGLE_ENCRYPTION_KEY`, is retired: stored Google refresh
+credentials are now encrypted with `APP_MASTER_KEY` (the `tuk-tuk-auth`
+item), the same key that protects the rest of the `settings` table.
+
+Once imported on that first boot, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`
+are never read from this Secret again — rotate or remove Google credentials
+from Settings afterward, not by editing `tuk-tuk-google`.
 
 Apply the item, then restart the pod to pick it up (`optional: true` means an
 existing pod won't be restarted automatically just because the Secret

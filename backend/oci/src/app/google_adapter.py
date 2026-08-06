@@ -113,6 +113,10 @@ class GoogleCalendarSource:
         # code never passes one and gets httpx's real network transport.
         self._transport = transport
 
+    def configure(self, client_id: str, client_secret: str) -> None:
+        self._client_id = client_id
+        self._client_secret = client_secret
+
     @asynccontextmanager
     async def _client(self, action: str) -> AsyncIterator[httpx.AsyncClient]:
         """Every request below shares this: a network-level failure (as

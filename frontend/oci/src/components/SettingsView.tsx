@@ -9,13 +9,14 @@ import {
   fetchGoogleStatus,
   googleConnectUrl,
   refreshGoogleCalendars,
+  removeGoogleIntegration,
+  saveGoogleCredentials,
   updateGoogleCalendar,
   type GoogleAccount,
   type GoogleCalendar,
+  type GoogleStatus,
 } from "../api";
 import { ACCENT_PALETTE } from "../theme";
-
-type GoogleStatusState = "checking" | "configured" | "unconfigured";
 
 interface SettingsViewProps {
   /** Set when the browser just landed back from a Google consent round
@@ -231,13 +232,110 @@ function ChangePasswordForm(): JSX.Element {
   );
 }
 
-/** The Settings screen. Asks the Google status endpoint once on mount and
- * only ever shows the Google Calendar section — or any Google wording at
- * all — when the backend reports it configured. Mirrors the Assist
- * principle: absent prerequisites make a feature invisible, not
- * greyed-out. See CONTEXT.md's Assist glossary entry. */
+interface GoogleCredentialsFormProps {
+  status: GoogleStatus;
+  onSaved: (status: GoogleStatus) => void;
+}
+
+/** The "Google API credentials" form (issue #117): client ID + a write-only
+ * client secret. Shown whenever no credentials are configured yet, and
+ * remains available afterward to edit them — the secret field never shows
+ * the real value, only a masked placeholder when one is already stored, with
+ * an explicit choice to overwrite it. Saving flips every connected account
+ * to "needs_reconnect" server-side (a refresh token belongs to the OAuth
+ * client that minted it), so `onSaved` re-fetches the account list too. */
+function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps): JSX.Element {
+  const [clientId, setClientId] = useState(status.client_id ?? "");
+  const [clientSecret, setClientSecret] = useState("");
+  const [overwriteSecret, setOverwriteSecret] = useState(!status.client_secret_set);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-syncs the form with the saved state after a save or a "Remove Google
+  // integration" — both replace `status` from outside this form (the parent
+  // owns the source of truth so the account list can react to it too).
+  useEffect(() => {
+    setClientId(status.client_id ?? "");
+    setOverwriteSecret(!status.client_secret_set);
+  }, [status.client_id, status.client_secret_set]);
+
+  function handleSubmit(event: React.FormEvent): void {
+    event.preventDefault();
+    if (pending) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    saveGoogleCredentials(clientId, overwriteSecret ? clientSecret : null)
+      .then((saved) => {
+        setClientSecret("");
+        setOverwriteSecret(false);
+        setPending(false);
+        onSaved(saved);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+        setPending(false);
+      });
+  }
+
+  async function handleRemove(): Promise<void> {
+    await removeGoogleIntegration();
+    onSaved({ configured: false, client_id: null, client_secret_set: false });
+  }
+
+  return (
+    <form className="google-credentials-form" onSubmit={handleSubmit}>
+      <label htmlFor="settings-google-client-id">Client ID</label>
+      <input
+        id="settings-google-client-id"
+        name="google-client-id"
+        type="text"
+        value={clientId}
+        disabled={pending}
+        onChange={(event) => setClientId(event.target.value)}
+      />
+      <label htmlFor="settings-google-client-secret">Client secret</label>
+      {status.client_secret_set && !overwriteSecret ? (
+        <p>
+          A client secret is already saved.{" "}
+          <button type="button" onClick={() => setOverwriteSecret(true)} disabled={pending}>
+            Replace it
+          </button>
+        </p>
+      ) : (
+        <input
+          id="settings-google-client-secret"
+          name="google-client-secret"
+          type="password"
+          autoComplete="off"
+          value={clientSecret}
+          disabled={pending}
+          onChange={(event) => setClientSecret(event.target.value)}
+        />
+      )}
+      {error !== null && <p role="alert">{error}</p>}
+      <button type="submit" disabled={pending}>
+        {pending ? "Saving…" : "Save Google credentials"}
+      </button>
+      {status.configured && (
+        <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+          Remove Google integration
+        </button>
+      )}
+    </form>
+  );
+}
+
+/** The Settings screen. Asks the Google status endpoint once on mount. The
+ * Google Calendar section itself is always shown once that answer is in —
+ * unlike before issue #117, its credentials form is how an operator gets
+ * from unconfigured to configured in the first place — but the account list
+ * and Connect button inside it stay invisible, not greyed-out, until the
+ * backend reports credentials are actually set. See CONTEXT.md's Assist
+ * glossary entry. */
 export function SettingsView({ googleOAuthError = false }: SettingsViewProps): JSX.Element {
-  const [googleStatus, setGoogleStatus] = useState<GoogleStatusState>("checking");
+  const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
 
   useEffect(() => {
@@ -247,7 +345,7 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
         if (cancelled) {
           return;
         }
-        setGoogleStatus(status.configured ? "configured" : "unconfigured");
+        setGoogleStatus(status);
         if (status.configured) {
           return fetchGoogleAccounts().then((fetched) => {
             if (!cancelled) {
@@ -258,13 +356,22 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
       })
       .catch(() => {
         if (!cancelled) {
-          setGoogleStatus("unconfigured");
+          setGoogleStatus({ configured: false, client_id: null, client_secret_set: false });
         }
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  function handleCredentialsSaved(status: GoogleStatus): void {
+    setGoogleStatus(status);
+    if (status.configured) {
+      void fetchGoogleAccounts().then(setAccounts);
+    } else {
+      setAccounts([]);
+    }
+  }
 
   async function handleDisconnect(accountId: number): Promise<void> {
     await disconnectGoogleAccount(accountId);
@@ -281,44 +388,50 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
         <h2>Security</h2>
         <ChangePasswordForm />
       </section>
-      {googleStatus === "configured" && (
+      {googleStatus !== null && (
         <section aria-label="Google Calendar" className="settings-section">
           <h2>Google Calendar</h2>
-          {googleOAuthError && (
-            <p role="alert">Connecting to Google didn't complete. Please try again.</p>
+          <h3>Google API credentials</h3>
+          <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
+          {googleStatus.configured && (
+            <>
+              {googleOAuthError && (
+                <p role="alert">Connecting to Google didn't complete. Please try again.</p>
+              )}
+              {accounts.length === 0 ? (
+                <p>No accounts connected.</p>
+              ) : (
+                <ul>
+                  {accounts.map((account) => (
+                    <li key={account.id}>
+                      <GoogleAccountCalendars
+                        account={account}
+                        onReconnectRequired={() => void refreshAccounts()}
+                      />
+                      {account.connection_state === "needs_reconnect" && (
+                        <p role="alert">
+                          This account needs to be reconnected — its Events and calendars can't be
+                          read until then.{" "}
+                          <a href={googleConnectUrl()} className="button">
+                            Reconnect
+                          </a>
+                        </p>
+                      )}
+                      <button type="button" onClick={() => void handleDisconnect(account.id)}>
+                        Disconnect
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* A full-page navigation, not a fetch: the consent flow is a
+               * browser round trip through Google that only the backend can
+               * broker. */}
+              <a href={googleConnectUrl()} className="button">
+                Connect
+              </a>
+            </>
           )}
-          {accounts.length === 0 ? (
-            <p>No accounts connected.</p>
-          ) : (
-            <ul>
-              {accounts.map((account) => (
-                <li key={account.id}>
-                  <GoogleAccountCalendars
-                    account={account}
-                    onReconnectRequired={() => void refreshAccounts()}
-                  />
-                  {account.connection_state === "needs_reconnect" && (
-                    <p role="alert">
-                      This account needs to be reconnected — its Events and calendars can't be read
-                      until then.{" "}
-                      <a href={googleConnectUrl()} className="button">
-                        Reconnect
-                      </a>
-                    </p>
-                  )}
-                  <button type="button" onClick={() => void handleDisconnect(account.id)}>
-                    Disconnect
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {/* A full-page navigation, not a fetch: the consent flow is a
-           * browser round trip through Google that only the backend can
-           * broker. */}
-          <a href={googleConnectUrl()} className="button">
-            Connect
-          </a>
         </section>
       )}
     </div>

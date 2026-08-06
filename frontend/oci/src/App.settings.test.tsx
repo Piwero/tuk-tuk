@@ -12,15 +12,19 @@ afterEach(() => {
 });
 
 describe("Google Calendar gate", () => {
-  it("shows no Google wording anywhere when the integration is unconfigured", async () => {
+  it("shows only the credentials form, no account UI, when unconfigured", async () => {
     installFakeApi({ googleConfigured: false });
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Settings" }));
 
-    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.queryByText(/google/i)).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Google API credentials" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Client ID")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Connect" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/no accounts connected/i)).not.toBeInTheDocument();
   });
 
   it("shows a Google Calendar section with nothing connected when configured", async () => {
@@ -349,6 +353,125 @@ describe("Google Calendar gate", () => {
     expect(await screen.findByText("me@example.com")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(window.location.search).toBe("");
+  });
+});
+
+describe("Google API credentials (issue #117)", () => {
+  it("saving credentials reveals the account-connect UI", async () => {
+    const state = installFakeApi({ googleConfigured: false });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.type(screen.getByLabelText("Client ID"), "a-client-id");
+    await user.type(screen.getByLabelText("Client secret"), "a-client-secret");
+    await user.click(screen.getByRole("button", { name: "Save Google credentials" }));
+
+    expect(await screen.findByRole("link", { name: "Connect" })).toBeInTheDocument();
+    expect(screen.getByText(/no accounts connected/i)).toBeInTheDocument();
+    const saveRequest = state.requests.find(
+      (r) => r.method === "PUT" && r.url === "/api/v1/google/credentials",
+    );
+    expect(saveRequest?.body).toEqual({
+      client_id: "a-client-id",
+      client_secret: "a-client-secret",
+    });
+  });
+
+  it("shows the client ID and a masked placeholder for an already-stored secret", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      googleClientId: "existing-client-id",
+      googleClientSecretSet: true,
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByLabelText("Client ID")).toHaveValue("existing-client-id");
+    expect(screen.getByText(/client secret is already saved/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Client secret")).not.toBeInTheDocument();
+  });
+
+  it("saving without replacing the secret keeps it unchanged and omits it from the request", async () => {
+    const state = installFakeApi({
+      googleConfigured: true,
+      googleClientId: "existing-client-id",
+      googleClientSecretSet: true,
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    const clientIdField = await screen.findByLabelText("Client ID");
+    await user.clear(clientIdField);
+    await user.type(clientIdField, "new-client-id");
+    await user.click(screen.getByRole("button", { name: "Save Google credentials" }));
+
+    await waitFor(() => {
+      const saveRequest = state.requests.find(
+        (r) => r.method === "PUT" && r.url === "/api/v1/google/credentials",
+      );
+      expect(saveRequest?.body).toEqual({ client_id: "new-client-id" });
+    });
+    expect(state.googleClientId).toBe("new-client-id");
+    expect(state.googleClientSecretSet).toBe(true);
+  });
+
+  it("editing credentials while an account is connected flips it to needs_reconnect", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      googleClientId: "existing-client-id",
+      googleClientSecretSet: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "me@example.com",
+          connection_state: "connected",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("button", { name: "Replace it" }));
+    await user.type(screen.getByLabelText("Client secret"), "new-client-secret");
+    await user.click(screen.getByRole("button", { name: "Save Google credentials" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/needs to be reconnected/i);
+  });
+
+  it("removing the integration returns Settings to the unconfigured state", async () => {
+    installFakeApi({
+      googleConfigured: true,
+      googleClientId: "existing-client-id",
+      googleClientSecretSet: true,
+      googleAccounts: [
+        {
+          id: 1,
+          google_account_id: "google-1",
+          email: "me@example.com",
+          connection_state: "connected",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await screen.findByText("me@example.com");
+    await user.click(screen.getByRole("button", { name: "Remove Google integration" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: "Connect" })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText("me@example.com")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Client ID")).toHaveValue("");
   });
 });
 

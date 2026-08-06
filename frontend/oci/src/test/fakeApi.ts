@@ -205,6 +205,10 @@ export interface FakeApiState {
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
+  /** The stored client ID, echoed back by /status — not sensitive, unlike
+   * the secret, which is never returned (only whether one is set). */
+  googleClientId: string | null;
+  googleClientSecretSet: boolean;
   googleAccounts: FakeGoogleAccount[];
   googleCalendars: FakeGoogleCalendar[];
   events: FakeEvent[];
@@ -395,6 +399,8 @@ export function installFakeApi({
   loggedIn = true,
   needsSetup = false,
   googleConfigured = false,
+  googleClientId = null,
+  googleClientSecretSet = false,
   googleAccounts = [],
   googleCalendars = [],
   events = [],
@@ -417,6 +423,8 @@ export function installFakeApi({
   needsSetup?: boolean;
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
+  googleClientId?: string | null;
+  googleClientSecretSet?: boolean;
   googleAccounts?: FakeGoogleAccount[];
   /** Pre-seeded as if already fetched once — the fake never re-derives
    * this from a Google-side `selected` flag; that seeding rule is the
@@ -454,6 +462,8 @@ export function installFakeApi({
     password: FAKE_PASSWORD,
     needsSetup,
     googleConfigured,
+    googleClientId,
+    googleClientSecretSet,
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
     googleCalendars: googleCalendars.map((calendar) => ({ ...calendar })),
     events: events.map((event) => ({ ...event })),
@@ -577,7 +587,56 @@ export function installFakeApi({
       if (!state.loggedIn) {
         return unauthorized();
       }
-      return json({ configured: state.googleConfigured });
+      return json({
+        configured: state.googleConfigured,
+        client_id: state.googleClientId,
+        client_secret_set: state.googleClientSecretSet,
+      });
+    }
+    if (method === "PUT" && url.pathname === "/api/v1/google/credentials") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      const input = body as { client_id: string; client_secret?: string | null };
+      if (!input.client_id) {
+        return json(
+          { error: { code: "validation_error", message: "client_id must not be empty" } },
+          422,
+        );
+      }
+      if (!input.client_secret && !state.googleClientSecretSet) {
+        return json(
+          { error: { code: "client_secret_required", message: "A client secret is required" } },
+          422,
+        );
+      }
+      state.googleClientId = input.client_id;
+      if (input.client_secret) {
+        state.googleClientSecretSet = true;
+      }
+      state.googleConfigured = true;
+      // Mirrors the backend: any credentials save flips every connected
+      // account to needs_reconnect (issue #117) — a refresh token only
+      // works for the OAuth client that minted it.
+      for (const account of state.googleAccounts) {
+        account.connection_state = "needs_reconnect";
+      }
+      return json({
+        configured: true,
+        client_id: state.googleClientId,
+        client_secret_set: state.googleClientSecretSet,
+      });
+    }
+    if (method === "DELETE" && url.pathname === "/api/v1/google/credentials") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      state.googleConfigured = false;
+      state.googleClientId = null;
+      state.googleClientSecretSet = false;
+      state.googleAccounts = [];
+      state.googleCalendars = [];
+      return new Response(null, { status: 204 });
     }
     if (method === "GET" && url.pathname === "/api/v1/google/accounts") {
       if (!state.loggedIn) {

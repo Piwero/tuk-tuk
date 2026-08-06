@@ -182,14 +182,50 @@ export function changePassword(currentPassword: string, newPassword: string): Pr
 
 export interface GoogleStatus {
   configured: boolean;
+  /** The client ID isn't sensitive — Settings shows it back for editing. */
+  client_id: string | null;
+  /** Whether a client secret is stored; the value itself never round-trips. */
+  client_secret_set: boolean;
 }
 
 /** Whether the Google Calendar integration is configured server-side (the
- * two settings present) — never the credential values themselves. Settings
- * asks this once to decide whether to show the Google Calendar section at
- * all; when false, no Google wording appears anywhere in the app. */
+ * two settings present) — the client secret's value never included. Settings
+ * asks this once to decide whether to show the account-connect UI; when
+ * `configured` is false, no Google wording appears anywhere else in the app. */
 export function fetchGoogleStatus(): Promise<GoogleStatus> {
   return request("/api/v1/google/status");
+}
+
+/** Saves the Google OAuth client credentials (issue #117). Omitting
+ * `clientSecret` keeps whatever is already stored — the credentials form's
+ * secret field is write-only and shows a masked placeholder, not the real
+ * value, so there's nothing to resubmit unless the operator chose to
+ * overwrite it. Every connected account is flipped to "needs_reconnect" by
+ * the backend as part of this call, since a refresh token is only valid for
+ * the OAuth client that minted it. */
+export function saveGoogleCredentials(
+  clientId: string,
+  clientSecret: string | null,
+): Promise<GoogleStatus> {
+  // The key itself is left out, not sent as null, when keeping the stored
+  // secret — the backend's GoogleCredentialsUpdate treats "absent" as the
+  // sentinel for "unchanged", matching the PATCH convention this app uses
+  // for every other partial-update field.
+  const body: { client_id: string; client_secret?: string } = { client_id: clientId };
+  if (clientSecret !== null) {
+    body.client_secret = clientSecret;
+  }
+  return request("/api/v1/google/credentials", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Removes the Google integration entirely: clears the stored credentials
+ * and disconnects every account, returning to the same "unconfigured,
+ * invisible" state as a fresh deployment. */
+export function removeGoogleIntegration(): Promise<void> {
+  return request("/api/v1/google/credentials", { method: "DELETE" });
 }
 
 export interface GoogleAccount {

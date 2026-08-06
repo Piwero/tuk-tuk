@@ -96,6 +96,13 @@ class TerminalCalendarSourceError(CalendarSourceError):
 
 
 class CalendarSource(Protocol):
+    def configure(self, client_id: str, client_secret: str) -> None:
+        """Replaces the OAuth client credentials in use, without
+        reconstructing the source (issue #117) — Settings can save new
+        Google credentials mid-process and have the very next request use
+        them, rather than requiring a restart."""
+        ...
+
     async def exchange_code(self, code: str, redirect_uri: str) -> ExchangedCredential:
         """Exchange a one-time authorization code for a refresh credential
         and the identity (Google account id, email) it belongs to."""
