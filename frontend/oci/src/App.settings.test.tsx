@@ -363,6 +363,7 @@ describe("Change password (issue #116)", () => {
     expect(await screen.findByRole("heading", { name: "Security" })).toBeInTheDocument();
     expect(screen.getByLabelText("Current password")).toBeInTheDocument();
     expect(screen.getByLabelText("New password")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirm new password")).toBeInTheDocument();
   });
 
   it("submitting with the correct current password succeeds and clears the form", async () => {
@@ -373,11 +374,13 @@ describe("Change password (issue #116)", () => {
     await user.click(await screen.findByRole("button", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
     await user.type(screen.getByLabelText("New password"), "a-new-password");
+    await user.type(screen.getByLabelText("Confirm new password"), "a-new-password");
     await user.click(screen.getByRole("button", { name: "Change password" }));
 
     expect(await screen.findByText(/password changed/i)).toBeInTheDocument();
     expect(screen.getByLabelText("Current password")).toHaveValue("");
     expect(screen.getByLabelText("New password")).toHaveValue("");
+    expect(screen.getByLabelText("Confirm new password")).toHaveValue("");
     expect(state.password).toBe("a-new-password");
   });
 
@@ -389,9 +392,25 @@ describe("Change password (issue #116)", () => {
     await user.click(await screen.findByRole("button", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), "wrong-password");
     await user.type(screen.getByLabelText("New password"), "a-new-password");
+    await user.type(screen.getByLabelText("Confirm new password"), "a-new-password");
     await user.click(screen.getByRole("button", { name: "Change password" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/incorrect/i);
+    expect(state.password).toBe(FAKE_PASSWORD);
+  });
+
+  it("shows an error and doesn't submit when the new password and confirmation don't match", async () => {
+    const state = installFakeApi({});
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
+    await user.type(screen.getByLabelText("New password"), "a-new-password");
+    await user.type(screen.getByLabelText("Confirm new password"), "a-different-password");
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("don't match");
     expect(state.password).toBe(FAKE_PASSWORD);
   });
 });

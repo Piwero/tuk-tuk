@@ -56,6 +56,7 @@ export function AuthGate(): JSX.Element | null {
 
 function SetupScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,6 +72,13 @@ function SetupScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
         onSubmit={(event) => {
           event.preventDefault();
           if (pending) {
+            return;
+          }
+          // Caught client-side, before any request: a typo here is a
+          // person mistyping their own new password, not something the
+          // backend needs to weigh in on.
+          if (password !== confirmPassword) {
+            setError("Password and confirmation don't match.");
             return;
           }
           setPending(true);
@@ -95,6 +103,16 @@ function SetupScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
           value={password}
           disabled={pending}
           onChange={(event) => setPassword(event.target.value)}
+        />
+        <label htmlFor="auth-gate-setup-confirm-password">Confirm password</label>
+        <input
+          id="auth-gate-setup-confirm-password"
+          name="confirm-password"
+          type="password"
+          autoComplete="new-password"
+          value={confirmPassword}
+          disabled={pending}
+          onChange={(event) => setConfirmPassword(event.target.value)}
         />
         {error !== null && (
           <p className="auth-gate-error" role="alert">

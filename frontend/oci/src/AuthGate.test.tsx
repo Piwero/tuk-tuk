@@ -23,9 +23,22 @@ describe("AuthGate", () => {
 
     const passwordField = await screen.findByLabelText("Password");
     expect(passwordField).toHaveFocus();
-    await user.type(passwordField, "a-new-password{Enter}");
+    await user.type(passwordField, "a-new-password");
+    await user.type(screen.getByLabelText("Confirm password"), "a-new-password{Enter}");
 
     expect(await screen.findByText("Buy milk")).toBeInTheDocument();
+  });
+
+  it("shows an error and doesn't submit when setup's password and confirmation don't match", async () => {
+    installFakeApi({ loggedIn: false, needsSetup: true, tasks: [fakeTask("Buy milk")] });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await user.type(await screen.findByLabelText("Password"), "a-new-password");
+    await user.type(screen.getByLabelText("Confirm password"), "a-different-password{Enter}");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("don't match");
+    expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
   });
 
   it("shows the password screen instead of the app without a session", async () => {
