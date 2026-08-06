@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import {
   ApiError,
+  changePassword,
   disconnectGoogleAccount,
   fetchGoogleAccounts,
   fetchGoogleCalendars,
@@ -148,6 +149,69 @@ function GoogleAccountCalendars({
   );
 }
 
+/** The change-password form (issue #116, ADR 0008): current + new password.
+ * Saving rotates the session signing key server-side, invalidating every
+ * other device's cookie while this device gets a fresh one in the response
+ * — nothing to do here on success beyond clearing the form and confirming. */
+function ChangePasswordForm(): JSX.Element {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  function handleSubmit(event: React.FormEvent): void {
+    event.preventDefault();
+    if (pending) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setSuccess(false);
+    changePassword(currentPassword, newPassword)
+      .then(() => {
+        setCurrentPassword("");
+        setNewPassword("");
+        setSuccess(true);
+        setPending(false);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+        setPending(false);
+      });
+  }
+
+  return (
+    <form className="change-password-form" onSubmit={handleSubmit}>
+      <label htmlFor="settings-current-password">Current password</label>
+      <input
+        id="settings-current-password"
+        name="current-password"
+        type="password"
+        autoComplete="current-password"
+        value={currentPassword}
+        disabled={pending}
+        onChange={(event) => setCurrentPassword(event.target.value)}
+      />
+      <label htmlFor="settings-new-password">New password</label>
+      <input
+        id="settings-new-password"
+        name="new-password"
+        type="password"
+        autoComplete="new-password"
+        value={newPassword}
+        disabled={pending}
+        onChange={(event) => setNewPassword(event.target.value)}
+      />
+      {error !== null && <p role="alert">{error}</p>}
+      {success && <p>Password changed. Other devices will need to log in again.</p>}
+      <button type="submit" disabled={pending}>
+        {pending ? "Changing…" : "Change password"}
+      </button>
+    </form>
+  );
+}
+
 /** The Settings screen. Asks the Google status endpoint once on mount and
  * only ever shows the Google Calendar section — or any Google wording at
  * all — when the backend reports it configured. Mirrors the Assist
@@ -194,6 +258,10 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
 
   return (
     <div className="settings-view">
+      <section aria-label="Security" className="settings-section">
+        <h2>Security</h2>
+        <ChangePasswordForm />
+      </section>
       {googleStatus === "configured" && (
         <section aria-label="Google Calendar" className="settings-section">
           <h2>Google Calendar</h2>

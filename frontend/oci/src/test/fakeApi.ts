@@ -194,6 +194,10 @@ export interface FakeApiState {
   requests: RecordedRequest[];
   /** Mutate directly to simulate a session lapsing mid-test. */
   loggedIn: boolean;
+  /** The password the fake login and change-password routes check against;
+   * starts at FAKE_PASSWORD, and a successful fake change-password call
+   * updates it — mirrors the backend hash living in `settings`. */
+  password: string;
   /** Mirrors a fresh deployment with no password set yet (ADR 0008):
    * every route but /health, /login, and /setup answers "setup_required"
    * regardless of `loggedIn`. Cleared by a successful fake /setup call. */
@@ -447,6 +451,7 @@ export function installFakeApi({
     timers: timers.map((timer) => ({ ...timer })),
     requests: [],
     loggedIn,
+    password: FAKE_PASSWORD,
     needsSetup,
     googleConfigured,
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
@@ -687,7 +692,7 @@ export function installFakeApi({
         return setupRequired();
       }
       const input = body as { password: string };
-      if (input.password !== FAKE_PASSWORD) {
+      if (input.password !== state.password) {
         return json({ error: { code: "invalid_credentials", message: "Incorrect password" } }, 401);
       }
       state.loggedIn = true;
@@ -701,6 +706,17 @@ export function installFakeApi({
     }
     if (method === "POST" && url.pathname === "/api/v1/auth/logout") {
       state.loggedIn = false;
+      return new Response(null, { status: 204 });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/password") {
+      const input = body as { current_password: string; new_password: string };
+      if (input.current_password !== state.password) {
+        return json(
+          { error: { code: "invalid_current_password", message: "Current password is incorrect" } },
+          400,
+        );
+      }
+      state.password = input.new_password;
       return new Response(null, { status: 204 });
     }
 
