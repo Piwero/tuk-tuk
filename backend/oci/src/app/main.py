@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app import __version__
+from app.app_settings import bootstrap_app_settings
 from app.calendar_source import CalendarSource
 from app.config import Settings
 from app.config import settings as default_settings
@@ -52,27 +53,11 @@ def create_app(
         client_secret=app_settings.google_client_secret or "",
     )
 
-    if not app_settings.auth_password_hash:
+    if not app_settings.app_master_key:
         raise RuntimeError(
-            "AUTH_PASSWORD_HASH is not configured. The app refuses to start without a "
-            "password hash: run 'mise run backend:hash-password' and set the printed "
-            "hash as AUTH_PASSWORD_HASH in your .env or 1Password item."
-        )
-    if app_settings.secret_key == "change-me":
-        raise RuntimeError(
-            "SECRET_KEY is not configured. The app refuses to start while it's left at "
-            "the placeholder value: generate one with 'openssl rand -base64 32' and set "
-            "it as SECRET_KEY in your .env or 1Password item."
-        )
-    google_configured = bool(app_settings.google_client_id) and bool(
-        app_settings.google_client_secret
-    )
-    if google_configured and not app_settings.google_encryption_key:
-        raise RuntimeError(
-            "GOOGLE_ENCRYPTION_KEY is not configured. GOOGLE_CLIENT_ID/SECRET are set, so "
-            "the app refuses to start without a dedicated key to encrypt stored Google "
-            "credentials: generate one with 'openssl rand -base64 32' and set it as "
-            "GOOGLE_ENCRYPTION_KEY in your .env or 1Password item."
+            "APP_MASTER_KEY is not configured. The app refuses to start without it: "
+            "generate one with 'openssl rand -base64 32' and set it as APP_MASTER_KEY "
+            "in your .env or 1Password item."
         )
 
     @asynccontextmanager
@@ -82,6 +67,7 @@ def create_app(
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         app.state.session_factory = session_factory
         async with session_factory() as session:
+            await bootstrap_app_settings(session, app_settings)
             inbox = await session.scalar(select(TaskList).where(TaskList.is_inbox))
             if inbox is None:
                 session.add(TaskList(name=INBOX_NAME, is_inbox=True))

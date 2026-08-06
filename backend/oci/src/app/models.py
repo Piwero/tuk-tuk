@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from sqlalchemy import (
     JSON,
     BigInteger,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -27,6 +28,33 @@ SORT_GAP = 1024
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+class AppSettings(Base):
+    """The DB-backed settings singleton (ADR 0008): the login password
+    hash, the session-cookie signing key, and — added by issue #117, but
+    the column shape anticipates it here — the Google OAuth client ID and
+    its encrypted client secret. Always exactly one row (`id` fixed at
+    `SETTINGS_ID` in app.app_settings), bootstrapped on first boot.
+
+    `password_hash` is nullable: its absence is exactly what gates every
+    route behind `/setup` (app.middleware). `encrypted_google_client_secret`
+    is encrypted with `APP_MASTER_KEY` (app.crypto), never `session_key` —
+    a copy of the SQLite file must not disclose it.
+    """
+
+    __tablename__ = "settings"
+    __table_args__ = (CheckConstraint("id = 1", name="settings_singleton"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    password_hash: Mapped[str | None] = mapped_column(Text, default=None)
+    session_key: Mapped[str] = mapped_column(Text)
+    google_client_id: Mapped[str | None] = mapped_column(String(255), default=None)
+    encrypted_google_client_secret: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class Folder(Base):
@@ -282,8 +310,8 @@ class FocusSession(Base):
 class GoogleAccount(Base):
     """A Google Account — a connected Google identity (issue #105): the
     Google-side account id, its email, and its refresh credential encrypted
-    at rest (app.crypto, keyed by the dedicated google_encryption_key
-    setting). `connection_state` is "connected" or "needs_reconnect"; #105
+    at rest (app.crypto, keyed by APP_MASTER_KEY). `connection_state` is
+    "connected" or "needs_reconnect"; #105
     only ever writes "connected" — the latter is set once event/calendar
     reads can fail terminally, in a later ticket.
 

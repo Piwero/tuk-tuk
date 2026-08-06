@@ -102,6 +102,7 @@ export class ApiError extends Error {
 }
 
 const LOGIN_PATH = "/api/v1/auth/login";
+const SETUP_PATH = "/api/v1/auth/setup";
 const SESSION_PATH = "/api/v1/auth/session";
 const LOGOUT_PATH = "/api/v1/auth/logout";
 
@@ -124,7 +125,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = (await response.json()) as ApiErrorBody;
-    if (response.status === 401 && path !== LOGIN_PATH && path !== SESSION_PATH) {
+    if (
+      response.status === 401 &&
+      path !== LOGIN_PATH &&
+      path !== SETUP_PATH &&
+      path !== SESSION_PATH
+    ) {
       for (const listener of unauthorizedListeners) {
         listener();
       }
@@ -146,6 +152,13 @@ export function checkSession(): Promise<void> {
 /** Exchanges the app password for a session cookie set by the response. */
 export function login(password: string): Promise<void> {
   return request(LOGIN_PATH, { method: "POST", body: JSON.stringify({ password }) });
+}
+
+/** Sets the initial password on a fresh deployment and logs in with it —
+ * reachable only until a password exists (checkSession's "setup_required"
+ * error code is what routes the gate here in the first place). */
+export function setup(password: string): Promise<void> {
+  return request(SETUP_PATH, { method: "POST", body: JSON.stringify({ password }) });
 }
 
 /** Clears the session cookie server-side. The cookie is httpOnly, so this is

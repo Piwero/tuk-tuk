@@ -6,9 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from app.config import Settings
 from app.session import issue_session_token, verify_session_token
-from tests.conftest import TEST_PASSWORD, FakeClock
+from tests.conftest import TEST_PASSWORD, FakeClock, app_settings_row
 
 
 class TestLogin:
@@ -122,9 +121,7 @@ class TestEnforcement:
     def test_a_cookie_signed_with_a_different_key_is_rejected(
         self, unauthenticated_client: TestClient
     ) -> None:
-        forged = issue_session_token(
-            Settings(secret_key="a-different-key"), issued_at=datetime.now(UTC)
-        )
+        forged = issue_session_token("a-different-key", issued_at=datetime.now(UTC))
         unauthenticated_client.cookies.set("tuktuk_session", forged)
 
         response = unauthenticated_client.get("/api/v1/tasks")
@@ -168,8 +165,9 @@ class TestRollingReissue:
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
         settings = unauthenticated_client.app.state.settings  # type: ignore[attr-defined]
+        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
         issued_at = fake_clock.now
-        old_token = issue_session_token(settings, issued_at=issued_at)
+        old_token = issue_session_token(session_key, issued_at=issued_at)
         unauthenticated_client.cookies.set("tuktuk_session", old_token)
         fake_clock.advance(timedelta(days=settings.auth_session_reissue_threshold_days, hours=1))
 
@@ -178,7 +176,7 @@ class TestRollingReissue:
         assert response.status_code == 200
         new_token = response.cookies["tuktuk_session"]
         assert new_token != old_token
-        reissued_at = verify_session_token(new_token, settings, fake_clock)
+        reissued_at = verify_session_token(new_token, session_key, settings, fake_clock)
         assert reissued_at is not None
         assert reissued_at > issued_at
 
@@ -190,8 +188,8 @@ class TestRollingReissue:
     def test_a_session_still_within_the_reissue_threshold_is_not_reissued(
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
-        settings = unauthenticated_client.app.state.settings  # type: ignore[attr-defined]
-        token = issue_session_token(settings, issued_at=fake_clock.now)
+        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
+        token = issue_session_token(session_key, issued_at=fake_clock.now)
         unauthenticated_client.cookies.set("tuktuk_session", token)
         fake_clock.advance(timedelta(hours=23))
 
@@ -203,8 +201,8 @@ class TestRollingReissue:
     def test_a_session_used_regularly_over_longer_than_the_lifetime_never_expires(
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
-        settings = unauthenticated_client.app.state.settings  # type: ignore[attr-defined]
-        token = issue_session_token(settings, issued_at=fake_clock.now)
+        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
+        token = issue_session_token(session_key, issued_at=fake_clock.now)
         unauthenticated_client.cookies.set("tuktuk_session", token)
 
         # A request every couple of days, well past the 30-day lifetime.
@@ -221,7 +219,8 @@ class TestRollingReissue:
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
         settings = unauthenticated_client.app.state.settings  # type: ignore[attr-defined]
-        token = issue_session_token(settings, issued_at=fake_clock.now)
+        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
+        token = issue_session_token(session_key, issued_at=fake_clock.now)
         unauthenticated_client.cookies.set("tuktuk_session", token)
         fake_clock.advance(timedelta(days=settings.auth_session_lifetime_days + 1))
 
@@ -234,7 +233,8 @@ class TestRollingReissue:
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
         settings = unauthenticated_client.app.state.settings  # type: ignore[attr-defined]
-        token = issue_session_token(settings, issued_at=fake_clock.now)
+        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
+        token = issue_session_token(session_key, issued_at=fake_clock.now)
         unauthenticated_client.cookies.set("tuktuk_session", token)
         fake_clock.advance(timedelta(days=settings.auth_session_reissue_threshold_days, hours=1))
 

@@ -7,6 +7,27 @@ import { fetchLists } from "./api";
 import { FAKE_PASSWORD, fakeTask, installFakeApi } from "./test/fakeApi";
 
 describe("AuthGate", () => {
+  it("shows the setup screen instead of the password screen on a fresh deployment", async () => {
+    installFakeApi({ loggedIn: false, needsSetup: true, tasks: [fakeTask("Buy milk")] });
+
+    render(<AuthGate />);
+
+    expect(await screen.findByRole("button", { name: "Set password" })).toBeInTheDocument();
+    expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
+  });
+
+  it("renders the app after completing setup", async () => {
+    installFakeApi({ loggedIn: false, needsSetup: true, tasks: [fakeTask("Buy milk")] });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    const passwordField = await screen.findByLabelText("Password");
+    expect(passwordField).toHaveFocus();
+    await user.type(passwordField, "a-new-password{Enter}");
+
+    expect(await screen.findByText("Buy milk")).toBeInTheDocument();
+  });
+
   it("shows the password screen instead of the app without a session", async () => {
     installFakeApi({ loggedIn: false, tasks: [fakeTask("Buy milk")] });
 

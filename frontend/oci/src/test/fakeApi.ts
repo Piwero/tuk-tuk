@@ -194,6 +194,10 @@ export interface FakeApiState {
   requests: RecordedRequest[];
   /** Mutate directly to simulate a session lapsing mid-test. */
   loggedIn: boolean;
+  /** Mirrors a fresh deployment with no password set yet (ADR 0008):
+   * every route but /health, /login, and /setup answers "setup_required"
+   * regardless of `loggedIn`. Cleared by a successful fake /setup call. */
+  needsSetup: boolean;
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
@@ -385,6 +389,7 @@ export function installFakeApi({
   focusSessions = [],
   timers = [],
   loggedIn = true,
+  needsSetup = false,
   googleConfigured = false,
   googleAccounts = [],
   googleCalendars = [],
@@ -404,6 +409,8 @@ export function installFakeApi({
   /** Start unauthenticated: every non-auth route is rejected until a fake
    * login succeeds. */
   loggedIn?: boolean;
+  /** Start on a fresh deployment with no password set (ADR 0008). */
+  needsSetup?: boolean;
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
   googleAccounts?: FakeGoogleAccount[];
@@ -440,6 +447,7 @@ export function installFakeApi({
     timers: timers.map((timer) => ({ ...timer })),
     requests: [],
     loggedIn,
+    needsSetup,
     googleConfigured,
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
     googleCalendars: googleCalendars.map((calendar) => ({ ...calendar })),
@@ -475,6 +483,9 @@ export function installFakeApi({
 
   const unauthorized = (): Response =>
     json({ error: { code: "unauthorized", message: "A valid session is required" } }, 401);
+
+  const setupRequired = (): Response =>
+    json({ error: { code: "setup_required", message: "Initial setup is required" } }, 401);
 
   /** Mirrors the backend's resolve_section rule: 404 unknown, 409 foreign. */
   const sectionMismatch = (sectionId: number, listId: number): Response | null => {
@@ -552,6 +563,9 @@ export function installFakeApi({
     state.requests.push({ method, url: url.pathname + url.search, body });
 
     if (method === "GET" && url.pathname === "/api/v1/auth/session") {
+      if (state.needsSetup) {
+        return setupRequired();
+      }
       return state.loggedIn ? new Response(null, { status: 204 }) : unauthorized();
     }
     if (method === "GET" && url.pathname === "/api/v1/google/status") {
@@ -660,13 +674,27 @@ export function installFakeApi({
       }
       return json(withoutAccountId(calendar));
     }
+    if (method === "POST" && url.pathname === "/api/v1/auth/setup") {
+      if (!state.needsSetup) {
+        return notFound("Setup has already been completed");
+      }
+      state.needsSetup = false;
+      state.loggedIn = true;
+      return new Response(null, { status: 204 });
+    }
     if (method === "POST" && url.pathname === "/api/v1/auth/login") {
+      if (state.needsSetup) {
+        return setupRequired();
+      }
       const input = body as { password: string };
       if (input.password !== FAKE_PASSWORD) {
         return json({ error: { code: "invalid_credentials", message: "Incorrect password" } }, 401);
       }
       state.loggedIn = true;
       return new Response(null, { status: 204 });
+    }
+    if (state.needsSetup) {
+      return setupRequired();
     }
     if (!state.loggedIn) {
       return unauthorized();

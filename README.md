@@ -32,9 +32,8 @@ and focus — with a clean, conventional HTTP API.
 # 1. Copy env defaults
 cp .env.example .env
 
-# 2. Set a session signing key — the backend refuses to start while
-#    SECRET_KEY is left at the placeholder "change-me"
-openssl rand -base64 32   # paste the result as SECRET_KEY in .env
+# 2. Set the master key — the backend refuses to start without APP_MASTER_KEY
+openssl rand -base64 32   # paste the result as APP_MASTER_KEY in .env
 
 # 3. Provision tools (python, node, uv, git-cliff)
 mise install
@@ -48,8 +47,9 @@ mise run dev
 
 Then open:
 
-- Frontend: http://localhost:5900 — unlock with the password `dev-password`
-  (the default in `.env.example`; see [Authentication](#authentication))
+- Frontend: http://localhost:5900 — a fresh database boots straight into a
+  one-time setup screen where you choose a password (see
+  [Authentication](#authentication))
 - API: http://localhost:8900 (interactive docs at `/docs`, health at
   `/health`). Everything except `/health` requires a session, so `/docs` is
   reachable only from a browser that has already logged in through the
@@ -58,20 +58,30 @@ Then open:
 ## Authentication
 
 tuk-tuk is a single-user app gated by one shared password
-([ADR 0005](docs/adr/0005-single-user-authentication-gate.md)) — there are no
-accounts, no signup, and no user records.
+([ADR 0005](docs/adr/0005-single-user-authentication-gate.md)). There are no
+accounts, no signup, and no user records — the password hash and the session
+signing key live in a single-row `settings` table in the database, managed
+entirely from the app itself rather than `.env`
+([ADR 0008](docs/adr/0008-ui-managed-settings.md)).
 
 ### How it works
 
+- **First run.** A fresh database has no password set yet. Every route other
+  than `/health`, `/api/v1/auth/login`, and `/api/v1/auth/setup` responds
+  `401 setup_required` until one exists, and the frontend shows a one-time
+  setup screen instead of the login screen. `POST /api/v1/auth/setup` sets
+  the password and logs you in; it 404s once a password already exists — it
+  is not a way to reset a forgotten one.
 - **Login.** `POST /api/v1/auth/login` takes `{"password": "…"}` and verifies
-  it against the Argon2id hash in `AUTH_PASSWORD_HASH`. On success it sets a
-  signed `tuktuk_session` cookie (`HttpOnly`, `SameSite=Strict`,
-  `Secure` per `AUTH_COOKIE_SECURE`). Nothing is stored server-side: the
-  cookie carries its own issued-at time, signed with `SECRET_KEY`.
+  it against the Argon2id hash stored in `settings`. On success it sets a
+  signed `tuktuk_session` cookie (`HttpOnly`, `SameSite=Lax`,
+  `Secure` per `AUTH_COOKIE_SECURE`). Nothing else is stored server-side: the
+  cookie carries its own issued-at time, signed with the session key
+  `settings` generated for itself on first boot.
 - **Enforcement.** `SessionAuthMiddleware` runs in front of routing and
-  rejects any request without a valid cookie with `401`. Only `/health` and
-  the login endpoint are public — every other path, including `/docs` and the
-  OpenAPI schema, is gated by default.
+  rejects any request without a valid cookie with `401`. Only `/health`,
+  `/api/v1/auth/login`, and `/api/v1/auth/setup` are public — every other
+  path, including `/docs` and the OpenAPI schema, is gated by default.
 - **Rolling window.** Sessions last `AUTH_SESSION_LIFETIME_DAYS` (30). Once a
   session is older than `AUTH_SESSION_REISSUE_THRESHOLD_DAYS` (1), the next
   request refreshes the cookie, so an active browser stays logged in
@@ -81,121 +91,42 @@ accounts, no signup, and no user records.
   Expect wrong-password responses to get progressively slower during local
   testing.
 - **Logout.** `POST /api/v1/auth/logout` deletes the cookie. There is no
-  server-side session to revoke; revoking every device at once means rotating
-  `SECRET_KEY`, which invalidates all outstanding cookies.
+  server-side session to revoke; revoking every device at once means
+  changing the password from Settings, which rotates the session key.
 - **Frontend.** `AuthGate` wraps `App`: it probes `GET /api/v1/auth/session`
-  on mount, shows the password screen when that fails, and drops back to the
-  password screen if any later request returns `401`.
+  on mount, shows the setup screen or the login screen depending on which the
+  probe reports, and drops back to the login screen if any later request
+  returns `401`.
 
-### `AUTH_PASSWORD_HASH` vs. `SECRET_KEY`
+### `APP_MASTER_KEY`
 
-Both are secrets, but they answer different questions at different moments.
-Typing the password checks it against `AUTH_PASSWORD_HASH`; on success the
-backend mints a cookie signed with `SECRET_KEY`, and for the next ~30 days
-only that signature matters — the password isn't consulted again.
+The one secret that still lives outside the database — generated once at
+deploy time, the same way `SECRET_KEY` was before this change. It encrypts
+the sensitive columns of `settings` (the Google client secret, once issue
+#117 lands) and stored Google refresh tokens. It never appears in the UI or
+in any API response: a copy of the SQLite file discloses nothing it protects
+without it. The password hash needs no such protection — Argon2id is
+one-way, so storing it in the database reveals nothing an attacker could use
+directly.
 
-|                            | `AUTH_PASSWORD_HASH`                                                                    | `SECRET_KEY`                                                 |
-| -------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Answers                    | "Is this the right password?"                                                           | "Did _we_ issue this cookie?"                                |
-| Used                       | Once, at login                                                                          | On every request                                             |
-| Contains                   | An Argon2id hash of the password, deliberately slow (~200ms) to make guessing expensive | Random bytes, used to sign the session cookie                |
-| Derived from the password? | Yes                                                                                     | No — unrelated random value                                  |
-| Changing it                | Old password stops working; existing cookies stay valid                                 | Every outstanding cookie is invalidated; all devices log out |
+The app refuses to start without `APP_MASTER_KEY` set.
 
-Neither substitutes for the other: the hash is one-way and can't sign
-anything, and the key knows nothing about the password. Rotating the hash is
-the "change my password" lever; rotating the key is the "log everything out"
-lever.
+### Upgrading an existing deployment
 
-### Local setup
-
-The defaults in `.env.example` work out of the box for local dev:
-
-| Variable             | Local default          | Notes                                                |
-| -------------------- | ---------------------- | ---------------------------------------------------- |
-| `AUTH_PASSWORD_HASH` | hash of `dev-password` | Argon2id hash, never the plaintext                   |
-| `SECRET_KEY`         | `change-me`            | **Must be replaced** — the app won't start otherwise |
-| `AUTH_COOKIE_SECURE` | `false`                | Allows the cookie over plain-HTTP LAN/tailnet dev    |
-
-### Worked example: setting your own password
-
-Say you want to log in with `ThisIsAPassword12!`.
-
-**1. Hash the password.** The task prompts twice on stdin — never pass the
-password as an argument, or it lands in your shell history:
-
-```bash
-mise run backend:hash-password
-# Password: ThisIsAPassword12!
-# Confirm password: ThisIsAPassword12!
-# $argon2id$v=19$m=262144,t=5,p=4$LAqzXoCJXzpJEIPnC6copg$tPs0LHku…
-```
-
-**2. Generate a signing key** (skip if you already set one):
-
-```bash
-openssl rand -base64 32
-# FkxEDVctIH4zGFh13EvwA…
-```
-
-**3. Paste both into `.env`,** exactly as printed — no quotes, no escaping of
-the hash's `$` separators. `docker-compose.yml` loads `.env` with
-`format: raw` precisely so those `$` characters survive:
-
-```dotenv
-AUTH_PASSWORD_HASH=$argon2id$v=19$m=262144,t=5,p=4$LAqzXoCJXzpJEIPnC6copg$tPs0LHku…
-SECRET_KEY=FkxEDVctIH4zGFh13EvwA…
-AUTH_COOKIE_SECURE=false
-```
-
-**4. Restart** — `.env` is read at startup, not per request:
-
-```bash
-mise run down && mise run dev
-```
-
-**5. Verify:**
-
-```bash
-curl -i -X POST localhost:8900/api/v1/auth/login \
-  -H 'content-type: application/json' \
-  -d '{"password":"ThisIsAPassword12!"}'
-```
-
-`204` with a `set-cookie: tuktuk_session=…` header means both values are wired
-up. A `401` means the hash doesn't match the password; a backend that won't
-boot means `SECRET_KEY` is still `change-me`.
-
-A `500` means the backend received a malformed hash — check what actually
-reached the container, which is not always what's in `.env`:
-
-```bash
-docker compose exec backend printenv AUTH_PASSWORD_HASH
-```
-
-If the `$` separators are missing, Compose interpolated them away; make sure
-the `env_file` entries in `docker-compose.yml` still carry `format: raw`.
-
-The hash and key above are truncated illustrations, never copy them — use
-your own command output. Argon2id salts randomly, so hashing the same password
-twice gives two different-looking strings and both work.
-
-Two settings are fail-closed at startup — the backend raises on boot if
-`AUTH_PASSWORD_HASH` is empty or `SECRET_KEY` is still `change-me`. If the
-backend container exits immediately, check its logs for one of those two
-messages.
-
-Changing `SECRET_KEY` invalidates the cookie you already have, so you'll be
-asked for the password again on the next load.
+If `AUTH_PASSWORD_HASH` (and, if you'd connected Google Calendar,
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) are still set in your `.env` from
+before this change, the first boot after upgrading imports them into
+`settings` automatically and skips the setup screen — you won't be logged
+out or lose your Google connection. This happens at most once: after that
+first boot, `settings` is authoritative and those env vars are never read
+again, even if you leave them in `.env`. `mise run backend:hash-password`
+still generates an `AUTH_PASSWORD_HASH` value for this path, if you want one.
 
 ### In production
 
-There is no `.env` in the cluster: both values live in the `tuk-tuk-auth`
-1Password item and reach the backend as a Secret, so the Compose
-interpolation caveat above doesn't apply. `AUTH_PASSWORD_HASH` still holds
-the hash and never the plaintext password — see
-[`backend/chart/README.md`](backend/chart/README.md) for the field names,
-pasting rules, and how to verify the value that reached the pod.
+There is no `.env` in the cluster: `APP_MASTER_KEY` lives in the
+`tuk-tuk-auth` 1Password item and reaches the backend as a Secret — see
+[`backend/chart/README.md`](backend/chart/README.md).
 
 ## Development
 
