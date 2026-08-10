@@ -19,7 +19,8 @@ import {
   type Task,
   type TaskList,
 } from "../api";
-import { readDragPayload, startDrag } from "../dnd";
+import { currentDragPayload, endDrag, readDragPayload, startDrag } from "../dnd";
+import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
 import { CreateMenu } from "./CreateMenu";
 import { FocusNavBadge } from "./FocusNavBadge";
@@ -35,7 +36,7 @@ const SMART_ICONS: Record<SmartView, IconName> = {
 };
 
 type Editor =
-  | { mode: "create-list" }
+  | { mode: "create-list"; folderId: number | null }
   | { mode: "edit-list"; listId: number }
   | { mode: "create-folder" }
   | { mode: "rename-folder"; folderId: number }
@@ -49,12 +50,18 @@ interface SidebarProps {
   tags: Tag[];
   selectedListId: number | null;
   selectedTagId: number | null;
+  /** The selected Folder — set only by clicking its name (the Folder view),
+   * never by its disclosure chevron. Independent of selectedListId, since a
+   * List inside the Folder can be selected without the Folder itself being
+   * "open". */
+  selectedFolderId: number | null;
   selectedSmart: SmartView | null;
   calendarSelected: boolean;
   habitsSelected: boolean;
   focusSelected: boolean;
   settingsSelected: boolean;
   onSelect: (listId: number) => void;
+  onSelectFolder: (folderId: number) => void;
   onSelectTag: (tagId: number) => void;
   onSelectSmart: (view: SmartView) => void;
   onSelectCalendar: () => void;
@@ -145,12 +152,14 @@ export function Sidebar({
   tags,
   selectedListId,
   selectedTagId,
+  selectedFolderId,
   selectedSmart,
   calendarSelected,
   habitsSelected,
   focusSelected,
   settingsSelected,
   onSelect,
+  onSelectFolder,
   onSelectTag,
   onSelectSmart,
   onSelectCalendar,
@@ -170,6 +179,13 @@ export function Sidebar({
   onLogout,
 }: SidebarProps): JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
+  // Layout preference, not data — persisted per Folder in localStorage
+  // (layoutPrefs), independent of selection. Default expanded.
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(loadCollapsedFolderIds);
+  // The Folder currently under a dragged List — drives both the drop-target
+  // highlight and a collapsed Folder's temporary auto-expand, without
+  // touching the persisted collapse choice.
+  const [dragOverFolderId, setDragOverFolderId] = useState<number | null>(null);
 
   const inbox = lists.find((list) => list.is_inbox);
   const active = lists.filter((list) => !list.is_inbox && !list.is_archived);
@@ -196,18 +212,51 @@ export function Sidebar({
       color: values.color,
       ...(values.emoji === "" ? {} : { emoji: values.emoji }),
     });
-    onListsChanged((current) => [...current, created]);
+    // Creation carries no Folder field (out of scope for #126 — no schema
+    // change); filing into one is a follow-up patch, exactly like dragging
+    // a freshly created List into a Folder would be.
+    if (values.folderId === null) {
+      onListsChanged((current) => [...current, created]);
+    } else {
+      const filed = await updateList(created.id, {
+        folder_id: values.folderId,
+        sort_order: appendOrder(membersOf(values.folderId)),
+      });
+      onListsChanged((current) => [...current, filed]);
+    }
     setEditor(null);
   }
 
   async function handleEditList(list: TaskList, values: ListFormValues): Promise<void> {
+    const folderChanged = values.folderId !== list.folder_id;
     const updated = await updateList(list.id, {
       name: values.name,
       color: values.color,
       emoji: values.emoji === "" ? null : values.emoji,
+      ...(folderChanged
+        ? {
+            folder_id: values.folderId,
+            sort_order: appendOrder(
+              values.folderId === null ? looseLists : membersOf(values.folderId),
+            ),
+          }
+        : {}),
     });
     applyListUpdate(updated);
     setEditor(null);
+  }
+
+  function toggleFolderCollapsed(folderId: number): void {
+    setCollapsedFolderIds((current) => {
+      const next = new Set(current);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      saveCollapsedFolderIds(next);
+      return next;
+    });
   }
 
   async function handleSetArchived(list: TaskList, isArchived: boolean): Promise<void> {
@@ -361,6 +410,7 @@ export function Sidebar({
   }
 
   function handleDropOnFolder(event: React.DragEvent, folder: Folder): void {
+    setDragOverFolderId(null);
     event.preventDefault();
     event.stopPropagation();
     const payload = readDragPayload(event);
@@ -373,6 +423,36 @@ export function Sidebar({
     if (payload.kind === "folder" && payload.id !== folder.id) {
       void moveFolderBefore(payload.id, folder);
     }
+  }
+
+  /** Folders hold Lists, never Tasks — so only a List (or another Folder,
+   * for reordering) is a valid drop; a Task dragged over gets no highlight
+   * and, by never calling preventDefault, the browser's own not-allowed
+   * cursor rather than a silent no-op. */
+  function handleFolderDragOver(event: React.DragEvent): void {
+    const payload = currentDragPayload();
+    if (payload !== null && payload.kind !== "task") {
+      event.preventDefault();
+    }
+  }
+
+  function handleFolderDragEnter(event: React.DragEvent, folder: Folder): void {
+    const payload = currentDragPayload();
+    if (payload?.kind === "list") {
+      event.preventDefault();
+      setDragOverFolderId(folder.id);
+    }
+  }
+
+  /** Ignores a leave into a child element (the row's own children fire
+   * their own enter/leave as the pointer crosses them) — only a leave past
+   * the row's own boundary clears the highlight. */
+  function handleFolderDragLeave(event: React.DragEvent, folder: Folder): void {
+    const related = event.relatedTarget;
+    if (related instanceof Node && event.currentTarget.contains(related)) {
+      return;
+    }
+    setDragOverFolderId((current) => (current === folder.id ? null : current));
   }
 
   function handleDropOnNav(event: React.DragEvent): void {
@@ -389,6 +469,8 @@ export function Sidebar({
         <li key={list.id}>
           <ListForm
             initial={list}
+            folders={folders}
+            initialFolderId={list.folder_id}
             onSubmit={(values) => void handleEditList(list, values)}
             onCancel={() => setEditor(null)}
           />
@@ -401,6 +483,7 @@ export function Sidebar({
           className="list-row"
           draggable
           onDragStart={(event) => startDrag(event, { kind: "list", id: list.id })}
+          onDragEnd={endDrag}
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => handleDropOnList(event, list)}
         >
@@ -533,12 +616,14 @@ export function Sidebar({
         <div className="lists-nav-heading">
           <h2>Lists</h2>
           <CreateMenu
-            onNewList={() => setEditor({ mode: "create-list" })}
+            onNewList={() => setEditor({ mode: "create-list", folderId: null })}
             onNewFolder={() => setEditor({ mode: "create-folder" })}
           />
         </div>
         {editor?.mode === "create-list" && (
           <ListForm
+            folders={folders}
+            initialFolderId={editor.folderId}
             onSubmit={(values) => void handleCreateList(values)}
             onCancel={() => setEditor(null)}
           />
@@ -573,48 +658,100 @@ export function Sidebar({
               </div>
             </li>
           )}
-          {[...folders].sort(byOrder).map((folder) => (
-            <li key={`folder-${folder.id}`} className="folder">
-              {editor?.mode === "rename-folder" && editor.folderId === folder.id ? (
-                <FolderForm
-                  initialName={folder.name}
-                  onSubmit={(name) => void handleRenameFolder(folder, name)}
-                  onCancel={() => setEditor(null)}
-                />
-              ) : (
-                <div
-                  className="folder-row"
-                  draggable
-                  onDragStart={(event) => startDrag(event, { kind: "folder", id: folder.id })}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => handleDropOnFolder(event, folder)}
-                >
-                  <Icon name="folder" size={16} />
-                  <span className="folder-name">{folder.name}</span>
-                  <span className="folder-count">{membersOf(folder.id).length}</span>
-                  <span className="row-actions">
+          {[...folders].sort(byOrder).map((folder) => {
+            const members = membersOf(folder.id);
+            // A drop in progress temporarily overrides a collapsed Folder so
+            // the user can see (and reach) the drop, without touching the
+            // persisted collapse choice underneath it.
+            const isCollapsed = collapsedFolderIds.has(folder.id) && dragOverFolderId !== folder.id;
+            return (
+              <li key={`folder-${folder.id}`} className="folder">
+                {editor?.mode === "rename-folder" && editor.folderId === folder.id ? (
+                  <FolderForm
+                    initialName={folder.name}
+                    onSubmit={(name) => void handleRenameFolder(folder, name)}
+                    onCancel={() => setEditor(null)}
+                  />
+                ) : (
+                  <div
+                    className={
+                      folder.id === dragOverFolderId ? "folder-row drag-over" : "folder-row"
+                    }
+                    draggable
+                    onDragStart={(event) => startDrag(event, { kind: "folder", id: folder.id })}
+                    onDragEnd={endDrag}
+                    onDragEnter={(event) => handleFolderDragEnter(event, folder)}
+                    onDragOver={handleFolderDragOver}
+                    onDragLeave={(event) => handleFolderDragLeave(event, folder)}
+                    onDrop={(event) => handleDropOnFolder(event, folder)}
+                  >
                     <button
                       type="button"
-                      aria-label={`Rename folder ${folder.name}`}
-                      onClick={() => setEditor({ mode: "rename-folder", folderId: folder.id })}
+                      className="folder-disclosure"
+                      aria-label={
+                        isCollapsed
+                          ? `Expand folder ${folder.name}`
+                          : `Collapse folder ${folder.name}`
+                      }
+                      aria-expanded={!isCollapsed}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleFolderCollapsed(folder.id);
+                      }}
                     >
-                      <Icon name="pencil" />
+                      <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={14} />
                     </button>
+                    <Icon name="folder" size={16} />
                     <button
                       type="button"
-                      aria-label={`Delete folder ${folder.name}`}
-                      onClick={() => void handleDeleteFolder(folder)}
+                      className={
+                        folder.id === selectedFolderId ? "folder-name selected" : "folder-name"
+                      }
+                      onClick={() => onSelectFolder(folder.id)}
                     >
-                      <Icon name="x" />
+                      {folder.name}
                     </button>
-                  </span>
-                </div>
-              )}
-              <ul className="folder-lists" aria-label={`Lists in ${folder.name}`}>
-                {membersOf(folder.id).map((list) => renderListItem(list))}
-              </ul>
-            </li>
-          ))}
+                    <span className="folder-count">{members.length}</span>
+                    <span className="row-actions">
+                      <button
+                        type="button"
+                        aria-label={`New list in ${folder.name}`}
+                        onClick={() => setEditor({ mode: "create-list", folderId: folder.id })}
+                      >
+                        <Icon name="plus" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Rename folder ${folder.name}`}
+                        onClick={() => setEditor({ mode: "rename-folder", folderId: folder.id })}
+                      >
+                        <Icon name="pencil" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete folder ${folder.name}`}
+                        onClick={() => void handleDeleteFolder(folder)}
+                      >
+                        <Icon name="x" />
+                      </button>
+                    </span>
+                  </div>
+                )}
+                {!isCollapsed && (
+                  <>
+                    <ul className="folder-lists" aria-label={`Lists in ${folder.name}`}>
+                      {members.map((list) => renderListItem(list))}
+                    </ul>
+                    {members.length === 0 && (
+                      <p className="folder-empty-hint">
+                        No lists here yet — drag one in, or use “New list” above to add one.
+                      </p>
+                    )}
+                  </>
+                )}
+              </li>
+            );
+          })}
           {looseLists.map((list) => renderListItem(list))}
         </ul>
       </nav>

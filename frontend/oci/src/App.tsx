@@ -30,6 +30,7 @@ import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
 import { EventDetail } from "./components/EventDetail";
 import { FocusView } from "./components/FocusView";
+import { FolderView, type FolderSortBy } from "./components/FolderView";
 import { HabitsView } from "./components/HabitsView";
 import { Icon } from "./components/Icon";
 import { KanbanView } from "./components/KanbanView";
@@ -42,12 +43,14 @@ import { Sidebar } from "./components/Sidebar";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 
-/** What the main pane shows: one List, one Tag, one computed Smart List, the
- * Calendar / Habits / Focus screens (which fetch their own data), or Search
- * results. A focus view may carry the Task to start a Pomo against. */
+/** What the main pane shows: one List, one Tag, one Folder (its Tasks across
+ * every List it contains — #126), one computed Smart List, the Calendar /
+ * Habits / Focus screens (which fetch their own data), or Search results. A
+ * focus view may carry the Task to start a Pomo against. */
 type View =
   | { kind: "list"; id: number }
   | { kind: "tag"; id: number }
+  | { kind: "folder"; id: number }
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar" }
   | { kind: "habits" }
@@ -92,6 +95,11 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
+  // The Folder view's own sort preference (#126) — kept separate from the
+  // List view's `sortBy` above so visiting one never disturbs the other,
+  // and restricted to date/priority/title: there's no manual cross-List
+  // order to preserve, so "custom" isn't offered here.
+  const [folderSortBy, setFolderSortBy] = useState<FolderSortBy>("date");
 
   // Lands here after the Google OAuth round trip (app.routers.v1.google
   // redirects to this origin with one of these markers): open Settings
@@ -139,6 +147,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     if (view?.kind === "tag" && tags.some((tag) => tag.id === view.id)) {
       return;
     }
+    if (view?.kind === "folder" && folders.some((folder) => folder.id === view.id)) {
+      return;
+    }
     const fallback = lists.find((list) => list.is_inbox) ?? lists[0];
     const next: View = fallback === undefined ? null : { kind: "list", id: fallback.id };
     setCompletedMode(false);
@@ -146,7 +157,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     // effect's render and it running (e.g. the user clicks Calendar just as
     // the lists load). Never stomp a view that changed in the meantime.
     setView((current) => (current === view ? next : current));
-  }, [lists, tags, view]);
+  }, [lists, tags, folders, view]);
 
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
@@ -179,10 +190,17 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       );
     } else if (view.kind === "list") {
       setTasks((await fetchTasks(view.id)).items);
+    } else if (view.kind === "folder") {
+      // No endpoint spans multiple Lists — fetch each member List's Tasks
+      // and flatten. Archived Lists stay out of the Folder view, same as
+      // they stay out of the sidebar's Folder contents.
+      const members = lists.filter((list) => list.folder_id === view.id && !list.is_archived);
+      const pages = await Promise.all(members.map((list) => fetchTasks(list.id)));
+      setTasks(pages.flatMap((page) => page.items));
     } else {
       setTasks((await fetchTasksByTag(view.id)).items);
     }
-  }, [view, completedMode]);
+  }, [view, completedMode, lists]);
 
   useEffect(() => {
     if (view === null) {
@@ -200,6 +218,18 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     view?.kind === "list" ? (lists.find((list) => list.id === view.id) ?? null) : null;
   const selectedTag =
     view?.kind === "tag" ? (tags.find((tag) => tag.id === view.id) ?? null) : null;
+  const selectedFolder =
+    view?.kind === "folder" ? (folders.find((folder) => folder.id === view.id) ?? null) : null;
+  // The Folder currently viewed, or the one the currently viewed List sits
+  // in (for the header breadcrumb) — either way, its member Lists.
+  const parentFolder =
+    selectedList !== null && selectedList.folder_id !== null
+      ? (folders.find((folder) => folder.id === selectedList.folder_id) ?? null)
+      : null;
+  const folderMembers =
+    selectedFolder !== null
+      ? lists.filter((list) => list.folder_id === selectedFolder.id && !list.is_archived)
+      : [];
   const smartView = view?.kind === "smart" ? view.view : null;
   const selectedTask =
     tasks.find((task) => task.id === selectedTaskId) ??
@@ -242,7 +272,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       view === null ||
       (view.kind === "list"
         ? updated.list_id === view.id
-        : view.kind === "tag" && updated.tags.some((tag) => tag.id === view.id));
+        : view.kind === "tag"
+          ? updated.tags.some((tag) => tag.id === view.id)
+          : view.kind === "folder" &&
+            lists.some((list) => list.id === updated.list_id && list.folder_id === view.id));
     setTasks((current) =>
       stillInView
         ? current.map((task) => (task.id === updated.id ? updated : task))
@@ -260,7 +293,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     const inView =
       view?.kind === "list"
         ? created.list_id === view.id
-        : view?.kind === "tag" && created.tags.some((tag) => tag.id === view.id);
+        : view?.kind === "tag"
+          ? created.tags.some((tag) => tag.id === view.id)
+          : view?.kind === "folder" &&
+            lists.some((list) => list.id === created.list_id && list.folder_id === view.id);
     if (inView) {
       setTasks((current) => [...current, created]);
     }
@@ -320,12 +356,14 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           tags={tags}
           selectedListId={view?.kind === "list" ? view.id : null}
           selectedTagId={view?.kind === "tag" ? view.id : null}
+          selectedFolderId={view?.kind === "folder" ? view.id : null}
           selectedSmart={smartView}
           calendarSelected={view?.kind === "calendar"}
           habitsSelected={view?.kind === "habits"}
           focusSelected={view?.kind === "focus"}
           settingsSelected={view?.kind === "settings"}
           onSelect={(listId) => switchView({ kind: "list", id: listId })}
+          onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
           onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
           onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
           onSelectCalendar={() => switchView({ kind: "calendar" })}
@@ -370,22 +408,45 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               <Icon name="menu" size={20} />
             </button>
             <h1>
-              {selectedList?.name ??
-                (selectedTag
-                  ? `#${selectedTag.name}`
-                  : smartView !== null
-                    ? SMART_LABELS[smartView]
-                    : view?.kind === "calendar"
-                      ? "Calendar"
-                      : view?.kind === "habits"
-                        ? "Habits"
-                        : view?.kind === "focus"
-                          ? "Focus"
-                          : view?.kind === "search"
-                            ? "Search"
-                            : view?.kind === "settings"
-                              ? "Settings"
-                              : "tuk-tuk")}
+              {selectedList !== null ? (
+                // A List filed in a Folder shows "Folder / List" (#126): the
+                // Folder segment is clickable through to the Folder view,
+                // same destination as clicking the Folder's name in the
+                // sidebar.
+                parentFolder !== null ? (
+                  <>
+                    <button
+                      type="button"
+                      className="breadcrumb-folder"
+                      onClick={() => switchView({ kind: "folder", id: parentFolder.id })}
+                    >
+                      {parentFolder.name}
+                    </button>
+                    <span aria-hidden="true"> / </span>
+                    {selectedList.name}
+                  </>
+                ) : (
+                  selectedList.name
+                )
+              ) : selectedFolder !== null ? (
+                selectedFolder.name
+              ) : selectedTag !== null ? (
+                `#${selectedTag.name}`
+              ) : smartView !== null ? (
+                SMART_LABELS[smartView]
+              ) : view?.kind === "calendar" ? (
+                "Calendar"
+              ) : view?.kind === "habits" ? (
+                "Habits"
+              ) : view?.kind === "focus" ? (
+                "Focus"
+              ) : view?.kind === "search" ? (
+                "Search"
+              ) : view?.kind === "settings" ? (
+                "Settings"
+              ) : (
+                "tuk-tuk"
+              )}
             </h1>
             {selectedList !== null && !completedMode && (
               <button
@@ -466,6 +527,41 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               </div>
             </>
           )}
+          {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
+            <>
+              {/* Quick-Add has no notion of "this Folder" — it always files
+                  by List, so it targets the Folder's first List and names
+                  it in the placeholder (#126) since that target isn't the
+                  one on screen. */}
+              <QuickAdd
+                listId={folderMembers[0]?.id ?? 0}
+                lists={lists}
+                tags={tags}
+                placeholder={`Add a task to ${folderMembers[0]?.name}…`}
+                onTagCreated={(tag) => setTags((current) => [...current, tag])}
+                onListCreated={(list) => setLists((current) => [...current, list])}
+                onCreated={(task) => {
+                  // A ~list token may have filed the task elsewhere in the Folder.
+                  if (folderMembers.some((list) => list.id === task.list_id)) {
+                    setTasks((current) => [...current, task]);
+                  }
+                }}
+              />
+              <div className="view-controls">
+                <label>
+                  Sort by
+                  <select
+                    value={folderSortBy}
+                    onChange={(event) => setFolderSortBy(event.target.value as FolderSortBy)}
+                  >
+                    <option value="date">Date</option>
+                    <option value="priority">Priority</option>
+                    <option value="title">Title</option>
+                  </select>
+                </label>
+              </div>
+            </>
+          )}
           {view?.kind === "settings" ? (
             <SettingsView googleOAuthError={googleOAuthError} />
           ) : view?.kind === "calendar" ? (
@@ -489,6 +585,17 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               state={view.search}
               onStateChange={(search) => switchView({ kind: "search", search })}
               onSelect={setSelectedTaskId}
+            />
+          ) : selectedFolder !== null ? (
+            <FolderView
+              folder={selectedFolder}
+              lists={folderMembers}
+              tasks={tasks}
+              sortBy={folderSortBy}
+              onChanged={setTasks}
+              onSelect={setSelectedTaskId}
+              onSelectList={(listId) => switchView({ kind: "list", id: listId })}
+              onStartFocus={(task) => switchView({ kind: "focus", task })}
             />
           ) : completedMode ? (
             <CompletedView
