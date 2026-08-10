@@ -20,6 +20,7 @@ import {
 } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
+import { CreateMenu } from "./CreateMenu";
 import { FocusNavBadge } from "./FocusNavBadge";
 import { FolderForm } from "./FolderForm";
 import { Icon, type IconName } from "./Icon";
@@ -513,9 +514,29 @@ export function Sidebar({
       </nav>
       <nav
         aria-label="Lists"
+        className="lists-nav"
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleDropOnNav}
       >
+        <div className="lists-nav-heading">
+          <h2>Lists</h2>
+          <CreateMenu
+            onNewList={() => setEditor({ mode: "create-list" })}
+            onNewFolder={() => setEditor({ mode: "create-folder" })}
+          />
+        </div>
+        {editor?.mode === "create-list" && (
+          <ListForm
+            onSubmit={(values) => void handleCreateList(values)}
+            onCancel={() => setEditor(null)}
+          />
+        )}
+        {editor?.mode === "create-folder" && (
+          <FolderForm
+            onSubmit={(name) => void handleCreateFolder(name)}
+            onCancel={() => setEditor(null)}
+          />
+        )}
         <ul>
           {inbox && (
             <li>
@@ -651,44 +672,6 @@ export function Sidebar({
           </button>
         )}
       </nav>
-      <div className="sidebar-actions">
-        {editor?.mode === "create-list" && (
-          <ListForm
-            onSubmit={(values) => void handleCreateList(values)}
-            onCancel={() => setEditor(null)}
-          />
-        )}
-        {editor?.mode === "create-folder" && (
-          <FolderForm
-            onSubmit={(name) => void handleCreateFolder(name)}
-            onCancel={() => setEditor(null)}
-          />
-        )}
-        {(editor === null || editor.mode === "edit-list") && (
-          <>
-            <button
-              type="button"
-              className="sidebar-add"
-              aria-label="Add List"
-              title="Add List"
-              onClick={() => setEditor({ mode: "create-list" })}
-            >
-              <Icon name="plus" size={18} />
-              <span className="nav-label">Add List</span>
-            </button>
-            <button
-              type="button"
-              className="sidebar-add"
-              aria-label="Add Folder"
-              title="Add Folder"
-              onClick={() => setEditor({ mode: "create-folder" })}
-            >
-              <Icon name="folder-plus" size={18} />
-              <span className="nav-label">Add Folder</span>
-            </button>
-          </>
-        )}
-      </div>
       {archivedLists.length > 0 && (
         <section className="archived" aria-label="Archived">
           <h2>Archived</h2>
