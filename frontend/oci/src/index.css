@@ -407,7 +407,8 @@ main > form,
 
 .folder-row.drag-over {
   background: var(--surface-selected);
-  box-shadow: var(--focus-ring);
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
 }
 
 .folder-name.selected {
@@ -421,8 +422,9 @@ main > form,
 }
 
 .folder-empty-hint {
-  margin: 0;
-  padding: var(--space-1) 10px var(--space-2) 42px;
+  margin: 0 0 0 18px;
+  padding: var(--space-1) var(--space-2) var(--space-2) var(--space-3);
+  border-left: 1px solid var(--border-subtle);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -598,6 +600,21 @@ main > form,
   line-height: var(--leading-tight);
 }
 
+.breadcrumb-folder {
+  padding: 0;
+  width: auto;
+  height: auto;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: var(--text-secondary);
+}
+
+.breadcrumb-folder:hover {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
 .view-toggle,
 .completed-toggle {
   display: inline-flex;
@@ -685,6 +702,10 @@ main > form input {
   visibility: visible;
 }
 
+/* Button reset only — typography (uppercase, tracking, weight) comes from
+ * the enclosing .group-header h2, same rule every other group label uses
+ * (e.g. Section headers), so a List name heading here matches them exactly
+ * rather than duplicating their declarations. */
 .folder-view-list-link {
   padding: 0;
   height: auto;
@@ -692,11 +713,9 @@ main > form input {
   border: none;
   background: transparent;
   font: inherit;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--text-secondary);
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: inherit;
 }
 
 .folder-view-list-link:hover {
