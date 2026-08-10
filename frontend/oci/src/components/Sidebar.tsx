@@ -7,6 +7,7 @@ import {
   deleteFolder,
   deleteList,
   deleteTag,
+  fetchTasks,
   updateFolder,
   updateList,
   updateTag,
@@ -246,9 +247,11 @@ export function Sidebar({
     setEditor(null);
   }
 
+  /** Deleting a Folder only ungroups its Lists — nothing is destroyed — so
+   * the confirmation says so plainly and stays light next to the List one. */
   async function handleDeleteFolder(folder: Folder): Promise<void> {
     const confirmed = window.confirm(
-      `Delete the folder "${folder.name}"? Its lists move back to the top level.`,
+      `Delete the folder "${folder.name}"? Its lists move to the top level; no tasks are deleted.`,
     );
     if (!confirmed) {
       return;
@@ -260,9 +263,15 @@ export function Sidebar({
     );
   }
 
+  /** Deleting a List destroys every Task inside it, so the confirmation
+   * names the count — worth the extra fetch, since the count isn't held
+   * anywhere on the client (lists don't carry a task_count). */
   async function handleDeleteList(list: TaskList): Promise<void> {
+    const { total } = await fetchTasks(list.id, 1);
+    const consequence =
+      total === 0 ? "It has no tasks." : `This destroys ${total} task${total === 1 ? "" : "s"}.`;
     const confirmed = window.confirm(
-      `Delete the list "${list.name}" and all of its tasks? This cannot be undone.`,
+      `Delete the list "${list.name}"? ${consequence} This cannot be undone.`,
     );
     if (!confirmed) {
       return;
@@ -418,10 +427,11 @@ export function Sidebar({
             </button>
             <button
               type="button"
+              className="row-action-danger"
               aria-label={`Delete list ${list.name}`}
               onClick={() => void handleDeleteList(list)}
             >
-              <Icon name="x" />
+              <Icon name="trash-2" />
             </button>
           </span>
         </div>

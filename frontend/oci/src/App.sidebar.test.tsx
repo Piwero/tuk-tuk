@@ -6,6 +6,12 @@ import { App } from "./App";
 import { closestOrThrow, fakeDataTransfer } from "./test/dnd";
 import { fakeFolder, fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 
+/** fakeTask() defaults to INBOX; delete confirmations name a task count for
+ * the List actually being deleted, so these helpers stamp the right list_id. */
+function tasksIn(listId: number, count: number): ReturnType<typeof fakeTask>[] {
+  return Array.from({ length: count }, (_, i) => fakeTask(`Task ${i + 1}`, { list_id: listId }));
+}
+
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
 // Restoring the real fetch between tests would let a late in-flight request
 // from an unmounting App escape to the network and fail the run.
@@ -245,16 +251,17 @@ describe("List management", () => {
     expect(within(archived).queryByLabelText(/^In folder /)).not.toBeInTheDocument();
   });
 
-  it("deletes a List only after confirmation", async () => {
+  it("deletes a List only after confirmation, naming how many Tasks are destroyed", async () => {
     const side = fakeList("Side project");
-    const api = installFakeApi({ lists: [INBOX, side] });
+    const api = installFakeApi({ lists: [INBOX, side], tasks: tasksIn(side.id, 3) });
     const user = userEvent.setup();
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Delete list Side project" }));
 
-    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    expect(confirmSpy.mock.calls[0]![0]).toMatch(/3 tasks/i);
     expect(screen.getByRole("button", { name: "Side project" })).toBeInTheDocument();
     expect(api.requests.some((r) => r.method === "DELETE")).toBe(false);
 
@@ -267,6 +274,33 @@ describe("List management", () => {
     expect(
       api.requests.some((r) => r.method === "DELETE" && r.url === `/api/v1/lists/${side.id}`),
     ).toBe(true);
+  });
+
+  it("names a single Task in the singular when deleting a List with exactly one", async () => {
+    const side = fakeList("Side project");
+    installFakeApi({ lists: [INBOX, side], tasks: tasksIn(side.id, 1) });
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete list Side project" }));
+
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    expect(confirmSpy.mock.calls[0]![0]).toMatch(/1 task\b/i);
+    expect(confirmSpy.mock.calls[0]![0]).not.toMatch(/1 tasks/i);
+  });
+
+  it("names zero Tasks when deleting an empty List", async () => {
+    const side = fakeList("Side project");
+    installFakeApi({ lists: [INBOX, side] });
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete list Side project" }));
+
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalled());
+    expect(confirmSpy.mock.calls[0]![0]).toMatch(/no tasks/i);
   });
 });
 
@@ -306,16 +340,18 @@ describe("Folder management", () => {
     expect(patch?.body).toEqual({ name: "Work" });
   });
 
-  it("deleting a Folder keeps its Lists, ungrouped", async () => {
+  it("deleting a Folder keeps its Lists, ungrouped, and confirms no Tasks are lost", async () => {
     const work = fakeFolder("Work");
     const backend = fakeList("Backend", { folder_id: work.id });
     const api = installFakeApi({ folders: [work], lists: [INBOX, backend] });
     const user = userEvent.setup();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Delete folder Work" }));
 
+    expect(confirmSpy.mock.calls[0]![0]).toMatch(/top level/i);
+    expect(confirmSpy.mock.calls[0]![0]).toMatch(/no tasks (are )?deleted|nothing is deleted/i);
     await waitFor(() =>
       expect(screen.queryByRole("list", { name: "Lists in Work" })).not.toBeInTheDocument(),
     );
@@ -324,6 +360,20 @@ describe("Folder management", () => {
     expect(
       api.requests.some((r) => r.method === "DELETE" && r.url === `/api/v1/folders/${work.id}`),
     ).toBe(true);
+  });
+
+  it("cancelling a Folder deletion leaves the Folder and its Lists untouched", async () => {
+    const work = fakeFolder("Work");
+    const backend = fakeList("Backend", { folder_id: work.id });
+    const api = installFakeApi({ folders: [work], lists: [INBOX, backend] });
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete folder Work" }));
+
+    expect(await screen.findByRole("list", { name: "Lists in Work" })).toBeInTheDocument();
+    expect(api.requests.some((r) => r.method === "DELETE")).toBe(false);
   });
 });
 

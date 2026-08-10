@@ -346,8 +346,9 @@ export function deleteFolder(folderId: number): Promise<void> {
   return request(`/api/v1/folders/${folderId}`, { method: "DELETE" });
 }
 
-export function fetchTasks(listId: number): Promise<Page<Task>> {
-  return request(`/api/v1/tasks?list_id=${listId}`);
+export function fetchTasks(listId: number, limit?: number): Promise<Page<Task>> {
+  const limitParam = limit === undefined ? "" : `&limit=${limit}`;
+  return request(`/api/v1/tasks?list_id=${listId}${limitParam}`);
 }
 
 export function fetchTasksByTag(tagId: number): Promise<Page<Task>> {
