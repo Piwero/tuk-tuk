@@ -11,6 +11,7 @@ export type DragPayload =
 
 export function startDrag(event: React.DragEvent, payload: DragPayload): void {
   event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(payload));
+  draggedPayload = payload;
 }
 
 export function readDragPayload(event: React.DragEvent): DragPayload | null {
@@ -19,4 +20,20 @@ export function readDragPayload(event: React.DragEvent): DragPayload | null {
     return null;
   }
   return JSON.parse(raw) as DragPayload;
+}
+
+// The HTML5 drag-and-drop spec keeps `dataTransfer.getData` opaque during
+// dragenter/dragover in real browsers (only `.types` is readable then) — so
+// a drop target that needs to react to the payload's *kind* before drop (a
+// Folder row deciding whether to highlight, in this app) can't read it off
+// the event. Tracked here instead, set synchronously by the row that starts
+// the drag and cleared once it ends.
+let draggedPayload: DragPayload | null = null;
+
+export function currentDragPayload(): DragPayload | null {
+  return draggedPayload;
+}
+
+export function endDrag(): void {
+  draggedPayload = null;
 }
