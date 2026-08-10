@@ -384,6 +384,7 @@ main > form,
 }
 
 .folder-name,
+.lists-nav h2,
 .tags-nav h2,
 .archived h2 {
   flex: 1;
@@ -402,15 +403,9 @@ main > form,
   padding-left: var(--space-4);
 }
 
-.sidebar-actions {
+.sidebar-footer {
   margin-top: auto;
   padding-top: var(--space-3);
-  border-top: 1px solid var(--border-default);
-}
-
-.sidebar-footer {
-  padding-top: var(--space-3);
-  margin-top: var(--space-3);
   border-top: 1px solid var(--border-default);
 }
 
@@ -442,6 +437,51 @@ main > form,
   border-radius: var(--radius-sm);
   background: var(--surface-card);
   cursor: pointer;
+}
+
+.lists-nav-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.lists-nav h2 {
+  padding: 0 10px var(--space-1);
+}
+
+.create-menu {
+  position: relative;
+}
+
+.create-menu-trigger {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-secondary);
+}
+
+.create-menu-list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-popover);
+  min-width: 160px;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.create-menu-list button {
+  width: 100%;
+}
+
+.create-menu-secondary {
+  color: var(--text-secondary);
 }
 
 .tags-nav {
@@ -2456,6 +2496,7 @@ li[data-overdue] .date-chip {
 .sidebar.collapsed .focus-nav-badge,
 .sidebar.collapsed .row-actions,
 .sidebar.collapsed .folder-row,
+.sidebar.collapsed .lists-nav h2,
 .sidebar.collapsed .tags-nav h2,
 .sidebar.collapsed .archived h2 {
   display: none;
@@ -2533,6 +2574,7 @@ li[data-overdue] .date-chip {
   }
 
   .sidebar.collapsed .sidebar-brand,
+  .sidebar.collapsed .lists-nav h2,
   .sidebar.collapsed .tags-nav h2,
   .sidebar.collapsed .archived h2 {
     display: block;

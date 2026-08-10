@@ -31,8 +31,45 @@ describe("Sidebar structure", () => {
     const workLists = await within(nav).findByRole("list", { name: "Lists in Work" });
     expect(within(workLists).getByRole("button", { name: "Backend" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "🛒 Groceries" })).toBeInTheDocument();
-    const buttons = within(nav).getAllByRole("button");
+    const buttons = within(nav).getAllByRole("button", { name: /^(Inbox|Backend|🛒 Groceries)$/ });
     expect(buttons[0]).toHaveAccessibleName("Inbox");
+  });
+
+  it("shows a Lists heading with a single Create control, and no bottom-pinned add buttons", async () => {
+    installFakeApi();
+    render(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Lists" });
+    expect(within(nav).getByRole("heading", { name: "Lists" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Create" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add List" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Folder" })).not.toBeInTheDocument();
+  });
+
+  it("with zero Folders, no Folder row or Folder heading appears anywhere", async () => {
+    installFakeApi({ lists: [INBOX, fakeList("Groceries")] });
+    render(<App />);
+
+    await screen.findByRole("button", { name: "Groceries" });
+    expect(screen.queryByText(/folder/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /folder/i })).not.toBeInTheDocument();
+  });
+
+  it("the Create menu opens New list and New folder, reachable by keyboard", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+
+    const trigger = await screen.findByRole("button", { name: "Create" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    await user.click(trigger);
+
+    const menu = screen.getByRole("menu", { name: "Create" });
+    expect(within(menu).getByRole("menuitem", { name: "New list" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "New folder" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu", { name: "Create" })).not.toBeInTheDocument();
   });
 });
 
@@ -42,7 +79,8 @@ describe("List management", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Add List" }));
+    await user.click(await screen.findByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("menuitem", { name: "New list" }));
     await user.type(screen.getByLabelText("Name"), "Groceries");
     fireEvent.change(screen.getByLabelText("Color"), { target: { value: "#ff9800" } });
     await user.type(screen.getByLabelText("Emoji"), "🛒");
@@ -59,7 +97,8 @@ describe("List management", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Add List" }));
+    await user.click(await screen.findByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("menuitem", { name: "New list" }));
     await user.type(screen.getByLabelText("Name"), "Groceries");
 
     await user.click(screen.getByRole("button", { name: "Choose emoji" }));
@@ -181,7 +220,8 @@ describe("Folder management", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Add Folder" }));
+    await user.click(await screen.findByRole("button", { name: "Create" }));
+    await user.click(screen.getByRole("menuitem", { name: "New folder" }));
     await user.type(screen.getByLabelText("Folder name"), "Work");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
