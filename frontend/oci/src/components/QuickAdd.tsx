@@ -25,6 +25,10 @@ interface QuickAddProps {
   onTagCreated: (tag: Tag) => void;
   onListCreated: (list: TaskList) => void;
   onCreated: (task: Task) => void;
+  /** Names the filing target in context — e.g. the Folder view (#126) names
+   * the List a Task lands in absent a `~list` token, since it isn't the
+   * List currently on screen. Defaults to the plain List view wording. */
+  placeholder?: string;
 }
 
 export function QuickAdd({
@@ -34,6 +38,7 @@ export function QuickAdd({
   onTagCreated,
   onListCreated,
   onCreated,
+  placeholder = "Add a task…",
 }: QuickAddProps): JSX.Element {
   const [title, setTitle] = useState("");
   const [tagChips, setTagChips] = useState<Tag[]>([]);
@@ -147,7 +152,7 @@ export function QuickAdd({
     <form onSubmit={(event) => void submit(event)}>
       <TokenInput
         ariaLabel="Add a task"
-        placeholder="Add a task…"
+        placeholder={placeholder}
         value={title}
         onValueChange={setTitle}
         channels={[

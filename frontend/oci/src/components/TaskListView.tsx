@@ -11,7 +11,7 @@ import {
   type TaskList,
 } from "../api";
 import { formatSchedule, isOverdue } from "../dates";
-import { readDragPayload, startDrag } from "../dnd";
+import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
@@ -155,6 +155,7 @@ export function TaskListView({
         data-overdue={isOverdue(task) || undefined}
         draggable
         onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
+        onDragEnd={endDrag}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => handleDropOnTaskRow(event, task)}
       >
