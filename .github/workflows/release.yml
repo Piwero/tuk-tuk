@@ -62,10 +62,29 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest
 
-      - name: Set up Docker Buildx
+      # GHCR pushes and the buildx bootstrap occasionally fail with transient
+      # errors (runner-side Docker daemon 500s, registry manifest-push denials
+      # that clear on retry) unrelated to workflow config — retry both, up to
+      # 3 attempts each, natively rather than via a third-party retry action.
+      - name: Set up Docker Buildx (attempt 1)
+        id: buildx1
+        continue-on-error: true
         uses: docker/setup-buildx-action@v4
 
-      - name: Build and push
+      - name: Set up Docker Buildx (attempt 2)
+        id: buildx2
+        if: steps.buildx1.outcome == 'failure'
+        continue-on-error: true
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set up Docker Buildx (attempt 3)
+        id: buildx3
+        if: steps.buildx1.outcome == 'failure' && steps.buildx2.outcome == 'failure'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push (attempt 1)
+        id: build1
+        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
@@ -78,3 +97,42 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push (attempt 2)
+        id: build2
+        if: steps.build1.outcome == 'failure'
+        continue-on-error: true
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          build-args: ${{ matrix.build-args }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push (attempt 3)
+        id: build3
+        if: steps.build1.outcome == 'failure' && steps.build2.outcome == 'failure'
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          build-args: ${{ matrix.build-args }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify build and push succeeded
+        if: steps.build1.outcome == 'failure' && steps.build2.outcome == 'failure' && steps.build3.outcome == 'failure'
+        run: |
+          echo "::error::Build and push failed after 3 attempts"
+          exit 1
