@@ -26,7 +26,7 @@ spec:
                       - amd64
       containers:
         - name: frontend
-          image: ghcr.io/piwero/tuk-tuk/frontend:0.4.1 # {"$imagepolicy": "tuk-tuk:frontend"}
+          image: ghcr.io/piwero/tuk-tuk/frontend:0.4.2 # {"$imagepolicy": "tuk-tuk:frontend"}
           imagePullPolicy: Always
           ports:
             - containerPort: 80
