@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.4.0](https://github.com/Piwero/tuk-tuk/compare/v0.3.0...v0.4.0) - 2026-08-10
+
+### Features
+
+- **sidebar:** Add Lists heading with unified create menu ([db1aada](https://github.com/Piwero/tuk-tuk/commit/db1aadaaab27ebf0b6db96767ab0e392552f1f9d))
+- **sidebar:** Give Folder rows their own visual grammar ([91b2461](https://github.com/Piwero/tuk-tuk/commit/91b246184cb993452099770336f4412a6f1e564d))
+- **sidebar:** Add Folder collapse, drag refusal, filing, and Folder view ([a5430eb](https://github.com/Piwero/tuk-tuk/commit/a5430ebdaea20d7f22d8271f8cf54c05588a28ce))
+
+### Bug Fixes
+
+- **sidebar:** Show originating Folder for archived Lists ([2eaafd8](https://github.com/Piwero/tuk-tuk/commit/2eaafd821e82e8cb8b1403070c971896f7d86a5a))
+- **sidebar:** Differentiate Folder and List delete confirmations ([8e6b7a0](https://github.com/Piwero/tuk-tuk/commit/8e6b7a0d5f274c647b1f4f8b74dd4298c878ab78))
+- **sidebar:** Correct post-merge CSS for breadcrumb, drag-over and empty hint ([0fe88ce](https://github.com/Piwero/tuk-tuk/commit/0fe88ce487b2afb1390358f111ef92657d0ffe6f))
+- **sidebar:** Correct CSS specificity so Folder rows actually render ([b4ca9a1](https://github.com/Piwero/tuk-tuk/commit/b4ca9a166e4eeb4c6c47a222a58deedbea8ebda7))
+
 ## [0.3.0](https://github.com/Piwero/tuk-tuk/compare/v0.2.2...v0.3.0) - 2026-08-06
 
 ### Features
