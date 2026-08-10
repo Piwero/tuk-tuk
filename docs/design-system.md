@@ -99,7 +99,7 @@ Bricolage Grotesque, semibold/bold, type only.
   identify Lists and Tags.
 - Established mappings: edit=`pencil`, delete=`x`, archive=`archive`,
   unarchive=`archive-restore`, history=`chart-column`, recurring=`repeat`,
-  nav chevrons=`chevron-left/right`; sidebar: Tasks=`list-checks`,
+  nav chevrons=`chevron-left/right`; folder row=`folder`; sidebar: Tasks=`list-checks`,
   Calendar=`calendar-days`, Habits=`repeat`, Focus=`timer`, Today=`sun`,
   Next 7 Days=`calendar-range`, All=`layers`, Inbox=`inbox`.
 

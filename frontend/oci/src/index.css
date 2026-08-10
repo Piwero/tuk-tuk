@@ -378,15 +378,40 @@ main > form,
 .folder-row {
   display: flex;
   align-items: center;
+  gap: 8px;
   min-height: 28px;
   margin-top: var(--space-2);
   padding: 0 10px;
 }
 
-.folder-name,
+.folder-row > .icon {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+/* Folder names are user content, not a section heading: sentence case,
+ * primary text color, medium weight — the uppercase treatment stays
+ * reserved for genuine static headings (Tags, Archived). */
+.folder-name {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
 .tags-nav h2,
 .archived h2 {
-  flex: 1;
   margin: 0;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
@@ -399,7 +424,9 @@ main > form,
 }
 
 .folder-lists {
-  padding-left: var(--space-4);
+  margin-left: 18px;
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .sidebar-actions {
