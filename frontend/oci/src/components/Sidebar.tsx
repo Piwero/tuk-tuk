@@ -173,6 +173,8 @@ export function Sidebar({
   const inbox = lists.find((list) => list.is_inbox);
   const active = lists.filter((list) => !list.is_inbox && !list.is_archived);
   const archivedLists = lists.filter((list) => !list.is_inbox && list.is_archived).sort(byOrder);
+  const archivedListFolder = (list: TaskList): Folder | undefined =>
+    list.folder_id === null ? undefined : folders.find((folder) => folder.id === list.folder_id);
   const looseLists = active.filter((list) => list.folder_id === null).sort(byOrder);
   const membersOf = (folderId: number): TaskList[] =>
     active.filter((list) => list.folder_id === folderId).sort(byOrder);
@@ -678,27 +680,38 @@ export function Sidebar({
         <section className="archived" aria-label="Archived">
           <h2>Archived</h2>
           <ul>
-            {archivedLists.map((list) => (
-              <li key={list.id}>
-                <div className="list-row">
-                  <ListButton
-                    list={list}
-                    selected={list.id === selectedListId}
-                    collapsed={collapsed}
-                    onSelect={onSelect}
-                  />
-                  <span className="row-actions">
-                    <button
-                      type="button"
-                      aria-label={`Unarchive ${list.name}`}
-                      onClick={() => void handleSetArchived(list, false)}
-                    >
-                      <Icon name="archive-restore" />
-                    </button>
-                  </span>
-                </div>
-              </li>
-            ))}
+            {archivedLists.map((list) => {
+              const originFolder = archivedListFolder(list);
+              return (
+                <li key={list.id}>
+                  <div className="list-row">
+                    <ListButton
+                      list={list}
+                      selected={list.id === selectedListId}
+                      collapsed={collapsed}
+                      onSelect={onSelect}
+                    />
+                    {originFolder !== undefined && (
+                      <span
+                        className="archived-list-folder"
+                        aria-label={`In folder ${originFolder.name}`}
+                      >
+                        {originFolder.name}
+                      </span>
+                    )}
+                    <span className="row-actions">
+                      <button
+                        type="button"
+                        aria-label={`Unarchive ${list.name}`}
+                        onClick={() => void handleSetArchived(list, false)}
+                      >
+                        <Icon name="archive-restore" />
+                      </button>
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

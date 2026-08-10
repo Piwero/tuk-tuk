@@ -210,6 +210,41 @@ describe("List management", () => {
     expect(patches).toEqual([{ is_archived: true }, { is_archived: false }]);
   });
 
+  it("shows the originating Folder beside an archived List that belonged to one", async () => {
+    const work = fakeFolder("Work");
+    const backend = fakeList("Backend", { folder_id: work.id });
+    const api = installFakeApi({ folders: [work], lists: [INBOX, backend] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Archive Backend" }));
+
+    const archived = await screen.findByRole("region", { name: "Archived" });
+    expect(within(archived).getByText("Work")).toBeInTheDocument();
+    expect(within(archived).getByLabelText("In folder Work")).toBeInTheDocument();
+
+    await user.click(within(archived).getByRole("button", { name: "Unarchive Backend" }));
+
+    const nav = screen.getByRole("navigation", { name: "Lists" });
+    const workLists = await within(nav).findByRole("list", { name: "Lists in Work" });
+    expect(within(workLists).getByRole("button", { name: "Backend" })).toBeInTheDocument();
+    const patches = api.requests.filter((r) => r.method === "PATCH").map((r) => r.body);
+    expect(patches).toEqual([{ is_archived: true }, { is_archived: false }]);
+  });
+
+  it("shows no Folder byline for an archived List that belonged to no Folder", async () => {
+    const side = fakeList("Side project");
+    installFakeApi({ lists: [INBOX, side] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Archive Side project" }));
+
+    const archived = await screen.findByRole("region", { name: "Archived" });
+    expect(within(archived).getByText("Side project")).toBeInTheDocument();
+    expect(within(archived).queryByLabelText(/^In folder /)).not.toBeInTheDocument();
+  });
+
   it("deletes a List only after confirmation", async () => {
     const side = fakeList("Side project");
     const api = installFakeApi({ lists: [INBOX, side] });
