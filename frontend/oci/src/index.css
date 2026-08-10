@@ -533,6 +533,16 @@ main > form,
   color: var(--text-tertiary);
 }
 
+.archived-list-folder {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
 /* ── Main header ─────────────────────────────────────────────────── */
 
 .main-header {
