@@ -577,7 +577,9 @@ export function Sidebar({
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => handleDropOnFolder(event, folder)}
                 >
+                  <Icon name="folder" size={16} />
                   <span className="folder-name">{folder.name}</span>
+                  <span className="folder-count">{membersOf(folder.id).length}</span>
                   <span className="row-actions">
                     <button
                       type="button"
