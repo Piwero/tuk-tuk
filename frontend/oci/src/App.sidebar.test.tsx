@@ -71,6 +71,27 @@ describe("Sidebar structure", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu", { name: "Create" })).not.toBeInTheDocument();
   });
+
+  it("shows a count of the Lists a Folder contains, including zero", async () => {
+    const work = fakeFolder("Work");
+    const empty = fakeFolder("Empty");
+    installFakeApi({
+      folders: [work, empty],
+      lists: [
+        INBOX,
+        fakeList("Backend", { folder_id: work.id }),
+        fakeList("Frontend", { folder_id: work.id }),
+      ],
+    });
+
+    render(<App />);
+    await screen.findByText("Work");
+
+    const workRow = folderRowOf("Work");
+    expect(within(workRow).getByText("2")).toBeInTheDocument();
+    const emptyRow = folderRowOf("Empty");
+    expect(within(emptyRow).getByText("0")).toBeInTheDocument();
+  });
 });
 
 describe("List management", () => {
