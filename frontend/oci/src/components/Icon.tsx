@@ -22,6 +22,7 @@ import {
   Smile,
   Sun,
   Timer,
+  Trash2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -52,6 +53,7 @@ const ICONS = {
   smile: Smile,
   sun: Sun,
   timer: Timer,
+  "trash-2": Trash2,
   x: X,
 } satisfies Record<string, LucideIcon>;
 

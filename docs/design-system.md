@@ -97,7 +97,10 @@ Bricolage Grotesque, semibold/bold, type only.
   `--text-secondary`, or accent/`--text-primary` when active.
 - Emoji appear **only** as user-chosen List/Habit icons. 10px color dots
   identify Lists and Tags.
-- Established mappings: edit=`pencil`, delete=`x`, archive=`archive`,
+- Established mappings: edit=`pencil`, delete=`x` (a non-destructive
+  removal — e.g. deleting a Folder, which only ungroups its Lists), List
+  delete=`trash-2` (destroys every Task inside — heavier weight, on
+  purpose), archive=`archive`,
   unarchive=`archive-restore`, history=`chart-column`, recurring=`repeat`,
   nav chevrons=`chevron-left/right`; folder row=`folder`; sidebar: Tasks=`list-checks`,
   Calendar=`calendar-days`, Habits=`repeat`, Focus=`timer`, Today=`sun`,
