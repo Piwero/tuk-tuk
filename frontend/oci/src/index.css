@@ -375,6 +375,14 @@ main > form,
   background: var(--surface-hover);
 }
 
+/* A List delete destroys every Task inside it; a Folder delete only
+ * ungroups its Lists. The danger tint gives that difference in
+ * consequence a difference in weight, on top of the heavier trash icon. */
+.row-actions button.row-action-danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .folder-row {
   display: flex;
   align-items: center;
