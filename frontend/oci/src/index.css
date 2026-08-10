@@ -397,7 +397,10 @@ main > form,
   color: var(--text-secondary);
 }
 
-.folder-disclosure {
+/* `button.folder-disclosure`, not `.folder-disclosure`: needs to match
+ * `.sidebar button`'s specificity (class+type) to actually override its
+ * width:100% — a bare class selector loses that fight silently. */
+button.folder-disclosure {
   width: 20px;
   height: 20px;
   padding: 0;
@@ -432,8 +435,9 @@ main > form,
 /* Folder names are user content, not a section heading: sentence case,
  * primary text color, medium weight — the uppercase treatment stays
  * reserved for genuine static headings (Tags, Archived). */
-.folder-name {
+button.folder-name {
   flex: 1;
+  width: auto;
   margin: 0;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -464,7 +468,11 @@ main > form,
   white-space: nowrap;
 }
 
-.folder-lists {
+/* `.sidebar .folder-lists`, not `.folder-lists`: needs to match
+ * `.sidebar ul`'s specificity to actually override its margin/padding
+ * reset — a bare class selector loses that fight silently, same trap as
+ * button.folder-disclosure above. */
+.sidebar .folder-lists {
   margin-left: 18px;
   padding-left: var(--space-3);
   border-left: 1px solid var(--border-subtle);
@@ -521,7 +529,10 @@ main > form,
   position: relative;
 }
 
-.create-menu-trigger {
+/* `button.create-menu-trigger`: needs `.sidebar button`'s specificity
+ * (class+type) to actually override its width/height — see
+ * button.folder-disclosure for the same trap. */
+button.create-menu-trigger {
   width: 28px;
   height: 28px;
   padding: 0;
