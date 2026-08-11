@@ -7,13 +7,15 @@ parent Task.
 """
 
 from datetime import date
+from typing import Annotated
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.models import DEFAULT_OWNER, SORT_GAP, SprintGoal, StandupBullet, StandupEntry
+from app.models import DEFAULT_OWNER, SORT_GAP, SprintGoal, StandupBullet, StandupEntry, Task
+from app.routers.v1.tasks import in_smart_view
 from app.schemas import (
     Page,
     SprintGoalRead,
@@ -22,6 +24,7 @@ from app.schemas import (
     StandupBulletUpdate,
     StandupEntryRead,
     StandupEntrySummary,
+    StandupSuggestionRead,
 )
 
 router = APIRouter(prefix="/api/v1/stand-up", tags=["stand-up"])
@@ -74,6 +77,20 @@ def get_bullet_or_404(entry: StandupEntry, bullet_id: int) -> StandupBullet:
         if bullet.id == bullet_id:
             return bullet
     raise NotFoundError(f"Bullet {bullet_id} not found on stand-up entry {entry.id}")
+
+
+@router.get("/suggestions/today")
+async def read_today_suggestions(
+    session: SessionDep,
+    day: Annotated[date, Query(alias="date")],
+) -> list[StandupSuggestionRead]:
+    """Opt-in chip suggestions for the Today section, sourced from the Today
+    Smart List (open Tasks whose scheduled window has started by `day`). Pure
+    read — no dismissal/seen-state tracking.
+    """
+    rows = await session.scalars(select(Task).where(Task.completed.is_(False)))
+    matches = [task for task in rows if in_smart_view(task, "today", day)]
+    return [StandupSuggestionRead(task_id=task.id, title=task.title) for task in matches]
 
 
 @router.get("/sprint-goal")

@@ -1686,6 +1686,19 @@ export function installFakeApi({
         return json({ enabled: state.standupEnabled });
       }
     }
+    if (method === "GET" && url.pathname === "/api/v1/stand-up/suggestions/today") {
+      const today = url.searchParams.get("date");
+      if (today === null) {
+        return json({ error: { code: "validation_error", message: "date is required" } }, 422);
+      }
+      // Mirrors the backend: the Today Smart List's own query (open Tasks
+      // whose scheduled window has started by `today`), reduced to a
+      // read-only chip shape.
+      const items = state.tasks
+        .filter((task) => !task.completed && inSmartView(task, "today", today))
+        .map((task) => ({ task_id: task.id, title: task.title }));
+      return json(items);
+    }
     if (url.pathname === "/api/v1/stand-up/sprint-goal") {
       if (method === "GET") {
         return json({ text: state.sprintGoal });

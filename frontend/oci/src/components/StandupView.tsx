@@ -8,12 +8,14 @@ import {
   fetchSprintGoal,
   fetchStandupEntries,
   fetchStandupEntry,
+  fetchTodaySuggestions,
   updateStandupBullet,
   updateSprintGoal,
   type StandupBullet,
   type StandupEntry,
   type StandupEntrySummary,
   type StandupSection,
+  type StandupSuggestion,
 } from "../api";
 import { localDayOf, shortDayLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
@@ -42,6 +44,10 @@ export function StandupView(): JSX.Element {
   const [entry, setEntry] = useState<StandupEntry | null>(null);
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
   const [bulletEditor, setBulletEditor] = useState<{ id: number; text: string } | null>(null);
+  // Opt-in Today chips, built from the Today Smart List — pure read, no
+  // dismissal/seen-state. Blockers has no structured "blocked" concept to
+  // suggest from, so only Today gets this treatment.
+  const [todaySuggestions, setTodaySuggestions] = useState<StandupSuggestion[]>([]);
   // The live Sprint goal (edited via the header) vs. `goalDraft`, the header
   // input's current text — the entry's snapshot when one exists (a past
   // day's goal never changes retroactively), the live goal otherwise.
@@ -61,6 +67,10 @@ export function StandupView(): JSX.Element {
     const goal = await fetchSprintGoal();
     liveGoalRef.current = goal.text;
     setLiveGoal(goal.text);
+  }, []);
+
+  const loadTodaySuggestions = useCallback(async (date: string): Promise<void> => {
+    setTodaySuggestions(await fetchTodaySuggestions(date));
   }, []);
 
   const loadEntry = useCallback(async (date: string): Promise<void> => {
@@ -101,7 +111,8 @@ export function StandupView(): JSX.Element {
     setBulletEditor(null);
     setDrafts(emptyDrafts());
     void loadEntry(selectedDate);
-  }, [selectedDate, loadEntry]);
+    void loadTodaySuggestions(selectedDate);
+  }, [selectedDate, loadEntry, loadTodaySuggestions]);
 
   async function saveGoal(): Promise<void> {
     if (!goalDirty) {
@@ -118,14 +129,24 @@ export function StandupView(): JSX.Element {
     return entry?.bullets.filter((bullet) => bullet.section === section) ?? [];
   }
 
-  async function addBullet(section: StandupSection): Promise<void> {
-    const trimmed = drafts[section].trim();
+  async function addBulletText(section: StandupSection, text: string): Promise<void> {
+    const trimmed = text.trim();
     if (trimmed === "") {
       return;
     }
     setEntry(await createStandupBullet(selectedDate, section, trimmed));
-    setDrafts((current) => ({ ...current, [section]: "" }));
     void loadHistory();
+  }
+
+  async function addBullet(section: StandupSection): Promise<void> {
+    await addBulletText(section, drafts[section]);
+    setDrafts((current) => ({ ...current, [section]: "" }));
+  }
+
+  /** A Today chip's click — appends its title as a new bullet, the same
+   * additive mechanism as typing it into the Add form. */
+  async function addSuggestion(suggestion: StandupSuggestion): Promise<void> {
+    await addBulletText("today", suggestion.title);
   }
 
   async function renameBullet(): Promise<void> {
@@ -264,6 +285,17 @@ export function StandupView(): JSX.Element {
             ),
           )}
         </ul>
+        {section === "today" && todaySuggestions.length > 0 && (
+          <ul aria-label="Today suggestions" className="standup-suggestions">
+            {todaySuggestions.map((suggestion) => (
+              <li key={suggestion.task_id}>
+                <button type="button" onClick={() => void addSuggestion(suggestion)}>
+                  {suggestion.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <form
           onSubmit={(event) => {
             event.preventDefault();
