@@ -147,3 +147,39 @@ class TestPastDatesAreEditable:
 
         assert response.status_code == 200
         assert response.json()["bullets"][0]["text"] == "Edited old entry"
+
+
+class TestSprintGoal:
+    def test_the_goal_defaults_to_empty(self, client: TestClient) -> None:
+        response = client.get("/api/v1/stand-up/sprint-goal")
+
+        assert response.status_code == 200
+        assert response.json() == {"text": ""}
+
+    def test_the_goal_round_trips_through_a_write_and_read(self, client: TestClient) -> None:
+        write = client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v1"})
+        assert write.status_code == 200
+        assert write.json() == {"text": "Ship v1"}
+
+        read_back = client.get("/api/v1/stand-up/sprint-goal")
+        assert read_back.json() == {"text": "Ship v1"}
+
+    def test_a_new_entry_snapshots_the_current_goal(self, client: TestClient) -> None:
+        client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v1"})
+
+        body = add_bullet(client, DAY, "today", "Ship the stand-up feature")
+
+        assert body["sprint_goal_snapshot"] == "Ship v1"
+
+    def test_editing_the_goal_later_does_not_change_an_existing_entrys_snapshot(
+        self, client: TestClient
+    ) -> None:
+        client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v1"})
+        body = add_bullet(client, DAY, "today", "Ship the stand-up feature")
+        assert body["sprint_goal_snapshot"] == "Ship v1"
+
+        client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v2"})
+
+        read_back = client.get(f"/api/v1/stand-up/entries/{DAY}")
+        assert read_back.json()["sprint_goal_snapshot"] == "Ship v1"
+        assert client.get("/api/v1/stand-up/sprint-goal").json() == {"text": "Ship v2"}

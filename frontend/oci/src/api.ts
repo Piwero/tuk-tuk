@@ -1000,3 +1000,19 @@ export function updateStandupBullet(
 export function deleteStandupBullet(date: string, bulletId: number): Promise<void> {
   return request(`/api/v1/stand-up/entries/${date}/bullets/${bulletId}`, { method: "DELETE" });
 }
+
+export interface SprintGoal {
+  text: string;
+}
+
+/** The single, persistent Sprint-goal text shown above every Stand-up Entry. */
+export function fetchSprintGoal(): Promise<SprintGoal> {
+  return request("/api/v1/stand-up/sprint-goal");
+}
+
+export function updateSprintGoal(text: string): Promise<SprintGoal> {
+  return request("/api/v1/stand-up/sprint-goal", {
+    method: "PUT",
+    body: JSON.stringify({ text }),
+  });
+}

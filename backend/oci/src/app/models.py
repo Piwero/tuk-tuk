@@ -411,6 +411,28 @@ class StandupBullet(Base):
     entry: Mapped[StandupEntry] = relationship(back_populates="bullets")
 
 
+class SprintGoal(Base):
+    """The single, persistent Sprint-goal text (issue #139) shown as a
+    header above the Stand-up detail pane. Editable at any time and applies
+    going forward — it is routinely-edited domain data, not app
+    configuration, so it lives here rather than on AppSettings. Lazily
+    created on first write, like StandupEntry; `StandupEntry.sprint_goal_snapshot`
+    copies this row's `text` at Entry-creation time and never changes
+    afterward, so editing this row never retroactively touches old Entries.
+    """
+
+    __tablename__ = "sprint_goals"
+    __table_args__ = (UniqueConstraint("owner"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class Timer(Base):
     """A Timer — a saved Focus Session preset (name + mode + duration,
     optionally pre-linked to a Task or Habit) for recurring scenarios like

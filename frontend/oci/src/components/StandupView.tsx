@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
   createStandupBullet,
   deleteStandupBullet,
   deleteStandupEntry,
+  fetchSprintGoal,
   fetchStandupEntries,
   fetchStandupEntry,
   updateStandupBullet,
+  updateSprintGoal,
   type StandupBullet,
   type StandupEntry,
   type StandupEntrySummary,
@@ -40,17 +42,38 @@ export function StandupView(): JSX.Element {
   const [entry, setEntry] = useState<StandupEntry | null>(null);
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
   const [bulletEditor, setBulletEditor] = useState<{ id: number; text: string } | null>(null);
+  // The live Sprint goal (edited via the header) vs. `goalDraft`, the header
+  // input's current text — the entry's snapshot when one exists (a past
+  // day's goal never changes retroactively), the live goal otherwise.
+  const [liveGoal, setLiveGoal] = useState("");
+  const liveGoalRef = useRef("");
+  const [goalDraft, setGoalDraft] = useState("");
+  // Only a real edit should write the live goal — merely viewing a past
+  // Entry's snapshot (which can differ from the live text) and then
+  // blurring away, e.g. by picking another date, must not overwrite it.
+  const [goalDirty, setGoalDirty] = useState(false);
 
   const loadHistory = useCallback(async (): Promise<void> => {
     setHistory((await fetchStandupEntries()).items);
   }, []);
 
+  const loadGoal = useCallback(async (): Promise<void> => {
+    const goal = await fetchSprintGoal();
+    liveGoalRef.current = goal.text;
+    setLiveGoal(goal.text);
+  }, []);
+
   const loadEntry = useCallback(async (date: string): Promise<void> => {
     try {
-      setEntry(await fetchStandupEntry(date));
+      const loaded = await fetchStandupEntry(date);
+      setEntry(loaded);
+      setGoalDraft(loaded.sprint_goal_snapshot);
+      setGoalDirty(false);
     } catch (error) {
       if (error instanceof ApiError && error.code === "not_found") {
         setEntry(null);
+        setGoalDraft(liveGoalRef.current);
+        setGoalDirty(false);
         return;
       }
       throw error;
@@ -62,10 +85,34 @@ export function StandupView(): JSX.Element {
   }, [loadHistory]);
 
   useEffect(() => {
+    void loadGoal();
+  }, [loadGoal]);
+
+  // A date with no persisted Entry tracks the live goal, including updates
+  // that land after this date was already selected (e.g. the initial load).
+  useEffect(() => {
+    if (entry === null) {
+      setGoalDraft(liveGoal);
+      setGoalDirty(false);
+    }
+  }, [liveGoal, entry]);
+
+  useEffect(() => {
     setBulletEditor(null);
     setDrafts(emptyDrafts());
     void loadEntry(selectedDate);
   }, [selectedDate, loadEntry]);
+
+  async function saveGoal(): Promise<void> {
+    if (!goalDirty) {
+      return;
+    }
+    const goal = await updateSprintGoal(goalDraft);
+    liveGoalRef.current = goal.text;
+    setLiveGoal(goal.text);
+    setGoalDraft(goal.text);
+    setGoalDirty(false);
+  }
 
   function bulletsOf(section: StandupSection): StandupBullet[] {
     return entry?.bullets.filter((bullet) => bullet.section === section) ?? [];
@@ -270,7 +317,31 @@ export function StandupView(): JSX.Element {
         </ul>
       </aside>
       <div className="standup-detail">
-        {SECTIONS.map(({ key, label }) => renderSection(key, label))}
+        <div className="standup-goal">
+          <label>
+            Sprint goal
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveGoal();
+              }}
+            >
+              <input
+                aria-label="Sprint goal"
+                placeholder="What's the sprint trying to achieve?"
+                value={goalDraft}
+                onChange={(event) => {
+                  setGoalDraft(event.target.value);
+                  setGoalDirty(true);
+                }}
+                onBlur={() => void saveGoal()}
+              />
+            </form>
+          </label>
+        </div>
+        <div className="standup-sections">
+          {SECTIONS.map(({ key, label }) => renderSection(key, label))}
+        </div>
       </div>
     </div>
   );

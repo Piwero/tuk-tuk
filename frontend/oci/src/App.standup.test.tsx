@@ -235,4 +235,63 @@ describe("Stand-up", () => {
     });
     expect(api.standupEntries[0]?.bullets.map((b) => b.text)).toEqual(["Second", "First"]);
   });
+
+  it("editing the Sprint goal persists it and updates the header", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openStandup();
+
+    const goalField = await screen.findByRole("textbox", { name: "Sprint goal" });
+    fireEvent.change(goalField, { target: { value: "Ship v1" } });
+    fireEvent.blur(goalField);
+
+    await waitFor(() => expect(api.sprintGoal).toBe("Ship v1"));
+    expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v1");
+  });
+
+  it("opening an old entry shows its snapshotted goal, not the current live goal", async () => {
+    installFakeApi({
+      sprintGoal: "Ship v2",
+      standupEntries: [
+        fakeStandupEntry("2026-07-01", {
+          sprint_goal_snapshot: "Ship v1",
+          bullets: [{ id: 1, section: "today", text: "Old work", sort_order: 1024 }],
+        }),
+      ],
+    });
+    render(<App />);
+    await openStandup();
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v2");
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Jul 1" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v1");
+    });
+  });
+
+  it("merely viewing (and blurring away from) a past entry's snapshot does not overwrite the live goal", async () => {
+    const api = installFakeApi({
+      sprintGoal: "Ship v2",
+      standupEntries: [
+        fakeStandupEntry("2026-07-01", {
+          sprint_goal_snapshot: "Ship v1",
+          bullets: [{ id: 1, section: "today", text: "Old work", sort_order: 1024 }],
+        }),
+      ],
+    });
+    render(<App />);
+    await openStandup();
+    fireEvent.click(await screen.findByRole("button", { name: "Jul 1" }));
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v1");
+    });
+
+    fireEvent.blur(screen.getByRole("textbox", { name: "Sprint goal" }));
+
+    await waitFor(() => expect(api.sprintGoal).toBe("Ship v2"));
+  });
 });

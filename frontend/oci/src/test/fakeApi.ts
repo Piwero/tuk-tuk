@@ -230,6 +230,7 @@ export interface FakeApiState {
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
+  sprintGoal: string;
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -438,6 +439,7 @@ export function installFakeApi({
   events = [],
   eventFailures = [],
   standupEntries = [],
+  sprintGoal = "",
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -475,6 +477,9 @@ export function installFakeApi({
    * (or mutates `api.eventFailures` directly) instead. */
   eventFailures?: FakeEventFailure[];
   standupEntries?: FakeStandupEntry[];
+  /** The live Sprint goal (issue #139) — never touches existing Entries'
+   * `sprint_goal_snapshot`, only what a newly-created Entry copies. */
+  sprintGoal?: string;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -506,6 +511,7 @@ export function installFakeApi({
       ...entry,
       bullets: entry.bullets.map((bullet) => ({ ...bullet })),
     })),
+    sprintGoal,
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -1662,6 +1668,16 @@ export function installFakeApi({
         })),
       });
     }
+    if (url.pathname === "/api/v1/stand-up/sprint-goal") {
+      if (method === "GET") {
+        return json({ text: state.sprintGoal });
+      }
+      if (method === "PUT") {
+        const input = body as { text: string };
+        state.sprintGoal = input.text;
+        return json({ text: state.sprintGoal });
+      }
+    }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/entries") {
       const items = [...state.standupEntries]
         .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
@@ -1695,7 +1711,7 @@ export function installFakeApi({
       const day = standupBulletsMatch[1] as string;
       let entry = state.standupEntries.find((e) => e.date === day);
       if (!entry) {
-        entry = fakeStandupEntry(day);
+        entry = fakeStandupEntry(day, { sprint_goal_snapshot: state.sprintGoal });
         state.standupEntries.push(entry);
       }
       const input = body as { section: StandupSection; text: string };
