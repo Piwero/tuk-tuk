@@ -364,6 +364,53 @@ class GoogleCalendar(Base):
     account: Mapped[GoogleAccount] = relationship(back_populates="calendars")
 
 
+class StandupEntry(Base):
+    """A Stand-up Entry — one calendar date's daily stand-up: Yesterday /
+    Today / Blockers Bullets, plus a Sprint-goal snapshot column (populated
+    with an empty placeholder for now; the real Sprint Goal field lands in a
+    follow-up ticket). Lazily persisted: navigating to a date with no entry
+    shows an editable empty form, and the row exists only once the first
+    Bullet is saved for that date (app.routers.v1.stand_up).
+    """
+
+    __tablename__ = "standup_entries"
+    __table_args__ = (UniqueConstraint("date", "owner"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    sprint_goal_snapshot: Mapped[str] = mapped_column(Text, default="")
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    bullets: Mapped[list["StandupBullet"]] = relationship(
+        back_populates="entry",
+        cascade="all, delete-orphan",
+        order_by="StandupBullet.sort_order, StandupBullet.id",
+        lazy="selectin",
+    )
+
+
+class StandupBullet(Base):
+    """One bullet within a Stand-up Entry's Yesterday / Today / Blockers
+    section (`section` discriminator). Each section orders independently via
+    its own sparse `sort_order`.
+
+    Composition under a StandupEntry (deleted with it), so no owner column —
+    ownership flows through the parent Entry.
+    """
+
+    __tablename__ = "standup_bullets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entry_id: Mapped[int] = mapped_column(ForeignKey("standup_entries.id"), index=True)
+    section: Mapped[str] = mapped_column(String(9))
+    text: Mapped[str] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    entry: Mapped[StandupEntry] = relationship(back_populates="bullets")
+
+
 class Timer(Base):
     """A Timer — a saved Focus Session preset (name + mode + duration,
     optionally pre-linked to a Task or Habit) for recurring scenarios like

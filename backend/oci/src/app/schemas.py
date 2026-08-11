@@ -21,6 +21,9 @@ ViewMode = Literal["list", "kanban"]
 # The two Habit types — named on the wire, like Priority.
 HabitType = Literal["boolean", "numeric"]
 
+# A Stand-up Bullet's section, in display order.
+StandupSection = Literal["yesterday", "today", "blockers"]
+
 
 def reject_explicit_null(value: object) -> object:
     """Shared PATCH-field rule: absent means "leave unchanged"; explicit null is rejected.
@@ -471,6 +474,42 @@ class FocusStats(BaseModel):
     weeks: list[FocusWeekTotal]
     tasks: list[FocusTaskTotal]
     habits: list[FocusHabitTotal]
+
+
+class StandupBulletCreate(BaseModel):
+    section: StandupSection
+    text: str = Field(min_length=1, max_length=1000)
+
+
+# PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
+class StandupBulletUpdate(BaseModel):
+    text: str | None = Field(default=None, min_length=1, max_length=1000)
+    sort_order: int | None = None
+
+    _reject_nulls = field_validator("text", "sort_order")(reject_explicit_null)
+
+
+class StandupBulletRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    section: StandupSection
+    text: str
+    sort_order: int
+
+
+class StandupEntrySummary(BaseModel):
+    """The history list's row shape — no bullets, one per persisted date."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: date
+    sprint_goal_snapshot: str
+
+
+class StandupEntryRead(StandupEntrySummary):
+    bullets: list[StandupBulletRead]
 
 
 class TaskRead(BaseModel):

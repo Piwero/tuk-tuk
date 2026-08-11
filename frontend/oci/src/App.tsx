@@ -40,6 +40,7 @@ import { QuickAddDialog } from "./components/QuickAddDialog";
 import { SearchView, type SearchState } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { Sidebar } from "./components/Sidebar";
+import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 
@@ -54,6 +55,7 @@ type View =
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar" }
   | { kind: "habits" }
+  | { kind: "standup" }
   | { kind: "focus"; task?: Task }
   | { kind: "search"; search: SearchState }
   | { kind: "settings" }
@@ -135,6 +137,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
       view?.kind === "habits" ||
+      view?.kind === "standup" ||
       view?.kind === "focus" ||
       view?.kind === "search" ||
       view?.kind === "settings"
@@ -166,6 +169,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       view === null ||
       view.kind === "calendar" ||
       view.kind === "habits" ||
+      view.kind === "standup" ||
       view.kind === "focus" ||
       view.kind === "settings"
     ) {
@@ -360,6 +364,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           selectedSmart={smartView}
           calendarSelected={view?.kind === "calendar"}
           habitsSelected={view?.kind === "habits"}
+          standupSelected={view?.kind === "standup"}
           focusSelected={view?.kind === "focus"}
           settingsSelected={view?.kind === "settings"}
           onSelect={(listId) => switchView({ kind: "list", id: listId })}
@@ -368,6 +373,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
           onSelectCalendar={() => switchView({ kind: "calendar" })}
           onSelectHabits={() => switchView({ kind: "habits" })}
+          onSelectStandup={() => switchView({ kind: "standup" })}
           onSelectFocus={() => switchView({ kind: "focus" })}
           onSelectSettings={() => switchView({ kind: "settings" })}
           onQuickAdd={() => setQuickAddOpen(true)}
@@ -438,6 +444,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 "Calendar"
               ) : view?.kind === "habits" ? (
                 "Habits"
+              ) : view?.kind === "standup" ? (
+                "Stand-up"
               ) : view?.kind === "focus" ? (
                 "Focus"
               ) : view?.kind === "search" ? (
@@ -575,6 +583,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             />
           ) : view?.kind === "habits" ? (
             <HabitsView />
+          ) : view?.kind === "standup" ? (
+            <StandupView />
           ) : view?.kind === "focus" ? (
             <FocusView key={view.task?.id ?? "focus"} initialTask={view.task ?? null} />
           ) : view?.kind === "search" ? (

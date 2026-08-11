@@ -58,6 +58,7 @@ interface SidebarProps {
   selectedSmart: SmartView | null;
   calendarSelected: boolean;
   habitsSelected: boolean;
+  standupSelected: boolean;
   focusSelected: boolean;
   settingsSelected: boolean;
   onSelect: (listId: number) => void;
@@ -66,6 +67,7 @@ interface SidebarProps {
   onSelectSmart: (view: SmartView) => void;
   onSelectCalendar: () => void;
   onSelectHabits: () => void;
+  onSelectStandup: () => void;
   onSelectFocus: () => void;
   onSelectSettings: () => void;
   onSearch: (query: string) => void;
@@ -158,6 +160,7 @@ export function Sidebar({
   selectedSmart,
   calendarSelected,
   habitsSelected,
+  standupSelected,
   focusSelected,
   settingsSelected,
   onSelect,
@@ -166,6 +169,7 @@ export function Sidebar({
   onSelectSmart,
   onSelectCalendar,
   onSelectHabits,
+  onSelectStandup,
   onSelectFocus,
   onSelectSettings,
   onSearch,
@@ -524,7 +528,8 @@ export function Sidebar({
     );
   }
 
-  const tasksSelected = !calendarSelected && !habitsSelected && !focusSelected && !settingsSelected;
+  const tasksSelected =
+    !calendarSelected && !habitsSelected && !standupSelected && !focusSelected && !settingsSelected;
 
   return (
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
@@ -563,6 +568,13 @@ export function Sidebar({
           selected={habitsSelected}
           collapsed={collapsed}
           onClick={onSelectHabits}
+        />
+        <TopNavItem
+          icon="users"
+          label="Stand-up"
+          selected={standupSelected}
+          collapsed={collapsed}
+          onClick={onSelectStandup}
         />
         <TopNavItem
           icon="timer"

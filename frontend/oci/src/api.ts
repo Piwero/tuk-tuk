@@ -930,3 +930,73 @@ export interface FocusStats {
 export function fetchFocusStats(start: string, end: string, tz: string): Promise<FocusStats> {
   return request(`/api/v1/focus-stats?start=${start}&end=${end}&tz=${encodeURIComponent(tz)}`);
 }
+
+/** A Stand-up Bullet's section, in display order. */
+export type StandupSection = "yesterday" | "today" | "blockers";
+
+export interface StandupBullet {
+  id: number;
+  section: StandupSection;
+  text: string;
+  sort_order: number;
+}
+
+/** The history list's row shape — no Bullets, one per persisted date. */
+export interface StandupEntrySummary {
+  id: number;
+  date: string;
+  sprint_goal_snapshot: string;
+}
+
+export interface StandupEntry extends StandupEntrySummary {
+  bullets: StandupBullet[];
+}
+
+/** The history list — only dates with an actual persisted Entry, newest first. */
+export function fetchStandupEntries(): Promise<Page<StandupEntrySummary>> {
+  return request("/api/v1/stand-up/entries");
+}
+
+/** Rejects with a "not_found" ApiError when `date` has no persisted Entry —
+ * the caller renders an empty, immediately-editable form in that case. */
+export function fetchStandupEntry(date: string): Promise<StandupEntry> {
+  return request(`/api/v1/stand-up/entries/${date}`);
+}
+
+export function deleteStandupEntry(date: string): Promise<void> {
+  return request(`/api/v1/stand-up/entries/${date}`, { method: "DELETE" });
+}
+
+/** Bullet mutations return the full parent Entry (composition), and lazily
+ * create it on the first Bullet saved for `date`. */
+export function createStandupBullet(
+  date: string,
+  section: StandupSection,
+  text: string,
+): Promise<StandupEntry> {
+  return request(`/api/v1/stand-up/entries/${date}/bullets`, {
+    method: "POST",
+    body: JSON.stringify({ section, text }),
+  });
+}
+
+/** Absent fields stay unchanged; explicit null is rejected by the API. */
+export interface StandupBulletPatch {
+  text?: string;
+  sort_order?: number;
+}
+
+export function updateStandupBullet(
+  date: string,
+  bulletId: number,
+  patch: StandupBulletPatch,
+): Promise<StandupEntry> {
+  return request(`/api/v1/stand-up/entries/${date}/bullets/${bulletId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteStandupBullet(date: string, bulletId: number): Promise<void> {
+  return request(`/api/v1/stand-up/entries/${date}/bullets/${bulletId}`, { method: "DELETE" });
+}

@@ -33,6 +33,7 @@ from app.routers.v1 import (
     habits,
     lists,
     sections,
+    stand_up,
     tags,
     tasks,
     timers,
@@ -112,6 +113,7 @@ def create_app(
     app.include_router(habits.check_ins_router)
     app.include_router(lists.router)
     app.include_router(sections.router)
+    app.include_router(stand_up.router)
     app.include_router(tags.router)
     app.include_router(tasks.router)
     app.include_router(timers.router)
