@@ -295,3 +295,24 @@ describe("Stand-up", () => {
     await waitFor(() => expect(api.sprintGoal).toBe("Ship v2"));
   });
 });
+
+describe("Stand-up settings toggle", () => {
+  it("shows the Stand-up nav item when the flag is enabled (the default)", async () => {
+    installFakeApi();
+    render(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Views" });
+    expect(await within(nav).findByRole("button", { name: "Stand-up" })).toBeInTheDocument();
+  });
+
+  it("hides the Stand-up nav item when the flag is disabled", async () => {
+    installFakeApi({ standupEnabled: false });
+    render(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Views" });
+    // Wait on a nav item that's always present, so this doesn't race the
+    // (still-pending) settings fetch and pass for the wrong reason.
+    await within(nav).findByRole("button", { name: "Focus" });
+    expect(within(nav).queryByRole("button", { name: "Stand-up" })).not.toBeInTheDocument();
+  });
+});

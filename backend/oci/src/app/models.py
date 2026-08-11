@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     CheckConstraint,
     Column,
     Date,
@@ -51,6 +52,10 @@ class AppSettings(Base):
     session_key: Mapped[str] = mapped_column(Text)
     google_client_id: Mapped[str | None] = mapped_column(String(255), default=None)
     encrypted_google_client_secret: Mapped[str | None] = mapped_column(Text, default=None)
+    # UI-only visibility toggle for the Stand-up feature (issue #140):
+    # turning it off hides the nav item and route, nothing more — no route
+    # is blocked and no stored data is ever touched by this flag.
+    standup_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
