@@ -90,8 +90,8 @@ def get_bullet_or_404(entry: StandupEntry, bullet_id: int) -> StandupBullet:
 
 @router.get("/suggestions/today")
 async def read_today_suggestions(
-    session: SessionDep,
     day: Annotated[date, Query(alias="date")],
+    session: SessionDep,
 ) -> list[StandupSuggestionRead]:
     """Opt-in chip suggestions for the Today section, sourced from the Today
     Smart List (open Tasks whose scheduled window has started by `day`). Pure

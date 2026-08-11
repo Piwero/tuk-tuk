@@ -326,7 +326,11 @@ export function StandupView(): JSX.Element {
           <ul aria-label="Today suggestions" className="standup-suggestions">
             {todaySuggestions.map((suggestion) => (
               <li key={suggestion.task_id}>
-                <button type="button" onClick={() => void addTodaySuggestion(suggestion)}>
+                <button
+                  type="button"
+                  className="standup-suggestion-chip"
+                  onClick={() => void addTodaySuggestion(suggestion)}
+                >
                   {suggestion.title}
                 </button>
               </li>
