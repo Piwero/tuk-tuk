@@ -105,7 +105,9 @@ function ListButton({ list, selected, collapsed, onSelect }: ListButtonProps): J
       // Only on the rail: expanded, the name comes from the label itself —
       // emoji included, which is the name the rest of the app expects.
       aria-label={collapsed ? list.name : undefined}
-      title={collapsed ? list.name : undefined}
+      // Always set, not just when collapsed — expanded names can still be
+      // truncated by ellipsis, and the native tooltip is the fallback.
+      title={list.name}
       onClick={() => onSelect(list.id)}
     >
       {list.is_inbox ? (
@@ -707,6 +709,7 @@ export function Sidebar({
                       className={
                         folder.id === selectedFolderId ? "folder-name selected" : "folder-name"
                       }
+                      title={folder.name}
                       onClick={() => onSelectFolder(folder.id)}
                     >
                       {folder.name}

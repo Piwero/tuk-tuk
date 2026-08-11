@@ -344,15 +344,22 @@ main > form,
   border-radius: var(--radius-full);
 }
 
+/* Collapsed to zero width at rest — not just `visibility: hidden` — so the
+ * hidden action buttons stop reserving ~90px that the List/Folder name
+ * needs for its own ellipsis truncation to kick in at a sane width. */
 .row-actions {
   display: flex;
   gap: 2px;
+  width: 0;
+  overflow: hidden;
   visibility: hidden;
 }
 
 .list-row:hover .row-actions,
 .folder-row:hover .row-actions,
 .row-actions:focus-within {
+  width: auto;
+  overflow: visible;
   visibility: visible;
 }
 
