@@ -13,9 +13,11 @@ from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.models import DEFAULT_OWNER, SORT_GAP, StandupBullet, StandupEntry
+from app.models import DEFAULT_OWNER, SORT_GAP, SprintGoal, StandupBullet, StandupEntry
 from app.schemas import (
     Page,
+    SprintGoalRead,
+    SprintGoalUpdate,
     StandupBulletCreate,
     StandupBulletUpdate,
     StandupEntryRead,
@@ -39,14 +41,30 @@ async def get_entry_or_404(day: date, session: SessionDep) -> StandupEntry:
     return entry
 
 
+async def get_sprint_goal(session: SessionDep) -> SprintGoal | None:
+    result = await session.execute(select(SprintGoal).where(SprintGoal.owner == DEFAULT_OWNER))
+    return result.scalar_one_or_none()
+
+
+async def get_or_create_sprint_goal(session: SessionDep) -> SprintGoal:
+    goal = await get_sprint_goal(session)
+    if goal is None:
+        goal = SprintGoal()
+        session.add(goal)
+    return goal
+
+
 async def get_or_create_entry(day: date, session: SessionDep) -> StandupEntry:
     entry = await get_entry_by_date(day, session)
     if entry is None:
+        goal = await get_sprint_goal(session)
         # bullets defaults to [] here without a query, since the relationship
         # is touched on a still-transient object — but it must be touched,
         # or a post-commit read of a freshly-flushed, never-queried Entry
         # would trigger the async "selectin" loader outside of await.
-        entry = StandupEntry(date=day, bullets=[])
+        entry = StandupEntry(
+            date=day, bullets=[], sprint_goal_snapshot=goal.text if goal is not None else ""
+        )
         session.add(entry)
     return entry
 
@@ -56,6 +74,20 @@ def get_bullet_or_404(entry: StandupEntry, bullet_id: int) -> StandupBullet:
         if bullet.id == bullet_id:
             return bullet
     raise NotFoundError(f"Bullet {bullet_id} not found on stand-up entry {entry.id}")
+
+
+@router.get("/sprint-goal")
+async def read_sprint_goal(session: SessionDep) -> SprintGoalRead:
+    goal = await get_sprint_goal(session)
+    return SprintGoalRead(text=goal.text if goal is not None else "")
+
+
+@router.put("/sprint-goal")
+async def update_sprint_goal(payload: SprintGoalUpdate, session: SessionDep) -> SprintGoalRead:
+    goal = await get_or_create_sprint_goal(session)
+    goal.text = payload.text
+    await session.commit()
+    return SprintGoalRead.model_validate(goal)
 
 
 @router.get("/entries")

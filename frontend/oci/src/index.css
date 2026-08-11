@@ -2290,6 +2290,23 @@ li[data-overdue] .date-chip {
 }
 
 .standup-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.standup-goal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.standup-goal input {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.standup-sections {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-4);
@@ -2323,7 +2340,7 @@ li[data-overdue] .date-chip {
     grid-template-columns: 1fr;
   }
 
-  .standup-detail {
+  .standup-sections {
     grid-template-columns: 1fr;
   }
 }
