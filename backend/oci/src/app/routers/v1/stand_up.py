@@ -6,14 +6,22 @@ mutations return the full parent Entry, like Check Items return their
 parent Task.
 """
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.models import DEFAULT_OWNER, SORT_GAP, SprintGoal, StandupBullet, StandupEntry
+from app.models import (
+    DEFAULT_OWNER,
+    SORT_GAP,
+    CompletedOccurrence,
+    SprintGoal,
+    StandupBullet,
+    StandupEntry,
+    Task,
+)
 from app.schemas import (
     Page,
     SprintGoalRead,
@@ -22,6 +30,7 @@ from app.schemas import (
     StandupBulletUpdate,
     StandupEntryRead,
     StandupEntrySummary,
+    StandupYesterdaySuggestion,
 )
 
 router = APIRouter(prefix="/api/v1/stand-up", tags=["stand-up"])
@@ -74,6 +83,38 @@ def get_bullet_or_404(entry: StandupEntry, bullet_id: int) -> StandupBullet:
         if bullet.id == bullet_id:
             return bullet
     raise NotFoundError(f"Bullet {bullet_id} not found on stand-up entry {entry.id}")
+
+
+@router.get("/suggestions/yesterday")
+async def read_yesterday_suggestions(
+    date: date, session: SessionDep
+) -> list[StandupYesterdaySuggestion]:
+    """Suggestion chips for the Yesterday section (issue #141): titles of
+    one-off Tasks completed, and Completed Occurrences logged, on the prior
+    calendar day (`date - 1`). A pure read over existing completed-Task and
+    Completed Occurrence data — no suggestion state is persisted, so this
+    reruns and repopulates identically every time the section is viewed.
+    """
+    day_start = datetime(date.year, date.month, date.day, tzinfo=UTC) - timedelta(days=1)
+    day_end = day_start + timedelta(days=1)
+
+    completed_tasks = await session.scalars(
+        select(Task.title).where(
+            Task.completed.is_(True),
+            Task.completed_at >= day_start,
+            Task.completed_at < day_end,
+        )
+    )
+    completed_occurrences = await session.scalars(
+        select(Task.title)
+        .join(CompletedOccurrence, CompletedOccurrence.task_id == Task.id)
+        .where(
+            CompletedOccurrence.completed_at >= day_start,
+            CompletedOccurrence.completed_at < day_end,
+        )
+    )
+    titles = [*completed_tasks.all(), *completed_occurrences.all()]
+    return [StandupYesterdaySuggestion(title=title) for title in titles]
 
 
 @router.get("/sprint-goal")

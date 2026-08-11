@@ -273,6 +273,68 @@ describe("Stand-up", () => {
     });
   });
 
+  it("renders Yesterday suggestion chips from suggestion data", async () => {
+    installFakeApi({
+      standupYesterdaySuggestions: [
+        { title: "Ship the release notes" },
+        { title: "Fix flaky test" },
+      ],
+    });
+    render(<App />);
+    await openStandup();
+
+    const suggestions = await screen.findByRole("list", { name: "Yesterday suggestions" });
+    expect(within(suggestions).getByText("Ship the release notes")).toBeInTheDocument();
+    expect(within(suggestions).getByText("Fix flaky test")).toBeInTheDocument();
+  });
+
+  it("does not render a suggestions row when there are no suggestions", async () => {
+    installFakeApi({ standupYesterdaySuggestions: [] });
+    render(<App />);
+    await openStandup();
+
+    await screen.findByRole("region", { name: "Yesterday" });
+    expect(screen.queryByRole("list", { name: "Yesterday suggestions" })).not.toBeInTheDocument();
+  });
+
+  it("clicking a suggestion chip appends a bullet to Yesterday without touching other sections", async () => {
+    const api = installFakeApi({
+      standupYesterdaySuggestions: [{ title: "Ship the release notes" }],
+    });
+    render(<App />);
+    await openStandup();
+    await addBullet("Today", "Unrelated today item");
+    await addBullet("Blockers", "Unrelated blocker");
+
+    const chip = await screen.findByRole("button", { name: "Ship the release notes" });
+    fireEvent.click(chip);
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("list", { name: "Yesterday bullets" })).getByText(
+          "Ship the release notes",
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(api.standupEntries[0]?.bullets.map((b) => b.text)).toEqual(
+      expect.arrayContaining([
+        "Ship the release notes",
+        "Unrelated today item",
+        "Unrelated blocker",
+      ]),
+    );
+    // The other sections are untouched by the chip click.
+    expect(
+      within(screen.getByRole("list", { name: "Today bullets" })).getByText("Unrelated today item"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: "Blockers bullets" })).getByText("Unrelated blocker"),
+    ).toBeInTheDocument();
+    // Clicking is additive: the chip itself remains available afterward
+    // (no dismissal/seen-state tracking).
+    expect(screen.getByRole("button", { name: "Ship the release notes" })).toBeInTheDocument();
+  });
+
   it("merely viewing (and blurring away from) a past entry's snapshot does not overwrite the live goal", async () => {
     const api = installFakeApi({
       sprintGoal: "Ship v2",

@@ -512,6 +512,16 @@ class StandupEntryRead(StandupEntrySummary):
     bullets: list[StandupBulletRead]
 
 
+class StandupYesterdaySuggestion(BaseModel):
+    """A suggestion chip for the Yesterday section: the title of a Task
+    completed, or a Completed Occurrence logged, on the prior calendar day.
+    Purely a read — clicking a chip copies its title into a new Bullet, and
+    no link to the source Task/Occurrence is kept afterward.
+    """
+
+    title: str
+
+
 class SprintGoalRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

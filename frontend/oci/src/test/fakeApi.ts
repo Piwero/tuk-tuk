@@ -144,6 +144,14 @@ export interface FakeStandupEntry {
   bullets: FakeStandupBullet[];
 }
 
+/** A Yesterday-section suggestion chip (issue #141). The fake never derives
+ * this from `tasks`/`completedOccurrences` or filters by date — that
+ * date-scoped query logic is the backend's, exercised in the backend
+ * suite; a test seeds exactly the chips it wants visible. */
+export interface FakeStandupYesterdaySuggestion {
+  title: string;
+}
+
 export interface FakeGoogleAccount {
   id: number;
   google_account_id: string;
@@ -230,6 +238,7 @@ export interface FakeApiState {
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
+  standupYesterdaySuggestions: FakeStandupYesterdaySuggestion[];
   sprintGoal: string;
 }
 
@@ -439,6 +448,7 @@ export function installFakeApi({
   events = [],
   eventFailures = [],
   standupEntries = [],
+  standupYesterdaySuggestions = [],
   sprintGoal = "",
 }: {
   lists?: FakeList[];
@@ -477,6 +487,9 @@ export function installFakeApi({
    * (or mutates `api.eventFailures` directly) instead. */
   eventFailures?: FakeEventFailure[];
   standupEntries?: FakeStandupEntry[];
+  /** Yesterday-section suggestion chips (issue #141), served as-is by the
+   * fake's suggestions route regardless of the requested `date`. */
+  standupYesterdaySuggestions?: FakeStandupYesterdaySuggestion[];
   /** The live Sprint goal (issue #139) — never touches existing Entries'
    * `sprint_goal_snapshot`, only what a newly-created Entry copies. */
   sprintGoal?: string;
@@ -510,6 +523,9 @@ export function installFakeApi({
     standupEntries: standupEntries.map((entry) => ({
       ...entry,
       bullets: entry.bullets.map((bullet) => ({ ...bullet })),
+    })),
+    standupYesterdaySuggestions: standupYesterdaySuggestions.map((suggestion) => ({
+      ...suggestion,
     })),
     sprintGoal,
   };
@@ -1677,6 +1693,9 @@ export function installFakeApi({
         state.sprintGoal = input.text;
         return json({ text: state.sprintGoal });
       }
+    }
+    if (method === "GET" && url.pathname === "/api/v1/stand-up/suggestions/yesterday") {
+      return json(state.standupYesterdaySuggestions);
     }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/entries") {
       const items = [...state.standupEntries]
