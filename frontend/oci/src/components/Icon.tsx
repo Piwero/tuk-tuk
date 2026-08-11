@@ -24,6 +24,7 @@ import {
   Sun,
   Timer,
   Trash2,
+  Users,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -56,6 +57,7 @@ const ICONS = {
   sun: Sun,
   timer: Timer,
   "trash-2": Trash2,
+  users: Users,
   x: X,
 } satisfies Record<string, LucideIcon>;
 

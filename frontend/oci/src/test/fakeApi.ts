@@ -128,6 +128,22 @@ export interface FakeTimer {
   created_at: string;
 }
 
+export type StandupSection = "yesterday" | "today" | "blockers";
+
+export interface FakeStandupBullet {
+  id: number;
+  section: StandupSection;
+  text: string;
+  sort_order: number;
+}
+
+export interface FakeStandupEntry {
+  id: number;
+  date: string;
+  sprint_goal_snapshot: string;
+  bullets: FakeStandupBullet[];
+}
+
 export interface FakeGoogleAccount {
   id: number;
   google_account_id: string;
@@ -213,6 +229,7 @@ export interface FakeApiState {
   googleCalendars: FakeGoogleCalendar[];
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
+  standupEntries: FakeStandupEntry[];
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -241,6 +258,21 @@ let nextHabitId = 300;
 let nextCheckInId = 9000;
 let nextFocusSessionId = 400;
 let nextTimerId = 450;
+let nextStandupEntryId = 600;
+let nextStandupBulletId = 650;
+
+export function fakeStandupEntry(
+  date: string,
+  overrides: Partial<Omit<FakeStandupEntry, "id" | "date">> = {},
+): FakeStandupEntry {
+  return {
+    id: nextStandupEntryId++,
+    date,
+    sprint_goal_snapshot: "",
+    bullets: [],
+    ...overrides,
+  };
+}
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
   const id = nextTaskId++;
@@ -405,6 +437,7 @@ export function installFakeApi({
   googleCalendars = [],
   events = [],
   eventFailures = [],
+  standupEntries = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -441,6 +474,7 @@ export function installFakeApi({
    * test simulating Retry/refresh recovering seeds a fresh `installFakeApi`
    * (or mutates `api.eventFailures` directly) instead. */
   eventFailures?: FakeEventFailure[];
+  standupEntries?: FakeStandupEntry[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -468,6 +502,10 @@ export function installFakeApi({
     googleCalendars: googleCalendars.map((calendar) => ({ ...calendar })),
     events: events.map((event) => ({ ...event })),
     eventFailures: eventFailures.map((failure) => ({ ...failure })),
+    standupEntries: standupEntries.map((entry) => ({
+      ...entry,
+      bullets: entry.bullets.map((bullet) => ({ ...bullet })),
+    })),
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -1623,6 +1661,78 @@ export function installFakeApi({
           seconds,
         })),
       });
+    }
+    if (method === "GET" && url.pathname === "/api/v1/stand-up/entries") {
+      const items = [...state.standupEntries]
+        .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+        .map(({ id, date, sprint_goal_snapshot }) => ({ id, date, sprint_goal_snapshot }));
+      return json(page(items));
+    }
+    const standupEntryMatch = url.pathname.match(
+      /^\/api\/v1\/stand-up\/entries\/(\d{4}-\d{2}-\d{2})$/,
+    );
+    if (standupEntryMatch) {
+      const day = standupEntryMatch[1] as string;
+      const entry = state.standupEntries.find((e) => e.date === day);
+      if (method === "GET") {
+        if (!entry) {
+          return notFound(`No stand-up entry on ${day}`);
+        }
+        return json(entry);
+      }
+      if (method === "DELETE") {
+        if (!entry) {
+          return notFound(`No stand-up entry on ${day}`);
+        }
+        state.standupEntries = state.standupEntries.filter((e) => e !== entry);
+        return new Response(null, { status: 204 });
+      }
+    }
+    const standupBulletsMatch = url.pathname.match(
+      /^\/api\/v1\/stand-up\/entries\/(\d{4}-\d{2}-\d{2})\/bullets$/,
+    );
+    if (standupBulletsMatch && method === "POST") {
+      const day = standupBulletsMatch[1] as string;
+      let entry = state.standupEntries.find((e) => e.date === day);
+      if (!entry) {
+        entry = fakeStandupEntry(day);
+        state.standupEntries.push(entry);
+      }
+      const input = body as { section: StandupSection; text: string };
+      const siblings = entry.bullets.filter((b) => b.section === input.section);
+      const created: FakeStandupBullet = {
+        id: nextStandupBulletId++,
+        section: input.section,
+        text: input.text,
+        sort_order: nextOrder(siblings),
+      };
+      entry.bullets.push(created);
+      entry.bullets.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+      return json(entry, 201);
+    }
+    const standupBulletMatch = url.pathname.match(
+      /^\/api\/v1\/stand-up\/entries\/(\d{4}-\d{2}-\d{2})\/bullets\/(\d+)$/,
+    );
+    if (standupBulletMatch) {
+      const day = standupBulletMatch[1] as string;
+      const bulletId = Number(standupBulletMatch[2]);
+      const entry = state.standupEntries.find((e) => e.date === day);
+      if (!entry) {
+        return notFound(`No stand-up entry on ${day}`);
+      }
+      const bullet = entry.bullets.find((b) => b.id === bulletId);
+      if (!bullet) {
+        return notFound(`Bullet ${bulletId} not found on stand-up entry ${entry.id}`);
+      }
+      if (method === "PATCH") {
+        Object.assign(bullet, body);
+        entry.bullets.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+        return json(entry);
+      }
+      if (method === "DELETE") {
+        entry.bullets = entry.bullets.filter((b) => b.id !== bulletId);
+        return new Response(null, { status: 204 });
+      }
     }
     return notFound(`No route: ${method} ${url.pathname}`);
   });
