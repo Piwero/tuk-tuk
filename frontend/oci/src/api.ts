@@ -1001,6 +1001,17 @@ export function deleteStandupBullet(date: string, bulletId: number): Promise<voi
   return request(`/api/v1/stand-up/entries/${date}/bullets/${bulletId}`, { method: "DELETE" });
 }
 
+/** A suggestion chip for the Yesterday section: the title of a Task
+ * completed, or a Completed Occurrence logged, on the day before `date`.
+ * A pure read — no suggestion state is persisted or tracked as seen. */
+export interface StandupYesterdaySuggestion {
+  title: string;
+}
+
+export function fetchYesterdaySuggestions(date: string): Promise<StandupYesterdaySuggestion[]> {
+  return request(`/api/v1/stand-up/suggestions/yesterday?date=${date}`);
+}
+
 export interface SprintGoal {
   text: string;
 }

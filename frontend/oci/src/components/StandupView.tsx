@@ -8,12 +8,14 @@ import {
   fetchSprintGoal,
   fetchStandupEntries,
   fetchStandupEntry,
+  fetchYesterdaySuggestions,
   updateStandupBullet,
   updateSprintGoal,
   type StandupBullet,
   type StandupEntry,
   type StandupEntrySummary,
   type StandupSection,
+  type StandupYesterdaySuggestion,
 } from "../api";
 import { localDayOf, shortDayLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
@@ -41,6 +43,12 @@ export function StandupView(): JSX.Element {
   const [selectedDate, setSelectedDate] = useState(() => localDayOf(new Date()));
   const [entry, setEntry] = useState<StandupEntry | null>(null);
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
+  // Yesterday-section suggestion chips (issue #141): opt-in, always
+  // available, no dependency on Assist — a plain re-run of a deterministic
+  // query against completed Tasks/Completed Occurrences for the selected
+  // date's prior day. No dismissal/seen-state: reloads every time the
+  // selected date changes.
+  const [suggestions, setSuggestions] = useState<StandupYesterdaySuggestion[]>([]);
   const [bulletEditor, setBulletEditor] = useState<{ id: number; text: string } | null>(null);
   // The live Sprint goal (edited via the header) vs. `goalDraft`, the header
   // input's current text — the entry's snapshot when one exists (a past
@@ -101,6 +109,7 @@ export function StandupView(): JSX.Element {
     setBulletEditor(null);
     setDrafts(emptyDrafts());
     void loadEntry(selectedDate);
+    void fetchYesterdaySuggestions(selectedDate).then(setSuggestions);
   }, [selectedDate, loadEntry]);
 
   async function saveGoal(): Promise<void> {
@@ -118,14 +127,27 @@ export function StandupView(): JSX.Element {
     return entry?.bullets.filter((bullet) => bullet.section === section) ?? [];
   }
 
-  async function addBullet(section: StandupSection): Promise<void> {
-    const trimmed = drafts[section].trim();
+  /** Appends a new bullet with `text` to `section`, additively — nothing
+   * else in the entry changes. Shared by the manual add-bullet form and
+   * suggestion-chip clicks, which just supply different `text`. */
+  async function appendBullet(section: StandupSection, text: string): Promise<void> {
+    const trimmed = text.trim();
     if (trimmed === "") {
       return;
     }
     setEntry(await createStandupBullet(selectedDate, section, trimmed));
-    setDrafts((current) => ({ ...current, [section]: "" }));
     void loadHistory();
+  }
+
+  async function addBullet(section: StandupSection): Promise<void> {
+    await appendBullet(section, drafts[section]);
+    setDrafts((current) => ({ ...current, [section]: "" }));
+  }
+
+  /** A suggestion chip click: adds its title as a new Yesterday bullet. No
+   * link to the source Task/Completed Occurrence is kept afterward. */
+  async function addSuggestion(title: string): Promise<void> {
+    await appendBullet("yesterday", title);
   }
 
   async function renameBullet(): Promise<void> {
@@ -198,6 +220,21 @@ export function StandupView(): JSX.Element {
     return (
       <section className="standup-section" key={section} aria-label={label}>
         <h3>{label}</h3>
+        {section === "yesterday" && suggestions.length > 0 && (
+          <ul className="standup-suggestions" aria-label="Yesterday suggestions">
+            {suggestions.map((suggestion, index) => (
+              <li key={`${suggestion.title}-${index}`}>
+                <button
+                  type="button"
+                  className="standup-suggestion-chip"
+                  onClick={() => void addSuggestion(suggestion.title)}
+                >
+                  {suggestion.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <ul
           aria-label={`${label} bullets`}
           onDragOver={(event) => event.preventDefault()}
