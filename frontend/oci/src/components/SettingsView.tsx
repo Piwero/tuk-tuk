@@ -9,9 +9,11 @@ import {
   fetchGoogleStatus,
   googleConnectUrl,
   refreshGoogleCalendars,
+  fetchStandupSettings,
   removeGoogleIntegration,
   saveGoogleCredentials,
   updateGoogleCalendar,
+  updateStandupSettings,
   type GoogleAccount,
   type GoogleCalendar,
   type GoogleStatus,
@@ -356,6 +358,18 @@ function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps):
 export function SettingsView({ googleOAuthError = false }: SettingsViewProps): JSX.Element {
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
+  // Enabled by default (issue #140) so the toggle doesn't flash off before
+  // the real value loads — mirrors the App-level nav item's own default.
+  const [standupEnabled, setStandupEnabled] = useState(true);
+
+  useEffect(() => {
+    void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
+  }, []);
+
+  async function handleStandupToggle(): Promise<void> {
+    const updated = await updateStandupSettings(!standupEnabled);
+    setStandupEnabled(updated.enabled);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -406,6 +420,17 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
       <section aria-label="Security" className="settings-section">
         <h2>Security</h2>
         <ChangePasswordForm />
+      </section>
+      <section aria-label="Features" className="settings-section">
+        <h2>Features</h2>
+        <label>
+          <input
+            type="checkbox"
+            checked={standupEnabled}
+            onChange={() => void handleStandupToggle()}
+          />
+          Stand-up
+        </label>
       </section>
       {googleStatus !== null && (
         <section aria-label="Google Calendar" className="settings-section">

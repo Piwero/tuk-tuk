@@ -38,6 +38,7 @@ from app.routers.v1 import (
     tasks,
     timers,
 )
+from app.routers.v1 import settings as settings_router
 from app.session import Clock, real_clock
 
 INBOX_NAME = "Inbox"
@@ -113,6 +114,7 @@ def create_app(
     app.include_router(habits.check_ins_router)
     app.include_router(lists.router)
     app.include_router(sections.router)
+    app.include_router(settings_router.router)
     app.include_router(stand_up.router)
     app.include_router(tags.router)
     app.include_router(tasks.router)
