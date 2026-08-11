@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeStandupEntry, installFakeApi } from "./test/fakeApi";
+import { fakeStandupEntry, fakeTask, installFakeApi } from "./test/fakeApi";
 
 // All tests pin the clock to Friday 2026-07-03, local noon, so "today" is
 // deterministic in any timezone.
@@ -293,5 +293,68 @@ describe("Stand-up", () => {
     fireEvent.blur(screen.getByRole("textbox", { name: "Sprint goal" }));
 
     await waitFor(() => expect(api.sprintGoal).toBe("Ship v2"));
+  });
+
+  it("renders Today suggestion chips from Tasks due today, and none for another day", async () => {
+    installFakeApi({
+      tasks: [
+        fakeTask("Ship the release", { due_date: "2026-07-03T00:00:00Z", is_all_day: true }),
+        fakeTask("Due tomorrow", { due_date: "2026-07-04T00:00:00Z", is_all_day: true }),
+      ],
+    });
+    render(<App />);
+    await openStandup();
+
+    const suggestions = await screen.findByRole("list", { name: "Today suggestions" });
+    expect(
+      within(suggestions).getByRole("button", { name: "Ship the release" }),
+    ).toBeInTheDocument();
+    expect(
+      within(suggestions).queryByRole("button", { name: "Due tomorrow" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("clicking a Today suggestion chip appends a bullet without altering other sections", async () => {
+    const api = installFakeApi({
+      tasks: [fakeTask("Ship the release", { due_date: "2026-07-03T00:00:00Z", is_all_day: true })],
+    });
+    render(<App />);
+    await openStandup();
+    await addBullet("Yesterday", "Reviewed PRs");
+    await addBullet("Blockers", "Waiting on design");
+
+    const suggestions = await screen.findByRole("list", { name: "Today suggestions" });
+    fireEvent.click(within(suggestions).getByRole("button", { name: "Ship the release" }));
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("list", { name: "Today bullets" })).getByText("Ship the release"),
+      ).toBeInTheDocument();
+    });
+    expect(
+      within(screen.getByRole("list", { name: "Yesterday bullets" })).getByText("Reviewed PRs"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: "Blockers bullets" })).getByText("Waiting on design"),
+    ).toBeInTheDocument();
+    expect(api.standupEntries[0]?.bullets.map((b) => [b.section, b.text])).toEqual(
+      expect.arrayContaining([
+        ["yesterday", "Reviewed PRs"],
+        ["blockers", "Waiting on design"],
+        ["today", "Ship the release"],
+      ]),
+    );
+  });
+
+  it("renders no suggestion chips at all for Blockers", async () => {
+    installFakeApi({
+      tasks: [fakeTask("Ship the release", { due_date: "2026-07-03T00:00:00Z", is_all_day: true })],
+    });
+    render(<App />);
+    await openStandup();
+    await screen.findByRole("list", { name: "Today suggestions" });
+
+    const blockers = screen.getByRole("region", { name: "Blockers" });
+    expect(within(blockers).queryByRole("list", { name: /suggestions/i })).not.toBeInTheDocument();
   });
 });
