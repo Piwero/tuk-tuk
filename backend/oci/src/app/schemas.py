@@ -512,6 +512,15 @@ class StandupEntryRead(StandupEntrySummary):
     bullets: list[StandupBulletRead]
 
 
+class StandupSuggestionRead(BaseModel):
+    """A read-only chip suggestion sourced from another part of the app
+    (e.g. a Task due today) — not persisted, no dismissal/seen-state.
+    """
+
+    task_id: int
+    title: str
+
+
 class SprintGoalRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

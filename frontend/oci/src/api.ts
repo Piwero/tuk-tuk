@@ -1001,6 +1001,19 @@ export function deleteStandupBullet(date: string, bulletId: number): Promise<voi
   return request(`/api/v1/stand-up/entries/${date}/bullets/${bulletId}`, { method: "DELETE" });
 }
 
+/** A read-only Today chip suggestion sourced from the Today Smart List
+ * (Tasks due today) — not persisted, no dismissal/seen-state. */
+export interface StandupSuggestion {
+  task_id: number;
+  title: string;
+}
+
+/** Opt-in suggestion chips for the Today section, judged against `date`
+ * (the caller's local day) using the same query as the Today Smart List. */
+export function fetchTodaySuggestions(date: string): Promise<StandupSuggestion[]> {
+  return request(`/api/v1/stand-up/suggestions/today?date=${date}`);
+}
+
 export interface SprintGoal {
   text: string;
 }

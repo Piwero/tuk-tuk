@@ -2,6 +2,8 @@
 
 from fastapi.testclient import TestClient
 
+from tests.conftest import make_task
+
 DAY = "2026-08-10"
 
 
@@ -147,6 +149,70 @@ class TestPastDatesAreEditable:
 
         assert response.status_code == 200
         assert response.json()["bullets"][0]["text"] == "Edited old entry"
+
+
+class TestTodaySuggestions:
+    def test_a_task_due_today_is_suggested(self, client: TestClient) -> None:
+        make_task(client, "Ship the release", due_date="2026-08-10T00:00:00Z", is_all_day=True)
+
+        response = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert response.status_code == 200
+        assert response.json() == [{"task_id": 1, "title": "Ship the release"}]
+
+    def test_a_task_due_on_another_day_is_not_suggested(self, client: TestClient) -> None:
+        make_task(client, "Due tomorrow", due_date="2026-08-11T00:00:00Z", is_all_day=True)
+
+        response = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_a_completed_task_due_today_is_not_suggested(self, client: TestClient) -> None:
+        task = make_task(client, "Already done", due_date="2026-08-10T00:00:00Z", is_all_day=True)
+        client.patch(f"/api/v1/tasks/{task['id']}", json={"completed": True})
+
+        response = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_an_overdue_open_task_is_suggested_like_the_today_smart_view(
+        self, client: TestClient
+    ) -> None:
+        make_task(client, "Overdue", due_date="2026-08-01T00:00:00Z", is_all_day=True)
+        make_task(client, "Undated")
+
+        response = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert response.status_code == 200
+        assert [item["title"] for item in response.json()] == ["Overdue"]
+
+    def test_suggestions_match_the_today_smart_views_own_results(self, client: TestClient) -> None:
+        make_task(client, "Due today", due_date="2026-08-10T00:00:00Z", is_all_day=True)
+        make_task(client, "Overdue", due_date="2026-08-01T00:00:00Z", is_all_day=True)
+        make_task(client, "Tomorrow", due_date="2026-08-11T00:00:00Z", is_all_day=True)
+        make_task(client, "Undated")
+
+        suggestions = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY}).json()
+        smart_view = client.get("/api/v1/tasks", params={"view": "today", "today": DAY}).json()
+
+        assert sorted(item["title"] for item in suggestions) == sorted(
+            item["title"] for item in smart_view["items"]
+        )
+
+    def test_suggestions_are_a_pure_read_with_no_side_effects(self, client: TestClient) -> None:
+        make_task(client, "Ship the release", due_date="2026-08-10T00:00:00Z", is_all_day=True)
+
+        first = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+        second = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert first.json() == second.json()
+
+    def test_the_date_parameter_is_required(self, client: TestClient) -> None:
+        response = client.get("/api/v1/stand-up/suggestions/today")
+
+        assert response.status_code == 422
 
 
 class TestSprintGoal:
