@@ -231,6 +231,9 @@ export interface FakeApiState {
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
   sprintGoal: string;
+  /** The Stand-up visibility toggle (issue #140) — server-defaulted to
+   * true, matching the backend's default. */
+  standupEnabled: boolean;
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -440,6 +443,7 @@ export function installFakeApi({
   eventFailures = [],
   standupEntries = [],
   sprintGoal = "",
+  standupEnabled = true,
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -480,6 +484,9 @@ export function installFakeApi({
   /** The live Sprint goal (issue #139) — never touches existing Entries'
    * `sprint_goal_snapshot`, only what a newly-created Entry copies. */
   sprintGoal?: string;
+  /** The Stand-up visibility toggle (issue #140). Defaults to true, matching
+   * the backend's server-defaulted-true column. */
+  standupEnabled?: boolean;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -512,6 +519,7 @@ export function installFakeApi({
       bullets: entry.bullets.map((bullet) => ({ ...bullet })),
     })),
     sprintGoal,
+    standupEnabled,
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -1667,6 +1675,16 @@ export function installFakeApi({
           seconds,
         })),
       });
+    }
+    if (url.pathname === "/api/v1/settings/stand-up") {
+      if (method === "GET") {
+        return json({ enabled: state.standupEnabled });
+      }
+      if (method === "PUT") {
+        const input = body as { enabled: boolean };
+        state.standupEnabled = input.enabled;
+        return json({ enabled: state.standupEnabled });
+      }
     }
     if (url.pathname === "/api/v1/stand-up/sprint-goal") {
       if (method === "GET") {
