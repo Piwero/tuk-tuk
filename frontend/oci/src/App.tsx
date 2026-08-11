@@ -8,6 +8,7 @@ import {
   fetchSearchTasks,
   fetchSections,
   fetchSmartTasks,
+  fetchStandupSettings,
   fetchTags,
   fetchTasks,
   fetchTasksByTag,
@@ -95,6 +96,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // Mobile only: below the breakpoint the sidebar is off-canvas and this
   // slides it over the content. Ignored by the desktop layout.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Whether the Stand-up nav item/route is shown (issue #140) — fetched once
+  // at load, defaulting to true so the nav item doesn't flash away on a slow
+  // network before the real value arrives.
+  const [standupEnabled, setStandupEnabled] = useState(true);
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
   // The Folder view's own sort preference (#126) — kept separate from the
@@ -130,10 +135,19 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     );
   }, []);
 
+  useEffect(() => {
+    void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
+  }, []);
+
   // Keep a valid view: default to the Inbox, and fall back to it when the
   // viewed list or tag disappears (e.g. it was deleted).
   useEffect(() => {
-    if (
+    if (view?.kind === "standup" && !standupEnabled) {
+      // The feature was turned off (or already was, on load) while this
+      // route was showing — fall through to the same Inbox fallback as a
+      // deleted List/Tag/Folder, rather than leaving an inaccessible route
+      // selected in the sidebar.
+    } else if (
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
       view?.kind === "habits" ||
@@ -160,7 +174,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     // effect's render and it running (e.g. the user clicks Calendar just as
     // the lists load). Never stomp a view that changed in the meantime.
     setView((current) => (current === view ? next : current));
-  }, [lists, tags, folders, view]);
+  }, [lists, tags, folders, view, standupEnabled]);
 
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
@@ -365,6 +379,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           calendarSelected={view?.kind === "calendar"}
           habitsSelected={view?.kind === "habits"}
           standupSelected={view?.kind === "standup"}
+          standupEnabled={standupEnabled}
           focusSelected={view?.kind === "focus"}
           settingsSelected={view?.kind === "settings"}
           onSelect={(listId) => switchView({ kind: "list", id: listId })}

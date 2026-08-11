@@ -1016,3 +1016,23 @@ export function updateSprintGoal(text: string): Promise<SprintGoal> {
     body: JSON.stringify({ text }),
   });
 }
+
+/** Whether the Stand-up nav item/route is visible at all (issue #140). A
+ * UI-only visibility switch: turning it off never blocks the stand-up
+ * routes above and never touches stored entries, bullets, or the Sprint
+ * goal — the app fetches this once at load to decide whether to show the
+ * nav item, mirroring how GoogleStatus is fetched once for Settings. */
+export interface StandupSettings {
+  enabled: boolean;
+}
+
+export function fetchStandupSettings(): Promise<StandupSettings> {
+  return request("/api/v1/settings/stand-up");
+}
+
+export function updateStandupSettings(enabled: boolean): Promise<StandupSettings> {
+  return request("/api/v1/settings/stand-up", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}

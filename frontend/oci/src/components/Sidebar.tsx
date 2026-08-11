@@ -59,6 +59,9 @@ interface SidebarProps {
   calendarSelected: boolean;
   habitsSelected: boolean;
   standupSelected: boolean;
+  /** Settings toggle (issue #140): hides the Stand-up nav item entirely
+   * when off — the feature's data isn't touched, only its visibility. */
+  standupEnabled: boolean;
   focusSelected: boolean;
   settingsSelected: boolean;
   onSelect: (listId: number) => void;
@@ -161,6 +164,7 @@ export function Sidebar({
   calendarSelected,
   habitsSelected,
   standupSelected,
+  standupEnabled,
   focusSelected,
   settingsSelected,
   onSelect,
@@ -569,13 +573,15 @@ export function Sidebar({
           collapsed={collapsed}
           onClick={onSelectHabits}
         />
-        <TopNavItem
-          icon="users"
-          label="Stand-up"
-          selected={standupSelected}
-          collapsed={collapsed}
-          onClick={onSelectStandup}
-        />
+        {standupEnabled && (
+          <TopNavItem
+            icon="users"
+            label="Stand-up"
+            selected={standupSelected}
+            collapsed={collapsed}
+            onClick={onSelectStandup}
+          />
+        )}
         <TopNavItem
           icon="timer"
           label="Focus"
