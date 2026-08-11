@@ -9,6 +9,7 @@ import {
   fetchStandupEntries,
   fetchStandupEntry,
   fetchTodaySuggestions,
+  fetchYesterdaySuggestions,
   updateStandupBullet,
   updateSprintGoal,
   type StandupBullet,
@@ -16,6 +17,7 @@ import {
   type StandupEntrySummary,
   type StandupSection,
   type StandupSuggestion,
+  type StandupYesterdaySuggestion,
 } from "../api";
 import { localDayOf, shortDayLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
@@ -43,6 +45,12 @@ export function StandupView(): JSX.Element {
   const [selectedDate, setSelectedDate] = useState(() => localDayOf(new Date()));
   const [entry, setEntry] = useState<StandupEntry | null>(null);
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
+  // Yesterday-section suggestion chips (issue #141): opt-in, always
+  // available, no dependency on Assist — a plain re-run of a deterministic
+  // query against completed Tasks/Completed Occurrences for the selected
+  // date's prior day. No dismissal/seen-state: reloads every time the
+  // selected date changes.
+  const [suggestions, setSuggestions] = useState<StandupYesterdaySuggestion[]>([]);
   const [bulletEditor, setBulletEditor] = useState<{ id: number; text: string } | null>(null);
   // Opt-in Today chips, built from the Today Smart List — pure read, no
   // dismissal/seen-state. Blockers has no structured "blocked" concept to
@@ -71,6 +79,10 @@ export function StandupView(): JSX.Element {
 
   const loadTodaySuggestions = useCallback(async (date: string): Promise<void> => {
     setTodaySuggestions(await fetchTodaySuggestions(date));
+  }, []);
+
+  const loadYesterdaySuggestions = useCallback(async (date: string): Promise<void> => {
+    setSuggestions(await fetchYesterdaySuggestions(date));
   }, []);
 
   const loadEntry = useCallback(async (date: string): Promise<void> => {
@@ -112,7 +124,8 @@ export function StandupView(): JSX.Element {
     setDrafts(emptyDrafts());
     void loadEntry(selectedDate);
     void loadTodaySuggestions(selectedDate);
-  }, [selectedDate, loadEntry, loadTodaySuggestions]);
+    void loadYesterdaySuggestions(selectedDate);
+  }, [selectedDate, loadEntry, loadTodaySuggestions, loadYesterdaySuggestions]);
 
   async function saveGoal(): Promise<void> {
     if (!goalDirty) {
@@ -129,7 +142,10 @@ export function StandupView(): JSX.Element {
     return entry?.bullets.filter((bullet) => bullet.section === section) ?? [];
   }
 
-  async function addBulletText(section: StandupSection, text: string): Promise<void> {
+  /** Appends a new bullet with `text` to `section`, additively — nothing
+   * else in the entry changes. Shared by the manual add-bullet form and
+   * suggestion-chip clicks, which just supply different `text`. */
+  async function appendBullet(section: StandupSection, text: string): Promise<void> {
     const trimmed = text.trim();
     if (trimmed === "") {
       return;
@@ -139,14 +155,20 @@ export function StandupView(): JSX.Element {
   }
 
   async function addBullet(section: StandupSection): Promise<void> {
-    await addBulletText(section, drafts[section]);
+    await appendBullet(section, drafts[section]);
     setDrafts((current) => ({ ...current, [section]: "" }));
   }
 
   /** A Today chip's click — appends its title as a new bullet, the same
    * additive mechanism as typing it into the Add form. */
-  async function addSuggestion(suggestion: StandupSuggestion): Promise<void> {
-    await addBulletText("today", suggestion.title);
+  async function addTodaySuggestion(suggestion: StandupSuggestion): Promise<void> {
+    await appendBullet("today", suggestion.title);
+  }
+
+  /** A Yesterday chip click: adds its title as a new bullet. No link to the
+   * source Task/Completed Occurrence is kept afterward. */
+  async function addYesterdaySuggestion(title: string): Promise<void> {
+    await appendBullet("yesterday", title);
   }
 
   async function renameBullet(): Promise<void> {
@@ -219,6 +241,21 @@ export function StandupView(): JSX.Element {
     return (
       <section className="standup-section" key={section} aria-label={label}>
         <h3>{label}</h3>
+        {section === "yesterday" && suggestions.length > 0 && (
+          <ul className="standup-suggestions" aria-label="Yesterday suggestions">
+            {suggestions.map((suggestion, index) => (
+              <li key={`${suggestion.title}-${index}`}>
+                <button
+                  type="button"
+                  className="standup-suggestion-chip"
+                  onClick={() => void addYesterdaySuggestion(suggestion.title)}
+                >
+                  {suggestion.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <ul
           aria-label={`${label} bullets`}
           onDragOver={(event) => event.preventDefault()}
@@ -289,7 +326,7 @@ export function StandupView(): JSX.Element {
           <ul aria-label="Today suggestions" className="standup-suggestions">
             {todaySuggestions.map((suggestion) => (
               <li key={suggestion.task_id}>
-                <button type="button" onClick={() => void addSuggestion(suggestion)}>
+                <button type="button" onClick={() => void addTodaySuggestion(suggestion)}>
                   {suggestion.title}
                 </button>
               </li>
