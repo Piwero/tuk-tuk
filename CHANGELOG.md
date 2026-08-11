@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.4.3](https://github.com/Piwero/tuk-tuk/compare/v0.4.2...v0.4.3) - 2026-08-11
+
+### Bug Fixes
+
+- **frontend:** Stop sidebar row actions from truncating folder/list names ([52efc7e](https://github.com/Piwero/tuk-tuk/commit/52efc7e64c13b423eeeb00f92e59cd1bf32e67ae))
+
 ## [0.4.2](https://github.com/Piwero/tuk-tuk/compare/v0.4.1...v0.4.2) - 2026-08-10
 
 _Maintenance release; no user-facing changes._
