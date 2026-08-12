@@ -4,6 +4,7 @@ import { fetchTimers, type Task, type Timer } from "../api";
 import { useFocusRun } from "../focusRunContext";
 
 const DEFAULT_POMO_MINUTES = 25;
+const POMO_LABEL = (minutes: number) => `Focus: ${minutes}min`;
 
 export interface PomoQuickStartMenuProps {
   /** The Task this quick-start session links to, regardless of any link a
@@ -123,6 +124,7 @@ export function PomoQuickStartMenu({
                 <button
                   type="button"
                   role="menuitem"
+                  className="pomo-timer-button"
                   onClick={() => void startPomo((timer.duration_seconds ?? 0) * 1000)}
                 >
                   {timer.name}
@@ -134,14 +136,20 @@ export function PomoQuickStartMenu({
               <button
                 type="button"
                 role="menuitem"
+                className="pomo-timer-button"
                 onClick={() => void startPomo(DEFAULT_POMO_MINUTES * 60_000)}
               >
-                25 min
+                {POMO_LABEL(DEFAULT_POMO_MINUTES)}
               </button>
             </li>
           )}
           <li role="none">
-            <button type="button" role="menuitem" onClick={() => setCustomOpen(true)}>
+            <button
+              type="button"
+              role="menuitem"
+              className="pomo-timer-button"
+              onClick={() => setCustomOpen(true)}
+            >
               Custom…
             </button>
           </li>
