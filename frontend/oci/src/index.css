@@ -2358,15 +2358,51 @@ li[data-overdue] .date-chip {
   overflow-y: auto;
 }
 
-.standup-history li {
+.standup-history-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
 }
 
-.standup-history li button[aria-current="true"] {
-  font-weight: 600;
+.standup-history-row:hover .row-actions,
+.standup-history-row .row-actions:focus-within {
+  width: auto;
+  overflow: visible;
+  visibility: visible;
+}
+
+.standup-history-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.standup-history-button:hover {
+  background: var(--surface-hover);
+}
+
+.standup-history-button.selected {
+  background: var(--surface-selected);
   color: var(--text-accent);
+  font-weight: var(--weight-semibold);
+}
+
+.standup-history-button.selected:hover {
+  background: var(--surface-selected);
 }
 
 .standup-detail {

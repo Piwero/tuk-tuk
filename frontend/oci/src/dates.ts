@@ -245,6 +245,19 @@ export function shortDayLabel(dayIso: string): string {
   return MONTH_DAY.format(fromDayIso(dayIso));
 }
 
+const WEEKDAY_LONG = new Intl.DateTimeFormat("en-US", { weekday: "long" });
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "2-digit",
+});
+
+/** A weekday-led record label for history rows: "Monday: 10/08/26". */
+export function weekdayRecordLabel(dayIso: string): string {
+  const date = fromDayIso(dayIso);
+  return `${WEEKDAY_LONG.format(date)}: ${DAY_MONTH_YEAR.format(date)}`;
+}
+
 /** The minimal schedule shape formatSchedule needs — a Task has it
  * directly; an Event (issue #110) satisfies it too, since both render in
  * the same wall-clock convention when no explicit timezone applies. */

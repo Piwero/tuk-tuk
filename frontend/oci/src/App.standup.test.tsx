@@ -72,7 +72,7 @@ describe("Stand-up", () => {
     expect(api.standupEntries[0]?.bullets).toHaveLength(1);
 
     const history = await screen.findByRole("list", { name: "Past stand-ups" });
-    expect(within(history).getByText("Jul 3")).toBeInTheDocument();
+    expect(within(history).getByText("Friday: 03/07/26")).toBeInTheDocument();
   });
 
   it("adds bullets independently to each of the three sections", async () => {
@@ -176,7 +176,7 @@ describe("Stand-up", () => {
     render(<App />);
     await openStandup();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Jul 1" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Wednesday: 01/07/26" }));
 
     await waitFor(() => {
       expect(
@@ -196,12 +196,12 @@ describe("Stand-up", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App />);
     await openStandup();
-    await screen.findByRole("button", { name: "Jul 1" });
+    await screen.findByRole("button", { name: "Wednesday: 01/07/26" });
 
     fireEvent.click(screen.getByRole("button", { name: "Delete stand-up 2026-07-01" }));
 
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Jul 1" })).not.toBeInTheDocument(),
+      expect(screen.queryByRole("button", { name: "Wednesday: 01/07/26" })).not.toBeInTheDocument(),
     );
     expect(api.standupEntries).toHaveLength(0);
   });
@@ -217,11 +217,11 @@ describe("Stand-up", () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<App />);
     await openStandup();
-    await screen.findByRole("button", { name: "Jul 1" });
+    await screen.findByRole("button", { name: "Wednesday: 01/07/26" });
 
     fireEvent.click(screen.getByRole("button", { name: "Delete stand-up 2026-07-01" }));
 
-    expect(screen.getByRole("button", { name: "Jul 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Wednesday: 01/07/26" })).toBeInTheDocument();
     expect(api.standupEntries).toHaveLength(1);
   });
 
@@ -286,7 +286,7 @@ describe("Stand-up", () => {
       expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v2");
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Jul 1" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Wednesday: 01/07/26" }));
 
     await waitFor(() => {
       expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v1");
@@ -368,7 +368,7 @@ describe("Stand-up", () => {
     });
     render(<App />);
     await openStandup();
-    fireEvent.click(await screen.findByRole("button", { name: "Jul 1" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Wednesday: 01/07/26" }));
     await waitFor(() => {
       expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v1");
     });
