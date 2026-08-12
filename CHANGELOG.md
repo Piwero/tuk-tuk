@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.5.3](https://github.com/Piwero/tuk-tuk/compare/v0.5.2...v0.5.3) - 2026-08-12
+
+### Features
+
+- **stand-up:** Include prior day's Today bullets in Yesterday suggestions ([509ddd7](https://github.com/Piwero/tuk-tuk/commit/509ddd72ee4f6e8587fbd08fb29ca26a885eebe4))
+
+### Bug Fixes
+
+- **stand-up:** Drop stale per-date responses when switching dates fast ([e98f64d](https://github.com/Piwero/tuk-tuk/commit/e98f64de36c5ec641479e1f8e8c272c3008c74c8))
+- **stand-up:** Confirm before deleting a stand-up entry ([2936ece](https://github.com/Piwero/tuk-tuk/commit/2936ece08134d33be800697e5e775f8c653d4150))
+
 ## [0.5.2](https://github.com/Piwero/tuk-tuk/compare/v0.5.1...v0.5.2) - 2026-08-12
 
 ### Features
