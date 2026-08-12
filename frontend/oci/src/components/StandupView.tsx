@@ -43,6 +43,12 @@ const emptyDrafts = (): Drafts => ({ yesterday: "", today: "", blockers: "" });
 export function StandupView(): JSX.Element {
   const [history, setHistory] = useState<StandupEntrySummary[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => localDayOf(new Date()));
+  // Per-date loads race: clicking through dates quickly can let an older
+  // request's response land after a newer one's. This ref lets each loader
+  // drop its result if `selectedDate` has since moved on, so a stale
+  // response can never overwrite what's currently selected.
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
   const [entry, setEntry] = useState<StandupEntry | null>(null);
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
   // Yesterday-section suggestion chips (issue #141, extended #147): opt-in,
@@ -79,21 +85,33 @@ export function StandupView(): JSX.Element {
   }, []);
 
   const loadTodaySuggestions = useCallback(async (date: string): Promise<void> => {
-    setTodaySuggestions(await fetchTodaySuggestions(date));
+    const result = await fetchTodaySuggestions(date);
+    if (selectedDateRef.current === date) {
+      setTodaySuggestions(result);
+    }
   }, []);
 
   const loadYesterdaySuggestions = useCallback(async (date: string): Promise<void> => {
-    setSuggestions(await fetchYesterdaySuggestions(date));
+    const result = await fetchYesterdaySuggestions(date);
+    if (selectedDateRef.current === date) {
+      setSuggestions(result);
+    }
   }, []);
 
   const loadEntry = useCallback(async (date: string): Promise<void> => {
     try {
       const loaded = await fetchStandupEntry(date);
+      if (selectedDateRef.current !== date) {
+        return;
+      }
       setEntry(loaded);
       setGoalDraft(loaded.sprint_goal_snapshot);
       setGoalDirty(false);
     } catch (error) {
       if (error instanceof ApiError && error.code === "not_found") {
+        if (selectedDateRef.current !== date) {
+          return;
+        }
         setEntry(null);
         setGoalDraft(liveGoalRef.current);
         setGoalDirty(false);
