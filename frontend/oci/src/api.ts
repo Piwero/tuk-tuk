@@ -1015,8 +1015,9 @@ export function fetchTodaySuggestions(date: string): Promise<StandupSuggestion[]
 }
 
 /** A suggestion chip for the Yesterday section: the title of a Task
- * completed, or a Completed Occurrence logged, on the day before `date`.
- * A pure read — no suggestion state is persisted or tracked as seen. */
+ * completed, or a Completed Occurrence logged, on the day before `date`,
+ * plus that prior day's own Stand-up "Today" bullets (issue #147). A pure
+ * read — no suggestion state is persisted or tracked as seen. */
 export interface StandupYesterdaySuggestion {
   title: string;
 }

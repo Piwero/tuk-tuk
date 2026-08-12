@@ -45,11 +45,12 @@ export function StandupView(): JSX.Element {
   const [selectedDate, setSelectedDate] = useState(() => localDayOf(new Date()));
   const [entry, setEntry] = useState<StandupEntry | null>(null);
   const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
-  // Yesterday-section suggestion chips (issue #141): opt-in, always
-  // available, no dependency on Assist — a plain re-run of a deterministic
-  // query against completed Tasks/Completed Occurrences for the selected
-  // date's prior day. No dismissal/seen-state: reloads every time the
-  // selected date changes.
+  // Yesterday-section suggestion chips (issue #141, extended #147): opt-in,
+  // always available, no dependency on Assist — a plain re-run of a
+  // deterministic query against completed Tasks/Completed Occurrences and
+  // the prior day's own Stand-up Today bullets for the selected date's
+  // prior day. No dismissal/seen-state: reloads every time the selected
+  // date changes.
   const [suggestions, setSuggestions] = useState<StandupYesterdaySuggestion[]>([]);
   const [bulletEditor, setBulletEditor] = useState<{ id: number; text: string } | null>(null);
   // Opt-in Today chips, built from the Today Smart List — pure read, no
