@@ -185,7 +185,7 @@ describe("Stand-up", () => {
     });
   });
 
-  it("deletes a whole entry from the history list", async () => {
+  it("deletes a whole entry from the history list after confirming", async () => {
     const api = installFakeApi({
       standupEntries: [
         fakeStandupEntry("2026-07-01", {
@@ -193,6 +193,7 @@ describe("Stand-up", () => {
         }),
       ],
     });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App />);
     await openStandup();
     await screen.findByRole("button", { name: "Jul 1" });
@@ -203,6 +204,25 @@ describe("Stand-up", () => {
       expect(screen.queryByRole("button", { name: "Jul 1" })).not.toBeInTheDocument(),
     );
     expect(api.standupEntries).toHaveLength(0);
+  });
+
+  it("keeps the entry when the delete confirmation is declined", async () => {
+    const api = installFakeApi({
+      standupEntries: [
+        fakeStandupEntry("2026-07-01", {
+          bullets: [{ id: 1, section: "today", text: "Old work", sort_order: 1024 }],
+        }),
+      ],
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<App />);
+    await openStandup();
+    await screen.findByRole("button", { name: "Jul 1" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete stand-up 2026-07-01" }));
+
+    expect(screen.getByRole("button", { name: "Jul 1" })).toBeInTheDocument();
+    expect(api.standupEntries).toHaveLength(1);
   });
 
   it("reorders bullets within a section by drag and drop", async () => {
