@@ -127,3 +127,61 @@ class TestYesterdaySuggestions:
         second = suggestions(client, VIEW_DATE)
 
         assert first == second
+
+
+class TestYesterdaySuggestionsFromPriorTodayBullets:
+    """issue #147: the prior day's own Stand-up "Today" bullets are also
+    suggested — what gets typed as "Today" often isn't tracked as a
+    completed Task/Occurrence at all.
+    """
+
+    def test_a_prior_day_today_bullet_appears(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/stand-up/entries/2026-08-10/bullets",
+            json={"section": "today", "text": "Call Vinodh regarding ticket"},
+        )
+        assert response.status_code == 201, response.text
+
+        items = suggestions(client, VIEW_DATE)
+
+        assert {"title": "Call Vinodh regarding ticket"} in items
+
+    def test_prior_day_yesterday_and_blockers_bullets_are_excluded(
+        self, client: TestClient
+    ) -> None:
+        client.post(
+            "/api/v1/stand-up/entries/2026-08-10/bullets",
+            json={"section": "yesterday", "text": "Prior yesterday bullet"},
+        )
+        client.post(
+            "/api/v1/stand-up/entries/2026-08-10/bullets",
+            json={"section": "blockers", "text": "Prior blocker bullet"},
+        )
+
+        items = suggestions(client, VIEW_DATE)
+
+        titles = [item["title"] for item in items]
+        assert "Prior yesterday bullet" not in titles
+        assert "Prior blocker bullet" not in titles
+
+    def test_today_bullets_from_other_days_are_excluded(self, client: TestClient) -> None:
+        client.post(
+            "/api/v1/stand-up/entries/2026-08-09/bullets",
+            json={"section": "today", "text": "Two days ago today bullet"},
+        )
+
+        items = suggestions(client, VIEW_DATE)
+
+        titles = [item["title"] for item in items]
+        assert "Two days ago today bullet" not in titles
+
+    def test_duplicate_titles_from_both_sources_are_deduped(self, client: TestClient) -> None:
+        seed_completed_task(client, "Ship the release notes", YESTERDAY)
+        client.post(
+            "/api/v1/stand-up/entries/2026-08-10/bullets",
+            json={"section": "today", "text": "Ship the release notes"},
+        )
+
+        items = suggestions(client, VIEW_DATE)
+
+        assert items.count({"title": "Ship the release notes"}) == 1

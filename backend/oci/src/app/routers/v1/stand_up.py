@@ -108,10 +108,13 @@ async def read_yesterday_suggestions(
 ) -> list[StandupYesterdaySuggestion]:
     """Suggestion chips for the Yesterday section (issue #141): titles of
     one-off Tasks completed, and Completed Occurrences logged, on the prior
-    calendar day (`day - 1`). A pure read over existing completed-Task and
-    Completed Occurrence data — no suggestion state is persisted, so this
-    reruns and repopulates identically every time the section is viewed.
+    calendar day (`day - 1`), plus the prior day's own Stand-up Today
+    bullets (issue #147) — what was actually typed as "Today" often isn't
+    tracked as a completed Task at all. A pure read — no suggestion state
+    is persisted, so this reruns and repopulates identically every time the
+    section is viewed. Deduped by title, preserving first-seen order.
     """
+    prior_day = day - timedelta(days=1)
     day_start = datetime(day.year, day.month, day.day, tzinfo=UTC) - timedelta(days=1)
     day_end = day_start + timedelta(days=1)
 
@@ -130,8 +133,20 @@ async def read_yesterday_suggestions(
             CompletedOccurrence.completed_at < day_end,
         )
     )
-    titles = [*completed_tasks.all(), *completed_occurrences.all()]
-    return [StandupYesterdaySuggestion(title=title) for title in titles]
+    prior_entry = await get_entry_by_date(prior_day, session)
+    prior_today_bullets = (
+        [b.text for b in prior_entry.bullets if b.section == "today"]
+        if prior_entry is not None
+        else []
+    )
+    titles = [*completed_tasks.all(), *completed_occurrences.all(), *prior_today_bullets]
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for title in titles:
+        if title not in seen:
+            seen.add(title)
+            deduped.append(title)
+    return [StandupYesterdaySuggestion(title=title) for title in deduped]
 
 
 @router.get("/sprint-goal")
