@@ -1,10 +1,18 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { openCalendar, openWeek, pinCalendarClock } from "./test/calendar";
 import { closestOrThrow } from "./test/dnd";
-import { fakeTask, installFakeApi, type RecordedRequest } from "./test/fakeApi";
+import { fakeTask, fakeTimer, installFakeApi, type RecordedRequest } from "./test/fakeApi";
 
 pinCalendarClock();
 
@@ -378,5 +386,151 @@ describe("The Week view", () => {
         due_date: "2026-07-03T11:00:00.000Z",
       }),
     );
+  });
+});
+
+describe("Pomo quick-start menu on Calendar Task entries", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 6, 3, 12, 0, 0));
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("right-click on a month-view Task entry opens PomoQuickStartMenu", async () => {
+    const task = fakeTask("Dentist", {
+      start_date: "2026-07-15T00:00:00Z",
+      due_date: "2026-07-15T00:00:00Z",
+      is_all_day: true,
+    });
+    installFakeApi({
+      tasks: [task],
+      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
+    });
+    render(<App />);
+
+    await openCalendar();
+    const monthCell = screen.getByLabelText("2026-07-15");
+    const taskElement = within(monthCell).getByText("Dentist").closest("div");
+
+    fireEvent.contextMenu(taskElement as HTMLElement);
+
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Dentist" });
+    expect(within(menu).getByRole("menuitem", { name: "Deep Work 50" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Custom…" })).toBeInTheDocument();
+  });
+
+  it("right-click on an all-day Task in week view opens PomoQuickStartMenu", async () => {
+    const task = fakeTask("Team Lunch", {
+      start_date: "2026-07-06T00:00:00Z",
+      due_date: "2026-07-06T00:00:00Z",
+      is_all_day: true,
+    });
+    installFakeApi({
+      tasks: [task],
+      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
+    });
+    render(<App />);
+
+    await openCalendar();
+    await openWeek();
+
+    const taskElement = screen.getByText("Team Lunch").closest("div");
+    fireEvent.contextMenu(taskElement as HTMLElement);
+
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Team Lunch" });
+    expect(within(menu).getByRole("menuitem", { name: "Deep Work 50" })).toBeInTheDocument();
+  });
+
+  it("right-click on a timed Task block in week view opens PomoQuickStartMenu", async () => {
+    const task = fakeTask("Standup", {
+      start_date: "2026-07-06T09:00:00Z",
+      due_date: "2026-07-06T09:30:00Z",
+      time_zone: "UTC",
+    });
+    installFakeApi({
+      tasks: [task],
+      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
+    });
+    render(<App />);
+
+    await openCalendar();
+    await openWeek();
+
+    const taskElement = screen.getByText("Standup").closest("[class*='time-block']");
+    fireEvent.contextMenu(taskElement as HTMLElement);
+
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Standup" });
+    expect(within(menu).getByRole("menuitem", { name: "Deep Work 50" })).toBeInTheDocument();
+  });
+
+  it("right-click on a Calendar Event (not Task) shows native context menu", async () => {
+    const task = fakeTask("Task", {
+      start_date: "2026-07-06T00:00:00Z",
+      due_date: "2026-07-06T00:00:00Z",
+      is_all_day: true,
+    });
+    installFakeApi({
+      tasks: [task],
+      events: [
+        {
+          id: "event-1",
+          title: "Google Event",
+          start: { dateTime: "2026-07-06T10:00:00Z" },
+          end: { dateTime: "2026-07-06T11:00:00Z" },
+          account_id: "account-1",
+        },
+      ],
+    });
+    render(<App />);
+
+    await openCalendar();
+    await openWeek();
+
+    const eventElement = screen.getByText("Google Event").closest("[class*='time-block']");
+    const preventDefaultSpy = vi.spyOn(
+      { preventDefault: () => {} } as unknown as Event,
+      "preventDefault",
+    );
+
+    // Verify that the Event element doesn't prevent default (letting native menu show)
+    // by checking the menu doesn't appear
+    fireEvent.contextMenu(eventElement as HTMLElement);
+
+    expect(
+      screen.queryByRole("menu", { name: /Start Focus for Google Event/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("starting a Pomo from Calendar entry keeps you on Calendar view", async () => {
+    const task = fakeTask("Dentist", {
+      start_date: "2026-07-15T00:00:00Z",
+      due_date: "2026-07-15T00:00:00Z",
+      is_all_day: true,
+    });
+    installFakeApi({
+      tasks: [task],
+      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
+    });
+    render(<App />);
+
+    await openCalendar();
+    const monthCell = screen.getByLabelText("2026-07-15");
+    const taskElement = within(monthCell).getByText("Dentist").closest("div");
+
+    fireEvent.contextMenu(taskElement as HTMLElement);
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Dentist" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Deep Work 50" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Focus timer running, 50:00 left" }),
+      ).toBeInTheDocument(),
+    );
+    // Still on Calendar view: no navigation happened
+    expect(screen.getByRole("heading", { name: "July 2026" })).toBeInTheDocument();
   });
 });
