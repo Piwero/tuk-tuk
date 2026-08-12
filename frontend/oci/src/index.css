@@ -576,8 +576,8 @@ button.create-menu-trigger {
 
 .pomo-quick-start-menu {
   z-index: var(--z-popover);
-  min-width: 160px;
-  padding: var(--space-1);
+  min-width: 200px;
+  padding: var(--space-2);
   background: var(--surface-raised);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -588,18 +588,65 @@ button.create-menu-trigger {
   margin: 0;
   padding: 0;
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
-.pomo-quick-start-menu button {
-  width: 100%;
+.pomo-quick-start-menu .pomo-timer-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-height);
+  padding: var(--space-2) var(--space-3);
+  background: var(--focus-accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-md) var(--ease-out);
+}
+
+.pomo-quick-start-menu .pomo-timer-button:hover {
+  background: color-mix(in srgb, var(--focus-accent) 90%, black);
+}
+
+.pomo-quick-start-menu .pomo-timer-button:active {
+  transform: scale(0.98);
+}
+
+.pomo-quick-start-menu .pomo-timer-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .pomo-quick-start-menu form {
-  padding: var(--space-1);
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .pomo-quick-start-menu input {
   width: 100%;
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  background: var(--surface-page);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  transition: border-color var(--duration-md) var(--ease-out);
+}
+
+.pomo-quick-start-menu input:focus {
+  outline: none;
+  border-color: var(--focus-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-accent) 20%, transparent);
 }
 
 .tags-nav {

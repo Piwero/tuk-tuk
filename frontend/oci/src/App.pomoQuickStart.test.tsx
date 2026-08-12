@@ -68,7 +68,7 @@ describe("Pomo quick-start menu", () => {
     fireEvent.contextMenu(row.closest("li") as HTMLElement);
 
     const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
-    expect(within(menu).getByRole("menuitem", { name: "25 min" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Focus: 25min" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Custom…" })).toBeInTheDocument();
   });
 
@@ -200,7 +200,7 @@ describe("Pomo quick-start menu", () => {
     const row = await screen.findByRole("button", { name: "Open details for Write report" });
     fireEvent.contextMenu(row.closest("li") as HTMLElement);
     const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "25 min" }));
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Focus: 25min" }));
 
     expect(window.confirm).toHaveBeenCalled();
     await waitFor(() => expect(api.focusSessions).toHaveLength(1));
@@ -234,7 +234,7 @@ describe("Pomo quick-start menu", () => {
     const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
 
     vi.spyOn(window, "confirm").mockReturnValue(false);
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "25 min" }));
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Focus: 25min" }));
 
     expect(window.confirm).toHaveBeenCalled();
     expect(api.focusSessions).toHaveLength(0);
