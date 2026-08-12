@@ -41,6 +41,7 @@ import {
 import { localDayOf } from "../dates";
 import { Icon } from "./Icon";
 import { readDragPayload, startDrag } from "../dnd";
+import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 
 const MODES: CalendarMode[] = ["month", "week", "day"];
 const MODE_LABELS: Record<CalendarMode, string> = { month: "Month", week: "Week", day: "Day" };
@@ -138,6 +139,19 @@ function selectEntry(
   }
 }
 
+/** Handles right-click on a calendar entry: shows PomoQuickStartMenu for Tasks,
+ * does nothing for Events so the native context menu appears. */
+function handleEntryContextMenu(
+  event: React.MouseEvent,
+  entry: Entry,
+  onQuickStart?: (task: Task, position: { x: number; y: number }) => void,
+): void {
+  if (entry.kind === "task") {
+    event.preventDefault();
+    onQuickStart?.(entry.task, { x: event.clientX, y: event.clientY });
+  }
+}
+
 /** A short weekday name ("Fri") for a week-column header. */
 function shortWeekday(dayIso: string): string {
   return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
@@ -172,6 +186,10 @@ export function CalendarView({
   const [drag, setDrag] = useState<HourDrag | null>(null);
   const [edgeDrag, setEdgeDrag] = useState<EdgeDrag | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [quickStart, setQuickStart] = useState<{
+    task: Task;
+    position: { x: number; y: number };
+  } | null>(null);
   const timeColumnsRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(
@@ -480,6 +498,12 @@ export function CalendarView({
                       event.stopPropagation();
                       selectEntry(entry, onSelect, onSelectEvent);
                     }}
+                    onContextMenu={(event) => {
+                      event.stopPropagation();
+                      handleEntryContextMenu(event, entry, (task, position) =>
+                        setQuickStart({ task, position }),
+                      );
+                    }}
                   >
                     {entryTitle(entry)}
                   </div>
@@ -492,6 +516,12 @@ export function CalendarView({
                     onClick={(event) => {
                       event.stopPropagation();
                       selectEntry(entry, onSelect, onSelectEvent);
+                    }}
+                    onContextMenu={(event) => {
+                      event.stopPropagation();
+                      handleEntryContextMenu(event, entry, (task, position) =>
+                        setQuickStart({ task, position }),
+                      );
                     }}
                   >
                     <span className="entry-time">{entryTime(entryTimeShape(entry))}</span>{" "}
@@ -535,6 +565,11 @@ export function CalendarView({
         }}
         {...entryDragProps(entry)}
         onClick={() => selectEntry(entry, onSelect, onSelectEvent)}
+        onContextMenu={(event) =>
+          handleEntryContextMenu(event, entry, (task, position) =>
+            setQuickStart({ task, position }),
+          )
+        }
       >
         {task !== null && (
           <div
@@ -612,6 +647,12 @@ export function CalendarView({
                   onClick={(event) => {
                     event.stopPropagation();
                     selectEntry(entry, onSelect, onSelectEvent);
+                  }}
+                  onContextMenu={(event) => {
+                    event.stopPropagation();
+                    handleEntryContextMenu(event, entry, (task, position) =>
+                      setQuickStart({ task, position }),
+                    );
                   }}
                 >
                   {entryTitle(entry)}
@@ -779,6 +820,13 @@ export function CalendarView({
           </ul>
         </aside>
       </div>
+      {quickStart !== null && (
+        <PomoQuickStartMenu
+          task={quickStart.task}
+          position={quickStart.position}
+          onClose={() => setQuickStart(null)}
+        />
+      )}
     </div>
   );
 }

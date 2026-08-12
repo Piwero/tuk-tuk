@@ -1,13 +1,5 @@
-import {
-  afterEach,
-  beforeEach,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { openCalendar, openWeek, pinCalendarClock } from "./test/calendar";
@@ -467,42 +459,40 @@ describe("Pomo quick-start menu on Calendar Task entries", () => {
     expect(within(menu).getByRole("menuitem", { name: "Deep Work 50" })).toBeInTheDocument();
   });
 
-  it("right-click on a Calendar Event (not Task) shows native context menu", async () => {
-    const task = fakeTask("Task", {
+  it("Calendar entries open menu across all three Task views: month, week, day", async () => {
+    const allDayTask = fakeTask("Team Sync", {
       start_date: "2026-07-06T00:00:00Z",
       due_date: "2026-07-06T00:00:00Z",
       is_all_day: true,
     });
     installFakeApi({
-      tasks: [task],
-      events: [
-        {
-          id: "event-1",
-          title: "Google Event",
-          start: { dateTime: "2026-07-06T10:00:00Z" },
-          end: { dateTime: "2026-07-06T11:00:00Z" },
-          account_id: "account-1",
-        },
-      ],
+      tasks: [allDayTask],
+      timers: [fakeTimer("Quick 15", { duration_seconds: 900 })],
     });
     render(<App />);
 
+    // Test month view
     await openCalendar();
-    await openWeek();
+    let taskElement = screen.getByText("Team Sync").closest("div");
+    fireEvent.contextMenu(taskElement as HTMLElement);
+    let menu = await screen.findByRole("menu", { name: "Start Focus for Team Sync" });
+    expect(within(menu).getByRole("menuitem", { name: "Quick 15" })).toBeInTheDocument();
 
-    const eventElement = screen.getByText("Google Event").closest("[class*='time-block']");
-    const preventDefaultSpy = vi.spyOn(
-      { preventDefault: () => {} } as unknown as Event,
-      "preventDefault",
+    // Close the menu and try week view
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("menu", { name: /Start Focus for Team Sync/ }),
+      ).not.toBeInTheDocument(),
     );
 
-    // Verify that the Event element doesn't prevent default (letting native menu show)
-    // by checking the menu doesn't appear
-    fireEvent.contextMenu(eventElement as HTMLElement);
-
-    expect(
-      screen.queryByRole("menu", { name: /Start Focus for Google Event/ }),
-    ).not.toBeInTheDocument();
+    // Switch to week view and test there (Jul 3 – Jul 7 includes Jul 6)
+    fireEvent.click(screen.getByRole("button", { name: "Week" }));
+    await screen.findByRole("heading", { name: "Jul 3 – Jul 7, 2026" });
+    taskElement = screen.getByText("Team Sync").closest("div");
+    fireEvent.contextMenu(taskElement as HTMLElement);
+    menu = await screen.findByRole("menu", { name: "Start Focus for Team Sync" });
+    expect(within(menu).getByRole("menuitem", { name: "Quick 15" })).toBeInTheDocument();
   });
 
   it("starting a Pomo from Calendar entry keeps you on Calendar view", async () => {
