@@ -19,7 +19,7 @@ import {
   type StandupSuggestion,
   type StandupYesterdaySuggestion,
 } from "../api";
-import { localDayOf, shortDayLabel } from "../dates";
+import { localDayOf, shortDayLabel, weekdayRecordLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { Icon } from "./Icon";
@@ -396,21 +396,28 @@ export function StandupView(): JSX.Element {
         </label>
         <ul aria-label="Past stand-ups">
           {history.map((item) => (
-            <li key={item.id}>
+            <li key={item.id} className="standup-history-row">
               <button
                 type="button"
+                className={
+                  item.date === selectedDate
+                    ? "standup-history-button selected"
+                    : "standup-history-button"
+                }
                 aria-current={item.date === selectedDate ? "true" : undefined}
                 onClick={() => setSelectedDate(item.date)}
               >
-                {shortDayLabel(item.date)}
+                {weekdayRecordLabel(item.date)}
               </button>
-              <button
-                type="button"
-                aria-label={`Delete stand-up ${item.date}`}
-                onClick={() => void removeEntry(item.date)}
-              >
-                <Icon name="x" />
-              </button>
+              <span className="row-actions">
+                <button
+                  type="button"
+                  aria-label={`Delete stand-up ${item.date}`}
+                  onClick={() => void removeEntry(item.date)}
+                >
+                  <Icon name="x" />
+                </button>
+              </span>
             </li>
           ))}
         </ul>
