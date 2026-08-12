@@ -574,6 +574,34 @@ button.create-menu-trigger {
   color: var(--text-secondary);
 }
 
+.pomo-quick-start-menu {
+  z-index: var(--z-popover);
+  min-width: 160px;
+  padding: var(--space-1);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.pomo-quick-start-menu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pomo-quick-start-menu button {
+  width: 100%;
+}
+
+.pomo-quick-start-menu form {
+  padding: var(--space-1);
+}
+
+.pomo-quick-start-menu input {
+  width: 100%;
+}
+
 .tags-nav {
   margin-top: var(--space-4);
   padding-top: var(--space-3);

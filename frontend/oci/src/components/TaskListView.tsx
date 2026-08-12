@@ -15,6 +15,7 @@ import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
+import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { SectionNameForm } from "./SectionNameForm";
 import { Icon } from "./Icon";
 
@@ -49,6 +50,10 @@ export function TaskListView({
 }: TaskListViewProps): JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
   const [renamingSectionId, setRenamingSectionId] = useState<number | null>(null);
+  const [quickStart, setQuickStart] = useState<{
+    task: Task;
+    position: { x: number; y: number };
+  } | null>(null);
 
   async function toggle(task: Task): Promise<void> {
     const updated = await updateTask(task.id, { completed: !task.completed });
@@ -158,6 +163,10 @@ export function TaskListView({
         onDragEnd={endDrag}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => handleDropOnTaskRow(event, task)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setQuickStart({ task, position: { x: event.clientX, y: event.clientY } });
+        }}
       >
         <label>
           <input
@@ -330,6 +339,13 @@ export function TaskListView({
             Add Section
           </button>
         ))}
+      {quickStart !== null && (
+        <PomoQuickStartMenu
+          task={quickStart.task}
+          position={quickStart.position}
+          onClose={() => setQuickStart(null)}
+        />
+      )}
     </div>
   );
 }
