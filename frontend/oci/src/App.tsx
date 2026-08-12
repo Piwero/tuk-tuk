@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   fetchCompletedOccurrences,
@@ -27,6 +27,7 @@ import { localDayOf } from "./dates";
 import { FocusRunProvider } from "./focusRunContext";
 import { type GroupBy, type SortBy } from "./grouping";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "./layoutPrefs";
+import { pathForStaticView, staticViewKindForPath, type StaticViewKind } from "./routes";
 import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
 import { EventDetail } from "./components/EventDetail";
@@ -62,6 +63,52 @@ type View =
   | { kind: "settings" }
   | null;
 
+/** A fresh Search, with no query or filters — what /search always opens to,
+ * whether loaded directly or reached via the Search nav item (issue #143). */
+const BLANK_SEARCH_STATE: SearchState = {
+  query: "",
+  listId: null,
+  tagId: null,
+  priority: null,
+  completed: null,
+};
+
+/** Which of the six URL-addressable static views (if any) a View shows —
+ * List/Tag/Folder/Smart views have no path, so this is null for them. */
+function staticViewKindOf(view: View): StaticViewKind | null {
+  if (
+    view?.kind === "calendar" ||
+    view?.kind === "habits" ||
+    view?.kind === "standup" ||
+    view?.kind === "focus" ||
+    view?.kind === "search" ||
+    view?.kind === "settings"
+  ) {
+    return view.kind;
+  }
+  return null;
+}
+
+/** The View a static path resolves to on a fresh load: always blank/no
+ * pre-selection, since neither a query nor a task can be encoded in these
+ * URLs (issue #143). */
+function viewForStaticKind(kind: StaticViewKind): View {
+  switch (kind) {
+    case "search":
+      return { kind: "search", search: BLANK_SEARCH_STATE };
+    case "calendar":
+      return { kind: "calendar" };
+    case "habits":
+      return { kind: "habits" };
+    case "standup":
+      return { kind: "standup" };
+    case "focus":
+      return { kind: "focus" };
+    case "settings":
+      return { kind: "settings" };
+  }
+}
+
 interface AppProps {
   /** Absent in tests that render App on its own — AuthGate is the only
    * caller that supplies it, so App's bootstrap and tests never need to
@@ -73,7 +120,15 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [view, setView] = useState<View>(null);
+  // Resolved from the URL on the very first render (rather than in a mount
+  // effect) so a direct load of a static path never runs a render with the
+  // "wrong" view — an effect-driven setView here would land in the same
+  // commit as the URL-sync effect below, which would then read the stale
+  // pre-update view and incorrectly clobber lastSyncedKindRef (issue #143).
+  const [view, setView] = useState<View>(() => {
+    const kind = staticViewKindForPath(window.location.pathname);
+    return kind !== null ? viewForStaticKind(kind) : null;
+  });
   // The completed view of the current List (or of All): computed, newest first.
   const [completedMode, setCompletedMode] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
@@ -124,6 +179,67 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
     }
   }, []);
+
+  // URL routing for the six static views (issue #143). `lastSyncedKindRef`
+  // starts out already matching whatever the URL says (the initial `view`
+  // state above resolves the same way), so the very first sync-to-URL
+  // effect run (below) is already a no-op match. `suppressNextSyncRef`
+  // marks a view change driven by Back/Forward rather than by the user
+  // navigating within the app — that must never itself push or replace
+  // history, since the browser already positioned it there.
+  const lastSyncedKindRef = useRef<StaticViewKind | null>(
+    staticViewKindForPath(window.location.pathname),
+  );
+  const suppressNextSyncRef = useRef(false);
+
+  // An unrecognized path redirects to "/" (falling into the Inbox-fallback
+  // effect below) — recognized paths are already handled by `view`'s
+  // initial state above.
+  useEffect(() => {
+    if (
+      staticViewKindForPath(window.location.pathname) === null &&
+      window.location.pathname !== "/"
+    ) {
+      window.history.replaceState(null, "", "/");
+    }
+  }, []);
+
+  // Back/Forward between visited static views (and back to "/" for
+  // everything else, which the Inbox-fallback effect resolves from there).
+  useEffect(() => {
+    function onPopState(): void {
+      const kind = staticViewKindForPath(window.location.pathname);
+      suppressNextSyncRef.current = true;
+      setCompletedMode(false);
+      setDrawerOpen(false);
+      setView(kind !== null ? viewForStaticKind(kind) : null);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // Keeps the address bar in sync with `view`: pushes a new entry on
+  // navigating into a (different) static view, replaces back to "/" on
+  // navigating away to a List/Tag/Folder/Smart view, and does neither for a
+  // change within the same static view (e.g. editing Search's filters) or
+  // one that came from the URL itself (handled above).
+  useEffect(() => {
+    const kind = staticViewKindOf(view);
+    if (suppressNextSyncRef.current) {
+      suppressNextSyncRef.current = false;
+      lastSyncedKindRef.current = kind;
+      return;
+    }
+    if (kind === lastSyncedKindRef.current) {
+      return;
+    }
+    lastSyncedKindRef.current = kind;
+    if (kind !== null) {
+      window.history.pushState(null, "", pathForStaticView(kind));
+    } else if (window.location.pathname !== "/") {
+      window.history.replaceState(null, "", "/");
+    }
+  }, [view]);
 
   useEffect(() => {
     void Promise.all([fetchLists(), fetchFolders(), fetchTags()]).then(
@@ -382,6 +498,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           standupEnabled={standupEnabled}
           focusSelected={view?.kind === "focus"}
           settingsSelected={view?.kind === "settings"}
+          searchSelected={view?.kind === "search"}
           onSelect={(listId) => switchView({ kind: "list", id: listId })}
           onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
           onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
@@ -396,11 +513,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           onToggleCollapsed={toggleSidebar}
           onLogout={onLogout}
           onSearch={(query) =>
-            switchView({
-              kind: "search",
-              search: { query, listId: null, tagId: null, priority: null, completed: null },
-            })
+            switchView({ kind: "search", search: { ...BLANK_SEARCH_STATE, query } })
           }
+          onOpenSearch={() => switchView({ kind: "search", search: BLANK_SEARCH_STATE })}
           onListsChanged={setLists}
           onFoldersChanged={setFolders}
           onTagCreated={(tag) => setTags((current) => [...current, tag])}

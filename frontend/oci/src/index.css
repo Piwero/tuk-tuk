@@ -273,7 +273,8 @@ main > form,
   border-bottom: 1px solid var(--border-default);
 }
 
-.sidebar button {
+.sidebar button,
+.sidebar a {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -283,9 +284,12 @@ main > form,
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
+  color: inherit;
   font-size: var(--text-md);
   text-align: left;
+  text-decoration: none;
   white-space: nowrap;
+  cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
 }
 
@@ -298,7 +302,8 @@ main > form,
   color: var(--text-accent);
 }
 
-.sidebar button:hover {
+.sidebar button:hover,
+.sidebar a:hover {
   background: var(--surface-hover);
 }
 
