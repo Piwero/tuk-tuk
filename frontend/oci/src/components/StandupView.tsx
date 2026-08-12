@@ -252,6 +252,9 @@ export function StandupView(): JSX.Element {
   }
 
   async function removeEntry(date: string): Promise<void> {
+    if (!window.confirm(`Delete the stand-up entry for ${shortDayLabel(date)}?`)) {
+      return;
+    }
     await deleteStandupEntry(date);
     setHistory((current) => current.filter((item) => item.date !== date));
     if (date === selectedDate) {
