@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.5.0](https://github.com/Piwero/tuk-tuk/compare/v0.4.3...v0.5.0) - 2026-08-12
+
+### Features
+
+- **stand-up:** Daily entries with Yesterday/Today/Blockers bullets ([1d2f7a8](https://github.com/Piwero/tuk-tuk/commit/1d2f7a8ddef271db025806318dbb1cd06edc2f2e))
+- **stand-up:** Add persistent Sprint goal field with per-entry snapshot ([d20e7cb](https://github.com/Piwero/tuk-tuk/commit/d20e7cb8a47ca032ed993afe84bf0530f89a0016))
+- **stand-up:** Add Settings toggle to enable/disable Stand-up ([e804f60](https://github.com/Piwero/tuk-tuk/commit/e804f6082bea20a6545ed12c1cef131333ae5554))
+- **stand-up:** Merge settings toggle for Stand-up (#140) ([7d322da](https://github.com/Piwero/tuk-tuk/commit/7d322da38eee2bb3338aee10f528b129cf59330a))
+- **stand-up:** Add Today suggestion chips from the Today Smart List ([aeaa0e5](https://github.com/Piwero/tuk-tuk/commit/aeaa0e5fd863484bd423f98303de4f468b4d6d29))
+- **stand-up:** Merge Today suggestion chips (#142) ([a4fa54b](https://github.com/Piwero/tuk-tuk/commit/a4fa54b208b774d1e406e66b366eaba5a831ccdd))
+- **stand-up:** Add Yesterday suggestion chips from completed Tasks ([164447a](https://github.com/Piwero/tuk-tuk/commit/164447a9e0bdb5d3a04c8cb0948d34285191690a))
+- **stand-up:** Merge Yesterday suggestion chips (#141) ([f808448](https://github.com/Piwero/tuk-tuk/commit/f808448ee1e25dd5d0fe3a3cecc4600733aca4a5))
+
+### Bug Fixes
+
+- **stand-up:** Style Today chips and align suggestions endpoint param order ([a63b65c](https://github.com/Piwero/tuk-tuk/commit/a63b65c20650fb76a78b09ad87b4e6bac1991100))
+
 ## [0.4.3](https://github.com/Piwero/tuk-tuk/compare/v0.4.2...v0.4.3) - 2026-08-11
 
 ### Bug Fixes
