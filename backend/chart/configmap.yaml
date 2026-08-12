@@ -7,8 +7,10 @@ data:
   BACKEND_LOG_LEVEL: "info"
   # Browser traffic arrives same-origin through the frontend nginx proxy, so
   # CORS only matters for direct calls to the backend's own Tailscale host.
-  # Adjust the tailnet name to yours.
-  CORS_ORIGINS: '["https://tuk-tuk.your-tailnet.ts.net"]'
+  # Also used to resolve/validate the origin the Google OAuth callback
+  # redirects back to (see routers/v1/google.py::_resolve_return_origin) —
+  # must include every origin the app is actually served from.
+  CORS_ORIGINS: '["https://tt.piwero.com", "https://tuk-tuk.your-tailnet.ts.net"]'
   # SQLite on the PVC (ADR 0004). Not a secret — no credentials in the URL.
   # Four slashes: absolute path /data/tuk_tuk.db.
   DATABASE_URL: "sqlite+aiosqlite:////data/tuk_tuk.db"
