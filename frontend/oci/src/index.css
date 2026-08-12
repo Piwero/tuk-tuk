@@ -2327,7 +2327,10 @@ li[data-overdue] .date-chip {
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.standup-section li:hover .row-actions {
+.standup-section li:hover .row-actions,
+.standup-section li .row-actions:focus-within {
+  width: auto;
+  overflow: visible;
   visibility: visible;
 }
 

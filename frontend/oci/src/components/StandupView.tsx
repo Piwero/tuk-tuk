@@ -160,15 +160,19 @@ export function StandupView(): JSX.Element {
   }
 
   /** A Today chip's click — appends its title as a new bullet, the same
-   * additive mechanism as typing it into the Add form. */
+   * additive mechanism as typing it into the Add form, then drops the chip
+   * so it can't be added again. */
   async function addTodaySuggestion(suggestion: StandupSuggestion): Promise<void> {
     await appendBullet("today", suggestion.title);
+    setTodaySuggestions((current) => current.filter((s) => s.task_id !== suggestion.task_id));
   }
 
-  /** A Yesterday chip click: adds its title as a new bullet. No link to the
-   * source Task/Completed Occurrence is kept afterward. */
+  /** A Yesterday chip click: adds its title as a new bullet, then drops the
+   * chip so it can't be added again. No link to the source Task/Completed
+   * Occurrence is kept afterward. */
   async function addYesterdaySuggestion(title: string): Promise<void> {
     await appendBullet("yesterday", title);
+    setSuggestions((current) => current.filter((s) => s.title !== title));
   }
 
   async function renameBullet(): Promise<void> {
