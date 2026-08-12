@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.5.2](https://github.com/Piwero/tuk-tuk/compare/v0.5.1...v0.5.2) - 2026-08-12
+
+### Features
+
+- **frontend:** Add URL routing for static views ([ad616fe](https://github.com/Piwero/tuk-tuk/commit/ad616fe72fd032cd57c4b9f2488744ca4103a0ce))
+- **focus:** Add Pomo quick-start menu on Task rows (right-click) ([80a97ad](https://github.com/Piwero/tuk-tuk/commit/80a97ad71b93bad85834cfa0e24441e7f342135f))
+- **focus:** Add kebab-button trigger for Pomo quick-start menu ([3a4c604](https://github.com/Piwero/tuk-tuk/commit/3a4c604165bd6f00ef8ed54c98855660600eec55))
+- **focus:** Pomo quick-start menu on Calendar Task entries ([cc516f7](https://github.com/Piwero/tuk-tuk/commit/cc516f7942e27dd12b9cf2161a568b127bc77ebb))
+
+### Bug Fixes
+
+- **deploy:** Add production origin to backend CORS_ORIGINS ([23254c0](https://github.com/Piwero/tuk-tuk/commit/23254c08dee4eb7e2929b7b586d9172fe4aec296))
+
 ## [0.5.1](https://github.com/Piwero/tuk-tuk/compare/v0.5.0...v0.5.1) - 2026-08-12
 
 ### Bug Fixes
