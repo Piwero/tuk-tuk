@@ -153,6 +153,11 @@ export function TaskListView({
   }
 
   function renderTaskRow(task: Task): JSX.Element {
+    function handleKebabClick(event: React.MouseEvent<HTMLButtonElement>): void {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setQuickStart({ task, position: { x: rect.left, y: rect.bottom } });
+    }
+
     return (
       <li
         key={task.id}
@@ -217,13 +222,22 @@ export function TaskListView({
           )}
         </button>
         {onStartFocus !== undefined && (
-          <button
-            type="button"
-            aria-label={`Start Focus for ${task.title}`}
-            onClick={() => onStartFocus(task)}
-          >
-            Focus
-          </button>
+          <>
+            <button
+              type="button"
+              aria-label={`Pomo quick-start menu for ${task.title}`}
+              onClick={handleKebabClick}
+            >
+              <Icon name="more-vertical" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Start Focus for ${task.title}`}
+              onClick={() => onStartFocus(task)}
+            >
+              Focus
+            </button>
+          </>
         )}
         <button type="button" aria-label={`Delete ${task.title}`} onClick={() => void remove(task)}>
           Delete

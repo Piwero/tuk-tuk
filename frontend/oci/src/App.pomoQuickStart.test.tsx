@@ -245,4 +245,90 @@ describe("Pomo quick-start menu", () => {
       `task:${otherTask.id}`,
     );
   });
+
+  it("kebab button opens the menu just like right-click", async () => {
+    const task = fakeTask("Write report");
+    installFakeApi({
+      tasks: [task],
+      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
+    });
+    render(<App />);
+    await screen.findByRole("button", { name: "Open details for Write report" });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
+    );
+
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
+    expect(within(menu).getByRole("menuitem", { name: "Deep Work 50" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Custom…" })).toBeInTheDocument();
+  });
+
+  it("kebab button starts a Pomo session with the same behavior as right-click", async () => {
+    const task = fakeTask("Write report");
+    installFakeApi({
+      tasks: [task],
+      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
+    });
+    render(<App />);
+    await screen.findByRole("button", { name: "Open details for Write report" });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
+    );
+
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Deep Work 50" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Focus timer running, 50:00 left" }),
+      ).toBeInTheDocument(),
+    );
+    // Still on the List view: no navigation happened.
+    expect(
+      screen.getByRole("button", { name: "Open details for Write report" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 50:00 left" }));
+    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+  });
+
+  it("kebab button closes the menu on Escape", async () => {
+    const task = fakeTask("Write report");
+    installFakeApi({ tasks: [task] });
+    render(<App />);
+    await screen.findByRole("button", { name: "Open details for Write report" });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
+    );
+
+    await screen.findByRole("menu", { name: "Start Focus for Write report" });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("menu", { name: "Start Focus for Write report" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("kebab button closes the menu on outside click", async () => {
+    const task = fakeTask("Write report");
+    installFakeApi({ tasks: [task] });
+    render(<App />);
+    await screen.findByRole("button", { name: "Open details for Write report" });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
+    );
+
+    await screen.findByRole("menu", { name: "Start Focus for Write report" });
+
+    fireEvent.mouseDown(document.body);
+
+    expect(
+      screen.queryByRole("menu", { name: "Start Focus for Write report" }),
+    ).not.toBeInTheDocument();
+  });
 });
