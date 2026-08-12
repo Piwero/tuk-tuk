@@ -330,9 +330,10 @@ describe("Stand-up", () => {
     expect(
       within(screen.getByRole("list", { name: "Blockers bullets" })).getByText("Unrelated blocker"),
     ).toBeInTheDocument();
-    // Clicking is additive: the chip itself remains available afterward
-    // (no dismissal/seen-state tracking).
-    expect(screen.getByRole("button", { name: "Ship the release notes" })).toBeInTheDocument();
+    // Once added, the chip is removed so it can't be added again.
+    expect(
+      screen.queryByRole("button", { name: "Ship the release notes" }),
+    ).not.toBeInTheDocument();
   });
 
   it("merely viewing (and blurring away from) a past entry's snapshot does not overwrite the live goal", async () => {
