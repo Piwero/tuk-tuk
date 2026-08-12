@@ -17,7 +17,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(
       await screen.findByRole("heading", { name: "Google API credentials" }),
@@ -32,7 +32,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Google Calendar" })).toBeInTheDocument();
     expect(screen.getByText(/no accounts connected/i)).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     const connectLink = await screen.findByRole("link", { name: "Connect" });
     expect(connectLink).toHaveAttribute("href", "/api/v1/google/connect");
@@ -72,7 +72,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByText("work@example.com")).toBeInTheDocument();
     expect(screen.getByText("personal@example.com")).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByText("work@example.com");
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
 
@@ -153,7 +153,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByText("work@example.com"));
 
     expect(await screen.findByText("Work")).toBeInTheDocument();
@@ -186,7 +186,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByText("work@example.com"));
     const checkbox = await screen.findByRole("checkbox", { name: "Work" });
     expect(checkbox).toBeChecked();
@@ -230,7 +230,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByText("work@example.com"));
     await screen.findByText("Work");
 
@@ -274,7 +274,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByText("work@example.com"));
     await screen.findByText("Work");
 
@@ -323,7 +323,7 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByText("work@example.com");
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
 
@@ -362,7 +362,7 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Client ID"), "a-client-id");
     await user.type(screen.getByLabelText("Client secret"), "a-client-secret");
     await user.click(screen.getByRole("button", { name: "Save Google credentials" }));
@@ -387,7 +387,7 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByLabelText("Client ID")).toHaveValue("existing-client-id");
     expect(screen.getByText(/client secret is already saved/i)).toBeInTheDocument();
@@ -403,7 +403,7 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     const clientIdField = await screen.findByLabelText("Client ID");
     await user.clear(clientIdField);
     await user.type(clientIdField, "new-client-id");
@@ -437,7 +437,7 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("button", { name: "Replace it" }));
     await user.type(screen.getByLabelText("Client secret"), "new-client-secret");
     await user.click(screen.getByRole("button", { name: "Save Google credentials" }));
@@ -463,7 +463,7 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByText("me@example.com");
     await user.click(screen.getByRole("button", { name: "Remove Google integration" }));
 
@@ -481,7 +481,7 @@ describe("Change password (issue #116)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Security" })).toBeInTheDocument();
     expect(screen.getByLabelText("Current password")).toBeInTheDocument();
@@ -494,7 +494,7 @@ describe("Change password (issue #116)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
     await user.type(screen.getByLabelText("New password"), "a-new-password");
     await user.type(screen.getByLabelText("Confirm new password"), "a-new-password");
@@ -512,7 +512,7 @@ describe("Change password (issue #116)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), "wrong-password");
     await user.type(screen.getByLabelText("New password"), "a-new-password");
     await user.type(screen.getByLabelText("Confirm new password"), "a-new-password");
@@ -527,7 +527,7 @@ describe("Change password (issue #116)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
     await user.type(screen.getByLabelText("New password"), "a-new-password");
     await user.type(screen.getByLabelText("Confirm new password"), "a-different-password");
@@ -555,7 +555,7 @@ describe("Per-account failure handling (issue #109)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/needs to be reconnected/i);
     const reconnectLinks = screen.getAllByRole("link", { name: "Reconnect" });
@@ -578,7 +578,7 @@ describe("Per-account failure handling (issue #109)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Settings" }));
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByText("me@example.com");
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

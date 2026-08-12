@@ -35,7 +35,7 @@ describe("Quick add dialog", () => {
     const user = userEvent.setup();
     render(<App />);
     const views = await screen.findByRole("navigation", { name: "Views" });
-    await user.click(within(views).getByRole("button", { name: "Habits" }));
+    await user.click(within(views).getByRole("link", { name: "Habits" }));
     await screen.findByRole("heading", { name: "Habits" });
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));

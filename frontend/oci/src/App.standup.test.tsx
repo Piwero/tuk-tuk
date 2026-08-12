@@ -17,7 +17,7 @@ afterEach(() => {
 
 async function openStandup(): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Views" });
-  fireEvent.click(within(nav).getByRole("button", { name: "Stand-up" }));
+  fireEvent.click(within(nav).getByRole("link", { name: "Stand-up" }));
   await screen.findByRole("heading", { name: "Stand-up" });
 }
 
@@ -428,7 +428,7 @@ describe("Stand-up settings toggle", () => {
     render(<App />);
 
     const nav = await screen.findByRole("navigation", { name: "Views" });
-    expect(await within(nav).findByRole("button", { name: "Stand-up" })).toBeInTheDocument();
+    expect(await within(nav).findByRole("link", { name: "Stand-up" })).toBeInTheDocument();
   });
 
   it("hides the Stand-up nav item when the flag is disabled", async () => {
@@ -438,7 +438,7 @@ describe("Stand-up settings toggle", () => {
     const nav = await screen.findByRole("navigation", { name: "Views" });
     // Wait on a nav item that's always present, so this doesn't race the
     // (still-pending) settings fetch and pass for the wrong reason.
-    await within(nav).findByRole("button", { name: "Focus" });
-    expect(within(nav).queryByRole("button", { name: "Stand-up" })).not.toBeInTheDocument();
+    await within(nav).findByRole("link", { name: "Focus" });
+    expect(within(nav).queryByRole("link", { name: "Stand-up" })).not.toBeInTheDocument();
   });
 });

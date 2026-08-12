@@ -19,7 +19,7 @@ afterEach(() => {
 
 async function openFocus(): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Views" });
-  fireEvent.click(within(nav).getByRole("button", { name: "Focus" }));
+  fireEvent.click(within(nav).getByRole("link", { name: "Focus" }));
   await screen.findByRole("heading", { name: "Focus" });
 }
 

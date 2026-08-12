@@ -22,6 +22,7 @@ import {
 import { currentDragPayload, endDrag, readDragPayload, startDrag } from "../dnd";
 import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
+import { pathForStaticView } from "../routes";
 import { CreateMenu } from "./CreateMenu";
 import { FocusNavBadge } from "./FocusNavBadge";
 import { FolderForm } from "./FolderForm";
@@ -64,6 +65,9 @@ interface SidebarProps {
   standupEnabled: boolean;
   focusSelected: boolean;
   settingsSelected: boolean;
+  /** Selected when viewing /search — distinct from having typed a query,
+   * so the nav item highlights for a blank search too (issue #143). */
+  searchSelected: boolean;
   onSelect: (listId: number) => void;
   onSelectFolder: (folderId: number) => void;
   onSelectTag: (tagId: number) => void;
@@ -74,6 +78,9 @@ interface SidebarProps {
   onSelectFocus: () => void;
   onSelectSettings: () => void;
   onSearch: (query: string) => void;
+  /** The Search nav item (icon-only, always reachable) opens a blank search,
+   * as opposed to onSearch which carries a typed query (issue #143). */
+  onOpenSearch: () => void;
   /** Opens the Quick add dialog; the sidebar is always there, so capture is
    * reachable from every screen, including Habits and Focus. */
   onQuickAdd: () => void;
@@ -129,27 +136,76 @@ function ListButton({ list, selected, collapsed, onSelect }: ListButtonProps): J
   );
 }
 
+/** A plain left-click navigates via the app's own history handling; any
+ * modified click (cmd/ctrl/shift/middle-button) is left to the browser so
+ * opening in a new tab, copying the link, etc. keep working (issue #143). */
+function handleNavAnchorClick(
+  event: React.MouseEvent<HTMLAnchorElement>,
+  onNavigate: () => void,
+): void {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey
+  ) {
+    return;
+  }
+  event.preventDefault();
+  onNavigate();
+}
+
 interface TopNavItemProps {
   icon: IconName;
   label: string;
+  /** Present only for the static, URL-addressable views (#143) — the "Tasks"
+   * item stays a plain button since Smart Lists aren't URL-addressable. */
+  href?: string;
   selected: boolean;
   collapsed: boolean;
   onClick: () => void;
 }
 
 /** One item in the top feature row: selected = pill with icon + label, others icon-only. */
-function TopNavItem({ icon, label, selected, collapsed, onClick }: TopNavItemProps): JSX.Element {
-  return (
-    <button
-      type="button"
-      className={selected ? "top-nav-item selected" : "top-nav-item"}
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-    >
+function TopNavItem({
+  icon,
+  label,
+  href,
+  selected,
+  collapsed,
+  onClick,
+}: TopNavItemProps): JSX.Element {
+  const className = selected ? "top-nav-item selected" : "top-nav-item";
+  const content = (
+    <>
       <Icon name={icon} size={18} />
       {selected && !collapsed && <span>{label}</span>}
-    </button>
+    </>
+  );
+  if (href === undefined) {
+    return (
+      <button
+        type="button"
+        className={className}
+        aria-label={label}
+        title={label}
+        onClick={onClick}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <a
+      href={href}
+      className={className}
+      aria-label={label}
+      title={label}
+      onClick={(event) => handleNavAnchorClick(event, onClick)}
+    >
+      {content}
+    </a>
   );
 }
 
@@ -167,6 +223,7 @@ export function Sidebar({
   standupEnabled,
   focusSelected,
   settingsSelected,
+  searchSelected,
   onSelect,
   onSelectFolder,
   onSelectTag,
@@ -177,6 +234,7 @@ export function Sidebar({
   onSelectFocus,
   onSelectSettings,
   onSearch,
+  onOpenSearch,
   onQuickAdd,
   collapsed,
   onToggleCollapsed,
@@ -562,6 +620,7 @@ export function Sidebar({
         <TopNavItem
           icon="calendar-days"
           label="Calendar"
+          href={pathForStaticView("calendar")}
           selected={calendarSelected}
           collapsed={collapsed}
           onClick={onSelectCalendar}
@@ -569,6 +628,7 @@ export function Sidebar({
         <TopNavItem
           icon="repeat"
           label="Habits"
+          href={pathForStaticView("habits")}
           selected={habitsSelected}
           collapsed={collapsed}
           onClick={onSelectHabits}
@@ -577,6 +637,7 @@ export function Sidebar({
           <TopNavItem
             icon="users"
             label="Stand-up"
+            href={pathForStaticView("standup")}
             selected={standupSelected}
             collapsed={collapsed}
             onClick={onSelectStandup}
@@ -585,9 +646,18 @@ export function Sidebar({
         <TopNavItem
           icon="timer"
           label="Focus"
+          href={pathForStaticView("focus")}
           selected={focusSelected}
           collapsed={collapsed}
           onClick={onSelectFocus}
+        />
+        <TopNavItem
+          icon="search"
+          label="Search"
+          href={pathForStaticView("search")}
+          selected={searchSelected}
+          collapsed={collapsed}
+          onClick={onOpenSearch}
         />
       </nav>
       {!collapsed && (
@@ -884,16 +954,16 @@ export function Sidebar({
         </section>
       )}
       <div className="sidebar-footer">
-        <button
-          type="button"
+        <a
+          href={pathForStaticView("settings")}
           className={settingsSelected ? "sidebar-settings selected" : "sidebar-settings"}
           aria-label="Settings"
           title="Settings"
-          onClick={onSelectSettings}
+          onClick={(event) => handleNavAnchorClick(event, onSelectSettings)}
         >
           <Icon name="settings" size={18} />
           <span className="nav-label">Settings</span>
-        </button>
+        </a>
         {onLogout !== undefined && (
           <button
             type="button"

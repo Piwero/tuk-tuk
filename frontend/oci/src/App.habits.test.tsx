@@ -17,7 +17,7 @@ afterEach(() => {
 
 async function openHabits(): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Views" });
-  fireEvent.click(within(nav).getByRole("button", { name: "Habits" }));
+  fireEvent.click(within(nav).getByRole("link", { name: "Habits" }));
   await screen.findByRole("heading", { name: "Habits" });
 }
 

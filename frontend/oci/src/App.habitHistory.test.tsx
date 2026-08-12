@@ -17,7 +17,7 @@ afterEach(() => {
 
 async function openHistory(name: string): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Views" });
-  fireEvent.click(within(nav).getByRole("button", { name: "Habits" }));
+  fireEvent.click(within(nav).getByRole("link", { name: "Habits" }));
   await screen.findByRole("heading", { name: "Habits" });
   fireEvent.click(await screen.findByRole("button", { name: `History ${name}` }));
 }

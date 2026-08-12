@@ -21,7 +21,7 @@ export function pinCalendarClock(): void {
 
 /** Opens the calendar view, waiting out the (slow) first render in a file. */
 export async function openCalendar(): Promise<void> {
-  fireEvent.click(await screen.findByRole("button", { name: "Calendar" }));
+  fireEvent.click(await screen.findByRole("link", { name: "Calendar" }));
   await screen.findByRole("heading", { name: "July 2026" }, { timeout: 10_000 });
 }
 

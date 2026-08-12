@@ -103,15 +103,20 @@ Bricolage Grotesque, semibold/bold, type only.
   purpose), archive=`archive`,
   unarchive=`archive-restore`, history=`chart-column`, recurring=`repeat`,
   nav chevrons=`chevron-left/right`; folder row=`folder`; sidebar: Tasks=`list-checks`,
-  Calendar=`calendar-days`, Habits=`repeat`, Focus=`timer`, Today=`sun`,
-  Next 7 Days=`calendar-range`, All=`layers`, Inbox=`inbox`.
+  Calendar=`calendar-days`, Habits=`repeat`, Focus=`timer`, Search=`search`,
+  Today=`sun`, Next 7 Days=`calendar-range`, All=`layers`, Inbox=`inbox`.
 
 ## Sidebar anatomy
 
-Top to bottom: wordmark → feature row (Tasks / Calendar / Habits / Focus —
-the active view is a pill with icon + label, the rest icon-only) → search →
-Smart Lists → Inbox → Folders and Lists → Tags → bottom-pinned add actions
-(Add List, Add Folder).
+Top to bottom: wordmark → feature row (Tasks / Calendar / Habits / Stand-up /
+Focus / Search — the active view is a pill with icon + label, the rest
+icon-only) → inline query box → Smart Lists → Inbox → Folders and Lists →
+Tags → bottom-pinned add actions (Add List, Add Folder).
+
+Standup, Focus, Calendar, Habits, Search, and Settings are URL-addressable
+(`/standup`, `/focus`, etc. — #143); their sidebar nav items are real
+anchors so cmd/ctrl-click, middle-click, and "copy link" work. List, Tag,
+and Folder views stay in-memory only.
 
 ## Content rules
 
