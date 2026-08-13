@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.5.4](https://github.com/Piwero/tuk-tuk/compare/v0.5.3...v0.5.4) - 2026-08-13
+
+### Features
+
+- **calendar:** Show new-task draft as a popup, editable timeframe ([477602c](https://github.com/Piwero/tuk-tuk/commit/477602c60820c564297a126225922a2ee6031332))
+
 ## [0.5.3](https://github.com/Piwero/tuk-tuk/compare/v0.5.2...v0.5.3) - 2026-08-12
 
 ### Features
