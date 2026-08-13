@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  createList,
+  createTag,
   createTask,
   fetchCalendarEvents,
   fetchCalendarTasks,
@@ -9,7 +11,10 @@ import {
   updateTask,
   type Event,
   type EventFailure,
+  type Priority,
+  type Tag,
   type Task,
+  type TaskList,
   type TaskPatch,
 } from "../api";
 import {
@@ -34,14 +39,22 @@ import {
   SNAP_MINUTES,
   taskEntry,
   timedCreate,
+  timeMinutes,
   weekDays,
   type CalendarMode,
   type Entry,
 } from "../calendar";
 import { localDayOf } from "../dates";
+import { PRIORITY_LABELS } from "../grouping";
+import { applyListPick, suggestLists } from "../listSuggest";
+import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
+import { parseQuickAdd, sameName } from "../quickAdd";
+import { applyTagPick, suggestTags } from "../tagSuggest";
 import { Icon } from "./Icon";
 import { readDragPayload, startDrag } from "../dnd";
+import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
+import { TokenInput, type TokenChannel } from "./TokenInput";
 
 const MODES: CalendarMode[] = ["month", "week", "day"];
 const MODE_LABELS: Record<CalendarMode, string> = { month: "Month", week: "Week", day: "Day" };
@@ -55,10 +68,21 @@ const HOUR_PX = 36;
 /** Where the time grid first scrolls to: the start of the working morning. */
 const SCROLL_TO_HOUR = 8;
 
-/** What the click/drag gesture is about to create. */
-type CreateDraft =
-  | { kind: "all-day"; day: string }
-  | { kind: "timed"; day: string; startHour: number; endHour: number };
+/** What the click/drag gesture is about to create: a day, plus an editable
+ * timeframe. `allDay` starts true from a Month-cell click and false from a
+ * Week/Day drag, but the dialog lets either be flipped and the timed range
+ * adjusted before it's submitted. */
+interface CreateDraft {
+  day: string;
+  allDay: boolean;
+  startMinute: number;
+  endMinute: number;
+}
+
+/** The timeframe a Month-cell click's draft opens with, before any edit —
+ * one working-hour block, a plausible default if "All day" gets unchecked. */
+const DEFAULT_DRAFT_START_MINUTE = 9 * 60;
+const DEFAULT_DRAFT_END_MINUTE = 10 * 60;
 
 /** An in-progress drag across a day column's hour cells. */
 interface HourDrag {
@@ -167,12 +191,24 @@ interface CalendarViewProps {
    * and the new Task appears immediately rather than on the next natural
    * refetch (a mode/anchor change, or the window regaining focus). */
   refreshToken?: number;
+  /** Powers the same `#tag`/`~list`/`!priority` autosuggest as Quick Add
+   * (issue triggering this: the calendar's inline draft input took plain
+   * text only). Optional so a caller without Lists/Tags loaded yet still
+   * renders a working (if suggestion-less) draft input. */
+  lists?: TaskList[];
+  tags?: Tag[];
+  onTagCreated?: (tag: Tag) => void;
+  onListCreated?: (list: TaskList) => void;
 }
 
 export function CalendarView({
   onSelect,
   onSelectEvent,
   refreshToken,
+  lists = [],
+  tags = [],
+  onTagCreated,
+  onListCreated,
 }: CalendarViewProps = {}): JSX.Element {
   const [mode, setMode] = useState<CalendarMode>("month");
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
@@ -183,6 +219,9 @@ export function CalendarView({
   const [unscheduled, setUnscheduled] = useState<Task[]>([]);
   const [draft, setDraft] = useState<CreateDraft | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
+  const [draftTagChips, setDraftTagChips] = useState<Tag[]>([]);
+  const [draftListChip, setDraftListChip] = useState<TaskList[]>([]);
+  const [draftPriorityChip, setDraftPriorityChip] = useState<Priority[]>([]);
   const [drag, setDrag] = useState<HourDrag | null>(null);
   const [edgeDrag, setEdgeDrag] = useState<EdgeDrag | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -402,23 +441,70 @@ export function CalendarView({
     if (draft === null) {
       return;
     }
-    const title = draftTitle.trim();
-    if (title === "") {
+    // Same chip-wins-over-same-named-token rule as Quick Add's submit.
+    const plan = parseQuickAdd(draftTitle, lists, {
+      skipListToken: draftListChip.length > 0,
+      skipPriorityToken: draftPriorityChip.length > 0,
+    });
+    if (plan.title === "") {
       return;
     }
-    await createTask(
-      draft.kind === "all-day"
-        ? allDayCreate(title, draft.day)
-        : timedCreate(title, draft.day, draft.startHour, draft.endHour),
-    );
-    setDraft(null);
-    setDraftTitle("");
+    const tagIds: number[] = [];
+    const seen: string[] = [];
+    for (const chip of draftTagChips) {
+      if (!seen.some((name) => sameName(name, chip.name))) {
+        seen.push(chip.name);
+        tagIds.push(chip.id);
+      }
+    }
+    for (const name of plan.tagNames) {
+      if (seen.some((seenName) => sameName(seenName, name))) {
+        continue;
+      }
+      seen.push(name);
+      const existing = tags.find((tag) => sameName(tag.name, name));
+      if (existing !== undefined) {
+        tagIds.push(existing.id);
+      } else {
+        const created = await createTag({ name });
+        onTagCreated?.(created);
+        tagIds.push(created.id);
+      }
+    }
+    const finalListId = draftListChip[0]?.id ?? plan.listId ?? undefined;
+    const finalPriority = draftPriorityChip[0] ?? plan.priority;
+    const base = draft.allDay
+      ? allDayCreate(plan.title, draft.day)
+      : timedCreate(plan.title, draft.day, draft.startMinute, draft.endMinute);
+    await createTask({
+      ...base,
+      ...(finalListId === undefined ? {} : { list_id: finalListId }),
+      ...(finalPriority === null || finalPriority === undefined ? {} : { priority: finalPriority }),
+      ...(tagIds.length === 0 ? {} : { tag_ids: tagIds }),
+    });
+    resetDraft();
     void load();
   }
 
-  function openAllDayDraft(day: string): void {
-    setDraft({ kind: "all-day", day });
+  function resetDraft(): void {
+    setDraft(null);
     setDraftTitle("");
+    setDraftTagChips([]);
+    setDraftListChip([]);
+    setDraftPriorityChip([]);
+  }
+
+  function openAllDayDraft(day: string): void {
+    setDraft({
+      day,
+      allDay: true,
+      startMinute: DEFAULT_DRAFT_START_MINUTE,
+      endMinute: DEFAULT_DRAFT_END_MINUTE,
+    });
+    setDraftTitle("");
+    setDraftTagChips([]);
+    setDraftListChip([]);
+    setDraftPriorityChip([]);
   }
 
   function finishDrag(): void {
@@ -427,9 +513,47 @@ export function CalendarView({
     }
     const from = Math.min(drag.from, drag.to);
     const to = Math.max(drag.from, drag.to);
-    setDraft({ kind: "timed", day: drag.day, startHour: from, endHour: to + 1 });
+    setDraft({
+      day: drag.day,
+      allDay: false,
+      startMinute: from * 60,
+      endMinute: Math.min((to + 1) * 60, 1440),
+    });
     setDraftTitle("");
+    setDraftTagChips([]);
+    setDraftListChip([]);
+    setDraftPriorityChip([]);
     setDrag(null);
+  }
+
+  /** Sets the draft's start, keeping it at least one snap step before the
+   * end — dragging the start past the end pushes the end along with it. */
+  function setDraftStart(value: string): void {
+    const startMinute = timeMinutes(value);
+    setDraft((current) =>
+      current === null
+        ? current
+        : {
+            ...current,
+            startMinute,
+            endMinute: Math.max(current.endMinute, startMinute + SNAP_MINUTES),
+          },
+    );
+  }
+
+  /** Sets the draft's end, keeping it at least one snap step after the
+   * start — the mirror of setDraftStart. */
+  function setDraftEnd(value: string): void {
+    const endMinute = timeMinutes(value);
+    setDraft((current) =>
+      current === null
+        ? current
+        : {
+            ...current,
+            endMinute,
+            startMinute: Math.min(current.startMinute, endMinute - SNAP_MINUTES),
+          },
+    );
   }
 
   async function handleDrop(
@@ -716,12 +840,56 @@ export function CalendarView({
     );
   }
 
-  const draftLabel =
-    draft === null
-      ? null
-      : draft.kind === "all-day"
-        ? `New task on ${draft.day}`
-        : `New task on ${draft.day}, ${hourLabel(draft.startHour)}–${hourLabel(draft.endHour)}`;
+  const draftLabel = draft === null ? null : `New task on ${draft.day}`;
+
+  // Same three channels as Quick Add (#126) — the calendar's inline draft
+  // input gets the same `#tag`/`~list`/`!priority` autosuggest rather than a
+  // second, divergent implementation.
+  const draftTagChannel: TokenChannel<Tag> = {
+    sigil: "#",
+    mode: "multi",
+    chips: draftTagChips,
+    onChipsChange: setDraftTagChips,
+    getId: (tag) => tag.id,
+    getLabel: (tag) => tag.name,
+    suggest: (text, caret) => suggestTags(text, caret, tags),
+    applyPick: applyTagPick,
+    allowCreate: true,
+    onCreate: (name) => createTag({ name }),
+    onCreated: (tag) => onTagCreated?.(tag),
+    createLabel: (name) => `Create tag "${name}"`,
+    removeAriaLabel: (tag) => `Remove ${tag.name}`,
+  };
+
+  const draftListChannel: TokenChannel<TaskList> = {
+    sigil: "~",
+    mode: "single",
+    chips: draftListChip,
+    onChipsChange: setDraftListChip,
+    getId: (list) => list.id,
+    getLabel: (list) => list.name,
+    suggest: (text, caret) => suggestLists(text, caret, lists),
+    applyPick: applyListPick,
+    allowCreate: true,
+    onCreate: (name) => createList({ name }),
+    onCreated: (list) => onListCreated?.(list),
+    createLabel: (name) => `Create list "${name}"`,
+    removeAriaLabel: (list) => `Remove ${list.name}`,
+  };
+
+  const draftPriorityChannel: TokenChannel<Priority> = {
+    sigil: "!",
+    mode: "single",
+    chips: draftPriorityChip,
+    onChipsChange: setDraftPriorityChip,
+    getId: (priority) => priority,
+    getLabel: (priority) => PRIORITY_LABELS[priority],
+    suggest: (text, caret) => suggestPriority(text, caret),
+    applyPick: applyPriorityPick,
+    allowCreate: false,
+    createLabel: (name) => name,
+    removeAriaLabel: (priority) => `Remove ${priority}`,
+  };
 
   return (
     <div className="calendar">
@@ -790,20 +958,63 @@ export function CalendarView({
           ))}
         </div>
       )}
-      {draft !== null && (
-        <form className="calendar-draft" onSubmit={(event) => void submitDraft(event)}>
-          <span>{draftLabel}</span>
-          <input
-            aria-label="New task title"
-            placeholder="New task title…"
-            value={draftTitle}
-            onChange={(event) => setDraftTitle(event.target.value)}
-          />
-          <button type="submit">Add</button>
-          <button type="button" onClick={() => setDraft(null)}>
-            Cancel
-          </button>
-        </form>
+      {draft !== null && draftLabel !== null && (
+        <Modal title={draftLabel} onClose={resetDraft}>
+          <form className="calendar-draft" onSubmit={(event) => void submitDraft(event)}>
+            <TokenInput
+              ariaLabel="New task title"
+              placeholder="New task title…"
+              value={draftTitle}
+              onValueChange={setDraftTitle}
+              channels={[
+                draftTagChannel as TokenChannel<unknown>,
+                draftListChannel as TokenChannel<unknown>,
+                draftPriorityChannel as TokenChannel<unknown>,
+              ]}
+              autoFocus
+            />
+            <label className="calendar-draft-allday">
+              <input
+                type="checkbox"
+                checked={draft.allDay}
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current === null ? current : { ...current, allDay: event.target.checked },
+                  )
+                }
+              />
+              All day
+            </label>
+            {!draft.allDay && (
+              <div className="calendar-draft-timeframe">
+                <label>
+                  Start
+                  <input
+                    type="time"
+                    aria-label="Start time"
+                    value={minuteLabel(draft.startMinute)}
+                    onChange={(event) => setDraftStart(event.target.value)}
+                  />
+                </label>
+                <label>
+                  End
+                  <input
+                    type="time"
+                    aria-label="End time"
+                    value={minuteLabel(draft.endMinute)}
+                    onChange={(event) => setDraftEnd(event.target.value)}
+                  />
+                </label>
+              </div>
+            )}
+            <div className="calendar-draft-actions">
+              <button type="submit">Add</button>
+              <button type="button" onClick={() => resetDraft()}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
       <div className="calendar-body">
         {mode === "month"

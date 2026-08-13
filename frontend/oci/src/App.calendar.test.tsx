@@ -84,7 +84,7 @@ describe("The Month view", () => {
 
     // The whole empty cell is the click target, not just the + affordance.
     fireEvent.click(screen.getByLabelText("2026-07-15"));
-    const input = await screen.findByRole("textbox", { name: "New task title" });
+    const input = await screen.findByRole("combobox", { name: "New task title" });
     fireEvent.change(input, { target: { value: "Dentist" } });
     fireEvent.submit(input);
 
@@ -99,6 +99,40 @@ describe("The Month view", () => {
     expect(
       await within(screen.getByLabelText("2026-07-15")).findByText("Dentist"),
     ).toBeInTheDocument();
+  });
+
+  it("opens the new-task draft as a popup dialog, not an inline row", async () => {
+    installFakeApi();
+    render(<App />);
+    await openCalendar();
+
+    fireEvent.click(screen.getByLabelText("2026-07-15"));
+    const dialog = await screen.findByRole("dialog", { name: "New task on 2026-07-15" });
+    expect(within(dialog).getByRole("combobox", { name: "New task title" })).toBeInTheDocument();
+  });
+
+  it("lets an all-day draft's timeframe be edited before it's created", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openCalendar();
+
+    fireEvent.click(screen.getByLabelText("2026-07-15"));
+    const input = await screen.findByRole("combobox", { name: "New task title" });
+    fireEvent.change(input, { target: { value: "Dentist" } });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "All day" }));
+    fireEvent.change(screen.getByLabelText("Start time"), { target: { value: "13:30" } });
+    fireEvent.change(screen.getByLabelText("End time"), { target: { value: "14:00" } });
+    fireEvent.submit(input);
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "Dentist",
+      start_date: "2026-07-15T13:30:00.000Z",
+      due_date: "2026-07-15T14:00:00.000Z",
+      is_all_day: false,
+      time_zone: "UTC",
+    });
   });
 
   it("places a timed task on the day read in its own timezone", async () => {
@@ -188,7 +222,7 @@ describe("The Week and Day views", () => {
     fireEvent.mouseEnter(screen.getByLabelText("2026-07-03 10:00"));
     fireEvent.mouseUp(screen.getByLabelText("2026-07-03 10:00"));
 
-    const input = await screen.findByRole("textbox", { name: "New task title" });
+    const input = await screen.findByRole("combobox", { name: "New task title" });
     fireEvent.change(input, { target: { value: "Design sync" } });
     fireEvent.submit(input);
 
@@ -197,6 +231,34 @@ describe("The Week and Day views", () => {
       title: "Design sync",
       start_date: "2026-07-03T09:00:00.000Z",
       due_date: "2026-07-03T11:00:00.000Z",
+      is_all_day: false,
+      time_zone: "UTC",
+    });
+  });
+
+  it("lets a dragged draft's start/end time be edited before it's created", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openCalendar();
+
+    fireEvent.click(screen.getByRole("button", { name: "Day" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
+
+    fireEvent.mouseDown(screen.getByLabelText("2026-07-03 09:00"));
+    fireEvent.mouseEnter(screen.getByLabelText("2026-07-03 10:00"));
+    fireEvent.mouseUp(screen.getByLabelText("2026-07-03 10:00"));
+
+    const input = await screen.findByRole("combobox", { name: "New task title" });
+    fireEvent.change(input, { target: { value: "Design sync" } });
+    // The drag proposed 09:00–11:00; the popup lets that be corrected.
+    fireEvent.change(screen.getByLabelText("End time"), { target: { value: "10:30" } });
+    fireEvent.submit(input);
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "Design sync",
+      start_date: "2026-07-03T09:00:00.000Z",
+      due_date: "2026-07-03T10:30:00.000Z",
       is_all_day: false,
       time_zone: "UTC",
     });
@@ -214,7 +276,7 @@ describe("The Week and Day views", () => {
     // Released over the hour gutter, outside any hour cell.
     fireEvent.mouseUp(screen.getByText("14:00"));
 
-    expect(await screen.findByRole("textbox", { name: "New task title" })).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "New task title" })).toBeInTheDocument();
   });
 
   it("caps a drag through the last hour cell at 23:59, within the day", async () => {
@@ -227,7 +289,7 @@ describe("The Week and Day views", () => {
 
     fireEvent.mouseDown(screen.getByLabelText("2026-07-03 23:00"));
     fireEvent.mouseUp(screen.getByLabelText("2026-07-03 23:00"));
-    const input = await screen.findByRole("textbox", { name: "New task title" });
+    const input = await screen.findByRole("combobox", { name: "New task title" });
     fireEvent.change(input, { target: { value: "Night owl" } });
     fireEvent.submit(input);
 
@@ -338,7 +400,7 @@ describe("The Week view", () => {
     fireEvent.mouseEnter(screen.getByLabelText("2026-07-04 10:00"));
     fireEvent.mouseUp(screen.getByLabelText("2026-07-04 10:00"));
 
-    const input = await screen.findByRole("textbox", { name: "New task title" });
+    const input = await screen.findByRole("combobox", { name: "New task title" });
     fireEvent.change(input, { target: { value: "Weekend prep" } });
     fireEvent.submit(input);
 

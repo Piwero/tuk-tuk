@@ -710,6 +710,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               }}
               onSelectEvent={setSelectedEvent}
               refreshToken={calendarRefresh}
+              lists={lists}
+              tags={tags}
+              onTagCreated={(tag) => setTags((current) => [...current, tag])}
+              onListCreated={(list) => setLists((current) => [...current, list])}
             />
           ) : view?.kind === "habits" ? (
             <HabitsView />
