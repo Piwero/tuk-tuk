@@ -293,11 +293,6 @@ export function draggedEdgeMinute(
   return Math.min(1440, Math.max(snapped, otherEdgeMinute + SNAP_MINUTES));
 }
 
-/** The wall-clock time an hour-cell gesture ends at. Covering the last cell
- * ends at 23:59 — midnight would leak into the next day, which the schedule
- * invariant (a timed task stays within one calendar day) rejects. */
-const hourEndTime = (hour: number): string => (hour >= 24 ? "23:59" : hourLabel(hour));
-
 /** The last instant a timed task may end and still stay within its day. */
 const dayEnd = (dayIso: string): number => new Date(instantOf(dayIso, "23:59")).getTime();
 
@@ -311,17 +306,19 @@ export function allDayCreate(title: string, dayIso: string): TaskCreateInput {
   };
 }
 
-/** The create payload for a Week/Day drag: a timed start+due on one day. */
+/** The create payload for a Week/Day drag, or an edited timeframe in the
+ * create-task dialog: a timed start+due on one day, given as minutes since
+ * midnight. */
 export function timedCreate(
   title: string,
   dayIso: string,
-  startHour: number,
-  endHour: number,
+  startMinute: number,
+  endMinute: number,
 ): TaskCreateInput {
   return {
     title,
-    start_date: instantOf(dayIso, hourLabel(startHour)),
-    due_date: instantOf(dayIso, hourEndTime(endHour)),
+    start_date: instantOf(dayIso, minuteLabel(startMinute)),
+    due_date: instantOf(dayIso, minuteLabel(endMinute)),
     is_all_day: false,
     time_zone: browserTimeZone(),
   };
