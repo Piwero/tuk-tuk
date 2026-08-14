@@ -32,7 +32,7 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "ruff>=0.16.0",
     "mypy>=2.3.0",
-    "pre-commit>=4.6.1",
+    "pre-commit>=4.6.2",
     "types-python-dateutil>=2.9.0.20260716",
 ]
 
