@@ -595,364 +595,371 @@ export function Sidebar({
 
   return (
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
-      <div className="sidebar-top">
-        <div className="sidebar-brand">Tuk Tuk</div>
-        <FocusNavBadge onOpen={onSelectFocus} />
+      {/* Scrolls internally, independent of the rest of the app shell
+          (issue #159) — everything above the footer lives here so a long
+          list tree scrolls without carrying Settings/Log out (below, outside
+          this wrapper) along with it. */}
+      <div className="sidebar-scroll">
+        <div className="sidebar-top">
+          <div className="sidebar-brand">Tuk Tuk</div>
+          <FocusNavBadge onOpen={onSelectFocus} />
+          <button
+            type="button"
+            className="sidebar-collapse"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
+            onClick={onToggleCollapsed}
+          >
+            <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={18} />
+          </button>
+        </div>
+        <nav aria-label="Views" className="top-nav">
+          <TopNavItem
+            icon="list-checks"
+            label="Tasks"
+            selected={tasksSelected}
+            collapsed={collapsed}
+            onClick={() => onSelectSmart("today")}
+          />
+          <TopNavItem
+            icon="calendar-days"
+            label="Calendar"
+            href={pathForStaticView("calendar")}
+            selected={calendarSelected}
+            collapsed={collapsed}
+            onClick={onSelectCalendar}
+          />
+          <TopNavItem
+            icon="repeat"
+            label="Habits"
+            href={pathForStaticView("habits")}
+            selected={habitsSelected}
+            collapsed={collapsed}
+            onClick={onSelectHabits}
+          />
+          {standupEnabled && (
+            <TopNavItem
+              icon="users"
+              label="Stand-up"
+              href={pathForStaticView("standup")}
+              selected={standupSelected}
+              collapsed={collapsed}
+              onClick={onSelectStandup}
+            />
+          )}
+          <TopNavItem
+            icon="timer"
+            label="Focus"
+            href={pathForStaticView("focus")}
+            selected={focusSelected}
+            collapsed={collapsed}
+            onClick={onSelectFocus}
+          />
+          <TopNavItem
+            icon="search"
+            label="Search"
+            href={pathForStaticView("search")}
+            selected={searchSelected}
+            collapsed={collapsed}
+            onClick={onOpenSearch}
+          />
+        </nav>
+        {!collapsed && (
+          <form
+            role="search"
+            className="sidebar-search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSearch(new FormData(event.currentTarget).get("query")?.toString() ?? "");
+            }}
+          >
+            <input type="search" name="query" aria-label="Search tasks" placeholder="Search…" />
+          </form>
+        )}
         <button
           type="button"
-          className="sidebar-collapse"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-expanded={!collapsed}
-          onClick={onToggleCollapsed}
+          className="quick-add-trigger"
+          aria-label="Quick add"
+          title="Quick add"
+          onClick={onQuickAdd}
         >
-          <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={18} />
+          <Icon name="plus" />
+          <span className="nav-label">Quick add</span>
         </button>
-      </div>
-      <nav aria-label="Views" className="top-nav">
-        <TopNavItem
-          icon="list-checks"
-          label="Tasks"
-          selected={tasksSelected}
-          collapsed={collapsed}
-          onClick={() => onSelectSmart("today")}
-        />
-        <TopNavItem
-          icon="calendar-days"
-          label="Calendar"
-          href={pathForStaticView("calendar")}
-          selected={calendarSelected}
-          collapsed={collapsed}
-          onClick={onSelectCalendar}
-        />
-        <TopNavItem
-          icon="repeat"
-          label="Habits"
-          href={pathForStaticView("habits")}
-          selected={habitsSelected}
-          collapsed={collapsed}
-          onClick={onSelectHabits}
-        />
-        {standupEnabled && (
-          <TopNavItem
-            icon="users"
-            label="Stand-up"
-            href={pathForStaticView("standup")}
-            selected={standupSelected}
-            collapsed={collapsed}
-            onClick={onSelectStandup}
-          />
-        )}
-        <TopNavItem
-          icon="timer"
-          label="Focus"
-          href={pathForStaticView("focus")}
-          selected={focusSelected}
-          collapsed={collapsed}
-          onClick={onSelectFocus}
-        />
-        <TopNavItem
-          icon="search"
-          label="Search"
-          href={pathForStaticView("search")}
-          selected={searchSelected}
-          collapsed={collapsed}
-          onClick={onOpenSearch}
-        />
-      </nav>
-      {!collapsed && (
-        <form
-          role="search"
-          className="sidebar-search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSearch(new FormData(event.currentTarget).get("query")?.toString() ?? "");
-          }}
+        <nav aria-label="Smart Lists" className="smart-lists">
+          {(Object.keys(SMART_LABELS) as SmartView[]).map((view) => (
+            <button
+              key={view}
+              type="button"
+              className={selectedSmart === view ? "list-button selected" : "list-button"}
+              aria-label={SMART_LABELS[view]}
+              title={SMART_LABELS[view]}
+              onClick={() => onSelectSmart(view)}
+            >
+              <Icon name={SMART_ICONS[view]} size={18} />
+              <span className="nav-label">{SMART_LABELS[view]}</span>
+            </button>
+          ))}
+        </nav>
+        <nav
+          aria-label="Lists"
+          className="lists-nav"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleDropOnNav}
         >
-          <input type="search" name="query" aria-label="Search tasks" placeholder="Search…" />
-        </form>
-      )}
-      <button
-        type="button"
-        className="quick-add-trigger"
-        aria-label="Quick add"
-        title="Quick add"
-        onClick={onQuickAdd}
-      >
-        <Icon name="plus" />
-        <span className="nav-label">Quick add</span>
-      </button>
-      <nav aria-label="Smart Lists" className="smart-lists">
-        {(Object.keys(SMART_LABELS) as SmartView[]).map((view) => (
-          <button
-            key={view}
-            type="button"
-            className={selectedSmart === view ? "list-button selected" : "list-button"}
-            aria-label={SMART_LABELS[view]}
-            title={SMART_LABELS[view]}
-            onClick={() => onSelectSmart(view)}
-          >
-            <Icon name={SMART_ICONS[view]} size={18} />
-            <span className="nav-label">{SMART_LABELS[view]}</span>
-          </button>
-        ))}
-      </nav>
-      <nav
-        aria-label="Lists"
-        className="lists-nav"
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={handleDropOnNav}
-      >
-        <div className="lists-nav-heading">
-          <h2>Lists</h2>
-          <CreateMenu
-            onNewList={() => setEditor({ mode: "create-list", folderId: null })}
-            onNewFolder={() => setEditor({ mode: "create-folder" })}
-          />
-        </div>
-        {editor?.mode === "create-list" && (
-          <ListForm
-            folders={folders}
-            initialFolderId={editor.folderId}
-            onSubmit={(values) => void handleCreateList(values)}
-            onCancel={() => setEditor(null)}
-          />
-        )}
-        {editor?.mode === "create-folder" && (
-          <FolderForm
-            onSubmit={(name) => void handleCreateFolder(name)}
-            onCancel={() => setEditor(null)}
-          />
-        )}
-        <ul>
-          {inbox && (
-            <li>
-              <div
-                className="list-row"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const payload = readDragPayload(event);
-                  if (payload?.kind === "task") {
-                    void moveTaskToList(payload.id, inbox.id);
-                  }
-                }}
-              >
-                <ListButton
-                  list={inbox}
-                  selected={inbox.id === selectedListId}
-                  collapsed={collapsed}
-                  onSelect={onSelect}
-                />
-              </div>
-            </li>
+          <div className="lists-nav-heading">
+            <h2>Lists</h2>
+            <CreateMenu
+              onNewList={() => setEditor({ mode: "create-list", folderId: null })}
+              onNewFolder={() => setEditor({ mode: "create-folder" })}
+            />
+          </div>
+          {editor?.mode === "create-list" && (
+            <ListForm
+              folders={folders}
+              initialFolderId={editor.folderId}
+              onSubmit={(values) => void handleCreateList(values)}
+              onCancel={() => setEditor(null)}
+            />
           )}
-          {[...folders].sort(byOrder).map((folder) => {
-            const members = membersOf(folder.id);
-            // A drop in progress temporarily overrides a collapsed Folder so
-            // the user can see (and reach) the drop, without touching the
-            // persisted collapse choice underneath it.
-            const isCollapsed = collapsedFolderIds.has(folder.id) && dragOverFolderId !== folder.id;
-            return (
-              <li key={`folder-${folder.id}`} className="folder">
-                {editor?.mode === "rename-folder" && editor.folderId === folder.id ? (
-                  <FolderForm
-                    initialName={folder.name}
-                    onSubmit={(name) => void handleRenameFolder(folder, name)}
+          {editor?.mode === "create-folder" && (
+            <FolderForm
+              onSubmit={(name) => void handleCreateFolder(name)}
+              onCancel={() => setEditor(null)}
+            />
+          )}
+          <ul>
+            {inbox && (
+              <li>
+                <div
+                  className="list-row"
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const payload = readDragPayload(event);
+                    if (payload?.kind === "task") {
+                      void moveTaskToList(payload.id, inbox.id);
+                    }
+                  }}
+                >
+                  <ListButton
+                    list={inbox}
+                    selected={inbox.id === selectedListId}
+                    collapsed={collapsed}
+                    onSelect={onSelect}
+                  />
+                </div>
+              </li>
+            )}
+            {[...folders].sort(byOrder).map((folder) => {
+              const members = membersOf(folder.id);
+              // A drop in progress temporarily overrides a collapsed Folder so
+              // the user can see (and reach) the drop, without touching the
+              // persisted collapse choice underneath it.
+              const isCollapsed =
+                collapsedFolderIds.has(folder.id) && dragOverFolderId !== folder.id;
+              return (
+                <li key={`folder-${folder.id}`} className="folder">
+                  {editor?.mode === "rename-folder" && editor.folderId === folder.id ? (
+                    <FolderForm
+                      initialName={folder.name}
+                      onSubmit={(name) => void handleRenameFolder(folder, name)}
+                      onCancel={() => setEditor(null)}
+                    />
+                  ) : (
+                    <div
+                      className={
+                        folder.id === dragOverFolderId ? "folder-row drag-over" : "folder-row"
+                      }
+                      draggable
+                      onDragStart={(event) => startDrag(event, { kind: "folder", id: folder.id })}
+                      onDragEnd={endDrag}
+                      onDragEnter={(event) => handleFolderDragEnter(event, folder)}
+                      onDragOver={handleFolderDragOver}
+                      onDragLeave={(event) => handleFolderDragLeave(event, folder)}
+                      onDrop={(event) => handleDropOnFolder(event, folder)}
+                    >
+                      <button
+                        type="button"
+                        className="folder-disclosure"
+                        aria-label={
+                          isCollapsed
+                            ? `Expand folder ${folder.name}`
+                            : `Collapse folder ${folder.name}`
+                        }
+                        aria-expanded={!isCollapsed}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleFolderCollapsed(folder.id);
+                        }}
+                      >
+                        <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={14} />
+                      </button>
+                      <Icon name="folder" size={16} />
+                      <button
+                        type="button"
+                        className={
+                          folder.id === selectedFolderId ? "folder-name selected" : "folder-name"
+                        }
+                        title={folder.name}
+                        onClick={() => onSelectFolder(folder.id)}
+                      >
+                        {folder.name}
+                      </button>
+                      <span className="folder-count">{members.length}</span>
+                      <span className="row-actions">
+                        <button
+                          type="button"
+                          aria-label={`New list in ${folder.name}`}
+                          onClick={() => setEditor({ mode: "create-list", folderId: folder.id })}
+                        >
+                          <Icon name="plus" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Rename folder ${folder.name}`}
+                          onClick={() => setEditor({ mode: "rename-folder", folderId: folder.id })}
+                        >
+                          <Icon name="pencil" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete folder ${folder.name}`}
+                          onClick={() => void handleDeleteFolder(folder)}
+                        >
+                          <Icon name="x" />
+                        </button>
+                      </span>
+                    </div>
+                  )}
+                  {!isCollapsed && (
+                    <>
+                      <ul className="folder-lists" aria-label={`Lists in ${folder.name}`}>
+                        {members.map((list) => renderListItem(list))}
+                      </ul>
+                      {members.length === 0 && (
+                        <p className="folder-empty-hint">
+                          No lists here yet — drag one in, or use “New list” above to add one.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+            {looseLists.map((list) => renderListItem(list))}
+          </ul>
+        </nav>
+        <nav aria-label="Tags" className="tags-nav">
+          <h2>Tags</h2>
+          <ul>
+            {[...tags].sort(byName).map((tag) =>
+              editor?.mode === "edit-tag" && editor.tagId === tag.id ? (
+                <li key={tag.id}>
+                  <TagForm
+                    initial={tag}
+                    onSubmit={(values) => handleEditTag(tag, values)}
                     onCancel={() => setEditor(null)}
                   />
-                ) : (
-                  <div
-                    className={
-                      folder.id === dragOverFolderId ? "folder-row drag-over" : "folder-row"
-                    }
-                    draggable
-                    onDragStart={(event) => startDrag(event, { kind: "folder", id: folder.id })}
-                    onDragEnd={endDrag}
-                    onDragEnter={(event) => handleFolderDragEnter(event, folder)}
-                    onDragOver={handleFolderDragOver}
-                    onDragLeave={(event) => handleFolderDragLeave(event, folder)}
-                    onDrop={(event) => handleDropOnFolder(event, folder)}
-                  >
+                </li>
+              ) : (
+                <li key={tag.id}>
+                  <div className="list-row">
                     <button
                       type="button"
-                      className="folder-disclosure"
-                      aria-label={
-                        isCollapsed
-                          ? `Expand folder ${folder.name}`
-                          : `Collapse folder ${folder.name}`
-                      }
-                      aria-expanded={!isCollapsed}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        toggleFolderCollapsed(folder.id);
-                      }}
+                      className={tag.id === selectedTagId ? "list-button selected" : "list-button"}
+                      aria-label={tag.name}
+                      title={tag.name}
+                      onClick={() => onSelectTag(tag.id)}
                     >
-                      <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={14} />
+                      {tag.color !== null ? (
+                        <span className="color-dot" style={{ background: tag.color }} />
+                      ) : (
+                        collapsed && <span className="list-initial">{tag.name.slice(0, 1)}</span>
+                      )}
+                      <span className="nav-label">{tag.name}</span>
                     </button>
-                    <Icon name="folder" size={16} />
-                    <button
-                      type="button"
-                      className={
-                        folder.id === selectedFolderId ? "folder-name selected" : "folder-name"
-                      }
-                      title={folder.name}
-                      onClick={() => onSelectFolder(folder.id)}
-                    >
-                      {folder.name}
-                    </button>
-                    <span className="folder-count">{members.length}</span>
                     <span className="row-actions">
                       <button
                         type="button"
-                        aria-label={`New list in ${folder.name}`}
-                        onClick={() => setEditor({ mode: "create-list", folderId: folder.id })}
-                      >
-                        <Icon name="plus" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Rename folder ${folder.name}`}
-                        onClick={() => setEditor({ mode: "rename-folder", folderId: folder.id })}
+                        aria-label={`Edit tag ${tag.name}`}
+                        onClick={() => setEditor({ mode: "edit-tag", tagId: tag.id })}
                       >
                         <Icon name="pencil" />
                       </button>
                       <button
                         type="button"
-                        aria-label={`Delete folder ${folder.name}`}
-                        onClick={() => void handleDeleteFolder(folder)}
+                        aria-label={`Delete tag ${tag.name}`}
+                        onClick={() => void handleDeleteTag(tag)}
                       >
                         <Icon name="x" />
                       </button>
                     </span>
                   </div>
-                )}
-                {!isCollapsed && (
-                  <>
-                    <ul className="folder-lists" aria-label={`Lists in ${folder.name}`}>
-                      {members.map((list) => renderListItem(list))}
-                    </ul>
-                    {members.length === 0 && (
-                      <p className="folder-empty-hint">
-                        No lists here yet — drag one in, or use “New list” above to add one.
-                      </p>
-                    )}
-                  </>
-                )}
-              </li>
-            );
-          })}
-          {looseLists.map((list) => renderListItem(list))}
-        </ul>
-      </nav>
-      <nav aria-label="Tags" className="tags-nav">
-        <h2>Tags</h2>
-        <ul>
-          {[...tags].sort(byName).map((tag) =>
-            editor?.mode === "edit-tag" && editor.tagId === tag.id ? (
-              <li key={tag.id}>
-                <TagForm
-                  initial={tag}
-                  onSubmit={(values) => handleEditTag(tag, values)}
-                  onCancel={() => setEditor(null)}
-                />
-              </li>
-            ) : (
-              <li key={tag.id}>
-                <div className="list-row">
-                  <button
-                    type="button"
-                    className={tag.id === selectedTagId ? "list-button selected" : "list-button"}
-                    aria-label={tag.name}
-                    title={tag.name}
-                    onClick={() => onSelectTag(tag.id)}
-                  >
-                    {tag.color !== null ? (
-                      <span className="color-dot" style={{ background: tag.color }} />
-                    ) : (
-                      collapsed && <span className="list-initial">{tag.name.slice(0, 1)}</span>
-                    )}
-                    <span className="nav-label">{tag.name}</span>
-                  </button>
-                  <span className="row-actions">
-                    <button
-                      type="button"
-                      aria-label={`Edit tag ${tag.name}`}
-                      onClick={() => setEditor({ mode: "edit-tag", tagId: tag.id })}
-                    >
-                      <Icon name="pencil" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete tag ${tag.name}`}
-                      onClick={() => void handleDeleteTag(tag)}
-                    >
-                      <Icon name="x" />
-                    </button>
-                  </span>
-                </div>
-              </li>
-            ),
-          )}
-        </ul>
-        {editor?.mode === "create-tag" ? (
-          <TagForm
-            onSubmit={(values) => handleCreateTag(values)}
-            onCancel={() => setEditor(null)}
-          />
-        ) : (
-          <button
-            type="button"
-            className="sidebar-add"
-            aria-label="Add Tag"
-            title="Add Tag"
-            onClick={() => setEditor({ mode: "create-tag" })}
-          >
-            <Icon name="plus" size={18} />
-            <span className="nav-label">Add Tag</span>
-          </button>
-        )}
-      </nav>
-      {archivedLists.length > 0 && (
-        <section className="archived" aria-label="Archived">
-          <h2>Archived</h2>
-          <ul>
-            {archivedLists.map((list) => {
-              const originFolder = archivedListFolder(list);
-              return (
-                <li key={list.id}>
-                  <div className="list-row">
-                    <ListButton
-                      list={list}
-                      selected={list.id === selectedListId}
-                      collapsed={collapsed}
-                      onSelect={onSelect}
-                    />
-                    {originFolder !== undefined && (
-                      <span
-                        className="archived-list-folder"
-                        aria-label={`In folder ${originFolder.name}`}
-                      >
-                        {originFolder.name}
-                      </span>
-                    )}
-                    <span className="row-actions">
-                      <button
-                        type="button"
-                        aria-label={`Unarchive ${list.name}`}
-                        onClick={() => void handleSetArchived(list, false)}
-                      >
-                        <Icon name="archive-restore" />
-                      </button>
-                    </span>
-                  </div>
                 </li>
-              );
-            })}
+              ),
+            )}
           </ul>
-        </section>
-      )}
+          {editor?.mode === "create-tag" ? (
+            <TagForm
+              onSubmit={(values) => handleCreateTag(values)}
+              onCancel={() => setEditor(null)}
+            />
+          ) : (
+            <button
+              type="button"
+              className="sidebar-add"
+              aria-label="Add Tag"
+              title="Add Tag"
+              onClick={() => setEditor({ mode: "create-tag" })}
+            >
+              <Icon name="plus" size={18} />
+              <span className="nav-label">Add Tag</span>
+            </button>
+          )}
+        </nav>
+        {archivedLists.length > 0 && (
+          <section className="archived" aria-label="Archived">
+            <h2>Archived</h2>
+            <ul>
+              {archivedLists.map((list) => {
+                const originFolder = archivedListFolder(list);
+                return (
+                  <li key={list.id}>
+                    <div className="list-row">
+                      <ListButton
+                        list={list}
+                        selected={list.id === selectedListId}
+                        collapsed={collapsed}
+                        onSelect={onSelect}
+                      />
+                      {originFolder !== undefined && (
+                        <span
+                          className="archived-list-folder"
+                          aria-label={`In folder ${originFolder.name}`}
+                        >
+                          {originFolder.name}
+                        </span>
+                      )}
+                      <span className="row-actions">
+                        <button
+                          type="button"
+                          aria-label={`Unarchive ${list.name}`}
+                          onClick={() => void handleSetArchived(list, false)}
+                        >
+                          <Icon name="archive-restore" />
+                        </button>
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+      </div>
       <div className="sidebar-footer">
         <a
           href={pathForStaticView("settings")}
