@@ -188,6 +188,7 @@
   --scrim: rgba(26, 29, 35, 0.4); /* the page behind a modal */
   --z-modal: 100;
   --z-popover: 50; /* anchored dropdowns, e.g. the Quick-Add tag suggestions */
+  --z-toast: 80; /* undo notifications (issue #155) — above page content, below a modal */
 
   --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
   --duration-fast: 120ms;

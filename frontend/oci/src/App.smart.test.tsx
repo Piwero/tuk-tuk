@@ -65,7 +65,7 @@ describe("Smart Lists", () => {
     ).toBe(true);
   });
 
-  it("completing a task in Today makes it leave the computed view", async () => {
+  it("completing a task in Today makes it leave the computed view once the undo toast commits", async () => {
     installFakeApi({
       tasks: [fakeTask("Due today", { due_date: "2026-07-03T00:00:00Z", is_all_day: true })],
     });
@@ -73,6 +73,12 @@ describe("Smart Lists", () => {
 
     await openSmart("Today");
     fireEvent.click(await screen.findByRole("checkbox", { name: "Complete Due today" }));
+
+    // Still visible while the completion is only pending (#155) — membership
+    // in a computed view is the server's call, made once the toast commits.
+    expect(screen.getByRole("button", { name: "Open details for Due today" })).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
 
     await waitFor(() =>
       expect(
