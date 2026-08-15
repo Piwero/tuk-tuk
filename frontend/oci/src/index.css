@@ -1760,7 +1760,13 @@ li[data-overdue] .date-chip {
   border-color: var(--green-100);
 }
 
-.habits-view .habit:hover .row-actions {
+/* Unlike the List/Folder row-actions hover-reveal, a Habit card's actions
+ * (History, Edit, Archive, Delete) stay painted at rest: hover has no touch
+ * equivalent, and `visibility: hidden` at rest would also pull the buttons
+ * out of the Tab order, so hover- or focus-only reveal can't be used here. */
+.habits-view .habit .row-actions {
+  width: auto;
+  overflow: visible;
   visibility: visible;
 }
 
