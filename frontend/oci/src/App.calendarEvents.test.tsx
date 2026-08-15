@@ -130,12 +130,13 @@ describe("Events in the Calendar view (issue #107)", () => {
   });
 
   it("renders a timed Event as a resize-handle-free block in Week view", async () => {
+    // Wed Jul 1: inside the Monday-aligned week (Jun 29 – Jul 5) containing today.
     installFakeApi({
       googleConfigured: true,
       events: [
         fakeEvent("Standup", {
-          start_date: "2026-07-06T09:00:00Z",
-          due_date: "2026-07-06T09:30:00Z",
+          start_date: "2026-07-01T09:00:00Z",
+          due_date: "2026-07-01T09:30:00Z",
         }),
       ],
     });
