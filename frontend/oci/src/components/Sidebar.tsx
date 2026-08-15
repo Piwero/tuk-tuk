@@ -163,26 +163,18 @@ interface TopNavItemProps {
    * item stays a plain button since Smart Lists aren't URL-addressable. */
   href?: string;
   selected: boolean;
-  collapsed: boolean;
   onClick: () => void;
 }
 
-/** One item in the top feature row: selected = pill with icon + label, others icon-only. */
-function TopNavItem({
-  icon,
-  label,
-  href,
-  selected,
-  collapsed,
-  onClick,
-}: TopNavItemProps): JSX.Element {
+/** One item in the top feature row: always icon-only, at a fixed equal
+ * share of the row's width, so the row's total width never depends on
+ * which destination is active (issue #160 — a growing text label used to
+ * push the row past the sidebar edge and clip whichever item landed last).
+ * The active item is distinguished by background + accent icon color
+ * instead of a label. */
+function TopNavItem({ icon, label, href, selected, onClick }: TopNavItemProps): JSX.Element {
   const className = selected ? "top-nav-item selected" : "top-nav-item";
-  const content = (
-    <>
-      <Icon name={icon} size={18} />
-      {selected && !collapsed && <span>{label}</span>}
-    </>
-  );
+  const content = <Icon name={icon} size={18} />;
   if (href === undefined) {
     return (
       <button
@@ -591,7 +583,12 @@ export function Sidebar({
   }
 
   const tasksSelected =
-    !calendarSelected && !habitsSelected && !standupSelected && !focusSelected && !settingsSelected;
+    !calendarSelected &&
+    !habitsSelected &&
+    !standupSelected &&
+    !focusSelected &&
+    !settingsSelected &&
+    !searchSelected;
 
   return (
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
@@ -614,7 +611,6 @@ export function Sidebar({
           icon="list-checks"
           label="Tasks"
           selected={tasksSelected}
-          collapsed={collapsed}
           onClick={() => onSelectSmart("today")}
         />
         <TopNavItem
@@ -622,7 +618,6 @@ export function Sidebar({
           label="Calendar"
           href={pathForStaticView("calendar")}
           selected={calendarSelected}
-          collapsed={collapsed}
           onClick={onSelectCalendar}
         />
         <TopNavItem
@@ -630,7 +625,6 @@ export function Sidebar({
           label="Habits"
           href={pathForStaticView("habits")}
           selected={habitsSelected}
-          collapsed={collapsed}
           onClick={onSelectHabits}
         />
         {standupEnabled && (
@@ -639,7 +633,6 @@ export function Sidebar({
             label="Stand-up"
             href={pathForStaticView("standup")}
             selected={standupSelected}
-            collapsed={collapsed}
             onClick={onSelectStandup}
           />
         )}
@@ -648,7 +641,6 @@ export function Sidebar({
           label="Focus"
           href={pathForStaticView("focus")}
           selected={focusSelected}
-          collapsed={collapsed}
           onClick={onSelectFocus}
         />
         <TopNavItem
@@ -656,7 +648,6 @@ export function Sidebar({
           label="Search"
           href={pathForStaticView("search")}
           selected={searchSelected}
-          collapsed={collapsed}
           onClick={onOpenSearch}
         />
       </nav>
