@@ -1,4 +1,5 @@
 import {
+  AlignLeft,
   Archive,
   ArchiveRestore,
   CalendarDays,
@@ -34,6 +35,7 @@ import {
 /** The app's Lucide subset, keyed by the design system's icon names.
  * This wrapper is the single swap point if a bespoke icon set arrives. */
 const ICONS = {
+  "align-left": AlignLeft,
   archive: Archive,
   "archive-restore": ArchiveRestore,
   "calendar-days": CalendarDays,
