@@ -283,6 +283,39 @@ describe("Managing Habits", () => {
     });
   });
 
+  it("reopens the edit form pre-populated with the Habit's saved fields", async () => {
+    installFakeApi({
+      habits: [
+        fakeHabit("Drink water", {
+          type: "numeric",
+          goal: 8,
+          step: 2,
+          unit: "glasses",
+          icon: "💧",
+          color: "#12a594",
+          encouragement: "Stay hydrated!",
+          frequency: "FREQ=WEEKLY;BYDAY=MO,FR",
+        }),
+      ],
+    });
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Drink water" }));
+
+    expect(screen.getByLabelText("Name")).toHaveValue("Drink water");
+    expect(screen.getByRole("combobox", { name: "Habit type" })).toHaveValue("numeric");
+    expect(screen.getByRole("spinbutton", { name: "Goal" })).toHaveValue(8);
+    expect(screen.getByRole("spinbutton", { name: "Step" })).toHaveValue(2);
+    expect(screen.getByLabelText("Unit")).toHaveValue("glasses");
+    expect(screen.getByRole("button", { name: "Icon" })).toHaveTextContent("💧");
+    expect(screen.getByRole("radio", { name: "Teal" })).toBeChecked();
+    expect(screen.getByLabelText("Encouragement")).toHaveValue("Stay hydrated!");
+    expect(screen.getByRole("combobox", { name: "Frequency" })).toHaveValue("weekdays");
+    expect(screen.getByRole("checkbox", { name: "Repeat on Mon" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Repeat on Fri" })).toBeChecked();
+  });
+
   it("edits a Habit in place", async () => {
     const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
     render(<App />);
