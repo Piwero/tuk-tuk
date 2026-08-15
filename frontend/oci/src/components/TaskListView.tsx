@@ -10,7 +10,6 @@ import {
   type Task,
   type TaskList,
 } from "../api";
-import { formatSchedule, isOverdue } from "../dates";
 import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
@@ -18,6 +17,7 @@ import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMov
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { SectionNameForm } from "./SectionNameForm";
 import { Icon } from "./Icon";
+import { TaskRow } from "./TaskRow";
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -158,11 +158,23 @@ export function TaskListView({
       setQuickStart({ task, position: { x: rect.left, y: rect.bottom } });
     }
 
+    // A single List's own view already says which List you're in — the
+    // badge only earns its place in views that span multiple Lists.
+    const taskList = listId === null ? lists.find((list) => list.id === task.list_id) : undefined;
+
     return (
-      <li
+      <TaskRow
         key={task.id}
-        data-priority={task.priority}
-        data-overdue={isOverdue(task) || undefined}
+        task={task}
+        list={taskList}
+        showDate
+        showTags
+        showCheckProgress
+        onToggle={(t) => void toggle(t)}
+        onSelect={onSelect}
+        onStartFocus={onStartFocus}
+        onKebabClick={onStartFocus === undefined ? undefined : handleKebabClick}
+        onDelete={(t) => void remove(t)}
         draggable
         onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
         onDragEnd={endDrag}
@@ -172,77 +184,7 @@ export function TaskListView({
           event.preventDefault();
           setQuickStart({ task, position: { x: event.clientX, y: event.clientY } });
         }}
-      >
-        <label>
-          <input
-            type="checkbox"
-            checked={task.completed}
-            aria-label={`Complete ${task.title}`}
-            onChange={() => void toggle(task)}
-          />
-        </label>
-        <button
-          type="button"
-          className="task-title"
-          aria-label={`Open details for ${task.title}`}
-          onClick={() => onSelect(task.id)}
-        >
-          <span className={task.completed ? "completed" : undefined}>{task.title}</span>
-          {listId === null &&
-            (() => {
-              const taskList = lists.find((list) => list.id === task.list_id);
-              return taskList !== undefined ? (
-                <span
-                  className="list-chip"
-                  style={taskList.color === null ? undefined : { borderColor: taskList.color }}
-                >
-                  {taskList.emoji !== null ? `${taskList.emoji} ` : ""}
-                  {taskList.name}
-                </span>
-              ) : null;
-            })()}
-          {task.due_date !== null && (
-            <span className={isOverdue(task) ? "date-chip overdue" : "date-chip"}>
-              {formatSchedule(task)}
-            </span>
-          )}
-          {task.tags.map((tag) => (
-            <span
-              key={tag.id}
-              className="tag-chip"
-              style={tag.color === null ? undefined : { borderColor: tag.color }}
-            >
-              {tag.name}
-            </span>
-          ))}
-          {task.check_items.length > 0 && (
-            <span className="check-progress">
-              {task.check_items.filter((item) => item.done).length}/{task.check_items.length}
-            </span>
-          )}
-        </button>
-        {onStartFocus !== undefined && (
-          <>
-            <button
-              type="button"
-              aria-label={`Pomo quick-start menu for ${task.title}`}
-              onClick={handleKebabClick}
-            >
-              <Icon name="more-vertical" />
-            </button>
-            <button
-              type="button"
-              aria-label={`Start Focus for ${task.title}`}
-              onClick={() => onStartFocus(task)}
-            >
-              Focus
-            </button>
-          </>
-        )}
-        <button type="button" aria-label={`Delete ${task.title}`} onClick={() => void remove(task)}>
-          Delete
-        </button>
-      </li>
+      />
     );
   }
 

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -64,5 +64,29 @@ describe("App", () => {
 
     expect(screen.queryByText("Old chore")).not.toBeInTheDocument();
     expect(api.requests.some((r) => r.method === "DELETE")).toBe(true);
+  });
+
+  it("shows a description indicator on the row only for a task that has one", async () => {
+    installFakeApi({
+      tasks: [
+        fakeTask("Bare task"),
+        fakeTask("Detailed task", { description: "Bring the receipts" }),
+      ],
+    });
+    render(<App />);
+
+    await screen.findByRole("button", { name: "Open details for Bare task" });
+    const bareRow = screen
+      .getByRole("button", { name: "Open details for Bare task" })
+      .closest("li");
+    const detailedRow = screen
+      .getByRole("button", { name: "Open details for Detailed task" })
+      .closest("li");
+    if (bareRow === null || detailedRow === null) {
+      throw new Error("row not found");
+    }
+
+    expect(within(bareRow).queryByLabelText("Has a description")).not.toBeInTheDocument();
+    expect(within(detailedRow).getByLabelText("Has a description")).toBeInTheDocument();
   });
 });

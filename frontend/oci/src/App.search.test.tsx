@@ -29,9 +29,11 @@ describe("Search", () => {
 
     await searchFor("Groceries");
 
-    expect(await screen.findByRole("button", { name: "Buy groceries" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Errand" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pack bags" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Open details for Buy groceries" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open details for Errand" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open details for Pack bags" })).toBeInTheDocument();
     expect(screen.queryByText("Write report")).not.toBeInTheDocument();
   });
 
@@ -55,38 +57,54 @@ describe("Search", () => {
     render(<App />);
 
     await searchFor("report");
-    expect(await screen.findByRole("button", { name: "Report inbox copy" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Open details for Report inbox copy" }),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "List" }), {
       target: { value: String(project.id) },
     });
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Report inbox copy" })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole("button", { name: "Open details for Report inbox copy" }),
+      ).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: "Report done" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open details for Report done" }),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Status" }), {
       target: { value: "open" },
     });
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Report done" })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole("button", { name: "Open details for Report done" }),
+      ).not.toBeInTheDocument(),
     );
 
     fireEvent.change(screen.getByRole("combobox", { name: "Priority" }), {
       target: { value: "high" },
     });
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Report draft" })).toBeInTheDocument(),
+      expect(
+        screen.getByRole("button", { name: "Open details for Report draft" }),
+      ).toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: "Report notes" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open details for Report notes" }),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Tag" }), {
       target: { value: String(work.id) },
     });
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Report notes" })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole("button", { name: "Open details for Report notes" }),
+      ).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: "Report draft" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open details for Report draft" }),
+    ).toBeInTheDocument();
   });
 
   it("opens the task's detail panel from a result", async () => {
@@ -94,7 +112,7 @@ describe("Search", () => {
     render(<App />);
 
     await searchFor("groceries");
-    fireEvent.click(await screen.findByRole("button", { name: "Buy groceries" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open details for Buy groceries" }));
 
     const panel = await screen.findByRole("complementary", { name: "Task details" });
     expect(within(panel).getByRole("textbox", { name: "Task title" })).toHaveValue("Buy groceries");
@@ -107,7 +125,45 @@ describe("Search", () => {
     await searchFor("   ");
 
     expect(await screen.findByText("Type to search")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Anything" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open details for Anything" }),
+    ).not.toBeInTheDocument();
     expect(searchRequests(api)).toEqual([]);
+  });
+
+  it("completes a task from a search result, same as any other row", async () => {
+    const api = installFakeApi({ tasks: [fakeTask("Buy groceries")] });
+    render(<App />);
+
+    await searchFor("groceries");
+    const checkbox = await screen.findByRole("checkbox", { name: "Complete Buy groceries" });
+    expect(checkbox).not.toBeChecked();
+
+    fireEvent.click(checkbox);
+
+    const patch = await waitFor(() => {
+      const request = api.requests.find((r) => r.method === "PATCH");
+      expect(request).toBeDefined();
+      return request;
+    });
+    expect(patch?.body).toEqual({ completed: true });
+  });
+
+  it("labels each result's List, since results can span every List", async () => {
+    const errands = fakeList("Errands");
+    installFakeApi({
+      lists: [INBOX, errands],
+      tasks: [fakeTask("Buy groceries", { list_id: errands.id })],
+    });
+    render(<App />);
+
+    await searchFor("groceries");
+    const row = (
+      await screen.findByRole("button", { name: "Open details for Buy groceries" })
+    ).closest("li");
+    if (row === null) {
+      throw new Error("row not found");
+    }
+    expect(within(row).getByText("Errands")).toBeInTheDocument();
   });
 });

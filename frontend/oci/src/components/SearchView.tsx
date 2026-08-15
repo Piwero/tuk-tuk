@@ -1,5 +1,13 @@
-import { type Priority, type SearchFilters, type Tag, type Task, type TaskList } from "../api";
+import {
+  updateTask,
+  type Priority,
+  type SearchFilters,
+  type Tag,
+  type Task,
+  type TaskList,
+} from "../api";
 import { PRIORITY_LABELS } from "../grouping";
+import { TaskRow } from "./TaskRow";
 
 /** What the search view shows: the query and its narrowing filters. */
 export interface SearchState extends SearchFilters {
@@ -12,6 +20,7 @@ interface SearchViewProps {
   tags: Tag[];
   state: SearchState;
   onStateChange: (state: SearchState) => void;
+  onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
 }
 
@@ -23,8 +32,13 @@ export function SearchView({
   tags,
   state,
   onStateChange,
+  onChanged,
   onSelect,
 }: SearchViewProps): JSX.Element {
+  async function toggle(task: Task): Promise<void> {
+    const updated = await updateTask(task.id, { completed: !task.completed });
+    onChanged((current) => current.map((t) => (t.id === updated.id ? updated : t)));
+  }
   return (
     <div className="search-view">
       <div className="view-controls">
@@ -105,13 +119,18 @@ export function SearchView({
       {state.query.trim() === "" ? (
         <p className="search-hint">Type to search</p>
       ) : (
-        <ul className="search-results">
+        <ul className="search-results tasks">
           {tasks.map((task) => (
-            <li key={task.id}>
-              <button type="button" onClick={() => onSelect(task.id)}>
-                {task.title}
-              </button>
-            </li>
+            <TaskRow
+              key={task.id}
+              task={task}
+              list={lists.find((list) => list.id === task.list_id)}
+              showDate
+              showTags
+              showCheckProgress
+              onToggle={(t) => void toggle(t)}
+              onSelect={onSelect}
+            />
           ))}
         </ul>
       )}
