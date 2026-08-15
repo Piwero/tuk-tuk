@@ -579,6 +579,10 @@ export function CalendarView({
   function renderMonth(): JSX.Element {
     const days = monthGridDays(anchor);
     const anchorMonth = anchor.slice(0, 7);
+    // Read fresh rather than off the `now` state, which only ticks while a
+    // time grid (Week/Day) is mounted (see the now-line effect above) — the
+    // Month cell only needs the current day, not a live-updating clock.
+    const today = localDayOf(new Date());
     return (
       <div className="month-grid">
         {WEEKDAY_HEADERS.map((label) => (
@@ -592,6 +596,7 @@ export function CalendarView({
             className="month-cell"
             aria-label={day}
             data-outside={day.slice(0, 7) !== anchorMonth || undefined}
+            data-today={day === today || undefined}
             onClick={() => openAllDayDraft(day)}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => void handleDrop(event, day, null)}

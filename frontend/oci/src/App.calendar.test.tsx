@@ -77,6 +77,22 @@ describe("The Month view", () => {
     await screen.findByRole("heading", { name: "July 2026" });
   });
 
+  it("marks today's cell as visually distinct, unlike every other cell", async () => {
+    installFakeApi();
+    render(<App />);
+    await openCalendar();
+
+    // Today (per pinCalendarClock) is Friday 2026-07-03.
+    expect(screen.getByLabelText("2026-07-03")).toHaveAttribute("data-today");
+    // No other in-month cell carries the marker…
+    expect(screen.getByLabelText("2026-07-02")).not.toHaveAttribute("data-today");
+    expect(screen.getByLabelText("2026-07-15")).not.toHaveAttribute("data-today");
+    // …nor does an adjacent-month (leading grid) cell.
+    const outsideCell = screen.getByLabelText("2026-06-29");
+    expect(outsideCell).toHaveAttribute("data-outside");
+    expect(outsideCell).not.toHaveAttribute("data-today");
+  });
+
   it("creates an all-day task from an empty cell", async () => {
     const api = installFakeApi();
     render(<App />);
@@ -302,7 +318,7 @@ describe("The Week and Day views", () => {
 });
 
 describe("The Week view", () => {
-  it("displays 5 day columns starting from today with dynamic day names", async () => {
+  it("displays 7 day columns for the Monday-aligned week, with dynamic day names", async () => {
     const api = installFakeApi({
       tasks: [
         fakeTask("Friday standup", {
@@ -317,32 +333,37 @@ describe("The Week view", () => {
 
     await openWeek();
 
-    // Verify heading shows correct date range (today + 4 days, not always Mon-Fri)
-    expect(screen.getByRole("heading", { name: "Jul 3 – Jul 7, 2026" })).toBeInTheDocument();
+    // Verify heading shows the Monday-aligned week containing today (Fri Jul
+    // 3), not a rolling 5-day window starting on today.
+    expect(screen.getByRole("heading", { name: "Jun 29 – Jul 5, 2026" })).toBeInTheDocument();
 
-    // Verify API fetches the correct 5-day range starting from today
+    // Verify API fetches the full 7-day week, Monday to Sunday.
     await waitFor(() =>
       expect(
         api.requests.some(
           (r) =>
             r.method === "GET" &&
             r.url ===
-              "/api/v1/tasks?range_start=2026-07-03&range_end=2026-07-07&completed=false&limit=200",
+              "/api/v1/tasks?range_start=2026-06-29&range_end=2026-07-05&completed=false&limit=200",
         ),
       ).toBe(true),
     );
 
-    // Verify all 5 day columns are rendered with correct day names (dynamic, not hardcoded)
-    // Today is Friday, so expect Fri, Sat, Sun, Mon, Tue
+    // Verify all 7 day columns are rendered with correct day names (dynamic,
+    // not hardcoded), Monday through Sunday — including Wed/Thu, which the
+    // old 5-day rolling window anchored on a Friday would have dropped.
+    expect(screen.getByText("Mon")).toBeInTheDocument();
+    expect(screen.getByText("Tue")).toBeInTheDocument();
+    expect(screen.getByText("Wed")).toBeInTheDocument();
+    expect(screen.getByText("Thu")).toBeInTheDocument();
     expect(screen.getByText("Fri")).toBeInTheDocument();
     expect(screen.getByText("Sat")).toBeInTheDocument();
     expect(screen.getByText("Sun")).toBeInTheDocument();
-    expect(screen.getByText("Mon")).toBeInTheDocument();
-    expect(screen.getByText("Tue")).toBeInTheDocument();
 
-    // Verify dates under day names (format: day/month)
-    const dateElements = screen.getAllByText(/^\d+\/7$/); // July dates: 3/7, 4/7, etc.
-    expect(dateElements).toHaveLength(5);
+    // Verify dates under day names: Jun 29 – Jul 5, seven columns total.
+    const juneDates = screen.getAllByText(/^\d+\/6$/);
+    const julyDates = screen.getAllByText(/^\d+\/7$/);
+    expect(juneDates.length + julyDates.length).toBe(7);
 
     // Verify the task is displayed (it may be in a card or list item)
     expect(await screen.findByText("Friday standup")).toBeInTheDocument();
@@ -351,6 +372,25 @@ describe("The Week view", () => {
     expect(
       within(screen.getByRole("complementary", { name: "Unscheduled" })).getByText("Weekend plan"),
     ).toBeInTheDocument();
+  });
+
+  it("steps to the previous/next week and stays on the Monday boundary", async () => {
+    const api = installFakeApi();
+    render(<App />);
+
+    await openWeek();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Jul 6 – Jul 12, 2026" });
+    await waitFor(() =>
+      expect(api.requests.some((r) => r.url.includes("range_start=2026-07-06"))).toBe(true),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    await screen.findByRole("heading", { name: "Jun 22 – Jun 28, 2026" });
   });
 
   it("lays timed blocks out in their day columns, sized by their times", async () => {
@@ -478,9 +518,10 @@ describe("Pomo quick-start menu on Calendar Task entries", () => {
   });
 
   it("right-click on an all-day Task in week view opens PomoQuickStartMenu", async () => {
+    // Wed Jul 1: inside the Monday-aligned week (Jun 29 – Jul 5) containing today.
     const task = fakeTask("Team Lunch", {
-      start_date: "2026-07-06T00:00:00Z",
-      due_date: "2026-07-06T00:00:00Z",
+      start_date: "2026-07-01T00:00:00Z",
+      due_date: "2026-07-01T00:00:00Z",
       is_all_day: true,
     });
     installFakeApi({
@@ -500,9 +541,10 @@ describe("Pomo quick-start menu on Calendar Task entries", () => {
   });
 
   it("right-click on a timed Task block in week view opens PomoQuickStartMenu", async () => {
+    // Wed Jul 1: inside the Monday-aligned week (Jun 29 – Jul 5) containing today.
     const task = fakeTask("Standup", {
-      start_date: "2026-07-06T09:00:00Z",
-      due_date: "2026-07-06T09:30:00Z",
+      start_date: "2026-07-01T09:00:00Z",
+      due_date: "2026-07-01T09:30:00Z",
       time_zone: "UTC",
     });
     installFakeApi({
@@ -522,9 +564,11 @@ describe("Pomo quick-start menu on Calendar Task entries", () => {
   });
 
   it("Calendar entries open menu across all three Task views: month, week, day", async () => {
+    // Wed Jul 1: inside both the July month grid and the Monday-aligned week
+    // (Jun 29 – Jul 5) containing "today" (Fri Jul 3).
     const allDayTask = fakeTask("Team Sync", {
-      start_date: "2026-07-06T00:00:00Z",
-      due_date: "2026-07-06T00:00:00Z",
+      start_date: "2026-07-01T00:00:00Z",
+      due_date: "2026-07-01T00:00:00Z",
       is_all_day: true,
     });
     installFakeApi({
@@ -548,9 +592,10 @@ describe("Pomo quick-start menu on Calendar Task entries", () => {
       ).not.toBeInTheDocument(),
     );
 
-    // Switch to week view and test there (Jul 3 – Jul 7 includes Jul 6)
+    // Switch to week view and test there — Jul 1 is inside the Monday-aligned
+    // week (Jun 29 – Jul 5) containing today.
     fireEvent.click(screen.getByRole("button", { name: "Week" }));
-    await screen.findByRole("heading", { name: "Jul 3 – Jul 7, 2026" });
+    await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
     taskElement = screen.getByText("Team Sync").closest("div");
     fireEvent.contextMenu(taskElement as HTMLElement);
     menu = await screen.findByRole("menu", { name: "Start Focus for Team Sync" });

@@ -1327,6 +1327,22 @@ li[data-overdue] .date-chip {
   background: var(--ink-25);
 }
 
+/* Today's cell: a tinted background plus an inset accent ring, distinct from
+ * the adjacent-month tint above (and layered after it, so it wins when a
+ * leading/trailing grid day happens to be today) and from the plain white of
+ * every other in-month cell. The date number itself gets the same accent
+ * treatment Week/Day already use for their today header. */
+.month-cell[data-today] {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  color: var(--text-primary);
+}
+
+.month-cell[data-today] .month-cell-head span {
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+}
+
 .month-cell-head {
   display: flex;
   justify-content: space-between;
