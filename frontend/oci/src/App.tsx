@@ -728,6 +728,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               tags={tags}
               state={view.search}
               onStateChange={(search) => switchView({ kind: "search", search })}
+              onChanged={changeTasksAndRecompute}
               onSelect={setSelectedTaskId}
             />
           ) : selectedFolder !== null ? (
