@@ -244,8 +244,10 @@ main > form,
   letter-spacing: -0.01em;
 }
 
-/* Top feature row: Tasks, Calendar, Habits, Focus. Selected = pill with
-   icon + label; the rest are icon-only. */
+/* Top feature row: Tasks, Calendar, Habits, Stand-up, Focus, Search. Every
+   item is icon-only at a fixed, equal share of the row — none of them ever
+   grow, so all six always fit inside the sidebar (issue #160). The active
+   item is told apart by background + accent icon color, not by a label. */
 .top-nav {
   display: flex;
   align-items: center;
@@ -255,27 +257,26 @@ main > form,
 
 .sidebar .top-nav-item {
   display: inline-flex;
+  flex: 1 1 0;
   align-items: center;
-  gap: 7px;
-  width: auto;
+  justify-content: center;
   height: 32px;
-  padding: 0 var(--space-2);
+  padding: 0;
   border: none;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
   transition: background var(--duration-fast) var(--ease-out);
 }
 
-.sidebar .top-nav-item:hover,
-.sidebar .top-nav-item.selected {
+.sidebar .top-nav-item:hover {
   background: var(--surface-hover);
 }
 
-.sidebar .top-nav-item.selected {
-  padding: 0 var(--space-3);
+.sidebar .top-nav-item.selected,
+.sidebar .top-nav-item.selected:hover {
+  background: var(--surface-selected);
+  color: var(--text-accent);
 }
 
 .sidebar-search input {
@@ -3056,6 +3057,14 @@ li[data-overdue] .date-chip {
   width: 100%;
 }
 
+/* Stacked in the rail, an item is a full-width square rather than an
+ * equal flex share of a row — the row-only sizing below is for the
+ * horizontal layout (expanded sidebar and the mobile drawer). */
+.sidebar.collapsed .top-nav .top-nav-item {
+  flex: none;
+  width: 100%;
+}
+
 .sidebar.collapsed .sidebar-top {
   justify-content: center;
 }
@@ -3138,6 +3147,16 @@ li[data-overdue] .date-chip {
 
   .sidebar.collapsed .top-nav {
     flex-direction: row;
+  }
+
+  /* The drawer is the full sidebar, not the rail — the row-of-six is back,
+   * so each item goes back to an equal flex share instead of the rail's
+   * full-width stacked square (issue #160). */
+  .sidebar.collapsed .top-nav .top-nav-item {
+    flex: 1 1 0;
+    width: auto;
+    justify-content: center;
+    padding: 0;
   }
 
   .sidebar .sidebar-collapse {
