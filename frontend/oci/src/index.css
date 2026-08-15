@@ -162,7 +162,12 @@ input[type="checkbox"]:checked {
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
-  min-height: 100vh;
+  /* The shell is pinned to the viewport — it never scrolls as a document.
+     Sidebar, main and the detail panel each own their own scroll region
+     below (issue #159), so losing your place in one never carries the
+     nav or the other panes off-screen. */
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .app.with-detail {
@@ -181,6 +186,12 @@ input[type="checkbox"]:checked {
 main {
   padding: var(--space-6) var(--space-8);
   min-width: 0;
+  /* Its own scroll region (issue #159): the grid track's height is fixed by
+     `.app`, and `min-height: 0` lets main shrink to it instead of growing
+     past it — expanding content (e.g. the description editor's detail
+     panel) scrolls main alone, never the document. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* The content column; Calendar and Kanban run full width. */
@@ -200,9 +211,24 @@ main > form,
 .sidebar {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background: var(--surface-sunken);
   border-right: 1px solid var(--border-subtle);
   padding: 14px 10px;
+  /* The sidebar itself doesn't scroll (issue #159) — `.sidebar-scroll` below
+     is the scroll region, so Settings/Log out in `.sidebar-footer` stay
+     anchored at the foot instead of scrolling away with the list tree. */
+  overflow: hidden;
+}
+
+/* Wraps everything above the footer (nav, search, smart lists, the list
+   tree, tags, archived) — its own scroll region, sized to whatever space
+   is left once `.sidebar-footer` takes its own height (issue #159). */
+.sidebar-scroll {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -491,7 +517,7 @@ button.folder-name {
 }
 
 .sidebar-footer {
-  margin-top: auto;
+  flex: none;
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-default);
 }
@@ -2244,6 +2270,12 @@ li[data-overdue] .date-chip {
   display: grid;
   gap: var(--space-4);
   align-content: start;
+  /* Its own scroll region (issue #159): expanding the description editor
+     grows this panel's content, not the document — `min-height: 0` lets it
+     shrink to its grid track instead of stretching `.app` past the
+     viewport. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .task-detail-header {
