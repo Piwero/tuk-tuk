@@ -4,6 +4,11 @@ import { Icon } from "./Icon";
 
 export interface TaskRowProps {
   task: Task;
+  /** Display-only completion override, defaulting to `task.completed`. Lets a
+   * call site show the row as completed before the backend confirms it — e.g.
+   * during an undoable toast's window (#155), where the PATCH is deferred and
+   * `task.completed` hasn't changed yet. */
+  completed?: boolean;
   /** The task's own List, shown as a badge — pass this from views that span
    * multiple Lists (Smart Lists, Search); a single List's own view omits it,
    * since the badge would just repeat the page the user is already on. */
@@ -36,6 +41,7 @@ export interface TaskRowProps {
  * title down to nothing on a narrow viewport. */
 export function TaskRow({
   task,
+  completed = task.completed,
   list,
   showDate,
   showTags,
@@ -73,7 +79,7 @@ export function TaskRow({
         <label>
           <input
             type="checkbox"
-            checked={task.completed}
+            checked={completed}
             aria-label={`Complete ${task.title}`}
             onChange={() => onToggle(task)}
           />
@@ -84,7 +90,7 @@ export function TaskRow({
           aria-label={`Open details for ${task.title}`}
           onClick={() => onSelect(task.id)}
         >
-          <span className={task.completed ? "completed" : undefined}>{task.title}</span>
+          <span className={completed ? "completed" : undefined}>{task.title}</span>
           {hasDescription && (
             <span
               className="description-indicator"
