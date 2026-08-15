@@ -25,11 +25,12 @@ export async function openCalendar(): Promise<void> {
   await screen.findByRole("heading", { name: "July 2026" }, { timeout: 10_000 });
 }
 
-/** Opens the calendar in the Week view (today + 4 days; Friday Jul 3 – Jul 7, 2026). */
+/** Opens the calendar in the Week view (the Monday-aligned week containing
+ * Friday Jul 3, 2026: Mon Jun 29 – Sun Jul 5). */
 export async function openWeek(): Promise<void> {
   await openCalendar();
   fireEvent.click(screen.getByRole("button", { name: "Week" }));
-  await screen.findByRole("heading", { name: "Jul 3 – Jul 7, 2026" });
+  await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
 }
 
 /** Opens the calendar in the Day view (Friday, July 3, 2026). */
