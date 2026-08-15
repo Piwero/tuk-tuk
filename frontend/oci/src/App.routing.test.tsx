@@ -49,6 +49,16 @@ describe("Direct load of a static view's URL", () => {
     expect(window.location.pathname).toBe("/focus");
   });
 
+  it("opens Focus statistics directly at /focus/stats", async () => {
+    installFakeApi();
+    window.history.replaceState(null, "", "/focus/stats");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Focus statistics" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/focus/stats");
+  });
+
   it("opens Calendar directly at /calendar", async () => {
     installFakeApi();
     window.history.replaceState(null, "", "/calendar");
@@ -133,6 +143,25 @@ describe("History push/replace while navigating in the app", () => {
 
     await screen.findByRole("heading", { name: "Groceries" });
     expect(window.location.pathname).toBe("/");
+  });
+
+  it("pushes /focus/stats from the timer screen, and Back returns to /focus", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    const nav = screen.getByRole("navigation", { name: "Views" });
+    await user.click(within(nav).getByRole("link", { name: "Focus" }));
+    await screen.findByRole("heading", { name: "Focus" });
+
+    await user.click(screen.getByRole("link", { name: "Statistics" }));
+    await screen.findByRole("heading", { name: "Focus statistics" });
+    expect(window.location.pathname).toBe("/focus/stats");
+
+    window.history.back();
+    await waitFor(() => expect(window.location.pathname).toBe("/focus"));
+    await screen.findByRole("heading", { name: "Focus" });
   });
 
   it("moves Back and Forward between visited static views", async () => {
