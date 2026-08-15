@@ -1,13 +1,15 @@
 /** URL routing for the app's static, URL-addressable views (issue #143).
  * List/Tag/Folder/Smart views stay in-memory only — they're not represented
  * here and never get a path. */
-export type StaticViewKind = "standup" | "focus" | "calendar" | "habits" | "search" | "settings";
+export type StaticViewKind =
+  "standup" | "focus" | "focus-stats" | "calendar" | "habits" | "search" | "settings";
 
 const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
   calendar: "/calendar",
   habits: "/habits",
   standup: "/standup",
   focus: "/focus",
+  "focus-stats": "/focus/stats",
   search: "/search",
   settings: "/settings",
 };

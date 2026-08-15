@@ -2112,12 +2112,87 @@ li[data-overdue] .date-chip {
   background: var(--plum-700);
 }
 
+/* Cancel sits beside Finish but must never be mistaken for it: an outline
+   rather than a filled plum, so the honest "records nothing" action reads as
+   secondary (#162). */
+.focus-timer > button.focus-cancel {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+
+.focus-timer > button.focus-cancel:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
 .focus-timer label {
   display: flex;
   flex-direction: column;
   gap: 2px;
   font-size: var(--text-sm);
   color: var(--text-secondary);
+}
+
+.focus-break-label {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--focus-accent);
+}
+
+.focus-break-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.focus-break-offer p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.focus-break-offer button {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-height);
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--focus-accent);
+  color: var(--text-inverse);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+}
+
+.focus-break-offer button:hover {
+  background: var(--plum-700);
+}
+
+.focus-break-offer button + button {
+  margin-left: var(--space-2);
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+
+.focus-break-offer button + button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.focus-stats-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.focus-stats-link:hover {
+  color: var(--focus-accent);
 }
 
 .focus-timers h2,
@@ -2235,18 +2310,30 @@ li[data-overdue] .date-chip {
   color: var(--text-secondary);
 }
 
-.focus-stats h3 {
-  margin: var(--space-2) 0 var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
+.focus-stats-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: var(--content-max);
 }
 
-.focus-stats ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.focus-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  color: var(--text-secondary);
   font-size: var(--text-sm);
-  font-variant-numeric: tabular-nums;
+}
+
+.focus-back-link:hover {
+  color: var(--focus-accent);
+}
+
+.focus-stats h3 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .focus-stats-range {
@@ -2259,6 +2346,61 @@ li[data-overdue] .date-chip {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  color: var(--text-secondary);
+}
+
+/* Statistics are a chart, not a text dump: one bar per row, the Focus plum
+   throughout (a single series needs no legend), a direct value label on
+   every bar since these are always sparse, short lists (#162). */
+.focus-chart {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.focus-chart-row {
+  display: grid;
+  grid-template-columns: minmax(96px, max-content) 1fr max-content;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.focus-chart-label {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.focus-chart-track {
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+}
+
+.focus-chart-bar {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: var(--radius-full);
+  background: var(--focus-accent);
+}
+
+.focus-chart-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.focus-chart-empty,
+.focus-history-empty {
+  margin: 0;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -2984,14 +3126,18 @@ li[data-overdue] .date-chip {
 }
 
 /* Specificity has to beat `.sidebar button` (width: 100%, transparent
-   background) — matched here the same way `.sidebar .sidebar-collapse` does. */
+   background) — matched here the same way `.sidebar .sidebar-collapse` does.
+   `margin-left` gives the pill its own breathing room from the wordmark
+   rather than relying entirely on `.sidebar-brand`'s flex-driven gap, so it
+   never reads as crowding the brand even at a squeezed width (#162). */
 .sidebar .focus-nav-badge {
   display: flex;
   flex: none;
   width: auto;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
+  margin-left: var(--space-2);
+  padding: 3px 7px;
   border-radius: var(--radius-full, 999px);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
@@ -3006,6 +3152,13 @@ li[data-overdue] .date-chip {
 
 .sidebar .focus-nav-badge.paused {
   background: var(--text-tertiary);
+}
+
+/* On a break: still the Focus identity, but the softer tint marks it as not
+   real focus time. */
+.sidebar .focus-nav-badge.break {
+  background: var(--focus-soft);
+  color: var(--focus-accent);
 }
 
 .sidebar .focus-nav-badge.finished {

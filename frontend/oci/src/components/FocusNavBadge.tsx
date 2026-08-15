@@ -22,12 +22,16 @@ export function FocusNavBadge({ onOpen }: FocusNavBadgeProps): JSX.Element | nul
   if (running !== null) {
     const clockMs = running.mode === "pomo" ? remainingMs : elapsedMs;
     const paused = running.pauseStartedAtMs !== null;
+    const onBreak = running.phase === "break";
+    const state = paused ? "paused" : onBreak ? "on a break" : "running";
     return (
       <button
         type="button"
-        className={paused ? "focus-nav-badge paused" : "focus-nav-badge running"}
+        className={["focus-nav-badge", paused ? "paused" : "", onBreak && !paused ? "break" : ""]
+          .filter(Boolean)
+          .join(" ")}
         onClick={onOpen}
-        aria-label={`Focus timer ${paused ? "paused" : "running"}, ${formatClock(clockMs)} left`}
+        aria-label={`Focus timer ${state}, ${formatClock(clockMs)} left`}
       >
         <Icon name="timer" size={14} />
         <span>{formatClock(clockMs)}</span>
