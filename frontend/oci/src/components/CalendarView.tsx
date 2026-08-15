@@ -44,7 +44,7 @@ import {
   type CalendarMode,
   type Entry,
 } from "../calendar";
-import { localDayOf } from "../dates";
+import { formatDate, localDayOf } from "../dates";
 import { PRIORITY_LABELS } from "../grouping";
 import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
@@ -178,9 +178,7 @@ function handleEntryContextMenu(
 
 /** A short weekday name ("Fri") for a week-column header. */
 function shortWeekday(dayIso: string): string {
-  return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
-    new Date(dayIso + "T00:00:00Z"),
-  );
+  return formatDate(new Date(dayIso + "T00:00:00Z"), "weekday");
 }
 
 interface CalendarViewProps {
