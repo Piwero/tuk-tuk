@@ -15,9 +15,11 @@ import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
+import { useUndoQueue } from "../undoQueue";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { SectionNameForm } from "./SectionNameForm";
 import { Icon } from "./Icon";
+import { ToastStack } from "./ToastStack";
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -55,14 +57,67 @@ export function TaskListView({
     position: { x: number; y: number };
   } | null>(null);
 
-  async function toggle(task: Task): Promise<void> {
-    const updated = await updateTask(task.id, { completed: !task.completed });
+  // Delete and complete are both undoable (#155): the toast holds the action
+  // for a few seconds before anything reaches the backend, so undo is just
+  // "never send the request" rather than a separate restore call. A recurring
+  // Task's completion branches server-side per ADR 0003 (advance in place +
+  // write a Completed Occurrence) — deferring the PATCH means there is
+  // nothing to unwind locally when the user undoes it, since it never
+  // happened.
+  const undoQueue = useUndoQueue();
+  // Task ids with a completion pending: greyed out like a completed Task
+  // without actually setting `completed` (a recurring Task never does), and
+  // mapped to the queue entry so re-clicking the checkbox can cancel it.
+  const [pendingComplete, setPendingComplete] = useState<Map<number, number>>(new Map());
+
+  function clearPendingComplete(taskId: number): void {
+    setPendingComplete((current) => {
+      if (!current.has(taskId)) {
+        return current;
+      }
+      const next = new Map(current);
+      next.delete(taskId);
+      return next;
+    });
+  }
+
+  async function reopen(task: Task): Promise<void> {
+    const updated = await updateTask(task.id, { completed: false });
     onChanged((current) => current.map((t) => (t.id === updated.id ? updated : t)));
   }
 
-  async function remove(task: Task): Promise<void> {
-    await deleteTask(task.id);
+  function startComplete(task: Task): void {
+    const entryId = undoQueue.push(
+      "Completed",
+      async () => {
+        const updated = await updateTask(task.id, { completed: true });
+        onChanged((current) => current.map((t) => (t.id === updated.id ? updated : t)));
+        clearPendingComplete(task.id);
+      },
+      () => clearPendingComplete(task.id),
+    );
+    setPendingComplete((current) => new Map(current).set(task.id, entryId));
+  }
+
+  function toggle(task: Task): void {
+    const pendingEntryId = pendingComplete.get(task.id);
+    if (pendingEntryId !== undefined) {
+      // A second click while completion is pending cancels it, same as Undo.
+      undoQueue.undo(pendingEntryId);
+    } else if (task.completed) {
+      void reopen(task);
+    } else {
+      startComplete(task);
+    }
+  }
+
+  function remove(task: Task): void {
     onChanged((current) => current.filter((t) => t.id !== task.id));
+    undoQueue.push(
+      "Task deleted",
+      () => deleteTask(task.id),
+      () => onChanged((current) => [...current, task]),
+    );
   }
 
   async function addSection(name: string): Promise<void> {
@@ -176,9 +231,9 @@ export function TaskListView({
         <label>
           <input
             type="checkbox"
-            checked={task.completed}
+            checked={task.completed || pendingComplete.has(task.id)}
             aria-label={`Complete ${task.title}`}
-            onChange={() => void toggle(task)}
+            onChange={() => toggle(task)}
           />
         </label>
         <button
@@ -187,7 +242,11 @@ export function TaskListView({
           aria-label={`Open details for ${task.title}`}
           onClick={() => onSelect(task.id)}
         >
-          <span className={task.completed ? "completed" : undefined}>{task.title}</span>
+          <span
+            className={task.completed || pendingComplete.has(task.id) ? "completed" : undefined}
+          >
+            {task.title}
+          </span>
           {listId === null &&
             (() => {
               const taskList = lists.find((list) => list.id === task.list_id);
@@ -239,7 +298,7 @@ export function TaskListView({
             </button>
           </>
         )}
-        <button type="button" aria-label={`Delete ${task.title}`} onClick={() => void remove(task)}>
+        <button type="button" aria-label={`Delete ${task.title}`} onClick={() => remove(task)}>
           Delete
         </button>
       </li>
@@ -335,31 +394,38 @@ export function TaskListView({
   }
 
   return (
-    <div
-      className="task-groups"
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={handleDropOnContainer}
-    >
-      {groups.map((group) => renderGroup(group))}
-      {listId !== null &&
-        groupBy === "section" &&
-        (addingSection ? (
-          <SectionNameForm
-            onSubmit={(name) => void addSection(name)}
-            onCancel={() => setAddingSection(false)}
+    <>
+      <div
+        className="task-groups"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={handleDropOnContainer}
+      >
+        {groups.map((group) => renderGroup(group))}
+        {listId !== null &&
+          groupBy === "section" &&
+          (addingSection ? (
+            <SectionNameForm
+              onSubmit={(name) => void addSection(name)}
+              onCancel={() => setAddingSection(false)}
+            />
+          ) : (
+            <button type="button" className="add-section" onClick={() => setAddingSection(true)}>
+              Add Section
+            </button>
+          ))}
+        {quickStart !== null && (
+          <PomoQuickStartMenu
+            task={quickStart.task}
+            position={quickStart.position}
+            onClose={() => setQuickStart(null)}
           />
-        ) : (
-          <button type="button" className="add-section" onClick={() => setAddingSection(true)}>
-            Add Section
-          </button>
-        ))}
-      {quickStart !== null && (
-        <PomoQuickStartMenu
-          task={quickStart.task}
-          position={quickStart.position}
-          onClose={() => setQuickStart(null)}
-        />
-      )}
-    </div>
+        )}
+      </div>
+      <ToastStack
+        entries={undoQueue.entries}
+        onUndo={undoQueue.undo}
+        onDismiss={undoQueue.dismiss}
+      />
+    </>
   );
 }
