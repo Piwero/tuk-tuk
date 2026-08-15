@@ -16,12 +16,21 @@ import {
 
 import { createFocusSession, type FocusMode } from "./api";
 import { linkFields, type FocusLink } from "./focusLink";
-import { clearStoredRun, loadStoredRun, saveStoredRun } from "./focusRun";
+import { clearStoredRun, loadStoredRun, saveStoredRun, type FocusPhase } from "./focusRun";
+
+const DEFAULT_BREAK_MS = 5 * 60_000;
+const DEFAULT_LONG_BREAK_MS = 15 * 60_000;
 
 export interface RunningSession {
   mode: FocusMode;
-  /** The Pomo length this run counts down from (frozen at start). */
+  phase: FocusPhase;
+  /** The length this run counts down from (frozen at start): the Pomo or
+   * break length, matching `phase`. */
   pomoMs: number;
+  /** The configured break / long-break lengths — carried on a focus run so
+   * they're available once it finishes; unused on a break run. */
+  breakMs: number;
+  longBreakMs: number;
   startedAtMs: number;
   /** Completed pause time so far, excluding a pause still in progress. */
   pausedMs: number;
@@ -29,17 +38,46 @@ export interface RunningSession {
   link: FocusLink;
 }
 
+/** Offered right after a Pomo (not a break) finishes: which break to take
+ * next, decided by a 4-Pomo cycle (the 4th offers the long break). */
+export interface PendingBreak {
+  shortMs: number;
+  longMs: number;
+  long: boolean;
+}
+
 interface FocusRunContextValue {
   running: RunningSession | null;
-  /** A pomo (or stopwatch) finished since the last dismissal — the nav badge
-   * keeps announcing it until the user looks or starts another run. */
+  /** A run finished since the last dismissal — the nav badge keeps
+   * announcing it until the user looks or starts another run. */
   justFinished: boolean;
+  /** Set right after a Pomo (not a break) finishes, offering the next break;
+   * cleared by starting or skipping it, or by starting a fresh run. */
+  pendingBreak: PendingBreak | null;
   elapsedMs: number;
   remainingMs: number;
-  start: (config: { mode: FocusMode; pomoMs: number; link: FocusLink }) => void;
+  start: (config: {
+    mode: FocusMode;
+    pomoMs: number;
+    /** Break / long-break lengths to offer once this Pomo finishes — absent
+     * for a caller that doesn't offer breaks (e.g. a task row's quick-start
+     * menu), which falls back to the default 5 / 15 minutes. */
+    breakMs?: number;
+    longBreakMs?: number;
+    link: FocusLink;
+  }) => void;
   pause: () => void;
   resume: () => void;
+  /** Ends the run honestly at its true stopping point and records it as a
+   * Focus Session — never called for a break, which is never recorded. */
   finish: () => Promise<void>;
+  /** Discards the run outright: nothing is recorded, however far it got.
+   * Also how a break ends (a break was never going to be recorded either). */
+  cancel: () => void;
+  /** Starts whichever break `pendingBreak` currently offers. */
+  startBreak: () => void;
+  /** Declines the offered break, going straight back to idle. */
+  skipBreak: () => void;
   dismissFinished: () => void;
 }
 
@@ -52,6 +90,11 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
   );
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [justFinished, setJustFinished] = useState(false);
+  const [pendingBreak, setPendingBreak] = useState<PendingBreak | null>(null);
+  // How many Pomos have finished this streak — a 4th offers the long break.
+  // Not persisted: a reload resets the streak, which is a fair trade for not
+  // adding another moving part to the stored run.
+  const pomoStreak = useRef(0);
   const finishing = useRef(false);
 
   // The run survives every mount: every change is written through to
@@ -95,7 +138,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
       return;
     }
     finishing.current = true;
-    // A Pomo that ran out while nobody was watching (the view unmounted, the
+    // A run that ran out while nobody was watching (the view unmounted, the
     // tab asleep) ends at its true expiry, not at whenever we noticed.
     const expiryMs = running.startedAtMs + running.pausedMs + running.pomoMs;
     const endMs =
@@ -105,6 +148,12 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
     const pausedTotalMs =
       running.pausedMs + (running.pauseStartedAtMs === null ? 0 : endMs - running.pauseStartedAtMs);
     try {
+      if (running.phase === "break") {
+        // A break is never focus time — it never becomes a Focus Session.
+        setRunning(null);
+        setJustFinished(true);
+        return;
+      }
       await createFocusSession({
         mode: running.mode,
         ...linkFields(running.link),
@@ -114,6 +163,14 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
       });
       setRunning(null);
       setJustFinished(true);
+      if (running.mode === "pomo") {
+        pomoStreak.current += 1;
+        setPendingBreak({
+          shortMs: running.breakMs,
+          longMs: running.longBreakMs,
+          long: pomoStreak.current % 4 === 0,
+        });
+      }
     } finally {
       // A failed save must not wedge the timer: the guard lifts so the next
       // tick (or tap) retries the finish.
@@ -121,7 +178,13 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
     }
   }, [running]);
 
-  // A Pomo finishes itself when the countdown reaches zero.
+  /** Discards the run outright — never recorded, whatever phase it was in. */
+  const cancel = useCallback((): void => {
+    setRunning(null);
+  }, []);
+
+  // A run finishes itself when the countdown reaches zero (Pomo or break —
+  // both are fixed-length countdowns; a Stopwatch only ends via Finish).
   useEffect(() => {
     if (running !== null && running.mode === "pomo" && remainingMs <= 0) {
       void finish();
@@ -129,12 +192,22 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
   }, [running, remainingMs, finish]);
 
   const start = useCallback(
-    (config: { mode: FocusMode; pomoMs: number; link: FocusLink }): void => {
+    (config: {
+      mode: FocusMode;
+      pomoMs: number;
+      breakMs?: number;
+      longBreakMs?: number;
+      link: FocusLink;
+    }): void => {
       finishing.current = false;
       setJustFinished(false);
+      setPendingBreak(null);
       setRunning({
         mode: config.mode,
+        phase: "focus",
         pomoMs: config.pomoMs,
+        breakMs: config.breakMs ?? DEFAULT_BREAK_MS,
+        longBreakMs: config.longBreakMs ?? DEFAULT_LONG_BREAK_MS,
         startedAtMs: Date.now(),
         pausedMs: 0,
         pauseStartedAtMs: null,
@@ -143,6 +216,28 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
     },
     [],
   );
+
+  const startBreak = useCallback((): void => {
+    if (pendingBreak === null) {
+      return;
+    }
+    finishing.current = false;
+    setJustFinished(false);
+    setRunning({
+      mode: "pomo",
+      phase: "break",
+      pomoMs: pendingBreak.long ? pendingBreak.longMs : pendingBreak.shortMs,
+      breakMs: pendingBreak.shortMs,
+      longBreakMs: pendingBreak.longMs,
+      startedAtMs: Date.now(),
+      pausedMs: 0,
+      pauseStartedAtMs: null,
+      link: "",
+    });
+    setPendingBreak(null);
+  }, [pendingBreak]);
+
+  const skipBreak = useCallback((): void => setPendingBreak(null), []);
 
   const pause = useCallback((): void => {
     setRunning((current) =>
@@ -171,12 +266,16 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
       value={{
         running,
         justFinished,
+        pendingBreak,
         elapsedMs,
         remainingMs,
         start,
         pause,
         resume,
         finish,
+        cancel,
+        startBreak,
+        skipBreak,
         dismissFinished,
       }}
     >

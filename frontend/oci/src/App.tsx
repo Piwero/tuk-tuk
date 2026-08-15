@@ -31,6 +31,7 @@ import { pathForStaticView, staticViewKindForPath, type StaticViewKind } from ".
 import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
 import { EventDetail } from "./components/EventDetail";
+import { FocusStatsView } from "./components/FocusStatsPanel";
 import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
 import { HabitsView } from "./components/HabitsView";
@@ -59,6 +60,7 @@ type View =
   | { kind: "habits" }
   | { kind: "standup" }
   | { kind: "focus"; task?: Task }
+  | { kind: "focus-stats" }
   | { kind: "search"; search: SearchState }
   | { kind: "settings" }
   | null;
@@ -81,6 +83,7 @@ function staticViewKindOf(view: View): StaticViewKind | null {
     view?.kind === "habits" ||
     view?.kind === "standup" ||
     view?.kind === "focus" ||
+    view?.kind === "focus-stats" ||
     view?.kind === "search" ||
     view?.kind === "settings"
   ) {
@@ -104,6 +107,8 @@ function viewForStaticKind(kind: StaticViewKind): View {
       return { kind: "standup" };
     case "focus":
       return { kind: "focus" };
+    case "focus-stats":
+      return { kind: "focus-stats" };
     case "settings":
       return { kind: "settings" };
   }
@@ -269,6 +274,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       view?.kind === "habits" ||
       view?.kind === "standup" ||
       view?.kind === "focus" ||
+      view?.kind === "focus-stats" ||
       view?.kind === "search" ||
       view?.kind === "settings"
     ) {
@@ -301,6 +307,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       view.kind === "habits" ||
       view.kind === "standup" ||
       view.kind === "focus" ||
+      view.kind === "focus-stats" ||
       view.kind === "settings"
     ) {
       return;
@@ -496,7 +503,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           habitsSelected={view?.kind === "habits"}
           standupSelected={view?.kind === "standup"}
           standupEnabled={standupEnabled}
-          focusSelected={view?.kind === "focus"}
+          focusSelected={view?.kind === "focus" || view?.kind === "focus-stats"}
           settingsSelected={view?.kind === "settings"}
           searchSelected={view?.kind === "search"}
           onSelect={(listId) => switchView({ kind: "list", id: listId })}
@@ -578,6 +585,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 "Stand-up"
               ) : view?.kind === "focus" ? (
                 "Focus"
+              ) : view?.kind === "focus-stats" ? (
+                "Focus statistics"
               ) : view?.kind === "search" ? (
                 "Search"
               ) : view?.kind === "settings" ? (
@@ -720,7 +729,13 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           ) : view?.kind === "standup" ? (
             <StandupView />
           ) : view?.kind === "focus" ? (
-            <FocusView key={view.task?.id ?? "focus"} initialTask={view.task ?? null} />
+            <FocusView
+              key={view.task?.id ?? "focus"}
+              initialTask={view.task ?? null}
+              onOpenStats={() => switchView({ kind: "focus-stats" })}
+            />
+          ) : view?.kind === "focus-stats" ? (
+            <FocusStatsView onBack={() => switchView({ kind: "focus" })} />
           ) : view?.kind === "search" ? (
             <SearchView
               tasks={tasks}
