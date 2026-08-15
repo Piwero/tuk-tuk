@@ -109,9 +109,11 @@ Bricolage Grotesque, semibold/bold, type only.
 ## Sidebar anatomy
 
 Top to bottom: wordmark → feature row (Tasks / Calendar / Habits / Stand-up /
-Focus / Search — the active view is a pill with icon + label, the rest
-icon-only) → inline query box → Smart Lists → Inbox → Folders and Lists →
-Tags → bottom-pinned add actions (Add List, Add Folder).
+Focus / Search — six icon-only items at a fixed equal width; the active one
+is told apart by background + accent icon color, never a label, so the row
+never grows past the sidebar edge — #160) → inline query box → Smart Lists →
+Inbox → Folders and Lists → Tags → bottom-pinned add actions (Add List, Add
+Folder).
 
 Standup, Focus, Calendar, Habits, Search, and Settings are URL-addressable
 (`/standup`, `/focus`, etc. — #143); their sidebar nav items are real
