@@ -171,9 +171,13 @@ export function monthGridDays(anchorDay: string): string[] {
   return days;
 }
 
-/** The five days starting from the anchor day (today + 4 more days). */
+/** The seven days of the Monday-aligned week containing the anchor day — the
+ * same WKST=MO boundary Month's grid uses (startOfWeekDay), so Week agrees
+ * with Month on which dates make up "this week" instead of rendering its own
+ * rolling window. */
 export function weekDays(anchorDay: string): string[] {
-  return Array.from({ length: 5 }, (_, index) => addDays(anchorDay, index));
+  const start = startOfWeekDay(anchorDay);
+  return Array.from({ length: 7 }, (_, index) => addDays(start, index));
 }
 
 /** The inclusive fetch window a view shows (the month view fetches its whole
@@ -184,7 +188,8 @@ export function rangeOf(mode: CalendarMode, anchorDay: string): [string, string]
     return [grid[0] ?? anchorDay, grid[grid.length - 1] ?? anchorDay];
   }
   if (mode === "week") {
-    return [anchorDay, addDays(anchorDay, 4)];
+    const days = weekDays(anchorDay);
+    return [days[0] ?? anchorDay, days[days.length - 1] ?? anchorDay];
   }
   return [anchorDay, anchorDay];
 }
