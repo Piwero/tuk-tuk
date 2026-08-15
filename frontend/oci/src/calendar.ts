@@ -18,11 +18,12 @@ import {
   allDaySchedule,
   browserTimeZone,
   diffDays,
+  formatDate,
+  formatDateRange,
   fromDayIso,
   instantOf,
   localDayOf,
   shiftInstant,
-  shortDayLabel,
   zonedDay,
   zonedTime,
 } from "./dates";
@@ -198,26 +199,17 @@ export function shiftAnchor(mode: CalendarMode, anchorDay: string, delta: number
   return addDays(anchorDay, mode === "week" ? 7 * delta : delta);
 }
 
-// Fixed locale, like dates.ts: deterministic labels for an English-only UI.
-const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
-const FULL_DAY = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-  month: "long",
-  day: "numeric",
-  year: "numeric",
-});
-
 /** The toolbar title: "July 2026", "Jun 29 – Jul 5, 2026", "Friday, July 3, 2026". */
 export function calendarTitle(mode: CalendarMode, anchorDay: string): string {
   if (mode === "month") {
-    return MONTH_YEAR.format(fromDayIso(anchorDay));
+    return formatDate(fromDayIso(anchorDay), "month");
   }
   if (mode === "week") {
     const [start, end] = rangeOf("week", anchorDay);
     const year = fromDayIso(end).getFullYear();
-    return `${shortDayLabel(start)} – ${shortDayLabel(end)}, ${year}`;
+    return `${formatDateRange(fromDayIso(start), fromDayIso(end))}, ${year}`;
   }
-  return FULL_DAY.format(fromDayIso(anchorDay));
+  return formatDate(fromDayIso(anchorDay), "full");
 }
 
 /** Zero-padded "HH:00" — hour-cell labels and drag-created times. */
