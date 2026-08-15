@@ -94,6 +94,23 @@ export function zonedTime(iso: string, timeZone: string | null): string {
   return format.format(new Date(iso));
 }
 
+/** A Task's stored instant, read in the timezone it was scheduled in, as a
+ * Date whose wall-clock getters — and so formatDate's output — reflect that
+ * zone rather than the runtime's own.
+ *
+ * This is the Task side of a deliberate asymmetry (see the Entry glossary
+ * entry in CONTEXT.md): a Task renders in the timezone it was scheduled in
+ * — a commitment the user made — while an Event renders in the *viewer's*
+ * own timezone instead, an artefact of whoever organised it (zonedDay and
+ * zonedTime's `timeZone: null` case, which reads the browser's, is how an
+ * Event asks for that). Do not "fix" this asymmetry into symmetry. */
+export function taskZonedDate(task: Pick<Task, "time_zone">, iso: string): Date {
+  const [hours = 0, minutes = 0] = zonedTime(iso, task.time_zone).split(":").map(Number);
+  const date = fromDayIso(zonedDay(iso, task.time_zone));
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
 /** The UTC instant of a local wall-clock time (HH:MM) on a local day. */
 export function instantOf(dayIso: string, time: string): string {
   const [hours = 0, minutes = 0] = time.split(":").map(Number);
@@ -231,31 +248,66 @@ export function dueInstant(task: Task): number | null {
   return new Date(task.due_date).getTime();
 }
 
-// Fixed locale: labels are data-like ("Jul 6"), consistent with the app's
-// English-only UI, and deterministic under test. Revisit with i18n.
-const MONTH_DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-const TIME = new Intl.DateTimeFormat("en-US", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
+/** Named styles the app's one date-formatting entry point (formatDate)
+ * covers — every render site that used to build its own Intl.DateTimeFormat
+ * goes through this instead, so date labels stay consistent and a new one
+ * doesn't reinvent a format:
+ * - "full": "Friday, July 3, 2026" (calendar Day-view title)
+ * - "month": "July 2026" (calendar Month-view title, habit month header)
+ * - "weekday": "Mon" (calendar Week-view column header)
+ * - "weekdayLong": "Monday" (history row label)
+ * - "short": "Jul 6" (compact day label)
+ * - "shortEuro": "10/08/26" (history row label)
+ * - "time": "14:00" (24-hour wall clock)
+ * - "dateTime": "Jul 10, 14:00" — "short" and "time" composed
+ */
+export type DateStyle =
+  "full" | "month" | "weekday" | "weekdayLong" | "short" | "shortEuro" | "time" | "dateTime";
+
+// Fixed locales, deterministic output: en-US for month/weekday names, en-GB
+// for the numeric day/month/year order "shortEuro" wants — consistent with
+// the app's English-only UI. Revisit with i18n.
+const FORMATTERS: { [S in Exclude<DateStyle, "dateTime">]: Intl.DateTimeFormat } = {
+  full: new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }),
+  month: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }),
+  weekday: new Intl.DateTimeFormat("en-US", { weekday: "short" }),
+  weekdayLong: new Intl.DateTimeFormat("en-US", { weekday: "long" }),
+  short: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }),
+  shortEuro: new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }),
+  time: new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+};
+
+/** A Date rendered in a named style — the app's one formatting function. */
+export function formatDate(date: Date, style: DateStyle): string {
+  if (style === "dateTime") {
+    return `${formatDate(date, "short")}, ${formatDate(date, "time")}`;
+  }
+  return FORMATTERS[style].format(date);
+}
+
+/** Two dates in the same style, joined as a range: "Jul 6 – Jul 8". */
+export function formatDateRange(start: Date, end: Date, style: DateStyle = "short"): string {
+  return `${formatDate(start, style)} – ${formatDate(end, style)}`;
+}
 
 /** A short deterministic day label: "Jul 6". */
 export function shortDayLabel(dayIso: string): string {
-  return MONTH_DAY.format(fromDayIso(dayIso));
+  return formatDate(fromDayIso(dayIso), "short");
 }
-
-const WEEKDAY_LONG = new Intl.DateTimeFormat("en-US", { weekday: "long" });
-const DAY_MONTH_YEAR = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "2-digit",
-});
 
 /** A weekday-led record label for history rows: "Monday: 10/08/26". */
 export function weekdayRecordLabel(dayIso: string): string {
   const date = fromDayIso(dayIso);
-  return `${WEEKDAY_LONG.format(date)}: ${DAY_MONTH_YEAR.format(date)}`;
+  return `${formatDate(date, "weekdayLong")}: ${formatDate(date, "shortEuro")}`;
 }
 
 /** The minimal schedule shape formatSchedule needs — a Task has it
@@ -273,12 +325,11 @@ export function formatSchedule(task: Scheduled): string | null {
     const start = task.start_date?.slice(0, 10) ?? null;
     return start === null || start === due
       ? shortDayLabel(due)
-      : `${shortDayLabel(start)} – ${shortDayLabel(due)}`;
+      : formatDateRange(fromDayIso(start), fromDayIso(due));
   }
   const due = new Date(task.due_date);
-  const day = MONTH_DAY.format(due);
   if (task.start_date === null) {
-    return `${day}, ${TIME.format(due)}`;
+    return formatDate(due, "dateTime");
   }
-  return `${day}, ${TIME.format(new Date(task.start_date))}–${TIME.format(due)}`;
+  return `${formatDate(due, "short")}, ${formatDate(new Date(task.start_date), "time")}–${formatDate(due, "time")}`;
 }

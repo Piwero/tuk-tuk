@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchHabitStats, putCheckIn, removeCheckIn, type Habit, type HabitStats } from "../api";
-import { localDayOf } from "../dates";
+import { formatDate, localDayOf } from "../dates";
 import { Icon } from "./Icon";
-
-// Fixed locale, deterministic under test (matches the app's other labels).
-const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
 
 /** The heatmap fill bucket (0..4) an intensity renders as. */
 function heatLevel(intensityValue: number): number {
@@ -77,7 +74,7 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Eleme
           <button type="button" aria-label="Previous month" onClick={() => stepMonth(-1)}>
             <Icon name="chevron-left" />
           </button>
-          <span className="habit-month-label">{MONTH_YEAR.format(monthStart)}</span>
+          <span className="habit-month-label">{formatDate(monthStart, "month")}</span>
           <button type="button" aria-label="Next month" onClick={() => stepMonth(1)}>
             <Icon name="chevron-right" />
           </button>
