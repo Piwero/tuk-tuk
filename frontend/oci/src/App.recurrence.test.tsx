@@ -16,11 +16,15 @@ const recurring = (title: string, overrides = {}): ReturnType<typeof fakeTask> =
 
 describe("Completing a recurring task", () => {
   it("keeps the task open with its date advanced and records an occurrence", async () => {
+    // Completing goes through the undo toast (#155): the PATCH that
+    // actually advances the task and writes the occurrence only fires once
+    // the toast is dismissed.
     const run = recurring("Morning run");
     const api = installFakeApi({ tasks: [run] });
     render(<App />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "Complete Morning run" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
 
     // The row stays open — the fake advanced the date instead of completing.
     await waitFor(() => {
@@ -41,12 +45,33 @@ describe("Completing a recurring task", () => {
     ).toBe(true);
   });
 
+  it("undoing a recurring completion never advances the dates or writes an occurrence", async () => {
+    const run = recurring("Morning run");
+    const api = installFakeApi({ tasks: [run] });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Complete Morning run" }));
+    // "Completed" also names the completed-view toggle button, so scope the
+    // assertion to the toast itself (role="status").
+    expect(await screen.findByRole("status")).toHaveTextContent("Completed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    // Undo is "never send the PATCH" — nothing advanced, nothing recorded.
+    expect(api.requests.some((r) => r.method === "PATCH")).toBe(false);
+    expect(screen.getByRole("checkbox", { name: "Complete Morning run" })).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Completed" }));
+    expect(screen.queryByLabelText(/Completed occurrence of Morning run/)).not.toBeInTheDocument();
+  });
+
   it("a recurrence that has ended completes the row normally", async () => {
     const last = recurring("Last session", { recurrence: "FREQ=DAILY;COUNT=1" });
     installFakeApi({ tasks: [last] });
     render(<App />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "Complete Last session" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
 
     await waitFor(() =>
       expect(screen.getByRole("checkbox", { name: "Complete Last session" })).toBeChecked(),

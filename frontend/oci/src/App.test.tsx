@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -36,6 +36,9 @@ describe("App", () => {
   });
 
   it("completes and un-completes a task from the list", async () => {
+    // Completing goes through the undo toast (#155) — the PATCH only fires
+    // once the toast is dismissed; un-completing an already-completed task
+    // is immediate, since it isn't the reversible action the toast covers.
     const api = installFakeApi({ tasks: [fakeTask("Water plants")] });
     const user = userEvent.setup();
     render(<App />);
@@ -44,26 +47,74 @@ describe("App", () => {
     expect(checkbox).not.toBeChecked();
 
     await user.click(checkbox);
-    expect(await screen.findByRole("checkbox", { name: "Complete Water plants" })).toBeChecked();
+    expect(checkbox).toBeChecked();
+    expect(api.requests.some((r) => r.method === "PATCH")).toBe(false);
 
-    await user.click(checkbox);
+    await user.click(await screen.findByRole("button", { name: "Dismiss" }));
+    await waitFor(() => {
+      const patches = api.requests.filter((r) => r.method === "PATCH");
+      expect(patches.map((r) => r.body)).toEqual([{ completed: true }]);
+    });
+
+    await user.click(screen.getByRole("checkbox", { name: "Complete Water plants" }));
+    await waitFor(() => {
+      const patches = api.requests.filter((r) => r.method === "PATCH");
+      expect(patches.map((r) => r.body)).toEqual([{ completed: true }, { completed: false }]);
+    });
     expect(
       await screen.findByRole("checkbox", { name: "Complete Water plants" }),
     ).not.toBeChecked();
-
-    const patches = api.requests.filter((r) => r.method === "PATCH");
-    expect(patches.map((r) => r.body)).toEqual([{ completed: true }, { completed: false }]);
   });
 
-  it("deletes a task from the list", async () => {
+  it("holds a completion pending until the undo toast is dismissed, and undo cancels it", async () => {
+    const api = installFakeApi({ tasks: [fakeTask("Water plants")] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const checkbox = await screen.findByRole("checkbox", { name: "Complete Water plants" });
+    await user.click(checkbox);
+
+    // "Completed" also names the completed-view toggle button, so scope the
+    // assertion to the toast itself (role="status").
+    expect(await screen.findByRole("status")).toHaveTextContent("Completed");
+    expect(api.requests.some((r) => r.method === "PATCH")).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+
+    expect(screen.getByRole("checkbox", { name: "Complete Water plants" })).not.toBeChecked();
+    expect(api.requests.some((r) => r.method === "PATCH")).toBe(false);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("deletes a task from the list through an undoable toast", async () => {
     const api = installFakeApi({ tasks: [fakeTask("Old chore")] });
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Delete Old chore" }));
 
+    // Removed from view at once, but nothing sent to the backend yet.
     expect(screen.queryByText("Old chore")).not.toBeInTheDocument();
-    expect(api.requests.some((r) => r.method === "DELETE")).toBe(true);
+    expect(api.requests.some((r) => r.method === "DELETE")).toBe(false);
+    expect(await screen.findByText("Task deleted")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    await waitFor(() => expect(api.requests.some((r) => r.method === "DELETE")).toBe(true));
+  });
+
+  it("undoing a delete restores the task without ever calling the backend", async () => {
+    const api = installFakeApi({ tasks: [fakeTask("Old chore")] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Delete Old chore" }));
+    expect(screen.queryByText("Old chore")).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+    expect(await screen.findByText("Old chore")).toBeInTheDocument();
+    expect(api.requests.some((r) => r.method === "DELETE")).toBe(false);
   });
 
   it("shows a description indicator on the row only for a task that has one", async () => {
