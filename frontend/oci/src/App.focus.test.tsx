@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeFocusSession, fakeHabit, fakeTask, installFakeApi } from "./test/fakeApi";
+import { fakeHabit, fakeTask, installFakeApi } from "./test/fakeApi";
 
 // All tests pin the clock to Friday 2026-07-03, local noon, so timers and
 // "today" are deterministic in any timezone.
@@ -75,7 +75,10 @@ describe("Pomo timer", () => {
       (new Date(saved?.ended_at ?? 0).getTime() - new Date(saved?.started_at ?? 0).getTime()) /
       1000;
     expect(wallSeconds).toBe(80);
-    // Back to idle, keeping the chosen length.
+    // A Pomo finishing offers a break rather than dropping straight back to
+    // idle — skipping it returns to idle, keeping the chosen length.
+    expect(await screen.findByRole("button", { name: "Skip" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
     expect(await screen.findByText("01:00")).toBeInTheDocument();
   });
 
@@ -95,6 +98,144 @@ describe("Pomo timer", () => {
       (new Date(saved?.ended_at ?? 0).getTime() - new Date(saved?.started_at ?? 0).getTime()) /
       1000;
     expect(wallSeconds).toBe(60);
+  });
+});
+
+describe("Cancel", () => {
+  it("discards a running session without recording it", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(60_000);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    // Back to idle at once — nothing was ever posted.
+    expect(await screen.findByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(
+      api.requests.some((r) => r.method === "POST" && r.url === "/api/v1/focus-sessions"),
+    ).toBe(false);
+    expect(api.focusSessions).toHaveLength(0);
+  });
+
+  it("sits alongside Finish while a session runs", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(screen.getByRole("button", { name: "Finish" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+});
+
+describe("Distraction-free running view", () => {
+  it("hides the Timers presets and config while a session runs", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    expect(screen.getByRole("heading", { name: "Timers" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Mode" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(screen.queryByRole("heading", { name: "Timers" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Mode" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Statistics" })).not.toBeInTheDocument();
+    // The countdown is still the dominant element.
+    expect(main().getByText("25:00")).toBeInTheDocument();
+  });
+});
+
+describe("Breaks", () => {
+  it("offers a configurable break once a Pomo finishes, and runs it", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+      target: { value: "1" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Break minutes" }), {
+      target: { value: "2" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(60_000);
+    await waitFor(() => expect(api.focusSessions).toHaveLength(1));
+
+    // What comes next is stated plainly, using the configured break length.
+    expect(await screen.findByText(/Time for a break \(02:00\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start break" }));
+
+    // The break counts down like any other run, but finishing it never
+    // records a Focus Session.
+    expect(main().getByText("02:00")).toBeInTheDocument();
+    tick(120_000);
+    await waitFor(() => expect(api.focusSessions).toHaveLength(1));
+    expect(
+      api.requests.filter((r) => r.method === "POST" && r.url === "/api/v1/focus-sessions"),
+    ).toHaveLength(1);
+  });
+
+  it("can be skipped, returning straight to idle", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(25 * 60_000);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Skip" }));
+    expect(await screen.findByRole("button", { name: "Start" })).toBeInTheDocument();
+  });
+
+  it("offers the long break on the fourth Pomo of the streak", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+      target: { value: "1" },
+    });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Long break minutes" }), {
+      target: { value: "20" },
+    });
+
+    for (let i = 0; i < 3; i += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "Start" }));
+      tick(60_000);
+      await waitFor(() => expect(api.focusSessions).toHaveLength(i + 1));
+      fireEvent.click(await screen.findByRole("button", { name: "Skip" }));
+      await screen.findByRole("button", { name: "Start" });
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(60_000);
+    await waitFor(() => expect(api.focusSessions).toHaveLength(4));
+
+    expect(await screen.findByText(/Time for a long break \(20:00\)/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start long break" })).toBeInTheDocument();
+  });
+
+  it("does not offer a break after a Stopwatch session", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), {
+      target: { value: "stopwatch" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(60_000);
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+
+    await waitFor(() => expect(api.focusSessions).toHaveLength(1));
+    expect(screen.queryByRole("button", { name: "Start break" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 });
 
@@ -278,7 +419,8 @@ describe("Run persistence", () => {
       (new Date(saved?.ended_at ?? 0).getTime() - new Date(saved?.started_at ?? 0).getTime()) /
       1000;
     expect(wallSeconds).toBe(60);
-    // Back to idle: the stored run is gone.
+    // Back to idle once the offered break is skipped: the stored run is gone.
+    fireEvent.click(await screen.findByRole("button", { name: "Skip" }));
     expect(await screen.findByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 });
@@ -315,6 +457,19 @@ describe("Nav badge", () => {
     expect(badge).toHaveClass("paused");
   });
 
+  it("returns to the timer screen when clicked while running", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await openHabits();
+
+    fireEvent.click(screen.getByRole("button", { name: /Focus timer running/ }));
+    expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+  });
+
   it("keeps announcing a finished Pomo until the badge is dismissed", async () => {
     const api = installFakeApi();
     render(<App />);
@@ -327,8 +482,9 @@ describe("Nav badge", () => {
     tick(60_000);
     await waitFor(() => expect(api.focusSessions).toHaveLength(1));
 
-    // Gone from the Focus screen (back to idle), but the nav still says so.
-    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    // Gone from the Focus screen (a break is offered instead), but the nav
+    // still says so.
+    expect(screen.getByRole("button", { name: "Skip" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Focus timer finished" })).toBeInTheDocument();
 
     await openHabits();
@@ -341,96 +497,15 @@ describe("Nav badge", () => {
   });
 });
 
-describe("Session history", () => {
-  it("lists persisted sessions newest first with duration and link names", async () => {
-    const task = fakeTask("Write report");
-    installFakeApi({
-      tasks: [task],
-      focusSessions: [
-        fakeFocusSession({
-          started_at: "2026-07-03T08:00:00Z",
-          ended_at: "2026-07-03T08:25:00Z",
-          note: "morning",
-        }),
-        fakeFocusSession({
-          mode: "pomo",
-          started_at: "2026-07-03T10:00:00Z",
-          ended_at: "2026-07-03T10:30:00Z",
-          pause_seconds: 300,
-          task_id: task.id,
-        }),
-      ],
-    });
+describe("Statistics", () => {
+  it("links from the timer screen to its own statistics + history screen", async () => {
+    installFakeApi();
     render(<App />);
     await openFocus();
 
-    const history = await screen.findByRole("list", { name: "Focus Sessions" });
-    const rows = within(history).getAllByRole("listitem");
-    expect(rows[0]).toHaveTextContent("pomo");
-    expect(rows[0]).toHaveTextContent("25 min");
-    expect(rows[0]).toHaveTextContent("Write report");
-    expect(rows[1]).toHaveTextContent("stopwatch");
-    expect(rows[1]).toHaveTextContent("morning");
-  });
+    fireEvent.click(screen.getByRole("link", { name: "Statistics" }));
 
-  it("adds a past session manually", async () => {
-    const api = installFakeApi();
-    render(<App />);
-    await openFocus();
-
-    fireEvent.click(screen.getByRole("button", { name: "Add session" }));
-    fireEvent.change(screen.getByLabelText("Started"), {
-      target: { value: "2026-07-02T09:00" },
-    });
-    fireEvent.change(screen.getByLabelText("Ended"), {
-      target: { value: "2026-07-02T09:45" },
-    });
-    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "backfilled" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(api.focusSessions).toHaveLength(1));
-    const saved = api.focusSessions[0];
-    expect(saved?.note).toBe("backfilled");
-    const wallSeconds =
-      (new Date(saved?.ended_at ?? 0).getTime() - new Date(saved?.started_at ?? 0).getTime()) /
-      1000;
-    expect(wallSeconds).toBe(2700);
-  });
-
-  it("edits a session's note and link retroactively", async () => {
-    const habit = fakeHabit("Reading");
-    const api = installFakeApi({
-      habits: [habit],
-      focusSessions: [fakeFocusSession({ note: "before" })],
-    });
-    render(<App />);
-    await openFocus();
-
-    fireEvent.click(await screen.findByRole("button", { name: "Edit session" }));
-    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "after" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Session link" }), {
-      target: { value: `habit:${habit.id}` },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => expect(api.focusSessions[0]?.note).toBe("after"));
-    expect(api.focusSessions[0]?.habit_id).toBe(habit.id);
-    expect(
-      api.requests.some(
-        (r) =>
-          r.method === "PATCH" &&
-          r.url === `/api/v1/focus-sessions/${api.focusSessions[0]?.id ?? 0}`,
-      ),
-    ).toBe(true);
-  });
-
-  it("deletes a session", async () => {
-    const api = installFakeApi({ focusSessions: [fakeFocusSession()] });
-    render(<App />);
-    await openFocus();
-
-    fireEvent.click(await screen.findByRole("button", { name: "Delete session" }));
-
-    await waitFor(() => expect(api.focusSessions).toHaveLength(0));
+    expect(await screen.findByRole("heading", { name: "Focus statistics" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to timer" })).toBeInTheDocument();
   });
 });

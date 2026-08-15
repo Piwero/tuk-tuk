@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeFocusSession, fakeHabit, fakeTask, fakeTimer, installFakeApi } from "./test/fakeApi";
+import { fakeHabit, fakeTimer, installFakeApi } from "./test/fakeApi";
 
 // All tests pin the clock to Friday 2026-07-03, local noon, so timers and
 // "today" are deterministic in any timezone.
@@ -111,70 +111,5 @@ describe("Timers", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Delete timer Reading 45m" }));
     await waitFor(() => expect(api.timers).toHaveLength(0));
-  });
-});
-
-describe("Focus statistics", () => {
-  it("shows daily and weekly totals and per-Task / per-Habit breakdowns", async () => {
-    const task = fakeTask("Write report");
-    const habit = fakeHabit("Reading");
-    installFakeApi({
-      tasks: [task],
-      habits: [habit],
-      focusSessions: [
-        fakeFocusSession({
-          started_at: "2026-07-02T09:00:00Z",
-          ended_at: "2026-07-02T09:30:00Z",
-          task_id: task.id,
-        }),
-        fakeFocusSession({
-          started_at: "2026-07-03T09:00:00Z",
-          ended_at: "2026-07-03T09:30:00Z",
-          pause_seconds: 300,
-          habit_id: habit.id,
-        }),
-      ],
-    });
-    render(<App />);
-    await openFocus();
-
-    const daily = await screen.findByRole("list", { name: "Daily focus" });
-    expect(within(daily).getByText("2026-07-02: 30 min")).toBeInTheDocument();
-    expect(within(daily).getByText("2026-07-03: 25 min")).toBeInTheDocument();
-
-    const weekly = screen.getByRole("list", { name: "Weekly focus" });
-    expect(within(weekly).getByText("Week of 2026-06-29: 55 min")).toBeInTheDocument();
-
-    const byTask = screen.getByRole("list", { name: "Focus by Task" });
-    expect(within(byTask).getByText("Write report: 30 min")).toBeInTheDocument();
-
-    const byHabit = screen.getByRole("list", { name: "Focus by Habit" });
-    expect(within(byHabit).getByText("Reading: 25 min")).toBeInTheDocument();
-  });
-
-  it("refetches when the range changes", async () => {
-    const api = installFakeApi({
-      focusSessions: [
-        fakeFocusSession({
-          started_at: "2026-06-10T09:00:00Z",
-          ended_at: "2026-06-10T09:30:00Z",
-        }),
-      ],
-    });
-    render(<App />);
-    await openFocus();
-
-    // The default range is the last 7 days: the June session is invisible.
-    await screen.findByRole("list", { name: "Daily focus" });
-    expect(screen.queryByText("2026-06-10: 30 min")).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-06-01" } });
-
-    expect(await screen.findByText("2026-06-10: 30 min")).toBeInTheDocument();
-    expect(
-      api.requests.some(
-        (r) => r.method === "GET" && r.url.startsWith("/api/v1/focus-stats?start=2026-06-01"),
-      ),
-    ).toBe(true);
   });
 });

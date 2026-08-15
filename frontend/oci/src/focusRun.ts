@@ -9,10 +9,20 @@
 import { type FocusMode } from "./api";
 import { type FocusLink } from "./focusLink";
 
+/** A run is either real focus time ("focus") or a rest period between Pomos
+ * ("break") — a break never becomes a Focus Session, however it ends. */
+export type FocusPhase = "focus" | "break";
+
 export interface StoredRun {
   mode: FocusMode;
-  /** The Pomo length this run counts down from (frozen at start). */
+  phase: FocusPhase;
+  /** The length this run counts down from (frozen at start): the Pomo or
+   * break length, matching `phase`. */
   pomoMs: number;
+  /** The configured break / long-break lengths, carried on a focus run so
+   * they're available to offer the next break once it finishes. */
+  breakMs: number;
+  longBreakMs: number;
   startedAtMs: number;
   /** Completed pause time so far, excluding a pause still in progress. */
   pausedMs: number;
@@ -37,7 +47,17 @@ export function loadStoredRun(): StoredRun | null {
       typeof run.pausedMs === "number" &&
       (run.pauseStartedAtMs === null || typeof run.pauseStartedAtMs === "number") &&
       typeof run.link === "string";
-    return valid ? run : null;
+    if (!valid) {
+      return null;
+    }
+    // Back-compat: a run stored before break support has none of these —
+    // treat it as an ordinary focus run with no break configured.
+    return {
+      ...run,
+      phase: run.phase === "break" ? "break" : "focus",
+      breakMs: typeof run.breakMs === "number" ? run.breakMs : 0,
+      longBreakMs: typeof run.longBreakMs === "number" ? run.longBreakMs : 0,
+    };
   } catch {
     return null;
   }
