@@ -1025,13 +1025,20 @@ export function CalendarView({
           : renderTimeGrid(mode === "week" ? weekDays(anchor) : [anchor])}
         <aside className="unscheduled-panel" aria-label="Unscheduled">
           <h3>Unscheduled</h3>
-          <ul>
-            {unscheduled.map((task) => (
-              <li key={task.id} {...taskDragProps(task)}>
-                {task.title}
-              </li>
-            ))}
-          </ul>
+          {unscheduled.length === 0 ? (
+            <p className="unscheduled-empty-hint">
+              Nothing unscheduled — Tasks without a date land here; drag one onto the calendar to
+              schedule it.
+            </p>
+          ) : (
+            <ul>
+              {unscheduled.map((task) => (
+                <li key={task.id} {...taskDragProps(task)}>
+                  {task.title}
+                </li>
+              ))}
+            </ul>
+          )}
         </aside>
       </div>
       {quickStart !== null && (

@@ -399,4 +399,14 @@ describe("Managing Habits", () => {
     );
     expect(api.habits[0]?.is_archived).toBe(false);
   });
+
+  it("explains what a Habit is when none exist yet", async () => {
+    installFakeApi({ habits: [] });
+    render(<App />);
+
+    await openHabits();
+
+    expect(screen.getByText(/habits are things you check in on/i)).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Today's Habits" })).not.toBeInTheDocument();
+  });
 });
