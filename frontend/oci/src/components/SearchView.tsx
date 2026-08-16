@@ -118,6 +118,8 @@ export function SearchView({
       </div>
       {state.query.trim() === "" ? (
         <p className="search-hint">Type to search</p>
+      ) : tasks.length === 0 ? (
+        <p className="search-hint">No matches for “{state.query.trim()}”</p>
       ) : (
         <ul className="search-results tasks">
           {tasks.map((task) => (

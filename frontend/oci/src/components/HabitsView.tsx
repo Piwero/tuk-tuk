@@ -225,7 +225,13 @@ export function HabitsView(): JSX.Element {
 
   return (
     <div className="habits-view">
-      <ul aria-label="Today's Habits">{dueToday.map((habit) => renderHabit(habit, true))}</ul>
+      {habits.length === 0 ? (
+        <p className="habits-empty-hint">
+          Habits are things you check in on daily or weekly — add one below to start tracking it.
+        </p>
+      ) : (
+        <ul aria-label="Today's Habits">{dueToday.map((habit) => renderHabit(habit, true))}</ul>
+      )}
       {others.length > 0 && (
         <section className="other-habits">
           <h2>Other habits</h2>

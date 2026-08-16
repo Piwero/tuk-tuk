@@ -9,6 +9,15 @@ import { fakeTask, installFakeApi } from "./test/fakeApi";
 pinCalendarClock();
 
 describe("The unscheduled panel", () => {
+  it("explains the drag interaction when there is nothing unscheduled", async () => {
+    installFakeApi({ tasks: [fakeTask("Dated", { due_date: "2026-07-10T15:00:00Z" })] });
+    render(<App />);
+    await openCalendar();
+
+    const panel = await screen.findByRole("complementary", { name: "Unscheduled" });
+    expect(within(panel).getByText(/drag/i)).toBeInTheDocument();
+  });
+
   it("lists undated open tasks only", async () => {
     installFakeApi({
       tasks: [

@@ -1685,6 +1685,12 @@ li[data-overdue] .date-chip {
   border-color: var(--border-strong);
 }
 
+.unscheduled-empty-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
 .resize-handle {
   position: absolute;
   left: 0;
@@ -1758,6 +1764,13 @@ li[data-overdue] .date-chip {
 }
 
 /* ── Habits ──────────────────────────────────────────────────────── */
+
+.habits-empty-hint {
+  max-width: 480px;
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
 
 .habits-view ul {
   list-style: none;

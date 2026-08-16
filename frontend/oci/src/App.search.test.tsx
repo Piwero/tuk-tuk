@@ -166,4 +166,19 @@ describe("Search", () => {
     }
     expect(within(row).getByText("Errands")).toBeInTheDocument();
   });
+
+  it("shows a distinct hint before a query and a distinct message when a query has no matches", async () => {
+    installFakeApi({ tasks: [fakeTask("Buy groceries")] });
+    render(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Views" });
+    fireEvent.click(within(nav).getByRole("link", { name: "Search" }));
+    expect(await screen.findByText(/type to search/i)).toBeInTheDocument();
+
+    await searchFor("no such task");
+    await waitFor(() =>
+      expect(screen.getByText(/no matches for.*no such task/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/type to search/i)).not.toBeInTheDocument();
+  });
 });
