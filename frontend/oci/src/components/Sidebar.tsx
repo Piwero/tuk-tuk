@@ -88,6 +88,10 @@ interface SidebarProps {
    * the main view its width back. */
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  /** Closes the off-canvas mobile drawer explicitly (issue #170) — until
+   * now the only way out was tapping the backdrop. Ignored by the desktop
+   * layout, where this button stays hidden. */
+  onCloseDrawer: () => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
@@ -230,6 +234,7 @@ export function Sidebar({
   onQuickAdd,
   collapsed,
   onToggleCollapsed,
+  onCloseDrawer,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
@@ -609,6 +614,17 @@ export function Sidebar({
             onClick={onToggleCollapsed}
           >
             <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={18} />
+          </button>
+          {/* Mobile only (hidden by CSS on desktop, issue #170): the drawer's
+              own close control, so dismissing it no longer requires hunting
+              for the backdrop. */}
+          <button
+            type="button"
+            className="drawer-close"
+            aria-label="Close navigation"
+            onClick={onCloseDrawer}
+          >
+            <Icon name="x" size={18} />
           </button>
         </div>
         <nav aria-label="Views" className="top-nav">

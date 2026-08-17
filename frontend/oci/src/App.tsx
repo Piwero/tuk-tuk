@@ -39,6 +39,7 @@ import { FolderView, type FolderSortBy } from "./components/FolderView";
 import { HabitsView } from "./components/HabitsView";
 import { Icon } from "./components/Icon";
 import { KanbanView } from "./components/KanbanView";
+import { MobileTabBar } from "./components/MobileTabBar";
 import { Modal } from "./components/Modal";
 import { QuickAdd } from "./components/QuickAdd";
 import { QuickAddDialog } from "./components/QuickAddDialog";
@@ -403,6 +404,16 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     setView(next);
   }
 
+  /** Dismisses the Task detail sheet/panel — shared by its Close button, its
+   * mobile backdrop, and its swipe-to-dismiss gesture (issue #170), so all
+   * three ways out behave identically. Never touches `view`: the detail is
+   * an overlay on top of whatever was already showing, so main's scroll
+   * position is untouched by opening or closing it. */
+  function closeTaskDetail(): void {
+    setSelectedTaskId(null);
+    setCalendarTask(null);
+  }
+
   /** In computed views, apply the optimistic update, then re-run the query —
    * membership is the server's call, not local state's. */
   function changeTasksAndRecompute(update: (current: Task[]) => Task[]): void {
@@ -489,6 +500,31 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     );
   }
 
+  // Shared with both the sidebar's top nav and the mobile tab bar (#170),
+  // so the two surfaces never disagree about which destination is active.
+  const calendarSelected = view?.kind === "calendar";
+  const habitsSelected = view?.kind === "habits";
+  const standupSelected = view?.kind === "standup";
+  const focusSelected = view?.kind === "focus" || view?.kind === "focus-stats";
+  const settingsSelected = view?.kind === "settings";
+  const searchSelected = view?.kind === "search";
+  const tasksSelected =
+    !calendarSelected &&
+    !habitsSelected &&
+    !standupSelected &&
+    !focusSelected &&
+    !settingsSelected &&
+    !searchSelected;
+
+  // The List the open Task belongs to, shown as a breadcrumb in the mobile
+  // sheet (#170) — Task detail can be reached from any view (List, Tag,
+  // Folder, Smart, Search, Calendar), so this is always resolved against
+  // the full `lists` array rather than the currently selected List.
+  const selectedTaskListName =
+    selectedTask !== null
+      ? (lists.find((list) => list.id === selectedTask.list_id)?.name ?? null)
+      : null;
+
   return (
     <FocusRunProvider>
       <div
@@ -509,13 +545,13 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           selectedTagId={view?.kind === "tag" ? view.id : null}
           selectedFolderId={view?.kind === "folder" ? view.id : null}
           selectedSmart={smartView}
-          calendarSelected={view?.kind === "calendar"}
-          habitsSelected={view?.kind === "habits"}
-          standupSelected={view?.kind === "standup"}
+          calendarSelected={calendarSelected}
+          habitsSelected={habitsSelected}
+          standupSelected={standupSelected}
           standupEnabled={standupEnabled}
-          focusSelected={view?.kind === "focus" || view?.kind === "focus-stats"}
-          settingsSelected={view?.kind === "settings"}
-          searchSelected={view?.kind === "search"}
+          focusSelected={focusSelected}
+          settingsSelected={settingsSelected}
+          searchSelected={searchSelected}
           onSelect={(listId) => switchView({ kind: "list", id: listId })}
           onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
           onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
@@ -528,6 +564,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           onQuickAdd={() => setQuickAddOpen(true)}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={toggleSidebar}
+          onCloseDrawer={() => setDrawerOpen(false)}
           onLogout={onLogout}
           onSearch={(query) =>
             switchView({ kind: "search", search: { ...BLANK_SEARCH_STATE, query } })
@@ -889,15 +926,26 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             />
           )}
         </main>
+        <MobileTabBar
+          tasksSelected={tasksSelected}
+          calendarSelected={calendarSelected}
+          habitsSelected={habitsSelected}
+          focusSelected={focusSelected}
+          onSelectTasks={() => switchView({ kind: "smart", view: "today" })}
+          onSelectCalendar={() => switchView({ kind: "calendar" })}
+          onSelectHabits={() => switchView({ kind: "habits" })}
+          onSelectFocus={() => switchView({ kind: "focus" })}
+        />
+        {selectedTask !== null && (
+          <div className="task-detail-backdrop" aria-hidden="true" onClick={closeTaskDetail} />
+        )}
         {selectedTask !== null && (
           <TaskDetail
             task={selectedTask}
             allTags={tags}
+            listName={selectedTaskListName}
             onTaskChanged={applyTaskChange}
-            onClose={() => {
-              setSelectedTaskId(null);
-              setCalendarTask(null);
-            }}
+            onClose={closeTaskDetail}
           />
         )}
         {selectedEvent !== null && (
