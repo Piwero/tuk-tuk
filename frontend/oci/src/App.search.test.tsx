@@ -167,6 +167,22 @@ describe("Search", () => {
     expect(within(row).getByText("Errands")).toBeInTheDocument();
   });
 
+  it("shows the priority indicator on a result with a non-default priority", async () => {
+    installFakeApi({
+      tasks: [fakeTask("Buy groceries", { priority: "high" })],
+    });
+    render(<App />);
+
+    await searchFor("groceries");
+    const row = (
+      await screen.findByRole("button", { name: "Open details for Buy groceries" })
+    ).closest("li");
+    if (row === null) {
+      throw new Error("row not found");
+    }
+    expect(within(row).getByLabelText("Priority: High")).toBeInTheDocument();
+  });
+
   it("shows a distinct hint before a query and a distinct message when a query has no matches", async () => {
     installFakeApi({ tasks: [fakeTask("Buy groceries")] });
     render(<App />);

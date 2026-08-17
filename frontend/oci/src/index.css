@@ -132,8 +132,9 @@ fieldset button:active {
   background: var(--ink-100);
 }
 
-/* The task checkbox. The ring is colored by Priority — the only place
-   priority color appears. */
+/* The task checkbox. Priority no longer colors it (#166) — Priority now
+   reads as a shape/glyph via .priority-indicator instead, so one checkbox
+   style serves every level. */
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -142,7 +143,7 @@ input[type="checkbox"] {
   margin: 0;
   padding: 0;
   flex: none;
-  border: 2px solid var(--check-ring, var(--border-strong));
+  border: 2px solid var(--border-strong);
   border-radius: 5px;
   background: transparent no-repeat center / 10px;
   cursor: pointer;
@@ -152,8 +153,8 @@ input[type="checkbox"] {
 }
 
 input[type="checkbox"]:checked {
-  border-color: var(--check-fill, var(--accent));
-  background-color: var(--check-fill, var(--accent));
+  border-color: var(--accent);
+  background-color: var(--accent);
   background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>');
 }
 
@@ -948,25 +949,27 @@ main > form input {
   color: var(--text-tertiary);
 }
 
-/* Priority colors the checkbox ring — and nowhere else. */
-.tasks li[data-priority="high"] {
-  --check-ring: var(--priority-high);
-  --check-fill: var(--priority-high);
+/* Priority (#166): a signal-bar glyph per level — one/two/three bars for
+ * Low/Medium/High — so the levels read apart by shape, not hue. Color only
+ * reinforces weight (lighter → darker as priority rises); never red, which
+ * stays reserved for "overdue" elsewhere on the row. None renders no
+ * indicator (PriorityIndicator returns null), so no rule is needed for it.
+ */
+.priority-indicator {
+  display: inline-flex;
+  flex: none;
 }
 
-.tasks li[data-priority="medium"] {
-  --check-ring: var(--priority-medium);
-  --check-fill: var(--priority-medium);
+.priority-indicator[data-priority="low"] {
+  color: var(--priority-low);
 }
 
-.tasks li[data-priority="low"] {
-  --check-ring: var(--priority-low);
-  --check-fill: var(--priority-low);
+.priority-indicator[data-priority="medium"] {
+  color: var(--priority-medium);
 }
 
-.tasks li[data-priority="none"] {
-  --check-ring: var(--priority-none);
-  --check-fill: var(--ink-400);
+.priority-indicator[data-priority="high"] {
+  color: var(--priority-high);
 }
 
 .task-title {
