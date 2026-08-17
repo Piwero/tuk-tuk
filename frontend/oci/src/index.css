@@ -1234,6 +1234,8 @@ li[data-overdue] .date-chip {
   flex-direction: column;
   gap: var(--space-3);
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .calendar-toolbar {
@@ -1301,6 +1303,49 @@ li[data-overdue] .date-chip {
 
 .calendar-refresh-button:disabled {
   opacity: 0.6;
+}
+
+/* Opens the Unscheduled panel below the narrow breakpoint, where it moves
+ * out of the main flow (issue #169) and needs an affordance to reach it —
+ * hidden above the breakpoint, where Unscheduled already sits in view. */
+.unscheduled-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+}
+
+.unscheduled-toggle:hover {
+  background: var(--ink-50);
+}
+
+/* Reuses .drawer-scrim's fixed/backdrop styling (defined in the narrow media
+ * query below) but only once narrow — above the breakpoint the toggle that
+ * would set `unscheduledOpen` is unreachable (display: none above), so this
+ * only guards a stale `open` state surviving a resize back to desktop. */
+.unscheduled-scrim {
+  display: none;
+}
+
+.unscheduled-toggle-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--text-accent);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
 }
 
 .calendar-event-failures {
@@ -1376,7 +1421,13 @@ li[data-overdue] .date-chip {
 
 .month-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* `minmax(0, 1fr)`, not a bare `1fr`: a bare `1fr` track's automatic
+   * minimum is its content's min-content width, so one unbreakable cell
+   * (an event title, a wide count badge) silently widens all seven columns
+   * past the viewport — the exact "Month clips to three columns" bug
+   * (issue #169). `minmax(0, 1fr)` lets a column shrink to 0 and rely on
+   * each entry's own text-overflow/ellipsis instead. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -1384,6 +1435,7 @@ li[data-overdue] .date-chip {
 }
 
 .month-weekday {
+  min-width: 0;
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
@@ -1391,10 +1443,14 @@ li[data-overdue] .date-chip {
   text-transform: uppercase;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .month-cell {
   min-height: 88px;
+  min-width: 0;
   padding: var(--space-1);
   border-top: 1px solid var(--border-subtle);
   border-left: 1px solid var(--border-subtle);
@@ -1402,6 +1458,7 @@ li[data-overdue] .date-chip {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
 }
 
 .month-cell[data-outside] {
@@ -1429,7 +1486,28 @@ li[data-overdue] .date-chip {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 2px;
+  min-width: 0;
   font-family: var(--font-mono);
+}
+
+/* The narrow-width stand-in for a cell's full entry list (issue #169): just
+ * a count, legible at 320px where titles no longer are. */
+.month-cell-count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--accent-soft);
+  color: var(--text-accent);
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: var(--weight-semibold);
+  line-height: 1;
 }
 
 .month-cell-head button {
@@ -1507,11 +1585,24 @@ li[data-overdue] .date-chip {
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
+  /* A narrow column's flex-computed width was already correct — what
+   * overflowed was the unbreakable "15/7" text painting outside it with
+   * nothing to clip it, visually overprinting the next header (issue #169).
+   * Every child's text is now confined to its own header. */
+  overflow: hidden;
 }
 
 .week-day-header[data-today] .day-name,
 .week-day-header[data-today] .day-date {
   color: var(--accent);
+}
+
+.week-day-header .day-name,
+.week-day-header .day-date {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .week-day-header .day-name {
@@ -1580,6 +1671,7 @@ li[data-overdue] .date-chip {
 
 .day-column {
   flex: 1;
+  min-width: 0;
   position: relative;
   border-left: 1px solid var(--border-subtle);
 }
@@ -3374,6 +3466,64 @@ li[data-overdue] .date-chip {
 
   .modal-backdrop {
     padding: var(--space-4) var(--space-2);
+  }
+
+  /* ── Calendar: phone layout (issue #169) ──────────────────────────
+   * Month defaults away to Day at this width (CalendarView.tsx), but the
+   * grid still has to stay legible for a user who picks Month deliberately
+   * — and Week's headers still have to fit without overlapping. */
+
+  .unscheduled-toggle {
+    display: inline-flex;
+  }
+
+  .unscheduled-scrim {
+    display: block;
+  }
+
+  /* Off-canvas: the panel that used to eat half the grid's width now lives
+   * below the fold as a bottom sheet, reachable through .unscheduled-toggle
+   * rather than always competing with the grid for horizontal space. */
+  .unscheduled-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-modal);
+    width: auto;
+    max-height: 60vh;
+    overflow-y: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(100%);
+    transition: transform var(--duration-base) var(--ease-out);
+  }
+
+  .unscheduled-panel[data-open] {
+    transform: translateY(0);
+  }
+
+  .week-header-gutter,
+  .hour-gutter {
+    width: 40px;
+  }
+
+  .all-day-lane {
+    padding-left: 40px;
+  }
+
+  .week-day-header {
+    padding: var(--space-1);
+    font-size: var(--text-xs);
+  }
+
+  .month-cell {
+    min-height: 52px;
+    padding: 2px;
+  }
+
+  .month-cell-head {
+    font-size: var(--text-2xs);
   }
 }
 

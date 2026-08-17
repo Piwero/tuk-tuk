@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { monthGridDays, rangeOf, shiftAnchor, weekDays } from "./calendar";
+import {
+  CALENDAR_NARROW_BREAKPOINT,
+  isNarrowWidth,
+  monthGridDays,
+  rangeOf,
+  shiftAnchor,
+  weekDays,
+} from "./calendar";
 
 // Friday 2026-07-03 sits in the Monday-aligned week Jun 29 – Jul 5 — the same
 // week Month's grid puts it in (the grid's leading days, per the Month view
@@ -62,5 +69,22 @@ describe("shiftAnchor in week mode", () => {
       "2026-06-27",
       "2026-06-28",
     ]);
+  });
+});
+
+// The Calendar's phone-width cutoff (issue #169): shared with the app
+// shell's own off-canvas sidebar breakpoint (index.css's
+// `@media (max-width: 720px)`) so the two never disagree about what counts
+// as narrow.
+describe("isNarrowWidth", () => {
+  it("is narrow at and below the breakpoint", () => {
+    expect(isNarrowWidth(CALENDAR_NARROW_BREAKPOINT)).toBe(true);
+    expect(isNarrowWidth(390)).toBe(true);
+    expect(isNarrowWidth(320)).toBe(true);
+  });
+
+  it("is not narrow above the breakpoint", () => {
+    expect(isNarrowWidth(CALENDAR_NARROW_BREAKPOINT + 1)).toBe(false);
+    expect(isNarrowWidth(1024)).toBe(false);
   });
 });
