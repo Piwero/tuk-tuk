@@ -180,6 +180,7 @@
   --popover-min-width: 160px; /* anchored dropdowns, e.g. tag suggestions */
   --popover-max-height: 240px;
   --row-height: 40px; /* task rows, sidebar items */
+  --mobile-tab-bar-height: 56px; /* the mobile bottom tab bar (issue #170) */
   --control-height: 34px; /* inputs, buttons */
   --tap-target: 44px; /* minimum touch hit area (issue #168), pointer: coarse only */
 

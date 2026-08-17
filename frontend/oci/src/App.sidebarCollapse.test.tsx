@@ -69,6 +69,29 @@ describe("Collapsing the sidebar", () => {
     );
   });
 
+  // Issue #170: the drawer used to have no way out but the backdrop —
+  // an explicit control closes it too.
+  it("closes the drawer from its own explicit close control", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    await user.click(screen.getByRole("button", { name: "Show navigation" }));
+    expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+
+    const sidebar = screen.getByRole("complementary");
+    await user.click(within(sidebar).getByRole("button", { name: "Close navigation" }));
+
+    expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
   it("remembers the choice across a reload", async () => {
     installFakeApi();
     const user = userEvent.setup();
