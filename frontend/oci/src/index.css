@@ -3484,8 +3484,11 @@ li[data-overdue] .date-chip {
   /* The task/subtask checkbox: visually still an 18x18 box (styled on
      the input itself), but its wrapping label's tappable area grows via
      padding so the box people tap dozens of times a day isn't the
-     smallest thing on the screen. */
-  .tasks label {
+     smallest thing on the screen. Kanban cards (.kanban-card is
+     TaskRow's own `<li>`, restyled, #165) get the same treatment — their
+     checkbox is met just as often as a List row's. */
+  .tasks label,
+  .kanban-card label {
     padding: 13px;
   }
 
@@ -3781,6 +3784,23 @@ li[data-overdue] .date-chip {
    * Month defaults away to Day at this width (CalendarView.tsx), but the
    * grid still has to stay legible for a user who picks Month deliberately
    * — and Week's headers still have to fit without overlapping. */
+
+  /* Title, prev/today/next, mode switch, refresh and the Unscheduled
+   * toggle no longer fit one unbroken row at 390px — let the toolbar wrap
+   * onto as many lines as it needs rather than pushing the page wider
+   * than the viewport, and let the title itself truncate if it's still
+   * the widest single piece. */
+  .calendar-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .calendar-toolbar h2 {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .unscheduled-toggle {
     display: inline-flex;
