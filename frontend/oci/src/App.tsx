@@ -743,6 +743,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                   ))}
                 </select>
               </label>
+            </div>
+          )}
+          {smartView === "all" && !completedMode && (
+            <div className="view-controls">
               <label>
                 Group by
                 <select
