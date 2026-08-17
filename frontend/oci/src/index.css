@@ -954,7 +954,9 @@ main > form input {
  * reinforces weight (lighter → darker as priority rises); never red, which
  * stays reserved for "overdue" elsewhere on the row. None renders no
  * indicator (PriorityIndicator returns null), so no rule is needed for it.
- */
+ * Kanban cards (.kanban-card is TaskRow's own `<li>`, restyled — see
+ * TaskRow's `className` prop, #165) render the same `.priority-indicator`
+ * for free since they share TaskRow's markup. */
 .priority-indicator {
   display: inline-flex;
   flex: none;
@@ -1189,6 +1191,9 @@ li[data-overdue] .date-chip {
 }
 
 .kanban-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);

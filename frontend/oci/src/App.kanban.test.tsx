@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { closestOrThrow, fakeDataTransfer } from "./test/dnd";
-import { fakeList, fakeSection, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
+import { fakeList, fakeSection, fakeTag, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
 // Restoring the real fetch between tests would let a late in-flight request
@@ -222,5 +222,154 @@ describe("Kanban view", () => {
     ).toBeInTheDocument();
     const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/sections");
     expect(post?.body).toEqual({ list_id: board.id, name: "Backlog" });
+  });
+});
+
+describe("Kanban cards: metadata (#165)", () => {
+  it("shows a checkbox, tag chips and priority indicator — the same metadata TaskRow renders in the List view", async () => {
+    const board = fakeList("Board", { view_mode: "kanban" });
+    const backlog = fakeSection("Backlog", board.id);
+    const tag = fakeTag("urgent", { color: "#e5484d" });
+    const task = fakeTask("Ship it", {
+      list_id: board.id,
+      section_id: backlog.id,
+      priority: "high",
+      tags: [tag],
+    });
+    installFakeApi({ lists: [INBOX, board], sections: [backlog], tasks: [task] });
+    render(<App />);
+    await openList("Board");
+    const kanban = await screen.findByRole("region", { name: "Kanban board" });
+
+    const checkbox = within(kanban).getByRole("checkbox", { name: "Complete Ship it" });
+    expect(checkbox).not.toBeChecked();
+    expect(within(kanban).getByText("urgent")).toBeInTheDocument();
+    const card = checkbox.closest("li");
+    expect(card).not.toBeNull();
+    expect(card).toHaveAttribute("data-priority", "high");
+  });
+
+  it("a task completed elsewhere starts checked on its card, and unticking un-completes it", async () => {
+    const board = fakeList("Board", { view_mode: "kanban" });
+    const done = fakeSection("Done", board.id);
+    const task = fakeTask("Ship it", {
+      list_id: board.id,
+      section_id: done.id,
+      completed: true,
+      completed_at: "2026-07-01T00:00:00Z",
+    });
+    const api = installFakeApi({ lists: [INBOX, board], sections: [done], tasks: [task] });
+    render(<App />);
+    await openList("Board");
+    const kanban = await screen.findByRole("region", { name: "Kanban board" });
+
+    const checkbox = within(kanban).getByRole("checkbox", { name: "Complete Ship it" });
+    expect(checkbox).toBeChecked();
+
+    fireEvent.click(checkbox);
+
+    await waitFor(() => expect(checkbox).not.toBeChecked());
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${task.id}`,
+    );
+    expect(patch?.body).toEqual({ completed: false });
+  });
+});
+
+describe("Kanban cards: completing honours undo (#155) and recurrence (ADR 0003)", () => {
+  // Undoing relies on real time passing (the toast's window), so these
+  // tests pin the clock rather than leaving it real — same convention as
+  // App.taskUndo.test.tsx and App.recurrence.test.tsx.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 6, 3, 12, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function tick(ms: number): void {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  async function openBoard(name: string): Promise<void> {
+    // Plain fireEvent rather than the file's userEvent-based openList: with
+    // fake timers active, userEvent's internal delays need to be told to
+    // advance them, which isn't worth wiring up for one click.
+    const nav = await screen.findByRole("navigation", { name: "Lists" });
+    fireEvent.click(await within(nav).findByRole("button", { name }));
+    await screen.findByRole("region", { name: "Kanban board" });
+  }
+
+  it("shows Completed — Undo, and undo leaves the card unchecked with nothing sent", async () => {
+    const board = fakeList("Board", { view_mode: "kanban" });
+    const backlog = fakeSection("Backlog", board.id);
+    const task = fakeTask("Ship it", { list_id: board.id, section_id: backlog.id });
+    const api = installFakeApi({ lists: [INBOX, board], sections: [backlog], tasks: [task] });
+    render(<App />);
+    await openBoard("Board");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Complete Ship it" }));
+
+    const toast = await screen.findByRole("status");
+    expect(toast).toHaveTextContent("Completed");
+    expect(within(toast).getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    expect(api.requests.some((r) => r.method === "PATCH")).toBe(false);
+
+    fireEvent.click(within(toast).getByRole("button", { name: "Undo" }));
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Complete Ship it" })).not.toBeChecked();
+    tick(10_000);
+    expect(api.requests.some((r) => r.method === "PATCH")).toBe(false);
+  });
+
+  it("committing after the toast window sends exactly one PATCH", async () => {
+    const board = fakeList("Board", { view_mode: "kanban" });
+    const backlog = fakeSection("Backlog", board.id);
+    const task = fakeTask("Ship it", { list_id: board.id, section_id: backlog.id });
+    const api = installFakeApi({ lists: [INBOX, board], sections: [backlog], tasks: [task] });
+    render(<App />);
+    await openBoard("Board");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Complete Ship it" }));
+    tick(5_000);
+
+    await waitFor(() => {
+      const patches = api.requests.filter((r) => r.method === "PATCH");
+      expect(patches).toHaveLength(1);
+    });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("a recurring task's card completion advances the date in place instead of completing it", async () => {
+    const board = fakeList("Board", { view_mode: "kanban" });
+    const backlog = fakeSection("Backlog", board.id);
+    const run = fakeTask("Morning run", {
+      list_id: board.id,
+      section_id: backlog.id,
+      due_date: "2026-07-10T15:00:00Z",
+      time_zone: "UTC",
+      recurrence: "FREQ=DAILY",
+    });
+    const api = installFakeApi({ lists: [INBOX, board], sections: [backlog], tasks: [run] });
+    render(<App />);
+    await openBoard("Board");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Complete Morning run" }));
+    tick(5_000);
+
+    await waitFor(() => {
+      const patches = api.requests.filter(
+        (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${run.id}`,
+      );
+      expect(patches).toHaveLength(1);
+    });
+    // The recurring task stays open on the board — the fake server advanced
+    // the date instead of completing it (ADR 0003), same as the List view.
+    expect(screen.getByRole("checkbox", { name: "Complete Morning run" })).not.toBeChecked();
   });
 });

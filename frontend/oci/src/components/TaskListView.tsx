@@ -5,7 +5,6 @@ import {
   deleteSection,
   deleteTask,
   updateSection,
-  updateTask,
   type Section,
   type Task,
   type TaskList,
@@ -14,6 +13,7 @@ import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
+import { useTaskCompletion } from "../taskCompletion";
 import { useUndoQueue } from "../undoQueue";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { SectionNameForm } from "./SectionNameForm";
@@ -63,53 +63,10 @@ export function TaskListView({
   // Task's completion branches server-side per ADR 0003 (advance in place +
   // write a Completed Occurrence) — deferring the PATCH means there is
   // nothing to unwind locally when the user undoes it, since it never
-  // happened.
+  // happened. Complete and delete share one queue (and one ToastStack below)
+  // rather than each keeping their own.
   const undoQueue = useUndoQueue();
-  // Task ids with a completion pending: greyed out like a completed Task
-  // without actually setting `completed` (a recurring Task never does), and
-  // mapped to the queue entry so re-clicking the checkbox can cancel it.
-  const [pendingComplete, setPendingComplete] = useState<Map<number, number>>(new Map());
-
-  function clearPendingComplete(taskId: number): void {
-    setPendingComplete((current) => {
-      if (!current.has(taskId)) {
-        return current;
-      }
-      const next = new Map(current);
-      next.delete(taskId);
-      return next;
-    });
-  }
-
-  async function reopen(task: Task): Promise<void> {
-    const updated = await updateTask(task.id, { completed: false });
-    onChanged((current) => current.map((t) => (t.id === updated.id ? updated : t)));
-  }
-
-  function startComplete(task: Task): void {
-    const entryId = undoQueue.push(
-      "Completed",
-      async () => {
-        const updated = await updateTask(task.id, { completed: true });
-        onChanged((current) => current.map((t) => (t.id === updated.id ? updated : t)));
-        clearPendingComplete(task.id);
-      },
-      () => clearPendingComplete(task.id),
-    );
-    setPendingComplete((current) => new Map(current).set(task.id, entryId));
-  }
-
-  function toggle(task: Task): void {
-    const pendingEntryId = pendingComplete.get(task.id);
-    if (pendingEntryId !== undefined) {
-      // A second click while completion is pending cancels it, same as Undo.
-      undoQueue.undo(pendingEntryId);
-    } else if (task.completed) {
-      void reopen(task);
-    } else {
-      startComplete(task);
-    }
-  }
+  const completion = useTaskCompletion(onChanged, undoQueue);
 
   function remove(task: Task): void {
     onChanged((current) => current.filter((t) => t.id !== task.id));
@@ -221,12 +178,12 @@ export function TaskListView({
       <TaskRow
         key={task.id}
         task={task}
-        completed={task.completed || pendingComplete.has(task.id)}
+        completed={task.completed || completion.isPending(task.id)}
         list={taskList}
         showDate
         showTags
         showCheckProgress
-        onToggle={(t) => void toggle(t)}
+        onToggle={completion.toggle}
         onSelect={onSelect}
         onStartFocus={onStartFocus}
         onKebabClick={onStartFocus === undefined ? undefined : handleKebabClick}
