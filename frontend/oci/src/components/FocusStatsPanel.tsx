@@ -13,7 +13,7 @@ import {
   type Habit,
   type Task,
 } from "../api";
-import { addDays, browserTimeZone, localDayOf } from "../dates";
+import { addDays, browserTimeZone, localDayOf, shortDayLabel } from "../dates";
 import { linkFields } from "../focusLink";
 import { FocusSessionForm, type FocusSessionFormValues } from "./FocusSessionForm";
 import { Icon } from "./Icon";
@@ -181,7 +181,7 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
           ariaLabel="Daily focus"
           rows={(stats?.days ?? []).map((day) => ({
             key: day.date,
-            label: day.date,
+            label: shortDayLabel(day.date),
             seconds: day.seconds,
           }))}
           emptyMessage="No focus time recorded in this range yet."
@@ -191,7 +191,7 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
           ariaLabel="Weekly focus"
           rows={(stats?.weeks ?? []).map((week) => ({
             key: week.start,
-            label: `Week of ${week.start}`,
+            label: `Week of ${shortDayLabel(week.start)}`,
             seconds: week.seconds,
           }))}
           emptyMessage="No full week of focus time recorded in this range yet."
