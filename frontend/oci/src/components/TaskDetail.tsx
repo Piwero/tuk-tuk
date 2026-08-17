@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 import {
@@ -31,9 +31,20 @@ import { DateFieldset } from "./DateFieldset";
 import { RepeatFieldset } from "./RepeatFieldset";
 import { Icon } from "./Icon";
 
+/** A vertical drag past this many pixels on the handle counts as a
+ * swipe-to-dismiss (issue #170) — short enough to feel responsive, long
+ * enough that a scroll-adjacent touch inside the handle's small hit area
+ * doesn't close the sheet by accident. */
+const SWIPE_DISMISS_THRESHOLD_PX = 60;
+
 interface TaskDetailProps {
   task: Task;
   allTags: Tag[];
+  /** The List this Task belongs to — shown as a breadcrumb above the title
+   * (issue #170) so the mobile sheet states where it was opened from,
+   * rather than reading as an unfamiliar screen with no context. Null only
+   * while `lists` hasn't loaded yet. */
+  listName: string | null;
   onTaskChanged: (task: Task) => void;
   onClose: () => void;
 }
@@ -41,6 +52,7 @@ interface TaskDetailProps {
 export function TaskDetail({
   task,
   allTags,
+  listName,
   onTaskChanged,
   onClose,
 }: TaskDetailProps): JSX.Element {
@@ -50,6 +62,12 @@ export function TaskDetail({
   const [offsetDraft, setOffsetDraft] = useState<{ amount: string; unit: OffsetUnit } | null>(null);
   const [newItemTitle, setNewItemTitle] = useState("");
   const [itemEditor, setItemEditor] = useState<{ id: number; title: string } | null>(null);
+  // Tracks a drag on the mobile sheet's handle (issue #170) — desktop never
+  // fires touch events, so this gesture is inert there without any extra
+  // gating. Refs, not state: the values only matter to the touchend handler
+  // and re-rendering the panel on every touchmove would be wasted work.
+  const touchStartY = useRef<number | null>(null);
+  const touchLastY = useRef<number | null>(null);
 
   useEffect(() => {
     setTitle(task.title);
@@ -208,22 +226,64 @@ export function TaskDetail({
     }
   }
 
+  function handleHandleTouchStart(event: React.TouchEvent): void {
+    const y = event.touches[0]?.clientY ?? null;
+    touchStartY.current = y;
+    touchLastY.current = y;
+  }
+
+  function handleHandleTouchMove(event: React.TouchEvent): void {
+    const y = event.touches[0]?.clientY;
+    if (y !== undefined) {
+      touchLastY.current = y;
+    }
+  }
+
+  /** A downward drag past the threshold dismisses, mirroring the backdrop
+   * tap and the close button — swipe is a third way out, not the only one
+   * (issue #170). */
+  function handleHandleTouchEnd(): void {
+    if (
+      touchStartY.current !== null &&
+      touchLastY.current !== null &&
+      touchLastY.current - touchStartY.current > SWIPE_DISMISS_THRESHOLD_PX
+    ) {
+      onClose();
+    }
+    touchStartY.current = null;
+    touchLastY.current = null;
+  }
+
   return (
     <aside className="task-detail" aria-label="Task details">
+      {/* Mobile only (hidden by CSS on desktop): the sheet's drag handle —
+          both the visible affordance and the swipe-to-dismiss target
+          (issue #170). Decorative, so it's kept out of the a11y tree; the
+          Close button below is the accessible control. */}
+      <div
+        className="task-detail-handle"
+        aria-hidden="true"
+        onTouchStart={handleHandleTouchStart}
+        onTouchMove={handleHandleTouchMove}
+        onTouchEnd={handleHandleTouchEnd}
+      />
       <div className="task-detail-header">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void saveTitle();
-          }}
-        >
-          <input
-            aria-label="Task title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            onBlur={() => void saveTitle()}
-          />
-        </form>
+        <div className="task-detail-titles">
+          {listName !== null && <p className="task-detail-breadcrumb">{listName}</p>}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveTitle();
+            }}
+          >
+            <input
+              aria-label="Task title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              onBlur={() => void saveTitle()}
+            />
+          </form>
+        </div>
         <button type="button" aria-label="Close details" onClick={onClose}>
           <Icon name="x" />
         </button>
