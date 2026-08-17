@@ -14,9 +14,11 @@ import {
   fetchTasksByTag,
   updateList,
   SMART_LABELS,
+  type AllFilters,
   type CompletedOccurrence,
   type Event,
   type Folder,
+  type Priority,
   type Section,
   type SmartView,
   type Tag,
@@ -25,7 +27,7 @@ import {
 } from "./api";
 import { localDayOf } from "./dates";
 import { FocusRunProvider } from "./focusRunContext";
-import { type GroupBy, type SortBy } from "./grouping";
+import { PRIORITY_LABELS, type GroupBy, type SortBy } from "./grouping";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "./layoutPrefs";
 import { pathForStaticView, staticViewKindForPath, type StaticViewKind } from "./routes";
 import { CalendarView } from "./components/CalendarView";
@@ -74,6 +76,10 @@ const BLANK_SEARCH_STATE: SearchState = {
   priority: null,
   completed: null,
 };
+
+/** No narrowing — Today/Next 7 Days always fetch with this, since only "All"
+ * offers filter controls. */
+const BLANK_ALL_FILTERS: AllFilters = { listId: null, tagId: null, priority: null };
 
 /** Which of the six URL-addressable static views (if any) a View shows —
  * List/Tag/Folder/Smart views have no path, so this is null for them. */
@@ -167,6 +173,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // and restricted to date/priority/title: there's no manual cross-List
   // order to preserve, so "custom" isn't offered here.
   const [folderSortBy, setFolderSortBy] = useState<FolderSortBy>("date");
+  // "All" Smart List's own List/Tag/Priority narrowing (this feature) — kept
+  // separate from Search's filters so the two never disturb each other.
+  const [allFilters, setAllFilters] = useState<AllFilters>(BLANK_ALL_FILTERS);
 
   // Lands here after the Google OAuth round trip (app.routers.v1.google
   // redirects to this origin with one of these markers): open Settings
@@ -321,7 +330,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       setTasks(completedPage.items);
       setOccurrences(occurrencePage.items);
     } else if (view.kind === "smart") {
-      setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()))).items);
+      const filters = view.view === "all" ? allFilters : BLANK_ALL_FILTERS;
+      setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()), filters)).items);
     } else if (view.kind === "search") {
       // An empty query shows nothing — without even asking the API.
       setTasks(
@@ -341,7 +351,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     } else {
       setTasks((await fetchTasksByTag(view.id)).items);
     }
-  }, [view, completedMode, lists]);
+  }, [view, completedMode, lists, allFilters]);
 
   useEffect(() => {
     if (view === null) {
@@ -673,6 +683,93 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 </label>
               </div>
             </>
+          )}
+          {smartView === "all" && !completedMode && (
+            <div className="view-controls">
+              <label>
+                List
+                <select
+                  value={allFilters.listId ?? ""}
+                  onChange={(event) =>
+                    setAllFilters((current) => ({
+                      ...current,
+                      listId: event.target.value === "" ? null : Number(event.target.value),
+                    }))
+                  }
+                >
+                  <option value="">Any</option>
+                  {lists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Tag
+                <select
+                  value={allFilters.tagId ?? ""}
+                  onChange={(event) =>
+                    setAllFilters((current) => ({
+                      ...current,
+                      tagId: event.target.value === "" ? null : Number(event.target.value),
+                    }))
+                  }
+                >
+                  <option value="">Any</option>
+                  {tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Priority
+                <select
+                  value={allFilters.priority ?? ""}
+                  onChange={(event) =>
+                    setAllFilters((current) => ({
+                      ...current,
+                      priority: event.target.value === "" ? null : (event.target.value as Priority),
+                    }))
+                  }
+                >
+                  <option value="">Any</option>
+                  {(Object.keys(PRIORITY_LABELS) as Priority[]).map((priority) => (
+                    <option key={priority} value={priority}>
+                      {PRIORITY_LABELS[priority]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Group by
+                <select
+                  value={groupBy}
+                  onChange={(event) => setGroupBy(event.target.value as GroupBy)}
+                >
+                  {/* "section" reruns as "None" here — All has no Sections
+                      of its own, so grouping by one is really no grouping. */}
+                  <option value="section">None</option>
+                  <option value="date">Date</option>
+                  <option value="priority">Priority</option>
+                  <option value="list">List</option>
+                </select>
+              </label>
+              <label>
+                Sort by
+                <select
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value as SortBy)}
+                >
+                  <option value="custom">Custom</option>
+                  <option value="date">Date</option>
+                  <option value="priority">Priority</option>
+                  <option value="title">Title</option>
+                </select>
+              </label>
+            </div>
           )}
           {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
             <>

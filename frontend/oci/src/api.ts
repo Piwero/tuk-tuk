@@ -365,9 +365,45 @@ export const SMART_LABELS: Record<SmartView, string> = {
   all: "All",
 };
 
-/** `today` is the caller's local day (YYYY-MM-DD); Smart Lists are open tasks only. */
-export function fetchSmartTasks(view: SmartView, today: string): Promise<Page<Task>> {
-  return request(`/api/v1/tasks?view=${view}&today=${today}`);
+/** List / Tag / Priority narrowing, shared by every view that offers it
+ * (Search adds a Status field of its own on top — see `SearchFilters`). */
+export interface ListTagPriorityFilters {
+  listId: number | null;
+  tagId: number | null;
+  priority: Priority | null;
+}
+
+/** Sets `list_id`/`tag_id`/`priority` on `params` for each non-null filter. */
+function appendListTagPriorityParams(
+  params: URLSearchParams,
+  filters: ListTagPriorityFilters,
+): void {
+  if (filters.listId !== null) {
+    params.set("list_id", String(filters.listId));
+  }
+  if (filters.tagId !== null) {
+    params.set("tag_id", String(filters.tagId));
+  }
+  if (filters.priority !== null) {
+    params.set("priority", filters.priority);
+  }
+}
+
+/** The filters "All" narrows by. No status field: `view` already forces open
+ * tasks only, and Completed has its own toggle. */
+export type AllFilters = ListTagPriorityFilters;
+
+/** `today` is the caller's local day (YYYY-MM-DD); Smart Lists are open tasks
+ * only. `filters` narrows further — only "All" offers the controls for it,
+ * so Today/Next 7 Days always pass none. */
+export function fetchSmartTasks(
+  view: SmartView,
+  today: string,
+  filters: AllFilters,
+): Promise<Page<Task>> {
+  const params = new URLSearchParams({ view, today });
+  appendListTagPriorityParams(params, filters);
+  return request(`/api/v1/tasks?${params.toString()}`);
 }
 
 /** The completed view: per List, or across all Lists when listId is null. */
@@ -558,10 +594,7 @@ export function fetchUnscheduledTasks(): Promise<Page<Task>> {
 }
 
 /** The filters a search combines with its query — null means "any". */
-export interface SearchFilters {
-  listId: number | null;
-  tagId: number | null;
-  priority: Priority | null;
+export interface SearchFilters extends ListTagPriorityFilters {
   completed: boolean | null;
 }
 
@@ -570,15 +603,7 @@ export interface SearchFilters {
  * API returns nothing for one. */
 export function fetchSearchTasks(query: string, filters: SearchFilters): Promise<Page<Task>> {
   const params = new URLSearchParams({ search: query, limit: "200" });
-  if (filters.listId !== null) {
-    params.set("list_id", String(filters.listId));
-  }
-  if (filters.tagId !== null) {
-    params.set("tag_id", String(filters.tagId));
-  }
-  if (filters.priority !== null) {
-    params.set("priority", filters.priority);
-  }
+  appendListTagPriorityParams(params, filters);
   if (filters.completed !== null) {
     params.set("completed", String(filters.completed));
   }
