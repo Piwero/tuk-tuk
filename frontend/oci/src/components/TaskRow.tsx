@@ -2,6 +2,28 @@ import { type Task, type TaskList } from "../api";
 import { formatSchedule, isOverdue } from "../dates";
 import { Icon } from "./Icon";
 
+/** Wraps the first case-insensitive occurrence of `query` in `title` with a
+ * `<mark>` — plain text either side, or the whole title unmarked when there
+ * is no match (a Search result can match on description or a Check Item
+ * instead of the title) or no query at all. */
+function highlightedTitle(title: string, query: string | undefined): React.ReactNode {
+  const trimmed = query?.trim() ?? "";
+  if (trimmed === "") {
+    return title;
+  }
+  const index = title.toLowerCase().indexOf(trimmed.toLowerCase());
+  if (index === -1) {
+    return title;
+  }
+  return (
+    <>
+      {title.slice(0, index)}
+      <mark>{title.slice(index, index + trimmed.length)}</mark>
+      {title.slice(index + trimmed.length)}
+    </>
+  );
+}
+
 export interface TaskRowProps {
   task: Task;
   /** Display-only completion override, defaulting to `task.completed`. Lets a
@@ -19,6 +41,10 @@ export interface TaskRowProps {
   showDate: boolean;
   showTags: boolean;
   showCheckProgress: boolean;
+  /** The substring (typically a search query) to mark within the title —
+   * absent everywhere but Search results (issue #167). Matches
+   * case-insensitively; only the first occurrence is marked. */
+  highlight?: string;
   onToggle: (task: Task) => void;
   onSelect: (taskId: number) => void;
   /** Row actions — each optional; a view wires only what it offers. */
@@ -46,6 +72,7 @@ export function TaskRow({
   showDate,
   showTags,
   showCheckProgress,
+  highlight,
   onToggle,
   onSelect,
   onStartFocus,
@@ -90,7 +117,9 @@ export function TaskRow({
           aria-label={`Open details for ${task.title}`}
           onClick={() => onSelect(task.id)}
         >
-          <span className={completed ? "completed" : undefined}>{task.title}</span>
+          <span className={completed ? "completed" : undefined}>
+            {highlightedTitle(task.title, highlight)}
+          </span>
           {hasDescription && (
             <span
               className="description-indicator"

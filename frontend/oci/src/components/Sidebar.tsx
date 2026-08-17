@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   createFolder,
@@ -239,6 +239,18 @@ export function Sidebar({
   onLogout,
 }: SidebarProps): JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
+  // Bumped only on the true→false edge of searchSelected — i.e. the moment
+  // Search stops being the active view — to remount (and so clear) the quick
+  // search field below (issue #167). Left untouched while arriving at or
+  // staying on Search, so a query that was just submitted stays visible.
+  const [searchFieldResetKey, setSearchFieldResetKey] = useState(0);
+  const wasSearchSelected = useRef(searchSelected);
+  useEffect(() => {
+    if (wasSearchSelected.current && !searchSelected) {
+      setSearchFieldResetKey((key) => key + 1);
+    }
+    wasSearchSelected.current = searchSelected;
+  }, [searchSelected]);
   // Layout preference, not data — persisted per Folder in localStorage
   // (layoutPrefs), independent of selection. Default expanded.
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(loadCollapsedFolderIds);
@@ -658,6 +670,14 @@ export function Sidebar({
         </nav>
         {!collapsed && (
           <form
+            // Remounts (clearing the field) the moment Search stops being
+            // the active view — leaving it, the typed text used to linger
+            // and look like it was still filtering whatever view the user
+            // had moved to, when it filters nothing (issue #167). The live,
+            // contextful results field lives on the Search page itself now;
+            // this one is only a quick jump into it, so it's left alone
+            // while Search stays open (including right after submitting).
+            key={searchFieldResetKey}
             role="search"
             className="sidebar-search"
             onSubmit={(event) => {
@@ -665,7 +685,7 @@ export function Sidebar({
               onSearch(new FormData(event.currentTarget).get("query")?.toString() ?? "");
             }}
           >
-            <input type="search" name="query" aria-label="Search tasks" placeholder="Search…" />
+            <input type="search" name="query" aria-label="Quick search" placeholder="Search…" />
           </form>
         )}
         <button

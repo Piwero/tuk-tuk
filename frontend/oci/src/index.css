@@ -994,6 +994,13 @@ main > form input {
   color: var(--text-tertiary);
 }
 
+/* The matched substring in a Search result's title (issue #167). */
+.task-title mark {
+  background: var(--amber-100);
+  color: inherit;
+  border-radius: 2px;
+}
+
 /* Row actions (Focus, Delete) reveal on hover. */
 .tasks li > button:not(.task-title) {
   padding: 2px 6px;
@@ -1766,9 +1773,53 @@ li[data-overdue] .date-chip {
 
 /* Results share the List view's row markup (.tasks li) — see TaskRow. */
 
-.search-hint {
+/* The page's own query field (issue #167) — distinct from the sidebar's
+   quick-jump field, and reachable on mobile where the sidebar is off-canvas. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-tertiary);
+}
+
+/* `input[type="search"]`, not a bare descendant selector — needs to match
+   the base `input:not(...)` rule's specificity (two class-equivalents) to
+   actually win the border/height/padding it's overriding. */
+.search-field input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  border: none;
+  padding: 0;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.search-field input[type="search"]:focus {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
+.search-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.search-hint,
+.search-count {
   color: var(--text-secondary);
   font-size: var(--text-sm);
+}
+
+.search-count {
+  margin-top: var(--space-3);
 }
 
 /* ── Habits ──────────────────────────────────────────────────────── */
