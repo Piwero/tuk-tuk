@@ -1846,6 +1846,41 @@ li[data-overdue] .date-chip {
   font-size: var(--text-2xs);
 }
 
+.habit-card-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.habit-streak-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.habit-streak-count .icon {
+  color: var(--success);
+}
+
+.habit-strip {
+  display: flex;
+  gap: 3px;
+}
+
+.habit-strip .heatmap-day {
+  width: 12px;
+  height: 12px;
+}
+
+.habit-strip-day.today {
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+
 .habit-check {
   flex: none;
   display: inline-flex;

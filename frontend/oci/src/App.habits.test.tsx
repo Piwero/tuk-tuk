@@ -2,7 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeHabit, installFakeApi } from "./test/fakeApi";
+import { fakeHabit, installFakeApi, type FakeApiState } from "./test/fakeApi";
+
+function checkIn(api: FakeApiState, habitId: number, date: string, value = 1): void {
+  api.checkIns.push({ id: 9500 + api.checkIns.length, habit_id: habitId, date, value });
+}
 
 // All tests pin the clock to Friday 2026-07-03, local noon, so "today" is
 // deterministic in any timezone.
@@ -118,6 +122,78 @@ describe("Today's Habits", () => {
     expect(api.checkIns[0]?.value).toBe(4);
     const puts = api.requests.filter((r) => r.method === "PUT");
     expect(puts.map((r) => r.body)).toEqual([{ value: 2 }, { value: 4 }]);
+  });
+});
+
+describe("Habit card stats", () => {
+  it("shows the Streak and a recent-days strip that reads misses only on scheduled days", async () => {
+    const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
+    const habitId = api.habits[0]?.id ?? 0;
+    checkIn(api, habitId, "2026-06-30");
+    checkIn(api, habitId, "2026-07-01");
+    checkIn(api, habitId, "2026-07-02");
+    render(<App />);
+    await openHabits();
+
+    // Yesterday closed a 3-day run; today is graced (not yet checked in),
+    // same grace the server's Streak rule gives it.
+    expect(await screen.findByText("Streak: 3")).toBeInTheDocument();
+
+    const strip = screen.getByRole("group", { name: "Recent days for Meditate" });
+    const days = within(strip).getAllByRole("img");
+    expect(days).toHaveLength(7);
+    expect(days.map((day) => day.getAttribute("aria-label"))).toEqual([
+      "Jun 27: missed",
+      "Jun 28: missed",
+      "Jun 29: missed",
+      "Jun 30: checked in",
+      "Jul 1: checked in",
+      "Jul 2: checked in",
+      "Jul 3: not yet checked in",
+    ]);
+  });
+
+  it("skips a non-daily Habit's off days rather than reading them as missed", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Review week", { frequency: "FREQ=WEEKLY;BYDAY=MO" })],
+    });
+    const habitId = api.habits[0]?.id ?? 0;
+    checkIn(api, habitId, "2026-06-29");
+    render(<App />);
+    await openHabits();
+
+    // Friday 2026-07-03 is not one of this Habit's scheduled days, so it
+    // never appears in the strip at all — it can't be shown as missed.
+    const strip = screen.getByRole("group", { name: "Recent days for Review week" });
+    const days = await within(strip).findAllByRole("img");
+    expect(days.map((day) => day.getAttribute("aria-label"))).toEqual([
+      "May 18: missed",
+      "May 25: missed",
+      "Jun 1: missed",
+      "Jun 8: missed",
+      "Jun 15: missed",
+      "Jun 22: missed",
+      "Jun 29: checked in",
+    ]);
+  });
+
+  it("shows a Numeric Habit's partial progress toward its Goal, not a binary state", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Drink water", { type: "numeric", goal: 4, step: 2, unit: "glasses" })],
+    });
+    const habitId = api.habits[0]?.id ?? 0;
+    checkIn(api, habitId, "2026-07-01", 4);
+    checkIn(api, habitId, "2026-07-02", 2);
+    render(<App />);
+    await openHabits();
+
+    const strip = await screen.findByRole("group", { name: "Recent days for Drink water" });
+    const full = within(strip).getByRole("img", { name: "Jul 1: checked in" });
+    const partial = within(strip).getByRole("img", {
+      name: "Jul 2: in progress: 2 of 4 glasses",
+    });
+    expect(full).toHaveClass("level-4");
+    expect(partial).toHaveClass("level-2");
   });
 });
 
