@@ -97,8 +97,10 @@ Bricolage Grotesque, semibold/bold, type only.
   through `frontend/src/components/Icon.tsx` (1.5px stroke). Add new icons to
   that file's map — never import `lucide-react` directly in a view — so a
   future bespoke icon set is a one-file swap.
-- Sizes: 16px inline/rows, 18px sidebar, 20px toolbar. Color:
-  `--text-secondary`, or accent/`--text-primary` when active.
+- Sizes: 14px small inline indicators (e.g. a row's description or
+  priority glyph, a habit card's Streak flame), 16px inline/rows, 18px
+  sidebar, 20px toolbar. Color: `--text-secondary`, or accent/`--text-primary`
+  when active.
 - Emoji appear **only** as user-chosen List/Habit icons. 10px color dots
   identify Lists and Tags.
 - Established mappings: edit=`pencil`, delete=`x` (a non-destructive
