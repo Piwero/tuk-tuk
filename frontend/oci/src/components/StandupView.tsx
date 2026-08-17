@@ -394,6 +394,7 @@ export function StandupView(): JSX.Element {
             onChange={(event) => setSelectedDate(event.target.value)}
           />
         </label>
+        <h3>Past stand-ups</h3>
         <ul aria-label="Past stand-ups">
           {history.map((item) => (
             <li key={item.id} className="standup-history-row">
@@ -405,6 +406,7 @@ export function StandupView(): JSX.Element {
                     : "standup-history-button"
                 }
                 aria-current={item.date === selectedDate ? "true" : undefined}
+                aria-label={`Stand-up entry, ${weekdayRecordLabel(item.date)}`}
                 onClick={() => setSelectedDate(item.date)}
               >
                 {weekdayRecordLabel(item.date)}
@@ -412,7 +414,7 @@ export function StandupView(): JSX.Element {
               <span className="row-actions">
                 <button
                   type="button"
-                  aria-label={`Delete stand-up ${item.date}`}
+                  aria-label={`Delete stand-up ${shortDayLabel(item.date)}`}
                   onClick={() => void removeEntry(item.date)}
                 >
                   <Icon name="x" />

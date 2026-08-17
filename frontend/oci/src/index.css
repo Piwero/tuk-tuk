@@ -2641,6 +2641,12 @@ li[data-overdue] .date-chip {
   align-items: start;
 }
 
+.standup-history h3 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
 .standup-history ul {
   list-style: none;
   margin: var(--space-3) 0 0;

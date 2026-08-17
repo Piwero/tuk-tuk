@@ -49,12 +49,12 @@ describe("Focus statistics", () => {
     await openFocusStats();
 
     const daily = await screen.findByRole("list", { name: "Daily focus" });
-    expect(within(daily).getByRole("listitem", { name: "2026-07-02: 30 min" })).toBeInTheDocument();
-    expect(within(daily).getByRole("listitem", { name: "2026-07-03: 25 min" })).toBeInTheDocument();
+    expect(within(daily).getByRole("listitem", { name: "Jul 2: 30 min" })).toBeInTheDocument();
+    expect(within(daily).getByRole("listitem", { name: "Jul 3: 25 min" })).toBeInTheDocument();
 
     const weekly = screen.getByRole("list", { name: "Weekly focus" });
     expect(
-      within(weekly).getByRole("listitem", { name: "Week of 2026-06-29: 55 min" }),
+      within(weekly).getByRole("listitem", { name: "Week of Jun 29: 55 min" }),
     ).toBeInTheDocument();
 
     const byTask = screen.getByRole("list", { name: "Focus by Task" });
@@ -83,11 +83,11 @@ describe("Focus statistics", () => {
     expect(
       await screen.findByText("No focus time recorded in this range yet."),
     ).toBeInTheDocument();
-    expect(screen.queryByText("2026-06-10: 30 min")).not.toBeInTheDocument();
+    expect(screen.queryByText("Jun 10: 30 min")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-06-01" } });
 
-    expect(await screen.findByRole("listitem", { name: "2026-06-10: 30 min" })).toBeInTheDocument();
+    expect(await screen.findByRole("listitem", { name: "Jun 10: 30 min" })).toBeInTheDocument();
     expect(
       api.requests.some(
         (r) => r.method === "GET" && r.url.startsWith("/api/v1/focus-stats?start=2026-06-01"),
