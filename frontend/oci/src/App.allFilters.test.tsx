@@ -24,7 +24,7 @@ async function openAll(): Promise<void> {
 function taskNames(): string[] {
   return screen
     .getAllByRole("button", { name: /^Open details for / })
-    .map((button) => button.getAttribute("aria-label")?.replace("Open details for ", ""));
+    .map((button) => button.getAttribute("aria-label")?.replace("Open details for ", "") ?? "");
 }
 
 describe("All view: filter and sort controls", () => {
