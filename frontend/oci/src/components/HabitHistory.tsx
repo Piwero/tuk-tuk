@@ -2,12 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { fetchHabitStats, putCheckIn, removeCheckIn, type Habit, type HabitStats } from "../api";
 import { formatDate, localDayOf } from "../dates";
+import { heatLevel } from "../habitStats";
 import { Icon } from "./Icon";
-
-/** The heatmap fill bucket (0..4) an intensity renders as. */
-function heatLevel(intensityValue: number): number {
-  return intensityValue <= 0 ? 0 : Math.min(Math.ceil(intensityValue * 4), 4);
-}
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 
