@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.0](https://github.com/Piwero/tuk-tuk/compare/v0.5.4...v0.6.0) - 2026-08-17
+
+### Features
+
+- **focus:** Split timer from statistics, add breaks and cancel ([f287491](https://github.com/Piwero/tuk-tuk/commit/f2874913691cdd9750f45892e0b928fd6d7cab3a))
+- **focus:** Split timer from statistics, add breaks and cancel (#162) ([e7967b1](https://github.com/Piwero/tuk-tuk/commit/e7967b1e890a614ad70400e9438b3f566f1d697d))
+- **polish:** Add empty states and home-screen identity ([73322c6](https://github.com/Piwero/tuk-tuk/commit/73322c61ba96a03b2ebc948752255753944f6f6f))
+
+### Bug Fixes
+
+- **calendar:** Monday-align Week to Month and mark today in Month ([c83c1c4](https://github.com/Piwero/tuk-tuk/commit/c83c1c409a6b0ce8408db0eb297d5f7d64bab35b))
+- **calendar:** Seven-day Monday-aligned Week, Month marks today (#161) ([f47a0cc](https://github.com/Piwero/tuk-tuk/commit/f47a0cca518fd9699d14f30b46255f4defecee8b))
+- **tasks:** Share a TaskRow so titles never truncate to nothing ([e64540b](https://github.com/Piwero/tuk-tuk/commit/e64540b4386cf43f0dca40e71ddfaa1a9b5c0adc))
+- **tasks:** Task rows fill the viewport and never truncate the title (#157) ([7c55752](https://github.com/Piwero/tuk-tuk/commit/7c5575295c0b708c4ba5524273c2586313e3b165))
+- **tasks:** Undo toast for delete and complete ([e932dcc](https://github.com/Piwero/tuk-tuk/commit/e932dcc3617df3d945a9354424c163ab3ed0cce1))
+- **tasks:** Undo toast for delete and complete (#155) ([a279a0e](https://github.com/Piwero/tuk-tuk/commit/a279a0eb51c7de2daf945c32f57e8d5e4faf0218))
+- **habits:** Make row action buttons paint on the Habit card ([096f96b](https://github.com/Piwero/tuk-tuk/commit/096f96b654915029cd55305540ebd0eb55f2d68d))
+- **habits:** Habit card actions render (#158) ([729cd02](https://github.com/Piwero/tuk-tuk/commit/729cd02ac77225e148f051e3ad5c9c9922d0802d))
+- **layout:** Sidebar, content and detail scroll independently ([587b2ef](https://github.com/Piwero/tuk-tuk/commit/587b2ef88a18c4306d62522f3229406c9bf00c77))
+- **layout:** Sidebar, content and detail scroll independently (#159) ([cabbc64](https://github.com/Piwero/tuk-tuk/commit/cabbc646be70d99a53d16e1f2bc8731bc1c0ad8f))
+- **nav:** Fix sidebar top nav row so all six destinations fit ([d1dc96c](https://github.com/Piwero/tuk-tuk/commit/d1dc96c4bf3e6ba447ac44c3df6bac6c272b8f5f))
+- **nav:** Sidebar nav fits all six destinations (#160) ([931f9d7](https://github.com/Piwero/tuk-tuk/commit/931f9d7f9fa12725ad5a27284db443eb36922215))
+- **tasks:** Keep task rows on one line when title and metadata fit ([5afeaff](https://github.com/Piwero/tuk-tuk/commit/5afeaff1a0d3d05df91b9c03204e329850eaba92))
+
 ## [0.5.4](https://github.com/Piwero/tuk-tuk/compare/v0.5.3...v0.5.4) - 2026-08-13
 
 ### Features
