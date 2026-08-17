@@ -1,6 +1,7 @@
 import { type Task, type TaskList } from "../api";
 import { formatSchedule, isOverdue } from "../dates";
 import { Icon } from "./Icon";
+import { PriorityIndicator } from "./PriorityIndicator";
 
 export interface TaskRowProps {
   task: Task;
@@ -103,6 +104,7 @@ export function TaskRow({
         </button>
       </div>
       <div className="task-row-meta">
+        <PriorityIndicator priority={task.priority} />
         {list !== undefined && (
           <span
             className="list-chip"

@@ -30,9 +30,13 @@ add a token first.
 - **Ink neutrals** `--ink-25…900` — cool grays for all text, lines, and
   surfaces.
 - **Color = meaning.** Color is never decoration:
-  - **Priority** (High/Medium/Low = red/amber/blue) appears on the task
-    checkbox ring **and nowhere else** (`--priority-*`, driven by the
-    `data-priority` attribute on task rows).
+  - **Priority** is never color-only. High/Medium/Low each render a distinct
+    signal-bar glyph (`PriorityIndicator`, one/two/three bars) with an
+    accessible name stating the level; `--priority-*` only varies the
+    glyph's lightness (never hue — never red, which stays reserved for
+    "overdue") to reinforce weight for sighted users. None renders no
+    indicator. Appears on task rows, Kanban cards, and search results —
+    everywhere a Task is listed (#166).
   - **Overdue** dates are red text.
   - **Habit success** is green (`--success`, heatmap ramp `--heat-0…4`).
   - **Focus** has its own identity — plum `--focus-accent` `#7a48ec` — so
@@ -104,7 +108,9 @@ Bricolage Grotesque, semibold/bold, type only.
   unarchive=`archive-restore`, history=`chart-column`, recurring=`repeat`,
   nav chevrons=`chevron-left/right`; folder row=`folder`; sidebar: Tasks=`list-checks`,
   Calendar=`calendar-days`, Habits=`repeat`, Focus=`timer`, Search=`search`,
-  Today=`sun`, Next 7 Days=`calendar-range`, All=`layers`, Inbox=`inbox`.
+  Today=`sun`, Next 7 Days=`calendar-range`, All=`layers`, Inbox=`inbox`;
+  Priority=`signal-low`/`signal-medium`/`signal-high` (Low/Medium/High —
+  see `PriorityIndicator.tsx`; None has no glyph).
 
 ## Sidebar anatomy
 

@@ -144,6 +144,20 @@ describe("TaskRow", () => {
     expect(onDelete).toHaveBeenCalledWith(task);
   });
 
+  it("shows the priority indicator with an accessible name for Low/Medium/High, and none for None", () => {
+    renderRow({ task: fakeTask("Someday", { priority: "none" }) });
+    expect(screen.queryByLabelText(/^Priority:/)).not.toBeInTheDocument();
+
+    renderRow({ task: fakeTask("Low prio", { priority: "low" }) });
+    expect(screen.getByLabelText("Priority: Low")).toBeInTheDocument();
+
+    renderRow({ task: fakeTask("Medium prio", { priority: "medium" }) });
+    expect(screen.getByLabelText("Priority: Medium")).toBeInTheDocument();
+
+    renderRow({ task: fakeTask("High prio", { priority: "high" }) });
+    expect(screen.getByLabelText("Priority: High")).toBeInTheDocument();
+  });
+
   it("flags priority and overdue state on the row for styling", () => {
     const overdue = fakeTask("Late", {
       due_date: "2020-01-01T00:00:00Z",
