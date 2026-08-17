@@ -3561,7 +3561,10 @@ li[data-overdue] .date-chip {
   display: none; /* desktop keeps the sidebar in the grid */
 }
 
-.drawer-close {
+/* `.sidebar button` (specificity 0,1,1) otherwise beats a bare
+   `.drawer-close` (0,1,0) and forces it visible at every width — same
+   trap `.sidebar .sidebar-collapse` above already sidesteps. */
+.sidebar .drawer-close {
   display: none; /* desktop has no drawer to close (issue #170) */
 }
 
@@ -3649,9 +3652,12 @@ li[data-overdue] .date-chip {
   }
 
   /* The drawer's own close control (issue #170) — sits beside the wordmark,
-     opposite the collapse toggle it replaces at this width. */
-  .drawer-close {
+     opposite the collapse toggle it replaces at this width. Scoped as
+     `.sidebar .drawer-close`, matching `.sidebar .sidebar-collapse` above,
+     so its own width/flex still beat `.sidebar button`'s `width: 100%`. */
+  .sidebar .drawer-close {
     display: inline-flex;
+    flex: none;
     align-items: center;
     justify-content: center;
     width: 32px;
@@ -3664,7 +3670,7 @@ li[data-overdue] .date-chip {
     color: var(--text-secondary);
   }
 
-  .drawer-close:hover {
+  .sidebar .drawer-close:hover {
     background: var(--surface-hover);
   }
 
