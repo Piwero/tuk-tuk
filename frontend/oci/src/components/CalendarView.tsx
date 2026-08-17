@@ -22,6 +22,7 @@ import {
   blockMinutes,
   blockSegment,
   calendarTitle,
+  CALENDAR_NARROW_BREAKPOINT,
   draggedEdgeMinute,
   dropPatch,
   entriesOn,
@@ -30,6 +31,7 @@ import {
   eventEntry,
   hourLabel,
   isBanner,
+  isNarrowWidth,
   laneBanners,
   minuteLabel,
   monthGridDays,
@@ -181,6 +183,29 @@ function shortWeekday(dayIso: string): string {
   return formatDate(new Date(dayIso + "T00:00:00Z"), "weekday");
 }
 
+/** Tracks whether the viewport is at/below the Calendar's narrow breakpoint,
+ * live across resizes (issue #169) — used to default Month away from phone
+ * widths and to condense the Month grid down to date + entry-count. Prefers
+ * `matchMedia` (live, no polling) but falls back to a `resize` listener over
+ * `window.innerWidth` where it's unavailable, which is also how narrow width
+ * is simulated in tests (jsdom has no `matchMedia`). */
+function useNarrowCalendar(): boolean {
+  const [narrow, setNarrow] = useState(() => isNarrowWidth(window.innerWidth));
+  useEffect(() => {
+    if (typeof window.matchMedia === "function") {
+      const query = window.matchMedia(`(max-width: ${CALENDAR_NARROW_BREAKPOINT}px)`);
+      setNarrow(query.matches);
+      const onChange = (event: MediaQueryListEvent): void => setNarrow(event.matches);
+      query.addEventListener("change", onChange);
+      return () => query.removeEventListener("change", onChange);
+    }
+    const onResize = (): void => setNarrow(isNarrowWidth(window.innerWidth));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return narrow;
+}
+
 interface CalendarViewProps {
   onSelect?: (task: Task) => void;
   onSelectEvent?: (event: Event) => void;
@@ -208,7 +233,12 @@ export function CalendarView({
   onTagCreated,
   onListCreated,
 }: CalendarViewProps = {}): JSX.Element {
-  const [mode, setMode] = useState<CalendarMode>("month");
+  // A phone-width load defaults to Day rather than the clipped Month grid
+  // (issue #169) — the mode picker still lets a narrow user reach Month
+  // (now legible down to 320px) or Week deliberately.
+  const [mode, setMode] = useState<CalendarMode>(() =>
+    isNarrowWidth(window.innerWidth) ? "day" : "month",
+  );
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -228,6 +258,33 @@ export function CalendarView({
     position: { x: number; y: number };
   } | null>(null);
   const timeColumnsRef = useRef<HTMLDivElement | null>(null);
+  const isNarrow = useNarrowCalendar();
+  // Off-canvas on narrow screens (issue #169) — mirrors the app shell's own
+  // sidebar drawer rather than inventing a second pattern for "panel that
+  // moves out of the flow on a phone".
+  const [unscheduledOpen, setUnscheduledOpen] = useState(false);
+
+  // The viewport crossing into narrow while Month is showing: switch to Day
+  // rather than leave a now-tiny grid up. Never fights a Week/Day choice the
+  // user already made, and never forces back to Month on widening again.
+  useEffect(() => {
+    if (isNarrow) {
+      setMode((current) => (current === "month" ? "day" : current));
+    }
+  }, [isNarrow]);
+
+  useEffect(() => {
+    if (!unscheduledOpen) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setUnscheduledOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [unscheduledOpen]);
 
   const load = useCallback(
     async (force = false): Promise<void> => {
@@ -588,76 +645,89 @@ export function CalendarView({
             {label}
           </div>
         ))}
-        {days.map((day) => (
-          <div
-            key={day}
-            className="month-cell"
-            aria-label={day}
-            data-outside={day.slice(0, 7) !== anchorMonth || undefined}
-            data-today={day === today || undefined}
-            onClick={() => openAllDayDraft(day)}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => void handleDrop(event, day, null)}
-          >
-            <div className="month-cell-head">
-              <span>{Number(day.slice(8))}</span>
-              <button
-                type="button"
-                aria-label={`Add a task on ${day}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openAllDayDraft(day);
-                }}
-              >
-                <Icon name="plus" size={14} />
-              </button>
+        {days.map((day) => {
+          const dayEntries = entriesOn(entries, day).sort(byKindThenTime);
+          return (
+            <div
+              key={day}
+              className="month-cell"
+              aria-label={day}
+              data-outside={day.slice(0, 7) !== anchorMonth || undefined}
+              data-today={day === today || undefined}
+              onClick={() => openAllDayDraft(day)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => void handleDrop(event, day, null)}
+            >
+              <div className="month-cell-head">
+                <span>{Number(day.slice(8))}</span>
+                {/* Below the narrow breakpoint a full title list no longer
+                  fits legibly (issue #169) — a count stands in for it, the
+                  date number staying the one thing every width shows. */}
+                {isNarrow && dayEntries.length > 0 && (
+                  <span
+                    className="month-cell-count"
+                    aria-label={`${dayEntries.length} ${dayEntries.length === 1 ? "entry" : "entries"}`}
+                  >
+                    {dayEntries.length}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-label={`Add a task on ${day}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openAllDayDraft(day);
+                  }}
+                >
+                  <Icon name="plus" size={14} />
+                </button>
+              </div>
+              {!isNarrow &&
+                dayEntries.map((entry) =>
+                  isBanner(entryTimeShape(entry)) ? (
+                    <div
+                      key={entryKey(entry)}
+                      className="calendar-banner"
+                      data-kind={entry.kind}
+                      {...entryDragProps(entry)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        selectEntry(entry, onSelect, onSelectEvent);
+                      }}
+                      onContextMenu={(event) => {
+                        event.stopPropagation();
+                        handleEntryContextMenu(event, entry, (task, position) =>
+                          setQuickStart({ task, position }),
+                        );
+                      }}
+                    >
+                      {entryTitle(entry)}
+                    </div>
+                  ) : (
+                    <div
+                      key={entryKey(entry)}
+                      className="calendar-timed-entry"
+                      data-kind={entry.kind}
+                      {...entryDragProps(entry)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        selectEntry(entry, onSelect, onSelectEvent);
+                      }}
+                      onContextMenu={(event) => {
+                        event.stopPropagation();
+                        handleEntryContextMenu(event, entry, (task, position) =>
+                          setQuickStart({ task, position }),
+                        );
+                      }}
+                    >
+                      <span className="entry-time">{entryTime(entryTimeShape(entry))}</span>{" "}
+                      {entryTitle(entry)}
+                    </div>
+                  ),
+                )}
             </div>
-            {entriesOn(entries, day)
-              .sort(byKindThenTime)
-              .map((entry) =>
-                isBanner(entryTimeShape(entry)) ? (
-                  <div
-                    key={entryKey(entry)}
-                    className="calendar-banner"
-                    data-kind={entry.kind}
-                    {...entryDragProps(entry)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      selectEntry(entry, onSelect, onSelectEvent);
-                    }}
-                    onContextMenu={(event) => {
-                      event.stopPropagation();
-                      handleEntryContextMenu(event, entry, (task, position) =>
-                        setQuickStart({ task, position }),
-                      );
-                    }}
-                  >
-                    {entryTitle(entry)}
-                  </div>
-                ) : (
-                  <div
-                    key={entryKey(entry)}
-                    className="calendar-timed-entry"
-                    data-kind={entry.kind}
-                    {...entryDragProps(entry)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      selectEntry(entry, onSelect, onSelectEvent);
-                    }}
-                    onContextMenu={(event) => {
-                      event.stopPropagation();
-                      handleEntryContextMenu(event, entry, (task, position) =>
-                        setQuickStart({ task, position }),
-                      );
-                    }}
-                  >
-                    <span className="entry-time">{entryTime(entryTimeShape(entry))}</span>{" "}
-                    {entryTitle(entry)}
-                  </div>
-                ),
-              )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
@@ -943,6 +1013,21 @@ export function CalendarView({
         >
           <Icon name="refresh-cw" />
         </button>
+        {/* Narrow screens only (index.css) — Unscheduled moves off-canvas
+            there (issue #169) rather than eating half the grid's width, so
+            it needs its own opener instead of always sitting in view. */}
+        <button
+          type="button"
+          className="unscheduled-toggle"
+          aria-label="Show Unscheduled"
+          aria-expanded={unscheduledOpen}
+          onClick={() => setUnscheduledOpen((current) => !current)}
+        >
+          <Icon name="inbox" size={16} />
+          {unscheduled.length > 0 && (
+            <span className="unscheduled-toggle-count">{unscheduled.length}</span>
+          )}
+        </button>
       </div>
       {eventFailures.length > 0 && (
         <div className="calendar-event-failures" role="alert">
@@ -1024,7 +1109,21 @@ export function CalendarView({
         {mode === "month"
           ? renderMonth()
           : renderTimeGrid(mode === "week" ? weekDays(anchor) : [anchor])}
-        <aside className="unscheduled-panel" aria-label="Unscheduled">
+        {/* Narrow-only backdrop (index.css hides it >720px): closes the
+            Unscheduled panel on an outside tap, same pattern as the sidebar
+            drawer's scrim. */}
+        {unscheduledOpen && (
+          <div
+            className="drawer-scrim unscheduled-scrim"
+            aria-hidden="true"
+            onClick={() => setUnscheduledOpen(false)}
+          />
+        )}
+        <aside
+          className="unscheduled-panel"
+          aria-label="Unscheduled"
+          data-open={unscheduledOpen || undefined}
+        >
           <h3>Unscheduled</h3>
           {unscheduled.length === 0 ? (
             <p className="unscheduled-empty-hint">
