@@ -44,7 +44,7 @@ import {
   type CalendarMode,
   type Entry,
 } from "../calendar";
-import { formatDate, localDayOf } from "../dates";
+import { formatDate, fromDayIso, localDayOf } from "../dates";
 import { PRIORITY_LABELS } from "../grouping";
 import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
@@ -843,7 +843,8 @@ export function CalendarView({
     );
   }
 
-  const draftLabel = draft === null ? null : `New task on ${draft.day}`;
+  const draftLabel =
+    draft === null ? null : `New task on ${formatDate(fromDayIso(draft.day), "full")}`;
 
   // Same three channels as Quick Add (#126) — the calendar's inline draft
   // input gets the same `#tag`/`~list`/`!priority` autosuggest rather than a

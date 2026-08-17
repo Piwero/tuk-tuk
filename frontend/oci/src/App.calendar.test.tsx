@@ -123,7 +123,9 @@ describe("The Month view", () => {
     await openCalendar();
 
     fireEvent.click(screen.getByLabelText("2026-07-15"));
-    const dialog = await screen.findByRole("dialog", { name: "New task on 2026-07-15" });
+    const dialog = await screen.findByRole("dialog", {
+      name: "New task on Wednesday, July 15, 2026",
+    });
     expect(within(dialog).getByRole("combobox", { name: "New task title" })).toBeInTheDocument();
   });
 
