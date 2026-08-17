@@ -30,6 +30,19 @@ import {
 
 export type CalendarMode = "month" | "week" | "day";
 
+/** The max viewport width (inclusive) the Calendar treats as "narrow" — the
+ * same breakpoint the app shell's sidebar collapses to an off-canvas drawer
+ * at (index.css's `@media (max-width: 720px)`), so the Calendar agrees with
+ * the rest of the shell on what counts as phone-sized rather than inventing
+ * its own cutoff (issue #169). */
+export const CALENDAR_NARROW_BREAKPOINT = 720;
+
+/** Whether a viewport width counts as narrow for the Calendar: below it,
+ * Month's grid can't stay legible and defaults away to Day (issue #169). */
+export function isNarrowWidth(width: number): boolean {
+  return width <= CALENDAR_NARROW_BREAKPOINT;
+}
+
 /** The minimal time-shape a calendar entry has: enough for the pure layout
  * functions (day-window membership, banner-vs-block, block spans, ordering)
  * to place it on the grid, whatever kind of entry it turns out to be. */
