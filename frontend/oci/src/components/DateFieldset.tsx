@@ -28,6 +28,7 @@ export function DateFieldset({ draft, onChange }: DateFieldsetProps): JSX.Elemen
             Start day
             <input
               type="date"
+              aria-label="Start day"
               value={draft.startDay}
               onChange={(event) => onChange({ ...draft, startDay: event.target.value })}
             />
@@ -36,6 +37,7 @@ export function DateFieldset({ draft, onChange }: DateFieldsetProps): JSX.Elemen
             Due day
             <input
               type="date"
+              aria-label="Due day"
               value={draft.dueDay}
               onChange={(event) => onChange({ ...draft, dueDay: event.target.value })}
             />
@@ -47,6 +49,7 @@ export function DateFieldset({ draft, onChange }: DateFieldsetProps): JSX.Elemen
             Day
             <input
               type="date"
+              aria-label="Day"
               value={draft.dueDay}
               onChange={(event) => onChange({ ...draft, dueDay: event.target.value })}
             />
@@ -55,6 +58,7 @@ export function DateFieldset({ draft, onChange }: DateFieldsetProps): JSX.Elemen
             Start time
             <input
               type="time"
+              aria-label="Start time"
               value={draft.startTime}
               onChange={(event) => onChange({ ...draft, startTime: event.target.value })}
             />
@@ -63,6 +67,7 @@ export function DateFieldset({ draft, onChange }: DateFieldsetProps): JSX.Elemen
             Due time
             <input
               type="time"
+              aria-label="Due time"
               value={draft.dueTime}
               onChange={(event) => onChange({ ...draft, dueTime: event.target.value })}
             />
