@@ -3255,6 +3255,87 @@ li[data-overdue] .date-chip {
   text-transform: uppercase;
 }
 
+/* ── Touch targets (issue #168) ──────────────────────────────────────
+   Hover-reveal and 28px/18px controls assume a mouse. Under a coarse
+   pointer (or a device that reports no hover capability at all — some
+   touchscreens answer `pointer: fine` but still `hover: none`) every
+   interactive control grows its *hit area* to --tap-target via padding
+   or box sizing, never by enlarging the icon/glyph itself, and anything
+   that only ever appeared on `:hover` is made reachable another way.
+   Nothing here changes on a real hover-capable pointer device — the
+   existing hover-reveal rules elsewhere in this file are untouched. */
+@media (hover: none), (pointer: coarse) {
+  /* The task/subtask checkbox: visually still an 18x18 box (styled on
+     the input itself), but its wrapping label's tappable area grows via
+     padding so the box people tap dozens of times a day isn't the
+     smallest thing on the screen. */
+  .tasks label {
+    padding: 13px;
+  }
+
+  /* List/Folder/Tag row actions (Edit, Archive, Delete, the Folder's New
+     list/Rename/Delete, the archived List's Unarchive…) never appeared at
+     all on touch before, since they only ever left `:hover`. They're not
+     singularly destructive the way a Task delete is — Edit/Archive/New
+     sit right beside Delete in the same group — so touch just gets them
+     reachable outright rather than gated behind a gesture; List and
+     Folder delete already ask for confirmation before anything is sent. */
+  .row-actions {
+    width: auto;
+    overflow: visible;
+    visibility: visible;
+  }
+
+  .row-actions button {
+    width: var(--tap-target);
+    height: var(--tap-target);
+  }
+
+  button.folder-disclosure {
+    width: var(--tap-target);
+    height: var(--tap-target);
+  }
+
+  /* A Task row's own actions (Focus, Delete) are different: Delete has no
+     confirmation dialog, relying instead on the undo toast (#155), and
+     used to sit permanently exposed at 19px tall beside every title —
+     a stray tap destroyed a Task. On touch they go back to hidden at
+     rest and open only behind a deliberate long-press (`data-actions-
+     open`, set by TaskRow) or keyboard focus — never permanently
+     rendered next to the title. */
+  .tasks li.task-row .row-actions {
+    width: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  .tasks li.task-row[data-actions-open="true"] .row-actions,
+  .tasks li.task-row .row-actions:focus-within {
+    width: auto;
+    overflow: visible;
+    visibility: visible;
+  }
+
+  /* The Folder view's flat row layout (no Delete, only Focus — see
+     FolderView.tsx) isn't destructive, so it's simply made reachable and
+     correctly sized rather than gated. */
+  .tasks li > button:not(.task-title) {
+    visibility: visible;
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    padding: 10px 14px;
+  }
+
+  .sidebar button,
+  .sidebar a {
+    min-height: var(--tap-target);
+  }
+
+  .sidebar .top-nav-item {
+    height: var(--tap-target);
+  }
+}
+
 /* ── Mobile: the sidebar becomes an off-canvas drawer ────────────── */
 
 .drawer-toggle {
@@ -3348,8 +3429,10 @@ li[data-overdue] .date-chip {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    /* 44x44 hit area with the same 18px glyph (#168) — the icon itself
+       doesn't grow, only the button's own box. */
+    width: var(--tap-target);
+    height: var(--tap-target);
     flex: none;
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
