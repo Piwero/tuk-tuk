@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.3](https://github.com/Piwero/tuk-tuk/compare/v0.6.2...v0.6.3) - 2026-08-17
+
+### Bug Fixes
+
+- **nav:** Stop the drawer close button hiding the sidebar wordmark ([77904b0](https://github.com/Piwero/tuk-tuk/commit/77904b0987573a938ab658d9b33bc94af3b0ccc5))
+
 ## [0.6.2](https://github.com/Piwero/tuk-tuk/compare/v0.6.1...v0.6.2) - 2026-08-17
 
 ### Features
