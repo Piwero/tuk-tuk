@@ -5,6 +5,7 @@ import { formatSchedule, isOverdue } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { groupTasks } from "../grouping";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
+import { PriorityIndicator } from "./PriorityIndicator";
 import { SectionNameForm } from "./SectionNameForm";
 
 interface KanbanViewProps {
@@ -104,6 +105,7 @@ export function KanbanView({
                   onClick={() => onSelect(task.id)}
                 >
                   <span className={task.completed ? "completed" : undefined}>{task.title}</span>
+                  <PriorityIndicator priority={task.priority} />
                   {task.due_date !== null && (
                     <span className={isOverdue(task) ? "date-chip overdue" : "date-chip"}>
                       {formatSchedule(task)}
