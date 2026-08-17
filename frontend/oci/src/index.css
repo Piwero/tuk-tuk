@@ -2442,10 +2442,34 @@ li[data-overdue] .date-chip {
   overflow-y: auto;
 }
 
+/* The sheet's drag handle and mobile backdrop (issue #170) — both hidden on
+   desktop, where the panel is a plain grid-column sibling, not an overlay. */
+.task-detail-handle {
+  display: none;
+}
+
+.task-detail-backdrop {
+  display: none;
+}
+
 .task-detail-header {
   display: flex;
   gap: var(--space-2);
   align-items: center;
+}
+
+.task-detail-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.task-detail-breadcrumb {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .task-detail-header form {
@@ -3261,6 +3285,17 @@ li[data-overdue] .date-chip {
   display: none; /* desktop keeps the sidebar in the grid */
 }
 
+.drawer-close {
+  display: none; /* desktop has no drawer to close (issue #170) */
+}
+
+/* Mobile-only bottom tab bar and Task detail sheet (issue #170): hidden on
+   desktop, where the sidebar's top nav and the grid-column detail panel
+   already cover this ground. */
+.mobile-tab-bar {
+  display: none;
+}
+
 @media (max-width: 720px) {
   .app,
   .app.with-detail,
@@ -3337,6 +3372,26 @@ li[data-overdue] .date-chip {
     display: none; /* the header's drawer toggle owns this on mobile */
   }
 
+  /* The drawer's own close control (issue #170) — sits beside the wordmark,
+     opposite the collapse toggle it replaces at this width. */
+  .drawer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-left: auto;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  .drawer-close:hover {
+    background: var(--surface-hover);
+  }
+
   .drawer-scrim {
     position: fixed;
     inset: 0;
@@ -3359,17 +3414,88 @@ li[data-overdue] .date-chip {
     background: var(--surface-hover);
   }
 
-  main {
-    padding: var(--space-4);
+  /* ── Bottom tab bar ──────────────────────────────────────────────── */
+
+  .mobile-tab-bar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: calc(var(--z-modal) - 4);
+    height: var(--mobile-tab-bar-height);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--surface-raised);
+    border-top: 1px solid var(--border-default);
   }
 
-  /* The detail panel has no third column to sit in: it covers the screen. */
+  .mobile-tab-item {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: none;
+    background: transparent;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .mobile-tab-item.selected {
+    color: var(--text-accent);
+  }
+
+  /* Bottom padding leaves room at the foot of the scroll region so the last
+     row of a scrolled list is never hidden behind the fixed tab bar
+     (issue #170). */
+  main {
+    padding: var(--space-4);
+    padding-bottom: calc(var(--mobile-tab-bar-height) + var(--space-4));
+  }
+
+  /* The detail panel has no third column to sit in: it becomes a
+     dismissible sheet (issue #170) — a peek of backdrop stays visible above
+     it so it reads as having opened over the current screen, not replaced
+     it, and the handle up top signals it can be dragged away. */
   .task-detail {
     position: fixed;
-    inset: 0;
+    top: 8vh;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: var(--z-modal);
     width: auto;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: var(--shadow-lg);
     overflow-y: auto;
+    animation: task-detail-sheet-in var(--duration-base) var(--ease-out);
+  }
+
+  .task-detail-handle {
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 0 auto var(--space-3);
+    border-radius: var(--radius-full);
+    background: var(--border-default);
+  }
+
+  .task-detail-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-modal) - 1);
+    background: var(--scrim);
+  }
+
+  @keyframes task-detail-sheet-in {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
   }
 
   .modal-backdrop {
