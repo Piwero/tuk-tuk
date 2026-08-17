@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.2](https://github.com/Piwero/tuk-tuk/compare/v0.6.1...v0.6.2) - 2026-08-17
+
+### Features
+
+- **habits:** Show streak and recent-days strip on habit card ([43c7228](https://github.com/Piwero/tuk-tuk/commit/43c7228d7103680c41631f901260b0e99557888a))
+- **habits:** Merge streak and recent-days strip on habit card (#171) ([98b3069](https://github.com/Piwero/tuk-tuk/commit/98b306989a0bbdbda83fd63d61963785c96068c0))
+- **tasks:** Show priority via shape not colour alone ([7d7fde3](https://github.com/Piwero/tuk-tuk/commit/7d7fde374c322bbc304335468706bd200ec82764))
+- **tasks:** Merge priority-as-shape indicator (#166) ([266dcca](https://github.com/Piwero/tuk-tuk/commit/266dccae0b99a6018430deabbf746c19607a38c4))
+- **mobile:** Add bottom tab bar and dismissible detail sheet ([7ebd3ef](https://github.com/Piwero/tuk-tuk/commit/7ebd3efc5b0fe23be27b6396b37f1b5f4e189638))
+- **mobile:** Merge bottom tab bar and dismissible detail sheet (#170) ([6c70fb4](https://github.com/Piwero/tuk-tuk/commit/6c70fb4547e349622d054001f7f4a46dbcc60a55))
+
+### Bug Fixes
+
+- **kanban:** Render checkbox, tags and priority on cards ([84b0320](https://github.com/Piwero/tuk-tuk/commit/84b0320f2722df314c628d32d081a421d22d4f06))
+- **kanban:** Merge checkbox, tags and priority on cards (#165) ([86b4691](https://github.com/Piwero/tuk-tuk/commit/86b469150ad0b8ba1b98aa55251820199dfb870a))
+- **search:** Add search field with live, contextful results ([46f50b9](https://github.com/Piwero/tuk-tuk/commit/46f50b92ae7d3e16f9cfb9274679c79a426a110d))
+- **search:** Merge search field with live, contextful results (#167) ([d1dadd9](https://github.com/Piwero/tuk-tuk/commit/d1dadd9e0be4e93bc7abd27eee3e78e4b11249e9))
+- **touch:** Enforce 44x44 targets and hover-free row actions ([e0554a6](https://github.com/Piwero/tuk-tuk/commit/e0554a6fe775f87089f51025df46795c31292c81))
+- **touch:** Merge 44x44 targets and hover-free row actions (#168) ([948c1fe](https://github.com/Piwero/tuk-tuk/commit/948c1fe3c14544a8dfbc5996e8f548425a75a33b))
+- **calendar:** Make calendar responsive below the narrow breakpoint ([e265aa6](https://github.com/Piwero/tuk-tuk/commit/e265aa674f0aad2cdc525538cf91f46554399fd7))
+- **calendar:** Merge responsive calendar below narrow breakpoint (#169) ([bdcd26b](https://github.com/Piwero/tuk-tuk/commit/bdcd26b1920898c56d3a736cc554fae81bb18b32))
+- **tasks:** Correct All view test's optional-string type mismatch ([5da5420](https://github.com/Piwero/tuk-tuk/commit/5da542045b37875b169212a960bcad02e0cc0087))
+- **touch:** Extend touch fixes to kanban and calendar toolbar ([34d6dd8](https://github.com/Piwero/tuk-tuk/commit/34d6dd8594a185d25528e6af9d439c59f7949ff4))
+
 ## [0.6.1](https://github.com/Piwero/tuk-tuk/compare/v0.6.0...v0.6.1) - 2026-08-17
 
 ### Features
