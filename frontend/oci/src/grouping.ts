@@ -1,10 +1,12 @@
 /** Pure grouping and sorting for the List view. */
 
-import { type Priority, type Section, type Task } from "./api";
+import { type Priority, type Section, type Task, type TaskList } from "./api";
 import { addDays, dueDay, dueInstant, localDayOf } from "./dates";
 import { byOrder } from "./ordering";
 
-export type GroupBy = "section" | "date" | "priority";
+/** "list" only makes sense in a view spanning multiple Lists (All) — see
+ * `groupTasks`'s `lists` parameter. */
+export type GroupBy = "section" | "date" | "priority" | "list";
 export type SortBy = "custom" | "date" | "priority" | "title";
 
 export interface TaskGroup {
@@ -89,7 +91,23 @@ export function groupTasks(
   sections: Section[],
   groupBy: GroupBy,
   sortBy: SortBy,
+  /** Every List, for "list" grouping's labels — irrelevant otherwise. */
+  lists: TaskList[] = [],
 ): TaskGroup[] {
+  if (groupBy === "list") {
+    return [...lists]
+      .sort(byOrder)
+      .map((list) => ({
+        key: `list-${list.id}`,
+        label: list.name,
+        sectionId: undefined,
+        tasks: sortTasks(
+          tasks.filter((task) => task.list_id === list.id),
+          sortBy,
+        ),
+      }))
+      .filter((group) => group.tasks.length > 0);
+  }
   if (groupBy === "priority") {
     return (Object.keys(PRIORITY_RANK) as Priority[])
       .map((level) => ({

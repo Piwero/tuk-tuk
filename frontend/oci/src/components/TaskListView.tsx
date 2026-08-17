@@ -305,7 +305,7 @@ export function TaskListView({
     );
   }
 
-  const groups = groupTasks(tasks, listId === null ? [] : sections, groupBy, sortBy);
+  const groups = groupTasks(tasks, listId === null ? [] : sections, groupBy, sortBy, lists);
 
   async function moveSectionToEnd(sectionId: number): Promise<void> {
     const siblings = [...sections].sort(byOrder).filter((s) => s.id !== sectionId);
