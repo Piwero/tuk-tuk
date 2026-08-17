@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fakeList, fakeTag, fakeTask } from "../test/fakeApi";
 import { TaskRow, type TaskRowProps } from "./TaskRow";
@@ -155,6 +155,86 @@ describe("TaskRow", () => {
     const row = screen.getByRole("button", { name: "Open details for Late" }).closest("li");
     expect(row).toHaveAttribute("data-priority", "high");
     expect(row).toHaveAttribute("data-overdue", "true");
+  });
+});
+
+describe("TaskRow touch: Focus/Delete stay behind a long-press (#168)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function row(): HTMLElement {
+    const el = screen.getByRole("button", { name: /^Open details for/ }).closest("li");
+    if (el === null) {
+      throw new Error("row not found");
+    }
+    return el;
+  }
+
+  it("is closed at rest, even with Focus/Delete wired up", () => {
+    renderRow({ onStartFocus: vi.fn(), onDelete: vi.fn() });
+    expect(row()).not.toHaveAttribute("data-actions-open");
+  });
+
+  it("opens after holding a touch for the long-press window", () => {
+    renderRow({ onStartFocus: vi.fn(), onDelete: vi.fn() });
+
+    fireEvent.touchStart(row());
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(row()).toHaveAttribute("data-actions-open", "true");
+  });
+
+  it("does not open on a plain, short tap", () => {
+    renderRow({ onStartFocus: vi.fn(), onDelete: vi.fn() });
+
+    fireEvent.touchStart(row());
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    fireEvent.touchEnd(row());
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(row()).not.toHaveAttribute("data-actions-open");
+  });
+
+  it("cancels the long-press on a touch move (a scroll or drag)", () => {
+    renderRow({ onStartFocus: vi.fn(), onDelete: vi.fn() });
+
+    fireEvent.touchStart(row());
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    fireEvent.touchMove(row());
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(row()).not.toHaveAttribute("data-actions-open");
+  });
+
+  it("closes again once something in the row is tapped", () => {
+    const onDelete = vi.fn();
+    renderRow({ onStartFocus: vi.fn(), onDelete });
+
+    fireEvent.touchStart(row());
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(row()).toHaveAttribute("data-actions-open", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Delete/ }));
+
+    expect(onDelete).toHaveBeenCalled();
+    expect(row()).not.toHaveAttribute("data-actions-open");
   });
 });
 

@@ -1,6 +1,13 @@
+import { useRef, useState } from "react";
+
 import { type Task, type TaskList } from "../api";
 import { formatSchedule, isOverdue } from "../dates";
 import { Icon } from "./Icon";
+
+/** How long a touch has to hold still before Focus/Delete reveal (#168).
+ * Long enough that a scroll or a normal tap never trips it, short enough
+ * not to feel unresponsive. */
+const LONG_PRESS_MS = 500;
 
 export interface TaskRowProps {
   task: Task;
@@ -63,17 +70,56 @@ export function TaskRow({
   const schedule = formatSchedule(task);
   const hasActions = onStartFocus !== undefined || onDelete !== undefined;
 
+  // Focus/Delete stay off-screen at rest on touch (CSS, `[data-actions-
+  // open]`) — a mis-tap must not be able to trigger a no-confirmation
+  // Delete. A long-press is the deliberate gesture that reveals them; a
+  // plain tap or a scroll never does (#168).
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressed = useRef(false);
+
+  function clearPressTimer(): void {
+    if (pressTimer.current !== null) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  function handleTouchStart(): void {
+    longPressed.current = false;
+    clearPressTimer();
+    pressTimer.current = setTimeout(() => {
+      longPressed.current = true;
+      setActionsOpen(true);
+    }, LONG_PRESS_MS);
+  }
+
+  function handleTouchEnd(event: React.TouchEvent<HTMLLIElement>): void {
+    clearPressTimer();
+    if (longPressed.current) {
+      // Swallow the trailing synthetic click so revealing the actions
+      // doesn't also open the task or toggle its checkbox.
+      event.preventDefault();
+    }
+  }
+
   return (
     <li
       className="task-row"
       data-priority={task.priority}
       data-overdue={overdue || undefined}
+      data-actions-open={actionsOpen || undefined}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onContextMenu={onContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={clearPressTimer}
+      onTouchCancel={clearPressTimer}
+      onClick={() => setActionsOpen(false)}
     >
       <div className="task-row-head">
         <label>
