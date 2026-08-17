@@ -5,15 +5,18 @@ import {
   deleteHabit,
   fetchCheckIns,
   fetchHabits,
+  fetchHabitStats,
   putCheckIn,
   removeCheckIn,
   updateHabit,
   type CheckIn,
   type Habit,
   type HabitCreateInput,
+  type HabitStats,
 } from "../api";
 import { localDayOf } from "../dates";
 import { habitFrequencyLabel } from "../habitFrequency";
+import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
 import { HabitHistory } from "./HabitHistory";
 import { Icon } from "./Icon";
@@ -34,6 +37,9 @@ export function HabitsView(): JSX.Element {
   const [historyId, setHistoryId] = useState<number | null>(null);
   // Habits with a check-in write in flight (see addStep).
   const [pending, setPending] = useState<Set<number>>(new Set());
+  // Each card's server-computed Streak + heatmap, for the Streak count and
+  // recent-days strip — keyed by habit id, absent while still loading.
+  const [statsByHabit, setStatsByHabit] = useState<Map<number, HabitStats>>(new Map());
   const today = localDayOf(new Date());
 
   const load = useCallback(async (): Promise<void> => {
@@ -45,6 +51,12 @@ export function HabitsView(): JSX.Element {
     setDueIds(new Set(duePage.items.map((habit) => habit.id)));
     setHabits(allPage.items);
     setCheckIns(checkInPage.items);
+    const statsEntries = await Promise.all(
+      allPage.items.map(
+        async (habit) => [habit.id, await fetchHabitStats(habit.id, today)] as const,
+      ),
+    );
+    setStatsByHabit(new Map(statsEntries));
   }, [today]);
 
   useEffect(() => {
@@ -159,6 +171,12 @@ export function HabitsView(): JSX.Element {
             <p className="habit-encouragement">{habit.encouragement}</p>
           )}
           <p className="habit-frequency">{habitFrequencyLabel(habit.frequency)}</p>
+          {/* The expanded history panel already shows the Streak (plus the
+           * full grid and heatmap); skip the compact badge so it isn't
+           * repeated. */}
+          {historyId !== habit.id && (
+            <HabitCardStats habit={habit} stats={statsByHabit.get(habit.id)} today={today} />
+          )}
         </div>
         {showCheckInControls &&
           (habit.type === "boolean" ? (

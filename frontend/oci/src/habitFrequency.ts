@@ -4,7 +4,7 @@
  * backend's app.habit_frequency module rather than the Task recurrence editor.
  */
 
-import { fromDayIso } from "./dates";
+import { addDays, fromDayIso } from "./dates";
 import { WEEKDAY_LABELS, WEEKDAYS, type Weekday } from "./recurrence";
 
 export type HabitFrequency =
@@ -65,6 +65,26 @@ export function habitDueOn(rule: string, dayIso: string): boolean {
   // date.getDay() counts from Sunday; WEEKDAYS starts at Monday.
   const weekday = WEEKDAYS[(fromDayIso(dayIso).getDay() + 6) % 7] as Weekday;
   return frequency.byday.includes(weekday);
+}
+
+/** The most recent `count` days this Habit is scheduled on, oldest first,
+ * walking back from (and including) `today`. Non-daily habits skip their
+ * off days entirely rather than padding them in, so the card's recent-days
+ * strip never reads an unscheduled day as missed. */
+export function recentScheduledDays(rule: string, today: string, count: number): string[] {
+  const days: string[] = [];
+  let cursor = today;
+  let guard = 0;
+  // A once-a-week habit needs several weeks back to fill the strip; the
+  // guard just bounds the walk so a malformed rule can't loop forever.
+  while (days.length < count && guard < 400) {
+    if (habitDueOn(rule, cursor)) {
+      days.push(cursor);
+    }
+    cursor = addDays(cursor, -1);
+    guard += 1;
+  }
+  return days.reverse();
 }
 
 /** A readable label: "Every day", "On Mon, Thu", "3 times a week". */
