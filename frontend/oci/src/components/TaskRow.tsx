@@ -9,6 +9,10 @@ export interface TaskRowProps {
    * during an undoable toast's window (#155), where the PATCH is deferred and
    * `task.completed` hasn't changed yet. */
   completed?: boolean;
+  /** Appended alongside the row's own "task-row" class — lets a call site
+   * restyle the `<li>` for its layout (e.g. the Kanban board's card look,
+   * #165) without forking the metadata markup itself. */
+  className?: string;
   /** The task's own List, shown as a badge — pass this from views that span
    * multiple Lists (Smart Lists, Search); a single List's own view omits it,
    * since the badge would just repeat the page the user is already on. */
@@ -42,6 +46,7 @@ export interface TaskRowProps {
 export function TaskRow({
   task,
   completed = task.completed,
+  className,
   list,
   showDate,
   showTags,
@@ -65,7 +70,7 @@ export function TaskRow({
 
   return (
     <li
-      className="task-row"
+      className={className === undefined ? "task-row" : `task-row ${className}`}
       data-priority={task.priority}
       data-overdue={overdue || undefined}
       draggable={draggable}

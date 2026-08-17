@@ -948,23 +948,30 @@ main > form input {
   color: var(--text-tertiary);
 }
 
-/* Priority colors the checkbox ring — and nowhere else. */
-.tasks li[data-priority="high"] {
+/* Priority colors the checkbox ring — and nowhere else. Kanban cards
+ * (.kanban-card is TaskRow's own `<li>`, restyled — see TaskRow's
+ * `className` prop) get the same treatment so a card carries the same
+ * priority indicator as a row (#165). */
+.tasks li[data-priority="high"],
+.kanban-card[data-priority="high"] {
   --check-ring: var(--priority-high);
   --check-fill: var(--priority-high);
 }
 
-.tasks li[data-priority="medium"] {
+.tasks li[data-priority="medium"],
+.kanban-card[data-priority="medium"] {
   --check-ring: var(--priority-medium);
   --check-fill: var(--priority-medium);
 }
 
-.tasks li[data-priority="low"] {
+.tasks li[data-priority="low"],
+.kanban-card[data-priority="low"] {
   --check-ring: var(--priority-low);
   --check-fill: var(--priority-low);
 }
 
-.tasks li[data-priority="none"] {
+.tasks li[data-priority="none"],
+.kanban-card[data-priority="none"] {
   --check-ring: var(--priority-none);
   --check-fill: var(--ink-400);
 }
@@ -1186,6 +1193,9 @@ li[data-overdue] .date-chip {
 }
 
 .kanban-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);

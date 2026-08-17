@@ -1,11 +1,14 @@
 import { useState } from "react";
 
 import { createSection, createTask, type Section, type Task } from "../api";
-import { formatSchedule, isOverdue } from "../dates";
-import { readDragPayload, startDrag } from "../dnd";
+import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks } from "../grouping";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
+import { useTaskCompletion } from "../taskCompletion";
+import { useUndoQueue } from "../undoQueue";
 import { SectionNameForm } from "./SectionNameForm";
+import { TaskRow } from "./TaskRow";
+import { ToastStack } from "./ToastStack";
 
 interface KanbanViewProps {
   tasks: Task[];
@@ -26,6 +29,12 @@ export function KanbanView({
 }: KanbanViewProps): JSX.Element {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [addingSection, setAddingSection] = useState(false);
+
+  // Completing a card goes through the exact same undoable flow as the List
+  // view's checkbox (#155, ADR 0003) — see ../taskCompletion for why this is
+  // a shared hook rather than a second implementation.
+  const undoQueue = useUndoQueue();
+  const completion = useTaskCompletion(onChanged, undoQueue);
 
   const apply = applierFor(onChanged);
 
@@ -78,76 +87,70 @@ export function KanbanView({
   }
 
   return (
-    <section className="kanban" aria-label="Kanban board">
-      {columns.map((column) => (
-        <div key={column.key} className="kanban-column">
-          <h2>{column.label}</h2>
-          <ul
-            aria-label={`Cards in ${column.label}`}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => handleDropOnColumn(event, column.sectionId)}
-          >
-            {column.tasks.map((task) => (
-              <li
-                key={task.id}
-                className="kanban-card"
-                data-overdue={isOverdue(task) || undefined}
-                draggable
-                onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => handleDropOnCard(event, task)}
-              >
-                <button
-                  type="button"
-                  className="task-title"
-                  aria-label={`Open details for ${task.title}`}
-                  onClick={() => onSelect(task.id)}
-                >
-                  <span className={task.completed ? "completed" : undefined}>{task.title}</span>
-                  {task.due_date !== null && (
-                    <span className={isOverdue(task) ? "date-chip overdue" : "date-chip"}>
-                      {formatSchedule(task)}
-                    </span>
-                  )}
-                  {task.check_items.length > 0 && (
-                    <span className="check-progress">
-                      {task.check_items.filter((item) => item.done).length}/
-                      {task.check_items.length}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void addCard(column.key, column.sectionId);
-            }}
-          >
-            <input
-              aria-label={`Add a task to ${column.label}`}
-              placeholder="Add a task…"
-              value={drafts[column.key] ?? ""}
-              onChange={(event) =>
-                setDrafts((current) => ({ ...current, [column.key]: event.target.value }))
-              }
+    <>
+      <section className="kanban" aria-label="Kanban board">
+        {columns.map((column) => (
+          <div key={column.key} className="kanban-column">
+            <h2>{column.label}</h2>
+            <ul
+              aria-label={`Cards in ${column.label}`}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => handleDropOnColumn(event, column.sectionId)}
+            >
+              {column.tasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  completed={task.completed || completion.isPending(task.id)}
+                  className="kanban-card"
+                  showDate
+                  showTags
+                  showCheckProgress
+                  onToggle={completion.toggle}
+                  onSelect={onSelect}
+                  draggable
+                  onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
+                  onDragEnd={endDrag}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => handleDropOnCard(event, task)}
+                />
+              ))}
+            </ul>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addCard(column.key, column.sectionId);
+              }}
+            >
+              <input
+                aria-label={`Add a task to ${column.label}`}
+                placeholder="Add a task…"
+                value={drafts[column.key] ?? ""}
+                onChange={(event) =>
+                  setDrafts((current) => ({ ...current, [column.key]: event.target.value }))
+                }
+              />
+            </form>
+          </div>
+        ))}
+        <div className="kanban-column kanban-add-column">
+          {addingSection ? (
+            <SectionNameForm
+              onSubmit={(name) => void addSection(name)}
+              onCancel={() => setAddingSection(false)}
             />
-          </form>
+          ) : (
+            <button type="button" className="add-section" onClick={() => setAddingSection(true)}>
+              Add Section
+            </button>
+          )}
         </div>
-      ))}
-      <div className="kanban-column kanban-add-column">
-        {addingSection ? (
-          <SectionNameForm
-            onSubmit={(name) => void addSection(name)}
-            onCancel={() => setAddingSection(false)}
-          />
-        ) : (
-          <button type="button" className="add-section" onClick={() => setAddingSection(true)}>
-            Add Section
-          </button>
-        )}
-      </div>
-    </section>
+      </section>
+      <ToastStack
+        entries={undoQueue.entries}
+        onUndo={undoQueue.undo}
+        onDismiss={undoQueue.dismiss}
+      />
+    </>
   );
 }
