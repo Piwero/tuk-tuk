@@ -894,16 +894,18 @@ main > form input {
   cursor: pointer;
 }
 
-/* TaskRow (#157) — the List view, Smart Lists and Search all render this
- * shape. Two lines, always: checkbox + title claim the row's full width
- * on their own line, so the title is the only thing that ever truncates;
- * metadata (chips, row actions) wraps freely on the line below instead of
- * squeezing the title down toward nothing on a narrow viewport. */
+/* TaskRow (#157): title and metadata share one line whenever they fit.
+ * Neither is given `flex-grow`, so the browser's flex line-breaking places
+ * the metadata on a wrapped second line — rather than shrinking the title
+ * toward nothing — the moment the pair's natural (un-truncated) widths stop
+ * fitting the row; title-only truncation (the inner span's ellipsis) is
+ * reached only if the title alone still can't fit a full-width line. */
 .tasks li.task-row {
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  gap: var(--space-1);
+  flex-wrap: wrap;
+  /* Asymmetric on purpose: column-gap matches the base .tasks li rhythm for
+   * the shared-line case; row-gap stays tight for the wrapped two-line case. */
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
   padding: var(--space-2);
 }
 
