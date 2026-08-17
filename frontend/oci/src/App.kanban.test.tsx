@@ -188,6 +188,23 @@ describe("Kanban view", () => {
     ).toEqual(["Cards in Backlog"]);
   });
 
+  it("shows the priority indicator on a card with a non-default priority", async () => {
+    const board = fakeList("Board", { view_mode: "kanban" });
+    const backlog = fakeSection("Backlog", board.id);
+    installFakeApi({
+      lists: [INBOX, board],
+      sections: [backlog],
+      tasks: [
+        fakeTask("Urgent fix", { list_id: board.id, section_id: backlog.id, priority: "high" }),
+      ],
+    });
+    render(<App />);
+    await openList("Board");
+    const kanban = await screen.findByRole("region", { name: "Kanban board" });
+
+    expect(within(kanban).getByLabelText("Priority: High")).toBeInTheDocument();
+  });
+
   it("offers Add Section on an empty board so the first column can be created", async () => {
     const board = fakeList("Board", { view_mode: "kanban" });
     const api = installFakeApi({ lists: [INBOX, board] });

@@ -37,13 +37,13 @@
   --green-600: #1f8a3d;
   --green-700: #176430;
 
-  /* Red — danger, overdue, High priority */
+  /* Red — danger, overdue (#166: no longer Priority — see --priority-*) */
   --red-50: #fdeded;
   --red-100: #fadbdb;
   --red-500: #e5484d;
   --red-600: #d63840;
 
-  /* Amber — Medium priority, warnings */
+  /* Amber — warnings (#166: no longer Medium priority — see --priority-*) */
   --amber-50: #fdf4e3;
   --amber-100: #fbe8c3;
   --amber-500: #eda812;
@@ -95,11 +95,14 @@
   --focus-accent: var(--plum-600);
   --focus-soft: var(--plum-50);
 
-  /* Priority — named levels, from the app's data attributes */
-  --priority-high: var(--red-500);
-  --priority-medium: var(--amber-500);
-  --priority-low: var(--blue-600);
-  --priority-none: var(--ink-300);
+  /* Priority — named levels, from the app's data attributes. Shape (the
+     signal-bar glyph in PriorityIndicator) carries the meaning; these only
+     reinforce weight via lightness, never hue — never red, which stays
+     reserved for "overdue" (#166). None has no token: it renders no
+     indicator at all. */
+  --priority-low: var(--text-tertiary);
+  --priority-medium: var(--text-secondary);
+  --priority-high: var(--text-primary);
 
   /* Habit heatmap levels (0–4) */
   --heat-0: var(--ink-100);
