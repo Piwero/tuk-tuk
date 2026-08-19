@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.4](https://github.com/Piwero/tuk-tuk/compare/v0.6.3...v0.6.4) - 2026-08-19
+
+### Features
+
+- **focus:** Play a sound when a Pomo or break finishes ([b09d4f1](https://github.com/Piwero/tuk-tuk/commit/b09d4f15d038fc14c42e3056f66221ef687787ca))
+
 ## [0.6.3](https://github.com/Piwero/tuk-tuk/compare/v0.6.2...v0.6.3) - 2026-08-17
 
 ### Bug Fixes
