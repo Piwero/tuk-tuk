@@ -17,6 +17,7 @@ import {
 import { createFocusSession, type FocusMode } from "./api";
 import { linkFields, type FocusLink } from "./focusLink";
 import { clearStoredRun, loadStoredRun, saveStoredRun, type FocusPhase } from "./focusRun";
+import { playFocusRunEndSound } from "./notificationSound";
 
 const DEFAULT_BREAK_MS = 5 * 60_000;
 const DEFAULT_LONG_BREAK_MS = 15 * 60_000;
@@ -152,6 +153,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
         // A break is never focus time — it never becomes a Focus Session.
         setRunning(null);
         setJustFinished(true);
+        playFocusRunEndSound(running.phase);
         return;
       }
       await createFocusSession({
@@ -163,6 +165,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
       });
       setRunning(null);
       setJustFinished(true);
+      playFocusRunEndSound(running.phase);
       if (running.mode === "pomo") {
         pomoStreak.current += 1;
         setPendingBreak({
