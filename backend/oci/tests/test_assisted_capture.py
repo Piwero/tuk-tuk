@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.date_phrase import resolve_date_phrase
 from app.main import create_app
+from app.priority_phrase import resolve_priority_phrase
 from app.recurrence_phrase import resolve_recurrence_phrase
 from app.reminder_phrase import resolve_reminder_phrase
 from tests.conftest import TEST_PASSWORD, FakeClock
@@ -816,6 +817,287 @@ class TestParseCaptureListTagPriority:
         assert created.json()["tags"][0]["name"] == "Urgent"
 
 
+class TestParseCaptureSpanish:
+    """Spanish input through the parse endpoint (issue #46): the same
+    resolution matrix as the English tests above, driven by Spanish
+    date/recurrence/reminder/priority phrases, mirroring the EN behavior
+    end to end through the HTTP seam with canned extractions.
+    """
+
+    def test_manana_resolves_as_all_day_tomorrow(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction("dentista", "mañana")
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={"text": "dentista mañana", "local_date": "2026-08-17", "time_zone": "UTC"},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "dentista"
+        assert body["due_date"] == "2026-08-18T00:00:00Z"
+        assert body["is_all_day"] is True
+
+    def test_weekday_and_time_phrase_resolves_against_the_client_local_date(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        # 2026-08-17 is a Monday; "martes a las 3" should resolve to 2026-08-18.
+        stub_ollama.set_extraction("dentista", "martes a las 3")
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "dentista martes a las 3",
+                    "local_date": "2026-08-17",
+                    "time_zone": "America/New_York",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "dentista"
+        assert body["due_date"] == "2026-08-18T03:00:00-04:00"
+        assert body["is_all_day"] is False
+        assert body["time_zone"] == "America/New_York"
+
+    def test_el_weekday_que_viene_forces_the_next_occurrence(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        # 2026-08-17 is a Monday; "el lunes que viene" should skip today's
+        # occurrence and land on 2026-08-24, mirroring "next monday".
+        stub_ollama.set_extraction("pagar renta", "el lunes que viene")
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "pagar renta el lunes que viene",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["due_date"] == "2026-08-24T00:00:00Z"
+
+    @pytest.mark.parametrize(
+        ("recurrence_phrase", "rrule"),
+        [
+            ("diario", "FREQ=DAILY"),
+            ("semanal", "FREQ=WEEKLY"),
+            ("cada lunes", "FREQ=WEEKLY;BYDAY=MO"),
+            ("cada lunes y jueves", "FREQ=WEEKLY;BYDAY=MO,TH"),
+            ("cada 2 semanas", "FREQ=WEEKLY;INTERVAL=2"),
+            ("todos los meses", "FREQ=MONTHLY"),
+            ("cada mes el dia 1", "FREQ=MONTHLY;BYMONTHDAY=1"),
+        ],
+    )
+    def test_recurrence_resolution_matrix_through_the_parse_endpoint(
+        self,
+        database_url: str,
+        fake_clock: FakeClock,
+        stub_ollama: StubOllama,
+        recurrence_phrase: str,
+        rrule: str,
+    ) -> None:
+        stub_ollama.set_extraction(
+            f"pagar renta {recurrence_phrase}", "mañana", recurrence_phrase=recurrence_phrase
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": f"pagar renta {recurrence_phrase} mañana",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["recurrence"] == rrule
+
+    @pytest.mark.parametrize(
+        ("reminder_phrase", "offset"),
+        [
+            ("a tiempo", "PT0S"),
+            ("recuérdame el día antes", "-P1D"),
+            ("1 hora antes", "-PT1H"),
+            ("30 minutos antes", "-PT30M"),
+        ],
+    )
+    def test_reminder_resolution_matrix_through_the_parse_endpoint(
+        self,
+        database_url: str,
+        fake_clock: FakeClock,
+        stub_ollama: StubOllama,
+        reminder_phrase: str,
+        offset: str,
+    ) -> None:
+        stub_ollama.set_extraction(
+            f"dentista {reminder_phrase}", "mañana", reminder_phrase=reminder_phrase
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": f"dentista {reminder_phrase} mañana",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["reminders"] == [offset]
+
+    @pytest.mark.parametrize(
+        ("priority_phrase", "priority"),
+        [("prioridad alta", "high"), ("urgente", "high"), ("baja", "low")],
+    )
+    def test_priority_phrases_map_to_the_existing_four_priority_levels(
+        self,
+        database_url: str,
+        fake_clock: FakeClock,
+        stub_ollama: StubOllama,
+        priority_phrase: str,
+        priority: str,
+    ) -> None:
+        stub_ollama.set_extraction(
+            f"llamar a mamá {priority_phrase}", None, priority_phrase=priority_phrase
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": f"llamar a mamá {priority_phrase}",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["priority"] == priority
+
+    def test_a_spanish_list_phrase_matching_an_existing_list_proposes_a_list_name(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        """List/Tag matching (app.name_phrase) is a literal case-insensitive
+        match against the user's own List/Tag names, not a fixed-vocabulary
+        resolver — so it needs no separate Spanish phrase set, only a
+        Spanish extraction feeding it, exercised here end to end."""
+        stub_ollama.set_extraction("comprar leche", None, list_phrase="mandados")
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "comprar leche en mi lista de mandados",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                    "list_names": ["Mandados", "Trabajo"],
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["list_name"] == "Mandados"
+
+    def test_mixed_language_recurrence_and_reminder_phrases_degrade_gracefully(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        """Unresolvable recurrence/reminder phrases never block the draft —
+        same fallback posture as an unresolvable date phrase, exercised
+        here with mixed EN/ES text."""
+        stub_ollama.set_extraction(
+            "pay rent cuando pueda avísame en algún momento",
+            "mañana",
+            recurrence_phrase="cuando pueda",
+            reminder_phrase="avísame en algún momento",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "pay rent cuando pueda mañana avísame en algún momento",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["due_date"] is not None
+        assert body["recurrence"] is None
+        assert body["reminders"] == []
+        assert "cuando pueda" in body["title"]
+        assert "avísame en algún momento" in body["title"]
+
+    def test_mixed_language_input_degrades_gracefully_when_the_date_phrase_is_unresolvable(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        """Mixed EN/ES text never blocks capture: a phrase this resolver
+        doesn't recognize just leaves the title untouched with no error,
+        the same fallback as an unresolvable English phrase."""
+        stub_ollama.set_extraction("dentista", "pronto")
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "dentista pronto next week maybe",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "dentista"
+        assert body["due_date"] is None
+
+    def test_the_created_task_can_be_confirmed_through_the_existing_task_endpoint(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "pagar renta",
+            "mañana",
+            recurrence_phrase="cada mes el dia 1",
+            reminder_phrase="recuérdame el día antes",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            draft = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "pagar renta cada mes el dia 1 mañana recuérdame el día antes",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            ).json()
+
+            created = client.post(
+                "/api/v1/tasks",
+                json={
+                    "title": draft["title"],
+                    "due_date": draft["due_date"],
+                    "is_all_day": draft["is_all_day"],
+                    "time_zone": draft["time_zone"],
+                    "recurrence": draft["recurrence"],
+                    "reminders": draft["reminders"],
+                },
+            )
+
+        assert created.status_code == 201, created.text
+        assert created.json()["recurrence"] == "FREQ=MONTHLY;BYMONTHDAY=1"
+        assert created.json()["reminders"] == ["-P1D"]
+
+
 class TestResolveDatePhrase:
     def test_tomorrow_is_all_day(self) -> None:
         result = resolve_date_phrase("tomorrow", dt.date(2026, 8, 17), "UTC")
@@ -843,6 +1125,45 @@ class TestResolveDatePhrase:
 
     def test_unknown_timezone_returns_none(self) -> None:
         assert resolve_date_phrase("tomorrow", dt.date(2026, 8, 17), "Not/AZone") is None
+
+    def test_manana_is_all_day(self) -> None:
+        result = resolve_date_phrase("mañana", dt.date(2026, 8, 17), "UTC")
+        assert result is not None
+        due_date, is_all_day = result
+        assert is_all_day is True
+        assert due_date.date().isoformat() == "2026-08-18"
+
+    def test_hoy_resolves_to_the_local_date(self) -> None:
+        result = resolve_date_phrase("hoy", dt.date(2026, 8, 17), "UTC")
+        assert result is not None
+        assert result[0].date().isoformat() == "2026-08-17"
+
+    def test_bare_spanish_weekday_can_resolve_to_today(self) -> None:
+        # 2026-08-18 is a Tuesday.
+        result = resolve_date_phrase("martes", dt.date(2026, 8, 18), "UTC")
+        assert result is not None
+        assert result[0].date().isoformat() == "2026-08-18"
+
+    def test_proximo_weekday_skips_todays_occurrence(self) -> None:
+        # 2026-08-18 is a Tuesday; "próximo martes" should be a week later.
+        result = resolve_date_phrase("próximo martes", dt.date(2026, 8, 18), "UTC")
+        assert result is not None
+        assert result[0].date().isoformat() == "2026-08-25"
+
+    def test_weekday_que_viene_skips_todays_occurrence(self) -> None:
+        result = resolve_date_phrase("martes que viene", dt.date(2026, 8, 18), "UTC")
+        assert result is not None
+        assert result[0].date().isoformat() == "2026-08-25"
+
+    def test_weekday_and_time_phrase_with_a_las(self) -> None:
+        result = resolve_date_phrase("martes a las 15", dt.date(2026, 8, 17), "UTC")
+        assert result is not None
+        due_date, is_all_day = result
+        assert is_all_day is False
+        assert due_date.time().isoformat() == "15:00:00"
+
+    def test_unrecognized_spanish_phrase_returns_none(self) -> None:
+        assert resolve_date_phrase("pronto", dt.date(2026, 8, 17), "UTC") is None
 
 
 class TestResolveRecurrencePhrase:
@@ -878,6 +1199,38 @@ class TestResolveRecurrencePhrase:
     def test_out_of_range_month_day_returns_none(self) -> None:
         assert resolve_recurrence_phrase("every month on the 32nd") is None
 
+    @pytest.mark.parametrize(
+        ("phrase", "rrule"),
+        [
+            ("diario", "FREQ=DAILY"),
+            ("diariamente", "FREQ=DAILY"),
+            ("semanal", "FREQ=WEEKLY"),
+            ("mensual", "FREQ=MONTHLY"),
+            ("anual", "FREQ=YEARLY"),
+            ("cada dia", "FREQ=DAILY"),
+            ("cada semana", "FREQ=WEEKLY"),
+            ("cada mes", "FREQ=MONTHLY"),
+            ("cada año", "FREQ=YEARLY"),
+            ("cada 2 semanas", "FREQ=WEEKLY;INTERVAL=2"),
+            ("cada 3 dias", "FREQ=DAILY;INTERVAL=3"),
+            ("cada lunes", "FREQ=WEEKLY;BYDAY=MO"),
+            ("cada lunes y jueves", "FREQ=WEEKLY;BYDAY=MO,TH"),
+            ("cada mes el dia 1", "FREQ=MONTHLY;BYMONTHDAY=1"),
+            ("cada mes el dia 15", "FREQ=MONTHLY;BYMONTHDAY=15"),
+            ("todos los dias", "FREQ=DAILY"),
+            ("todos los meses", "FREQ=MONTHLY"),
+            ("todos los lunes", "FREQ=WEEKLY;BYDAY=MO"),
+        ],
+    )
+    def test_common_spanish_recurrence_phrases_resolve(self, phrase: str, rrule: str) -> None:
+        assert resolve_recurrence_phrase(phrase) == rrule
+
+    def test_unrecognized_spanish_phrase_returns_none(self) -> None:
+        assert resolve_recurrence_phrase("cuando pueda") is None
+
+    def test_cada_with_no_unit_returns_none(self) -> None:
+        assert resolve_recurrence_phrase("cada") is None
+
 
 class TestResolveReminderPhrase:
     @pytest.mark.parametrize(
@@ -901,3 +1254,49 @@ class TestResolveReminderPhrase:
 
     def test_missing_before_returns_none(self) -> None:
         assert resolve_reminder_phrase("1 hour") is None
+
+    @pytest.mark.parametrize(
+        ("phrase", "offset"),
+        [
+            ("a tiempo", "PT0S"),
+            ("en el momento", "PT0S"),
+            ("el día antes", "-P1D"),
+            ("un día antes", "-P1D"),
+            ("1 hora antes", "-PT1H"),
+            ("2 horas antes", "-PT2H"),
+            ("30 minutos antes", "-PT30M"),
+            ("una semana antes", "-P7D"),
+            ("recuérdame el día antes", "-P1D"),
+        ],
+    )
+    def test_common_spanish_reminder_phrases_resolve(self, phrase: str, offset: str) -> None:
+        assert resolve_reminder_phrase(phrase) == offset
+
+    def test_unrecognized_spanish_phrase_returns_none(self) -> None:
+        assert resolve_reminder_phrase("avísame en algún momento") is None
+
+    def test_missing_antes_returns_none(self) -> None:
+        assert resolve_reminder_phrase("1 hora") is None
+
+
+class TestResolvePriorityPhrase:
+    @pytest.mark.parametrize(
+        ("phrase", "priority"),
+        [
+            ("high priority", "high"),
+            ("urgent", "high"),
+            ("asap", "high"),
+            ("medium", "medium"),
+            ("normal", "medium"),
+            ("low", "low"),
+            ("urgente", "high"),
+            ("prioridad alta", "high"),
+            ("media", "medium"),
+            ("baja", "low"),
+        ],
+    )
+    def test_priority_phrases_resolve(self, phrase: str, priority: str) -> None:
+        assert resolve_priority_phrase(phrase) == priority
+
+    def test_unrecognized_phrase_returns_none(self) -> None:
+        assert resolve_priority_phrase("whenever") is None

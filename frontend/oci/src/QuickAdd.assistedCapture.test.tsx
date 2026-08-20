@@ -393,4 +393,45 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
       tag_ids: [urgent.id],
     });
   });
+
+  it("parses Spanish input into chips the same way as English (issue #46)", async () => {
+    const api = installFakeApi({
+      assistAvailable: true,
+      assistParseResult: {
+        title: "dentista",
+        due_date: "2026-08-18T15:00:00-04:00",
+        is_all_day: false,
+        time_zone: "America/New_York",
+        recurrence: null,
+        reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "dentista martes a las 3{Enter}");
+
+    await waitFor(() => expect(parsePosts(api.requests)).toHaveLength(1));
+    expect(parsePosts(api.requests)[0]).toMatchObject({ text: "dentista martes a las 3" });
+
+    const chipGroup = await screen.findByRole("group", { name: "Assisted Capture draft" });
+    expect(chipGroup).toHaveTextContent("dentista");
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "dentista",
+      list_id: 1,
+      due_date: "2026-08-18T15:00:00-04:00",
+      is_all_day: false,
+      time_zone: "America/New_York",
+    });
+  });
 });

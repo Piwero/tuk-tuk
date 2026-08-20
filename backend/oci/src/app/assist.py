@@ -4,6 +4,17 @@ three ever read from Ollama and never raise — any failure (unset/blank base
 URL, connection refused, timeout, a malformed response) simply degrades to
 "unavailable", "no models", or "nothing extracted", so a caller never has
 to distinguish "Ollama is down" from "Ollama was never configured".
+
+English and Spanish are equally first-class extraction inputs (ADR 0005,
+issue #46): `_EXTRACTION_SYSTEM_PROMPT` asks for phrases verbatim in
+whichever language the text itself uses, and the deterministic resolvers it
+feeds (app.date_phrase, app.recurrence_phrase, app.reminder_phrase,
+app.priority_phrase) each recognize the Spanish equivalents of every English
+phrase shape they understand. This is why ADR 0005 constrains the
+configured model to multilingual-strong ~14B-class options (e.g.
+`qwen3:14b`) rather than an English-only model of similar size — a model
+that only extracts well in English would silently degrade ES parses back to
+plain capture.
 """
 
 import json
@@ -83,7 +94,9 @@ _EXTRACTION_SYSTEM_PROMPT = (
     "priority', 'urgent', 'low'), or null if the text names none. Never "
     "invent a phrase that isn't in the text, and never compute or output "
     "an actual date, RRULE, offset, or decide whether a list/tag/priority "
-    "name actually exists — only ever extract what the text itself says."
+    "name actually exists — only ever extract what the text itself says. "
+    "The text may be in English or Spanish; extract every phrase verbatim "
+    "in whichever language it appears in the text — never translate it."
 )
 
 
