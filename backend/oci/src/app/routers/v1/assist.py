@@ -24,9 +24,11 @@ from app.assist import assist_available, list_installed_models, parse_capture_ex
 from app.date_phrase import resolve_date_phrase
 from app.db import SessionDep
 from app.models import AppSettings
+from app.name_phrase import resolve_name_phrase
+from app.priority_phrase import resolve_priority_phrase
 from app.recurrence_phrase import resolve_recurrence_phrase
 from app.reminder_phrase import resolve_reminder_phrase
-from app.schemas import reject_explicit_null
+from app.schemas import Priority, reject_explicit_null
 
 router = APIRouter(prefix="/api/v1/assist", tags=["assist"])
 
@@ -125,6 +127,13 @@ class ParseCaptureRequest(BaseModel):
     # done here in code, never by the model (ADR 0005).
     local_date: date
     time_zone: str = Field(min_length=1, max_length=64)
+    # The user's existing List/Tag names (issue #45) — the only legal
+    # values a list_phrase/tag_phrases match can resolve to. Matching
+    # happens here, never in the model, so a name that isn't in this list
+    # can never come back on the draft (CONTEXT.md: "only existing Lists
+    # and Tags are matched, never invented").
+    list_names: list[str] = Field(default_factory=list)
+    tag_names: list[str] = Field(default_factory=list)
 
 
 class ParseCaptureDraft(BaseModel):
@@ -142,6 +151,13 @@ class ParseCaptureDraft(BaseModel):
     # neither is ever set alongside a null due_date.
     recurrence: str | None
     reminders: list[str]
+    # A matched existing List name, matched existing Tag names, and a
+    # resolved Priority level (issue #45) — unlike due_date/recurrence/
+    # reminders, none of these require a resolved date, since filing a Task
+    # is independent of scheduling it.
+    list_name: str | None
+    tag_names: list[str]
+    priority: Priority | None
 
 
 def _strip_phrase(title: str, phrase: str) -> str:
@@ -169,9 +185,10 @@ def _resolve_and_strip(
 
 @router.post("/parse-capture")
 async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> ParseCaptureDraft:
-    """Assisted Capture's parse step (ADR 0005; issues #43, #44): one
-    stateless extraction plus deterministic date, recurrence, and reminder
-    resolution, for Quick-Add's single confirmation beat. Assist only ever
+    """Assisted Capture's parse step (ADR 0005; issues #43, #44, #45): one
+    stateless extraction plus deterministic date, recurrence, reminder,
+    list, tag, and priority resolution, for Quick-Add's single confirmation
+    beat. Assist only ever
     adds value, never subtracts it — an unconfigured or unreachable Ollama,
     a parse failure, an empty extraction, an empty residual title, or an
     unresolvable phrase all degrade towards the text exactly as typed, with
@@ -190,6 +207,9 @@ async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> Pa
         time_zone=None,
         recurrence=None,
         reminders=[],
+        list_name=None,
+        tag_names=[],
+        priority=None,
     )
     if not base_url or not model:
         return plain_capture
@@ -199,6 +219,26 @@ async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> Pa
         return plain_capture
 
     title = (extraction["title"] or "").strip() or payload.text
+
+    # List/Tag/Priority filing is independent of scheduling — resolved (and
+    # stripped from the title) regardless of whether a date phrase resolves
+    # below, unlike recurrence/reminders which require a due_date to attach
+    # to.
+    list_name, title = _resolve_and_strip(
+        extraction["list_phrase"],
+        lambda phrase: resolve_name_phrase(phrase, payload.list_names),
+        title,
+    )
+    matched_tag_names: list[str] = []
+    for tag_phrase in extraction["tag_phrases"]:
+        match = resolve_name_phrase(tag_phrase, payload.tag_names)
+        if match is not None and match not in matched_tag_names:
+            matched_tag_names.append(match)
+            title = _strip_phrase(title, tag_phrase)
+    priority, title = _resolve_and_strip(
+        extraction["priority_phrase"], resolve_priority_phrase, title
+    )
+
     date_phrase = extraction["date_phrase"]
     resolved = (
         resolve_date_phrase(date_phrase, payload.local_date, payload.time_zone)
@@ -213,6 +253,9 @@ async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> Pa
             time_zone=None,
             recurrence=None,
             reminders=[],
+            list_name=list_name,
+            tag_names=matched_tag_names,
+            priority=priority,
         )
     due_date, is_all_day = resolved
 
@@ -232,4 +275,7 @@ async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> Pa
         time_zone=payload.time_zone,
         recurrence=recurrence,
         reminders=reminders,
+        list_name=list_name,
+        tag_names=matched_tag_names,
+        priority=priority,
     )

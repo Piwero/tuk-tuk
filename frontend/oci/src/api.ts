@@ -209,14 +209,30 @@ export interface AssistCaptureDraft {
    * a dateless draft can't recur or hold reminders. */
   recurrence: string | null;
   reminders: string[];
+  /** A matched existing List name, matched existing Tag names, and a
+   * resolved Priority level (issue #45) — none require a non-null
+   * due_date, since filing a Task is independent of scheduling it. Always
+   * one of the `list_names`/`tag_names` candidates the request sent, never
+   * an invented name. */
+  list_name: string | null;
+  tag_names: string[];
+  priority: Priority | null;
 }
 
 /** One parse of free text into a proposed Task draft. `local_date` (the
  * caller's own YYYY-MM-DD day) and `time_zone` (IANA key) are what a
  * relative phrase like "tomorrow" resolves against — resolution itself
- * happens server-side, in code, never in the model. */
+ * happens server-side, in code, never in the model. `list_names`/
+ * `tag_names` are the caller's existing List/Tag names (issue #45) — the
+ * only legal values a returned `list_name`/`tag_names` match can name. */
 export function parseAssistCapture(
-  input: { text: string; local_date: string; time_zone: string },
+  input: {
+    text: string;
+    local_date: string;
+    time_zone: string;
+    list_names: string[];
+    tag_names: string[];
+  },
   signal?: AbortSignal,
 ): Promise<AssistCaptureDraft> {
   return request("/api/v1/assist/parse-capture", {
