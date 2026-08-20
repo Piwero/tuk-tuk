@@ -350,6 +350,56 @@ export function QuickAdd({
     });
   }
 
+  /** Per-chip removal (issue #47): drops one field from the draft before
+   * confirming. `restoreTitle` always falls back to the full typed text —
+   * the words a chip's phrase consumed aren't tracked individually on the
+   * frontend, and the acceptance criteria allow this coarser fallback so a
+   * removal never silently loses typed meaning. */
+  function removeDraftField(update: (current: CaptureDraft) => CaptureDraft): void {
+    setDraft((current) =>
+      current === null ? null : update({ ...current, proposedTitle: current.typedTitle }),
+    );
+  }
+
+  function removeDateChip(): void {
+    // A date-less Task can't recur or hold reminders (backend invariant),
+    // so removing the date chip drops those dependent chips too.
+    removeDraftField((current) => ({
+      ...current,
+      dueDate: null,
+      isAllDay: false,
+      timeZone: null,
+      recurrence: null,
+      reminders: [],
+    }));
+  }
+
+  function removeRecurrenceChip(): void {
+    removeDraftField((current) => ({ ...current, recurrence: null }));
+  }
+
+  function removeReminderChip(offset: string): void {
+    removeDraftField((current) => ({
+      ...current,
+      reminders: current.reminders.filter((r) => r !== offset),
+    }));
+  }
+
+  function removeListChip(): void {
+    removeDraftField((current) => ({ ...current, proposedListName: null }));
+  }
+
+  function removeTagChip(name: string): void {
+    removeDraftField((current) => ({
+      ...current,
+      proposedTagNames: current.proposedTagNames.filter((n) => !sameName(n, name)),
+    }));
+  }
+
+  function removePriorityChip(): void {
+    removeDraftField((current) => ({ ...current, proposedPriority: null }));
+  }
+
   /** The confirmation beat's Enter: creates the Task from the proposed
    * title and resolved date. */
   async function confirmDraft(): Promise<void> {
@@ -469,7 +519,10 @@ export function QuickAdd({
     if (event.key === "Escape") {
       event.preventDefault();
       void discardDraft();
-    } else if (event.key === "Enter") {
+    } else if (event.key === "Enter" && event.target === draftRef.current) {
+      // Enter on a chip's own remove button activates that button instead
+      // (native keyboard behavior) — only Enter on the draft row itself
+      // confirms, so removing a chip with the keyboard never also confirms.
       event.preventDefault();
       void confirmDraft();
     }
@@ -535,20 +588,40 @@ export function QuickAdd({
           {draft.dueDate !== null && (
             <span className="date-chip token-chip">
               {formatDraftDate(draft.dueDate, draft.isAllDay)}
+              <button type="button" aria-label="Remove date" onClick={removeDateChip}>
+                <Icon name="x" size={12} />
+              </button>
             </span>
           )}
           {draft.recurrence !== null && (
-            <span className="date-chip token-chip">{formatRecurrenceRule(draft.recurrence)}</span>
+            <span className="date-chip token-chip">
+              {formatRecurrenceRule(draft.recurrence)}
+              <button type="button" aria-label="Remove recurrence" onClick={removeRecurrenceChip}>
+                <Icon name="x" size={12} />
+              </button>
+            </span>
           )}
           {draft.reminders.map((offset) => (
             <span key={offset} className="date-chip token-chip">
               {formatReminderOffset(offset)}
+              <button
+                type="button"
+                aria-label={`Remove reminder (${formatReminderOffset(offset)})`}
+                onClick={() => removeReminderChip(offset)}
+              >
+                <Icon name="x" size={12} />
+              </button>
             </span>
           ))}
           {draft.proposedListName !== null &&
             draft.tokenListId === null &&
             draft.listChip.length === 0 && (
-              <span className="list-chip token-chip">{draft.proposedListName}</span>
+              <span className="list-chip token-chip">
+                {draft.proposedListName}
+                <button type="button" aria-label="Remove list" onClick={removeListChip}>
+                  <Icon name="x" size={12} />
+                </button>
+              </span>
             )}
           {draft.proposedTagNames
             .filter(
@@ -559,12 +632,24 @@ export function QuickAdd({
             .map((name) => (
               <span key={name} className="tag-chip token-chip">
                 #{name}
+                <button
+                  type="button"
+                  aria-label={`Remove ${name}`}
+                  onClick={() => removeTagChip(name)}
+                >
+                  <Icon name="x" size={12} />
+                </button>
               </span>
             ))}
           {draft.proposedPriority !== null &&
             draft.tokenPriority === null &&
             draft.priorityChip.length === 0 && (
-              <span className="tag-chip token-chip">{PRIORITY_LABELS[draft.proposedPriority]}</span>
+              <span className="tag-chip token-chip">
+                {PRIORITY_LABELS[draft.proposedPriority]}
+                <button type="button" aria-label="Remove priority" onClick={removePriorityChip}>
+                  <Icon name="x" size={12} />
+                </button>
+              </span>
             )}
           <span className="quick-add-assist-hint">Enter to confirm · Esc to discard</span>
           <button
