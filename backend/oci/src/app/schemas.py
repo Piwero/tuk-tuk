@@ -168,6 +168,7 @@ class TaskCreate(BaseModel):
     due_date: datetime | None = None
     is_all_day: bool = False
     time_zone: str | None = Field(default=None, max_length=64)
+    reminders: list[str] = Field(default_factory=list)
     recurrence: str | None = Field(default=None, max_length=255)
     # Provenance of a Task converted from a Google Event (issue #111);
     # absent for an ordinary Task.

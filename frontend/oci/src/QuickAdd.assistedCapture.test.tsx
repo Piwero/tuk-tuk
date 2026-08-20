@@ -22,6 +22,8 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
         due_date: "2026-08-18T15:00:00-04:00",
         is_all_day: false,
         time_zone: "America/New_York",
+        recurrence: null,
+        reminders: [],
       },
     });
     render(<App />);
@@ -58,6 +60,8 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
         due_date: "2026-08-18T15:00:00-04:00",
         is_all_day: false,
         time_zone: "America/New_York",
+        recurrence: null,
+        reminders: [],
       },
     });
     render(<App />);
@@ -86,6 +90,8 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
         due_date: "2026-08-18T15:00:00-04:00",
         is_all_day: false,
         time_zone: "America/New_York",
+        recurrence: null,
+        reminders: [],
       },
     });
     render(<App />);
@@ -148,5 +154,108 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
     await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
     expect(parsePosts(api.requests)).toHaveLength(0);
     expect(taskPosts(api.requests)[0]).toEqual({ title: "call mom", list_id: 1 });
+  });
+});
+
+describe("Assisted Capture recurrence and reminders (issue #44)", () => {
+  it("renders a recurrence chip and confirms it into the Task's recurrence", async () => {
+    const api = installFakeApi({
+      assistAvailable: true,
+      assistParseResult: {
+        title: "pay rent",
+        due_date: "2026-08-18T00:00:00Z",
+        is_all_day: true,
+        time_zone: null,
+        recurrence: "FREQ=MONTHLY;BYMONTHDAY=1",
+        reminders: [],
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "pay rent every month on the 1st{Enter}");
+
+    const chipGroup = await screen.findByRole("group", { name: "Assisted Capture draft" });
+    expect(chipGroup).toHaveTextContent("monthly on the 1st");
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "pay rent",
+      list_id: 1,
+      due_date: "2026-08-18T00:00:00Z",
+      is_all_day: true,
+      recurrence: "FREQ=MONTHLY;BYMONTHDAY=1",
+    });
+  });
+
+  it("renders a reminder chip and confirms it into the Task's reminders", async () => {
+    const api = installFakeApi({
+      assistAvailable: true,
+      assistParseResult: {
+        title: "dentist",
+        due_date: "2026-08-18T15:00:00-04:00",
+        is_all_day: false,
+        time_zone: "America/New_York",
+        recurrence: null,
+        reminders: ["-P1D"],
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "dentist tuesday 3pm remind me the day before{Enter}");
+
+    const chipGroup = await screen.findByRole("group", { name: "Assisted Capture draft" });
+    expect(chipGroup).toHaveTextContent("1 day before");
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "dentist",
+      list_id: 1,
+      due_date: "2026-08-18T15:00:00-04:00",
+      is_all_day: false,
+      time_zone: "America/New_York",
+      reminders: ["-P1D"],
+    });
+  });
+
+  it("discarding the draft drops the recurrence and reminders, saving as typed", async () => {
+    const api = installFakeApi({
+      assistAvailable: true,
+      assistParseResult: {
+        title: "pay rent",
+        due_date: "2026-08-18T00:00:00Z",
+        is_all_day: true,
+        time_zone: null,
+        recurrence: "FREQ=MONTHLY;BYMONTHDAY=1",
+        reminders: ["-P1D"],
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "pay rent every month on the 1st remind me the day before{Enter}");
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+
+    await user.click(screen.getByRole("button", { name: "Discard suggestion" }));
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "pay rent every month on the 1st remind me the day before",
+      list_id: 1,
+    });
   });
 });

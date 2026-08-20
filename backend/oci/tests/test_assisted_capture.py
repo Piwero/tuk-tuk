@@ -20,6 +20,8 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.date_phrase import resolve_date_phrase
 from app.main import create_app
+from app.recurrence_phrase import resolve_recurrence_phrase
+from app.reminder_phrase import resolve_reminder_phrase
 from tests.conftest import TEST_PASSWORD, FakeClock
 
 
@@ -63,7 +65,12 @@ _RAISE = object()
 class StubOllama:
     def __init__(self) -> None:
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), _OllamaHandler)
-        self._server.extraction = {"title": "dentist", "date_phrase": "tuesday 3pm"}  # type: ignore[attr-defined]
+        self._server.extraction = {  # type: ignore[attr-defined]
+            "title": "dentist",
+            "date_phrase": "tuesday 3pm",
+            "recurrence_phrase": None,
+            "reminder_phrase": None,
+        }
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
 
@@ -72,8 +79,19 @@ class StubOllama:
         host, port = self._server.server_address[:2]
         return f"http://{host}:{port}"
 
-    def set_extraction(self, title: str, date_phrase: str | None) -> None:
-        self._server.extraction = {"title": title, "date_phrase": date_phrase}  # type: ignore[attr-defined]
+    def set_extraction(
+        self,
+        title: str,
+        date_phrase: str | None,
+        recurrence_phrase: str | None = None,
+        reminder_phrase: str | None = None,
+    ) -> None:
+        self._server.extraction = {  # type: ignore[attr-defined]
+            "title": title,
+            "date_phrase": date_phrase,
+            "recurrence_phrase": recurrence_phrase,
+            "reminder_phrase": reminder_phrase,
+        }
 
     def set_malformed_extraction(self) -> None:
         self._server.extraction = "not an object"  # type: ignore[attr-defined]
@@ -139,6 +157,8 @@ class TestParseCapture:
             "due_date": None,
             "is_all_day": False,
             "time_zone": None,
+            "recurrence": None,
+            "reminders": [],
         }
 
     def test_falls_back_when_ollama_is_unreachable(
@@ -184,6 +204,8 @@ class TestParseCapture:
             "due_date": None,
             "is_all_day": False,
             "time_zone": None,
+            "recurrence": None,
+            "reminders": [],
         }
 
     def test_falls_back_when_ollama_errors(
@@ -221,6 +243,8 @@ class TestParseCapture:
             "due_date": None,
             "is_all_day": False,
             "time_zone": None,
+            "recurrence": None,
+            "reminders": [],
         }
 
     def test_empty_residual_title_falls_back_to_the_full_typed_text(
@@ -258,6 +282,8 @@ class TestParseCapture:
             "due_date": None,
             "is_all_day": False,
             "time_zone": None,
+            "recurrence": None,
+            "reminders": [],
         }
 
     def test_resolves_a_weekday_and_time_phrase_against_the_client_local_date(
@@ -329,6 +355,268 @@ class TestParseCapture:
         assert created.json()["due_date"] == "2026-08-18T00:00:00Z"
 
 
+class TestParseCaptureRecurrenceAndReminders:
+    """Recurrence and reminder resolution through the parse endpoint
+    (issue #44). Both require a resolved date to attach to — a Task
+    without one can't recur or hold reminders — so both are gated on
+    `date_phrase` also resolving.
+    """
+
+    @pytest.mark.parametrize(
+        ("recurrence_phrase", "rrule"),
+        [
+            ("daily", "FREQ=DAILY"),
+            ("weekly", "FREQ=WEEKLY"),
+            ("monthly", "FREQ=MONTHLY"),
+            ("yearly", "FREQ=YEARLY"),
+            ("every 2 weeks", "FREQ=WEEKLY;INTERVAL=2"),
+            ("every monday and thursday", "FREQ=WEEKLY;BYDAY=MO,TH"),
+            ("every month on the 1st", "FREQ=MONTHLY;BYMONTHDAY=1"),
+        ],
+    )
+    def test_recurrence_resolution_matrix_through_the_parse_endpoint(
+        self,
+        database_url: str,
+        fake_clock: FakeClock,
+        stub_ollama: StubOllama,
+        recurrence_phrase: str,
+        rrule: str,
+    ) -> None:
+        stub_ollama.set_extraction(
+            f"pay rent {recurrence_phrase}", "tomorrow", recurrence_phrase=recurrence_phrase
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": f"pay rent {recurrence_phrase} tomorrow",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["recurrence"] == rrule
+
+    @pytest.mark.parametrize(
+        ("reminder_phrase", "offset"),
+        [
+            ("at the time", "PT0S"),
+            ("the day before", "-P1D"),
+            ("1 hour before", "-PT1H"),
+            ("30 minutes before", "-PT30M"),
+        ],
+    )
+    def test_reminder_resolution_matrix_through_the_parse_endpoint(
+        self,
+        database_url: str,
+        fake_clock: FakeClock,
+        stub_ollama: StubOllama,
+        reminder_phrase: str,
+        offset: str,
+    ) -> None:
+        stub_ollama.set_extraction(
+            f"dentist {reminder_phrase}", "tomorrow", reminder_phrase=reminder_phrase
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": f"dentist {reminder_phrase} tomorrow",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["reminders"] == [offset]
+
+    def test_recurrence_phrase_resolves_to_rrule_and_is_stripped_from_the_title(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "pay rent every month on the 1st",
+            "tomorrow",
+            recurrence_phrase="every month on the 1st",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "pay rent every month on the 1st tomorrow",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "pay rent"
+        assert body["recurrence"] == "FREQ=MONTHLY;BYMONTHDAY=1"
+        assert body["reminders"] == []
+
+    def test_reminder_phrase_resolves_to_an_offset_and_is_stripped_from_the_title(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "dentist remind me the day before",
+            "tuesday 3pm",
+            reminder_phrase="remind me the day before",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "dentist tuesday 3pm remind me the day before",
+                    "local_date": "2026-08-17",
+                    "time_zone": "America/New_York",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "dentist"
+        assert body["reminders"] == ["-P1D"]
+        assert body["recurrence"] is None
+
+    def test_recurrence_and_reminder_phrases_both_resolve_in_one_parse(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "pay rent every month on the 1st remind me 1 hour before",
+            "tomorrow",
+            recurrence_phrase="every month on the 1st",
+            reminder_phrase="1 hour before",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "pay rent every month on the 1st tomorrow remind me 1 hour before",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "pay rent remind me"
+        assert body["recurrence"] == "FREQ=MONTHLY;BYMONTHDAY=1"
+        assert body["reminders"] == ["-PT1H"]
+
+    def test_unresolvable_recurrence_phrase_is_omitted_and_left_in_the_title(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "pay rent whenever I feel like it",
+            "tomorrow",
+            recurrence_phrase="whenever I feel like it",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "pay rent whenever I feel like it tomorrow",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "pay rent whenever I feel like it"
+        assert body["recurrence"] is None
+
+    def test_unresolvable_reminder_phrase_is_omitted_and_left_in_the_title(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "dentist ping me eventually", "tomorrow", reminder_phrase="ping me eventually"
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "dentist ping me eventually tomorrow",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "dentist ping me eventually"
+        assert body["reminders"] == []
+
+    def test_recurrence_and_reminder_phrases_are_ignored_without_a_resolved_date(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "pay rent every month on the 1st",
+            None,
+            recurrence_phrase="every month on the 1st",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "pay rent every month on the 1st",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["due_date"] is None
+        assert body["recurrence"] is None
+        assert body["reminders"] == []
+
+    def test_the_created_task_can_be_confirmed_with_recurrence_and_reminders(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "pay rent every month on the 1st",
+            "tomorrow",
+            recurrence_phrase="every month on the 1st",
+            reminder_phrase="the day before",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            draft = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "pay rent every month on the 1st tomorrow the day before",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            ).json()
+
+            created = client.post(
+                "/api/v1/tasks",
+                json={
+                    "title": draft["title"],
+                    "due_date": draft["due_date"],
+                    "is_all_day": draft["is_all_day"],
+                    "time_zone": draft["time_zone"],
+                    "recurrence": draft["recurrence"],
+                    "reminders": draft["reminders"],
+                },
+            )
+
+        assert created.status_code == 201, created.text
+        assert created.json()["recurrence"] == "FREQ=MONTHLY;BYMONTHDAY=1"
+        assert created.json()["reminders"] == ["-P1D"]
+
+
 class TestResolveDatePhrase:
     def test_tomorrow_is_all_day(self) -> None:
         result = resolve_date_phrase("tomorrow", dt.date(2026, 8, 17), "UTC")
@@ -356,3 +644,61 @@ class TestResolveDatePhrase:
 
     def test_unknown_timezone_returns_none(self) -> None:
         assert resolve_date_phrase("tomorrow", dt.date(2026, 8, 17), "Not/AZone") is None
+
+
+class TestResolveRecurrencePhrase:
+    @pytest.mark.parametrize(
+        ("phrase", "rrule"),
+        [
+            ("daily", "FREQ=DAILY"),
+            ("weekly", "FREQ=WEEKLY"),
+            ("monthly", "FREQ=MONTHLY"),
+            ("yearly", "FREQ=YEARLY"),
+            ("annually", "FREQ=YEARLY"),
+            ("every day", "FREQ=DAILY"),
+            ("every week", "FREQ=WEEKLY"),
+            ("every month", "FREQ=MONTHLY"),
+            ("every year", "FREQ=YEARLY"),
+            ("every 2 weeks", "FREQ=WEEKLY;INTERVAL=2"),
+            ("every 3 days", "FREQ=DAILY;INTERVAL=3"),
+            ("every monday", "FREQ=WEEKLY;BYDAY=MO"),
+            ("every monday and thursday", "FREQ=WEEKLY;BYDAY=MO,TH"),
+            ("every month on the 1st", "FREQ=MONTHLY;BYMONTHDAY=1"),
+            ("every month on the 15th", "FREQ=MONTHLY;BYMONTHDAY=15"),
+        ],
+    )
+    def test_common_recurrence_phrases_resolve(self, phrase: str, rrule: str) -> None:
+        assert resolve_recurrence_phrase(phrase) == rrule
+
+    def test_unrecognized_phrase_returns_none(self) -> None:
+        assert resolve_recurrence_phrase("whenever I feel like it") is None
+
+    def test_every_with_no_unit_returns_none(self) -> None:
+        assert resolve_recurrence_phrase("every") is None
+
+    def test_out_of_range_month_day_returns_none(self) -> None:
+        assert resolve_recurrence_phrase("every month on the 32nd") is None
+
+
+class TestResolveReminderPhrase:
+    @pytest.mark.parametrize(
+        ("phrase", "offset"),
+        [
+            ("at the time", "PT0S"),
+            ("on time", "PT0S"),
+            ("the day before", "-P1D"),
+            ("a day before", "-P1D"),
+            ("1 hour before", "-PT1H"),
+            ("2 hours before", "-PT2H"),
+            ("30 minutes before", "-PT30M"),
+            ("a week before", "-P7D"),
+        ],
+    )
+    def test_common_reminder_phrases_resolve(self, phrase: str, offset: str) -> None:
+        assert resolve_reminder_phrase(phrase) == offset
+
+    def test_unrecognized_phrase_returns_none(self) -> None:
+        assert resolve_reminder_phrase("ping me eventually") is None
+
+    def test_missing_before_returns_none(self) -> None:
+        assert resolve_reminder_phrase("1 hour") is None
