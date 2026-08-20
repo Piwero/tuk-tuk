@@ -70,6 +70,9 @@ class StubOllama:
             "date_phrase": "tuesday 3pm",
             "recurrence_phrase": None,
             "reminder_phrase": None,
+            "list_phrase": None,
+            "tag_phrases": [],
+            "priority_phrase": None,
         }
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
@@ -85,12 +88,18 @@ class StubOllama:
         date_phrase: str | None,
         recurrence_phrase: str | None = None,
         reminder_phrase: str | None = None,
+        list_phrase: str | None = None,
+        tag_phrases: list[str] | None = None,
+        priority_phrase: str | None = None,
     ) -> None:
         self._server.extraction = {  # type: ignore[attr-defined]
             "title": title,
             "date_phrase": date_phrase,
             "recurrence_phrase": recurrence_phrase,
             "reminder_phrase": reminder_phrase,
+            "list_phrase": list_phrase,
+            "tag_phrases": tag_phrases or [],
+            "priority_phrase": priority_phrase,
         }
 
     def set_malformed_extraction(self) -> None:
@@ -159,6 +168,9 @@ class TestParseCapture:
             "time_zone": None,
             "recurrence": None,
             "reminders": [],
+            "list_name": None,
+            "tag_names": [],
+            "priority": None,
         }
 
     def test_falls_back_when_ollama_is_unreachable(
@@ -206,6 +218,9 @@ class TestParseCapture:
             "time_zone": None,
             "recurrence": None,
             "reminders": [],
+            "list_name": None,
+            "tag_names": [],
+            "priority": None,
         }
 
     def test_falls_back_when_ollama_errors(
@@ -245,6 +260,9 @@ class TestParseCapture:
             "time_zone": None,
             "recurrence": None,
             "reminders": [],
+            "list_name": None,
+            "tag_names": [],
+            "priority": None,
         }
 
     def test_empty_residual_title_falls_back_to_the_full_typed_text(
@@ -284,6 +302,9 @@ class TestParseCapture:
             "time_zone": None,
             "recurrence": None,
             "reminders": [],
+            "list_name": None,
+            "tag_names": [],
+            "priority": None,
         }
 
     def test_resolves_a_weekday_and_time_phrase_against_the_client_local_date(
@@ -615,6 +636,184 @@ class TestParseCaptureRecurrenceAndReminders:
         assert created.status_code == 201, created.text
         assert created.json()["recurrence"] == "FREQ=MONTHLY;BYMONTHDAY=1"
         assert created.json()["reminders"] == ["-P1D"]
+
+
+class TestParseCaptureListTagPriority:
+    """List/Tag/Priority proposals through the parse endpoint (issue #45).
+    Match-existing-only: a name the model claims but that isn't in the
+    request's `list_names`/`tag_names` candidates is silently dropped,
+    never invented — the same posture as an unresolvable date/recurrence/
+    reminder phrase, and independent of whether a date phrase resolves.
+    """
+
+    def test_a_list_phrase_matching_an_existing_list_proposes_a_list_name(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction("buy milk", None, list_phrase="errands")
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "buy milk in my errands list",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                    "list_names": ["Errands", "Work"],
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["list_name"] == "Errands"
+
+    def test_a_hallucinated_list_name_is_dropped(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction("buy milk in my groceries list", None, list_phrase="groceries")
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "buy milk in my groceries list",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                    "list_names": ["Errands", "Work"],
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["list_name"] is None
+        assert body["title"] == "buy milk in my groceries list"
+
+    def test_tag_like_phrases_propose_tag_chips_only_for_existing_tags(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "call the plumber urgent shopping", None, tag_phrases=["urgent", "shopping"]
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "call the plumber urgent shopping",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                    "tag_names": ["Urgent", "Home"],
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["tag_names"] == ["Urgent"]
+        assert body["title"] == "call the plumber shopping"
+
+    @pytest.mark.parametrize(
+        ("priority_phrase", "priority"),
+        [("high priority", "high"), ("urgent", "high"), ("low", "low")],
+    )
+    def test_priority_phrases_map_to_the_existing_four_priority_levels(
+        self,
+        database_url: str,
+        fake_clock: FakeClock,
+        stub_ollama: StubOllama,
+        priority_phrase: str,
+        priority: str,
+    ) -> None:
+        stub_ollama.set_extraction(
+            f"call mom {priority_phrase}", None, priority_phrase=priority_phrase
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": f"call mom {priority_phrase}",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["priority"] == priority
+
+    def test_list_tag_priority_resolve_without_a_resolved_date(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "buy milk",
+            None,
+            list_phrase="errands",
+            tag_phrases=["urgent"],
+            priority_phrase="high priority",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            response = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "buy milk in my errands list urgent high priority",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                    "list_names": ["Errands"],
+                    "tag_names": ["Urgent"],
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["due_date"] is None
+        assert body["list_name"] == "Errands"
+        assert body["tag_names"] == ["Urgent"]
+        assert body["priority"] == "high"
+
+    def test_the_created_task_can_be_confirmed_with_list_tags_and_priority(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_extraction(
+            "buy milk",
+            None,
+            list_phrase="errands",
+            tag_phrases=["urgent"],
+            priority_phrase="high priority",
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_ollama.base_url)
+            list_response = client.post("/api/v1/lists", json={"name": "Errands"})
+            assert list_response.status_code == 201, list_response.text
+            list_id = list_response.json()["id"]
+            tag_response = client.post("/api/v1/tags", json={"name": "Urgent"})
+            assert tag_response.status_code == 201, tag_response.text
+            tag_id = tag_response.json()["id"]
+
+            draft = client.post(
+                "/api/v1/assist/parse-capture",
+                json={
+                    "text": "buy milk in my errands list urgent high priority",
+                    "local_date": "2026-08-17",
+                    "time_zone": "UTC",
+                    "list_names": ["Errands"],
+                    "tag_names": ["Urgent"],
+                },
+            ).json()
+            assert draft["list_name"] == "Errands"
+            assert draft["tag_names"] == ["Urgent"]
+            assert draft["priority"] == "high"
+
+            created = client.post(
+                "/api/v1/tasks",
+                json={
+                    "title": draft["title"],
+                    "list_id": list_id,
+                    "tag_ids": [tag_id],
+                    "priority": draft["priority"],
+                },
+            )
+
+        assert created.status_code == 201, created.text
+        assert created.json()["priority"] == "high"
+        assert created.json()["tags"][0]["name"] == "Urgent"
 
 
 class TestResolveDatePhrase:

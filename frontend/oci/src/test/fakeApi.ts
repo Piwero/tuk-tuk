@@ -767,6 +767,9 @@ export function installFakeApi({
           time_zone: null,
           recurrence: null,
           reminders: [],
+          list_name: null,
+          tag_names: [],
+          priority: null,
         });
       }
       return json(state.assistParseResult);

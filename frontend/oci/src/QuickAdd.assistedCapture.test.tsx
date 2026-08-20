@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
-import { installFakeApi, type RecordedRequest } from "./test/fakeApi";
+import { fakeList, fakeTag, INBOX, installFakeApi, type RecordedRequest } from "./test/fakeApi";
 
 const taskPosts = (requests: RecordedRequest[]): unknown[] =>
   requests.filter((r) => r.method === "POST" && r.url === "/api/v1/tasks").map((r) => r.body);
@@ -24,6 +24,9 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
         time_zone: "America/New_York",
         recurrence: null,
         reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
       },
     });
     render(<App />);
@@ -62,6 +65,9 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
         time_zone: "America/New_York",
         recurrence: null,
         reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
       },
     });
     render(<App />);
@@ -92,6 +98,9 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
         time_zone: "America/New_York",
         recurrence: null,
         reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
       },
     });
     render(<App />);
@@ -168,6 +177,9 @@ describe("Assisted Capture recurrence and reminders (issue #44)", () => {
         time_zone: null,
         recurrence: "FREQ=MONTHLY;BYMONTHDAY=1",
         reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
       },
     });
     render(<App />);
@@ -203,6 +215,9 @@ describe("Assisted Capture recurrence and reminders (issue #44)", () => {
         time_zone: "America/New_York",
         recurrence: null,
         reminders: ["-P1D"],
+        list_name: null,
+        tag_names: [],
+        priority: null,
       },
     });
     render(<App />);
@@ -239,6 +254,9 @@ describe("Assisted Capture recurrence and reminders (issue #44)", () => {
         time_zone: null,
         recurrence: "FREQ=MONTHLY;BYMONTHDAY=1",
         reminders: ["-P1D"],
+        list_name: null,
+        tag_names: [],
+        priority: null,
       },
     });
     render(<App />);
@@ -256,6 +274,123 @@ describe("Assisted Capture recurrence and reminders (issue #44)", () => {
     expect(taskPosts(api.requests)[0]).toEqual({
       title: "pay rent every month on the 1st remind me the day before",
       list_id: 1,
+    });
+  });
+});
+
+describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
+  it("proposes a List/Tag/Priority chip and confirms them into the created Task", async () => {
+    const errands = fakeList("Errands");
+    const urgent = fakeTag("Urgent");
+    const api = installFakeApi({
+      lists: [INBOX, errands],
+      tags: [urgent],
+      assistAvailable: true,
+      assistParseResult: {
+        title: "buy milk",
+        due_date: null,
+        is_all_day: false,
+        time_zone: null,
+        recurrence: null,
+        reminders: [],
+        list_name: "Errands",
+        tag_names: ["Urgent"],
+        priority: "high",
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "buy milk in my errands list urgent high priority{Enter}");
+
+    const chipGroup = await screen.findByRole("group", { name: "Assisted Capture draft" });
+    expect(chipGroup).toHaveTextContent("Errands");
+    expect(chipGroup).toHaveTextContent("Urgent");
+    expect(chipGroup).toHaveTextContent("High");
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "buy milk",
+      list_id: errands.id,
+      priority: "high",
+      tag_ids: [urgent.id],
+    });
+  });
+
+  it("drops a hallucinated List/Tag name never sent as a candidate", async () => {
+    const api = installFakeApi({
+      lists: [INBOX],
+      tags: [],
+      assistAvailable: true,
+      assistParseResult: {
+        title: "buy milk",
+        due_date: null,
+        is_all_day: false,
+        time_zone: null,
+        recurrence: null,
+        reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "buy milk{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({ title: "buy milk", list_id: INBOX.id });
+    expect(screen.queryByRole("group", { name: "Assisted Capture draft" })).not.toBeInTheDocument();
+  });
+
+  it("sends only the residual text after explicit tokens are stripped, and an explicit #tag/!priority/~list token wins over a same-field Assist proposal", async () => {
+    const errands = fakeList("Errands");
+    const work = fakeList("Work");
+    const urgent = fakeTag("Urgent");
+    const api = installFakeApi({
+      lists: [INBOX, errands, work],
+      tags: [urgent],
+      assistAvailable: true,
+      assistParseResult: {
+        title: "buy milk",
+        due_date: null,
+        is_all_day: false,
+        time_zone: null,
+        recurrence: null,
+        reminders: [],
+        list_name: "Errands",
+        tag_names: ["Urgent"],
+        priority: "low",
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "buy milk !high ~Work{Enter}");
+
+    await waitFor(() => expect(parsePosts(api.requests)).toHaveLength(1));
+    expect(parsePosts(api.requests)[0]).toMatchObject({ text: "buy milk" });
+
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "buy milk",
+      list_id: work.id,
+      priority: "high",
+      tag_ids: [urgent.id],
     });
   });
 });

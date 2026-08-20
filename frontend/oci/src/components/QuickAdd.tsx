@@ -60,7 +60,7 @@ interface CaptureDraft {
   listChip: TaskList[];
   priorityChip: Priority[];
   proposedTitle: string;
-  dueDate: string;
+  dueDate: string | null;
   isAllDay: boolean;
   timeZone: string | null;
   // RRULE content and reminder offsets resolved from recurrence/reminder
@@ -68,6 +68,22 @@ interface CaptureDraft {
   // through to Task.recurrence/Task.reminders on the create call.
   recurrence: string | null;
   reminders: string[];
+  // Explicit `#tag`/`~list`/`!priority` tokens the typed text still had at
+  // submit time (issue #45) — parsed client-side before the residual text
+  // ever reached the parse endpoint, so they're captured here rather than
+  // re-derivable from `proposedTitle`. Always outrank the proposed fields
+  // below on confirm (CONTEXT.md: token-derived fields are never
+  // overridden by a model suggestion).
+  tokenTagNames: string[];
+  tokenListId: number | null;
+  tokenPriority: Priority | null;
+  // Matched-existing-only List/Tag/Priority proposals (issue #45) — same
+  // "only ever adds value" posture as the date/recurrence/reminder
+  // proposals above: every one of these can be null/empty with nothing
+  // else about the draft changing.
+  proposedListName: string | null;
+  proposedTagNames: string[];
+  proposedPriority: Priority | null;
 }
 
 const FREQ_LABELS: Record<string, string> = {
@@ -202,6 +218,20 @@ export function QuickAdd({
     }
   }, [draft]);
 
+  /** Assist proposals (issue #45) confirmed alongside a draft — always
+   * outranked by a chip or an explicit token, per CONTEXT.md's Assist
+   * glossary. Absent on every non-Assist call to `finalizeCreate`. Same
+   * six fields `CaptureDraft` carries, named once and reused there. */
+  type AssistExtra = Pick<
+    CaptureDraft,
+    | "tokenTagNames"
+    | "tokenListId"
+    | "tokenPriority"
+    | "proposedListName"
+    | "proposedTagNames"
+    | "proposedPriority"
+  >;
+
   /** The shared tail of every Task creation — plain, Assisted-Capture
    * confirmed, or Assisted-Capture discarded all funnel through this one
    * call to the existing task-creation API (ADR 0005: confirming a
@@ -216,6 +246,7 @@ export function QuickAdd({
       reminders?: string[];
     },
     snapshot: { tagChips: Tag[]; listChip: TaskList[]; priorityChip: Priority[] },
+    extra?: AssistExtra,
   ): Promise<void> {
     // A chip is a deliberate pick — it wins over a same-named raw token, and
     // that token is left in the title rather than silently consumed too.
@@ -226,9 +257,11 @@ export function QuickAdd({
     if (plan.title === "") {
       return;
     }
-    // Chips and any raw #tokens left in the title are unioned and
-    // deduplicated case-insensitively by name — a chip and a typed token can
-    // both name the same tag. Unknown names create the Tag on the fly.
+    // Chips, any raw #tokens left in the title, and any #tokens Assist's
+    // parse already consumed from the typed text (issue #45) are unioned
+    // and deduplicated case-insensitively by name. Unknown names create the
+    // Tag on the fly — the same explicit, deterministic-parser behavior as
+    // today, never something Assist's own tag proposals get to do.
     const tagIds: number[] = [];
     const seen: string[] = [];
     for (const chip of snapshot.tagChips) {
@@ -237,7 +270,7 @@ export function QuickAdd({
         tagIds.push(chip.id);
       }
     }
-    for (const name of plan.tagNames) {
+    for (const name of [...plan.tagNames, ...(extra?.tokenTagNames ?? [])]) {
       if (seen.some((seenName) => sameName(seenName, name))) {
         continue;
       }
@@ -251,8 +284,25 @@ export function QuickAdd({
         tagIds.push(created.id);
       }
     }
-    const finalListId = snapshot.listChip[0]?.id ?? plan.listId ?? listId;
-    const finalPriority = snapshot.priorityChip[0] ?? plan.priority;
+    // Assist's proposed tags are match-existing-only (never create), and
+    // only apply when no chip or explicit token already named a tag — a
+    // token-derived field is never overridden by a model suggestion.
+    if (seen.length === 0) {
+      for (const name of extra?.proposedTagNames ?? []) {
+        const existing = tags.find((tag) => sameName(tag.name, name));
+        if (existing !== undefined) {
+          tagIds.push(existing.id);
+        }
+      }
+    }
+    const proposedListId =
+      extra?.proposedListName == null
+        ? null
+        : (lists.find((list) => sameName(list.name, extra.proposedListName as string))?.id ?? null);
+    const finalListId =
+      snapshot.listChip[0]?.id ?? plan.listId ?? extra?.tokenListId ?? proposedListId ?? listId;
+    const finalPriority =
+      snapshot.priorityChip[0] ?? plan.priority ?? extra?.tokenPriority ?? extra?.proposedPriority;
     const task = await createTask({
       title: plan.title,
       list_id: finalListId,
@@ -307,8 +357,7 @@ export function QuickAdd({
       return;
     }
     const schedule = {
-      due_date: draft.dueDate,
-      is_all_day: draft.isAllDay,
+      ...(draft.dueDate === null ? {} : { due_date: draft.dueDate, is_all_day: draft.isAllDay }),
       ...(draft.timeZone === null ? {} : { time_zone: draft.timeZone }),
       ...(draft.recurrence === null ? {} : { recurrence: draft.recurrence }),
       ...(draft.reminders.length === 0 ? {} : { reminders: draft.reminders }),
@@ -318,7 +367,14 @@ export function QuickAdd({
       listChip: draft.listChip,
       priorityChip: draft.priorityChip,
     };
-    await finalizeCreate(draft.proposedTitle, schedule, snapshot);
+    await finalizeCreate(draft.proposedTitle, schedule, snapshot, {
+      tokenTagNames: draft.tokenTagNames,
+      tokenListId: draft.tokenListId,
+      tokenPriority: draft.tokenPriority,
+      proposedListName: draft.proposedListName,
+      proposedTagNames: draft.proposedTagNames,
+      proposedPriority: draft.proposedPriority,
+    });
     resetInput(draft.typedTitle, snapshot);
   }
 
@@ -331,11 +387,11 @@ export function QuickAdd({
       await confirmDraft();
       return;
     }
-    const plan = parseQuickAdd(title, lists, {
+    const tokenPlan = parseQuickAdd(title, lists, {
       skipListToken: listChip.length > 0,
       skipPriorityToken: priorityChip.length > 0,
     });
-    if (plan.title === "") {
+    if (tokenPlan.title === "") {
       return;
     }
     // Snapshots so a chip or title edit made while this submission is still
@@ -349,22 +405,34 @@ export function QuickAdd({
     // Assisted Capture: exactly one parse per submit, backstopped by a
     // client-enforced timeout on top of the backend's own — any failure
     // here silently degrades to plain capture, never a blocking error.
+    // Explicit #tag/~list/!priority tokens are parsed client-side first
+    // (issue #45): only the residual text — with those tokens already
+    // stripped — is ever sent to the parse endpoint, and the tokens
+    // themselves (tokenPlan) are carried through the draft so they still
+    // outrank whatever Assist proposes for the same fields on confirm.
     setParsing(true);
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), PARSE_TIMEOUT_MS);
     try {
       const proposal = await parseAssistCapture(
         {
-          text: submittedTitle,
+          text: tokenPlan.title,
           local_date: localDateString(),
           time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          list_names: lists.map((list) => list.name),
+          tag_names: tags.map((tag) => tag.name),
         },
         controller.signal,
       );
-      if (proposal.due_date === null) {
-        // Empty extraction, or a phrase that resolved to nothing: nothing
+      const hasProposal =
+        proposal.due_date !== null ||
+        proposal.list_name !== null ||
+        proposal.tag_names.length > 0 ||
+        proposal.priority !== null;
+      if (!hasProposal) {
+        // Empty extraction, or every phrase resolved to nothing: nothing
         // to confirm, so save as typed rather than open a beat with no
-        // date chip to show.
+        // chip to show.
         await saveAsTyped(submittedTitle, snapshot);
         return;
       }
@@ -378,6 +446,12 @@ export function QuickAdd({
         timeZone: proposal.time_zone,
         recurrence: proposal.recurrence,
         reminders: proposal.reminders,
+        tokenTagNames: tokenPlan.tagNames,
+        tokenListId: tokenPlan.listId,
+        tokenPriority: tokenPlan.priority,
+        proposedListName: proposal.list_name,
+        proposedTagNames: proposal.tag_names,
+        proposedPriority: proposal.priority,
       });
     } catch {
       // Parse failure or timeout: degrade to plain capture, no error shown.
@@ -458,9 +532,11 @@ export function QuickAdd({
           aria-label="Assisted Capture draft"
         >
           <span className="tag-chip token-chip">{draft.proposedTitle}</span>
-          <span className="date-chip token-chip">
-            {formatDraftDate(draft.dueDate, draft.isAllDay)}
-          </span>
+          {draft.dueDate !== null && (
+            <span className="date-chip token-chip">
+              {formatDraftDate(draft.dueDate, draft.isAllDay)}
+            </span>
+          )}
           {draft.recurrence !== null && (
             <span className="date-chip token-chip">{formatRecurrenceRule(draft.recurrence)}</span>
           )}
@@ -469,6 +545,27 @@ export function QuickAdd({
               {formatReminderOffset(offset)}
             </span>
           ))}
+          {draft.proposedListName !== null &&
+            draft.tokenListId === null &&
+            draft.listChip.length === 0 && (
+              <span className="list-chip token-chip">{draft.proposedListName}</span>
+            )}
+          {draft.proposedTagNames
+            .filter(
+              (name) =>
+                draft.tagChips.length === 0 &&
+                !draft.tokenTagNames.some((tokenName) => sameName(tokenName, name)),
+            )
+            .map((name) => (
+              <span key={name} className="tag-chip token-chip">
+                #{name}
+              </span>
+            ))}
+          {draft.proposedPriority !== null &&
+            draft.tokenPriority === null &&
+            draft.priorityChip.length === 0 && (
+              <span className="tag-chip token-chip">{PRIORITY_LABELS[draft.proposedPriority]}</span>
+            )}
           <span className="quick-add-assist-hint">Enter to confirm · Esc to discard</span>
           <button
             type="button"
