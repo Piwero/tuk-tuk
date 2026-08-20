@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.2.1](https://github.com/Piwero/tuk-tuk/compare/v1.2.0...v1.2.1) - 2026-08-20
+
+### Features
+
+- **assist:** List/Tag/Priority matching with token precedence ([afe2ab6](https://github.com/Piwero/tuk-tuk/commit/afe2ab691391606754640e7db6c5beda9e4748c7))
+
 ## [1.2.0](https://github.com/Piwero/tuk-tuk/compare/v1.1.0...v1.2.0) - 2026-08-20
 
 ### Features
