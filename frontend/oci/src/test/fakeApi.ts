@@ -760,7 +760,14 @@ export function installFakeApi({
       }
       const input = body as { text: string; local_date: string; time_zone: string };
       if (state.assistParseResult === null) {
-        return json({ title: input.text, due_date: null, is_all_day: false, time_zone: null });
+        return json({
+          title: input.text,
+          due_date: null,
+          is_all_day: false,
+          time_zone: null,
+          recurrence: null,
+          reminders: [],
+        });
       }
       return json(state.assistParseResult);
     }

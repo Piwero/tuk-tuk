@@ -18,6 +18,27 @@ def test_a_new_task_has_no_reminders(client: TestClient) -> None:
     assert task["reminders"] == []
 
 
+def test_reminders_can_be_set_on_creation(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "Dated",
+            "due_date": "2026-07-10T15:00:00Z",
+            "reminders": ["PT0S", "-PT30M", "-PT30M"],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["reminders"] == ["PT0S", "-PT30M"]
+
+
+def test_reminders_on_creation_require_a_date(client: TestClient) -> None:
+    response = client.post("/api/v1/tasks", json={"title": "Dateless", "reminders": ["-PT30M"]})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_reminders"
+
+
 def test_reminders_persist_and_read_back(client: TestClient) -> None:
     task = make_dated_task(client)
 

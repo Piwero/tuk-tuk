@@ -129,6 +129,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         await resolve_section(session, payload.section_id, list_id)
     validate_schedule(payload.start_date, payload.due_date, payload.is_all_day, payload.time_zone)
     validate_recurrence(payload.recurrence, payload.due_date)
+    reminders = validate_reminders(payload.reminders, payload.due_date)
     tags = await resolve_tags(session, payload.tag_ids) if payload.tag_ids else []
     # Initialize collections so serialization never triggers an async lazy load.
     # Append within the target List (mirrors create_section's per-List scope).
@@ -145,6 +146,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         due_date=payload.due_date,
         is_all_day=payload.is_all_day,
         time_zone=payload.time_zone,
+        reminders=reminders,
         recurrence=payload.recurrence,
         source_google_calendar_id=payload.source_google_calendar_id,
         source_google_event_id=payload.source_google_event_id,

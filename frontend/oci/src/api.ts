@@ -203,6 +203,12 @@ export interface AssistCaptureDraft {
   due_date: string | null;
   is_all_day: boolean;
   time_zone: string | null;
+  /** RRULE content and reminder offsets resolved from recurrence/reminder
+   * phrases (issue #44) — same wire conventions as Task.recurrence and
+   * Task.reminders. Both are only ever set alongside a non-null due_date;
+   * a dateless draft can't recur or hold reminders. */
+  recurrence: string | null;
+  reminders: string[];
 }
 
 /** One parse of free text into a proposed Task draft. `local_date` (the
@@ -585,6 +591,8 @@ export interface TaskCreateInput {
   due_date?: string;
   is_all_day?: boolean;
   time_zone?: string;
+  reminders?: string[];
+  recurrence?: string;
   /** Set only when creating a Task by converting an Event (issue #111). */
   source_google_calendar_id?: number;
   source_google_event_id?: string;

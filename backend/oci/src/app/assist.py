@@ -29,17 +29,26 @@ _EXTRACTION_SCHEMA = {
     "properties": {
         "title": {"type": "string"},
         "date_phrase": {"type": ["string", "null"]},
+        "recurrence_phrase": {"type": ["string", "null"]},
+        "reminder_phrase": {"type": ["string", "null"]},
     },
-    "required": ["title", "date_phrase"],
+    "required": ["title", "date_phrase", "recurrence_phrase", "reminder_phrase"],
 }
 
 _EXTRACTION_SYSTEM_PROMPT = (
-    "Extract a task title and a date/time phrase from the user's free text. "
-    '"title" is the text with any date/time phrase removed, otherwise the '
-    'original text unchanged. "date_phrase" is the exact substring naming a '
-    "date or time (e.g. 'tomorrow', 'next friday', 'tuesday 3pm'), or null "
-    "if the text names no date or time. Never invent a date_phrase that "
-    "isn't in the text, and never compute or output an actual date."
+    "Extract a task title, a date/time phrase, a recurrence phrase, and a "
+    'reminder phrase from the user\'s free text. "title" is the text with '
+    "any date/time phrase removed, otherwise the original text unchanged — "
+    'recurrence and reminder phrases stay in the title. "date_phrase" is '
+    "the exact substring naming a date or time (e.g. 'tomorrow', 'next "
+    "friday', 'tuesday 3pm'), or null if the text names no date or time. "
+    '"recurrence_phrase" is the exact substring naming a repeating schedule '
+    "(e.g. 'every month on the 1st', 'weekly'), or null if the text names "
+    'none. "reminder_phrase" is the exact substring asking to be reminded '
+    "ahead of the task's date (e.g. 'remind me the day before', '1 hour "
+    "before'), or null if the text names none. Never invent a phrase that "
+    "isn't in the text, and never compute or output an actual date, RRULE, "
+    "or offset."
 )
 
 
@@ -123,8 +132,16 @@ async def parse_capture_extraction(
         return None
     title = extracted.get("title")
     date_phrase = extracted.get("date_phrase")
+    recurrence_phrase = extracted.get("recurrence_phrase")
+    reminder_phrase = extracted.get("reminder_phrase")
     if not isinstance(title, str):
         return None
-    if date_phrase is not None and not isinstance(date_phrase, str):
-        return None
-    return {"title": title, "date_phrase": date_phrase}
+    for field in (date_phrase, recurrence_phrase, reminder_phrase):
+        if field is not None and not isinstance(field, str):
+            return None
+    return {
+        "title": title,
+        "date_phrase": date_phrase,
+        "recurrence_phrase": recurrence_phrase,
+        "reminder_phrase": reminder_phrase,
+    }

@@ -12,6 +12,8 @@ button calls the same endpoint to confirm a saved configuration actually
 reaches Ollama and finds the model installed.
 """
 
+import re
+from collections.abc import Callable
 from datetime import date, datetime
 
 from fastapi import APIRouter, Query
@@ -22,6 +24,8 @@ from app.assist import assist_available, list_installed_models, parse_capture_ex
 from app.date_phrase import resolve_date_phrase
 from app.db import SessionDep
 from app.models import AppSettings
+from app.recurrence_phrase import resolve_recurrence_phrase
+from app.reminder_phrase import resolve_reminder_phrase
 from app.schemas import reject_explicit_null
 
 router = APIRouter(prefix="/api/v1/assist", tags=["assist"])
@@ -131,22 +135,61 @@ class ParseCaptureDraft(BaseModel):
     # create the Task with the same timezone it was resolved against; null
     # whenever due_date is, including every fallback path.
     time_zone: str | None
+    # RRULE content (app.recurrence) and reminder offsets (app.models.Task.
+    # reminders), resolved from recurrence_phrase/reminder_phrase (issue
+    # #44). Both require a resolved due_date to attach to — a Task without a
+    # date can't recur or hold reminders (app.recurrence, app.schemas) — so
+    # neither is ever set alongside a null due_date.
+    recurrence: str | None
+    reminders: list[str]
+
+
+def _strip_phrase(title: str, phrase: str) -> str:
+    """Removes the first case-insensitive occurrence of `phrase` from
+    `title` and collapses the whitespace left behind; a phrase the model
+    claimed was in the title but isn't leaves the title unchanged."""
+    stripped = re.sub(re.escape(phrase), "", title, count=1, flags=re.IGNORECASE)
+    return " ".join(stripped.split())
+
+
+def _resolve_and_strip(
+    phrase: str | None, resolver: Callable[[str], str | None], title: str
+) -> tuple[str | None, str]:
+    """The shared shape behind resolving a recurrence/reminder phrase: only
+    a phrase that both exists and resolves gets stripped out of the title —
+    an unresolvable one leaves its words in place rather than blocking the
+    draft. Returns (resolved value or None, possibly-stripped title)."""
+    if not phrase:
+        return None, title
+    resolved = resolver(phrase)
+    if resolved is None:
+        return None, title
+    return resolved, _strip_phrase(title, phrase)
 
 
 @router.post("/parse-capture")
 async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> ParseCaptureDraft:
-    """Assisted Capture's parse step (ADR 0005; issue #43): one stateless
-    extraction plus deterministic date resolution, for Quick-Add's single
-    confirmation beat. Assist only ever adds value, never subtracts it — an
-    unconfigured or unreachable Ollama, a parse failure, an empty
-    extraction, an empty residual title, or an unresolvable date phrase all
-    degrade to the text exactly as typed, with no date and no error.
+    """Assisted Capture's parse step (ADR 0005; issues #43, #44): one
+    stateless extraction plus deterministic date, recurrence, and reminder
+    resolution, for Quick-Add's single confirmation beat. Assist only ever
+    adds value, never subtracts it — an unconfigured or unreachable Ollama,
+    a parse failure, an empty extraction, an empty residual title, or an
+    unresolvable phrase all degrade towards the text exactly as typed, with
+    no error. Recurrence and reminder phrases are only ever resolved
+    against a Task that also has a resolved date (a dateless Task can't
+    recur or hold reminders); an unresolvable phrase of either kind simply
+    leaves its words in the title rather than blocking the draft.
     """
     app_settings = await require_app_settings(session)
     base_url = app_settings.assist_ollama_base_url
     model = app_settings.assist_model
     plain_capture = ParseCaptureDraft(
-        title=payload.text, due_date=None, is_all_day=False, time_zone=None
+        title=payload.text,
+        due_date=None,
+        is_all_day=False,
+        time_zone=None,
+        recurrence=None,
+        reminders=[],
     )
     if not base_url or not model:
         return plain_capture
@@ -157,14 +200,36 @@ async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> Pa
 
     title = (extraction["title"] or "").strip() or payload.text
     date_phrase = extraction["date_phrase"]
-    if not date_phrase:
-        return ParseCaptureDraft(title=title, due_date=None, is_all_day=False, time_zone=None)
-
-    resolved = resolve_date_phrase(date_phrase, payload.local_date, payload.time_zone)
+    resolved = (
+        resolve_date_phrase(date_phrase, payload.local_date, payload.time_zone)
+        if date_phrase
+        else None
+    )
     if resolved is None:
-        return ParseCaptureDraft(title=title, due_date=None, is_all_day=False, time_zone=None)
-
+        return ParseCaptureDraft(
+            title=title,
+            due_date=None,
+            is_all_day=False,
+            time_zone=None,
+            recurrence=None,
+            reminders=[],
+        )
     due_date, is_all_day = resolved
+
+    recurrence, title = _resolve_and_strip(
+        extraction["recurrence_phrase"], resolve_recurrence_phrase, title
+    )
+
+    reminder, title = _resolve_and_strip(
+        extraction["reminder_phrase"], resolve_reminder_phrase, title
+    )
+    reminders = [] if reminder is None else [reminder]
+
     return ParseCaptureDraft(
-        title=title, due_date=due_date, is_all_day=is_all_day, time_zone=payload.time_zone
+        title=title,
+        due_date=due_date,
+        is_all_day=is_all_day,
+        time_zone=payload.time_zone,
+        recurrence=recurrence,
+        reminders=reminders,
     )
