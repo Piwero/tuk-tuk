@@ -66,7 +66,7 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: "July 2026" }, { timeout: 10_000 }),
+      await screen.findByRole("heading", { name: "Friday, July 3, 2026" }, { timeout: 10_000 }),
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/calendar");
   });

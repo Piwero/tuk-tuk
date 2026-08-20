@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe("The Calendar below the narrow breakpoint", () => {
-  it("defaults to Day rather than the clipped Month grid", async () => {
+  it("defaults to Day, same as any width", async () => {
     installFakeApi();
     render(<App />);
 
@@ -90,6 +90,8 @@ describe("The Calendar below the narrow breakpoint", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("link", { name: "Calendar" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
+    fireEvent.click(screen.getByRole("button", { name: "Month" }));
     await screen.findByRole("heading", { name: "July 2026" });
 
     const standupDay = await screen.findByLabelText("2026-07-06");
