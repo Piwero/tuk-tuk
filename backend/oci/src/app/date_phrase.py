@@ -41,6 +41,32 @@ _NEXT_MARKERS = ("proximo", "proxima")
 
 _TIME_RE = re.compile(r"^(\d{1,2})(?::(\d{2}))?(am|pm)?$")
 
+# Daypart qualifiers (issue #173): trailing words like "afternoon"/"tarde"
+# name an imprecise time-of-day rather than a clock time, so each maps to a
+# reasonable default hour instead of failing to resolve at all — the same
+# "app resolves it, never the model" posture as the explicit-time parsing
+# below. "manana" is deliberately absent here: unqualified it already means
+# "tomorrow" (see the leading-word match above), and its trailing daypart
+# sense ("morning") only applies behind the "por"/"en" markers handled by
+# _DAYPART_PREFIXES, disambiguated in the trailing-word loop itself.
+_DAYPART_TIMES = {
+    "morning": time(9, 0),
+    "afternoon": time(15, 0),
+    "tarde": time(15, 0),
+    "evening": time(18, 0),
+    "night": time(20, 0),
+    "noche": time(20, 0),
+}
+
+# Markers that precede a trailing daypart word ("por la tarde", "en la
+# mañana") — stripped the same way "at"/"a las" precede an explicit time.
+_DAYPART_PREFIXES = ("por", "en")
+
+# "tonight"/"esta noche" name today's date at night with no other date word
+# to anchor to, unlike every other daypart phrase which qualifies a
+# preceding date word.
+_TONIGHT_PHRASES = (("tonight",), ("esta", "noche"))
+
 
 def _fold(word: str) -> str:
     """Lowercases and strips accents so "miércoles"/"próximo" match their
@@ -93,6 +119,12 @@ def resolve_date_phrase(
     if not words:
         return None
 
+    # "tonight"/"esta noche" name today at night with no other date word to
+    # qualify — unlike every other daypart phrase below, which trails a
+    # date word this engine already resolved.
+    if tuple(words) in _TONIGHT_PHRASES:
+        return datetime.combine(local_date, _DAYPART_TIMES["night"], tzinfo=zone), False
+
     idx = 0
     while idx < len(words) and words[idx] in _ARTICLES:
         idx += 1
@@ -131,10 +163,31 @@ def resolve_date_phrase(
     else:
         return None
 
+    remaining = words[idx:]
+
+    # A trailing daypart word ("afternoon"/"tarde") — optionally behind a
+    # "por"/"en" marker and article ("por la tarde") — names an imprecise
+    # time-of-day rather than a clock time, so it maps to a default hour
+    # instead of falling through to the strict clock-time parse below. Only
+    # ever tried as a whole-remainder match: "afternoon" bare, or a marker
+    # plus exactly one daypart word, so it doesn't swallow a real trailing
+    # clock time.
+    daypart_remainder = remaining
+    if daypart_remainder and daypart_remainder[0] in _DAYPART_PREFIXES:
+        daypart_remainder = daypart_remainder[1:]
+        if daypart_remainder and daypart_remainder[0] in ("la", "el"):
+            daypart_remainder = daypart_remainder[1:]
+    if len(daypart_remainder) == 1:
+        word = daypart_remainder[0]
+        # "manana" only means "morning" in this trailing position — its
+        # leading-word sense above ("tomorrow") already consumed it there.
+        daypart_time = time(9, 0) if word == "manana" else _DAYPART_TIMES.get(word)
+        if daypart_time is not None:
+            return datetime.combine(target_date, daypart_time, tzinfo=zone), False
+
     # Only a leading run of filler words is stripped — "at"/"a las"/"a la"
     # precede the time itself, so unlike the date-word matching above there's
     # no case where one of these legitimately reappears after the time.
-    remaining = words[idx:]
     while remaining and remaining[0] in ("at", "a", "las", "la"):
         remaining = remaining[1:]
     if not remaining:
