@@ -59,7 +59,7 @@ describe("Direct load of a static view's URL", () => {
     expect(window.location.pathname).toBe("/focus/stats");
   });
 
-  it("opens Calendar directly at /calendar", async () => {
+  it("opens Calendar directly at /calendar, normalizing to /calendar/day", async () => {
     installFakeApi();
     window.history.replaceState(null, "", "/calendar");
 
@@ -68,7 +68,33 @@ describe("Direct load of a static view's URL", () => {
     expect(
       await screen.findByRole("heading", { name: "Friday, July 3, 2026" }, { timeout: 10_000 }),
     ).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/calendar");
+    expect(window.location.pathname).toBe("/calendar/day");
+  });
+
+  it("opens Calendar directly at /calendar/week", async () => {
+    installFakeApi();
+    window.history.replaceState(null, "", "/calendar/week");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" }, { timeout: 10_000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Week" })).toHaveAttribute("aria-pressed", "true");
+    expect(window.location.pathname).toBe("/calendar/week");
+  });
+
+  it("opens Calendar directly at /calendar/month", async () => {
+    installFakeApi();
+    window.history.replaceState(null, "", "/calendar/month");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "July 2026" }, { timeout: 10_000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute("aria-pressed", "true");
+    expect(window.location.pathname).toBe("/calendar/month");
   });
 
   it("opens Habits directly at /habits", async () => {
@@ -187,5 +213,31 @@ describe("History push/replace while navigating in the app", () => {
     window.history.forward();
     await waitFor(() => expect(window.location.pathname).toBe("/habits"));
     await screen.findByRole("heading", { name: "Habits" });
+  });
+
+  it("replaces (never pushes) the URL as the Calendar mode picker is used", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "Inbox" });
+
+    const nav = screen.getByRole("navigation", { name: "Views" });
+    await user.click(within(nav).getByRole("link", { name: "Calendar" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
+    expect(window.location.pathname).toBe("/calendar/day");
+
+    await user.click(screen.getByRole("button", { name: "Month" }));
+    await screen.findByRole("heading", { name: "July 2026" });
+    expect(window.location.pathname).toBe("/calendar/month");
+
+    await user.click(screen.getByRole("button", { name: "Week" }));
+    await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
+    expect(window.location.pathname).toBe("/calendar/week");
+
+    // A single Back leaves the Calendar entirely — mode toggles never added
+    // history entries of their own.
+    window.history.back();
+    await waitFor(() => expect(window.location.pathname).toBe("/"));
+    await screen.findByRole("heading", { name: "Inbox" });
   });
 });

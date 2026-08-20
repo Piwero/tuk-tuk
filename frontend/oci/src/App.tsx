@@ -25,11 +25,18 @@ import {
   type Task,
   type TaskList,
 } from "./api";
+import { type CalendarMode } from "./calendar";
 import { localDayOf } from "./dates";
 import { FocusRunProvider } from "./focusRunContext";
 import { PRIORITY_LABELS, type GroupBy, type SortBy } from "./grouping";
 import { loadSidebarCollapsed, saveSidebarCollapsed } from "./layoutPrefs";
-import { pathForStaticView, staticViewKindForPath, type StaticViewKind } from "./routes";
+import {
+  calendarModeForPath,
+  pathForCalendarMode,
+  pathForStaticView,
+  staticViewKindForPath,
+  type StaticViewKind,
+} from "./routes";
 import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
 import { EventDetail } from "./components/EventDetail";
@@ -59,7 +66,7 @@ type View =
   | { kind: "tag"; id: number }
   | { kind: "folder"; id: number }
   | { kind: "smart"; view: SmartView }
-  | { kind: "calendar" }
+  | { kind: "calendar"; mode: CalendarMode }
   | { kind: "habits" }
   | { kind: "standup" }
   | { kind: "focus"; task?: Task }
@@ -101,13 +108,14 @@ function staticViewKindOf(view: View): StaticViewKind | null {
 
 /** The View a static path resolves to on a fresh load: always blank/no
  * pre-selection, since neither a query nor a task can be encoded in these
- * URLs (issue #143). */
-function viewForStaticKind(kind: StaticViewKind): View {
+ * URLs (issue #143). The Calendar's mode is the one exception — it reads
+ * straight off the path (`/calendar/week`, etc.), defaulting to Day. */
+function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
   switch (kind) {
     case "search":
       return { kind: "search", search: BLANK_SEARCH_STATE };
     case "calendar":
-      return { kind: "calendar" };
+      return { kind: "calendar", mode: calendarModeForPath(pathname) ?? "day" };
     case "habits":
       return { kind: "habits" };
     case "standup":
@@ -139,7 +147,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // pre-update view and incorrectly clobber lastSyncedKindRef (issue #143).
   const [view, setView] = useState<View>(() => {
     const kind = staticViewKindForPath(window.location.pathname);
-    return kind !== null ? viewForStaticKind(kind) : null;
+    return kind !== null ? viewForStaticKind(kind, window.location.pathname) : null;
   });
   // The completed view of the current List (or of All): computed, newest first.
   const [completedMode, setCompletedMode] = useState(false);
@@ -227,7 +235,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       suppressNextSyncRef.current = true;
       setCompletedMode(false);
       setDrawerOpen(false);
-      setView(kind !== null ? viewForStaticKind(kind) : null);
+      setView(kind !== null ? viewForStaticKind(kind, window.location.pathname) : null);
     }
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -249,10 +257,27 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       return;
     }
     lastSyncedKindRef.current = kind;
-    if (kind !== null) {
+    if (kind === "calendar" && view?.kind === "calendar") {
+      window.history.pushState(null, "", pathForCalendarMode(view.mode));
+    } else if (kind !== null) {
       window.history.pushState(null, "", pathForStaticView(kind));
     } else if (window.location.pathname !== "/") {
       window.history.replaceState(null, "", "/");
+    }
+  }, [view]);
+
+  // Keeps /calendar/<mode> in sync with the mode picker: a `replaceState`
+  // (never a push) since switching Month/Week/Day is a within-view toggle,
+  // not a new place to Back/Forward through — same treatment Search's filter
+  // edits get above. A no-op when the path already matches (a direct load,
+  // or Back/Forward already landing on the right mode via the effect above).
+  useEffect(() => {
+    if (view?.kind !== "calendar") {
+      return;
+    }
+    const path = pathForCalendarMode(view.mode);
+    if (window.location.pathname !== path) {
+      window.history.replaceState(null, "", path);
     }
   }, [view]);
 
@@ -403,6 +428,13 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     setDrawerOpen(false);
     setView(next);
   }
+
+  /** Keeps `view.mode` (and so /calendar/<mode> — see the sync effect above)
+   * matching CalendarView's own internal mode state, without touching
+   * completedMode/drawerOpen the way a full switchView would. */
+  const handleCalendarModeChange = useCallback((mode: CalendarMode): void => {
+    setView((current) => (current?.kind === "calendar" ? { kind: "calendar", mode } : current));
+  }, []);
 
   /** Dismisses the Task detail sheet/panel — shared by its Close button, its
    * mobile backdrop, and its swipe-to-dismiss gesture (issue #170), so all
@@ -556,7 +588,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
           onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
           onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
-          onSelectCalendar={() => switchView({ kind: "calendar" })}
+          onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
           onSelectHabits={() => switchView({ kind: "habits" })}
           onSelectStandup={() => switchView({ kind: "standup" })}
           onSelectFocus={() => switchView({ kind: "focus" })}
@@ -861,6 +893,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               tags={tags}
               onTagCreated={(tag) => setTags((current) => [...current, tag])}
               onListCreated={(list) => setLists((current) => [...current, list])}
+              initialMode={view.mode}
+              onModeChange={handleCalendarModeChange}
             />
           ) : view?.kind === "habits" ? (
             <HabitsView />
@@ -932,7 +966,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           habitsSelected={habitsSelected}
           focusSelected={focusSelected}
           onSelectTasks={() => switchView({ kind: "smart", view: "today" })}
-          onSelectCalendar={() => switchView({ kind: "calendar" })}
+          onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
           onSelectHabits={() => switchView({ kind: "habits" })}
           onSelectFocus={() => switchView({ kind: "focus" })}
         />
