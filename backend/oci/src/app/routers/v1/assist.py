@@ -12,11 +12,14 @@ button calls the same endpoint to confirm a saved configuration actually
 reaches Ollama and finds the model installed.
 """
 
+from datetime import date, datetime
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
 
 from app.app_settings import require_app_settings
-from app.assist import assist_available, list_installed_models
+from app.assist import assist_available, list_installed_models, parse_capture_extraction
+from app.date_phrase import resolve_date_phrase
 from app.db import SessionDep
 from app.models import AppSettings
 from app.schemas import reject_explicit_null
@@ -109,3 +112,59 @@ async def remove_assist_config(session: SessionDep) -> None:
     app_settings.assist_ollama_base_url = None
     app_settings.assist_model = None
     await session.commit()
+
+
+class ParseCaptureRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+    # The caller's own local day and IANA timezone — the date phrase (e.g.
+    # "tuesday 3pm") is meaningless without them, and resolving it is always
+    # done here in code, never by the model (ADR 0005).
+    local_date: date
+    time_zone: str = Field(min_length=1, max_length=64)
+
+
+class ParseCaptureDraft(BaseModel):
+    title: str
+    due_date: datetime | None
+    is_all_day: bool
+    # Set alongside a non-null due_date so the frontend's confirm step can
+    # create the Task with the same timezone it was resolved against; null
+    # whenever due_date is, including every fallback path.
+    time_zone: str | None
+
+
+@router.post("/parse-capture")
+async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> ParseCaptureDraft:
+    """Assisted Capture's parse step (ADR 0005; issue #43): one stateless
+    extraction plus deterministic date resolution, for Quick-Add's single
+    confirmation beat. Assist only ever adds value, never subtracts it — an
+    unconfigured or unreachable Ollama, a parse failure, an empty
+    extraction, an empty residual title, or an unresolvable date phrase all
+    degrade to the text exactly as typed, with no date and no error.
+    """
+    app_settings = await require_app_settings(session)
+    base_url = app_settings.assist_ollama_base_url
+    model = app_settings.assist_model
+    plain_capture = ParseCaptureDraft(
+        title=payload.text, due_date=None, is_all_day=False, time_zone=None
+    )
+    if not base_url or not model:
+        return plain_capture
+
+    extraction = await parse_capture_extraction(base_url, model, payload.text)
+    if extraction is None:
+        return plain_capture
+
+    title = (extraction["title"] or "").strip() or payload.text
+    date_phrase = extraction["date_phrase"]
+    if not date_phrase:
+        return ParseCaptureDraft(title=title, due_date=None, is_all_day=False, time_zone=None)
+
+    resolved = resolve_date_phrase(date_phrase, payload.local_date, payload.time_zone)
+    if resolved is None:
+        return ParseCaptureDraft(title=title, due_date=None, is_all_day=False, time_zone=None)
+
+    due_date, is_all_day = resolved
+    return ParseCaptureDraft(
+        title=title, due_date=due_date, is_all_day=is_all_day, time_zone=payload.time_zone
+    )
