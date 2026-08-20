@@ -193,6 +193,33 @@ export function fetchAssistStatus(): Promise<AssistStatus> {
   return request("/api/v1/assist/status");
 }
 
+/** Assisted Capture's proposed draft (ADR 0005; issue #43): the residual
+ * title plus a resolved date, or a fallback draft with `due_date: null`
+ * when nothing could be extracted — same shape either way, so the caller
+ * never has to branch on which happened. `time_zone` is set only alongside
+ * a non-null `due_date`. */
+export interface AssistCaptureDraft {
+  title: string;
+  due_date: string | null;
+  is_all_day: boolean;
+  time_zone: string | null;
+}
+
+/** One parse of free text into a proposed Task draft. `local_date` (the
+ * caller's own YYYY-MM-DD day) and `time_zone` (IANA key) are what a
+ * relative phrase like "tomorrow" resolves against — resolution itself
+ * happens server-side, in code, never in the model. */
+export function parseAssistCapture(
+  input: { text: string; local_date: string; time_zone: string },
+  signal?: AbortSignal,
+): Promise<AssistCaptureDraft> {
+  return request("/api/v1/assist/parse-capture", {
+    method: "POST",
+    body: JSON.stringify(input),
+    signal,
+  });
+}
+
 /** The Ollama base URL and model name Settings configures Assist with
  * (ADR 0005). Neither is a credential, so — unlike GoogleStatus's client
  * secret — both round-trip in full; there's nothing to mask. */

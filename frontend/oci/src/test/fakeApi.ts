@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-import { type HabitType, type Priority, type ViewMode } from "../api";
+import { type AssistCaptureDraft, type HabitType, type Priority, type ViewMode } from "../api";
 import { entryDayWindow } from "../calendar";
 import { addDays } from "../dates";
 import { habitDueOn } from "../habitFrequency";
@@ -261,6 +261,18 @@ export interface FakeApiState {
    * the backend suite); a test wanting "no models" simply doesn't seed
    * this. */
   assistInstalledModels: string[];
+  /** Assisted Capture's parse result (ADR 0005; issue #43). `null` (the
+   * default) makes the fake echo back the plain-capture fallback the real
+   * backend answers with when nothing was extracted — the text unchanged,
+   * no date — so a test only sets this when it wants a draft with a date
+   * to confirm or discard. */
+  assistParseResult: AssistCaptureDraft | null;
+  /** When true, POST /api/v1/assist/parse-capture answers with a server
+   * error instead of a draft — simulates a parse failure the real backend
+   * would otherwise absorb into a plain-capture fallback itself, letting a
+   * test exercise Quick-Add's own client-side degrade-to-plain-capture
+   * `catch` path (issue #43). */
+  assistParseFails: boolean;
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -476,6 +488,8 @@ export function installFakeApi({
   assistOllamaBaseUrl = null,
   assistModel = null,
   assistInstalledModels = [],
+  assistParseResult = null,
+  assistParseFails = false,
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -529,6 +543,12 @@ export function installFakeApi({
   assistModel?: string | null;
   /** What GET /api/v1/assist/models answers with (ADR 0005). */
   assistInstalledModels?: string[];
+  /** What POST /api/v1/assist/parse-capture answers with (issue #43); null
+   * means "echo the plain-capture fallback" (see the field's own doc). */
+  assistParseResult?: AssistCaptureDraft | null;
+  /** Makes POST /api/v1/assist/parse-capture answer with a server error
+   * instead (issue #43) — see the field's own doc. */
+  assistParseFails?: boolean;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -569,6 +589,8 @@ export function installFakeApi({
     assistOllamaBaseUrl,
     assistModel,
     assistInstalledModels: [...assistInstalledModels],
+    assistParseResult,
+    assistParseFails,
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -728,6 +750,19 @@ export function installFakeApi({
       state.assistOllamaBaseUrl = null;
       state.assistModel = null;
       return new Response(null, { status: 204 });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/assist/parse-capture") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      if (state.assistParseFails) {
+        return json({ error: { code: "internal_error", message: "Assist parse failed" } }, 500);
+      }
+      const input = body as { text: string; local_date: string; time_zone: string };
+      if (state.assistParseResult === null) {
+        return json({ title: input.text, due_date: null, is_all_day: false, time_zone: null });
+      }
+      return json(state.assistParseResult);
     }
     if (method === "GET" && url.pathname === "/api/v1/google/status") {
       if (!state.loggedIn) {

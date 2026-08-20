@@ -1119,6 +1119,55 @@ li[data-overdue] .date-chip {
   padding-right: var(--space-1);
 }
 
+/* The busy indicator (issue #43) covers the ~1-2s Assisted Capture parse —
+ * a slow, gentle pulse, not a spin: the design system's motion rules keep
+ * nothing bouncing or looping fast. */
+.quick-add-assist-busy {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--accent);
+  padding-right: var(--space-1);
+  animation: quick-add-assist-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes quick-add-assist-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Assisted Capture's confirmation beat (ADR 0005; issue #43): the proposed
+ * draft's ghost chips replace the input for one beat — Enter confirms,
+ * Escape (or the dismiss button) discards and saves the task as typed. */
+.quick-add-assist-draft {
+  gap: var(--space-2);
+}
+
+.quick-add-assist-hint {
+  flex: 1;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.quick-add-assist-discard {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+}
+
+.quick-add-assist-discard:hover {
+  color: var(--text-danger);
+}
+
 .token-input-chips {
   display: contents;
 }
