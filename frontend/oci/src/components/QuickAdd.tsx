@@ -613,6 +613,11 @@ export function QuickAdd({
               </button>
             </span>
           ))}
+          {draft.tokenListId !== null && (
+            <span className="list-chip token-chip">
+              {lists.find((list) => list.id === draft.tokenListId)?.name ?? ""}
+            </span>
+          )}
           {draft.proposedListName !== null &&
             draft.tokenListId === null &&
             draft.listChip.length === 0 && (
@@ -623,6 +628,11 @@ export function QuickAdd({
                 </button>
               </span>
             )}
+          {draft.tokenTagNames.map((name) => (
+            <span key={name} className="tag-chip token-chip">
+              #{name}
+            </span>
+          ))}
           {draft.proposedTagNames
             .filter(
               (name) =>
@@ -641,6 +651,9 @@ export function QuickAdd({
                 </button>
               </span>
             ))}
+          {draft.tokenPriority !== null && (
+            <span className="tag-chip token-chip">{PRIORITY_LABELS[draft.tokenPriority]}</span>
+          )}
           {draft.proposedPriority !== null &&
             draft.tokenPriority === null &&
             draft.priorityChip.length === 0 && (
