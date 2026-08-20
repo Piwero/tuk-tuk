@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.4.1](https://github.com/Piwero/tuk-tuk/compare/v1.4.0...v1.4.1) - 2026-08-20
+
+### Bug Fixes
+
+- **assist:** Resolve daypart phrases in date extraction ([89d1f61](https://github.com/Piwero/tuk-tuk/commit/89d1f619744571b29c9c2070a573fb27581cb0c8))
+- **assist:** Match list/tag phrases wrapped in extra words ([f7d0495](https://github.com/Piwero/tuk-tuk/commit/f7d04951286b38c70c29aa543d5bcb1ef4e7b9eb))
+- **assist:** Render chips for explicit #tag/!priority tokens in draft ([61c4167](https://github.com/Piwero/tuk-tuk/commit/61c4167d0b9a3ac05e4defeda809138bddecdc48))
+
 ## [1.4.0](https://github.com/Piwero/tuk-tuk/compare/v1.3.0...v1.4.0) - 2026-08-20
 
 _Maintenance release; no user-facing changes._
