@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.0.0](https://github.com/Piwero/tuk-tuk/compare/v0.6.5...v1.0.0) - 2026-08-20
+
+### Features
+
+- **assist:** Availability gate — Ollama settings, status endpoint, invisible-when-absent UI ([911ccde](https://github.com/Piwero/tuk-tuk/commit/911ccdef9bd51d62cc337f6b8ee9687a48b3f0c9))
+- **assist:** Settings UI to configure Ollama base URL/model with a test button ([59dae61](https://github.com/Piwero/tuk-tuk/commit/59dae61ba3c700a9640a0e5fb5ad4fbe59d8c579))
+- **assist:** Model dropdown in Settings, populated from Ollama's installed list ([1774645](https://github.com/Piwero/tuk-tuk/commit/1774645604ac3608975bff1870d58d8be50b9f2d))
+
 ## [0.6.5](https://github.com/Piwero/tuk-tuk/compare/v0.6.4...v0.6.5) - 2026-08-20
 
 ### Features
