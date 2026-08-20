@@ -14,3 +14,18 @@ class TestResolveNamePhrase:
 
     def test_returns_none_against_an_empty_candidate_list(self) -> None:
         assert resolve_name_phrase("Errands", []) is None
+
+    def test_matches_a_candidate_wrapped_in_extra_words(self) -> None:
+        assert resolve_name_phrase("my errands list", ["Errands", "Work"]) == "Errands"
+        assert (
+            resolve_name_phrase("my list-2-no-folder list", ["list-2-no-folder"])
+            == "list-2-no-folder"
+        )
+
+    def test_does_not_match_a_substring_of_a_larger_word(self) -> None:
+        assert resolve_name_phrase("concatenate the docs", ["cat"]) is None
+
+    def test_prefers_the_longest_containment_match(self) -> None:
+        assert resolve_name_phrase("my work errands list", ["Errands", "Work Errands"]) == (
+            "Work Errands"
+        )
