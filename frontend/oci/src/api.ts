@@ -227,6 +227,17 @@ export function removeAssistConfig(): Promise<void> {
   return request("/api/v1/assist/config", { method: "DELETE" });
 }
 
+/** Every model Ollama reports installed at `ollamaBaseUrl` — the Settings
+ * model dropdown's source. Queries that URL directly (not the saved
+ * setting), so it works against a base URL just typed but not yet saved;
+ * omit it to fall back to whatever's currently saved. Never rejects on an
+ * unreachable Ollama — an empty list either way, so the caller doesn't
+ * need a separate error path from "nothing installed". */
+export function fetchAssistModels(ollamaBaseUrl?: string): Promise<{ models: string[] }> {
+  const query = ollamaBaseUrl === undefined ? "" : `?base_url=${encodeURIComponent(ollamaBaseUrl)}`;
+  return request(`/api/v1/assist/models${query}`);
+}
+
 export interface GoogleStatus {
   configured: boolean;
   /** The client ID isn't sensitive — Settings shows it back for editing. */

@@ -224,3 +224,53 @@ class TestAssistConfig:
 
         assert delete_response.status_code == 204
         assert read_response.json() == {"ollama_base_url": None, "model": None}
+
+
+class TestAssistModels:
+    def test_lists_installed_models_sorted_for_a_url_passed_as_a_query_param(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        """Queries a base URL directly — not the saved config — so
+        Settings' dropdown can list models for a URL just typed but not
+        yet saved."""
+        stub_ollama.set_installed_models(["qwen3:14b", "llama3:8b"])
+        with make_client(database_url, fake_clock) as client:
+            response = client.get(
+                "/api/v1/assist/models", params={"base_url": stub_ollama.base_url}
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"models": ["llama3:8b", "qwen3:14b"]}
+
+    def test_falls_back_to_the_saved_base_url_when_none_is_passed(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        stub_ollama.set_installed_models(["qwen3:14b"])
+        with make_client(database_url, fake_clock) as client:
+            client.put(
+                "/api/v1/assist/config",
+                json={"ollama_base_url": stub_ollama.base_url, "model": "qwen3:14b"},
+            )
+
+            response = client.get("/api/v1/assist/models")
+
+        assert response.status_code == 200
+        assert response.json() == {"models": ["qwen3:14b"]}
+
+    def test_answers_an_empty_list_rather_than_an_error_when_unreachable(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with make_client(database_url, fake_clock) as client:
+            response = client.get("/api/v1/assist/models", params={"base_url": _closed_port_url()})
+
+        assert response.status_code == 200
+        assert response.json() == {"models": []}
+
+    def test_answers_an_empty_list_when_no_base_url_is_known_at_all(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with make_client(database_url, fake_clock) as client:
+            response = client.get("/api/v1/assist/models")
+
+        assert response.status_code == 200
+        assert response.json() == {"models": []}

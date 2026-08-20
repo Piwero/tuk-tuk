@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
   changePassword,
   disconnectGoogleAccount,
   fetchAssistConfig,
+  fetchAssistModels,
   fetchAssistStatus,
   fetchGoogleAccounts,
   fetchGoogleCalendars,
@@ -371,7 +372,15 @@ interface AssistConfigFormProps {
  * "Remove" clears both settings server-side (mirrors GoogleCredentialsForm's
  * "Remove Google integration") — the only way to turn Assist back off once
  * something is saved, since the backend rejects blank fields as a save (a
- * config value, once set, doesn't degrade to "unset" by typing nothing). */
+ * config value, once set, doesn't degrade to "unset" by typing nothing).
+ *
+ * The Model field is a dropdown of whatever Ollama reports installed at the
+ * typed base URL, fetched on mount (against the saved URL) and on demand via
+ * "Refresh models" (against whatever's currently typed, saved or not) — an
+ * operator picks a real model instead of typing a name from memory. Falls
+ * back to a free-text field whenever nothing's been fetched yet (no base URL
+ * saved, or the list came back empty), so a blank Ollama never blocks typing
+ * a model name ahead of getting it running. */
 function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Element {
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState(config.ollama_base_url ?? "");
   const [model, setModel] = useState(config.model ?? "");
@@ -381,6 +390,14 @@ function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Eleme
   // null until a test has actually run — distinct from a false result, so
   // the form doesn't claim "unavailable" before anyone asked.
   const [testResult, setTestResult] = useState<boolean | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsPending, setModelsPending] = useState(false);
+  // Tags each fetch so a response can tell whether it's still the most
+  // recent request before applying itself — covers both the mount effect
+  // re-firing on a changed base URL and a Refresh click racing either of
+  // those, with one guard instead of a separate `cancelled` flag per call
+  // site.
+  const modelsRequestId = useRef(0);
 
   const isDirty =
     ollamaBaseUrl !== (config.ollama_base_url ?? "") || model !== (config.model ?? "");
@@ -391,6 +408,46 @@ function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Eleme
     setOllamaBaseUrl(config.ollama_base_url ?? "");
     setModel(config.model ?? "");
   }, [config.ollama_base_url, config.model]);
+
+  function loadModels(url: string): void {
+    const requestId = ++modelsRequestId.current;
+    setModelsPending(true);
+    fetchAssistModels(url)
+      .then((result) => {
+        if (modelsRequestId.current === requestId) {
+          setModels(result.models);
+        }
+      })
+      .catch(() => {
+        if (modelsRequestId.current === requestId) {
+          setModels([]);
+        }
+      })
+      .finally(() => {
+        if (modelsRequestId.current === requestId) {
+          setModelsPending(false);
+        }
+      });
+  }
+
+  // Populates the dropdown against the saved URL on mount, and again
+  // whenever a save changes it — never against unsaved typing, which is
+  // what the explicit "Refresh models" button below is for instead.
+  useEffect(() => {
+    if (!config.ollama_base_url) {
+      modelsRequestId.current += 1; // invalidates any fetch already in flight
+      setModels([]);
+      return;
+    }
+    loadModels(config.ollama_base_url);
+  }, [config.ollama_base_url]);
+
+  function handleRefreshModels(): void {
+    if (modelsPending || !ollamaBaseUrl) {
+      return;
+    }
+    loadModels(ollamaBaseUrl);
+  }
 
   function handleSubmit(event: React.FormEvent): void {
     event.preventDefault();
@@ -452,15 +509,45 @@ function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Eleme
       </div>
       <div className="settings-field">
         <label htmlFor="settings-assist-model">Model</label>
-        <input
-          id="settings-assist-model"
-          name="assist-model"
-          type="text"
-          placeholder="qwen3:14b"
-          value={model}
-          disabled={pending}
-          onChange={(event) => setModel(event.target.value)}
-        />
+        <div className="settings-field-with-action">
+          {models.length > 0 ? (
+            <select
+              id="settings-assist-model"
+              name="assist-model"
+              value={model}
+              disabled={pending}
+              onChange={(event) => setModel(event.target.value)}
+            >
+              <option value="">Select a model…</option>
+              {/* The saved/typed model might not (or no longer) be among
+               * what's installed — kept as its own option rather than
+               * silently dropped, so switching to the dropdown never loses
+               * what was already configured. */}
+              {(model && !models.includes(model) ? [model, ...models] : models).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="settings-assist-model"
+              name="assist-model"
+              type="text"
+              placeholder="qwen3:14b"
+              value={model}
+              disabled={pending}
+              onChange={(event) => setModel(event.target.value)}
+            />
+          )}
+          <button
+            type="button"
+            onClick={handleRefreshModels}
+            disabled={modelsPending || !ollamaBaseUrl}
+          >
+            {modelsPending ? "Refreshing…" : "Refresh models"}
+          </button>
+        </div>
       </div>
       {error !== null && <p role="alert">{error}</p>}
       <div className="settings-form-actions">
