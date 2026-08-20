@@ -233,12 +233,9 @@ export function CalendarView({
   onTagCreated,
   onListCreated,
 }: CalendarViewProps = {}): JSX.Element {
-  // A phone-width load defaults to Day rather than the clipped Month grid
-  // (issue #169) — the mode picker still lets a narrow user reach Month
-  // (now legible down to 320px) or Week deliberately.
-  const [mode, setMode] = useState<CalendarMode>(() =>
-    isNarrowWidth(window.innerWidth) ? "day" : "month",
-  );
+  // Day is the default on every load — the mode picker still lets the user
+  // reach Week or Month deliberately.
+  const [mode, setMode] = useState<CalendarMode>("day");
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<Event[]>([]);

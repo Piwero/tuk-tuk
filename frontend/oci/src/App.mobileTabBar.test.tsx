@@ -64,7 +64,7 @@ describe("Mobile bottom tab bar (issue #170)", () => {
     const nav = screen.getByRole("navigation", { name: "Primary" });
     await user.click(getTab(nav, "Calendar"));
 
-    await screen.findByRole("heading", { name: "July 2026" }, { timeout: 10_000 });
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" }, { timeout: 10_000 });
     expect(window.location.pathname).toBe("/calendar");
     expect(getTab(nav, "Calendar")).toHaveClass("selected");
     expect(getTab(nav, "Tasks")).not.toHaveClass("selected");

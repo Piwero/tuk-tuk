@@ -19,9 +19,13 @@ export function pinCalendarClock(): void {
   });
 }
 
-/** Opens the calendar view, waiting out the (slow) first render in a file. */
+/** Opens the calendar view in Month (its callers assume the Month grid),
+ * waiting out the (slow) first render in a file. Day is the view's actual
+ * default on load, so this switches into Month explicitly. */
 export async function openCalendar(): Promise<void> {
   fireEvent.click(await screen.findByRole("link", { name: "Calendar" }));
+  await screen.findByRole("heading", { name: "Friday, July 3, 2026" }, { timeout: 10_000 });
+  fireEvent.click(screen.getByRole("button", { name: "Month" }));
   await screen.findByRole("heading", { name: "July 2026" }, { timeout: 10_000 });
 }
 

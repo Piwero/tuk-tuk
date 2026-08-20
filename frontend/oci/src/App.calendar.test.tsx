@@ -11,6 +11,17 @@ pinCalendarClock();
 const taskPosts = (requests: RecordedRequest[]): unknown[] =>
   requests.filter((r) => r.method === "POST" && r.url === "/api/v1/tasks").map((r) => r.body);
 
+describe("The Calendar view", () => {
+  it("opens in Day rather than Month", async () => {
+    installFakeApi();
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("link", { name: "Calendar" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
+    expect(screen.getByRole("button", { name: "Day" })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
 describe("The Month view", () => {
   it("fetches the visible grid and renders banners and timed entries", async () => {
     const api = installFakeApi({
@@ -532,7 +543,6 @@ describe("Pomo quick-start menu on Calendar Task entries", () => {
     });
     render(<App />);
 
-    await openCalendar();
     await openWeek();
 
     const taskElement = screen.getByText("Team Lunch").closest("div");
@@ -555,7 +565,6 @@ describe("Pomo quick-start menu on Calendar Task entries", () => {
     });
     render(<App />);
 
-    await openCalendar();
     await openWeek();
 
     const taskElement = screen.getByText("Standup").closest("[class*='time-block']");

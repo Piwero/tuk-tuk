@@ -333,7 +333,7 @@ describe("Per-account failure handling and Event refresh (issue #109)", () => {
 
     await openCalendar();
     await waitFor(() =>
-      expect(api.requests.filter((r) => r.url.startsWith("/api/v1/events")).length).toBe(1),
+      expect(api.requests.filter((r) => r.url.startsWith("/api/v1/events")).length).toBe(2),
     );
 
     await act(async () => {
@@ -341,12 +341,12 @@ describe("Per-account failure handling and Event refresh (issue #109)", () => {
     });
 
     await waitFor(() =>
-      expect(api.requests.filter((r) => r.url.startsWith("/api/v1/events")).length).toBe(2),
+      expect(api.requests.filter((r) => r.url.startsWith("/api/v1/events")).length).toBe(3),
     );
-    const [, secondRequest] = api.requests.filter((r) => r.url.startsWith("/api/v1/events"));
+    const eventRequests = api.requests.filter((r) => r.url.startsWith("/api/v1/events"));
     // Forces past the cache: a focus refetch that's still cache-eligible
     // could serve a stale answer, defeating the point of the refetch.
-    expect(secondRequest?.url).toContain("force=true");
+    expect(eventRequests[eventRequests.length - 1]?.url).toContain("force=true");
   });
 
   it("forces a fresh fetch when the manual refresh control is used", async () => {
