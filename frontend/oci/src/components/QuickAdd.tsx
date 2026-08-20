@@ -166,12 +166,18 @@ export function QuickAdd({
           listChannel as TokenChannel<unknown>,
           priorityChannel as TokenChannel<unknown>,
         ]}
+        trailingContent={
+          assistAvailable && (
+            <span
+              className="quick-add-assist-affordance"
+              aria-label="Assist available"
+              title="Assist"
+            >
+              <Icon name="sparkles" size={16} />
+            </span>
+          )
+        }
       />
-      {assistAvailable && (
-        <span className="quick-add-assist-affordance" aria-label="Assist available" title="Assist">
-          <Icon name="sparkles" size={16} />
-        </span>
-      )}
     </form>
   );
 }
