@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.5](https://github.com/Piwero/tuk-tuk/compare/v0.6.4...v0.6.5) - 2026-08-20
+
+### Features
+
+- **calendar:** Add individual URIs for Month/Week/Day ([ea98433](https://github.com/Piwero/tuk-tuk/commit/ea984335909675e82e4c5679ce1f6c0d8bd0ffa5))
+- **routing:** Add /today, /next-7-days, /all URIs and default to All ([b653d40](https://github.com/Piwero/tuk-tuk/commit/b653d401eff0206f0d6bf9280d875d157d41edba))
+
+### Bug Fixes
+
+- **calendar:** Default the Calendar view to Day on load ([41787b7](https://github.com/Piwero/tuk-tuk/commit/41787b776061571e5660ea3655630701321a19f5))
+
 ## [0.6.4](https://github.com/Piwero/tuk-tuk/compare/v0.6.3...v0.6.4) - 2026-08-19
 
 ### Features
