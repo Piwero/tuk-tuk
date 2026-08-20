@@ -222,6 +222,13 @@ interface CalendarViewProps {
   tags?: Tag[];
   onTagCreated?: (tag: Tag) => void;
   onListCreated?: (list: TaskList) => void;
+  /** The mode to open in — e.g. resolved from `/calendar/week` on a direct
+   * load. Day is the default on every load otherwise; the mode picker still
+   * lets the user reach Week or Month deliberately. */
+  initialMode?: CalendarMode;
+  /** Notified whenever the mode changes (picker click, or the narrow-width
+   * auto-switch away from Month) so the caller can keep the URL in sync. */
+  onModeChange?: (mode: CalendarMode) => void;
 }
 
 export function CalendarView({
@@ -232,10 +239,14 @@ export function CalendarView({
   tags = [],
   onTagCreated,
   onListCreated,
+  initialMode = "day",
+  onModeChange,
 }: CalendarViewProps = {}): JSX.Element {
-  // Day is the default on every load — the mode picker still lets the user
-  // reach Week or Month deliberately.
-  const [mode, setMode] = useState<CalendarMode>("day");
+  const [mode, setMode] = useState<CalendarMode>(initialMode);
+  useEffect(() => {
+    onModeChange?.(mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
   const [anchor, setAnchor] = useState(() => localDayOf(new Date()));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
