@@ -13,6 +13,7 @@ describe("Quick-Add ! suggestion dropdown", () => {
     installFakeApi({});
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "!");
@@ -29,6 +30,7 @@ describe("Quick-Add ! suggestion dropdown", () => {
     installFakeApi({});
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "!HI");
@@ -45,6 +47,7 @@ describe("Quick-Add ! suggestion dropdown", () => {
     installFakeApi({});
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "!zzz");
@@ -56,6 +59,7 @@ describe("Quick-Add ! suggestion dropdown", () => {
     installFakeApi({});
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read !hi");
@@ -74,6 +78,7 @@ describe("Quick-Add ! suggestion dropdown", () => {
     const api = installFakeApi({});
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read !hi");
@@ -92,6 +97,7 @@ describe("Quick-Add ! suggestion dropdown", () => {
     const api = installFakeApi({});
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read !high{Enter}");

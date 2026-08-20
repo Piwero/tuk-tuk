@@ -21,6 +21,7 @@ describe("Quick-Add tokens", () => {
     const personal = fakeList("Personal");
     const api = installFakeApi({ lists: [INBOX, personal] });
     render(<App />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Inbox" }));
 
     await quickAdd("pay rent #finance !high ~Personal");
 
@@ -49,6 +50,7 @@ describe("Quick-Add tokens", () => {
     const books = fakeTag("Books");
     const api = installFakeApi({ tags: [books] });
     render(<App />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Inbox" }));
 
     await quickAdd("read #books #fun");
 
@@ -69,6 +71,7 @@ describe("Quick-Add tokens", () => {
   it("leaves an unmatched ~list token in the title verbatim", async () => {
     const api = installFakeApi();
     render(<App />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Inbox" }));
 
     await quickAdd("call mom ~Family");
 
@@ -84,6 +87,7 @@ describe("Quick-Add tokens", () => {
     const work = fakeList("Work");
     const api = installFakeApi({ lists: [INBOX, personal, work] });
     render(<App />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Inbox" }));
 
     await quickAdd("buy milk ~Personal ~Work");
 
@@ -97,6 +101,7 @@ describe("Quick-Add tokens", () => {
   it("leaves an unknown !priority token in the title verbatim", async () => {
     const api = installFakeApi();
     render(<App />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Inbox" }));
 
     await quickAdd("ship it !urgent");
 
@@ -110,6 +115,7 @@ describe("Quick-Add tokens", () => {
   it("creates nothing when only tokens remain", async () => {
     const api = installFakeApi({ tags: [fakeTag("finance")] });
     render(<App />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Inbox" }));
 
     await quickAdd("#finance !high");
 

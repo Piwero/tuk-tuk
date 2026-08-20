@@ -126,6 +126,6 @@ describe("Task detail sheet dismissal (issue #170)", () => {
     expect(main.scrollTop).toBe(240);
     // Also confirm we're genuinely back at the prior view, not somewhere else.
     expect(panel).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Inbox" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "All" })).toBeInTheDocument();
   });
 });

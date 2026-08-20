@@ -126,6 +126,7 @@ describe("Task detail panel", () => {
     installFakeApi({ tasks: [trip] });
     const user = userEvent.setup();
     render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const panel = await openDetail("Pack bags");
     await user.click(within(panel).getByRole("checkbox", { name: "Tick Socks" }));

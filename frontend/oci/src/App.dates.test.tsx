@@ -38,6 +38,7 @@ describe("Task dates in list views", () => {
       ],
     });
     render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Late" });
 
     expect(rowFor("Late")).toHaveAttribute("data-overdue", "true");

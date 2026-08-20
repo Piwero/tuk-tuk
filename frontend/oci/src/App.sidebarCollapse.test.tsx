@@ -23,7 +23,7 @@ describe("Collapsing the sidebar", () => {
     installFakeApi({ lists: [INBOX, errands] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const sidebar = screen.getByRole("complementary");
     expect(within(sidebar).getByRole("search")).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe("Collapsing the sidebar", () => {
     installFakeApi({ lists: [INBOX, errands] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const menu = screen.getByRole("button", { name: "Show navigation" });
     expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -75,7 +75,7 @@ describe("Collapsing the sidebar", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     await user.click(screen.getByRole("button", { name: "Show navigation" }));
     expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
@@ -96,7 +96,7 @@ describe("Collapsing the sidebar", () => {
     installFakeApi();
     const user = userEvent.setup();
     const first = render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
     await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
     first.unmount();
 

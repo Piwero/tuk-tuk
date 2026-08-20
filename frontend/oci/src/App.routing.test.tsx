@@ -128,14 +128,44 @@ describe("Direct load of a static view's URL", () => {
     expect(window.location.pathname).toBe("/search");
   });
 
-  it("redirects an unrecognized path to / and falls back to the Inbox", async () => {
+  it("redirects an unrecognized path to / and falls back to All", async () => {
     installFakeApi({ tasks: [] });
     window.history.replaceState(null, "", "/foobar");
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Inbox" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/");
+    expect(await screen.findByRole("heading", { name: "All" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/all");
+  });
+
+  it("opens Today directly at /today", async () => {
+    installFakeApi();
+    window.history.replaceState(null, "", "/today");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/today");
+  });
+
+  it("opens Next 7 Days directly at /next-7-days", async () => {
+    installFakeApi();
+    window.history.replaceState(null, "", "/next-7-days");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Next 7 Days" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/next-7-days");
+  });
+
+  it("opens All directly at /all, and / opens All by default", async () => {
+    installFakeApi();
+    window.history.replaceState(null, "", "/all");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "All" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/all");
   });
 });
 
@@ -144,7 +174,7 @@ describe("History push/replace while navigating in the app", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Habits" }));
@@ -158,7 +188,7 @@ describe("History push/replace while navigating in the app", () => {
     installFakeApi({ lists: [INBOX, groceries] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Habits" }));
@@ -175,7 +205,7 @@ describe("History push/replace while navigating in the app", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Focus" }));
@@ -194,7 +224,7 @@ describe("History push/replace while navigating in the app", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Habits" }));
@@ -207,8 +237,8 @@ describe("History push/replace while navigating in the app", () => {
     await screen.findByRole("heading", { name: "Habits" });
 
     window.history.back();
-    await waitFor(() => expect(window.location.pathname).toBe("/"));
-    await screen.findByRole("heading", { name: "Inbox" });
+    await waitFor(() => expect(window.location.pathname).toBe("/all"));
+    await screen.findByRole("heading", { name: "All" });
 
     window.history.forward();
     await waitFor(() => expect(window.location.pathname).toBe("/habits"));
@@ -219,7 +249,7 @@ describe("History push/replace while navigating in the app", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Calendar" }));
@@ -237,7 +267,7 @@ describe("History push/replace while navigating in the app", () => {
     // A single Back leaves the Calendar entirely — mode toggles never added
     // history entries of their own.
     window.history.back();
-    await waitFor(() => expect(window.location.pathname).toBe("/"));
-    await screen.findByRole("heading", { name: "Inbox" });
+    await waitFor(() => expect(window.location.pathname).toBe("/all"));
+    await screen.findByRole("heading", { name: "All" });
   });
 });

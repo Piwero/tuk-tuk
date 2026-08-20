@@ -33,7 +33,9 @@ import { loadSidebarCollapsed, saveSidebarCollapsed } from "./layoutPrefs";
 import {
   calendarModeForPath,
   pathForCalendarMode,
+  pathForSmartView,
   pathForStaticView,
+  smartViewForPath,
   staticViewKindForPath,
   type StaticViewKind,
 } from "./routes";
@@ -89,8 +91,8 @@ const BLANK_SEARCH_STATE: SearchState = {
  * offers filter controls. */
 const BLANK_ALL_FILTERS: AllFilters = { listId: null, tagId: null, priority: null };
 
-/** Which of the six URL-addressable static views (if any) a View shows —
- * List/Tag/Folder/Smart views have no path, so this is null for them. */
+/** Which of the URL-addressable static views (if any) a View shows —
+ * List/Tag/Folder views have no path, so this is null for them. */
 function staticViewKindOf(view: View): StaticViewKind | null {
   if (
     view?.kind === "calendar" ||
@@ -99,7 +101,8 @@ function staticViewKindOf(view: View): StaticViewKind | null {
     view?.kind === "focus" ||
     view?.kind === "focus-stats" ||
     view?.kind === "search" ||
-    view?.kind === "settings"
+    view?.kind === "settings" ||
+    view?.kind === "smart"
   ) {
     return view.kind;
   }
@@ -108,14 +111,17 @@ function staticViewKindOf(view: View): StaticViewKind | null {
 
 /** The View a static path resolves to on a fresh load: always blank/no
  * pre-selection, since neither a query nor a task can be encoded in these
- * URLs (issue #143). The Calendar's mode is the one exception — it reads
- * straight off the path (`/calendar/week`, etc.), defaulting to Day. */
+ * URLs (issue #143). The Calendar's mode and the Smart List shown are the
+ * exceptions — both read straight off the path (`/calendar/week`, `/today`,
+ * etc.), defaulting to Day and All respectively. */
 function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
   switch (kind) {
     case "search":
       return { kind: "search", search: BLANK_SEARCH_STATE };
     case "calendar":
       return { kind: "calendar", mode: calendarModeForPath(pathname) ?? "day" };
+    case "smart":
+      return { kind: "smart", view: smartViewForPath(pathname) ?? "all" };
     case "habits":
       return { kind: "habits" };
     case "standup":
@@ -259,6 +265,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     lastSyncedKindRef.current = kind;
     if (kind === "calendar" && view?.kind === "calendar") {
       window.history.pushState(null, "", pathForCalendarMode(view.mode));
+    } else if (kind === "smart" && view?.kind === "smart") {
+      window.history.pushState(null, "", pathForSmartView(view.view));
     } else if (kind !== null) {
       window.history.pushState(null, "", pathForStaticView(kind));
     } else if (window.location.pathname !== "/") {
@@ -281,6 +289,20 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     }
   }, [view]);
 
+  // Keeps /today, /next-7-days, and /all in sync with which Smart List is
+  // selected, the same `replaceState` treatment the Calendar's mode picker
+  // gets above — switching between them is a within-category pick, not a
+  // new place to Back/Forward through.
+  useEffect(() => {
+    if (view?.kind !== "smart") {
+      return;
+    }
+    const path = pathForSmartView(view.view);
+    if (window.location.pathname !== path) {
+      window.history.replaceState(null, "", path);
+    }
+  }, [view]);
+
   useEffect(() => {
     void Promise.all([fetchLists(), fetchFolders(), fetchTags()]).then(
       ([listPage, folderPage, tagPage]) => {
@@ -295,8 +317,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
   }, []);
 
-  // Keep a valid view: default to the Inbox, and fall back to it when the
-  // viewed list or tag disappears (e.g. it was deleted).
+  // Keep a valid view: default to All, and fall back to it when the viewed
+  // list or tag disappears (e.g. it was deleted).
   useEffect(() => {
     if (view?.kind === "standup" && !standupEnabled) {
       // The feature was turned off (or already was, on load) while this
@@ -324,8 +346,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     if (view?.kind === "folder" && folders.some((folder) => folder.id === view.id)) {
       return;
     }
-    const fallback = lists.find((list) => list.is_inbox) ?? lists[0];
-    const next: View = fallback === undefined ? null : { kind: "list", id: fallback.id };
+    const next: View = { kind: "smart", view: "all" };
     setCompletedMode(false);
     // Guard against a stale closure: a view switch may land between this
     // effect's render and it running (e.g. the user clicks Calendar just as

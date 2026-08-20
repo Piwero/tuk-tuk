@@ -22,6 +22,7 @@ describe("Completing a recurring task", () => {
     const run = recurring("Morning run");
     const api = installFakeApi({ tasks: [run] });
     render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
 
     fireEvent.click(await screen.findByRole("checkbox", { name: "Complete Morning run" }));
     fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));

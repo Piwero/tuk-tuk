@@ -67,6 +67,7 @@ describe("Deleting a task", () => {
       sections: [section],
     });
     render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await screen.findByText("Old chore");
     fireEvent.click(screen.getByRole("button", { name: "Delete Old chore" }));

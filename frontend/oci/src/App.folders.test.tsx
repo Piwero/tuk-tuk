@@ -30,6 +30,7 @@ describe("Collapsing a Folder", () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole("button", { name: "Backend" });
+    await user.click(screen.getByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Collapse folder Work" }));
 
@@ -149,6 +150,7 @@ describe("Folder drag and drop", () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole("button", { name: "Backend" });
+    await user.click(screen.getByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Collapse folder Work" }));
     expect(screen.queryByRole("button", { name: "Backend" })).not.toBeInTheDocument();
