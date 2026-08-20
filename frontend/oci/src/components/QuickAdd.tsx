@@ -288,7 +288,7 @@ export function QuickAdd({
     }
   }
 
-  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
+  function onKeyDown(event: React.KeyboardEvent<HTMLFormElement>): void {
     if (draft === null) {
       return;
     }
