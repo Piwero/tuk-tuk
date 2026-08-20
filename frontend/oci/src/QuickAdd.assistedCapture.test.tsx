@@ -435,3 +435,281 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     });
   });
 });
+
+describe("Assisted Capture per-chip removal (issue #47)", () => {
+  it("removing the date chip drops the date from the confirmed payload and restores the typed title", async () => {
+    const api = installFakeApi({
+      assistAvailable: true,
+      assistParseResult: {
+        title: "dentist",
+        due_date: "2026-08-18T15:00:00-04:00",
+        is_all_day: false,
+        time_zone: "America/New_York",
+        recurrence: null,
+        reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "dentist tuesday 3pm{Enter}");
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+
+    await user.click(screen.getByRole("button", { name: "Remove date" }));
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "dentist tuesday 3pm",
+      list_id: 1,
+    });
+  });
+
+  it("removing the recurrence chip keeps the date but drops recurrence", async () => {
+    const api = installFakeApi({
+      assistAvailable: true,
+      assistParseResult: {
+        title: "pay rent",
+        due_date: "2026-08-18T00:00:00Z",
+        is_all_day: true,
+        time_zone: null,
+        recurrence: "FREQ=MONTHLY;BYMONTHDAY=1",
+        reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "pay rent every month on the 1st{Enter}");
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+
+    await user.click(screen.getByRole("button", { name: "Remove recurrence" }));
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "pay rent every month on the 1st",
+      list_id: 1,
+      due_date: "2026-08-18T00:00:00Z",
+      is_all_day: true,
+    });
+  });
+
+  it("removing a tag chip drops only that tag, keeping the list and priority chips", async () => {
+    const errands = fakeList("Errands");
+    const urgent = fakeTag("Urgent");
+    const api = installFakeApi({
+      lists: [INBOX, errands],
+      tags: [urgent],
+      assistAvailable: true,
+      assistParseResult: {
+        title: "buy milk",
+        due_date: null,
+        is_all_day: false,
+        time_zone: null,
+        recurrence: null,
+        reminders: [],
+        list_name: "Errands",
+        tag_names: ["Urgent"],
+        priority: "high",
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "buy milk in my errands list urgent high priority{Enter}");
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+
+    await user.click(screen.getByRole("button", { name: "Remove Urgent" }));
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "buy milk in my errands list urgent high priority",
+      list_id: errands.id,
+      priority: "high",
+    });
+  });
+
+  it("removing the reminder chip drops it from the payload, leaving the date intact", async () => {
+    const api = installFakeApi({
+      assistAvailable: true,
+      assistParseResult: {
+        title: "dentist",
+        due_date: "2026-08-18T15:00:00-04:00",
+        is_all_day: false,
+        time_zone: "America/New_York",
+        recurrence: null,
+        reminders: ["-P1D"],
+        list_name: null,
+        tag_names: [],
+        priority: null,
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "dentist tuesday 3pm remind me the day before{Enter}");
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+
+    await user.click(screen.getByRole("button", { name: "Remove reminder (1 day before)" }));
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "dentist tuesday 3pm remind me the day before",
+      list_id: 1,
+      due_date: "2026-08-18T15:00:00-04:00",
+      is_all_day: false,
+      time_zone: "America/New_York",
+    });
+  });
+
+  it("removing the list chip files under the default List instead", async () => {
+    const errands = fakeList("Errands");
+    const api = installFakeApi({
+      lists: [INBOX, errands],
+      assistAvailable: true,
+      assistParseResult: {
+        title: "buy milk",
+        due_date: null,
+        is_all_day: false,
+        time_zone: null,
+        recurrence: null,
+        reminders: [],
+        list_name: "Errands",
+        tag_names: [],
+        priority: null,
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "buy milk in my errands list{Enter}");
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+
+    await user.click(screen.getByRole("button", { name: "Remove list" }));
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "buy milk in my errands list",
+      list_id: 1,
+    });
+  });
+
+  it("supports the full flow keyboard-only: focus a chip's remove button by Tab, remove it, then confirm — focus returns to the draft row automatically", async () => {
+    const errands = fakeList("Errands");
+    const urgent = fakeTag("Urgent");
+    const api = installFakeApi({
+      lists: [INBOX, errands],
+      tags: [urgent],
+      assistAvailable: true,
+      assistParseResult: {
+        title: "buy milk",
+        due_date: "2026-08-18T15:00:00-04:00",
+        is_all_day: false,
+        time_zone: "America/New_York",
+        recurrence: null,
+        reminders: [],
+        list_name: "Errands",
+        tag_names: ["Urgent"],
+        priority: "high",
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "buy milk tuesday in my errands list urgent high priority{Enter}");
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+
+    // Tab moves focus through every removable chip in order.
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Remove date" })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Remove list" })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Remove Urgent" })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Remove priority" })).toHaveFocus();
+
+    // Removing the date chip with the keyboard doesn't confirm the draft —
+    // it activates the focused remove button, and focus returns to the
+    // draft row so a following Enter confirms rather than needing a
+    // separate click or manual refocus.
+    await user.tab({ shift: true });
+    await user.tab({ shift: true });
+    await user.tab({ shift: true });
+    expect(screen.getByRole("button", { name: "Remove date" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("button", { name: "Remove date" })).not.toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "buy milk tuesday in my errands list urgent high priority",
+      list_id: errands.id,
+      priority: "high",
+      tag_ids: [urgent.id],
+    });
+  });
+
+  it("discarding after a chip removal still saves the task exactly as typed", async () => {
+    const api = installFakeApi({
+      assistAvailable: true,
+      assistParseResult: {
+        title: "dentist",
+        due_date: "2026-08-18T15:00:00-04:00",
+        is_all_day: false,
+        time_zone: "America/New_York",
+        recurrence: null,
+        reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "dentist tuesday 3pm{Enter}");
+    await screen.findByRole("group", { name: "Assisted Capture draft" });
+
+    await user.click(screen.getByRole("button", { name: "Remove date" }));
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "dentist tuesday 3pm",
+      list_id: 1,
+    });
+  });
+});
