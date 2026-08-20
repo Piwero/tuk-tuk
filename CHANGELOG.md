@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.3.0](https://github.com/Piwero/tuk-tuk/compare/v1.2.1...v1.3.0) - 2026-08-20
+
+### Features
+
+- **assist:** Spanish input support for assisted capture ([f85fa5e](https://github.com/Piwero/tuk-tuk/commit/f85fa5e15981a934f86092204418e948e305805f))
+- **assist:** Per-chip removal and keyboard flow in the confirmation beat ([a8ca214](https://github.com/Piwero/tuk-tuk/commit/a8ca21457ec148f34a89e598c2d1fd7265091f55))
+
 ## [1.2.1](https://github.com/Piwero/tuk-tuk/compare/v1.2.0...v1.2.1) - 2026-08-20
 
 ### Features
