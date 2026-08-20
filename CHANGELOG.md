@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.2.0](https://github.com/Piwero/tuk-tuk/compare/v1.1.0...v1.2.0) - 2026-08-20
+
+### Features
+
+- **assist:** Recurrence and reminder resolution in assisted capture ([8a47923](https://github.com/Piwero/tuk-tuk/commit/8a47923aa28ebb1b76072a37b861f664abb33504))
+
+### Bug Fixes
+
+- **frontend:** Correct onKeyDown event type in QuickAdd form ([7dc0cab](https://github.com/Piwero/tuk-tuk/commit/7dc0cab05baf6c148133685d4459b8594daa73d4))
+
 ## [1.1.0](https://github.com/Piwero/tuk-tuk/compare/v1.0.1...v1.1.0) - 2026-08-20
 
 ### Features
