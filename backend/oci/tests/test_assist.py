@@ -145,3 +145,82 @@ class TestAssistStatus:
 
         assert response.status_code == 200
         assert response.json() == {"available": True}
+
+    def test_reflects_config_saved_through_the_settings_endpoint(
+        self, database_url: str, fake_clock: FakeClock, stub_ollama: StubOllama
+    ) -> None:
+        """The Settings UI's Test button is just this endpoint, called
+        after Save — proving a saved config (not an env var) is what
+        status now answers against."""
+        stub_ollama.set_installed_models(["qwen3:14b"])
+        with make_client(database_url, fake_clock) as client:
+            save = client.put(
+                "/api/v1/assist/config",
+                json={"ollama_base_url": stub_ollama.base_url, "model": "qwen3:14b"},
+            )
+            assert save.status_code == 200, save.text
+
+            response = client.get("/api/v1/assist/status")
+
+        assert response.status_code == 200
+        assert response.json() == {"available": True}
+
+
+class TestAssistConfig:
+    def test_reads_unset_config_as_nulls(self, database_url: str, fake_clock: FakeClock) -> None:
+        with make_client(database_url, fake_clock) as client:
+            response = client.get("/api/v1/assist/config")
+
+        assert response.status_code == 200
+        assert response.json() == {"ollama_base_url": None, "model": None}
+
+    def test_saves_both_fields(self, database_url: str, fake_clock: FakeClock) -> None:
+        with make_client(database_url, fake_clock) as client:
+            response = client.put(
+                "/api/v1/assist/config",
+                json={"ollama_base_url": "http://localhost:11434", "model": "qwen3:14b"},
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "ollama_base_url": "http://localhost:11434",
+            "model": "qwen3:14b",
+        }
+
+    def test_a_field_omitted_from_the_update_is_left_unchanged(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with make_client(database_url, fake_clock) as client:
+            client.put(
+                "/api/v1/assist/config",
+                json={"ollama_base_url": "http://localhost:11434", "model": "qwen3:14b"},
+            )
+
+            response = client.put("/api/v1/assist/config", json={"model": "llama3:8b"})
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "ollama_base_url": "http://localhost:11434",
+            "model": "llama3:8b",
+        }
+
+    def test_an_explicit_null_is_rejected_rather_than_clearing_the_field(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with make_client(database_url, fake_clock) as client:
+            response = client.put("/api/v1/assist/config", json={"ollama_base_url": None})
+
+        assert response.status_code == 422
+
+    def test_delete_clears_both_fields(self, database_url: str, fake_clock: FakeClock) -> None:
+        with make_client(database_url, fake_clock) as client:
+            client.put(
+                "/api/v1/assist/config",
+                json={"ollama_base_url": "http://localhost:11434", "model": "qwen3:14b"},
+            )
+
+            delete_response = client.delete("/api/v1/assist/config")
+            read_response = client.get("/api/v1/assist/config")
+
+        assert delete_response.status_code == 204
+        assert read_response.json() == {"ollama_base_url": None, "model": None}

@@ -57,10 +57,11 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
 
-    # Assist (v2; ADR 0005/issue #41). Both absent by default, the same
-    # "missing means off" convention as the Google settings above — a fresh
-    # deployment runs with no AI affordances anywhere until an operator
-    # points these at a running Ollama instance and an installed model.
+    # Assist (v2; ADR 0005/issue #41). Migration-only, like
+    # auth_password_hash/google_client_id above: read once on an existing
+    # deployment's first boot to import into the DB-backed `settings` row
+    # (app.app_settings), then never consulted again. A fresh deployment
+    # leaves both unset and configures Assist from Settings instead.
     assist_ollama_base_url: str | None = None
     assist_model: str | None = None
 

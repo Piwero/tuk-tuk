@@ -163,6 +163,41 @@ class TestUpgradeImport:
         assert row.google_client_id is None
         assert row.encrypted_google_client_secret is None
 
+    def test_assist_settings_are_imported_alongside_the_password(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        settings = Settings(
+            database_url=database_url,
+            auth_password_hash="an-imported-hash",
+            assist_ollama_base_url="http://localhost:11434",
+            assist_model="qwen3:14b",
+        )
+
+        with TestClient(create_app(settings, clock=fake_clock)) as client:
+            row = app_settings_row(client.app)  # type: ignore[arg-type]
+
+        assert row.assist_ollama_base_url == "http://localhost:11434"
+        assert row.assist_model == "qwen3:14b"
+
+    def test_a_lone_assist_setting_is_still_imported(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        """Unlike the Google pair, neither Assist field is a credential, so
+        there's no half-configured-and-unusable risk to guard against —
+        each imports independently."""
+        settings = Settings(
+            database_url=database_url,
+            auth_password_hash="an-imported-hash",
+            assist_ollama_base_url="http://localhost:11434",
+            assist_model=None,
+        )
+
+        with TestClient(create_app(settings, clock=fake_clock)) as client:
+            row = app_settings_row(client.app)  # type: ignore[arg-type]
+
+        assert row.assist_ollama_base_url == "http://localhost:11434"
+        assert row.assist_model is None
+
 
 class TestEncryptionAtRest:
     def test_the_stored_google_client_secret_is_not_plaintext_in_the_raw_db_file(

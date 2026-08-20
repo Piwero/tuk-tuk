@@ -52,6 +52,11 @@ class AppSettings(Base):
     session_key: Mapped[str] = mapped_column(Text)
     google_client_id: Mapped[str | None] = mapped_column(String(255), default=None)
     encrypted_google_client_secret: Mapped[str | None] = mapped_column(Text, default=None)
+    # Assist (ADR 0005). Neither value is sensitive — an Ollama base URL and
+    # a model name, not a credential — so unlike the Google secret above,
+    # these are stored plain, no encryption needed.
+    assist_ollama_base_url: Mapped[str | None] = mapped_column(String(255), default=None)
+    assist_model: Mapped[str | None] = mapped_column(String(255), default=None)
     # UI-only visibility toggle for the Stand-up feature (issue #140):
     # turning it off hides the nav item and route, nothing more — no route
     # is blocked and no stored data is ever touched by this flag.
