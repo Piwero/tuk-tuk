@@ -519,6 +519,7 @@ describe("Sidebar drag and drop", () => {
     const api = installFakeApi({ lists: [INBOX, groceries], tasks: [milk] });
     const user = userEvent.setup();
     render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
     await screen.findByText("Buy milk");
 
     const dataTransfer = fakeDataTransfer();

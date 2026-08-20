@@ -30,7 +30,7 @@ describe("Sidebar top nav (issue #160)", () => {
   it("keeps all six destinations present and reachable with Tasks active", async () => {
     installFakeApi();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Views" });
     for (const name of VIEW_NAMES) {

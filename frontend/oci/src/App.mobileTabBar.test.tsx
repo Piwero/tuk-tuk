@@ -33,7 +33,7 @@ describe("Mobile bottom tab bar (issue #170)", () => {
   it("exposes Tasks, Calendar, Habits, and Focus, with Tasks active by default", async () => {
     installFakeApi();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Primary" });
     for (const name of TAB_NAMES) {
@@ -48,7 +48,7 @@ describe("Mobile bottom tab bar (issue #170)", () => {
   it("does not include Stand-up or Search — those stay drawer-only", async () => {
     installFakeApi();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).queryByText("Stand-up")).not.toBeInTheDocument();
@@ -59,7 +59,7 @@ describe("Mobile bottom tab bar (issue #170)", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Primary" });
     await user.click(getTab(nav, "Calendar"));
@@ -74,7 +74,7 @@ describe("Mobile bottom tab bar (issue #170)", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Primary" });
     await user.click(getTab(nav, "Habits"));
@@ -87,7 +87,7 @@ describe("Mobile bottom tab bar (issue #170)", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Primary" });
     await user.click(getTab(nav, "Focus"));
@@ -100,7 +100,7 @@ describe("Mobile bottom tab bar (issue #170)", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     const nav = screen.getByRole("navigation", { name: "Primary" });
     await user.click(getTab(nav, "Habits"));
@@ -116,7 +116,7 @@ describe("Mobile bottom tab bar (issue #170)", () => {
     const errands = fakeList("Errands");
     installFakeApi({ lists: [INBOX, errands] });
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await screen.findByRole("heading", { name: "All" });
 
     // Tasks lights up for any Smart List / List / Tag / Folder view (it's
     // the "everything else" destination, same convention as the sidebar's

@@ -15,6 +15,7 @@ describe("Quick-Add ~ suggestion dropdown", () => {
     installFakeApi({ lists: [INBOX, work, home] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "~");
@@ -33,6 +34,7 @@ describe("Quick-Add ~ suggestion dropdown", () => {
     installFakeApi({ lists: [INBOX, work, workout] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "~WO");
@@ -50,6 +52,7 @@ describe("Quick-Add ~ suggestion dropdown", () => {
     installFakeApi({ lists: [INBOX, errands] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "buy milk ~personal");
@@ -67,6 +70,7 @@ describe("Quick-Add ~ suggestion dropdown", () => {
     installFakeApi({ lists: [INBOX, work, home] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read ~wo");
@@ -86,6 +90,7 @@ describe("Quick-Add ~ suggestion dropdown", () => {
     const api = installFakeApi({ lists: [INBOX, work] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read ~wo");
@@ -104,6 +109,7 @@ describe("Quick-Add ~ dropdown create-list row", () => {
     installFakeApi({ lists: [INBOX] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "~zzz");
@@ -115,6 +121,7 @@ describe("Quick-Add ~ dropdown create-list row", () => {
     installFakeApi({ lists: [INBOX] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "~");
@@ -127,6 +134,7 @@ describe("Quick-Add ~ dropdown create-list row", () => {
     const api = installFakeApi({ lists: [INBOX] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read ~zzz");
@@ -153,6 +161,7 @@ describe("Quick-Add ~ dropdown create-list row", () => {
     installFakeApi({ lists: [INBOX] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "~zzz");
@@ -166,6 +175,7 @@ describe("Quick-Add ~ dropdown create-list row", () => {
     const api = installFakeApi({ lists: [INBOX] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read ~foo{Enter}");
@@ -182,6 +192,7 @@ describe("Quick-Add ~ dropdown create-list row", () => {
     const api = installFakeApi({ lists: [INBOX, personal, work] });
     render(<App />);
     const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read ~personal");

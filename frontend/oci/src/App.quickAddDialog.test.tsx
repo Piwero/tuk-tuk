@@ -19,7 +19,7 @@ describe("Quick add dialog", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const sidebar = screen.getByRole("complementary");
     const trigger = within(sidebar).getByRole("button", { name: "Quick add" });
@@ -47,7 +47,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await screen.findByRole("dialog", { name: "Quick add" });
@@ -66,7 +66,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Buy milk");
@@ -84,7 +84,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi({ lists: [INBOX, errands] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Print badge");
@@ -108,7 +108,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi({ tags: [work] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Email boss");
@@ -135,7 +135,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Design review");
@@ -160,7 +160,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Conference");
@@ -187,7 +187,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Someday"); // no date
@@ -224,7 +224,7 @@ describe("Quick add dialog", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     const trigger = screen.getByRole("button", { name: "Quick add" });
     await user.click(trigger);
@@ -244,7 +244,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "   ");
@@ -259,7 +259,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi({ lists: [INBOX, expenses] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     const title = await screen.findByRole("combobox", { name: "Title" });
@@ -289,7 +289,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi({ lists: [INBOX, expenses] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Ask Tomas for invoices ~expenses");
@@ -305,7 +305,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi({ lists: [INBOX, expenses, errands] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Buy stamps ~expenses");
@@ -323,7 +323,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi({ tags: [work] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "Inbox" });
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     const title = await screen.findByRole("combobox", { name: "Title" });
