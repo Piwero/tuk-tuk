@@ -382,7 +382,14 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     await waitFor(() => expect(parsePosts(api.requests)).toHaveLength(1));
     expect(parsePosts(api.requests)[0]).toMatchObject({ text: "buy milk" });
 
-    await screen.findByRole("group", { name: "Assisted Capture draft" });
+    const chipGroup = await screen.findByRole("group", { name: "Assisted Capture draft" });
+    // The explicit tokens win over Assist's proposals on confirm, and the
+    // confirmation beat must show that effective payload (issue #175) —
+    // not just Assist's own (superseded) "Errands"/"low" proposals.
+    expect(chipGroup).toHaveTextContent("Work");
+    expect(chipGroup).toHaveTextContent("High");
+    expect(chipGroup).not.toHaveTextContent("Errands");
+    expect(chipGroup).not.toHaveTextContent("Low");
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
@@ -391,6 +398,44 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
       list_id: work.id,
       priority: "high",
       tag_ids: [urgent.id],
+    });
+  });
+
+  it("shows chips for explicit #tag/!priority tokens even when Assist also proposes a draft (issue #175)", async () => {
+    const api = installFakeApi({
+      lists: [INBOX],
+      tags: [],
+      assistAvailable: true,
+      assistParseResult: {
+        title: "buy milk",
+        due_date: "2026-08-21T00:00:00Z",
+        is_all_day: true,
+        time_zone: null,
+        recurrence: null,
+        reminders: [],
+        list_name: null,
+        tag_names: [],
+        priority: null,
+      },
+    });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await screen.findByLabelText("Assist available");
+    await user.type(input, "buy milk tomorrow #tag-2 !high{Enter}");
+
+    const chipGroup = await screen.findByRole("group", { name: "Assisted Capture draft" });
+    expect(chipGroup).toHaveTextContent("tag-2");
+    expect(chipGroup).toHaveTextContent("High");
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toMatchObject({
+      title: "buy milk",
+      priority: "high",
     });
   });
 
