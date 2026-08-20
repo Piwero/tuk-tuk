@@ -56,6 +56,11 @@ interface TokenInputProps {
   /** Focuses the text input on mount — how the Quick-Add dialog puts the
    * caret in the title the moment it opens. */
   autoFocus?: boolean;
+  /** Rendered as the last flex item in the input row itself (e.g.
+   * Quick-Add's Assist affordance) — flows with the input/chips instead of
+   * sitting outside `.token-input`'s box, where it would fall onto its own
+   * line below a full-width input. */
+  trailingContent?: React.ReactNode;
 }
 
 /** A row the dropdown can show: an existing item, or the trailing offer to
@@ -76,6 +81,7 @@ export function TokenInput({
   channels,
   showChips = true,
   autoFocus = false,
+  trailingContent,
 }: TokenInputProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
@@ -271,6 +277,7 @@ export function TokenInput({
         onKeyDown={onKeyDown}
         autoFocus={autoFocus}
       />
+      {trailingContent}
       {open && active !== null && (
         <ul className="token-input-dropdown" role="listbox" id={listboxId}>
           {rows.map((row, index) => (
