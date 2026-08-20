@@ -193,6 +193,40 @@ export function fetchAssistStatus(): Promise<AssistStatus> {
   return request("/api/v1/assist/status");
 }
 
+/** The Ollama base URL and model name Settings configures Assist with
+ * (ADR 0005). Neither is a credential, so — unlike GoogleStatus's client
+ * secret — both round-trip in full; there's nothing to mask. */
+export interface AssistConfig {
+  ollama_base_url: string | null;
+  model: string | null;
+}
+
+export function fetchAssistConfig(): Promise<AssistConfig> {
+  return request("/api/v1/assist/config");
+}
+
+/** Saves whichever fields are passed; an omitted field is left unchanged
+ * server-side (the same partial-update convention as saveGoogleCredentials'
+ * client secret). */
+export function saveAssistConfig(
+  fields: Partial<{ ollamaBaseUrl: string; model: string }>,
+): Promise<AssistConfig> {
+  const body: { ollama_base_url?: string; model?: string } = {};
+  if (fields.ollamaBaseUrl !== undefined) {
+    body.ollama_base_url = fields.ollamaBaseUrl;
+  }
+  if (fields.model !== undefined) {
+    body.model = fields.model;
+  }
+  return request("/api/v1/assist/config", { method: "PUT", body: JSON.stringify(body) });
+}
+
+/** Clears both settings, returning Assist to the same unconfigured,
+ * invisible state as a fresh deployment. */
+export function removeAssistConfig(): Promise<void> {
+  return request("/api/v1/assist/config", { method: "DELETE" });
+}
+
 export interface GoogleStatus {
   configured: boolean;
   /** The client ID isn't sensitive — Settings shows it back for editing. */

@@ -248,6 +248,13 @@ export interface FakeApiState {
    * Defaults to false, matching a fresh deployment with no Ollama
    * settings configured. */
   assistAvailable: boolean;
+  /** The Assist config Settings reads/writes (ADR 0005). Both null by
+   * default, matching a fresh deployment with nothing configured yet —
+   * independent of `assistAvailable`, which a test sets directly rather
+   * than deriving from these (mirrors the backend/fake split for Google:
+   * status and config are asked separately). */
+  assistOllamaBaseUrl: string | null;
+  assistModel: string | null;
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -460,6 +467,8 @@ export function installFakeApi({
   sprintGoal = "",
   standupEnabled = true,
   assistAvailable = false,
+  assistOllamaBaseUrl = null,
+  assistModel = null,
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -508,6 +517,9 @@ export function installFakeApi({
   standupEnabled?: boolean;
   /** The Assist availability probe's answer (ADR 0005, issue #42). */
   assistAvailable?: boolean;
+  /** The saved Assist config Settings reads on mount (ADR 0005). */
+  assistOllamaBaseUrl?: string | null;
+  assistModel?: string | null;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -545,6 +557,8 @@ export function installFakeApi({
     sprintGoal,
     standupEnabled,
     assistAvailable,
+    assistOllamaBaseUrl,
+    assistModel,
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -665,6 +679,39 @@ export function installFakeApi({
         return unauthorized();
       }
       return json({ available: state.assistAvailable });
+    }
+    if (method === "GET" && url.pathname === "/api/v1/assist/config") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      return json({
+        ollama_base_url: state.assistOllamaBaseUrl,
+        model: state.assistModel,
+      });
+    }
+    if (method === "PUT" && url.pathname === "/api/v1/assist/config") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      const input = body as { ollama_base_url?: string; model?: string };
+      if (input.ollama_base_url !== undefined) {
+        state.assistOllamaBaseUrl = input.ollama_base_url;
+      }
+      if (input.model !== undefined) {
+        state.assistModel = input.model;
+      }
+      return json({
+        ollama_base_url: state.assistOllamaBaseUrl,
+        model: state.assistModel,
+      });
+    }
+    if (method === "DELETE" && url.pathname === "/api/v1/assist/config") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      state.assistOllamaBaseUrl = null;
+      state.assistModel = null;
+      return new Response(null, { status: 204 });
     }
     if (method === "GET" && url.pathname === "/api/v1/google/status") {
       if (!state.loggedIn) {

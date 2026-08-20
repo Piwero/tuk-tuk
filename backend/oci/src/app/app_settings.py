@@ -38,6 +38,13 @@ def google_configured(app_settings: AppSettings) -> bool:
     return bool(app_settings.google_client_id) and bool(app_settings.encrypted_google_client_secret)
 
 
+def assist_configured(app_settings: AppSettings) -> bool:
+    """Whether Assist has both settings it needs (ADR 0005) — the source of
+    truth every route consults, not the one-time-import env vars in
+    app.config, which `bootstrap_app_settings` below only reads once."""
+    return bool(app_settings.assist_ollama_base_url) and bool(app_settings.assist_model)
+
+
 async def bootstrap_app_settings(session: AsyncSession, settings: Settings) -> AppSettings:
     """Ensures the singleton settings row exists, run once from app.main's
     lifespan before the app serves any request.
@@ -75,6 +82,11 @@ async def bootstrap_app_settings(session: AsyncSession, settings: Settings) -> A
         password_hash=settings.auth_password_hash,
         google_client_id=google_client_id,
         encrypted_google_client_secret=encrypted_google_client_secret,
+        # Neither value is a credential, so — unlike the Google pair above —
+        # each imports independently; a lone one is simply unavailable
+        # until its partner is set from Settings, not a security concern.
+        assist_ollama_base_url=settings.assist_ollama_base_url,
+        assist_model=settings.assist_model,
     )
     session.add(row)
     await session.commit()

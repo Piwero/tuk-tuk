@@ -4,16 +4,21 @@ import {
   ApiError,
   changePassword,
   disconnectGoogleAccount,
+  fetchAssistConfig,
+  fetchAssistStatus,
   fetchGoogleAccounts,
   fetchGoogleCalendars,
   fetchGoogleStatus,
   googleConnectUrl,
   refreshGoogleCalendars,
   fetchStandupSettings,
+  removeAssistConfig,
   removeGoogleIntegration,
+  saveAssistConfig,
   saveGoogleCredentials,
   updateGoogleCalendar,
   updateStandupSettings,
+  type AssistConfig,
   type GoogleAccount,
   type GoogleCalendar,
   type GoogleStatus,
@@ -348,6 +353,148 @@ function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps):
   );
 }
 
+interface AssistConfigFormProps {
+  config: AssistConfig;
+  onSaved: (config: AssistConfig) => void;
+}
+
+/** The Assist configuration form (ADR 0005): the Ollama base URL and model
+ * name, both plain text — neither is a credential, so unlike the Google
+ * client secret there's nothing to mask or keep write-only.
+ *
+ * "Test connection" re-runs the same availability check Quick-Add polls —
+ * but only against what's actually saved, since that's what every other
+ * part of the app (Quick-Add's own probe) will see too. Disabled whenever
+ * the fields have unsaved edits, so it can never quietly report on stale
+ * config the operator thinks they just tested.
+ *
+ * "Remove" clears both settings server-side (mirrors GoogleCredentialsForm's
+ * "Remove Google integration") — the only way to turn Assist back off once
+ * something is saved, since the backend rejects blank fields as a save (a
+ * config value, once set, doesn't degrade to "unset" by typing nothing). */
+function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Element {
+  const [ollamaBaseUrl, setOllamaBaseUrl] = useState(config.ollama_base_url ?? "");
+  const [model, setModel] = useState(config.model ?? "");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [testPending, setTestPending] = useState(false);
+  // null until a test has actually run — distinct from a false result, so
+  // the form doesn't claim "unavailable" before anyone asked.
+  const [testResult, setTestResult] = useState<boolean | null>(null);
+
+  const isDirty =
+    ollamaBaseUrl !== (config.ollama_base_url ?? "") || model !== (config.model ?? "");
+
+  // Re-syncs the form with the saved state after a save from outside (the
+  // parent owns the source of truth) — mirrors GoogleCredentialsForm.
+  useEffect(() => {
+    setOllamaBaseUrl(config.ollama_base_url ?? "");
+    setModel(config.model ?? "");
+  }, [config.ollama_base_url, config.model]);
+
+  function handleSubmit(event: React.FormEvent): void {
+    event.preventDefault();
+    if (pending) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setTestResult(null);
+    saveAssistConfig({ ollamaBaseUrl, model })
+      .then((saved) => {
+        setPending(false);
+        onSaved(saved);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+        setPending(false);
+      });
+  }
+
+  async function handleRemove(): Promise<void> {
+    await removeAssistConfig();
+    setOllamaBaseUrl("");
+    setModel("");
+    setTestResult(null);
+    onSaved({ ollama_base_url: null, model: null });
+  }
+
+  function handleTest(): void {
+    if (testPending || isDirty) {
+      return;
+    }
+    setTestPending(true);
+    setTestResult(null);
+    fetchAssistStatus()
+      .then((status) => {
+        setTestResult(status.available);
+        setTestPending(false);
+      })
+      .catch(() => {
+        setTestResult(false);
+        setTestPending(false);
+      });
+  }
+
+  return (
+    <form className="assist-config-form settings-form" onSubmit={handleSubmit}>
+      <div className="settings-field">
+        <label htmlFor="settings-assist-ollama-base-url">Ollama base URL</label>
+        <input
+          id="settings-assist-ollama-base-url"
+          name="assist-ollama-base-url"
+          type="text"
+          placeholder="http://localhost:11434"
+          value={ollamaBaseUrl}
+          disabled={pending}
+          onChange={(event) => setOllamaBaseUrl(event.target.value)}
+        />
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-assist-model">Model</label>
+        <input
+          id="settings-assist-model"
+          name="assist-model"
+          type="text"
+          placeholder="qwen3:14b"
+          value={model}
+          disabled={pending}
+          onChange={(event) => setModel(event.target.value)}
+        />
+      </div>
+      {error !== null && <p role="alert">{error}</p>}
+      <div className="settings-form-actions">
+        <button type="submit" className="settings-primary-action" disabled={pending}>
+          {pending ? "Saving…" : "Save Assist settings"}
+        </button>
+        <button
+          type="button"
+          onClick={handleTest}
+          disabled={testPending || isDirty}
+          title={isDirty ? "Save your changes before testing" : undefined}
+        >
+          {testPending ? "Testing…" : "Test connection"}
+        </button>
+        {(config.ollama_base_url !== null || config.model !== null) && (
+          <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+            Remove
+          </button>
+        )}
+      </div>
+      {isDirty && testResult === null && (
+        <p className="settings-hint">Save your changes before testing the connection.</p>
+      )}
+      {testResult !== null && (
+        <p role="status" className={testResult ? "settings-hint" : undefined}>
+          {testResult
+            ? "Assist is available — Ollama is reachable and the model is installed."
+            : "Assist is unavailable — check that Ollama is running and the model is installed."}
+        </p>
+      )}
+    </form>
+  );
+}
+
 /** The Settings screen. Asks the Google status endpoint once on mount. The
  * Google Calendar section itself is always shown once that answer is in —
  * unlike before issue #117, its credentials form is how an operator gets
@@ -361,9 +508,14 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
   // Enabled by default (issue #140) so the toggle doesn't flash off before
   // the real value loads — mirrors the App-level nav item's own default.
   const [standupEnabled, setStandupEnabled] = useState(true);
+  const [assistConfig, setAssistConfig] = useState<AssistConfig | null>(null);
 
   useEffect(() => {
     void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
+  }, []);
+
+  useEffect(() => {
+    void fetchAssistConfig().then(setAssistConfig);
   }, []);
 
   async function handleStandupToggle(): Promise<void> {
@@ -432,6 +584,16 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
           Stand-up
         </label>
       </section>
+      {assistConfig !== null && (
+        <section aria-label="Assist" className="settings-section">
+          <h2>Assist</h2>
+          <p className="settings-hint">
+            Runs entirely on your own machine via Ollama — no cloud inference, no data leaves this
+            device. Unconfigured (or removed) means Assist stays off everywhere.
+          </p>
+          <AssistConfigForm config={assistConfig} onSaved={setAssistConfig} />
+        </section>
+      )}
       {googleStatus !== null && (
         <section aria-label="Google Calendar" className="settings-section">
           <h2>Google Calendar</h2>
