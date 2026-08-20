@@ -23,6 +23,7 @@ from app.login_throttle import LoginThrottle
 from app.middleware import SessionAuthMiddleware
 from app.models import TaskList
 from app.routers.v1 import (
+    assist,
     auth,
     check_items,
     completed_occurrences,
@@ -102,6 +103,7 @@ def create_app(
         allow_headers=["*"],
     )
     register_error_handlers(app)
+    app.include_router(assist.router)
     app.include_router(auth.router)
     app.include_router(check_items.router)
     app.include_router(completed_occurrences.router)

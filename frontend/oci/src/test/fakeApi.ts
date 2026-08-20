@@ -243,6 +243,11 @@ export interface FakeApiState {
   /** The Stand-up visibility toggle (issue #140) — server-defaulted to
    * true, matching the backend's default. */
   standupEnabled: boolean;
+  /** Mirrors the backend's Assist status probe (ADR 0005, issue #42):
+   * whether Ollama is reachable and the configured model is installed.
+   * Defaults to false, matching a fresh deployment with no Ollama
+   * settings configured. */
+  assistAvailable: boolean;
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -454,6 +459,7 @@ export function installFakeApi({
   standupYesterdaySuggestions = [],
   sprintGoal = "",
   standupEnabled = true,
+  assistAvailable = false,
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -500,6 +506,8 @@ export function installFakeApi({
   /** The Stand-up visibility toggle (issue #140). Defaults to true, matching
    * the backend's server-defaulted-true column. */
   standupEnabled?: boolean;
+  /** The Assist availability probe's answer (ADR 0005, issue #42). */
+  assistAvailable?: boolean;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -536,6 +544,7 @@ export function installFakeApi({
     })),
     sprintGoal,
     standupEnabled,
+    assistAvailable,
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -650,6 +659,12 @@ export function installFakeApi({
         return setupRequired();
       }
       return state.loggedIn ? new Response(null, { status: 204 }) : unauthorized();
+    }
+    if (method === "GET" && url.pathname === "/api/v1/assist/status") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      return json({ available: state.assistAvailable });
     }
     if (method === "GET" && url.pathname === "/api/v1/google/status") {
       if (!state.loggedIn) {

@@ -14,6 +14,8 @@ import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
 import { parseQuickAdd, sameName } from "../quickAdd";
 import { applyTagPick, suggestTags } from "../tagSuggest";
+import { useAssistAvailable } from "../useAssistAvailable";
+import { Icon } from "./Icon";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
 interface QuickAddProps {
@@ -44,6 +46,10 @@ export function QuickAdd({
   const [tagChips, setTagChips] = useState<Tag[]>([]);
   const [listChip, setListChip] = useState<TaskList[]>([]);
   const [priorityChip, setPriorityChip] = useState<Priority[]>([]);
+  // ADR 0005 / issue #42: invisible, not greyed out, when Ollama isn't
+  // reachable — this foundation issue only gates the affordance; parsing
+  // itself lands in issue #43.
+  const assistAvailable = useAssistAvailable();
 
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -161,6 +167,11 @@ export function QuickAdd({
           priorityChannel as TokenChannel<unknown>,
         ]}
       />
+      {assistAvailable && (
+        <span className="quick-add-assist-affordance" aria-label="Assist available" title="Assist">
+          <Icon name="sparkles" size={16} />
+        </span>
+      )}
     </form>
   );
 }

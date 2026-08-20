@@ -57,5 +57,12 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
 
+    # Assist (v2; ADR 0005/issue #41). Both absent by default, the same
+    # "missing means off" convention as the Google settings above — a fresh
+    # deployment runs with no AI affordances anywhere until an operator
+    # points these at a running Ollama instance and an installed model.
+    assist_ollama_base_url: str | None = None
+    assist_model: str | None = None
+
 
 settings = Settings()

@@ -180,6 +180,19 @@ export function changePassword(currentPassword: string, newPassword: string): Pr
   });
 }
 
+/** Whether Assist (ADR 0005) is available: Ollama is reachable and the
+ * configured model is installed. Polled on load and on window refocus;
+ * `available: false` — unset settings, an unreachable Ollama, or a missing
+ * model all collapse to this same value — means no AI affordance renders
+ * anywhere, and Quick-Add behaves exactly as it does today. */
+export interface AssistStatus {
+  available: boolean;
+}
+
+export function fetchAssistStatus(): Promise<AssistStatus> {
+  return request("/api/v1/assist/status");
+}
+
 export interface GoogleStatus {
   configured: boolean;
   /** The client ID isn't sensitive — Settings shows it back for editing. */
