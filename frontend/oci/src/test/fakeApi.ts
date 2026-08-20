@@ -255,6 +255,12 @@ export interface FakeApiState {
    * status and config are asked separately). */
   assistOllamaBaseUrl: string | null;
   assistModel: string | null;
+  /** What the Assist models endpoint answers with (ADR 0005) — the
+   * Settings dropdown's source. Answered regardless of the requested
+   * `base_url`, unlike the backend's real reachability check (exercised in
+   * the backend suite); a test wanting "no models" simply doesn't seed
+   * this. */
+  assistInstalledModels: string[];
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -469,6 +475,7 @@ export function installFakeApi({
   assistAvailable = false,
   assistOllamaBaseUrl = null,
   assistModel = null,
+  assistInstalledModels = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -520,6 +527,8 @@ export function installFakeApi({
   /** The saved Assist config Settings reads on mount (ADR 0005). */
   assistOllamaBaseUrl?: string | null;
   assistModel?: string | null;
+  /** What GET /api/v1/assist/models answers with (ADR 0005). */
+  assistInstalledModels?: string[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -559,6 +568,7 @@ export function installFakeApi({
     assistAvailable,
     assistOllamaBaseUrl,
     assistModel,
+    assistInstalledModels: [...assistInstalledModels],
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -704,6 +714,12 @@ export function installFakeApi({
         ollama_base_url: state.assistOllamaBaseUrl,
         model: state.assistModel,
       });
+    }
+    if (method === "GET" && url.pathname === "/api/v1/assist/models") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      return json({ models: state.assistInstalledModels });
     }
     if (method === "DELETE" && url.pathname === "/api/v1/assist/config") {
       if (!state.loggedIn) {

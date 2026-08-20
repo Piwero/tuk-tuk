@@ -12,11 +12,11 @@ button calls the same endpoint to confirm a saved configuration actually
 reaches Ollama and finds the model installed.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
 
 from app.app_settings import require_app_settings
-from app.assist import assist_available
+from app.assist import assist_available, list_installed_models
 from app.db import SessionDep
 from app.models import AppSettings
 from app.schemas import reject_explicit_null
@@ -31,6 +31,10 @@ class AssistStatus(BaseModel):
 class AssistConfig(BaseModel):
     ollama_base_url: str | None
     model: str | None
+
+
+class AssistModels(BaseModel):
+    models: list[str]
 
 
 # PATCH-style fields: absent means "leave unchanged" (reject_explicit_null),
@@ -64,6 +68,25 @@ async def assist_status(session: SessionDep) -> AssistStatus:
 async def read_assist_config(session: SessionDep) -> AssistConfig:
     app_settings = await require_app_settings(session)
     return _config_from(app_settings)
+
+
+@router.get("/models")
+async def read_assist_models(
+    session: SessionDep, base_url: str | None = Query(default=None)
+) -> AssistModels:
+    """Powers Settings' model dropdown: every model Ollama reports
+    installed at `base_url`, so an operator picks from what's actually
+    there instead of typing a name from memory. `base_url` is a query
+    param, not the saved setting, so the dropdown can query a URL the
+    operator just typed but hasn't saved yet; omitting it falls back to
+    whatever's currently saved (e.g. a page refresh with fields already
+    filled in). Never errors — an unreachable or blank base URL just
+    answers an empty list, same posture as `/status`.
+    """
+    if base_url is None:
+        app_settings = await require_app_settings(session)
+        base_url = app_settings.assist_ollama_base_url
+    return AssistModels(models=await list_installed_models(base_url))
 
 
 @router.put("/config")
