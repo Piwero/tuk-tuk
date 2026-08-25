@@ -377,6 +377,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       view.kind === "calendar" ||
       view.kind === "habits" ||
       view.kind === "standup" ||
+      view.kind === "assistant" ||
       view.kind === "focus" ||
       view.kind === "focus-stats" ||
       view.kind === "settings"
