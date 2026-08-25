@@ -5,12 +5,21 @@ import type { SmartView } from "./api";
  * List/Tag/Folder views stay in-memory only — they're not represented here
  * and never get a path. Smart views (Today/Next 7 Days/All) do get one. */
 export type StaticViewKind =
-  "standup" | "focus" | "focus-stats" | "calendar" | "habits" | "search" | "settings" | "smart";
+  | "standup"
+  | "assistant"
+  | "focus"
+  | "focus-stats"
+  | "calendar"
+  | "habits"
+  | "search"
+  | "settings"
+  | "smart";
 
 const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
   calendar: "/calendar/day",
   habits: "/habits",
   standup: "/standup",
+  assistant: "/assistant",
   focus: "/focus",
   "focus-stats": "/focus/stats",
   search: "/search",

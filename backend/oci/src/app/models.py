@@ -57,6 +57,14 @@ class AppSettings(Base):
     # these are stored plain, no encryption needed.
     assist_ollama_base_url: Mapped[str | None] = mapped_column(String(255), default=None)
     assist_model: Mapped[str | None] = mapped_column(String(255), default=None)
+    # The Assistant (ADR 0009, issue #185) — entirely independent of Assist
+    # above; never read by it and never reads it. `encrypted_assistant_api_key`
+    # is encrypted with `APP_MASTER_KEY` (app.crypto), like the Google client
+    # secret, since unlike the base URL and model it is a credential.
+    assistant_base_url: Mapped[str | None] = mapped_column(String(255), default=None)
+    assistant_model: Mapped[str | None] = mapped_column(String(255), default=None)
+    encrypted_assistant_api_key: Mapped[str | None] = mapped_column(Text, default=None)
+    assistant_planning_preferences: Mapped[str | None] = mapped_column(Text, default=None)
     # UI-only visibility toggle for the Stand-up feature (issue #140):
     # turning it off hides the nav item and route, nothing more — no route
     # is blocked and no stored data is ever touched by this flag.

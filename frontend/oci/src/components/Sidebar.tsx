@@ -63,6 +63,12 @@ interface SidebarProps {
   /** Settings toggle (issue #140): hides the Stand-up nav item entirely
    * when off — the feature's data isn't touched, only its visibility. */
   standupEnabled: boolean;
+  assistantSelected: boolean;
+  /** The Assistant's availability gate (ADR 0009, issue #185): hides the
+   * nav item entirely until a configured provider is reachable — unlike
+   * `standupEnabled`, this is never a user-facing toggle, only a direct
+   * read of whether the feature is configured at all. */
+  assistantAvailable: boolean;
   focusSelected: boolean;
   settingsSelected: boolean;
   /** Selected when viewing /search — distinct from having typed a query,
@@ -75,6 +81,7 @@ interface SidebarProps {
   onSelectCalendar: () => void;
   onSelectHabits: () => void;
   onSelectStandup: () => void;
+  onSelectAssistant: () => void;
   onSelectFocus: () => void;
   onSelectSettings: () => void;
   onSearch: (query: string) => void;
@@ -217,6 +224,8 @@ export function Sidebar({
   habitsSelected,
   standupSelected,
   standupEnabled,
+  assistantSelected,
+  assistantAvailable,
   focusSelected,
   settingsSelected,
   searchSelected,
@@ -227,6 +236,7 @@ export function Sidebar({
   onSelectCalendar,
   onSelectHabits,
   onSelectStandup,
+  onSelectAssistant,
   onSelectFocus,
   onSelectSettings,
   onSearch,
@@ -603,6 +613,7 @@ export function Sidebar({
     !calendarSelected &&
     !habitsSelected &&
     !standupSelected &&
+    !assistantSelected &&
     !focusSelected &&
     !settingsSelected &&
     !searchSelected;
@@ -667,6 +678,15 @@ export function Sidebar({
               href={pathForStaticView("standup")}
               selected={standupSelected}
               onClick={onSelectStandup}
+            />
+          )}
+          {assistantAvailable && (
+            <TopNavItem
+              icon="sparkles"
+              label="Assistant"
+              href={pathForStaticView("assistant")}
+              selected={assistantSelected}
+              onClick={onSelectAssistant}
             />
           )}
           <TopNavItem

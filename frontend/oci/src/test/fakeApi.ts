@@ -273,6 +273,17 @@ export interface FakeApiState {
    * test exercise Quick-Add's own client-side degrade-to-plain-capture
    * `catch` path (issue #43). */
   assistParseFails: boolean;
+  /** Mirrors the backend's Assistant status probe (ADR 0009, issue #185):
+   * whether the configured provider is reachable and authenticated.
+   * Defaults to false, matching a fresh deployment with nothing
+   * configured. Entirely independent of `assistAvailable`. */
+  assistantAvailable: boolean;
+  /** The Assistant's provider config Settings reads/writes (ADR 0009). All
+   * null/unset by default, matching a fresh deployment. */
+  assistantBaseUrl: string | null;
+  assistantModel: string | null;
+  assistantApiKeySet: boolean;
+  assistantPlanningPreferences: string | null;
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -490,6 +501,11 @@ export function installFakeApi({
   assistInstalledModels = [],
   assistParseResult = null,
   assistParseFails = false,
+  assistantAvailable = false,
+  assistantBaseUrl = null,
+  assistantModel = null,
+  assistantApiKeySet = false,
+  assistantPlanningPreferences = null,
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -549,6 +565,13 @@ export function installFakeApi({
   /** Makes POST /api/v1/assist/parse-capture answer with a server error
    * instead (issue #43) — see the field's own doc. */
   assistParseFails?: boolean;
+  /** The Assistant availability probe's answer (ADR 0009, issue #185). */
+  assistantAvailable?: boolean;
+  /** The saved Assistant config Settings reads on mount (ADR 0009). */
+  assistantBaseUrl?: string | null;
+  assistantModel?: string | null;
+  assistantApiKeySet?: boolean;
+  assistantPlanningPreferences?: string | null;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -591,6 +614,11 @@ export function installFakeApi({
     assistInstalledModels: [...assistInstalledModels],
     assistParseResult,
     assistParseFails,
+    assistantAvailable,
+    assistantBaseUrl,
+    assistantModel,
+    assistantApiKeySet,
+    assistantPlanningPreferences,
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -773,6 +801,62 @@ export function installFakeApi({
         });
       }
       return json(state.assistParseResult);
+    }
+    if (method === "GET" && url.pathname === "/api/v1/assistant/status") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      return json({ available: state.assistantAvailable });
+    }
+    if (method === "GET" && url.pathname === "/api/v1/assistant/config") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      return json({
+        base_url: state.assistantBaseUrl,
+        model: state.assistantModel,
+        api_key_set: state.assistantApiKeySet,
+        planning_preferences: state.assistantPlanningPreferences,
+      });
+    }
+    if (method === "PUT" && url.pathname === "/api/v1/assistant/config") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      const input = body as {
+        base_url?: string;
+        model?: string;
+        api_key?: string;
+        planning_preferences?: string;
+      };
+      if (input.base_url !== undefined) {
+        state.assistantBaseUrl = input.base_url;
+      }
+      if (input.model !== undefined) {
+        state.assistantModel = input.model;
+      }
+      if (input.api_key !== undefined) {
+        state.assistantApiKeySet = true;
+      }
+      if (input.planning_preferences !== undefined) {
+        state.assistantPlanningPreferences = input.planning_preferences;
+      }
+      return json({
+        base_url: state.assistantBaseUrl,
+        model: state.assistantModel,
+        api_key_set: state.assistantApiKeySet,
+        planning_preferences: state.assistantPlanningPreferences,
+      });
+    }
+    if (method === "DELETE" && url.pathname === "/api/v1/assistant/config") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      state.assistantBaseUrl = null;
+      state.assistantModel = null;
+      state.assistantApiKeySet = false;
+      state.assistantPlanningPreferences = null;
+      return new Response(null, { status: 204 });
     }
     if (method === "GET" && url.pathname === "/api/v1/google/status") {
       if (!state.loggedIn) {
