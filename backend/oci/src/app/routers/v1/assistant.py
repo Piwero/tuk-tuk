@@ -11,11 +11,23 @@ reports whether it's set, never its value, exactly as the Google client
 secret does.
 """
 
+from datetime import date
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.app_settings import require_app_settings
+from app.assistant_chat import (
+    AssistantChatMessage,
+    AssistantChatTurn,
+    build_messages,
+    fallback_turn,
+    request_assistant_turn,
+    validate_turn,
+)
 from app.assistant_provider import assistant_available
+from app.assistant_snapshot import build_week_snapshot
 from app.config import Settings
 from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
@@ -122,3 +134,67 @@ async def remove_assistant_config(session: SessionDep) -> None:
     app_settings.encrypted_assistant_api_key = None
     app_settings.assistant_planning_preferences = None
     await session.commit()
+
+
+class AssistantChatRequest(BaseModel):
+    # The whole client-held transcript, per turn (ADR 0009: nothing about
+    # the conversation is persisted server-side). Capped further, oldest
+    # first, once the system prompt is built — see `build_messages`.
+    transcript: list[AssistantChatMessage] = Field(min_length=1, max_length=200)
+    local_date: date
+    time_zone: str = Field(min_length=1, max_length=64)
+
+    @field_validator("time_zone")
+    @classmethod
+    def _validate_time_zone(cls, value: str) -> str:
+        # A bad IANA name is a client error, not a provider failure — reject
+        # it as ordinary validation (422) rather than letting the snapshot
+        # builder's unguarded `ZoneInfo(...)` raise a 500 downstream.
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError:
+            raise ValueError(f"Unknown IANA timezone {value!r}") from None
+        return value
+
+
+@router.post("/chat")
+async def assistant_chat(
+    payload: AssistantChatRequest, request: Request, session: SessionDep
+) -> AssistantChatTurn:
+    """The Assistant's chat turn (ADR 0009; issue #187): builds the week
+    snapshot for `local_date`/`time_zone`, asks the configured provider for
+    prose plus Suggestions, and validates every Suggestion against that
+    same snapshot before it reaches the caller. Never raises: an
+    unconfigured or unreachable provider, a timeout, or an unparseable
+    response all degrade to an apologetic assistant message with no
+    Suggestions.
+    """
+    settings: Settings = request.app.state.settings
+    app_settings = await require_app_settings(session)
+
+    base_url = app_settings.assistant_base_url
+    model = app_settings.assistant_model
+    if not base_url or not model or app_settings.encrypted_assistant_api_key is None:
+        return fallback_turn()
+
+    master_key = _require_master_key(settings)
+    try:
+        api_key = decrypt_credential(app_settings.encrypted_assistant_api_key, key=master_key)
+    except ValueError:
+        return fallback_turn()
+
+    snapshot = await build_week_snapshot(
+        session,
+        settings=settings,
+        calendar_source=request.app.state.calendar_source,
+        event_cache=request.app.state.event_cache,
+        local_date=payload.local_date,
+        time_zone=payload.time_zone,
+    )
+    messages = build_messages(
+        app_settings.assistant_planning_preferences, snapshot, payload.transcript
+    )
+    raw = await request_assistant_turn(base_url, model, api_key, messages)
+    if raw is None:
+        return fallback_turn()
+    return validate_turn(raw, snapshot)
