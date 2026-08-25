@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.5.0](https://github.com/Piwero/tuk-tuk/compare/v1.4.1...v1.5.0) - 2026-08-25
+
+### Features
+
+- **assistant:** Provider settings, encrypted key, and availability gate ([a900e4c](https://github.com/Piwero/tuk-tuk/commit/a900e4cb287c9c88ab60ac379688c0a1d2a35a87))
+- **assistant:** Week snapshot builder (no model involved) ([8436f8f](https://github.com/Piwero/tuk-tuk/commit/8436f8fc908f9911a5b632dffee71aa3d37a90b2))
+- **assistant:** Chat endpoint with validated Suggestions ([07d69cb](https://github.com/Piwero/tuk-tuk/commit/07d69cbfd653ba685e0a1867ea92c74718184205))
+- **assistant:** Assistant view, Suggestion cards, and apply path ([2918848](https://github.com/Piwero/tuk-tuk/commit/29188487b51b309a8713ae6384bbd195856e1804))
+
+### Bug Fixes
+
+- **assistant:** Skip the tag-tasks fetch branch for the assistant view ([2aa9577](https://github.com/Piwero/tuk-tuk/commit/2aa9577423061e1dbe40221cf250dea091f745c6))
+- **assistant:** Satisfy noUncheckedIndexedAccess in Assistant view test ([a6b3464](https://github.com/Piwero/tuk-tuk/commit/a6b3464432316c98f8f94e7096d4fc0bb848215d))
+
 ## [1.4.1](https://github.com/Piwero/tuk-tuk/compare/v1.4.0...v1.4.1) - 2026-08-20
 
 ### Bug Fixes
