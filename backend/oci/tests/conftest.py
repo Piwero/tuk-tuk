@@ -132,6 +132,7 @@ class FakeCalendarSource:
         # test assert a credential refresh was (or wasn't) re-issued, e.g. to
         # prove a fully-cached account's Events read skips it (issue #109).
         self.refresh_calls: list[str] = []
+        self.list_events_calls: list[tuple[str, str, str]] = []
 
     def configure(self, client_id: str, client_secret: str) -> None:
         self.client_id = client_id
@@ -196,6 +197,11 @@ class FakeCalendarSource:
     async def list_events(
         self, access_token: str, google_calendar_id: str, time_min: str, time_max: str
     ) -> list[CalendarEventEntry]:
+        # Every window a caller actually requested — lets a test assert the
+        # exact timeMin/timeMax sent to Google, e.g. that a caller's local
+        # timezone was converted to the right UTC instant range, without
+        # depending on this fake filtering by it (it doesn't; Google does).
+        self.list_events_calls.append((google_calendar_id, time_min, time_max))
         error = self._list_events_errors.get((access_token, google_calendar_id))
         if error is not None:
             raise error
