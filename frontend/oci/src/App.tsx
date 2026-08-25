@@ -39,6 +39,8 @@ import {
   staticViewKindForPath,
   type StaticViewKind,
 } from "./routes";
+import { useAssistantAvailable } from "./useAssistantAvailable";
+import { AssistantView } from "./components/AssistantView";
 import { CalendarView } from "./components/CalendarView";
 import { CompletedView } from "./components/CompletedView";
 import { EventDetail } from "./components/EventDetail";
@@ -71,6 +73,7 @@ type View =
   | { kind: "calendar"; mode: CalendarMode }
   | { kind: "habits" }
   | { kind: "standup" }
+  | { kind: "assistant" }
   | { kind: "focus"; task?: Task }
   | { kind: "focus-stats" }
   | { kind: "search"; search: SearchState }
@@ -98,6 +101,7 @@ function staticViewKindOf(view: View): StaticViewKind | null {
     view?.kind === "calendar" ||
     view?.kind === "habits" ||
     view?.kind === "standup" ||
+    view?.kind === "assistant" ||
     view?.kind === "focus" ||
     view?.kind === "focus-stats" ||
     view?.kind === "search" ||
@@ -126,6 +130,8 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
       return { kind: "habits" };
     case "standup":
       return { kind: "standup" };
+    case "assistant":
+      return { kind: "assistant" };
     case "focus":
       return { kind: "focus" };
     case "focus-stats":
@@ -181,6 +187,11 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // at load, defaulting to true so the nav item doesn't flash away on a slow
   // network before the real value arrives.
   const [standupEnabled, setStandupEnabled] = useState(true);
+  // Whether the Assistant nav item/route is shown (ADR 0009, issue #185):
+  // polled on load and window refocus, mirroring Quick-Add's Assist gate.
+  // No settings toggle — unlike Stand-up, this is never independently
+  // configurable, only a direct read of whether a provider is configured.
+  const assistantAvailable = useAssistantAvailable();
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
   // The Folder view's own sort preference (#126) — kept separate from the
@@ -325,11 +336,15 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       // route was showing — fall through to the same Inbox fallback as a
       // deleted List/Tag/Folder, rather than leaving an inaccessible route
       // selected in the sidebar.
+    } else if (view?.kind === "assistant" && !assistantAvailable) {
+      // Same fallback, for the Assistant becoming (or already being)
+      // unconfigured while this route was showing.
     } else if (
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
       view?.kind === "habits" ||
       view?.kind === "standup" ||
+      view?.kind === "assistant" ||
       view?.kind === "focus" ||
       view?.kind === "focus-stats" ||
       view?.kind === "search" ||
@@ -352,7 +367,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     // effect's render and it running (e.g. the user clicks Calendar just as
     // the lists load). Never stomp a view that changed in the meantime.
     setView((current) => (current === view ? next : current));
-  }, [lists, tags, folders, view, standupEnabled]);
+  }, [lists, tags, folders, view, standupEnabled, assistantAvailable]);
 
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
@@ -558,6 +573,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const calendarSelected = view?.kind === "calendar";
   const habitsSelected = view?.kind === "habits";
   const standupSelected = view?.kind === "standup";
+  const assistantSelected = view?.kind === "assistant";
   const focusSelected = view?.kind === "focus" || view?.kind === "focus-stats";
   const settingsSelected = view?.kind === "settings";
   const searchSelected = view?.kind === "search";
@@ -565,6 +581,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     !calendarSelected &&
     !habitsSelected &&
     !standupSelected &&
+    !assistantSelected &&
     !focusSelected &&
     !settingsSelected &&
     !searchSelected;
@@ -602,6 +619,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           habitsSelected={habitsSelected}
           standupSelected={standupSelected}
           standupEnabled={standupEnabled}
+          assistantSelected={assistantSelected}
+          assistantAvailable={assistantAvailable}
           focusSelected={focusSelected}
           settingsSelected={settingsSelected}
           searchSelected={searchSelected}
@@ -612,6 +631,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
           onSelectHabits={() => switchView({ kind: "habits" })}
           onSelectStandup={() => switchView({ kind: "standup" })}
+          onSelectAssistant={() => switchView({ kind: "assistant" })}
           onSelectFocus={() => switchView({ kind: "focus" })}
           onSelectSettings={() => switchView({ kind: "settings" })}
           onQuickAdd={() => setQuickAddOpen(true)}
@@ -683,6 +703,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 "Habits"
               ) : view?.kind === "standup" ? (
                 "Stand-up"
+              ) : view?.kind === "assistant" ? (
+                "Assistant"
               ) : view?.kind === "focus" ? (
                 "Focus"
               ) : view?.kind === "focus-stats" ? (
@@ -921,6 +943,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             <HabitsView />
           ) : view?.kind === "standup" ? (
             <StandupView />
+          ) : view?.kind === "assistant" ? (
+            <AssistantView />
           ) : view?.kind === "focus" ? (
             <FocusView
               key={view.task?.id ?? "focus"}

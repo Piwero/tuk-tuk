@@ -24,6 +24,7 @@ from app.middleware import SessionAuthMiddleware
 from app.models import TaskList
 from app.routers.v1 import (
     assist,
+    assistant,
     auth,
     check_items,
     completed_occurrences,
@@ -104,6 +105,7 @@ def create_app(
     )
     register_error_handlers(app)
     app.include_router(assist.router)
+    app.include_router(assistant.router)
     app.include_router(auth.router)
     app.include_router(check_items.router)
     app.include_router(completed_occurrences.router)

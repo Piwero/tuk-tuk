@@ -287,6 +287,73 @@ export function fetchAssistModels(ollamaBaseUrl?: string): Promise<{ models: str
   return request(`/api/v1/assist/models${query}`);
 }
 
+/** Whether the Assistant (ADR 0009) is available: the configured provider
+ * is reachable and authenticated. Polled on load and on window refocus;
+ * `available: false` — unset settings, an unreachable provider, or a bad
+ * API key all collapse to this same value — means no Assistant affordance
+ * renders anywhere. Entirely independent of AssistStatus above. */
+export interface AssistantStatus {
+  available: boolean;
+}
+
+export function fetchAssistantStatus(): Promise<AssistantStatus> {
+  return request("/api/v1/assistant/status");
+}
+
+/** The Assistant's provider config Settings reads/writes (ADR 0009). Unlike
+ * AssistConfig, the API key is a credential — write-only, so only whether
+ * one is stored round-trips, never its value, exactly as GoogleStatus's
+ * client secret. */
+export interface AssistantConfig {
+  base_url: string | null;
+  model: string | null;
+  api_key_set: boolean;
+  planning_preferences: string | null;
+}
+
+export function fetchAssistantConfig(): Promise<AssistantConfig> {
+  return request("/api/v1/assistant/config");
+}
+
+/** Saves whichever fields are passed; an omitted field is left unchanged
+ * server-side. `apiKey` is omitted (not sent empty) to keep whatever is
+ * already stored — the same write-only convention as
+ * `saveGoogleCredentials`'s `clientSecret`. */
+export function saveAssistantConfig(
+  fields: Partial<{
+    baseUrl: string;
+    model: string;
+    apiKey: string;
+    planningPreferences: string;
+  }>,
+): Promise<AssistantConfig> {
+  const body: {
+    base_url?: string;
+    model?: string;
+    api_key?: string;
+    planning_preferences?: string;
+  } = {};
+  if (fields.baseUrl !== undefined) {
+    body.base_url = fields.baseUrl;
+  }
+  if (fields.model !== undefined) {
+    body.model = fields.model;
+  }
+  if (fields.apiKey !== undefined) {
+    body.api_key = fields.apiKey;
+  }
+  if (fields.planningPreferences !== undefined) {
+    body.planning_preferences = fields.planningPreferences;
+  }
+  return request("/api/v1/assistant/config", { method: "PUT", body: JSON.stringify(body) });
+}
+
+/** Clears every field, returning the Assistant to the same unconfigured,
+ * invisible state as a fresh deployment. */
+export function removeAssistantConfig(): Promise<void> {
+  return request("/api/v1/assistant/config", { method: "DELETE" });
+}
+
 export interface GoogleStatus {
   configured: boolean;
   /** The client ID isn't sensitive — Settings shows it back for editing. */

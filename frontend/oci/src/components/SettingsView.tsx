@@ -7,6 +7,8 @@ import {
   fetchAssistConfig,
   fetchAssistModels,
   fetchAssistStatus,
+  fetchAssistantConfig,
+  fetchAssistantStatus,
   fetchGoogleAccounts,
   fetchGoogleCalendars,
   fetchGoogleStatus,
@@ -14,12 +16,15 @@ import {
   refreshGoogleCalendars,
   fetchStandupSettings,
   removeAssistConfig,
+  removeAssistantConfig,
   removeGoogleIntegration,
   saveAssistConfig,
+  saveAssistantConfig,
   saveGoogleCredentials,
   updateGoogleCalendar,
   updateStandupSettings,
   type AssistConfig,
+  type AssistantConfig,
   type GoogleAccount,
   type GoogleCalendar,
   type GoogleStatus,
@@ -582,6 +587,192 @@ function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Eleme
   );
 }
 
+interface AssistantConfigFormProps {
+  config: AssistantConfig;
+  onSaved: (config: AssistantConfig) => void;
+}
+
+/** The Assistant's provider configuration form (ADR 0009; issue #185):
+ * base URL and model, plain text like AssistConfigForm's — plus a
+ * write-only API key (mirrors GoogleCredentialsForm's client secret: a
+ * masked placeholder once one is saved, with an explicit choice to
+ * overwrite it) and a free-text planning-preferences textarea.
+ *
+ * "Test connection" re-runs the same availability check the Assistant's own
+ * gate polls, against only what's actually saved — disabled whenever the
+ * form has unsaved edits, so it can never report on stale config.
+ *
+ * "Remove" clears every field server-side, the only way back to the
+ * unconfigured, invisible state once something is saved. */
+function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX.Element {
+  const [baseUrl, setBaseUrl] = useState(config.base_url ?? "");
+  const [model, setModel] = useState(config.model ?? "");
+  const [apiKey, setApiKey] = useState("");
+  const [overwriteApiKey, setOverwriteApiKey] = useState(!config.api_key_set);
+  const [planningPreferences, setPlanningPreferences] = useState(config.planning_preferences ?? "");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [testPending, setTestPending] = useState(false);
+  const [testResult, setTestResult] = useState<boolean | null>(null);
+
+  const isDirty =
+    baseUrl !== (config.base_url ?? "") ||
+    model !== (config.model ?? "") ||
+    (overwriteApiKey && apiKey !== "") ||
+    planningPreferences !== (config.planning_preferences ?? "");
+
+  useEffect(() => {
+    setBaseUrl(config.base_url ?? "");
+    setModel(config.model ?? "");
+    setOverwriteApiKey(!config.api_key_set);
+    setPlanningPreferences(config.planning_preferences ?? "");
+  }, [config.base_url, config.model, config.api_key_set, config.planning_preferences]);
+
+  function handleSubmit(event: React.FormEvent): void {
+    event.preventDefault();
+    if (pending) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setTestResult(null);
+    saveAssistantConfig({
+      baseUrl,
+      model,
+      ...(overwriteApiKey && apiKey !== "" ? { apiKey } : {}),
+      planningPreferences,
+    })
+      .then((saved) => {
+        setApiKey("");
+        setOverwriteApiKey(!saved.api_key_set);
+        setPending(false);
+        onSaved(saved);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+        setPending(false);
+      });
+  }
+
+  async function handleRemove(): Promise<void> {
+    await removeAssistantConfig();
+    setBaseUrl("");
+    setModel("");
+    setApiKey("");
+    setOverwriteApiKey(true);
+    setPlanningPreferences("");
+    setTestResult(null);
+    onSaved({ base_url: null, model: null, api_key_set: false, planning_preferences: null });
+  }
+
+  function handleTest(): void {
+    if (testPending || isDirty) {
+      return;
+    }
+    setTestPending(true);
+    setTestResult(null);
+    fetchAssistantStatus()
+      .then((status) => {
+        setTestResult(status.available);
+        setTestPending(false);
+      })
+      .catch(() => {
+        setTestResult(false);
+        setTestPending(false);
+      });
+  }
+
+  return (
+    <form className="assistant-config-form settings-form" onSubmit={handleSubmit}>
+      <div className="settings-field">
+        <label htmlFor="settings-assistant-base-url">Base URL</label>
+        <input
+          id="settings-assistant-base-url"
+          name="assistant-base-url"
+          type="text"
+          placeholder="https://api.openai.com/v1"
+          value={baseUrl}
+          disabled={pending}
+          onChange={(event) => setBaseUrl(event.target.value)}
+        />
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-assistant-model">Assistant model</label>
+        <input
+          id="settings-assistant-model"
+          name="assistant-model"
+          type="text"
+          placeholder="gpt-4o-mini"
+          value={model}
+          disabled={pending}
+          onChange={(event) => setModel(event.target.value)}
+        />
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-assistant-api-key">API key</label>
+        {config.api_key_set && !overwriteApiKey ? (
+          <p className="settings-hint">
+            An API key is already saved.{" "}
+            <button type="button" onClick={() => setOverwriteApiKey(true)} disabled={pending}>
+              Replace it
+            </button>
+          </p>
+        ) : (
+          <input
+            id="settings-assistant-api-key"
+            name="assistant-api-key"
+            type="password"
+            autoComplete="off"
+            value={apiKey}
+            disabled={pending}
+            onChange={(event) => setApiKey(event.target.value)}
+          />
+        )}
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-assistant-planning-preferences">Planning preferences</label>
+        <textarea
+          id="settings-assistant-planning-preferences"
+          name="assistant-planning-preferences"
+          placeholder="work 9-6, lunch 1-2, gym Tue/Thu 7pm, keep Friday afternoons free"
+          value={planningPreferences}
+          disabled={pending}
+          onChange={(event) => setPlanningPreferences(event.target.value)}
+        />
+      </div>
+      {error !== null && <p role="alert">{error}</p>}
+      <div className="settings-form-actions">
+        <button type="submit" className="settings-primary-action" disabled={pending}>
+          {pending ? "Saving…" : "Save Assistant settings"}
+        </button>
+        <button
+          type="button"
+          onClick={handleTest}
+          disabled={testPending || isDirty}
+          title={isDirty ? "Save your changes before testing" : undefined}
+        >
+          {testPending ? "Testing…" : "Test Assistant connection"}
+        </button>
+        {(config.base_url !== null || config.model !== null || config.api_key_set) && (
+          <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+            Remove Assistant configuration
+          </button>
+        )}
+      </div>
+      {isDirty && testResult === null && (
+        <p className="settings-hint">Save your changes before testing the connection.</p>
+      )}
+      {testResult !== null && (
+        <p role="status" className={testResult ? "settings-hint" : undefined}>
+          {testResult
+            ? "The Assistant is available — the provider is reachable."
+            : "The Assistant is unavailable — check the base URL, model, and API key."}
+        </p>
+      )}
+    </form>
+  );
+}
+
 /** The Settings screen. Asks the Google status endpoint once on mount. The
  * Google Calendar section itself is always shown once that answer is in —
  * unlike before issue #117, its credentials form is how an operator gets
@@ -596,6 +787,7 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
   // the real value loads — mirrors the App-level nav item's own default.
   const [standupEnabled, setStandupEnabled] = useState(true);
   const [assistConfig, setAssistConfig] = useState<AssistConfig | null>(null);
+  const [assistantConfig, setAssistantConfig] = useState<AssistantConfig | null>(null);
 
   useEffect(() => {
     void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
@@ -603,6 +795,10 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
 
   useEffect(() => {
     void fetchAssistConfig().then(setAssistConfig);
+  }, []);
+
+  useEffect(() => {
+    void fetchAssistantConfig().then(setAssistantConfig);
   }, []);
 
   async function handleStandupToggle(): Promise<void> {
@@ -675,10 +871,22 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
         <section aria-label="Assist" className="settings-section">
           <h2>Assist</h2>
           <p className="settings-hint">
-            Runs entirely on your own machine via Ollama — no cloud inference, no data leaves this
-            device. Unconfigured (or removed) means Assist stays off everywhere.
+            Local — runs entirely on your own machine via Ollama. No data leaves this device.
+            Unconfigured (or removed) means Assist stays off everywhere.
           </p>
           <AssistConfigForm config={assistConfig} onSaved={setAssistConfig} />
+        </section>
+      )}
+      {assistantConfig !== null && (
+        <section aria-label="Assistant" className="settings-section">
+          <h2>Assistant</h2>
+          <p className="settings-hint">
+            Cloud — every turn sends the current week's tasks, today's Events, your List and Tag
+            names, habits, and your planning preferences to the configured provider. Task
+            descriptions and Check Item text are never sent. Unconfigured (or removed) means the
+            Assistant stays off everywhere.
+          </p>
+          <AssistantConfigForm config={assistantConfig} onSaved={setAssistantConfig} />
         </section>
       )}
       {googleStatus !== null && (

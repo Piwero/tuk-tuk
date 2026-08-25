@@ -45,6 +45,17 @@ def assist_configured(app_settings: AppSettings) -> bool:
     return bool(app_settings.assist_ollama_base_url) and bool(app_settings.assist_model)
 
 
+def assistant_configured(app_settings: AppSettings) -> bool:
+    """Whether the Assistant (ADR 0009) has every setting it needs — base
+    URL, model, and an API key — entirely independent of `assist_configured`
+    above, which this never reads."""
+    return (
+        bool(app_settings.assistant_base_url)
+        and bool(app_settings.assistant_model)
+        and bool(app_settings.encrypted_assistant_api_key)
+    )
+
+
 async def bootstrap_app_settings(session: AsyncSession, settings: Settings) -> AppSettings:
     """Ensures the singleton settings row exists, run once from app.main's
     lifespan before the app serves any request.
