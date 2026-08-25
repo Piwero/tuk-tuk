@@ -3058,6 +3058,104 @@ li[data-overdue] .date-chip {
   }
 }
 
+/* ── Assistant ────────────────────────────────────────────────────── */
+
+.assistant-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 640px;
+}
+
+.assistant-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.assistant-message {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  align-self: flex-start;
+  max-width: 80%;
+}
+
+.assistant-message.user {
+  align-self: flex-end;
+  background: var(--surface-selected);
+}
+
+.assistant-thinking {
+  margin: 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.assistant-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.assistant-suggestions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.assistant-suggestion-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.assistant-suggestion-status {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.assistant-suggestion-status.applied {
+  color: var(--text-success);
+}
+
+.assistant-suggestion-status.failed {
+  color: var(--text-danger);
+}
+
+.assistant-discarded {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.assistant-composer {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.assistant-composer input {
+  flex: 1;
+}
+
+@media (max-width: 720px) {
+  .assistant-view {
+    max-width: none;
+  }
+
+  .assistant-message {
+    max-width: 100%;
+  }
+}
+
 /* Completed history: plain rows, no controls. */
 .completed-history .occurrence {
   display: flex;
