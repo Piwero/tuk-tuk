@@ -125,7 +125,10 @@ describe("Assistant view (ADR 0009, issue #188)", () => {
       (r) => r.method === "PATCH" && r.url === "/api/v1/tasks/42",
     );
     expect(patchRequests).toHaveLength(1);
-    expect(patchRequests[0].body).toEqual({ completed: true });
+    const patchRequest = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === "/api/v1/tasks/42",
+    );
+    expect(patchRequest?.body).toEqual({ completed: true });
   });
 
   it("reports a per-card failure without stopping the rest", async () => {
