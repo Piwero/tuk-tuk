@@ -74,12 +74,16 @@ The count of consecutive scheduled days a Habit has been checked in without a mi
 ## Assist (v2)
 
 **Assist**:
-The optional AI capability family. Assist only ever proposes — every output is a Suggestion the user confirms or discards; it never changes data on its own. When no local model is available, Assist features are invisible, and the app is fully functional without them.
-_Avoid_: Copilot, AI assistant, agent
+The optional AI capability family. Assist only ever proposes — every output is a Suggestion the user confirms or discards; it never changes data on its own. Each Assist feature is configured with its own inference provider (ADR 0009), so one may run locally while another does not; a feature whose provider is unconfigured or unreachable is invisible, and the app is fully functional without any of them.
+_Avoid_: Copilot, agent. "AI assistant" as a generic label for the family — the Assistant is one specific member of it (below), so using the phrase loosely makes the family and the feature indistinguishable.
+
+**Assistant**:
+The Assist feature that plans a day in conversation: the user describes what they need to do, and the Assistant reads the current week — Tasks, today's Events, List and Tag names, Habits — and answers with prose plus Suggestions to create Tasks, block them into time, and set priorities. Accepted individually; nothing is written until accepted. It plans Tasks *around* Events, never moving an Event (ADR 0006 keeps Google Calendar read-only). The only Assist feature that may be configured against a cloud provider, and the only one that is conversational at all — every other member is a single beat with no transcript. The conversation is ephemeral: held in the browser, sent whole each turn, gone on refresh.
+_Avoid_: Chat, bot, agent (it takes no actions), Copilot
 
 **Suggestion**:
-One proposal produced by Assist (a parsed task draft, a proposed order, a proposed date). Ephemeral: computed on demand, shown inline, and gone once confirmed or discarded — never stored.
-_Avoid_: Recommendation, action (Assist takes no actions)
+One suggestion produced by Assist (a parsed task draft, a proposed order, a proposed date, a proposed time block). Ephemeral: computed on demand, shown inline, and gone once confirmed or discarded — never stored. A Suggestion names a change, never performs one: the Assistant's Suggestions in particular are structured output, never tool calls the model could invoke, which is what makes "Assist takes no actions" an architectural property rather than a promise (ADR 0009).
+_Avoid_: Recommendation, action (Assist takes no actions), Proposal (the same concept under a second name)
 
 **Assisted Capture**:
 The Assist feature on Quick-Add: on submit, free text (English or Spanish) is parsed into a proposed Task — date, recurrence, reminder, list, tags, priority shown as editable chips — for one confirmation beat before saving. Parsed words are stripped from the title; only existing Lists and Tags are matched, never invented. Replaces the deferred "Smart Recognition" idea.

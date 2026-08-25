@@ -640,7 +640,7 @@ class TestParseCaptureRecurrenceAndReminders:
 
 
 class TestParseCaptureListTagPriority:
-    """List/Tag/Priority proposals through the parse endpoint (issue #45).
+    """List/Tag/Priority suggestions through the parse endpoint (issue #45).
     Match-existing-only: a name the model claims but that isn't in the
     request's `list_names`/`tag_names` candidates is silently dropped,
     never invented — the same posture as an unresolvable date/recurrence/
