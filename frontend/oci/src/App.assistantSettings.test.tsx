@@ -167,7 +167,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const link = await screen.findByRole("link", { name: "Assistant" });
     await user.click(link);
 
-    expect(await screen.findByText("The Assistant is configured and ready.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: "Describe your day" })).toBeInTheDocument();
   });
 
   it("never shows the API key back in the DOM after saving", async () => {

@@ -1,6 +1,12 @@
 import { vi } from "vitest";
 
-import { type AssistCaptureDraft, type HabitType, type Priority, type ViewMode } from "../api";
+import {
+  type AssistantChatTurn,
+  type AssistCaptureDraft,
+  type HabitType,
+  type Priority,
+  type ViewMode,
+} from "../api";
 import { entryDayWindow } from "../calendar";
 import { addDays } from "../dates";
 import { habitDueOn } from "../habitFrequency";
@@ -284,6 +290,13 @@ export interface FakeApiState {
   assistantModel: string | null;
   assistantApiKeySet: boolean;
   assistantPlanningPreferences: string | null;
+  /** Queued POST /api/v1/assistant/chat responses (ADR 0009, issue #188):
+   * one shift()'d per call. A test pushes onto this array (the field is
+   * mutable and returned live via installFakeApi's FakeApiState) to script
+   * what a turn answers; an empty queue falls back to the same apologetic,
+   * no-suggestions turn the real backend returns for an unconfigured
+   * provider. */
+  assistantChatQueue: AssistantChatTurn[];
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -506,6 +519,7 @@ export function installFakeApi({
   assistantModel = null,
   assistantApiKeySet = false,
   assistantPlanningPreferences = null,
+  assistantChatQueue = [],
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -572,6 +586,8 @@ export function installFakeApi({
   assistantModel?: string | null;
   assistantApiKeySet?: boolean;
   assistantPlanningPreferences?: string | null;
+  /** Queued chat turns (ADR 0009, issue #188) — see the field's own doc. */
+  assistantChatQueue?: AssistantChatTurn[];
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -619,6 +635,7 @@ export function installFakeApi({
     assistantModel,
     assistantApiKeySet,
     assistantPlanningPreferences,
+    assistantChatQueue: [...assistantChatQueue],
   };
 
   const json = (data: unknown, status = 200): Response =>
@@ -857,6 +874,18 @@ export function installFakeApi({
       state.assistantApiKeySet = false;
       state.assistantPlanningPreferences = null;
       return new Response(null, { status: 204 });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/assistant/chat") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      const turn = state.assistantChatQueue.shift() ?? {
+        message:
+          "Sorry, I couldn't reach the planning assistant just now. Please try again in a moment.",
+        suggestions: [],
+        discarded_count: 0,
+      };
+      return json(turn);
     }
     if (method === "GET" && url.pathname === "/api/v1/google/status") {
       if (!state.loggedIn) {

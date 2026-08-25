@@ -354,6 +354,66 @@ export function removeAssistantConfig(): Promise<void> {
   return request("/api/v1/assistant/config", { method: "DELETE" });
 }
 
+/** One turn of the Assistant's chat transcript (ADR 0009). The whole
+ * transcript is held client-side and posted in full each turn — nothing
+ * about the conversation is persisted server-side. */
+export interface AssistantChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** The Assistant's write vocabulary (ADR 0009, issue #187): the only
+ * shapes a Suggestion can take. Every field a given `type` doesn't use is
+ * simply absent — this mirrors the backend's discriminated union, not its
+ * wire schema (which sends every field on every suggestion). */
+export type AssistantSuggestion =
+  | {
+      type: "create_task";
+      title: string;
+      list_name: string | null;
+      tag_names: string[];
+      priority: Priority;
+      start_date: string | null;
+      due_date: string | null;
+      is_all_day: boolean;
+      time_zone: string | null;
+    }
+  | {
+      type: "schedule_task" | "reschedule_task";
+      task_id: number;
+      start_date: string | null;
+      due_date: string | null;
+      is_all_day: boolean;
+      time_zone: string | null;
+    }
+  | { type: "complete_task"; task_id: number }
+  | { type: "set_priority"; task_id: number; priority: Priority }
+  | { type: "set_list"; task_id: number; list_name: string }
+  | { type: "add_tags"; task_id: number; tag_names: string[] }
+  | { type: "add_check_items"; task_id: number; check_item_titles: string[] };
+
+/** One chat turn's response: prose plus zero or more validated
+ * Suggestions, and how many the backend discarded (malformed, or naming
+ * something outside the snapshot) before they ever reached here. */
+export interface AssistantChatTurn {
+  message: string;
+  suggestions: AssistantSuggestion[];
+  discarded_count: number;
+}
+
+/** Posts the whole transcript (including the just-typed turn) plus the
+ * caller's own day/timezone, which is what a relative phrase like "this
+ * afternoon" resolves against server-side. Never rejects on a provider
+ * failure or timeout — those degrade to an apologetic `message` with no
+ * Suggestions (ADR 0009) — only a genuine network failure throws. */
+export function postAssistantChat(input: {
+  transcript: AssistantChatMessage[];
+  local_date: string;
+  time_zone: string;
+}): Promise<AssistantChatTurn> {
+  return request("/api/v1/assistant/chat", { method: "POST", body: JSON.stringify(input) });
+}
+
 export interface GoogleStatus {
   configured: boolean;
   /** The client ID isn't sensitive — Settings shows it back for editing. */
