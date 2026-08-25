@@ -351,7 +351,7 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     expect(screen.queryByRole("group", { name: "Assisted Capture draft" })).not.toBeInTheDocument();
   });
 
-  it("sends only the residual text after explicit tokens are stripped, and an explicit #tag/!priority/~list token wins over a same-field Assist proposal", async () => {
+  it("sends only the residual text after explicit tokens are stripped, and an explicit #tag/!priority/~list token wins over a same-field Assist suggestion", async () => {
     const errands = fakeList("Errands");
     const work = fakeList("Work");
     const urgent = fakeTag("Urgent");
@@ -383,9 +383,9 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     expect(parsePosts(api.requests)[0]).toMatchObject({ text: "buy milk" });
 
     const chipGroup = await screen.findByRole("group", { name: "Assisted Capture draft" });
-    // The explicit tokens win over Assist's proposals on confirm, and the
+    // The explicit tokens win over Assist's suggestions on confirm, and the
     // confirmation beat must show that effective payload (issue #175) —
-    // not just Assist's own (superseded) "Errands"/"low" proposals.
+    // not just Assist's own (superseded) "Errands"/"low" suggestions.
     expect(chipGroup).toHaveTextContent("Work");
     expect(chipGroup).toHaveTextContent("High");
     expect(chipGroup).not.toHaveTextContent("Errands");

@@ -51,7 +51,7 @@ function formatDraftDate(dueDate: string, isAllDay: boolean): string {
 /** One Assisted Capture confirmation beat (ADR 0005; issue #43): the
  * chip/tag/list/priority state a parse was triggered against, plus the
  * proposed title and resolved date it came back with. Confirming (Enter)
- * creates the Task from `proposedTitle` + the resolved date; discarding
+ * creates the Task from `suggestedTitle` + the resolved date; discarding
  * (Escape / the dismiss button) creates it from `typedTitle` instead, with
  * no date — "exactly as typed". */
 interface CaptureDraft {
@@ -59,7 +59,7 @@ interface CaptureDraft {
   tagChips: Tag[];
   listChip: TaskList[];
   priorityChip: Priority[];
-  proposedTitle: string;
+  suggestedTitle: string;
   dueDate: string | null;
   isAllDay: boolean;
   timeZone: string | null;
@@ -71,19 +71,19 @@ interface CaptureDraft {
   // Explicit `#tag`/`~list`/`!priority` tokens the typed text still had at
   // submit time (issue #45) — parsed client-side before the residual text
   // ever reached the parse endpoint, so they're captured here rather than
-  // re-derivable from `proposedTitle`. Always outrank the proposed fields
+  // re-derivable from `suggestedTitle`. Always outrank the proposed fields
   // below on confirm (CONTEXT.md: token-derived fields are never
   // overridden by a model suggestion).
   tokenTagNames: string[];
   tokenListId: number | null;
   tokenPriority: Priority | null;
-  // Matched-existing-only List/Tag/Priority proposals (issue #45) — same
+  // Matched-existing-only List/Tag/Priority suggestions (issue #45) — same
   // "only ever adds value" posture as the date/recurrence/reminder
-  // proposals above: every one of these can be null/empty with nothing
+  // suggestions above: every one of these can be null/empty with nothing
   // else about the draft changing.
-  proposedListName: string | null;
-  proposedTagNames: string[];
-  proposedPriority: Priority | null;
+  suggestedListName: string | null;
+  suggestedTagNames: string[];
+  suggestedPriority: Priority | null;
 }
 
 const FREQ_LABELS: Record<string, string> = {
@@ -218,7 +218,7 @@ export function QuickAdd({
     }
   }, [draft]);
 
-  /** Assist proposals (issue #45) confirmed alongside a draft — always
+  /** Assist suggestions (issue #45) confirmed alongside a draft — always
    * outranked by a chip or an explicit token, per CONTEXT.md's Assist
    * glossary. Absent on every non-Assist call to `finalizeCreate`. Same
    * six fields `CaptureDraft` carries, named once and reused there. */
@@ -227,9 +227,9 @@ export function QuickAdd({
     | "tokenTagNames"
     | "tokenListId"
     | "tokenPriority"
-    | "proposedListName"
-    | "proposedTagNames"
-    | "proposedPriority"
+    | "suggestedListName"
+    | "suggestedTagNames"
+    | "suggestedPriority"
   >;
 
   /** The shared tail of every Task creation — plain, Assisted-Capture
@@ -261,7 +261,7 @@ export function QuickAdd({
     // parse already consumed from the typed text (issue #45) are unioned
     // and deduplicated case-insensitively by name. Unknown names create the
     // Tag on the fly — the same explicit, deterministic-parser behavior as
-    // today, never something Assist's own tag proposals get to do.
+    // today, never something Assist's own tag suggestions get to do.
     const tagIds: number[] = [];
     const seen: string[] = [];
     for (const chip of snapshot.tagChips) {
@@ -288,21 +288,22 @@ export function QuickAdd({
     // only apply when no chip or explicit token already named a tag — a
     // token-derived field is never overridden by a model suggestion.
     if (seen.length === 0) {
-      for (const name of extra?.proposedTagNames ?? []) {
+      for (const name of extra?.suggestedTagNames ?? []) {
         const existing = tags.find((tag) => sameName(tag.name, name));
         if (existing !== undefined) {
           tagIds.push(existing.id);
         }
       }
     }
-    const proposedListId =
-      extra?.proposedListName == null
+    const suggestedListId =
+      extra?.suggestedListName == null
         ? null
-        : (lists.find((list) => sameName(list.name, extra.proposedListName as string))?.id ?? null);
+        : (lists.find((list) => sameName(list.name, extra.suggestedListName as string))?.id ??
+          null);
     const finalListId =
-      snapshot.listChip[0]?.id ?? plan.listId ?? extra?.tokenListId ?? proposedListId ?? listId;
+      snapshot.listChip[0]?.id ?? plan.listId ?? extra?.tokenListId ?? suggestedListId ?? listId;
     const finalPriority =
-      snapshot.priorityChip[0] ?? plan.priority ?? extra?.tokenPriority ?? extra?.proposedPriority;
+      snapshot.priorityChip[0] ?? plan.priority ?? extra?.tokenPriority ?? extra?.suggestedPriority;
     const task = await createTask({
       title: plan.title,
       list_id: finalListId,
@@ -357,7 +358,7 @@ export function QuickAdd({
    * removal never silently loses typed meaning. */
   function removeDraftField(update: (current: CaptureDraft) => CaptureDraft): void {
     setDraft((current) =>
-      current === null ? null : update({ ...current, proposedTitle: current.typedTitle }),
+      current === null ? null : update({ ...current, suggestedTitle: current.typedTitle }),
     );
   }
 
@@ -386,18 +387,18 @@ export function QuickAdd({
   }
 
   function removeListChip(): void {
-    removeDraftField((current) => ({ ...current, proposedListName: null }));
+    removeDraftField((current) => ({ ...current, suggestedListName: null }));
   }
 
   function removeTagChip(name: string): void {
     removeDraftField((current) => ({
       ...current,
-      proposedTagNames: current.proposedTagNames.filter((n) => !sameName(n, name)),
+      suggestedTagNames: current.suggestedTagNames.filter((n) => !sameName(n, name)),
     }));
   }
 
   function removePriorityChip(): void {
-    removeDraftField((current) => ({ ...current, proposedPriority: null }));
+    removeDraftField((current) => ({ ...current, suggestedPriority: null }));
   }
 
   /** The confirmation beat's Enter: creates the Task from the proposed
@@ -417,13 +418,13 @@ export function QuickAdd({
       listChip: draft.listChip,
       priorityChip: draft.priorityChip,
     };
-    await finalizeCreate(draft.proposedTitle, schedule, snapshot, {
+    await finalizeCreate(draft.suggestedTitle, schedule, snapshot, {
       tokenTagNames: draft.tokenTagNames,
       tokenListId: draft.tokenListId,
       tokenPriority: draft.tokenPriority,
-      proposedListName: draft.proposedListName,
-      proposedTagNames: draft.proposedTagNames,
-      proposedPriority: draft.proposedPriority,
+      suggestedListName: draft.suggestedListName,
+      suggestedTagNames: draft.suggestedTagNames,
+      suggestedPriority: draft.suggestedPriority,
     });
     resetInput(draft.typedTitle, snapshot);
   }
@@ -464,7 +465,7 @@ export function QuickAdd({
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), PARSE_TIMEOUT_MS);
     try {
-      const proposal = await parseAssistCapture(
+      const suggestion = await parseAssistCapture(
         {
           text: tokenPlan.title,
           local_date: localDateString(),
@@ -474,34 +475,34 @@ export function QuickAdd({
         },
         controller.signal,
       );
-      const hasProposal =
-        proposal.due_date !== null ||
-        proposal.list_name !== null ||
-        proposal.tag_names.length > 0 ||
-        proposal.priority !== null;
-      if (!hasProposal) {
+      const hasSuggestion =
+        suggestion.due_date !== null ||
+        suggestion.list_name !== null ||
+        suggestion.tag_names.length > 0 ||
+        suggestion.priority !== null;
+      if (!hasSuggestion) {
         // Empty extraction, or every phrase resolved to nothing: nothing
         // to confirm, so save as typed rather than open a beat with no
         // chip to show.
         await saveAsTyped(submittedTitle, snapshot);
         return;
       }
-      const proposedTitle = proposal.title.trim() === "" ? submittedTitle : proposal.title;
+      const suggestedTitle = suggestion.title.trim() === "" ? submittedTitle : suggestion.title;
       setDraft({
         typedTitle: submittedTitle,
         ...snapshot,
-        proposedTitle,
-        dueDate: proposal.due_date,
-        isAllDay: proposal.is_all_day,
-        timeZone: proposal.time_zone,
-        recurrence: proposal.recurrence,
-        reminders: proposal.reminders,
+        suggestedTitle,
+        dueDate: suggestion.due_date,
+        isAllDay: suggestion.is_all_day,
+        timeZone: suggestion.time_zone,
+        recurrence: suggestion.recurrence,
+        reminders: suggestion.reminders,
         tokenTagNames: tokenPlan.tagNames,
         tokenListId: tokenPlan.listId,
         tokenPriority: tokenPlan.priority,
-        proposedListName: proposal.list_name,
-        proposedTagNames: proposal.tag_names,
-        proposedPriority: proposal.priority,
+        suggestedListName: suggestion.list_name,
+        suggestedTagNames: suggestion.tag_names,
+        suggestedPriority: suggestion.priority,
       });
     } catch {
       // Parse failure or timeout: degrade to plain capture, no error shown.
@@ -584,7 +585,7 @@ export function QuickAdd({
           role="group"
           aria-label="Assisted Capture draft"
         >
-          <span className="tag-chip token-chip">{draft.proposedTitle}</span>
+          <span className="tag-chip token-chip">{draft.suggestedTitle}</span>
           {draft.dueDate !== null && (
             <span className="date-chip token-chip">
               {formatDraftDate(draft.dueDate, draft.isAllDay)}
@@ -618,11 +619,11 @@ export function QuickAdd({
               {lists.find((list) => list.id === draft.tokenListId)?.name ?? ""}
             </span>
           )}
-          {draft.proposedListName !== null &&
+          {draft.suggestedListName !== null &&
             draft.tokenListId === null &&
             draft.listChip.length === 0 && (
               <span className="list-chip token-chip">
-                {draft.proposedListName}
+                {draft.suggestedListName}
                 <button type="button" aria-label="Remove list" onClick={removeListChip}>
                   <Icon name="x" size={12} />
                 </button>
@@ -633,7 +634,7 @@ export function QuickAdd({
               #{name}
             </span>
           ))}
-          {draft.proposedTagNames
+          {draft.suggestedTagNames
             .filter(
               (name) =>
                 draft.tagChips.length === 0 &&
@@ -654,11 +655,11 @@ export function QuickAdd({
           {draft.tokenPriority !== null && (
             <span className="tag-chip token-chip">{PRIORITY_LABELS[draft.tokenPriority]}</span>
           )}
-          {draft.proposedPriority !== null &&
+          {draft.suggestedPriority !== null &&
             draft.tokenPriority === null &&
             draft.priorityChip.length === 0 && (
               <span className="tag-chip token-chip">
-                {PRIORITY_LABELS[draft.proposedPriority]}
+                {PRIORITY_LABELS[draft.suggestedPriority]}
                 <button type="button" aria-label="Remove priority" onClick={removePriorityChip}>
                   <Icon name="x" size={12} />
                 </button>
