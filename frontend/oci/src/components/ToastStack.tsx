@@ -7,8 +7,10 @@ interface ToastStackProps {
   onDismiss: (id: number) => void;
 }
 
-/** Transient "message — Undo" notifications for reversible actions (issue
- * #155: deleting or completing a Task). Each toast's lifetime is owned by
+/** Transient notifications: "message — Undo" for reversible actions (issue
+ * #155: deleting or completing a Task), or "message — <action>" for a
+ * confirmation that reverses nothing (#191: a created Task, where the action
+ * is a way to reach it). Each toast's lifetime is owned by
  * the caller's useUndoQueue — this component only renders whatever's
  * currently pending and reports clicks back.
  *
@@ -24,9 +26,22 @@ export function ToastStack({ entries, onUndo, onDismiss }: ToastStackProps): JSX
       {entries.map((entry) => (
         <div key={entry.id} className="toast" role="status" aria-live="polite">
           <span className="toast-message">{entry.message}</span>
-          <button type="button" className="toast-undo" onClick={() => onUndo(entry.id)}>
-            Undo
-          </button>
+          {entry.action === undefined ? (
+            <button type="button" className="toast-undo" onClick={() => onUndo(entry.id)}>
+              Undo
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="toast-undo"
+              onClick={() => {
+                entry.action?.run();
+                onDismiss(entry.id);
+              }}
+            >
+              {entry.action.label}
+            </button>
+          )}
           <button
             type="button"
             className="toast-dismiss"

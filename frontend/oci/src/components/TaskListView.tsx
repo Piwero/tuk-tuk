@@ -14,12 +14,11 @@ import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../groupi
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
 import { useTaskCompletion } from "../taskCompletion";
-import { useUndoQueue } from "../undoQueue";
+import { type UndoQueue } from "../undoQueue";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { SectionNameForm } from "./SectionNameForm";
 import { Icon } from "./Icon";
 import { TaskRow } from "./TaskRow";
-import { ToastStack } from "./ToastStack";
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -36,6 +35,10 @@ interface TaskListViewProps {
   onSectionsChanged: (update: (current: Section[]) => Section[]) => void;
   /** The task row's "Start Focus" shortcut, when the app offers Focus here. */
   onStartFocus?: (task: Task) => void;
+  /** The app-wide toast queue (see App.tsx). This view raises toasts but no
+   * longer renders them: the single <ToastStack> lives at the app root so a
+   * toast survives — and covers — any screen (#191). */
+  toasts: UndoQueue;
 }
 
 export function TaskListView({
@@ -49,6 +52,7 @@ export function TaskListView({
   onSelect,
   onSectionsChanged,
   onStartFocus,
+  toasts,
 }: TaskListViewProps): JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
   const [renamingSectionId, setRenamingSectionId] = useState<number | null>(null);
@@ -63,9 +67,9 @@ export function TaskListView({
   // Task's completion branches server-side per ADR 0003 (advance in place +
   // write a Completed Occurrence) — deferring the PATCH means there is
   // nothing to unwind locally when the user undoes it, since it never
-  // happened. Complete and delete share one queue (and one ToastStack below)
-  // rather than each keeping their own.
-  const undoQueue = useUndoQueue();
+  // happened. Complete and delete share the app-wide queue (and its single
+  // ToastStack) rather than each keeping their own.
+  const undoQueue = toasts;
   const completion = useTaskCompletion(onChanged, undoQueue);
 
   function remove(task: Task): void {
@@ -317,11 +321,6 @@ export function TaskListView({
           />
         )}
       </div>
-      <ToastStack
-        entries={undoQueue.entries}
-        onUndo={undoQueue.undo}
-        onDismiss={undoQueue.dismiss}
-      />
     </>
   );
 }
