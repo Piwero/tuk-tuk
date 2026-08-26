@@ -82,6 +82,16 @@ type View =
   | { kind: "settings" }
   | null;
 
+/** A stable identity for a View, for use as an effect dependency: two Views
+ * with the same key show the same screen. Kept next to `View` so the encoding
+ * moves with the type it encodes. */
+function keyOfView(view: View): string {
+  if (view === null) {
+    return "";
+  }
+  return `${view.kind}:${"id" in view ? view.id : ""}`;
+}
+
 /** A fresh Search, with no query or filters — what /search always opens to,
  * whether loaded directly or reached via the Search nav item (issue #143). */
 const BLANK_SEARCH_STATE: SearchState = {
@@ -469,7 +479,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // No toast outlives the screen it was raised on: a stale "Added to Errands"
   // on a screen the user has already left is noise, and its "Show Task" would
   // undo their navigation. Anything still pending commits on the way out.
-  const viewKey = view === null ? "" : JSON.stringify([view.kind, "id" in view ? view.id : null]);
+  const viewKey = keyOfView(view);
   useEffect(() => {
     clearToasts();
   }, [viewKey, clearToasts]);
@@ -535,6 +545,21 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     );
   }
 
+  /** Whether a Task belongs to the view currently on screen. False for a
+   * computed view (Today, Search): membership is decided server-side by the
+   * query, so we never claim the Task is visible when we can't know. */
+  function isInCurrentView(task: Task): boolean {
+    if (isComputedView) {
+      return false;
+    }
+    return view?.kind === "list"
+      ? task.list_id === view.id
+      : view?.kind === "tag"
+        ? task.tags.some((tag) => tag.id === view.id)
+        : view?.kind === "folder" &&
+          lists.some((list) => list.id === task.list_id && list.folder_id === view.id);
+  }
+
   /** Confirms a Task that has just been created, from whichever entry point
    * made it (issue #191). Creating a Task is the app's most frequent write
    * and used to be its only silent one: from Focus or Settings the dialog
@@ -547,21 +572,21 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
    * that DELETEs, is a different operation wearing the same word, and it
    * would discard anything done to the Task inside the window. So the toast
    * answers the question the user actually has instead — where did it go —
-   * by naming the List, plus a way there when the Task isn't on screen.
-   *
-   * `inView` is false for a computed view (Today, Search): membership is the
-   * server's call, so we offer the jump rather than claim it's visible. */
-  function announceCreated(created: Task, inView: boolean): void {
-    const listName = lists.find((list) => list.id === created.list_id)?.name ?? "the List";
+   * by naming the List, plus a way there when the Task isn't on screen. */
+  function announceCreated(created: Task): void {
+    const listName = lists.find((list) => list.id === created.list_id)?.name;
+    // With no name to give, say only what is certainly true rather than
+    // naming a destination we can't identify.
+    const message = listName === undefined ? "Task added" : `Added to ${listName}`;
     toasts.notify(
-      `Added to ${listName}`,
-      inView ? undefined : { label: "Show Task", run: () => switchView(listFocus(created)) },
+      message,
+      isInCurrentView(created)
+        ? undefined
+        : {
+            label: "Show Task",
+            run: () => switchView({ kind: "list", id: created.list_id }),
+          },
     );
-  }
-
-  /** Where "Show Task" goes: the created Task's own List. */
-  function listFocus(created: Task): View {
-    return { kind: "list", id: created.list_id };
   }
 
   /** Show a newly created task, but only where it belongs: the dialog can file
@@ -569,20 +594,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   function addCreatedTask(created: Task): void {
     if (isComputedView) {
       changeTasksAndRecompute((current) => current);
-      announceCreated(created, false);
-      return;
-    }
-    const inView =
-      view?.kind === "list"
-        ? created.list_id === view.id
-        : view?.kind === "tag"
-          ? created.tags.some((tag) => tag.id === view.id)
-          : view?.kind === "folder" &&
-            lists.some((list) => list.id === created.list_id && list.folder_id === view.id);
-    if (inView) {
+    } else if (isInCurrentView(created)) {
       setTasks((current) => [...current, created]);
     }
-    announceCreated(created, inView);
+    announceCreated(created);
   }
 
   /** "Convert to task" (issue #111) already created the Task by the time
@@ -1040,7 +1055,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               onSelect={setSelectedTaskId}
               onSectionsChanged={setSections}
               toasts={toasts}
-              onCreated={(task) => announceCreated(task, task.list_id === selectedList.id)}
+              onCreated={announceCreated}
             />
           ) : (
             <TaskListView

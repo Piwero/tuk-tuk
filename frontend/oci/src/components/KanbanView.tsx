@@ -40,8 +40,7 @@ export function KanbanView({
   // Completing a card goes through the exact same undoable flow as the List
   // view's checkbox (#155, ADR 0003) — see ../taskCompletion for why this is
   // a shared hook rather than a second implementation.
-  const undoQueue = toasts;
-  const completion = useTaskCompletion(onChanged, undoQueue);
+  const completion = useTaskCompletion(onChanged, toasts);
 
   const apply = applierFor(onChanged);
 

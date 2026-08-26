@@ -26,6 +26,10 @@ export interface ToastAction {
 export interface UndoToastEntry {
   id: number;
   message: string;
+  /** Whether this toast's action is reversible — i.e. whether it offers
+   * Undo. False for a confirmation of something that has already happened
+   * (#191); the Undo button is not merely hidden but meaningless there. */
+  undoable: boolean;
   action?: ToastAction;
 }
 
@@ -34,6 +38,9 @@ interface PendingEntry {
   undo: () => void;
   timer: ReturnType<typeof setTimeout>;
 }
+
+/** A toast with nothing to commit or reverse still needs both slots filled. */
+const NOTHING = (): void => {};
 
 /** The minimum time an undo toast stays up (issue #155's "at least 5s"). */
 export const UNDO_WINDOW_MS = 5_000;
@@ -79,17 +86,12 @@ export function useUndoQueue(windowMs: number = UNDO_WINDOW_MS): UndoQueue {
   }, []);
 
   const add = useCallback(
-    (
-      message: string,
-      commit: () => void | Promise<void>,
-      undo: () => void,
-      action?: ToastAction,
-    ): number => {
+    (entry: Omit<UndoToastEntry, "id">, commit?: () => void | Promise<void>, undo?: () => void) => {
       const id = nextId.current;
       nextId.current += 1;
       const timer = setTimeout(() => resolve(id, "commit"), windowMs);
-      pending.current.set(id, { commit, undo, timer });
-      setEntries((current) => [...current, { id, message, ...(action ? { action } : {}) }]);
+      pending.current.set(id, { commit: commit ?? NOTHING, undo: undo ?? NOTHING, timer });
+      setEntries((current) => [...current, { ...entry, id }]);
       return id;
     },
     [resolve, windowMs],
@@ -97,14 +99,14 @@ export function useUndoQueue(windowMs: number = UNDO_WINDOW_MS): UndoQueue {
 
   const push = useCallback(
     (message: string, commit: () => void | Promise<void>, undo: () => void): number =>
-      add(message, commit, undo),
+      add({ message, undoable: true }, commit, undo),
     [add],
   );
 
-  const noop = useCallback(() => {}, []);
   const notify = useCallback(
-    (message: string, action?: ToastAction): number => add(message, noop, noop, action),
-    [add, noop],
+    (message: string, action?: ToastAction): number =>
+      add({ message, undoable: false, ...(action ? { action } : {}) }),
+    [add],
   );
 
   const undo = useCallback((id: number) => resolve(id, "undo"), [resolve]);

@@ -70,6 +70,19 @@ describe("Confirming a created Task", () => {
     expect(within(toast).queryByRole("button", { name: "Show Task" })).not.toBeInTheDocument();
   });
 
+  it("carries no Undo, because the Task already exists by the time it is shown", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+
+    await quickAdd(user, "Review UX report");
+
+    const toast = await screen.findByRole("status");
+    expect(within(toast).queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(within(toast).getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
+  });
+
   it("renders exactly one toast stack, even on a task view that used to own its own", async () => {
     const { container } = (() => {
       installFakeApi({ tasks: [fakeTask("Old chore")] });
@@ -122,5 +135,26 @@ describe("Confirming a created Task", () => {
     await user.click(within(views).getByRole("link", { name: "Habits" }));
 
     await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+  });
+
+  // A pending undo toast (#155) is cleared by the same route change. Clearing
+  // it *commits* rather than drops: the toast is gone, so the undo is
+  // unreachable, and a silently pending DELETE would be worse than a sent one.
+  it("commits a pending delete when the route changes out from under it", async () => {
+    const api = installFakeApi({ tasks: [fakeTask("Old chore")] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await screen.findByText("Old chore");
+
+    await user.click(screen.getByRole("button", { name: "Delete Old chore" }));
+    await screen.findByRole("status");
+    expect(api.requests.some((r) => r.method === "DELETE")).toBe(false);
+
+    const views = screen.getByRole("navigation", { name: "Views" });
+    await user.click(within(views).getByRole("link", { name: "Habits" }));
+
+    await waitFor(() => expect(api.requests.some((r) => r.method === "DELETE")).toBe(true));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

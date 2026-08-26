@@ -69,12 +69,11 @@ export function TaskListView({
   // nothing to unwind locally when the user undoes it, since it never
   // happened. Complete and delete share the app-wide queue (and its single
   // ToastStack) rather than each keeping their own.
-  const undoQueue = toasts;
-  const completion = useTaskCompletion(onChanged, undoQueue);
+  const completion = useTaskCompletion(onChanged, toasts);
 
   function remove(task: Task): void {
     onChanged((current) => current.filter((t) => t.id !== task.id));
-    undoQueue.push(
+    toasts.push(
       "Task deleted",
       () => deleteTask(task.id),
       () => onChanged((current) => [...current, task]),
