@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.5.1](https://github.com/Piwero/tuk-tuk/compare/v1.5.0...v1.5.1) - 2026-08-26
+
+### Bug Fixes
+
+- **assistant:** Normalize suggested schedules to the v1 invariants ([d04e4a4](https://github.com/Piwero/tuk-tuk/commit/d04e4a435a2292295af860b0bddbc821344a6fb1))
+- **assistant:** Keep /assistant on direct load and card titles after apply ([8397b3f](https://github.com/Piwero/tuk-tuk/commit/8397b3fbe6cbc7a1e00cbe65cbea66a15dc449aa))
+
 ## [1.5.0](https://github.com/Piwero/tuk-tuk/compare/v1.4.1...v1.5.0) - 2026-08-25
 
 ### Features
