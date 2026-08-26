@@ -23,8 +23,9 @@ or Tag into being, exactly as an unpicked Quick-Add token does not.
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, tzinfo
 from typing import Annotated, Any, Literal
+from zoneinfo import ZoneInfo
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
@@ -151,8 +152,13 @@ snapshot).
 - add_check_items: task_id and check_item_titles (required, one or more \
 short strings).
 
-Dates are ISO-8601 datetimes. Leave every field you don't need null or \
-empty rather than guessing. Respond only with the JSON object described by \
+Dates are ISO-8601 datetimes with an offset. A dated task always needs a \
+due_date: for a task at a single moment ("tomorrow at 9 a.m.") put that \
+moment in due_date and leave start_date null; only use start_date for a \
+task that genuinely spans a range, and then start_date must be earlier \
+than due_date on the same calendar day. All-day dates are date-only \
+(midnight). Leave every field you don't need null or empty rather than \
+guessing. Respond only with the JSON object described by \
 the schema — a "message" string plus a "suggestions" array."""
 
 
@@ -311,6 +317,73 @@ async def request_assistant_turn(
     return parsed
 
 
+def _coerce_datetime(value: object) -> datetime | None:
+    """A wire value as an aware UTC datetime, or None when absent/unparseable.
+    Naive input is taken as UTC, matching `app.schemas.normalize_to_utc`."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
+
+
+def _normalize_schedule(
+    start_date: object,
+    due_date: object,
+    is_all_day: bool,
+    time_zone: object,
+) -> tuple[datetime | None, datetime | None, bool, str | None]:
+    """Bends a model-proposed schedule into one the v1 schedule invariants
+    accept (`app.routers.v1.tasks.validate_schedule`), rather than letting
+    the owner discover the mismatch as a red "Failed:" on a card.
+
+    Models routinely answer "tomorrow at 9 a.m." as a lone `start_date`,
+    which the API rejects — a start requires a due. The owner's intent is a
+    point in time, so a lone start becomes start == due; an inverted pair is
+    swapped; all-day values are floored to midnight UTC; a timed pair that
+    straddles two local days keeps the due and drops the start; and an
+    unknown IANA key is dropped rather than failing the whole Suggestion.
+    """
+    zone: tzinfo = UTC
+    zone_name: str | None = None
+    if isinstance(time_zone, str) and time_zone:
+        try:
+            zone = ZoneInfo(time_zone)
+        except (KeyError, ValueError):
+            zone = UTC
+        else:
+            zone_name = time_zone
+
+    start = _coerce_datetime(start_date)
+    due = _coerce_datetime(due_date)
+
+    if start is not None and due is not None and start > due:
+        start, due = due, start
+    if due is None:
+        due = start
+    if is_all_day:
+        start = None if start is None else start.replace(hour=0, minute=0, second=0, microsecond=0)
+        due = None if due is None else due.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif (
+        start is not None
+        and due is not None
+        and start.astimezone(zone).date() != due.astimezone(zone).date()
+    ):
+        start = None
+    if due is None:
+        # Nothing to schedule at all: an all-day flag with no date is a
+        # schedule the API would reject on its own.
+        is_all_day = False
+    return start, due, is_all_day, zone_name
+
+
 def _resolve_names(phrases: list[str], candidates: list[str]) -> list[str] | None:
     """Resolves every phrase against `candidates` (issue #45's discipline);
     None if any phrase fails to resolve to an existing name — a Suggestion
@@ -365,15 +438,21 @@ def _build_suggestion(raw: object, snapshot: WeekSnapshot, task_ids: set[int]) -
             if resolved_tags is None:
                 logger.info("assistant: discarding create_task with unknown tag in %r", tag_names)
                 return None
+            start, due, all_day, zone_name = _normalize_schedule(
+                raw.get("start_date"),
+                raw.get("due_date"),
+                bool(raw.get("is_all_day") or False),
+                raw.get("time_zone"),
+            )
             return CreateTaskSuggestion(
                 title=raw.get("title") or "",
                 list_name=list_name,
                 tag_names=resolved_tags,
                 priority=raw.get("priority") or "none",
-                start_date=raw.get("start_date"),
-                due_date=raw.get("due_date"),
-                is_all_day=bool(raw.get("is_all_day") or False),
-                time_zone=raw.get("time_zone"),
+                start_date=start,
+                due_date=due,
+                is_all_day=all_day,
+                time_zone=zone_name,
             )
 
         if suggestion_type in ("schedule_task", "reschedule_task"):
@@ -385,12 +464,21 @@ def _build_suggestion(raw: object, snapshot: WeekSnapshot, task_ids: set[int]) -
                 if suggestion_type == "schedule_task"
                 else RescheduleTaskSuggestion
             )
+            start, due, all_day, zone_name = _normalize_schedule(
+                raw.get("start_date"),
+                raw.get("due_date"),
+                bool(raw.get("is_all_day") or False),
+                raw.get("time_zone"),
+            )
+            if due is None:
+                logger.info("assistant: discarding %s with no usable date to set", suggestion_type)
+                return None
             return model_cls(
                 task_id=task_id,
-                start_date=raw.get("start_date"),
-                due_date=raw.get("due_date"),
-                is_all_day=bool(raw.get("is_all_day") or False),
-                time_zone=raw.get("time_zone"),
+                start_date=start,
+                due_date=due,
+                is_all_day=all_day,
+                time_zone=zone_name,
             )
 
         if suggestion_type == "complete_task":

@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import assistant_chat
+from app.assistant_chat import _normalize_schedule
 from tests.conftest import FakeClock
 from tests.test_assistant import make_client
 
@@ -423,3 +424,129 @@ class TestBilingual:
 
         assert body["discarded_count"] == 0
         assert len(body["suggestions"]) == 1
+
+
+class TestScheduleNormalization:
+    """A model that answers "tomorrow at 9 a.m." with a lone start_date used
+    to produce a card that failed on apply ("A start date requires a due
+    date"). The Suggestion is bent into a schedule the v1 invariants accept
+    instead."""
+
+    def test_a_lone_start_becomes_a_due_date(
+        self, database_url: str, fake_clock: FakeClock, stub_chat: StubChatProvider
+    ) -> None:
+        stub_chat.set_json_content(
+            {
+                "message": "I'll plan this for tomorrow at 9:00 a.m.",
+                "suggestions": [
+                    {
+                        "type": "create_task",
+                        "task_id": None,
+                        "title": "Promote tag to latest environment",
+                        "list_name": None,
+                        "tag_names": [],
+                        "priority": None,
+                        "start_date": "2024-01-02T09:00:00+00:00",
+                        "due_date": None,
+                        "is_all_day": None,
+                        "time_zone": "Europe/Madrid",
+                        "check_item_titles": [],
+                    }
+                ],
+            }
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_chat.base_url)
+            body = _chat(client)
+            suggestion = body["suggestions"][0]
+            assert suggestion["due_date"] == "2024-01-02T09:00:00Z"
+            assert suggestion["start_date"] == "2024-01-02T09:00:00Z"
+
+            response = client.post(
+                "/api/v1/tasks",
+                json={
+                    "title": suggestion["title"],
+                    "start_date": suggestion["start_date"],
+                    "due_date": suggestion["due_date"],
+                    "is_all_day": suggestion["is_all_day"],
+                    "time_zone": suggestion["time_zone"],
+                },
+            )
+            assert response.status_code == 201, response.text
+
+    def test_a_lone_start_on_a_schedule_task_becomes_a_due_date(
+        self, database_url: str, fake_clock: FakeClock, stub_chat: StubChatProvider
+    ) -> None:
+        with make_client(database_url, fake_clock) as client:
+            task_id = make_task(client, "Write report")
+            stub_chat.set_json_content(
+                {
+                    "message": "Scheduled.",
+                    "suggestions": [
+                        {
+                            "type": "schedule_task",
+                            "task_id": task_id,
+                            "title": None,
+                            "list_name": None,
+                            "tag_names": [],
+                            "priority": None,
+                            "start_date": "2024-01-02T09:00:00Z",
+                            "due_date": None,
+                            "is_all_day": None,
+                            "time_zone": None,
+                            "check_item_titles": [],
+                        }
+                    ],
+                }
+            )
+            _configure(client, stub_chat.base_url)
+            body = _chat(client)
+            suggestion = body["suggestions"][0]
+            assert suggestion["due_date"] == "2024-01-02T09:00:00Z"
+
+            response = client.patch(
+                f"/api/v1/tasks/{task_id}",
+                json={
+                    "start_date": suggestion["start_date"],
+                    "due_date": suggestion["due_date"],
+                    "is_all_day": suggestion["is_all_day"],
+                    "time_zone": suggestion["time_zone"],
+                },
+            )
+            assert response.status_code == 200, response.text
+
+
+class TestNormalizeScheduleUnits:
+    def test_an_inverted_pair_is_swapped(self) -> None:
+        start, due, all_day, zone = _normalize_schedule(
+            "2024-01-02T17:00:00Z", "2024-01-02T09:00:00Z", False, "UTC"
+        )
+        assert start is not None
+        assert due is not None
+        assert start < due
+        assert (all_day, zone) == (False, "UTC")
+
+    def test_all_day_values_are_floored_to_midnight(self) -> None:
+        start, due, all_day, _ = _normalize_schedule(None, "2024-01-02T09:30:00Z", True, None)
+        assert due is not None
+        assert due.hour == 0
+        assert due.minute == 0
+        assert start is None
+        assert all_day is True
+
+    def test_a_timed_pair_across_two_local_days_keeps_only_the_due(self) -> None:
+        start, due, _, _ = _normalize_schedule(
+            "2024-01-02T09:00:00Z", "2024-01-05T09:00:00Z", False, "UTC"
+        )
+        assert start is None
+        assert due is not None
+        assert due.day == 5
+
+    def test_an_unknown_timezone_is_dropped_not_fatal(self) -> None:
+        _, due, _, zone = _normalize_schedule("2024-01-02T09:00:00Z", None, False, "Mars/Olympus")
+        assert zone is None
+        assert due is not None
+
+    def test_an_unparseable_date_is_dropped(self) -> None:
+        start, due, all_day, _ = _normalize_schedule("not a date", None, True, None)
+        assert (start, due, all_day) == (None, None, False)
