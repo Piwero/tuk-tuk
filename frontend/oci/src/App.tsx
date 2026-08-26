@@ -191,7 +191,12 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // polled on load and window refocus, mirroring Quick-Add's Assist gate.
   // No settings toggle — unlike Stand-up, this is never independently
   // configurable, only a direct read of whether a provider is configured.
-  const assistantAvailable = useAssistantAvailable();
+  // `null` while the probe is still in flight: an affordance needs a
+  // settled `true`, but the route guard below must not act on anything but
+  // a settled `false`, or a hard load of /assistant redirects itself away
+  // before the answer arrives.
+  const assistantStatus = useAssistantAvailable();
+  const assistantAvailable = assistantStatus === true;
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
   // The Folder view's own sort preference (#126) — kept separate from the
@@ -336,7 +341,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       // route was showing — fall through to the same Inbox fallback as a
       // deleted List/Tag/Folder, rather than leaving an inaccessible route
       // selected in the sidebar.
-    } else if (view?.kind === "assistant" && !assistantAvailable) {
+    } else if (view?.kind === "assistant" && assistantStatus === false) {
       // Same fallback, for the Assistant becoming (or already being)
       // unconfigured while this route was showing.
     } else if (
@@ -367,7 +372,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     // effect's render and it running (e.g. the user clicks Calendar just as
     // the lists load). Never stomp a view that changed in the meantime.
     setView((current) => (current === view ? next : current));
-  }, [lists, tags, folders, view, standupEnabled, assistantAvailable]);
+  }, [lists, tags, folders, view, standupEnabled, assistantStatus]);
 
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */

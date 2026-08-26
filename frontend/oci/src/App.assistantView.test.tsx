@@ -172,6 +172,33 @@ describe("Assistant view (ADR 0009, issue #188)", () => {
     expect(createRequests).toHaveLength(1);
   });
 
+  it("keeps a completed task's title on its card after applying", async () => {
+    // Applying complete_task refetches the *open* tasks; the task just
+    // closed must not drop out of the lookup and leave "Task #42".
+    const task = fakeTask("Write report", { id: 42 });
+    installFakeApi({
+      assistantAvailable: true,
+      tasks: [task],
+      assistantChatQueue: [
+        {
+          message: "Here's a plan.",
+          discarded_count: 0,
+          suggestions: [{ type: "complete_task", task_id: 42 }],
+        },
+      ],
+    });
+    render(<App />);
+    await openAssistant();
+    await send("Plan my day");
+
+    await screen.findByText('Complete "Write report"');
+    fireEvent.click(screen.getByRole("button", { name: /Apply 1 suggestion/ }));
+
+    await screen.findByText("Applied");
+    expect(screen.getByText('Complete "Write report"')).toBeInTheDocument();
+    expect(screen.queryByText('Complete "Task #42"')).not.toBeInTheDocument();
+  });
+
   it("shows the discarded count the backend reports", async () => {
     installFakeApi({
       assistantAvailable: true,

@@ -38,6 +38,28 @@ describe("Direct load of a static view's URL", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/before"));
   });
 
+  it("opens the Assistant directly at /assistant once its probe answers", async () => {
+    // The availability probe resolves a tick after mount; until it does,
+    // the route guard must leave the view alone rather than bouncing this
+    // load to All.
+    installFakeApi({ assistantAvailable: true });
+    window.history.replaceState(null, "", "/assistant");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/assistant");
+  });
+
+  it("falls back from /assistant to All when the Assistant is unconfigured", async () => {
+    installFakeApi({ assistantAvailable: false });
+    window.history.replaceState(null, "", "/assistant");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "All" })).toBeInTheDocument();
+  });
+
   it("opens Focus directly at /focus, with no task pre-selected", async () => {
     installFakeApi();
     window.history.replaceState(null, "", "/focus");
