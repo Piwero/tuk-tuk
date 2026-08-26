@@ -21,7 +21,7 @@ describe("useUndoQueue", () => {
       result.current.push("Task deleted", commit, undo);
     });
 
-    expect(result.current.entries).toEqual([{ id: 0, message: "Task deleted" }]);
+    expect(result.current.entries).toEqual([{ id: 0, message: "Task deleted", undoable: true }]);
     expect(commit).not.toHaveBeenCalled();
 
     act(() => {
@@ -124,5 +124,39 @@ describe("useUndoQueue", () => {
     });
     expect(firstCommit).not.toHaveBeenCalled();
     expect(secondCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("notify raises a toast with no Undo, which expires on its own", () => {
+    const { result } = renderHook(() => useUndoQueue(5_000));
+    const run = vi.fn();
+
+    act(() => {
+      result.current.notify("Added to Inbox", { label: "Show Task", run });
+    });
+    expect(result.current.entries).toEqual([
+      { id: 0, message: "Added to Inbox", undoable: false, action: { label: "Show Task", run } },
+    ]);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(result.current.entries).toEqual([]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("clearAll empties the stack and commits everything still pending", () => {
+    const { result } = renderHook(() => useUndoQueue(5_000));
+    const commit = vi.fn();
+    const undo = vi.fn();
+
+    act(() => {
+      result.current.push("Task deleted", commit, undo);
+      result.current.notify("Added to Inbox");
+      result.current.clearAll();
+    });
+
+    expect(result.current.entries).toEqual([]);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(undo).not.toHaveBeenCalled();
   });
 });

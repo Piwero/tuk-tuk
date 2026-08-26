@@ -13,7 +13,7 @@ describe("ToastStack", () => {
   it("announces each entry as a live status region with an Undo affordance", () => {
     render(
       <ToastStack
-        entries={[{ id: 1, message: "Task deleted" }]}
+        entries={[{ id: 1, message: "Task deleted", undoable: true }]}
         onUndo={vi.fn()}
         onDismiss={vi.fn()}
       />,
@@ -30,7 +30,7 @@ describe("ToastStack", () => {
     const user = userEvent.setup();
     render(
       <ToastStack
-        entries={[{ id: 7, message: "Completed" }]}
+        entries={[{ id: 7, message: "Completed", undoable: true }]}
         onUndo={onUndo}
         onDismiss={vi.fn()}
       />,
@@ -47,7 +47,7 @@ describe("ToastStack", () => {
     const user = userEvent.setup();
     render(
       <ToastStack
-        entries={[{ id: 3, message: "Task deleted" }]}
+        entries={[{ id: 3, message: "Task deleted", undoable: true }]}
         onUndo={vi.fn()}
         onDismiss={onDismiss}
       />,
@@ -61,8 +61,8 @@ describe("ToastStack", () => {
     render(
       <ToastStack
         entries={[
-          { id: 1, message: "Task deleted" },
-          { id: 2, message: "Completed" },
+          { id: 1, message: "Task deleted", undoable: true },
+          { id: 2, message: "Completed", undoable: true },
         ]}
         onUndo={vi.fn()}
         onDismiss={vi.fn()}

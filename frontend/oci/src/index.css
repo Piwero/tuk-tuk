@@ -3226,7 +3226,11 @@ li[data-overdue] .date-chip {
   font-size: var(--text-sm);
 }
 
-.toast-undo {
+/* Undo (#155) and a confirmation's jump-to action (#191) sit in the same
+   slot and read the same; they stay separate selectors so either can be
+   restyled without the other. */
+.toast-undo,
+.toast-action {
   background: none;
   border: none;
   padding: 0;

@@ -26,14 +26,15 @@ export function ToastStack({ entries, onUndo, onDismiss }: ToastStackProps): JSX
       {entries.map((entry) => (
         <div key={entry.id} className="toast" role="status" aria-live="polite">
           <span className="toast-message">{entry.message}</span>
-          {entry.action === undefined ? (
+          {entry.undoable && (
             <button type="button" className="toast-undo" onClick={() => onUndo(entry.id)}>
               Undo
             </button>
-          ) : (
+          )}
+          {entry.action !== undefined && (
             <button
               type="button"
-              className="toast-undo"
+              className="toast-action"
               onClick={() => {
                 entry.action?.run();
                 onDismiss(entry.id);
