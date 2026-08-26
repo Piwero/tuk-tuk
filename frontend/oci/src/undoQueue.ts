@@ -14,9 +14,19 @@
  */
 import { useCallback, useRef, useState } from "react";
 
+/** An extra button on a toast, beside Dismiss. Undo toasts don't use this —
+ * their button is the queue's own Undo. Confirmation toasts do: it's how a
+ * "Added to Errands" toast offers a way to the Task it's talking about
+ * (issue #191). */
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 export interface UndoToastEntry {
   id: number;
   message: string;
+  action?: ToastAction;
 }
 
 interface PendingEntry {
@@ -34,10 +44,18 @@ export interface UndoQueue {
   /** Queues `commit` to run after `windowMs`; returns an id that `undo` or
    * `dismiss` can resolve early. */
   push: (message: string, commit: () => void | Promise<void>, undo: () => void) => number;
+  /** A toast that reverses nothing: it reports something that has already
+   * happened, and disappears after the same window. */
+  notify: (message: string, action?: ToastAction) => number;
   /** Cancels the pending commit and runs its `undo` instead. */
   undo: (id: number) => void;
   /** Ends the window early and runs `commit` right away. */
   dismiss: (id: number) => void;
+  /** Ends every open window at once, committing each. Used on a route change
+   * so no toast outlives the screen it was raised on — deliberately a commit
+   * and not a drop, so navigating away from a pending delete still sends it.
+   */
+  clearAll: () => void;
 }
 
 export function useUndoQueue(windowMs: number = UNDO_WINDOW_MS): UndoQueue {
@@ -60,20 +78,42 @@ export function useUndoQueue(windowMs: number = UNDO_WINDOW_MS): UndoQueue {
     }
   }, []);
 
-  const push = useCallback(
-    (message: string, commit: () => void | Promise<void>, undo: () => void): number => {
+  const add = useCallback(
+    (
+      message: string,
+      commit: () => void | Promise<void>,
+      undo: () => void,
+      action?: ToastAction,
+    ): number => {
       const id = nextId.current;
       nextId.current += 1;
       const timer = setTimeout(() => resolve(id, "commit"), windowMs);
       pending.current.set(id, { commit, undo, timer });
-      setEntries((current) => [...current, { id, message }]);
+      setEntries((current) => [...current, { id, message, ...(action ? { action } : {}) }]);
       return id;
     },
     [resolve, windowMs],
   );
 
+  const push = useCallback(
+    (message: string, commit: () => void | Promise<void>, undo: () => void): number =>
+      add(message, commit, undo),
+    [add],
+  );
+
+  const noop = useCallback(() => {}, []);
+  const notify = useCallback(
+    (message: string, action?: ToastAction): number => add(message, noop, noop, action),
+    [add, noop],
+  );
+
   const undo = useCallback((id: number) => resolve(id, "undo"), [resolve]);
   const dismiss = useCallback((id: number) => resolve(id, "commit"), [resolve]);
+  const clearAll = useCallback(() => {
+    for (const id of [...pending.current.keys()]) {
+      resolve(id, "commit");
+    }
+  }, [resolve]);
 
-  return { entries, push, undo, dismiss };
+  return { entries, push, notify, undo, dismiss, clearAll };
 }

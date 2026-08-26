@@ -5,10 +5,9 @@ import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks } from "../grouping";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
 import { useTaskCompletion } from "../taskCompletion";
-import { useUndoQueue } from "../undoQueue";
+import { type UndoQueue } from "../undoQueue";
 import { SectionNameForm } from "./SectionNameForm";
 import { TaskRow } from "./TaskRow";
-import { ToastStack } from "./ToastStack";
 
 interface KanbanViewProps {
   tasks: Task[];
@@ -17,6 +16,12 @@ interface KanbanViewProps {
   onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
   onSectionsChanged: (update: (current: Section[]) => Section[]) => void;
+  /** The app-wide toast queue — see TaskListView for why the board doesn't
+   * own one. */
+  toasts: UndoQueue;
+  /** Confirms a card the board just created, so the Kanban add reports back
+   * exactly like the two quick adds do (#191). */
+  onCreated: (task: Task) => void;
 }
 
 export function KanbanView({
@@ -26,6 +31,8 @@ export function KanbanView({
   onChanged,
   onSelect,
   onSectionsChanged,
+  toasts,
+  onCreated,
 }: KanbanViewProps): JSX.Element {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [addingSection, setAddingSection] = useState(false);
@@ -33,7 +40,7 @@ export function KanbanView({
   // Completing a card goes through the exact same undoable flow as the List
   // view's checkbox (#155, ADR 0003) — see ../taskCompletion for why this is
   // a shared hook rather than a second implementation.
-  const undoQueue = useUndoQueue();
+  const undoQueue = toasts;
   const completion = useTaskCompletion(onChanged, undoQueue);
 
   const apply = applierFor(onChanged);
@@ -60,6 +67,7 @@ export function KanbanView({
       ...(sectionId === null ? {} : { section_id: sectionId }),
     });
     onChanged((current) => [...current, created]);
+    onCreated(created);
     setDrafts((current) => ({ ...current, [columnKey]: "" }));
   }
 
@@ -146,11 +154,6 @@ export function KanbanView({
           )}
         </div>
       </section>
-      <ToastStack
-        entries={undoQueue.entries}
-        onUndo={undoQueue.undo}
-        onDismiss={undoQueue.dismiss}
-      />
     </>
   );
 }

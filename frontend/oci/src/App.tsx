@@ -39,6 +39,7 @@ import {
   staticViewKindForPath,
   type StaticViewKind,
 } from "./routes";
+import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { AssistantView } from "./components/AssistantView";
 import { CalendarView } from "./components/CalendarView";
@@ -60,6 +61,7 @@ import { Sidebar } from "./components/Sidebar";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
+import { ToastStack } from "./components/ToastStack";
 
 /** What the main pane shows: one List, one Tag, one Folder (its Tasks across
  * every List it contains — #126), one computed Smart List, the Calendar /
@@ -458,6 +460,20 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // The completed view exists per List and for All (not Today / Next 7 Days).
   const hasCompletedView = selectedList !== null || smartView === "all";
 
+  // One queue for the whole app: undo toasts for delete/complete (#155) and
+  // create confirmations (#191) share it, so two stacks can never overlap and
+  // a pending undo isn't lost when its view unmounts.
+  const toasts = useUndoQueue();
+  const clearToasts = toasts.clearAll;
+
+  // No toast outlives the screen it was raised on: a stale "Added to Errands"
+  // on a screen the user has already left is noise, and its "Show Task" would
+  // undo their navigation. Anything still pending commits on the way out.
+  const viewKey = view === null ? "" : JSON.stringify([view.kind, "id" in view ? view.id : null]);
+  useEffect(() => {
+    clearToasts();
+  }, [viewKey, clearToasts]);
+
   function toggleSidebar(): void {
     setSidebarCollapsed((current) => {
       saveSidebarCollapsed(!current);
@@ -519,11 +535,41 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     );
   }
 
+  /** Confirms a Task that has just been created, from whichever entry point
+   * made it (issue #191). Creating a Task is the app's most frequent write
+   * and used to be its only silent one: from Focus or Settings the dialog
+   * simply closed, with the Task filed somewhere off-screen.
+   *
+   * Decision: the create toast carries no Undo. The queue's Undo works by
+   * *deferring* the request for `UNDO_WINDOW_MS` (#155), and a create can't
+   * be deferred — the caller needs the server-assigned Task back to show it,
+   * and the dialog has already closed around it. The alternative, an Undo
+   * that DELETEs, is a different operation wearing the same word, and it
+   * would discard anything done to the Task inside the window. So the toast
+   * answers the question the user actually has instead — where did it go —
+   * by naming the List, plus a way there when the Task isn't on screen.
+   *
+   * `inView` is false for a computed view (Today, Search): membership is the
+   * server's call, so we offer the jump rather than claim it's visible. */
+  function announceCreated(created: Task, inView: boolean): void {
+    const listName = lists.find((list) => list.id === created.list_id)?.name ?? "the List";
+    toasts.notify(
+      `Added to ${listName}`,
+      inView ? undefined : { label: "Show Task", run: () => switchView(listFocus(created)) },
+    );
+  }
+
+  /** Where "Show Task" goes: the created Task's own List. */
+  function listFocus(created: Task): View {
+    return { kind: "list", id: created.list_id };
+  }
+
   /** Show a newly created task, but only where it belongs: the dialog can file
    * it into another List, and computed views decide membership server-side. */
   function addCreatedTask(created: Task): void {
     if (isComputedView) {
       changeTasksAndRecompute((current) => current);
+      announceCreated(created, false);
       return;
     }
     const inView =
@@ -536,6 +582,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     if (inView) {
       setTasks((current) => [...current, created]);
     }
+    announceCreated(created, inView);
   }
 
   /** "Convert to task" (issue #111) already created the Task by the time
@@ -768,12 +815,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 tags={tags}
                 onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onListCreated={(list) => setLists((current) => [...current, list])}
-                onCreated={(task) => {
-                  // A ~list token may have filed the task elsewhere.
-                  if (task.list_id === selectedList.id) {
-                    setTasks((current) => [...current, task]);
-                  }
-                }}
+                // A ~list token may have filed the task elsewhere; the shared
+                // handler already accounts for that, and confirms either way.
+                onCreated={addCreatedTask}
               />
               <div className="view-controls">
                 <label>
@@ -995,6 +1039,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               onChanged={setTasks}
               onSelect={setSelectedTaskId}
               onSectionsChanged={setSections}
+              toasts={toasts}
+              onCreated={(task) => announceCreated(task, task.list_id === selectedList.id)}
             />
           ) : (
             <TaskListView
@@ -1008,6 +1054,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               onSelect={setSelectedTaskId}
               onSectionsChanged={setSections}
               onStartFocus={(task) => switchView({ kind: "focus", task })}
+              toasts={toasts}
             />
           )}
         </main>
@@ -1038,6 +1085,11 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             <EventDetail event={selectedEvent} onConverted={handleEventConverted} />
           </Modal>
         )}
+        {/* The app's only toast stack. It sits here, outside <main>, so a
+            toast raised from Quick add covers Focus, Settings and Calendar
+            too — the task views used to each own one and could only cover
+            themselves (#191). */}
+        <ToastStack entries={toasts.entries} onUndo={toasts.undo} onDismiss={toasts.dismiss} />
       </div>
     </FocusRunProvider>
   );
