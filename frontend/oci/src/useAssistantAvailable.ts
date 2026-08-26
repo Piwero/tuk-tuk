@@ -2,15 +2,18 @@
  * mount and re-checked on every window refocus, mirroring
  * useAssistAvailable — cheap enough to poll that way, and refocus is when a
  * provider is most likely to have just been fixed (or broken) and switched
- * back to. Defaults to `false` so no Assistant affordance renders during
- * the initial check or if it fails; a network error is indistinguishable
- * from "not available" here, same as the backend probe itself. */
+ * back to. Starts at `null` — *not yet known* — so no Assistant affordance
+ * renders during the initial check while a caller can still tell "still
+ * checking" apart from a settled `false`: a hard load of /assistant must
+ * not be bounced to another view before the probe has answered. A network
+ * error settles to `false`, indistinguishable from "not available", same
+ * as the backend probe itself. */
 import { useEffect, useState } from "react";
 
 import { fetchAssistantStatus } from "./api";
 
-export function useAssistantAvailable(): boolean {
-  const [available, setAvailable] = useState(false);
+export function useAssistantAvailable(): boolean | null {
+  const [available, setAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;

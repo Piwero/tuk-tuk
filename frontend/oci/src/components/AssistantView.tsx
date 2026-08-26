@@ -54,7 +54,16 @@ export function AssistantView(): JSX.Element {
     ]);
     setLists(listPage.items);
     setTags(tagPage.items);
-    setTasksById(new Map(taskPage.items.map((task) => [task.id, task])));
+    // Merged, never replaced: the fetch returns only *open* tasks, so a
+    // task an applied complete_task just closed would otherwise vanish
+    // from this map and its own card would fall back to "Task #12".
+    setTasksById((current) => {
+      const merged = new Map(current);
+      for (const task of taskPage.items) {
+        merged.set(task.id, task);
+      }
+      return merged;
+    });
   }, []);
 
   useEffect(() => {
