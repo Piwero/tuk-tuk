@@ -10,6 +10,12 @@ import {
   type TaskList,
 } from "../api";
 import {
+  dateDraftFromAssist,
+  formatRecurrenceRule,
+  formatReminderOffset,
+  parseCaptureWithTimeout,
+} from "../assistCapture";
+import {
   addDays,
   emptyDraft,
   localDayOf,
@@ -23,7 +29,9 @@ import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
 import { parseQuickAdd, sameName } from "../quickAdd";
 import { applyTagPick, suggestTags } from "../tagSuggest";
+import { useAssistAvailable } from "../useAssistAvailable";
 import { DateFieldset } from "./DateFieldset";
+import { Icon } from "./Icon";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
 interface QuickAddDialogProps {
@@ -43,7 +51,19 @@ interface QuickAddDialogProps {
  * The title takes the same `#tag` / `!priority` / `~list` tokens as the bar,
  * but a pick lands in this form's own List/Priority/Tags controls rather than
  * a chip row — one visible source of truth per field, so the two can't
- * disagree about what the task will be. */
+ * disagree about what the task will be.
+ *
+ * Assisted Capture (ADR 0005; CONTEXT.md) rides that same principle: when
+ * Assist is available, the first "Add task" click parses the typed title
+ * into these very controls — the recognised phrase leaves the title, the
+ * date lands in the Date fieldset, a matched List/Priority/Tag lands in its
+ * control — and saves nothing. The now-populated form *is* the one
+ * confirmation beat: the user reviews it and clicks "Add task" again to
+ * save. Recurrence and reminder phrases, which have no control here, show as
+ * removable chips. Assist only ever adds value: an unavailable Ollama, a
+ * parse that extracts nothing, a failure, or a timeout all just save the
+ * task in the single click, exactly as this dialog behaved before.
+ */
 export function QuickAddDialog({
   lists,
   tags,
@@ -66,6 +86,33 @@ export function QuickAddDialog({
   // field that nobody chose, mirroring how a chip wins in the bar.
   const [listChosen, setListChosen] = useState(false);
   const [priorityChosen, setPriorityChosen] = useState(false);
+  // ADR 0005: invisible, not greyed out, when Ollama isn't reachable.
+  const assistAvailable = useAssistAvailable();
+  // True while the one parse an "Add task" triggers is in flight — the
+  // title field's busy indicator.
+  const [parsing, setParsing] = useState(false);
+  // True once a parse has populated this form: the next "Add task" then
+  // saves rather than parsing again.
+  const [assistApplied, setAssistApplied] = useState(false);
+  // Recurrence / reminder phrases Assist resolved (issue #44): this dialog
+  // has no control for either, so they show as removable chips and ride the
+  // create call only alongside a resolved date.
+  const [recurrence, setRecurrence] = useState<string | null>(null);
+  const [reminders, setReminders] = useState<string[]>([]);
+
+  /** A title edit re-arms Assist: the next "Add task" parses the new text
+   * rather than saving stale suggestions, keeping the behaviour "parse on
+   * submit" exactly as in the bar. Any recurrence / reminder chips from the
+   * previous parse go with it — they're Assist-only artifacts with no
+   * control of their own, so a fresh parse must own them outright. */
+  function onTitleChange(next: string): void {
+    setTitle(next);
+    if (assistApplied) {
+      setAssistApplied(false);
+      setRecurrence(null);
+      setReminders([]);
+    }
+  }
 
   /** A quick pick sets the day and leaves the times alone — an untimed day is
    * an all-day task, exactly as in the detail panel. */
@@ -79,8 +126,107 @@ export function QuickAddDialog({
     );
   }
 
+  function removeReminder(offset: string): void {
+    setReminders((current) => current.filter((r) => r !== offset));
+  }
+
+  /** Editing the date away takes the Assist recurrence / reminder chips with
+   * it — neither can attach to a dateless Task (backend invariant), so a
+   * visible chip that would be silently dropped at save must not survive. */
+  function changeDate(next: DateDraft): void {
+    setDateDraft(next);
+    if (next.dueDay === "" && (recurrence !== null || reminders.length > 0)) {
+      setRecurrence(null);
+      setReminders([]);
+    }
+  }
+
+  /** One Assisted Capture parse of the residual title (tokens already
+   * stripped by `plan`), applied to this form's controls. Returns true when
+   * a control actually changed — the caller then leaves the dialog open for
+   * the confirmation click — and false when there was nothing to apply
+   * (every suggested field was already claimed, or the parse failed), so
+   * the caller falls through to an immediate save. A suggestion never
+   * overrides a field the user already claimed with the control or an
+   * explicit token: token-derived and hand-chosen fields both outrank the
+   * model (CONTEXT.md's Assist glossary). */
+  async function runAssist(plan: ReturnType<typeof parseQuickAdd>): Promise<boolean> {
+    setParsing(true);
+    try {
+      const suggestion = await parseCaptureWithTimeout(plan.title, lists, tags);
+      if (suggestion === null) {
+        return false;
+      }
+      // A day already in the Date fieldset is the user's — Assist fills that
+      // control, it never overwrites a hand-entered date, and it leaves an
+      // untouched fieldset alone rather than wiping it.
+      const dateTouched = dateDraft.dueDay !== "";
+      const willApplyDate = suggestion.due_date !== null && !dateTouched;
+      // Recurrence / reminders can only attach to a dated Task (backend
+      // invariant), so they apply only when a date will be present.
+      const willHaveDate = willApplyDate || dateTouched;
+      const willApplyRecurrence = suggestion.recurrence !== null && willHaveDate;
+      const willApplyReminders = suggestion.reminders.length > 0 && willHaveDate;
+      const matchedListId =
+        suggestion.list_name == null
+          ? null
+          : (lists.find((list) => sameName(list.name, suggestion.list_name as string))?.id ?? null);
+      const willApplyList = matchedListId !== null && !listChosen && plan.listId === null;
+      const willApplyPriority =
+        suggestion.priority !== null &&
+        suggestion.priority !== "none" &&
+        !priorityChosen &&
+        plan.priority === null;
+      // Assist's tags, like the bar's, apply only when the user named none
+      // themselves — never overriding a hand-ticked or `#token` set.
+      const suggestedTagIds =
+        tagIds.length === 0 && plan.tagNames.length === 0
+          ? suggestion.tag_names
+              .map((name) => tags.find((tag) => sameName(tag.name, name))?.id)
+              .filter((id): id is number => id !== undefined)
+          : [];
+
+      if (
+        !willApplyDate &&
+        !willApplyRecurrence &&
+        !willApplyReminders &&
+        !willApplyList &&
+        !willApplyPriority &&
+        suggestedTagIds.length === 0
+      ) {
+        return false;
+      }
+
+      const strippedTitle = suggestion.title.trim();
+      setTitle(strippedTitle === "" ? plan.title.trim() : strippedTitle);
+      if (willApplyDate) {
+        setDateDraft(dateDraftFromAssist(suggestion));
+      }
+      setRecurrence(willApplyRecurrence ? suggestion.recurrence : null);
+      setReminders(willApplyReminders ? suggestion.reminders : []);
+      if (willApplyList) {
+        setListId(matchedListId);
+        setListChosen(true);
+      }
+      if (willApplyPriority) {
+        setPriority(suggestion.priority as Priority);
+        setPriorityChosen(true);
+      }
+      if (suggestedTagIds.length > 0) {
+        setTagIds((current) => [...new Set([...current, ...suggestedTagIds])]);
+      }
+      setAssistApplied(true);
+      return true;
+    } finally {
+      setParsing(false);
+    }
+  }
+
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
+    if (parsing) {
+      return;
+    }
     // Tokens typed but never picked from the dropdown are still honoured at
     // submit, exactly as in the bar — otherwise a fully-typed `~expenses`
     // would be saved as literal title text.
@@ -90,6 +236,12 @@ export function QuickAddDialog({
     });
     const trimmed = plan.title.trim();
     if (trimmed === "") {
+      return;
+    }
+    // First submit with Assist available: parse into the form and wait for
+    // the confirmation click. A parse that applies nothing (or fails) falls
+    // straight through to the save below, so Assist never costs a click.
+    if (assistAvailable && !assistApplied && (await runAssist(plan))) {
       return;
     }
     // A typed name that matches nothing creates the Tag first — the same
@@ -129,6 +281,10 @@ export function QuickAddDialog({
       ...(finalPriority === "none" ? {} : { priority: finalPriority }),
       ...(chosen.length === 0 ? {} : { tag_ids: chosen }),
       ...(schedule === null ? {} : scheduleForCreate(schedule)),
+      // Recurrence and reminders can't attach to a dateless Task (backend
+      // invariant), so they ride only alongside a resolved schedule.
+      ...(schedule !== null && recurrence !== null ? { recurrence } : {}),
+      ...(schedule !== null && reminders.length > 0 ? { reminders } : {}),
     });
     onCreated(task);
     onClose();
@@ -197,7 +353,7 @@ export function QuickAddDialog({
           ariaLabel="Title"
           placeholder="What needs doing?"
           value={title}
-          onValueChange={setTitle}
+          onValueChange={onTitleChange}
           channels={[
             tagChannel as TokenChannel<unknown>,
             listChannel as TokenChannel<unknown>,
@@ -205,6 +361,23 @@ export function QuickAddDialog({
           ]}
           showChips={false}
           autoFocus
+          trailingContent={
+            parsing ? (
+              <span className="quick-add-assist-busy" aria-label="Assist is parsing" role="status">
+                <Icon name="sparkles" size={16} />
+              </span>
+            ) : (
+              assistAvailable && (
+                <span
+                  className="quick-add-assist-affordance"
+                  aria-label="Assist available"
+                  title="Assist"
+                >
+                  <Icon name="sparkles" size={16} />
+                </span>
+              )
+            )
+          }
         />
       </label>
       <label>
@@ -253,11 +426,39 @@ export function QuickAddDialog({
           <button type="button" onClick={() => pickDay(nextMonday(localDayOf(new Date())))}>
             Next Week
           </button>
-          <button type="button" onClick={() => setDateDraft(emptyDraft())}>
+          <button type="button" onClick={() => changeDate(emptyDraft())}>
             Clear date
           </button>
         </div>
-        <DateFieldset draft={dateDraft} onChange={setDateDraft} />
+        <DateFieldset draft={dateDraft} onChange={changeDate} />
+        {(recurrence !== null || reminders.length > 0) && (
+          <div className="quick-add-assist-chips" role="group" aria-label="Assist suggestions">
+            {recurrence !== null && (
+              <span className="date-chip token-chip">
+                {formatRecurrenceRule(recurrence)}
+                <button
+                  type="button"
+                  aria-label="Remove recurrence"
+                  onClick={() => setRecurrence(null)}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </span>
+            )}
+            {reminders.map((offset) => (
+              <span key={offset} className="date-chip token-chip">
+                {formatReminderOffset(offset)}
+                <button
+                  type="button"
+                  aria-label={`Remove reminder (${formatReminderOffset(offset)})`}
+                  onClick={() => removeReminder(offset)}
+                >
+                  <Icon name="x" size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
       </fieldset>
       <fieldset className="quick-add-tags">
         <legend>Tags</legend>

@@ -86,7 +86,7 @@ One suggestion produced by Assist (a parsed task draft, a proposed order, a prop
 _Avoid_: Recommendation, action (Assist takes no actions), Proposal (the same concept under a second name)
 
 **Assisted Capture**:
-The Assist feature on Quick-Add: on submit, free text (English or Spanish) is parsed into a proposed Task — date, recurrence, reminder, list, tags, priority shown as editable chips — for one confirmation beat before saving. Parsed words are stripped from the title; only existing Lists and Tags are matched, never invented. Replaces the deferred "Smart Recognition" idea.
+The Assist feature on Quick-Add: on submit, free text (English or Spanish) is parsed into a proposed Task — date, recurrence, reminder, list, tags, priority — for one confirmation beat before saving. In the one-line Quick-Add bar the proposal is a row of editable ghost chips (Enter confirms, Escape discards); in the Quick add dialog it fills the dialog's own List/Priority/Date controls instead (a second "Add task" saves), with recurrence and reminder — which have no control there — shown as removable chips. Parsed words are stripped from the title; only existing Lists and Tags are matched, never invented. Assist only ever adds value: an unreachable Ollama, a parse that extracts nothing, or a failure all save the Task in the single beat, exactly as Quick-Add behaved before. Replaces the deferred "Smart Recognition" idea.
 _Avoid_: Smart Recognition, NLP parsing
 
 **Overdue Triage**:

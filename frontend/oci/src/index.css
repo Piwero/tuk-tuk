@@ -1168,6 +1168,16 @@ li[data-overdue] .date-chip {
   color: var(--text-danger);
 }
 
+/* Assisted Capture's recurrence / reminder chips in the Quick add dialog
+ * (ADR 0005): the dialog has no control for either, so a resolved phrase
+ * shows here as a removable chip below the date inputs. */
+.quick-add-assist-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
 .token-input-chips {
   display: contents;
 }
