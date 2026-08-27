@@ -356,6 +356,19 @@ describe("Google Calendar gate", () => {
   });
 });
 
+describe("About section", () => {
+  it("shows the running app version", async () => {
+    installFakeApi({ googleConfigured: false });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+
+    // Nothing sets VITE_APP_VERSION in the test suite, so it falls back to "dev".
+    expect(await screen.findByText(/tuk-tuk version/i)).toHaveTextContent("tuk-tuk version dev");
+  });
+});
+
 describe("Google API credentials (issue #117)", () => {
   it("saving credentials reveals the account-connect UI", async () => {
     const state = installFakeApi({ googleConfigured: false });

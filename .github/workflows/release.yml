@@ -89,7 +89,9 @@ jobs:
         with:
           context: ${{ matrix.context }}
           target: ${{ matrix.target }}
-          build-args: ${{ matrix.build-args }}
+          build-args: |
+            ${{ matrix.build-args }}
+            VITE_APP_VERSION=${{ steps.meta.outputs.version }}
           platforms: linux/amd64
           push: true
           provenance: false
@@ -106,7 +108,9 @@ jobs:
         with:
           context: ${{ matrix.context }}
           target: ${{ matrix.target }}
-          build-args: ${{ matrix.build-args }}
+          build-args: |
+            ${{ matrix.build-args }}
+            VITE_APP_VERSION=${{ steps.meta.outputs.version }}
           platforms: linux/amd64
           push: true
           provenance: false
@@ -122,7 +126,9 @@ jobs:
         with:
           context: ${{ matrix.context }}
           target: ${{ matrix.target }}
-          build-args: ${{ matrix.build-args }}
+          build-args: |
+            ${{ matrix.build-args }}
+            VITE_APP_VERSION=${{ steps.meta.outputs.version }}
           platforms: linux/amd64
           push: true
           provenance: false
