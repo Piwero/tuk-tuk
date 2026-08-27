@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { openCalendar, openWeek, pinCalendarClock } from "./test/calendar";
+import { openCalendar, openDay, openWeek, pinCalendarClock } from "./test/calendar";
 import { closestOrThrow } from "./test/dnd";
 import { fakeTask, fakeTimer, installFakeApi, type RecordedRequest } from "./test/fakeApi";
 
@@ -237,6 +237,64 @@ describe("The Week and Day views", () => {
 
     expect(await screen.findByText("Today's block")).toBeInTheDocument();
     expect(screen.queryByText("Tomorrow's block")).not.toBeInTheDocument();
+  });
+
+  it("draws the now-line on today's column only, in week view", async () => {
+    installFakeApi();
+    render(<App />);
+    await openWeek();
+
+    const nowLines = document.querySelectorAll(".now-line");
+    expect(nowLines).toHaveLength(1);
+    expect(nowLines[0]?.closest(".day-column")).toHaveAttribute("data-day", "2026-07-03");
+
+    // Today's column and header carry a non-colour cue as well.
+    expect(nowLines[0]?.closest(".day-column")).toHaveAttribute("data-today");
+    expect(screen.getByText("Today", { selector: ".day-today-marker" })).toBeInTheDocument();
+  });
+
+  it("drops the now-line when the day view is navigated away from today", async () => {
+    installFakeApi();
+    render(<App />);
+    await openDay();
+
+    expect(document.querySelectorAll(".now-line")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await screen.findByRole("heading", { name: "Saturday, July 4, 2026" });
+
+    expect(document.querySelectorAll(".now-line")).toHaveLength(0);
+  });
+
+  it("keeps the all-day lane classifying banner Entries as time passes", async () => {
+    installFakeApi({
+      tasks: [
+        fakeTask("Conference", {
+          start_date: "2026-07-03T00:00:00Z",
+          due_date: "2026-07-03T00:00:00Z",
+          is_all_day: true,
+        }),
+        fakeTask("Deep work", {
+          start_date: "2026-07-03T10:00:00Z",
+          due_date: "2026-07-03T11:30:00Z",
+          time_zone: "UTC",
+        }),
+      ],
+    });
+    render(<App />);
+    await openDay();
+
+    const allDayLane = screen.getByLabelText("All day");
+    expect(within(allDayLane).getByText("Conference")).toBeInTheDocument();
+    // The timed Entry never leaks into the all-day lane.
+    expect(within(allDayLane).queryByText("Deep work")).not.toBeInTheDocument();
+
+    vi.advanceTimersByTime(120_000);
+
+    expect(within(screen.getByLabelText("All day")).getByText("Conference")).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("All day")).queryByText("Deep work"),
+    ).not.toBeInTheDocument();
   });
 
   it("creates a timed task by dragging across a time range in day view", async () => {
@@ -484,7 +542,7 @@ describe("The Week view", () => {
     fireEvent.mouseDown(await screen.findByLabelText('Resize end of "Standup"'), {
       clientY: 400,
     });
-    fireEvent.mouseMove(window, { clientY: 418 }); // +30 minutes at 36px per hour
+    fireEvent.mouseMove(window, { clientY: 424 }); // +30 minutes at 48px per hour
     fireEvent.mouseUp(window);
 
     await waitFor(() =>

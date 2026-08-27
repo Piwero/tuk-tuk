@@ -1879,10 +1879,12 @@ li[data-overdue] .date-chip {
   cursor: default;
 }
 
+/* Header, all-day lane and hour grid are drawn as one frame (#198): the
+ * border and radius live on .time-grid, and each band carries only a
+ * bottom divider so the three read as a single panel, not stacked boxes. */
 .week-header {
   display: flex;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--border-default);
   background: var(--surface-sunken);
 }
 
@@ -1911,9 +1913,29 @@ li[data-overdue] .date-chip {
   overflow: hidden;
 }
 
+.week-day-header[data-today] {
+  /* More than colour (#198): an underline bar and a "Today" pill mark the
+   * column so it reads without relying on the accent hue alone. */
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
 .week-day-header[data-today] .day-name,
 .week-day-header[data-today] .day-date {
   color: var(--accent);
+  font-weight: var(--weight-semibold);
+}
+
+.day-today-marker {
+  margin-top: 2px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--accent);
+  color: var(--surface-card);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
 }
 
 .week-day-header .day-name,
@@ -1937,8 +1959,11 @@ li[data-overdue] .date-chip {
 .time-grid {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   min-height: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-card);
 }
 
 .all-day-lane {
@@ -1946,8 +1971,7 @@ li[data-overdue] .date-chip {
   gap: var(--space-2);
   min-height: 28px;
   padding: var(--space-1) var(--space-2) var(--space-1) 56px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--border-default);
   font-size: var(--text-xs);
   background: var(--surface-card);
 }
@@ -1962,8 +1986,6 @@ li[data-overdue] .date-chip {
 
 .time-columns {
   display: flex;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
   overflow-y: auto;
   max-height: 70vh;
   background: var(--surface-card);
@@ -1979,7 +2001,8 @@ li[data-overdue] .date-chip {
 
 .hour-label,
 .hour-cell {
-  height: 36px;
+  /* Kept in sync with HOUR_PX in CalendarView.tsx (#198). */
+  height: 48px;
   box-sizing: border-box;
 }
 
@@ -1993,6 +2016,14 @@ li[data-overdue] .date-chip {
   min-width: 0;
   position: relative;
   border-left: 1px solid var(--border-subtle);
+}
+
+/* Today's column: a faint accent wash plus a full-height accent rule down
+ * its leading edge (#198) — the tint alone would be colour-only, the rule
+ * and the now-line give it structure too. */
+.day-column[data-today] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .hour-cell {
@@ -2044,6 +2075,15 @@ li[data-overdue] .date-chip {
 .time-block[data-continues-after] {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
+}
+
+/* The title is first and never wraps, so a 30-minute block still shows it
+ * on one line without clipping (#198); a tight block clips the time below
+ * it instead. How Entries are fully drawn is a later slice. */
+.time-block .block-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .time-block .block-time {
@@ -2152,6 +2192,9 @@ li[data-overdue] .date-chip {
   bottom: 0;
 }
 
+/* The now-line is the one deliberate use of red outside overdue (#198,
+ * design-system.md): a hairline rule with a dot at the gutter edge, drawn
+ * on today's column only. */
 .now-line {
   position: absolute;
   left: 0;

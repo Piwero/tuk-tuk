@@ -241,8 +241,8 @@ describe("Resizing blocks in the Day view", () => {
       ],
     });
 
-  /** Pointer travel in px for a wanted delta in minutes: one hour is 36px. */
-  const px = (minutes: number): number => (minutes / 60) * 36;
+  /** Pointer travel in px for a wanted delta in minutes: one hour is 48px. */
+  const px = (minutes: number): number => (minutes / 60) * 48;
 
   it("drags the bottom edge down to extend the due, snapping to 15 minutes", async () => {
     const api = seedBlock();
