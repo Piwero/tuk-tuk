@@ -207,6 +207,41 @@ main > form,
   max-width: var(--content-max);
 }
 
+/* The keyboard-shortcut hint strip along the foot of the task list (issue
+   #192). It advertises whatever the shortcut layer currently has registered,
+   so it grows as later slices register more. Hidden under a coarse pointer,
+   where there is no keyboard to advertise. */
+.shortcut-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  max-width: var(--content-max);
+  margin-top: var(--space-6);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.shortcut-hint kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 1px var(--space-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--text-2xs);
+  text-align: center;
+}
+
+@media (pointer: coarse) {
+  .shortcut-hints {
+    display: none;
+  }
+}
+
 /* ── Sidebar ─────────────────────────────────────────────────────── */
 
 .sidebar {
