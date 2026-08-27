@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.5.2](https://github.com/Piwero/tuk-tuk/compare/v1.5.1...v1.5.2) - 2026-08-27
+
+### Bug Fixes
+
+- **quick-add:** Confirm a created Task with a global toast ([404069f](https://github.com/Piwero/tuk-tuk/commit/404069fe47c9419117bf25bfa78072982f37de3d))
+- **quick-add:** Drop the dead Undo from the create toast ([52d25bc](https://github.com/Piwero/tuk-tuk/commit/52d25bcf2ac0519b23428aa77eecf2d8d00ffdf7))
+- **habits:** Refresh a Habit's stats after a Check-in ([b6c5811](https://github.com/Piwero/tuk-tuk/commit/b6c5811db69cc3a027e4637de463b67515847fc1))
+
 ## [1.5.1](https://github.com/Piwero/tuk-tuk/compare/v1.5.0...v1.5.1) - 2026-08-26
 
 ### Bug Fixes
