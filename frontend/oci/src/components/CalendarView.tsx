@@ -64,8 +64,9 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const WEEKDAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /** One rendered hour of the time grid, in px — the scale every block position,
- * resize delta, and the now-line are computed against. */
-const HOUR_PX = 36;
+ * resize delta, and the now-line are computed against. Tall enough that a
+ * 30-minute Entry (half of this) still clears one line of its title (#198). */
+const HOUR_PX = 48;
 
 /** Where the time grid first scrolls to: the start of the working morning. */
 const SCROLL_TO_HOUR = 8;
@@ -824,11 +825,17 @@ export function CalendarView({
           <div className="week-header">
             <div className="week-header-gutter" />
             {days.map((day) => (
-              <div key={day} className="week-day-header" data-today={day === today || undefined}>
+              <div
+                key={day}
+                className="week-day-header"
+                data-today={day === today || undefined}
+                aria-current={day === today ? "date" : undefined}
+              >
                 <span className="day-name">{shortWeekday(day)}</span>
                 <span className="day-date">
                   {Number(day.slice(8))}/{Number(day.slice(5, 7))}
                 </span>
+                {day === today && <span className="day-today-marker">Today</span>}
               </div>
             ))}
           </div>
@@ -880,7 +887,12 @@ export function CalendarView({
             ))}
           </div>
           {days.map((day) => (
-            <div key={day} className="day-column" data-day={day}>
+            <div
+              key={day}
+              className="day-column"
+              data-day={day}
+              data-today={day === today || undefined}
+            >
               {HOURS.map((hour) => (
                 <div
                   key={hour}

@@ -38,6 +38,11 @@ add a token first.
     indicator. Appears on task rows, Kanban cards, and search results —
     everywhere a Task is listed (#166).
   - **Overdue** dates are red text — the only red on a task row.
+  - The **calendar now-line** (the rule marking the current time in Week and
+    Day, on today's column only) is the one deliberate use of red outside
+    overdue. It is a hairline with a dot at the gutter edge — never a fill —
+    and today's column is already marked by more than colour (an accent
+    edge-rule and a "Today" pill), so the red reads purely as "now".
   - **Due today** is the accent; every other date on a row is
     `--text-secondary`. The accent used to be on every dated row, where it
     meant nothing. Outside a task row (Quick-Add tokens, the Folder and
