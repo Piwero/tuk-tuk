@@ -5084,3 +5084,59 @@ a.button:hover {
   gap: var(--space-1);
   font-size: var(--text-sm);
 }
+
+/* ------------------------------------------------------------------ *
+ * Calendar Entries coloured by List + the Unscheduled rail (#203).   *
+ * ------------------------------------------------------------------ */
+.calendar-banner[data-list-color],
+.calendar-timed-entry[data-list-color] {
+  border-left-color: var(--entry-color);
+}
+
+.time-block[data-list-color] {
+  border-left-color: var(--entry-color);
+  background: color-mix(in srgb, var(--entry-color) 12%, var(--surface-page));
+}
+
+.month-cell .calendar-timed-entry[data-list-color] .entry-time {
+  color: var(--entry-color);
+}
+
+/* The Unscheduled rail: a compact card per Task, a legible drop target. */
+.unscheduled-rail h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.unscheduled-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full, 999px);
+  background: var(--accent-soft);
+  color: var(--text-accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.unscheduled-card {
+  padding: var(--space-2);
+  margin-bottom: var(--space-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-page);
+  font-size: var(--text-sm);
+  cursor: grab;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unscheduled-card:hover {
+  background: var(--surface-hover);
+}
