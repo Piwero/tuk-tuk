@@ -30,6 +30,7 @@ import {
   type GoogleStatus,
 } from "../api";
 import { ACCENT_PALETTE } from "../theme";
+import { APP_VERSION } from "../version";
 
 interface SettingsViewProps {
   /** Set when the browser just landed back from a Google consent round
@@ -866,6 +867,12 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
           />
           Stand-up
         </label>
+      </section>
+      <section aria-label="About" className="settings-section">
+        <h2>About</h2>
+        <p className="settings-hint">
+          tuk-tuk version <span className="app-version">{APP_VERSION}</span>
+        </p>
       </section>
       {assistConfig !== null && (
         <section aria-label="Assist" className="settings-section">

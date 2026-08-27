@@ -23,6 +23,11 @@ FROM base AS build
 ARG VITE_API_BASE_URL=""
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
+# The release tag (e.g. 1.6.0), surfaced in Settings → About. Defaults to
+# "dev" for local builds that don't pass it.
+ARG VITE_APP_VERSION="dev"
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
+
 COPY . .
 RUN npm run build
 
