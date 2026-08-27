@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.6.1](https://github.com/Piwero/tuk-tuk/compare/v1.6.0...v1.6.1) - 2026-08-27
+
+### Features
+
+- **settings:** Show running app version in an About section ([27d24cc](https://github.com/Piwero/tuk-tuk/commit/27d24ccb79f51689677a91ac63db8f37c7283fed))
+- **settings:** Surface app version as a tooltip on the nav wordmark ([85ef32f](https://github.com/Piwero/tuk-tuk/commit/85ef32f9fea10a9560302a288bbf7450a885a60e))
+
 ## [1.6.0](https://github.com/Piwero/tuk-tuk/compare/v1.5.2...v1.6.0) - 2026-08-27
 
 ### Features
