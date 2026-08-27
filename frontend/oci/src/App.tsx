@@ -29,7 +29,14 @@ import { type CalendarMode } from "./calendar";
 import { localDayOf } from "./dates";
 import { FocusRunProvider } from "./focusRunContext";
 import { PRIORITY_LABELS, type GroupBy, type SortBy } from "./grouping";
-import { loadSidebarCollapsed, saveSidebarCollapsed } from "./layoutPrefs";
+import {
+  applyThemePreference,
+  loadSidebarCollapsed,
+  loadThemePreference,
+  saveSidebarCollapsed,
+  saveThemePreference,
+  type ThemePreference,
+} from "./layoutPrefs";
 import {
   calendarModeForPath,
   pathForCalendarMode,
@@ -194,6 +201,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const [sections, setSections] = useState<Section[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
+  // Appearance (issue #193) — a browser-local preference, like the collapsed
+  // state above. The resolved `data-theme` is (re)applied on every change,
+  // and "system" keeps a live subscription to the OS setting.
+  const [themePreference, setThemePreference] = useState<ThemePreference>(loadThemePreference);
   // Mobile only: below the breakpoint the sidebar is off-canvas and this
   // slides it over the content. Ignored by the desktop layout.
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -485,6 +496,15 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   useEffect(() => {
     clearToasts();
   }, [viewKey, clearToasts]);
+
+  useEffect(() => {
+    applyThemePreference(themePreference);
+  }, [themePreference]);
+
+  function chooseTheme(preference: ThemePreference): void {
+    saveThemePreference(preference);
+    setThemePreference(preference);
+  }
 
   function toggleSidebar(): void {
     setSidebarCollapsed((current) => {
@@ -993,7 +1013,11 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               </>
             )}
             {view?.kind === "settings" ? (
-              <SettingsView googleOAuthError={googleOAuthError} />
+              <SettingsView
+                googleOAuthError={googleOAuthError}
+                themePreference={themePreference}
+                onThemeChange={chooseTheme}
+              />
             ) : view?.kind === "calendar" ? (
               <CalendarView
                 onSelect={(task) => {

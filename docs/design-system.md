@@ -59,6 +59,35 @@ add a token first.
   `--danger`, …) are what component CSS should reference; the raw ramps are
   implementation detail.
 
+### Dark theme (issue #193)
+
+A dark counterpart to the semantic aliases, chosen in Settings → Appearance
+as **Light / Dark / System** — and nothing else; the three options are the
+whole scope. The choice is browser-local (`tuktuk.theme` in `localStorage`,
+the same path as the sidebar's collapsed state — see `layoutPrefs.ts`), not
+account data. A browser with storage disabled falls back to System without
+throwing.
+
+`layoutPrefs.ts → applyThemePreference` resolves the choice to a concrete
+`data-theme="light" | "dark"` on `<html>`; System also subscribes to
+`(prefers-color-scheme: dark)` so an OS flip re-resolves live. The dark
+values live in one `:root[data-theme="dark"]` block in `tokens.css`, right
+after the light `:root`. **No component knows which theme is on** — every
+surface re-points because it references the alias, not the ramp. Dark meets
+the same text/border/surface contrast the light theme meets, and keeps
+focus rings, the overdue red, the Focus plum, and the Habit heat ramp
+legible.
+
+Two rules carry across the inversion unchanged:
+
+- **Priority** stays a lightness-only ink ramp (`--priority-low/medium/high`
+  step weight, never hue) — still never red.
+- **Overdue** stays the only red on a task row.
+
+One ramp deliberately inverts: the **Habit heat ramp** (`--heat-0…4`). On a
+dark ground "more" reads as *brighter*, so the ramp climbs from a dim empty
+cell to a bright green rather than darkening. No other ramp changes meaning.
+
 ## Typography
 
 Three faces, loaded from Google Fonts in `index.html`:
@@ -186,4 +215,3 @@ way: restyle by CSS, and when markup must change, preserve accessible names
 
 - Sidebar task counts (design shows per-list counts; needs an API aggregate).
 - A global "Add Task" sidebar action (Quick-Add is currently per-List).
-- Dark mode: not designed; tokens make it feasible later.

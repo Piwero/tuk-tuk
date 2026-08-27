@@ -29,6 +29,7 @@ import {
   type GoogleCalendar,
   type GoogleStatus,
 } from "../api";
+import { type ThemePreference } from "../layoutPrefs";
 import { ACCENT_PALETTE } from "../theme";
 import { APP_VERSION } from "../version";
 
@@ -37,6 +38,43 @@ interface SettingsViewProps {
    * trip that failed (backend redirected with ?googleError=1) — e.g. the
    * user declined consent, or the authorization code exchange failed. */
   googleOAuthError?: boolean;
+  /** The current Appearance choice (issue #193) and its setter. Owned by
+   * App, which persists it to browser-local storage and applies the
+   * resolved `data-theme`. */
+  themePreference: ThemePreference;
+  onThemeChange: (preference: ThemePreference) => void;
+}
+
+const THEME_OPTIONS: readonly { value: ThemePreference; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
+
+/** Appearance (issue #193): Light / Dark / System, and nothing else — the
+ * three are the whole scope. A plain radio group; App does the persisting
+ * and the theme application. */
+function AppearanceSettings({
+  themePreference,
+  onThemeChange,
+}: Pick<SettingsViewProps, "themePreference" | "onThemeChange">): JSX.Element {
+  return (
+    <fieldset className="settings-appearance">
+      <legend>Theme</legend>
+      {THEME_OPTIONS.map((option) => (
+        <label key={option.value}>
+          <input
+            type="radio"
+            name="appearance-theme"
+            value={option.value}
+            checked={themePreference === option.value}
+            onChange={() => onThemeChange(option.value)}
+          />
+          {option.label}
+        </label>
+      ))}
+    </fieldset>
+  );
 }
 
 interface GoogleAccountCalendarsProps {
@@ -781,7 +819,11 @@ function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX
  * and Connect button inside it stay invisible, not greyed-out, until the
  * backend reports credentials are actually set. See CONTEXT.md's Assist
  * glossary entry. */
-export function SettingsView({ googleOAuthError = false }: SettingsViewProps): JSX.Element {
+export function SettingsView({
+  googleOAuthError = false,
+  themePreference,
+  onThemeChange,
+}: SettingsViewProps): JSX.Element {
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
   // Enabled by default (issue #140) so the toggle doesn't flash off before
@@ -856,6 +898,10 @@ export function SettingsView({ googleOAuthError = false }: SettingsViewProps): J
       <section aria-label="Security" className="settings-section">
         <h2>Security</h2>
         <ChangePasswordForm />
+      </section>
+      <section aria-label="Appearance" className="settings-section">
+        <h2>Appearance</h2>
+        <AppearanceSettings themePreference={themePreference} onThemeChange={onThemeChange} />
       </section>
       <section aria-label="Features" className="settings-section">
         <h2>Features</h2>

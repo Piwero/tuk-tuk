@@ -663,7 +663,7 @@ button.create-menu-trigger {
   height: var(--control-height);
   padding: var(--space-2) var(--space-3);
   background: var(--focus-accent);
-  color: white;
+  color: var(--text-inverse);
   border: none;
   border-radius: var(--radius-sm);
   font-family: var(--font-body);
@@ -4529,6 +4529,30 @@ li[data-overdue] .date-chip {
   flex-direction: column;
   gap: var(--space-3);
   max-width: 340px;
+}
+
+/* Appearance (issue #193): the Light / Dark / System radio group. Border
+   drawn by an alias so it re-points with the theme like everything else. */
+.settings-appearance {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-appearance legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.settings-appearance label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-right: var(--space-4);
+  font-size: var(--text-md);
+  color: var(--text-primary);
 }
 
 .settings-field {
