@@ -48,11 +48,13 @@ import {
   type StaticViewKind,
 } from "./routes";
 import { deriveOpenTaskCounts } from "./openCounts";
+import { type PaletteItem } from "./commandPalette";
 import { useRegisterShortcut } from "./shortcuts";
 import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { AssistantView } from "./components/AssistantView";
 import { CalendarView } from "./components/CalendarView";
+import { CommandPalette } from "./components/CommandPalette";
 import { CompletedView } from "./components/CompletedView";
 import { EventDetail } from "./components/EventDetail";
 import { FocusStatsView } from "./components/FocusStatsPanel";
@@ -208,6 +210,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
   // Appearance (issue #193) — a browser-local preference, like the collapsed
   // state above. The resolved `data-theme` is (re)applied on every change,
@@ -365,6 +368,21 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
 
   useEffect(() => {
     void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
+  }, []);
+
+  // The command palette (issue #201): cmd/ctrl+K from anywhere, including a
+  // focused text field or an open dialog — this is a raw listener rather than
+  // a registration against the shortcut layer precisely so the typing-context
+  // suppression there doesn't apply.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   // Keep a valid view: default to All, and fall back to it when the viewed
@@ -752,10 +770,105 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     );
   }, [openTasks, lists]);
 
+  // Every jump target the command palette offers (issue #201). Rebuilt each
+  // render — cheap, and it keeps every `run` closure current rather than
+  // stale. Order here is only within-kind; the palette groups by kind itself.
+  const paletteItems: PaletteItem[] = [
+    ...(Object.keys(SMART_LABELS) as SmartView[]).map((smart) => ({
+      key: `smart-${smart}`,
+      kind: "smart" as const,
+      label: SMART_LABELS[smart],
+      run: () => switchView({ kind: "smart", view: smart }),
+    })),
+    {
+      key: "view-calendar",
+      kind: "view" as const,
+      label: "Calendar",
+      run: () => switchView({ kind: "calendar", mode: "day" }),
+    },
+    {
+      key: "view-habits",
+      kind: "view" as const,
+      label: "Habits",
+      run: () => switchView({ kind: "habits" }),
+    },
+    ...(standupEnabled
+      ? [
+          {
+            key: "view-standup",
+            kind: "view" as const,
+            label: "Stand-up",
+            run: () => switchView({ kind: "standup" }),
+          },
+        ]
+      : []),
+    ...(assistantAvailable
+      ? [
+          {
+            key: "view-assistant",
+            kind: "view" as const,
+            label: "Assistant",
+            run: () => switchView({ kind: "assistant" }),
+          },
+        ]
+      : []),
+    {
+      key: "view-focus",
+      kind: "view" as const,
+      label: "Focus",
+      run: () => switchView({ kind: "focus" }),
+    },
+    {
+      key: "view-search",
+      kind: "view" as const,
+      label: "Search",
+      run: () => switchView({ kind: "search", search: BLANK_SEARCH_STATE }),
+    },
+    {
+      key: "view-settings",
+      kind: "view" as const,
+      label: "Settings",
+      run: () => switchView({ kind: "settings" }),
+    },
+    ...lists
+      .filter((list) => !list.is_archived)
+      .map((list) => ({
+        key: `list-${list.id}`,
+        kind: "list" as const,
+        label: list.name,
+        run: () => switchView({ kind: "list", id: list.id }),
+      })),
+    ...folders.map((folder) => ({
+      key: `folder-${folder.id}`,
+      kind: "folder" as const,
+      label: folder.name,
+      run: () => switchView({ kind: "folder", id: folder.id }),
+    })),
+    ...tags.map((tag) => ({
+      key: `tag-${tag.id}`,
+      kind: "tag" as const,
+      label: `#${tag.name}`,
+      run: () => switchView({ kind: "tag", id: tag.id }),
+    })),
+    ...openTasks.map((task) => ({
+      key: `task-${task.id}`,
+      kind: "task" as const,
+      label: task.title,
+      run: () => {
+        switchView({ kind: "list", id: task.list_id });
+        setSelectedTaskId(task.id);
+        setCalendarTask(task);
+      },
+    })),
+  ];
+
   return (
     <FocusRunProvider>
       <ShortcutsProvider>
         <ShellShortcuts onQuickAdd={() => setQuickAddOpen(true)} />
+        {paletteOpen && (
+          <CommandPalette items={paletteItems} onClose={() => setPaletteOpen(false)} />
+        )}
         <div
           className={[
             "app",

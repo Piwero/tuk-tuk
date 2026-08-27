@@ -4939,3 +4939,83 @@ a.button {
 a.button:hover {
   background: var(--accent-hover);
 }
+
+/* ------------------------------------------------------------------ *
+ * Command palette (issue #201) — the cmd/ctrl+K jump overlay.        *
+ * ------------------------------------------------------------------ */
+.command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--space-4) var(--space-4);
+  background: var(--scrim, rgba(15, 18, 26, 0.32));
+}
+
+.command-palette {
+  width: min(560px, 100%);
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-page);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.command-palette-input {
+  flex: none;
+  height: 48px;
+  padding: 0 var(--space-4);
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-md, 15px);
+}
+
+.command-palette-input:focus {
+  outline: none;
+}
+
+.command-palette-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.command-palette-heading {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.command-palette-option {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-palette-option.active {
+  background: var(--surface-selected);
+  color: var(--text-accent);
+  font-weight: var(--weight-medium);
+}
+
+.command-palette-empty {
+  padding: var(--space-4) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
