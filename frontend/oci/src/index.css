@@ -901,12 +901,15 @@ main > form input {
   cursor: pointer;
 }
 
-/* TaskRow (#157): title and metadata share one line whenever they fit.
- * Neither is given `flex-grow`, so the browser's flex line-breaking places
- * the metadata on a wrapped second line — rather than shrinking the title
- * toward nothing — the moment the pair's natural (un-truncated) widths stop
- * fitting the row; title-only truncation (the inner span's ellipsis) is
- * reached only if the title alone still can't fit a full-width line. */
+/* TaskRow narrow fallback (#157): title and metadata share one line whenever
+ * they fit. Neither is given `flex-grow`, so the browser's flex line-breaking
+ * places the metadata on a wrapped second line — rather than shrinking the
+ * title toward nothing — the moment the pair's natural (un-truncated) widths
+ * stop fitting the row.
+ *
+ * This is what a phone, and a desktop window narrow enough that the detail
+ * panel has eaten the list's width, still get. Once the list is wide enough
+ * to align columns honestly, the container query below takes over. */
 .tasks li.task-row {
   flex-wrap: wrap;
   /* Asymmetric on purpose: column-gap matches the base .tasks li rhythm for
@@ -931,16 +934,139 @@ main > form input {
   min-width: 0;
 }
 
-/* No chips and no row actions rendered — collapse the empty second line. */
-.task-row-meta:empty {
+/* Holds the title and its Check Item counter together. `flex: 1` is what
+ * `.task-title` itself used to carry as a direct child of the head line —
+ * it keeps the wrapped fallback and the Kanban card behaving as before, and
+ * is ignored outright once the row is a grid. */
+.task-row-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.task-row-priority {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+/* The checkbox is a fixed 18px control, so it must never be the thing that
+ * gives way when a long title overflows its line. Stated on .task-row rather
+ * than .tasks because the Kanban card is this same row outside that list. */
+.task-row label {
+  display: flex;
+  flex: none;
+  align-items: center;
+  cursor: pointer;
+}
+
+.task-row-tags {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.task-row-list,
+.task-row-date {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Wherever the row is *not* a grid — the wrapped fallback and the Kanban
+ * card — a cell with nothing in it must take no space at all, or its flex
+ * gap shows up as a hole. The grid re-enables them below, where an empty
+ * cell is exactly what holds its column open. */
+.task-row-head > :empty,
+.task-row-meta > :empty {
   display: none;
 }
 
 .tasks li.task-row:hover .row-actions,
+.tasks li.task-row:focus-within .row-actions,
 .tasks li.task-row .row-actions:focus-within {
   width: auto;
   overflow: visible;
   visibility: visible;
+}
+
+/* The list is the query container, not `main`: containment on `main` would
+ * also make it the containing block for anything absolutely positioned
+ * inside it. A `<ul>` of rows has nothing that escapes. */
+.tasks {
+  container-type: inline-size;
+  container-name: tasklist;
+}
+
+/* ── The aligned task row ────────────────────────────────────────────
+ * Seven fixed tracks either side of a flexing title, so priority, tags,
+ * List, due date and actions land at the same x on every row: a long list
+ * reads down each column instead of zig-zagging, and the title is the only
+ * thing that ever truncates. The actions track is *reserved* rather than
+ * revealed, so hovering a row no longer shuffles its own metadata sideways.
+ *
+ * The 620px floor is the width below which the fixed tracks would leave the
+ * title too little to be worth reading; under it the wrapped fallback above
+ * stands. Querying the list rather than the viewport is what makes that
+ * true with the detail panel open, too. */
+@container tasklist (min-width: 620px) {
+  .tasks li.task-row {
+    display: grid;
+    grid-template-columns:
+      auto
+      var(--task-col-priority)
+      minmax(0, 1fr)
+      minmax(0, auto)
+      var(--task-col-list)
+      var(--task-col-date)
+      var(--task-row-actions-col, 0px);
+    align-items: center;
+    column-gap: var(--space-3);
+    row-gap: 0;
+    height: var(--task-row-height);
+    min-height: var(--task-row-height);
+    padding: 0 var(--space-2);
+  }
+
+  /* A view that wires no row actions gives the gutter back to the title. */
+  .tasks li.task-row.with-actions {
+    --task-row-actions-col: var(--task-col-actions);
+  }
+
+  /* The two grouping wrappers stop drawing a box so their children become
+   * the row's own grid items. Selector matching is unaffected, and neither
+   * carries a role, so nothing is lost from the accessibility tree. */
+  .tasks li.task-row > .task-row-head,
+  .tasks li.task-row > .task-row-meta {
+    display: contents;
+  }
+
+  /* Every cell holds its track, empty or not — that is the whole point. */
+  .tasks li.task-row .task-row-head > :empty,
+  .tasks li.task-row .task-row-meta > :empty {
+    display: flex;
+  }
+
+  /* Metadata reads right-aligned against the row's edge, so the List and
+   * due-date columns form clean rules down the list. */
+  .tasks li.task-row .task-row-tags,
+  .tasks li.task-row .task-row-list,
+  .tasks li.task-row .task-row-date {
+    justify-content: flex-end;
+  }
+
+  .tasks li.task-row .row-actions {
+    justify-content: flex-end;
+    /* The track already holds the space; only the buttons come and go. */
+    width: auto;
+    overflow: visible;
+  }
 }
 
 .description-indicator {
@@ -1076,6 +1202,62 @@ li[data-overdue] .date-chip {
   color: var(--text-secondary);
   background: var(--surface-hover);
   white-space: nowrap;
+}
+
+/* ── A task row's own chips ──────────────────────────────────────────
+ * Scoped to .task-row (so both the List row and the Kanban card get them)
+ * and no wider: Quick-Add's token chips, the Folder view's flat rows and
+ * the Completed view keep the outlined pill they were drawn for. */
+
+/* Three or four outlined pills on one line was most of the line-work on a
+ * row. A tint plus a darkened ink of the Tag's own colour carries the same
+ * identity with none of it. Both are mixed from --chip-color, set inline
+ * from the Tag (TaskRow.chipColor), so the curated 12-swatch palette
+ * doesn't have to grow a hand-picked second entry per colour. */
+.task-row .tag-chip {
+  padding: 1px 6px;
+  border-color: transparent;
+  border-radius: var(--radius-xs);
+  font-weight: var(--weight-medium);
+  background: color-mix(in oklab, var(--chip-color, var(--ink-400)) 14%, var(--white));
+  color: color-mix(in oklab, var(--chip-color, var(--ink-500)) 62%, var(--ink-900));
+}
+
+/* The List is context, not a badge: the 10px dot that already identifies a
+ * List in the sidebar (or the List's own emoji) and its name, in the same
+ * secondary ink as the rest of the row's metadata. */
+.task-row .list-chip {
+  gap: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.task-row .list-emoji {
+  font-size: var(--text-sm);
+}
+
+.task-row .list-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The accent was on every dated row, which made it mean nothing. It now
+ * marks today alone; every other date is secondary ink, and overdue keeps
+ * the red it has always owned (li[data-overdue] above adds the weight). */
+.task-row .date-chip {
+  color: var(--text-secondary);
+}
+
+.task-row .date-chip.today {
+  color: var(--text-accent);
+}
+
+.task-row .date-chip.overdue {
+  color: var(--text-danger);
 }
 
 /* ── Token input (Quick-Add bar) ─────────────────────────────────── */
@@ -1271,6 +1453,11 @@ li[data-overdue] .date-chip {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  /* A grid item's automatic minimum is its min-content width, and the title
+   * span is `white-space: nowrap` — so without this a long title widened the
+   * card past the column's own `flex: 0 0 260px`, and the column with it.
+   * The title ellipsises inside the card instead. */
+  min-width: 0;
   background: var(--surface-card);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -1288,8 +1475,15 @@ li[data-overdue] .date-chip {
   box-shadow: var(--shadow-drag);
 }
 
+/* The card gives its head line to `.task-row-main`, not to `.task-title`
+ * directly: the title shares that line with the Check Item counter, and a
+ * `width: 100%` title would push the counter off the end of it. */
+.kanban-card .task-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .kanban-card .task-title {
-  width: 100%;
   flex-wrap: wrap;
   row-gap: var(--space-1);
   line-height: var(--leading-snug);
@@ -1299,7 +1493,12 @@ li[data-overdue] .date-chip {
   margin-top: var(--space-2);
 }
 
-.kanban-column input {
+/* `form input`, not a bare `input`: the column's add-a-card field is the only
+ * input this was written for, but the bare selector also matched every card's
+ * completion checkbox — same specificity as `input[type="checkbox"]` and
+ * later in the file, so it won, stretching the checkbox to `width: 100%` and
+ * `height: 28px`. */
+.kanban-column form input {
   width: 100%;
   height: 28px;
   border-style: dashed;
@@ -1307,7 +1506,7 @@ li[data-overdue] .date-chip {
   font-size: var(--text-sm);
 }
 
-.kanban-column input:focus {
+.kanban-column form input:focus {
   border-style: solid;
   background: var(--surface-card);
 }

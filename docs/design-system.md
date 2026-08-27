@@ -37,7 +37,15 @@ add a token first.
     "overdue") to reinforce weight for sighted users. None renders no
     indicator. Appears on task rows, Kanban cards, and search results —
     everywhere a Task is listed (#166).
-  - **Overdue** dates are red text.
+  - **Overdue** dates are red text — the only red on a task row.
+  - **Due today** is the accent; every other date on a row is
+    `--text-secondary`. The accent used to be on every dated row, where it
+    meant nothing. Outside a task row (Quick-Add tokens, the Folder and
+    Completed views) `.date-chip` keeps its plain accent.
+  - **Tags on a task row** are a tint plus a darkened ink, both `color-mix`ed
+    from the Tag's own colour, which `TaskRow` passes in as `--chip-color`;
+    the outlined pill stays everywhere else. A row's **List** is a 10px dot
+    (or the List's emoji) and its name in secondary ink, not a badge.
   - **Habit success** is green (`--success`, heatmap ramp `--heat-0…4`).
   - **Focus** has its own identity — plum `--focus-accent` `#7a48ec` — so
     deep work feels like a different room.
@@ -67,6 +75,18 @@ Bricolage Grotesque, semibold/bold, type only.
   `--detail-width` 360px, content column `--content-max` 720px (Calendar and
   Kanban run full width), rows `--row-height` 40px, controls
   `--control-height` 34px.
+- **The task row is a grid**, not a wrapping flex line: `--task-row-height`
+  36px over seven tracks — done, `--task-col-priority` 16px, a flexing title,
+  tags, `--task-col-list` 104px, `--task-col-date` 88px, and
+  `--task-col-actions` 68px. Every cell renders whether or not it has
+  content, so the columns line up down the list and the title is the only
+  thing that truncates. The actions track is *reserved*, so hovering a row
+  never shuffles its own metadata sideways.
+  The switch is a **container query** on `.tasks` (`tasklist`, min-width
+  620px), not a media query: below that the row falls back to the wrapped
+  two-line layout of #157, which is what a phone gets — and what a desktop
+  window gets once the detail panel has taken the list's width. Query the
+  container, not the viewport, or the fallback misses that second case.
 - Radii: 6px inputs/buttons/chips (`--radius-sm`), 8px cards/panels
   (`--radius-md`), 12px modals (`--radius-lg`), full-round pills
   (`--radius-full`: timer presets, habit check, tag chips).
@@ -86,7 +106,10 @@ Bricolage Grotesque, semibold/bold, type only.
 - **Hover** = background tint (`--surface-hover`), never opacity or scale.
 - **Selected** rows = `--surface-selected` (blue-50) + semibold + accent text.
 - **Row actions** (edit/delete/archive…) stay hidden until the row is
-  hovered or the action is keyboard-focused.
+  hovered or the action is keyboard-focused. On a **task row** the trigger is
+  `:focus-within` on the row itself, not on the action group: a
+  `visibility: hidden` button can't be tabbed to, so keying the reveal off
+  the group alone left the actions unreachable by keyboard entirely.
 - **Keyboard focus** = 3px blue halo (`--focus-ring`).
 - **Motion**: 120–180ms ease-out fades/slides (`--duration-*`, `--ease-out`).
   Nothing bounces, nothing loops; the focus clock ticks without animation.

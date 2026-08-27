@@ -1,9 +1,16 @@
 import { useRef, useState } from "react";
 
 import { type Task, type TaskList } from "../api";
-import { formatSchedule, isOverdue } from "../dates";
+import { formatSchedule, isDueToday, isOverdue } from "../dates";
 import { Icon } from "./Icon";
 import { PriorityIndicator } from "./PriorityIndicator";
+
+/** Carries a user-chosen Tag colour into CSS as a custom property, where the
+ * chip's tint and its ink are both mixed from it. Keeps the curated 12-swatch
+ * palette from having to grow a hand-picked second entry per colour. */
+function chipColor(color: string | null): React.CSSProperties | undefined {
+  return color === null ? undefined : ({ ["--chip-color"]: color } as React.CSSProperties);
+}
 
 /** Wraps the first case-insensitive occurrence of `query` in `title` with a
  * `<mark>` — plain text either side, or the whole title unmarked when there
@@ -72,11 +79,20 @@ export interface TaskRowProps {
 }
 
 /** The single row a Task renders as, wherever it's met: the List view,
- * Smart Lists, and Search results (#157). Two lines, always — the title
- * gets the full row width on its own line and is the only thing that ever
- * truncates; metadata (list/date/tag chips, the Check Item counter, row
- * actions) wraps freely on the line below, so it can never squeeze the
- * title down to nothing on a narrow viewport. */
+ * Smart Lists, and Search results (#157).
+ *
+ * The row's seven cells — done, priority, title, tags, List, due date,
+ * actions — are laid out by `.tasks li.task-row` as a CSS grid with fixed
+ * tracks either side of a flexing title, so every row puts the same thing at
+ * the same x and a long list reads down each column rather than zig-zagging.
+ * Each cell is rendered whether or not it has content, because an omitted
+ * cell would shift every cell after it into the wrong track.
+ *
+ * `task-row-head` and `task-row-meta` group those cells but draw no box of
+ * their own in the list: the grid gives them `display: contents` so their
+ * children become the row's own grid items. They stay real boxes on a Kanban
+ * card (`.kanban-card` is this same `<li>`, restyled — #165), which is what
+ * keeps the card a two-line card while the row is one aligned line. */
 export function TaskRow({
   task,
   completed = task.completed,
@@ -102,6 +118,21 @@ export function TaskRow({
   const hasDescription = task.description.trim() !== "";
   const schedule = formatSchedule(task);
   const hasActions = onStartFocus !== undefined || onDelete !== undefined;
+
+  // Today's date reads in the accent, everything else in the secondary ink —
+  // the accent used to be on every dated row, which made it mean nothing.
+  // Overdue still wins, and still owns the only red on the row.
+  const dateClass = overdue
+    ? "date-chip overdue"
+    : !completed && isDueToday(task)
+      ? "date-chip today"
+      : "date-chip";
+
+  // `with-actions` opens the reserved actions track. Without it the track is
+  // 0 wide, so a view that wires no row actions loses nothing to the gutter.
+  const rowClassName = ["task-row", hasActions ? "with-actions" : null, className]
+    .filter((part) => part !== null && part !== undefined)
+    .join(" ");
 
   // Focus/Delete stay off-screen at rest on touch (CSS, `[data-actions-
   // open]`) — a mis-tap must not be able to trigger a no-confirmation
@@ -138,7 +169,7 @@ export function TaskRow({
 
   return (
     <li
-      className={className === undefined ? "task-row" : `task-row ${className}`}
+      className={rowClassName}
       data-priority={task.priority}
       data-overdue={overdue || undefined}
       data-actions-open={actionsOpen || undefined}
@@ -163,55 +194,65 @@ export function TaskRow({
             onChange={() => onToggle(task)}
           />
         </label>
-        <button
-          type="button"
-          className="task-title"
-          aria-label={`Open details for ${task.title}`}
-          onClick={() => onSelect(task.id)}
-        >
-          <span className={completed ? "completed" : undefined}>
-            {highlightedTitle(task.title, highlight)}
-          </span>
-          {hasDescription && (
-            <span
-              className="description-indicator"
-              title="Has a description"
-              aria-label="Has a description"
-            >
-              <Icon name="align-left" size={14} />
+        {/* Rendered even at Priority None, where PriorityIndicator draws
+            nothing: the empty box is what keeps every title on one x. */}
+        <span className="task-row-priority">
+          <PriorityIndicator priority={task.priority} />
+        </span>
+        <span className="task-row-main">
+          <button
+            type="button"
+            className="task-title"
+            aria-label={`Open details for ${task.title}`}
+            onClick={() => onSelect(task.id)}
+          >
+            <span className={completed ? "completed" : undefined}>
+              {highlightedTitle(task.title, highlight)}
+            </span>
+            {hasDescription && (
+              <span
+                className="description-indicator"
+                title="Has a description"
+                aria-label="Has a description"
+              >
+                <Icon name="align-left" size={14} />
+              </span>
+            )}
+          </button>
+          {showCheckProgress && task.check_items.length > 0 && (
+            <span className="check-progress">
+              {task.check_items.filter((item) => item.done).length}/{task.check_items.length}
             </span>
           )}
-        </button>
+        </span>
       </div>
       <div className="task-row-meta">
-        <PriorityIndicator priority={task.priority} />
-        {list !== undefined && (
-          <span
-            className="list-chip"
-            style={list.color === null ? undefined : { borderColor: list.color }}
-          >
-            {list.emoji !== null ? `${list.emoji} ` : ""}
-            {list.name}
-          </span>
-        )}
-        {showDate && task.due_date !== null && (
-          <span className={overdue ? "date-chip overdue" : "date-chip"}>{schedule}</span>
-        )}
-        {showTags &&
-          task.tags.map((tag) => (
-            <span
-              key={tag.id}
-              className="tag-chip"
-              style={tag.color === null ? undefined : { borderColor: tag.color }}
-            >
-              {tag.name}
+        <span className="task-row-tags">
+          {showTags &&
+            task.tags.map((tag) => (
+              <span key={tag.id} className="tag-chip" style={chipColor(tag.color)}>
+                {tag.name}
+              </span>
+            ))}
+        </span>
+        <span className="task-row-list">
+          {list !== undefined && (
+            <span className="list-chip">
+              {list.emoji === null ? (
+                <span
+                  className="color-dot"
+                  style={{ background: list.color ?? "var(--border-strong)" }}
+                />
+              ) : (
+                <span className="list-emoji">{list.emoji}</span>
+              )}
+              <span className="list-name">{list.name}</span>
             </span>
-          ))}
-        {showCheckProgress && task.check_items.length > 0 && (
-          <span className="check-progress">
-            {task.check_items.filter((item) => item.done).length}/{task.check_items.length}
-          </span>
-        )}
+          )}
+        </span>
+        <span className="task-row-date">
+          {showDate && task.due_date !== null && <span className={dateClass}>{schedule}</span>}
+        </span>
         {hasActions && (
           <span className="row-actions">
             {onStartFocus !== undefined && onKebabClick !== undefined && (

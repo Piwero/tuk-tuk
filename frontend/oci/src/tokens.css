@@ -179,7 +179,17 @@
   --content-max: 720px;
   --popover-min-width: 160px; /* anchored dropdowns, e.g. tag suggestions */
   --popover-max-height: 240px;
-  --row-height: 40px; /* task rows, sidebar items */
+  --row-height: 40px; /* the base .tasks row — Folder view's flat rows */
+  --task-row-height: 36px; /* the aligned single-line task row */
+
+  /* Task row columns. The row is a grid, not a wrapping flex line, so
+     priority, tags, List, due date and actions land at the same x on every
+     row and a long list reads down each column. Only the title track
+     flexes. */
+  --task-col-priority: 16px; /* holds the glyph's box even at Priority None */
+  --task-col-list: 104px;
+  --task-col-date: 88px;
+  --task-col-actions: 68px; /* reserved, so hover never reflows the row */
   --mobile-tab-bar-height: 56px; /* the mobile bottom tab bar (issue #170) */
   --control-height: 34px; /* inputs, buttons */
   --tap-target: 44px; /* minimum touch hit area (issue #168), pointer: coarse only */
