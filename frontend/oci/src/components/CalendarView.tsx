@@ -46,7 +46,7 @@ import {
   type CalendarMode,
   type Entry,
 } from "../calendar";
-import { formatDate, fromDayIso, localDayOf } from "../dates";
+import { clearedSchedule, formatDate, fromDayIso, localDayOf } from "../dates";
 import { PRIORITY_LABELS } from "../grouping";
 import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
@@ -638,7 +638,41 @@ export function CalendarView({
     void load();
   }
 
+  /** The Unscheduled rail is also a drop target (issue #203): dropping a
+   * scheduled Task-block onto it clears the Task's schedule, the mirror of
+   * dragging one out of the rail onto a slot. Events have no schedule to
+   * clear and never carry a drag payload, so they can't reach this. */
+  async function handleUnscheduleDrop(event: React.DragEvent): Promise<void> {
+    const payload = readDragPayload(event);
+    if (payload === null || payload.kind !== "task") {
+      return;
+    }
+    const task = tasks.find((candidate) => candidate.id === payload.id);
+    if (task === undefined || task.due_date === null) {
+      return;
+    }
+    await updateTask(task.id, clearedSchedule());
+    void load();
+  }
+
   const entries: Entry[] = [...tasks.map(taskEntry), ...events.map(eventEntry)];
+
+  const listById = new Map(lists.map((list) => [list.id, list]));
+
+  /** A Task-backed entry is tinted with its List's colour (issue #203) — a
+   * `--entry-color` custom property the calendar CSS paints the block's
+   * accent edge from, plus a `data-list-color` flag to switch it on. An
+   * Event, or a Task whose List has no colour (the Inbox, say), gets
+   * nothing here and reads with the default accent. */
+  function listColorProps(entry: Entry): {
+    style?: React.CSSProperties;
+    "data-list-color"?: boolean;
+  } {
+    const color = entry.kind === "task" ? (listById.get(entry.task.list_id)?.color ?? null) : null;
+    return color === null
+      ? {}
+      : { style: { ["--entry-color"]: color } as React.CSSProperties, "data-list-color": true };
+  }
 
   function renderMonth(): JSX.Element {
     const days = monthGridDays(anchor);
@@ -698,6 +732,7 @@ export function CalendarView({
                       key={entryKey(entry)}
                       className="calendar-banner"
                       data-kind={entry.kind}
+                      {...listColorProps(entry)}
                       {...entryDragProps(entry)}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -717,6 +752,7 @@ export function CalendarView({
                       key={entryKey(entry)}
                       className="calendar-timed-entry"
                       data-kind={entry.kind}
+                      {...listColorProps(entry)}
                       {...entryDragProps(entry)}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -765,9 +801,11 @@ export function CalendarView({
         data-continues-before={continuesBefore || undefined}
         data-continues-after={continuesAfter || undefined}
         data-resizing={pending !== null || undefined}
+        data-list-color={listColorProps(entry)["data-list-color"]}
         style={{
           top: (startMin / 60) * HOUR_PX,
           height: Math.max(((endMin - startMin) / 60) * HOUR_PX, HOUR_PX / 3),
+          ...listColorProps(entry).style,
         }}
         {...entryDragProps(entry)}
         onClick={() => selectEntry(entry, onSelect, onSelectEvent)}
@@ -855,6 +893,7 @@ export function CalendarView({
                   key={entryKey(entry)}
                   className="calendar-banner"
                   data-kind={entry.kind}
+                  {...listColorProps(entry)}
                   {...entryDragProps(entry)}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -1140,11 +1179,20 @@ export function CalendarView({
           />
         )}
         <aside
-          className="unscheduled-panel"
+          className="unscheduled-panel unscheduled-rail"
           aria-label="Unscheduled"
           data-open={unscheduledOpen || undefined}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => void handleUnscheduleDrop(event)}
         >
-          <h3>Unscheduled</h3>
+          <h3>
+            Unscheduled
+            {unscheduled.length > 0 && (
+              <span className="unscheduled-count" aria-hidden="true">
+                {unscheduled.length}
+              </span>
+            )}
+          </h3>
           {unscheduled.length === 0 ? (
             <p className="unscheduled-empty-hint">
               Nothing unscheduled — Tasks without a date land here; drag one onto the calendar to
@@ -1153,7 +1201,7 @@ export function CalendarView({
           ) : (
             <ul>
               {unscheduled.map((task) => (
-                <li key={task.id} {...taskDragProps(task)}>
+                <li key={task.id} className="unscheduled-card" {...taskDragProps(task)}>
                   {task.title}
                 </li>
               ))}
