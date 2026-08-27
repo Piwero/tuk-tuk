@@ -2760,6 +2760,79 @@ li[data-overdue] .date-chip {
 /* ── Focus ───────────────────────────────────────────────────────── */
 
 .focus-view {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* Presets/stats sit beside the stage, not stacked below it, once there's room. */
+@media (min-width: 640px) {
+  .focus-view:has(.focus-aside) {
+    grid-template-columns: minmax(0, 1fr) 240px;
+  }
+}
+
+/* The stage: one bordered room holding the clock, the Task and the decisions. */
+.focus-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  text-align: center;
+}
+
+/* The progress dial. It never animates and never loops — the ring is redrawn
+   each tick from a static stroke-dashoffset (design-system "Interaction"). */
+.focus-dial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.focus-dial.has-ring {
+  position: relative;
+  width: 220px;
+  height: 220px;
+}
+
+.focus-dial-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.focus-dial-track {
+  fill: none;
+  stroke: var(--plum-100);
+  stroke-width: 6;
+}
+
+.focus-dial-progress {
+  fill: none;
+  stroke: var(--focus-accent);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.focus-stage-task {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.focus-stage-task strong {
+  color: var(--focus-accent);
+  font-weight: var(--weight-semibold);
+}
+
+.focus-aside {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -2768,8 +2841,15 @@ li[data-overdue] .date-chip {
 .focus-timer {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
   flex-wrap: wrap;
+}
+
+/* The honest "records nothing" note, trailing the secondary Cancel. */
+.focus-cancel-note {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .focus-clock {

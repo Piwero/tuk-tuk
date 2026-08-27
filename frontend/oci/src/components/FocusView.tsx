@@ -26,6 +26,17 @@ function formatClock(ms: number): string {
   return `${minutes}:${seconds}`;
 }
 
+/** The name of the Task or Habit a run is linked to, for the stage. */
+function linkLabel(link: FocusLink, tasks: Task[], habits: Habit[]): string | null {
+  if (link.startsWith("task:")) {
+    return tasks.find((task) => task.id === Number(link.slice(5)))?.title ?? null;
+  }
+  if (link.startsWith("habit:")) {
+    return habits.find((habit) => habit.id === Number(link.slice(6)))?.name ?? null;
+  }
+  return null;
+}
+
 interface FocusViewProps {
   /** Start a Pomo against this Task immediately (the task row's shortcut). */
   initialTask?: Task | null;
@@ -160,120 +171,154 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
           ? remainingMs
           : elapsedMs;
 
+  const progress =
+    running !== null && running.pomoMs > 0
+      ? Math.min(1, Math.max(0, elapsedMs / running.pomoMs))
+      : 0;
+  const showDial = running !== null && running.mode === "pomo";
+  const stageTask = running !== null ? linkLabel(running.link, tasks, habits) : null;
+
   return (
     <div className="focus-view">
-      <div className="focus-timer">
-        <p className="focus-clock">{formatClock(clockMs)}</p>
-        {pendingBreak !== null ? (
-          <div className="focus-break-offer">
-            <p>
-              {`Nice work. Time for ${pendingBreak.long ? "a long break" : "a break"} (${formatClock(clockMs)}).`}
-            </p>
-            <button type="button" onClick={startBreak}>
-              {`Start ${pendingBreak.long ? "long break" : "break"}`}
-            </button>
-            <button type="button" onClick={skipBreak}>
-              Skip
-            </button>
-          </div>
-        ) : running === null ? (
-          <>
-            <label>
-              Mode
-              <select
-                aria-label="Mode"
-                value={mode}
-                onChange={(event) => setMode(event.target.value as FocusMode)}
+      {/* The stage: clock, the Task being focused on, and the pause/finish/
+          cancel decisions as one group. The dial shows progress statically —
+          Focus does not animate (design-system "Interaction"). */}
+      <div className="focus-stage">
+        <div className={showDial ? "focus-dial has-ring" : "focus-dial"}>
+          {showDial && (
+            <svg className="focus-dial-ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle className="focus-dial-track" cx="60" cy="60" r="54" pathLength={1} />
+              <circle
+                className="focus-dial-progress"
+                cx="60"
+                cy="60"
+                r="54"
+                pathLength={1}
+                strokeDasharray={1}
+                strokeDashoffset={1 - progress}
+              />
+            </svg>
+          )}
+          <p className="focus-clock">{formatClock(clockMs)}</p>
+        </div>
+        {stageTask !== null && (
+          <p className="focus-stage-task">
+            Focusing on <strong>{stageTask}</strong>
+          </p>
+        )}
+        <div className="focus-timer">
+          {pendingBreak !== null ? (
+            <div className="focus-break-offer">
+              <p>
+                {`Nice work. Time for ${pendingBreak.long ? "a long break" : "a break"} (${formatClock(clockMs)}).`}
+              </p>
+              <button type="button" onClick={startBreak}>
+                {`Start ${pendingBreak.long ? "long break" : "break"}`}
+              </button>
+              <button type="button" onClick={skipBreak}>
+                Skip
+              </button>
+            </div>
+          ) : running === null ? (
+            <>
+              <label>
+                Mode
+                <select
+                  aria-label="Mode"
+                  value={mode}
+                  onChange={(event) => setMode(event.target.value as FocusMode)}
+                >
+                  <option value="pomo">Pomo</option>
+                  <option value="stopwatch">Stopwatch</option>
+                </select>
+              </label>
+              {mode === "pomo" && (
+                <>
+                  <label>
+                    Pomo minutes
+                    <input
+                      type="number"
+                      min={1}
+                      aria-label="Pomo minutes"
+                      value={pomoMinutes}
+                      onChange={(event) => setPomoMinutes(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Break minutes
+                    <input
+                      type="number"
+                      min={1}
+                      aria-label="Break minutes"
+                      value={breakMinutes}
+                      onChange={(event) => setBreakMinutes(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Long break minutes
+                    <input
+                      type="number"
+                      min={1}
+                      aria-label="Long break minutes"
+                      value={longBreakMinutes}
+                      onChange={(event) => setLongBreakMinutes(event.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={start}
+                disabled={mode === "pomo" && Number(pomoMinutes) < 1}
               >
-                <option value="pomo">Pomo</option>
-                <option value="stopwatch">Stopwatch</option>
-              </select>
-            </label>
-            {mode === "pomo" && (
-              <>
-                <label>
-                  Pomo minutes
-                  <input
-                    type="number"
-                    min={1}
-                    aria-label="Pomo minutes"
-                    value={pomoMinutes}
-                    onChange={(event) => setPomoMinutes(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Break minutes
-                  <input
-                    type="number"
-                    min={1}
-                    aria-label="Break minutes"
-                    value={breakMinutes}
-                    onChange={(event) => setBreakMinutes(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Long break minutes
-                  <input
-                    type="number"
-                    min={1}
-                    aria-label="Long break minutes"
-                    value={longBreakMinutes}
-                    onChange={(event) => setLongBreakMinutes(event.target.value)}
-                  />
-                </label>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={start}
-              disabled={mode === "pomo" && Number(pomoMinutes) < 1}
-            >
-              Start
-            </button>
-          </>
-        ) : (
-          <>
-            {running.phase === "break" && <p className="focus-break-label">On a break</p>}
-            {running.pauseStartedAtMs === null ? (
-              <button type="button" onClick={pause}>
-                Pause
+                Start
               </button>
-            ) : (
-              <button type="button" onClick={resume}>
-                Resume
-              </button>
-            )}
-            {running.phase === "break" ? (
-              <button type="button" onClick={cancel}>
-                Skip break
-              </button>
-            ) : (
-              <>
-                <button type="button" onClick={() => void finish()}>
-                  Finish
+            </>
+          ) : (
+            <>
+              {running.phase === "break" && <p className="focus-break-label">On a break</p>}
+              {running.pauseStartedAtMs === null ? (
+                <button type="button" onClick={pause}>
+                  Pause
                 </button>
-                <button type="button" className="focus-cancel" onClick={cancel}>
-                  Cancel
+              ) : (
+                <button type="button" onClick={resume}>
+                  Resume
                 </button>
-              </>
-            )}
-          </>
-        )}
-        {pendingBreak === null && running?.phase !== "break" && (
-          <LinkSelect
-            label="Link"
-            tasks={tasks}
-            habits={habits}
-            value={link}
-            disabled={running !== null}
-            onChange={setLink}
-          />
-        )}
+              )}
+              {running.phase === "break" ? (
+                <button type="button" onClick={cancel}>
+                  Skip break
+                </button>
+              ) : (
+                <>
+                  <button type="button" onClick={() => void finish()}>
+                    Finish
+                  </button>
+                  <button type="button" className="focus-cancel" onClick={cancel}>
+                    Cancel
+                  </button>
+                  <span className="focus-cancel-note">Records nothing</span>
+                </>
+              )}
+            </>
+          )}
+          {pendingBreak === null && running?.phase !== "break" && (
+            <LinkSelect
+              label="Link"
+              tasks={tasks}
+              habits={habits}
+              value={link}
+              disabled={running !== null}
+              onChange={setLink}
+            />
+          )}
+        </div>
       </div>
-      {/* Distraction-free while a session is running or a break is being
-          offered: no presets, no config — just the clock and its controls. */}
+      {/* Presets and statistics sit beside the stage while idle, and step
+          aside entirely while a session runs or a break is offered. */}
       {running === null && pendingBreak === null && (
-        <>
+        <aside className="focus-aside">
           <section className="focus-timers">
             <h2>Timers</h2>
             <ul aria-label="Timers">
@@ -351,7 +396,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             <Icon name="chart-column" size={16} />
             Statistics
           </a>
-        </>
+        </aside>
       )}
     </div>
   );
