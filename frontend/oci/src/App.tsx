@@ -378,7 +378,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     function onKeyDown(event: KeyboardEvent): void {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setPaletteOpen((open) => !open);
+        setPaletteOpen(true);
       }
     }
     document.addEventListener("keydown", onKeyDown);

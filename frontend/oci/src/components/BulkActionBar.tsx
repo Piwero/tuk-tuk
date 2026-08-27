@@ -37,10 +37,10 @@ export function BulkActionBar({
         Reschedule
       </button>
       <button type="button" onClick={onMove}>
-        Move to list
+        Move to List
       </button>
       <button type="button" onClick={onAddTag}>
-        Add tag
+        Add Tag
       </button>
       <button type="button" className="row-action-danger" onClick={onDelete}>
         Delete

@@ -110,7 +110,7 @@ export function TaskListView({
 
   const selectedTasks = (): Task[] => tasks.filter((task) => selection.isSelected(task.id));
 
-  const plural = (n: number): string => (n === 1 ? "" : "s");
+  const taskWord = (n: number): string => (n === 1 ? "Task" : "Tasks");
 
   /** Run `op` against every target one Task at a time (no bulk route),
    * tolerating partial failure: the fulfilled Tasks come back in `updated`,
@@ -152,7 +152,7 @@ export function TaskListView({
     const unmark = (): void =>
       setBulkPending((current) => new Set([...current].filter((id) => !ids.has(id))));
     toasts.push(
-      `Completed ${targets.length} task${plural(targets.length)}`,
+      `Completed ${targets.length} ${taskWord(targets.length)}`,
       async () => {
         const { updated, failed } = await runPerTask(targets, (task) =>
           updateTask(task.id, { completed: true }),
@@ -174,7 +174,7 @@ export function TaskListView({
     onChanged((current) => current.filter((task) => !ids.has(task.id)));
     selection.clear();
     toasts.push(
-      `Deleted ${targets.length} task${plural(targets.length)}`,
+      `Deleted ${targets.length} ${taskWord(targets.length)}`,
       async () => {
         const { failed } = await runPerTask(targets, (task) =>
           deleteTask(task.id).then(() => task),
@@ -233,7 +233,7 @@ export function TaskListView({
     const patch = allDaySchedule(null, day);
     bulkPatch(
       "reschedule",
-      `Rescheduled ${selection.size} task${plural(selection.size)}`,
+      `Rescheduled ${selection.size} ${taskWord(selection.size)}`,
       () => patch,
       (task) => ({
         ...task,
@@ -245,7 +245,7 @@ export function TaskListView({
   function bulkMove(targetListId: number): void {
     bulkPatch(
       "move",
-      `Moved ${selection.size} task${plural(selection.size)}`,
+      `Moved ${selection.size} ${taskWord(selection.size)}`,
       () => ({ list_id: targetListId }),
       (task) => ({ ...task, list_id: targetListId }),
     );
@@ -255,7 +255,7 @@ export function TaskListView({
     const tag = tags.find((t) => t.id === tagId);
     bulkPatch(
       "add tag",
-      `Tagged ${selection.size} task${plural(selection.size)}`,
+      `Tagged ${selection.size} ${taskWord(selection.size)}`,
       (task) => ({ tag_ids: [...new Set([...task.tags.map((t) => t.id), tagId])] }),
       (task) =>
         task.tags.some((t) => t.id === tagId) || tag === undefined
@@ -498,7 +498,7 @@ export function TaskListView({
         />
       )}
       {bulkDialog === "reschedule" && (
-        <Modal title="Reschedule selected tasks" onClose={() => setBulkDialog(null)}>
+        <Modal title="Reschedule selected Tasks" onClose={() => setBulkDialog(null)}>
           <form
             className="bulk-dialog"
             onSubmit={(event) => {
@@ -518,7 +518,7 @@ export function TaskListView({
         </Modal>
       )}
       {bulkDialog === "move" && (
-        <Modal title="Move selected tasks" onClose={() => setBulkDialog(null)}>
+        <Modal title="Move selected Tasks" onClose={() => setBulkDialog(null)}>
           <form
             className="bulk-dialog"
             onSubmit={(event) => {
@@ -533,7 +533,7 @@ export function TaskListView({
               List
               <select name="list" aria-label="List" defaultValue="">
                 <option value="" disabled>
-                  Choose a list…
+                  Choose a List…
                 </option>
                 {lists
                   .filter((list) => !list.is_archived)
@@ -549,7 +549,7 @@ export function TaskListView({
         </Modal>
       )}
       {bulkDialog === "tag" && (
-        <Modal title="Add a tag to selected tasks" onClose={() => setBulkDialog(null)}>
+        <Modal title="Add a Tag to selected Tasks" onClose={() => setBulkDialog(null)}>
           <form
             className="bulk-dialog"
             onSubmit={(event) => {
@@ -564,7 +564,7 @@ export function TaskListView({
               Tag
               <select name="tag" aria-label="Tag" defaultValue="">
                 <option value="" disabled>
-                  Choose a tag…
+                  Choose a Tag…
                 </option>
                 {tags.map((tag) => (
                   <option key={tag.id} value={tag.id}>
@@ -573,7 +573,7 @@ export function TaskListView({
                 ))}
               </select>
             </label>
-            <button type="submit">Add tag</button>
+            <button type="submit">Add Tag</button>
           </form>
         </Modal>
       )}
