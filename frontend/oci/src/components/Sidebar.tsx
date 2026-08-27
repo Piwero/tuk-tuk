@@ -178,15 +178,21 @@ interface TopNavItemProps {
   onClick: () => void;
 }
 
-/** One item in the top feature row: always icon-only, at a fixed equal
- * share of the row's width, so the row's total width never depends on
- * which destination is active (issue #160 — a growing text label used to
- * push the row past the sidebar edge and clip whichever item landed last).
- * The active item is distinguished by background + accent icon color
- * instead of a label. */
+/** One item in the vertical feature nav: an icon plus its label, so each
+ * destination is readable rather than guessed from a glyph (issue #194).
+ * Stacking removed the width constraint that once forced the row to be
+ * icon-only (issue #160). Collapsed, the label steps aside (CSS) and the
+ * accessible name is carried by aria-label/title so the rail stays usable.
+ * The active item is distinguished by an inset accent bar + weight, not by
+ * colour alone; `aria-current` marks it for assistive tech. */
 function TopNavItem({ icon, label, href, selected, onClick }: TopNavItemProps): JSX.Element {
   const className = selected ? "top-nav-item selected" : "top-nav-item";
-  const content = <Icon name={icon} size={18} />;
+  const content = (
+    <>
+      <Icon name={icon} size={18} />
+      <span className="nav-label">{label}</span>
+    </>
+  );
   if (href === undefined) {
     return (
       <button
@@ -194,6 +200,7 @@ function TopNavItem({ icon, label, href, selected, onClick }: TopNavItemProps): 
         className={className}
         aria-label={label}
         title={label}
+        aria-current={selected ? "page" : undefined}
         onClick={onClick}
       >
         {content}
@@ -206,6 +213,7 @@ function TopNavItem({ icon, label, href, selected, onClick }: TopNavItemProps): 
       className={className}
       aria-label={label}
       title={label}
+      aria-current={selected ? "page" : undefined}
       onClick={(event) => handleNavAnchorClick(event, onClick)}
     >
       {content}
@@ -904,7 +912,10 @@ export function Sidebar({
         </nav>
         <nav aria-label="Tags" className="tags-nav">
           <h2>Tags</h2>
-          <ul>
+          {/* A wrapped cloud of chips (issue #194) — Tags no longer take a
+              full row each. Each chip navigates to its Tag view; edit/delete
+              stay reachable by their accessible names. */}
+          <ul className="tag-cloud">
             {[...tags].sort(byName).map((tag) =>
               editor?.mode === "edit-tag" && editor.tagId === tag.id ? (
                 <li key={tag.id}>
@@ -915,7 +926,7 @@ export function Sidebar({
                   />
                 </li>
               ) : (
-                <li key={tag.id}>
+                <li key={tag.id} className="tag-chip">
                   <div className="list-row">
                     <button
                       type="button"

@@ -198,12 +198,14 @@ Bricolage Grotesque, semibold/bold, type only.
 
 ## Sidebar anatomy
 
-Top to bottom: wordmark → feature row (Tasks / Calendar / Habits / Stand-up /
-Focus / Search — six icon-only items at a fixed equal width; the active one
-is told apart by background + accent icon color, never a label, so the row
-never grows past the sidebar edge — #160) → inline query box → Smart Lists →
-Inbox → Folders and Lists → Tags → bottom-pinned add actions (Add List, Add
-Folder).
+Top to bottom: wordmark → feature nav (Tasks / Calendar / Habits / Stand-up /
+Focus / Search, plus Assistant when available — a vertical list of labelled
+rows, readable rather than guessed from a glyph; the active one is told apart
+by an inset accent bar + weight, not colour alone; #194, #160) → inline query
+box → Smart Lists → Inbox → Folders and Lists → Tags (a wrapped cloud of
+chips, each linking to its Tag view — #194) → bottom-pinned add actions (Add
+List, Add Folder). Collapsed, the sidebar is an icon-only rail with every
+accessible name preserved on aria-label/title.
 
 Standup, Focus, Calendar, Habits, Search, and Settings are URL-addressable
 (`/standup`, `/focus`, etc. — #143); their sidebar nav items are real
