@@ -131,6 +131,57 @@ describe("Cancel", () => {
   });
 });
 
+describe("Stage", () => {
+  it("groups the dial, the linked Task and the decisions, with Cancel secondary", async () => {
+    const task = fakeTask("Write report");
+    installFakeApi({ tasks: [task] });
+    render(<App />);
+    await openFocus();
+
+    fireEvent.change(await screen.findByRole("combobox", { name: "Link" }), {
+      target: { value: `task:${task.id}` },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+
+    const stage = screen.getByRole("main").querySelector(".focus-stage");
+    expect(stage).not.toBeNull();
+    // Clock, the Task being focused on, and all three decisions live together.
+    expect(within(stage as HTMLElement).getByText("25:00")).toBeInTheDocument();
+    expect(
+      within(stage as HTMLElement).getByText("Write report", { selector: "strong" }),
+    ).toBeInTheDocument();
+    expect(within(stage as HTMLElement).getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(
+      within(stage as HTMLElement).getByRole("button", { name: "Finish" }),
+    ).toBeInTheDocument();
+    expect(
+      within(stage as HTMLElement).getByRole("button", { name: "Cancel" }),
+    ).toBeInTheDocument();
+
+    // The dial draws progress statically — no transition, no animation.
+    const ring = stage!.querySelector(".focus-dial-progress");
+    expect(ring).not.toBeNull();
+    tick(5 * 60_000);
+    const offset = Number((ring as SVGCircleElement).getAttribute("stroke-dashoffset"));
+    expect(offset).toBeGreaterThan(0);
+    expect(offset).toBeLessThan(1);
+
+    // Cancel still states that it records nothing.
+    expect(within(stage as HTMLElement).getByText("Records nothing")).toBeInTheDocument();
+  });
+
+  it("keeps presets and statistics beside the stage while idle, gone while running", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    expect(screen.getByRole("main").querySelector(".focus-aside")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(screen.getByRole("main").querySelector(".focus-aside")).toBeNull();
+  });
+});
+
 describe("Distraction-free running view", () => {
   it("hides the Timers presets and config while a session runs", async () => {
     installFakeApi();

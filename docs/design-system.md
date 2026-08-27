@@ -53,7 +53,12 @@ add a token first.
     (or the List's emoji) and its name in secondary ink, not a badge.
   - **Habit success** is green (`--success`, heatmap ramp `--heat-0…4`).
   - **Focus** has its own identity — plum `--focus-accent` `#7a48ec` — so
-    deep work feels like a different room.
+    deep work feels like a different room. Its screen is literally staged: the
+    clock (inside a static progress dial), the linked Task and the
+    pause/finish/cancel decisions sit together in one bordered `.focus-stage`
+    card; presets and statistics sit beside it, and step aside while a session
+    runs. Cancel stays visually secondary to Finish (outline, not filled) and
+    says it records nothing.
   - User-chosen List/Tag colors come from the 8 curated `--swatch-*` values.
 - **Semantic aliases** (`--surface-*`, `--text-*`, `--border-*`, `--accent`,
   `--danger`, …) are what component CSS should reference; the raw ramps are
@@ -154,7 +159,9 @@ Bricolage Grotesque, semibold/bold, type only.
   the group alone left the actions unreachable by keyboard entirely.
 - **Keyboard focus** = 3px blue halo (`--focus-ring`).
 - **Motion**: 120–180ms ease-out fades/slides (`--duration-*`, `--ease-out`).
-  Nothing bounces, nothing loops; the focus clock ticks without animation.
+  Nothing bounces, nothing loops; the focus clock ticks without animation,
+  and the Focus progress dial is redrawn each tick from a static
+  `stroke-dashoffset` — it has no transition and no keyframes.
 
 ## Iconography
 
