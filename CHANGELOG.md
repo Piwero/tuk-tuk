@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [1.6.0](https://github.com/Piwero/tuk-tuk/compare/v1.5.2...v1.6.0) - 2026-08-27
+
+### Features
+
+- **assist:** Wire Assisted Capture into the Quick add dialog ([1e25ee0](https://github.com/Piwero/tuk-tuk/commit/1e25ee0fd1bf28f82bcdadf384d7aa389f41e645))
+
+### Bug Fixes
+
+- **assist:** Accept "." as a time separator in date phrases ([f329ec7](https://github.com/Piwero/tuk-tuk/commit/f329ec7286e56a4351fdd5057e5ee02a935b34cb))
+- **assist:** Resolve spelled-out clock hours in date phrases ([8390009](https://github.com/Piwero/tuk-tuk/commit/8390009f5b198dc9bfb25457920bd2b082e5af47))
+
 ## [1.5.2](https://github.com/Piwero/tuk-tuk/compare/v1.5.1...v1.5.2) - 2026-08-27
 
 ### Bug Fixes
