@@ -79,3 +79,14 @@ class TestDaypartPhrases:
 
     def test_an_unrecognized_trailing_word_still_fails_to_resolve(self) -> None:
         assert resolve_date_phrase("tomorrow whenever", _LOCAL_DATE, _ZONE) is None
+
+    def test_a_dot_separated_clock_time_resolves(self) -> None:
+        # "18.00" is the everyday written form in Spanish and much of
+        # Europe — it must resolve exactly like "18:00", not degrade to
+        # "no date".
+        resolved = resolve_date_phrase("today at 18.00", _LOCAL_DATE, _ZONE)
+        assert resolved is not None
+        due_date, is_all_day = resolved
+        assert is_all_day is False
+        assert (due_date.hour, due_date.minute) == (18, 0)
+        assert due_date.date() == _LOCAL_DATE

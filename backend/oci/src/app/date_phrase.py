@@ -39,7 +39,9 @@ _WEEKDAYS = {
 _ARTICLES = ("el", "la", "los", "las")
 _NEXT_MARKERS = ("proximo", "proxima")
 
-_TIME_RE = re.compile(r"^(\d{1,2})(?::(\d{2}))?(am|pm)?$")
+# The minutes separator is ":" (English) or "." (common in Spanish and much
+# of Europe: "18.00"), so both resolve rather than degrading to "no date".
+_TIME_RE = re.compile(r"^(\d{1,2})(?:[:.](\d{2}))?(am|pm)?$")
 
 # Daypart qualifiers (issue #173): trailing words like "afternoon"/"tarde"
 # name an imprecise time-of-day rather than a clock time, so each maps to a
