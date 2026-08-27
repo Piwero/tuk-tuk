@@ -210,3 +210,89 @@
   --duration-base: 180ms;
   --duration-slow: 280ms;
 }
+
+/* ── Dark theme (issue #193) ──────────────────────────────────────
+   The same semantic aliases, re-pointed onto a dark ground. No
+   component knows this block exists: every surface follows because
+   it references the alias, not the raw ramp. layoutPrefs.ts resolves
+   the Light / Dark / System choice to a concrete data-theme on
+   <html>; "system" also re-resolves live when the OS flips.
+
+   Rules that survive the inversion:
+   - Priority stays a lightness-only ramp (--priority-low/medium/high
+     step ink weight, never hue — never red, which stays "overdue").
+   - Overdue stays red (--text-danger / --danger).
+   - Focus keeps its plum identity (--focus-accent).
+   - The Habit heat ramp INVERTS: on a dark ground "more" reads as
+     brighter, so --heat-0…4 climbs from a dim empty cell to a bright
+     green rather than darkening. No other ramp changes meaning.
+   Text, borders and surfaces are tuned to the same contrast the
+   light theme meets. */
+:root[data-theme="dark"] {
+  /* Semantic aliases -------------------------------------------------- */
+  --surface-page: #14161b;
+  --surface-sunken: #0f1115; /* sidebar, kanban columns */
+  --surface-card: #1b1e24;
+  --surface-raised: #22262e; /* popovers, detail panel */
+  --surface-hover: #262b34;
+  --surface-selected: #1c2c52;
+
+  --text-primary: #eef1f5;
+  --text-secondary: #b6bdc8;
+  --text-tertiary: #868e9b;
+  --text-inverse: #14161b;
+  --text-accent: #9bb5fd;
+  --text-danger: #ff8589;
+  --text-success: #63cf8b;
+
+  --border-default: #333a45;
+  --border-subtle: #262b33;
+  --border-strong: #4a525f;
+
+  --accent: #5b82fb;
+  --accent-hover: #7c9dff;
+  --accent-soft: #1c2c52; /* selected rows, calendar blocks */
+  --accent-border: #35487c;
+  --accent-strong: #5b82fb; /* filled primary actions on a dark surface */
+  --accent-strong-hover: #7c9dff;
+
+  --danger: #e5484d;
+  --danger-hover: #ff6b6f;
+  --danger-soft: #3a1d1f;
+  --warning: #eda812;
+  --warning-soft: #382c12;
+  --success: #2da44e;
+  --success-soft: #16301f;
+
+  /* Focus (the feature) — plum, lifted for the dark ground. The filled
+     Focus controls carry dark text (--text-inverse), so --focus-accent and
+     its hover/border ramp all stay light enough to keep that label legible;
+     --plum-700 (the hover, referenced straight from index.css) lifts rather
+     than darkens for the same reason. */
+  --focus-accent: #a988f7;
+  --focus-soft: #2a2047;
+  --plum-100: #2f2450; /* Focus chip / offer borders */
+  --plum-700: #bfa4fa; /* filled Focus control hover */
+
+  /* Priority — lightness-only ink ramp, same as light: never hue. */
+  --priority-low: var(--text-tertiary);
+  --priority-medium: var(--text-secondary);
+  --priority-high: var(--text-primary);
+
+  /* Habit heatmap levels (0–4) — inverted: brighter = more. */
+  --heat-0: #23272f;
+  --heat-1: #1f4d34;
+  --heat-2: #2f7d50;
+  --heat-3: #46b571;
+  --heat-4: #7ee7a6;
+
+  --focus-ring: 0 0 0 3px rgba(124, 157, 255, 0.5);
+
+  /* Elevation — shadows read against near-black, not near-white ink. */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.65), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-drag: 0 8px 24px rgba(0, 0, 0, 0.6); /* picked-up kanban card */
+  --scrim: rgba(0, 0, 0, 0.6); /* the page behind a modal */
+}

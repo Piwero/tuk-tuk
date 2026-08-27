@@ -24,6 +24,77 @@ export function saveSidebarCollapsed(collapsed: boolean): void {
   }
 }
 
+// Appearance (issue #193): Light / Dark / System. Like the collapsed state
+// above, the choice belongs to this browser, not the account — it never
+// touches the API. "system" (the default, and the fallback whenever storage
+// is unavailable or the stored value is unrecognised) defers to the OS.
+export type ThemePreference = "light" | "dark" | "system";
+
+const THEME_KEY = "tuktuk.theme";
+const THEME_VALUES: readonly ThemePreference[] = ["light", "dark", "system"];
+
+export function loadThemePreference(): ThemePreference {
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    return THEME_VALUES.includes(raw as ThemePreference) ? (raw as ThemePreference) : "system";
+  } catch {
+    return "system";
+  }
+}
+
+export function saveThemePreference(preference: ThemePreference): void {
+  try {
+    localStorage.setItem(THEME_KEY, preference);
+  } catch {
+    // Storage full or unavailable: the theme still applies this session, the
+    // choice just won't survive a reload.
+  }
+}
+
+function prefersDark(): MediaQueryList | null {
+  try {
+    return typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-color-scheme: dark)")
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+let systemListener: (() => void) | null = null;
+let systemQuery: MediaQueryList | null = null;
+
+/** Resolves the Light / Dark / System choice to a concrete `data-theme` on
+ * <html>, which is the single switch every dark alias in tokens.css keys off.
+ * No component ever reads this — surfaces follow because they reference the
+ * alias, not the ramp. When the choice is "system" it also subscribes to the
+ * OS setting so a live flip re-resolves without a reload; any other choice
+ * tears that subscription down. Never throws: a browser without matchMedia
+ * simply renders light. */
+export function applyThemePreference(preference: ThemePreference): void {
+  const query = prefersDark();
+
+  if (systemListener && systemQuery) {
+    systemQuery.removeEventListener("change", systemListener);
+  }
+  systemListener = null;
+  systemQuery = null;
+
+  const resolved = preference === "system" ? (query?.matches ? "dark" : "light") : preference;
+
+  if (typeof document !== "undefined") {
+    document.documentElement.setAttribute("data-theme", resolved);
+  }
+
+  if (preference === "system" && query) {
+    systemQuery = query;
+    systemListener = () => {
+      document.documentElement.setAttribute("data-theme", query.matches ? "dark" : "light");
+    };
+    query.addEventListener("change", systemListener);
+  }
+}
+
 // Which Folders the user has collapsed — a set of ids, stored as a JSON
 // array. Absent (or unparseable) means every Folder starts expanded, so
 // existing users see no change on upgrade.

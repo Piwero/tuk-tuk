@@ -356,6 +356,53 @@ describe("Google Calendar gate", () => {
   });
 });
 
+describe("Appearance (issue #193)", () => {
+  it("renders the current choice, defaulting to System", async () => {
+    localStorage.clear();
+    installFakeApi({});
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+
+    expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "System" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Light" })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: "Dark" })).not.toBeChecked();
+  });
+
+  it("reflects a previously stored choice on load", async () => {
+    localStorage.clear();
+    localStorage.setItem("tuktuk.theme", "dark");
+    installFakeApi({});
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+
+    expect(await screen.findByRole("radio", { name: "Dark" })).toBeChecked();
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+  });
+
+  it("persists a new choice and applies it, surviving a reload", async () => {
+    localStorage.clear();
+    installFakeApi({});
+    const user = userEvent.setup();
+    const first = render(<App />);
+
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(await screen.findByRole("radio", { name: "Dark" }));
+
+    expect(localStorage.getItem("tuktuk.theme")).toBe("dark");
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    first.unmount();
+
+    render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    expect(await screen.findByRole("radio", { name: "Dark" })).toBeChecked();
+  });
+});
+
 describe("About section", () => {
   it("shows the running app version", async () => {
     installFakeApi({ googleConfigured: false });
