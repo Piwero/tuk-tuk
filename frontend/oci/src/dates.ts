@@ -237,6 +237,16 @@ export function isOverdue(task: Task, now: Date = new Date()): boolean {
   return new Date(task.due_date).getTime() < now.getTime();
 }
 
+/** Due on the viewer's current local day. Reads the same `dueDay` the Today
+ * Smart List and the date groupings do, so "today" means one thing across the
+ * app. Purely a display distinction: a task row paints today's date in the
+ * accent and every other date in the secondary ink, so the accent means
+ * something on a mixed list instead of appearing on every row. */
+export function isDueToday(task: Task, now: Date = new Date()): boolean {
+  const day = dueDay(task);
+  return day !== null && day === localDayOf(now);
+}
+
 /** The instant a task is due, for date sorting; all-day means local midnight. */
 export function dueInstant(task: Task): number | null {
   if (task.due_date === null) {

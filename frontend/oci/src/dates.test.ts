@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { fakeTask } from "./test/fakeApi";
 import {
   formatDate,
   formatDateRange,
   formatSchedule,
   fromDayIso,
+  isDueToday,
   shortDayLabel,
   taskZonedDate,
   weekdayRecordLabel,
@@ -95,5 +97,39 @@ describe("taskZonedDate", () => {
     );
     expect(formatDate(beforeTransition, "time")).toBe("01:59");
     expect(formatDate(afterTransition, "time")).toBe("03:01");
+  });
+});
+
+describe("isDueToday", () => {
+  const now = new Date("2026-08-27T09:00:00Z");
+
+  it("is false for an unscheduled task", () => {
+    expect(isDueToday(fakeTask("Someday"), now)).toBe(false);
+  });
+
+  it("is true for an all-day task due on the current local day", () => {
+    const task = fakeTask("Today", { due_date: "2026-08-27", is_all_day: true });
+    expect(isDueToday(task, now)).toBe(true);
+  });
+
+  it("is false either side of the current local day", () => {
+    const yesterday = fakeTask("Late", { due_date: "2026-08-26", is_all_day: true });
+    const tomorrow = fakeTask("Soon", { due_date: "2026-08-28", is_all_day: true });
+    expect(isDueToday(yesterday, now)).toBe(false);
+    expect(isDueToday(tomorrow, now)).toBe(false);
+  });
+
+  it("reads a timed task on the local day its instant falls in", () => {
+    const later = fakeTask("Later today", { due_date: "2026-08-27T23:30:00Z" });
+    const justOver = fakeTask("Just past midnight", { due_date: "2026-08-28T00:30:00Z" });
+    expect(isDueToday(later, now)).toBe(true);
+    expect(isDueToday(justOver, now)).toBe(false);
+  });
+
+  it("still reads true once completed — the styling caller decides that", () => {
+    // Unlike isOverdue, completion isn't this helper's business: TaskRow
+    // suppresses the accent on a completed row itself.
+    const done = fakeTask("Done", { due_date: "2026-08-27", is_all_day: true, completed: true });
+    expect(isDueToday(done, now)).toBe(true);
   });
 });

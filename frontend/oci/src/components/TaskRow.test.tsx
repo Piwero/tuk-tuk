@@ -22,7 +22,7 @@ function renderRow(overrides: Partial<TaskRowProps> = {}): ReturnType<typeof ren
 }
 
 describe("TaskRow", () => {
-  it("puts the title on its own row, separate from any metadata", () => {
+  it("groups the title and the metadata into head and meta", () => {
     const task = fakeTask("Buy milk tomorrow at 5pm", {
       due_date: "2026-08-16T17:00:00Z",
       tags: [fakeTag("work")],
@@ -39,10 +39,74 @@ describe("TaskRow", () => {
     const meta = row.querySelector(".task-row-meta");
     expect(head).not.toBeNull();
     expect(meta).not.toBeNull();
-    // The title lives in the head line; metadata lives in the separate meta
-    // line below it — they never compete for the same horizontal space.
+    // The two wrappers group the row's cells. On a wide list they draw no box
+    // of their own (`display: contents`) and their children become the row's
+    // grid items; on a Kanban card they stay the card's two lines.
     expect(head?.contains(screen.getByRole("button", { name: /Open details for/ }))).toBe(true);
     expect(meta?.textContent).toContain("work");
+  });
+
+  it("renders every metadata cell even when it is empty, so columns stay aligned", () => {
+    // A cell left out would pull every cell after it into the wrong grid
+    // track, and the columns would stop lining up down the list.
+    renderRow({
+      task: fakeTask("Bare", { priority: "none", due_date: null, tags: [] }),
+      showDate: false,
+      showTags: false,
+    });
+
+    const row = screen.getByRole("button", { name: "Open details for Bare" }).closest("li");
+    if (row === null) {
+      throw new Error("row not found");
+    }
+    for (const cell of [
+      ".task-row-priority",
+      ".task-row-tags",
+      ".task-row-list",
+      ".task-row-date",
+    ]) {
+      expect(row.querySelector(cell)).not.toBeNull();
+    }
+  });
+
+  it("marks the actions gutter on the row only when actions are wired", () => {
+    // The reserved track costs width, so a view that wires no row actions
+    // gives it back to the title.
+    renderRow({ task: fakeTask("No actions") });
+    expect(
+      screen.getByRole("button", { name: "Open details for No actions" }).closest("li"),
+    ).not.toHaveClass("with-actions");
+
+    renderRow({ task: fakeTask("With actions"), onDelete: vi.fn() });
+    expect(
+      screen.getByRole("button", { name: "Open details for With actions" }).closest("li"),
+    ).toHaveClass("with-actions");
+  });
+
+  it("marks a date due today apart from a plain future date", () => {
+    // Pinned, so the assertion can't turn on the clock crossing midnight
+    // between building the fixture and rendering it.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-27T09:00:00Z"));
+    try {
+      renderRow({ task: fakeTask("Due today", { due_date: "2026-08-27", is_all_day: true }) });
+      const dueToday = screen
+        .getByRole("button", { name: "Open details for Due today" })
+        .closest("li")
+        ?.querySelector(".date-chip");
+      expect(dueToday).toHaveClass("today");
+      expect(dueToday).not.toHaveClass("overdue");
+
+      renderRow({ task: fakeTask("Due later", { due_date: "2026-09-30", is_all_day: true }) });
+      const dueLater = screen
+        .getByRole("button", { name: "Open details for Due later" })
+        .closest("li")
+        ?.querySelector(".date-chip");
+      expect(dueLater).not.toHaveClass("today");
+      expect(dueLater).not.toHaveClass("overdue");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("toggles completion from the checkbox", () => {
