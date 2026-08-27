@@ -291,28 +291,36 @@ main {
   letter-spacing: -0.01em;
 }
 
-/* Top feature row: Tasks, Calendar, Habits, Stand-up, Focus, Search. Every
-   item is icon-only at a fixed, equal share of the row — none of them ever
-   grow, so all six always fit inside the sidebar (issue #160). The active
-   item is told apart by background + accent icon color, not by a label. */
+/* Feature nav: Tasks, Calendar, Habits, Stand-up, Focus, Search (+ Assistant
+   when available). A vertical list of labelled rows — readable, not guessed
+   from a glyph (issue #194). Stacking removed the width limit that once
+   forced an icon-only row (issue #160). Collapsed, the label steps aside
+   (see the rail rules) and the accessible name is kept on aria-label/title.
+   The active item is told apart by an inset accent bar + weight, not colour
+   alone. */
 .top-nav {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 2px;
-  padding: 0 2px 10px;
+  padding: 0 0 10px;
 }
 
 .sidebar .top-nav-item {
-  display: inline-flex;
-  flex: 1 1 0;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  height: 32px;
-  padding: 0;
+  gap: 10px;
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 10px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
+  font-size: var(--text-md);
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
   transition: background var(--duration-fast) var(--ease-out);
 }
 
@@ -324,6 +332,10 @@ main {
 .sidebar .top-nav-item.selected:hover {
   background: var(--surface-selected);
   color: var(--text-accent);
+  font-weight: var(--weight-semibold);
+  /* Non-colour cue (issue #194): an inset bar on the leading edge, visible
+     in the rail too where the label is gone. */
+  box-shadow: inset 3px 0 0 0 var(--text-accent);
 }
 
 .sidebar-search input {
@@ -731,6 +743,53 @@ button.create-menu-trigger {
 
 .tags-nav h2 {
   padding: 0 10px var(--space-1);
+}
+
+/* A wrapped cloud of chips (issue #194): Tags no longer take a full row
+   each. Each chip is its own inline pill that wraps to the next line. */
+.tags-nav .tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 0 6px;
+}
+
+.tags-nav .tag-chip {
+  display: inline-flex;
+  width: auto;
+}
+
+.tags-nav .tag-chip .list-row {
+  width: auto;
+}
+
+.tags-nav .tag-chip .list-button {
+  width: auto;
+  height: auto;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.tags-nav .tag-chip .list-button.selected {
+  border-color: var(--text-accent);
+}
+
+/* Collapsed rail: the chip cloud falls back to a simple stacked column of
+   glyphs, like every other rail row. */
+.sidebar.collapsed .tags-nav .tag-cloud {
+  flex-direction: column;
+  padding: 0;
+}
+
+.sidebar.collapsed .tags-nav .tag-chip .list-button {
+  width: 100%;
+  justify-content: center;
+  border: none;
+  padding: 0;
 }
 
 .archived {
@@ -4124,12 +4183,15 @@ li[data-overdue] .date-chip {
   width: 100%;
 }
 
-/* Stacked in the rail, an item is a full-width square rather than an
- * equal flex share of a row — the row-only sizing below is for the
- * horizontal layout (expanded sidebar and the mobile drawer). */
+/* In the rail the label is gone, so the icon centres in a full-width row
+ * (this also catches the anchor items, which `.sidebar.collapsed button`
+ * above does not). The inset accent bar on `.selected` stays visible. */
 .sidebar.collapsed .top-nav .top-nav-item {
   flex: none;
   width: 100%;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
 }
 
 .sidebar.collapsed .sidebar-top {
@@ -4310,18 +4372,37 @@ li[data-overdue] .date-chip {
     padding: 0 10px;
   }
 
+  /* The drawer is the full sidebar, not the rail — the feature nav is the
+   * vertical labelled list again (issue #194), not the icon rail. */
   .sidebar.collapsed .top-nav {
-    flex-direction: row;
+    flex-direction: column;
   }
 
-  /* The drawer is the full sidebar, not the rail — the row-of-six is back,
-   * so each item goes back to an equal flex share instead of the rail's
-   * full-width stacked square (issue #160). */
   .sidebar.collapsed .top-nav .top-nav-item {
-    flex: 1 1 0;
+    flex: none;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 10px;
+  }
+
+  /* The drawer is the full sidebar: Tags are the wrapped chip cloud again,
+   * not the rail's stacked glyphs (issue #194). */
+  .sidebar.collapsed .tags-nav .tag-cloud {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0 6px;
+  }
+
+  .sidebar.collapsed .tags-nav .tag-chip .list-button {
     width: auto;
-    justify-content: center;
-    padding: 0;
+    justify-content: flex-start;
+    border: 1px solid var(--border-default);
+    padding: 3px 10px;
+  }
+
+  .sidebar.collapsed .tags-nav .tag-chip .list-button.selected {
+    border-color: var(--text-accent);
   }
 
   .sidebar .sidebar-collapse {

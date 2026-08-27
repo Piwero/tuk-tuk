@@ -88,17 +88,17 @@ describe("Sidebar top nav (issue #160)", () => {
     }
   });
 
-  it("never grows the active item with a visible text label that could push the row wider", async () => {
+  it("shows each feature item's label as visible text (issue #194)", async () => {
     installFakeApi();
     window.history.replaceState(null, "", "/standup");
     render(<App />);
     await screen.findByRole("heading", { name: "Stand-up" });
 
-    // Stand-up was the longest label and the one whose active state used to
-    // widen the row and clip Search. The item is still reachable by its
-    // accessible name (aria-label/title), but no longer renders that name
-    // as visible text inside the row.
+    // The vertical nav is readable, not guessed from a glyph: every item
+    // renders its label as visible text, not only as an accessible name.
     const nav = screen.getByRole("navigation", { name: "Views" });
-    expect(within(nav).queryByText("Stand-up")).not.toBeInTheDocument();
+    for (const name of VIEW_NAMES) {
+      expect(within(nav).getByText(name)).toBeInTheDocument();
+    }
   });
 });
