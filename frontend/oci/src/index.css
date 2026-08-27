@@ -5019,3 +5019,68 @@ a.button:hover {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
+
+/* ------------------------------------------------------------------ *
+ * Multi-select bulk action bar (issue #202).                         *
+ * ------------------------------------------------------------------ */
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  background: var(--surface-selected);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.bulk-action-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.bulk-action-bar button {
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.bulk-action-bar button:hover {
+  background: var(--surface-hover);
+}
+
+.bulk-action-bar .row-action-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.bulk-action-clear {
+  margin-left: auto;
+  padding: 0 var(--space-2) !important;
+}
+
+.tasks li.task-row[data-selected] {
+  background: var(--surface-selected);
+}
+
+.bulk-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.bulk-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}

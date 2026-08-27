@@ -76,6 +76,13 @@ export interface TaskRowProps {
   onDragOver?: (event: React.DragEvent<HTMLLIElement>) => void;
   onDrop?: (event: React.DragEvent<HTMLLIElement>) => void;
   onContextMenu?: (event: React.MouseEvent<HTMLLIElement>) => void;
+  /** Multi-select (issue #202), wired only by the List view. When set, the
+   * row is focusable: `x` marks it (Shift+`x` extends the range from the
+   * last-marked row), Escape clears the whole selection. */
+  selectable?: boolean;
+  selected?: boolean;
+  onSelectToggle?: (shiftKey: boolean) => void;
+  onSelectionClear?: () => void;
 }
 
 /** The single row a Task renders as, wherever it's met: the List view,
@@ -113,6 +120,10 @@ export function TaskRow({
   onDragOver,
   onDrop,
   onContextMenu,
+  selectable,
+  selected,
+  onSelectToggle,
+  onSelectionClear,
 }: TaskRowProps): JSX.Element {
   const overdue = isOverdue(task);
   const hasDescription = task.description.trim() !== "";
@@ -167,12 +178,28 @@ export function TaskRow({
     }
   }
 
+  function handleSelectionKeyDown(event: React.KeyboardEvent<HTMLLIElement>): void {
+    if (!selectable) {
+      return;
+    }
+    if (event.key === "x" || event.key === "X") {
+      event.preventDefault();
+      onSelectToggle?.(event.shiftKey);
+    } else if (event.key === "Escape") {
+      onSelectionClear?.();
+    }
+  }
+
   return (
     <li
       className={rowClassName}
       data-priority={task.priority}
       data-overdue={overdue || undefined}
       data-actions-open={actionsOpen || undefined}
+      data-selected={selected || undefined}
+      aria-selected={selectable ? Boolean(selected) : undefined}
+      tabIndex={selectable ? 0 : undefined}
+      onKeyDown={selectable ? handleSelectionKeyDown : undefined}
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -186,6 +213,7 @@ export function TaskRow({
       onClick={() => setActionsOpen(false)}
     >
       <div className="task-row-head">
+        {selectable && selected && <span className="visually-hidden">{task.title} selected</span>}
         <label>
           <input
             type="checkbox"
