@@ -195,15 +195,26 @@ main {
   overflow-y: auto;
 }
 
-/* The content column; Calendar and Kanban run full width. */
-.main-header,
-main > form,
-.view-controls,
-.task-groups,
+/* The content column.
+
+   Task list, Search results and the Kanban board fill the full width of
+   the content area — they are dense, columnar surfaces, not prose (issue
+   #196). A consequence worth naming: the aligned single-line task row is a
+   container query on `.tasks` (see "The task row is a grid" in the design
+   system), so a wider list makes the aligned form apply in far more
+   windows and the wrapped fallback in fewer — expected and desired.
+
+   Settings and Stand-up keep the reading measure: they are prose and read
+   badly at full width. Habits and Focus stay on the measure too. Calendar
+   and Kanban were already full width.
+
+   The task list's own chrome — the `.main-header` title bar, the QuickAdd
+   bar (`main > form`) and the `.view-controls` — fills with it, so the
+   list and everything above it share one left-to-right extent. */
 .habits-view,
 .focus-view,
-.search-view,
-.settings-view {
+.settings-view,
+.standup-view {
   max-width: var(--content-max);
 }
 

@@ -111,9 +111,19 @@ Bricolage Grotesque, semibold/bold, type only.
 
 - 4px base scale (`--space-1…12`).
 - Layout constants: sidebar `--sidebar-width` 248px, detail panel
-  `--detail-width` 360px, content column `--content-max` 720px (Calendar and
-  Kanban run full width), rows `--row-height` 40px, controls
-  `--control-height` 34px.
+  `--detail-width` 360px, content column `--content-max` 720px, rows
+  `--row-height` 40px, controls `--control-height` 34px.
+- **What the reading measure applies to.** `--content-max` is a *prose*
+  measure: it keeps running text at a comfortable line length. Settings,
+  Stand-up, Habits and Focus opt into it. The task list, Search results and
+  the Kanban board do *not* — they are dense, columnar surfaces that read
+  better edge to edge, so they fill the full width of the content area at
+  any window width (issue #196), and the task list's own chrome (the title
+  bar, the QuickAdd bar, the view controls) fills with them. Calendar was
+  already full width. A consequence worth naming: because the aligned
+  single-line task row is gated on the list's own width (next point), a
+  full-width list makes the aligned form apply in far more windows and the
+  wrapped fallback in fewer — expected and desired.
 - **The task row is a grid**, not a wrapping flex line: `--task-row-height`
   36px over seven tracks — done, `--task-col-priority` 16px, a flexing title,
   tags, `--task-col-list` 104px, `--task-col-date` 88px, and
