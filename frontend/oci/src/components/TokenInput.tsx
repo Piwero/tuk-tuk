@@ -61,6 +61,12 @@ interface TokenInputProps {
    * sitting outside `.token-input`'s box, where it would fall onto its own
    * line below a full-width input. */
   trailingContent?: React.ReactNode;
+  /** Decorative ghost hints for this input's sigils (issue #197), shown at
+   * rest so the `#tag`/`!priority`/`~list` shortcuts are discoverable. Not
+   * controls: rendered `aria-hidden`, not focusable, and dimmed once `value`
+   * has content so they never compete with what's being typed. Omitted by
+   * the Quick-Add dialog, which is out of scope. */
+  sigilHints?: React.ReactNode;
 }
 
 /** A row the dropdown can show: an existing item, or the trailing offer to
@@ -82,6 +88,7 @@ export function TokenInput({
   showChips = true,
   autoFocus = false,
   trailingContent,
+  sigilHints,
 }: TokenInputProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
@@ -277,6 +284,15 @@ export function TokenInput({
         onKeyDown={onKeyDown}
         autoFocus={autoFocus}
       />
+      {sigilHints !== undefined && (
+        <span
+          className="quick-add-sigil-hints"
+          data-has-content={value.length > 0 ? "true" : undefined}
+          aria-hidden="true"
+        >
+          {sigilHints}
+        </span>
+      )}
       {trailingContent}
       {open && active !== null && (
         <ul className="token-input-dropdown" role="listbox" id={listboxId}>
