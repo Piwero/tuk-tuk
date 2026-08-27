@@ -103,8 +103,8 @@ export function CommandPalette({ items, onClose }: CommandPaletteProps): JSX.Ele
           aria-expanded="true"
           aria-controls="command-palette-results"
           aria-activedescendant={activeId}
-          aria-label="Search lists, folders, tags and tasks"
-          placeholder="Jump to a list, tag, view or task…"
+          aria-label="Search Lists, Folders, Tags and Tasks"
+          placeholder="Jump to a List, Tag, view or Task…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />

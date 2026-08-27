@@ -791,6 +791,7 @@ export function CalendarView({
     const start = minuteLabel(startMin);
     const end = minuteLabel(endMin);
     const title = entryTitle(entry);
+    const listColor = listColorProps(entry);
     return (
       <div
         key={`${entryKey(entry)}-${day}`}
@@ -801,11 +802,11 @@ export function CalendarView({
         data-continues-before={continuesBefore || undefined}
         data-continues-after={continuesAfter || undefined}
         data-resizing={pending !== null || undefined}
-        data-list-color={listColorProps(entry)["data-list-color"]}
+        data-list-color={listColor["data-list-color"]}
         style={{
           top: (startMin / 60) * HOUR_PX,
           height: Math.max(((endMin - startMin) / 60) * HOUR_PX, HOUR_PX / 3),
-          ...listColorProps(entry).style,
+          ...listColor.style,
         }}
         {...entryDragProps(entry)}
         onClick={() => selectEntry(entry, onSelect, onSelectEvent)}
@@ -1188,9 +1189,14 @@ export function CalendarView({
           <h3>
             Unscheduled
             {unscheduled.length > 0 && (
-              <span className="unscheduled-count" aria-hidden="true">
-                {unscheduled.length}
-              </span>
+              <>
+                <span className="unscheduled-count" aria-hidden="true">
+                  {unscheduled.length}
+                </span>
+                <span className="visually-hidden">
+                  {unscheduled.length} unscheduled {unscheduled.length === 1 ? "task" : "tasks"}
+                </span>
+              </>
             )}
           </h3>
           {unscheduled.length === 0 ? (

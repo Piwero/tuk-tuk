@@ -1945,7 +1945,7 @@ li[data-overdue] .date-chip {
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
-  border-radius: var(--radius-full, 999px);
+  border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--text-accent);
   font-family: var(--font-body);
@@ -4143,7 +4143,7 @@ li[data-overdue] .date-chip {
   gap: 4px;
   margin-left: var(--space-2);
   padding: 3px 7px;
-  border-radius: var(--radius-full, 999px);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
@@ -4951,7 +4951,7 @@ a.button:hover {
   align-items: flex-start;
   justify-content: center;
   padding: 12vh var(--space-4) var(--space-4);
-  background: var(--scrim, rgba(15, 18, 26, 0.32));
+  background: var(--scrim);
 }
 
 .command-palette {
@@ -4975,7 +4975,7 @@ a.button:hover {
   background: transparent;
   color: var(--text-primary);
   font-family: var(--font-body);
-  font-size: var(--text-md, 15px);
+  font-size: var(--text-md);
 }
 
 .command-palette-input:focus {
@@ -5071,6 +5071,11 @@ a.button:hover {
   background: var(--surface-selected);
 }
 
+.tasks li.task-row[data-selected] .task-title {
+  font-weight: var(--weight-semibold);
+  color: var(--text-accent);
+}
+
 .bulk-dialog {
   display: flex;
   flex-direction: column;
@@ -5116,7 +5121,7 @@ a.button:hover {
   min-width: 18px;
   height: 18px;
   padding: 0 var(--space-1);
-  border-radius: var(--radius-full, 999px);
+  border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--text-accent);
   font-family: var(--font-mono);

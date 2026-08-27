@@ -155,8 +155,8 @@ describe("multi-select and bulk actions", () => {
 
     mark("A");
     mark("B", true);
-    fireEvent.click(screen.getByRole("button", { name: "Move to list" }));
-    const dialog = await screen.findByRole("dialog", { name: "Move selected tasks" });
+    fireEvent.click(screen.getByRole("button", { name: "Move to List" }));
+    const dialog = await screen.findByRole("dialog", { name: "Move selected Tasks" });
     fireEvent.change(within(dialog).getByLabelText("List"), { target: { value: "12" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Move" }));
     tick(6_000);
