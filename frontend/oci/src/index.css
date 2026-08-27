@@ -1325,6 +1325,29 @@ li[data-overdue] .date-chip {
   box-shadow: none;
 }
 
+/* Decorative ghost hints for the inline Quick-Add bar's sigils (issue #197)
+ * — discoverable at rest, dimmed once the field has content so they never
+ * compete with typed text. Not controls: aria-hidden, never focusable. */
+.quick-add-sigil-hints {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--space-2);
+  padding-right: var(--space-1);
+  opacity: 1;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.quick-add-sigil-hints[data-has-content="true"] {
+  opacity: 0.35;
+}
+
+.quick-add-sigil-hint {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
 /* Quick-Add's Assist affordance (ADR 0005) — a flex item alongside the
  * input/chips, not an overlay, so it never overlaps typed text or the
  * suggestion dropdown. */

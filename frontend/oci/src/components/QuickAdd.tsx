@@ -583,6 +583,22 @@ export function QuickAdd({
             listChannel as TokenChannel<unknown>,
             priorityChannel as TokenChannel<unknown>,
           ]}
+          sigilHints={
+            <>
+              <span className="quick-add-sigil-hint">
+                {tagChannel.sigil}
+                tag
+              </span>
+              <span className="quick-add-sigil-hint">
+                {priorityChannel.sigil}
+                priority
+              </span>
+              <span className="quick-add-sigil-hint">
+                {listChannel.sigil}
+                list
+              </span>
+            </>
+          }
           trailingContent={
             parsing ? (
               <span className="quick-add-assist-busy" aria-label="Assist is parsing" role="status">
