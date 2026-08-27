@@ -19,7 +19,8 @@ async function openHistory(name: string): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Views" });
   fireEvent.click(within(nav).getByRole("link", { name: "Habits" }));
   await screen.findByRole("heading", { name: "Habits" });
-  fireEvent.click(await screen.findByRole("button", { name: `History ${name}` }));
+  fireEvent.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: `History ${name}` }));
 }
 
 function checkIn(api: FakeApiState, habitId: number, date: string, value = 1): void {

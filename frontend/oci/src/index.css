@@ -2287,11 +2287,25 @@ li[data-overdue] .date-chip {
   gap: var(--space-2);
 }
 
+/* Habits read as a grid of cards, not one long column — a card holds the
+ * name, its recent-days strip and Streak, one Check-in control and the
+ * actions menu. `auto-fill` + a min track means the grid reflows to a
+ * single column once the viewport can't hold two full cards. */
+.habits-view ul.habits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+
+.habits-grid > .habit-editing {
+  grid-column: 1 / -1;
+}
+
 .habits-view .habit {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -2301,19 +2315,117 @@ li[data-overdue] .date-chip {
     border-color var(--duration-base) var(--ease-out);
 }
 
+.habit-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.habit-head .habit-body {
+  flex: 1;
+}
+
 .habits-view .habit.complete {
   background: var(--success-soft);
   border-color: var(--green-100);
 }
 
-/* Unlike the List/Folder row-actions hover-reveal, a Habit card's actions
- * (History, Edit, Archive, Delete) stay painted at rest: hover has no touch
- * equivalent, and `visibility: hidden` at rest would also pull the buttons
- * out of the Tab order, so hover- or focus-only reveal can't be used here. */
-.habits-view .habit .row-actions {
-  width: auto;
-  overflow: visible;
-  visibility: visible;
+/* Goal met, said in words + a mark — not signalled by the card's green
+ * wash alone (which fails for anyone who can't tell the two grounds
+ * apart). */
+.habit-goal-met {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-success);
+}
+
+.habit-checkin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/* One menu (History, Edit, Archive, Delete) behind a kebab trigger,
+ * replacing four permanent buttons. The trigger and items are real
+ * buttons, so the menu is reachable by keyboard and under a coarse
+ * pointer where there is no hover. */
+.habit-actions-menu {
+  position: relative;
+  flex: none;
+}
+
+.habit-actions-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.habit-actions-trigger:hover,
+.habit-actions-trigger[aria-expanded="true"] {
+  background: var(--surface-hover);
+  border-color: var(--border-default);
+}
+
+.habit-actions-list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-popover);
+  min-width: 160px;
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.habit-actions-list button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.habit-actions-list button:hover {
+  background: var(--surface-hover);
+}
+
+.habit-actions-list .habit-actions-danger {
+  color: var(--text-danger);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .habit-actions-trigger {
+    width: var(--tap-target);
+    height: var(--tap-target);
+  }
+
+  .habit-actions-list button {
+    min-height: var(--tap-target);
+  }
 }
 
 .habit-icon {
@@ -2346,6 +2458,7 @@ li[data-overdue] .date-chip {
 
 .habit-card-stats {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-1);
@@ -2367,6 +2480,7 @@ li[data-overdue] .date-chip {
 
 .habit-strip {
   display: flex;
+  flex-wrap: wrap;
   gap: 3px;
 }
 
