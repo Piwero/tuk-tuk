@@ -207,6 +207,19 @@ chips, each linking to its Tag view — #194) → bottom-pinned add actions (Add
 List, Add Folder). Collapsed, the sidebar is an icon-only rail with every
 accessible name preserved on aria-label/title.
 
+Every Smart List, the Inbox, each Folder and each List carries an **open-Task
+count** (#195): a trailing tabular numeral, `--text-xs`/`--text-tertiary`,
+right-aligned in the row (`.nav-count`; on a Folder the pre-existing
+`.folder-count`, which now counts open Tasks — the sum of its Lists — rather
+than how many Lists it holds). The numbers are derived client-side from the
+open Tasks the app already holds, never an aggregate endpoint, and update the
+instant a Task is completed, created, deleted or moved. A count of zero
+renders no element at all — never a literal "0". Tags carry no count. The
+visible numeral is `aria-hidden`; the spoken form ("3 open tasks") is a
+`.visually-hidden` sibling wired to the control via `aria-describedby`, so the
+count reaches assistive tech without colliding with the item's accessible
+name. Collapsed, the numeral steps aside with the rest of the row.
+
 Standup, Focus, Calendar, Habits, Search, and Settings are URL-addressable
 (`/standup`, `/focus`, etc. — #143); their sidebar nav items are real
 anchors so cmd/ctrl-click, middle-click, and "copy link" work. List, Tag,
@@ -232,5 +245,4 @@ way: restyle by CSS, and when markup must change, preserve accessible names
 
 ## Known gaps
 
-- Sidebar task counts (design shows per-list counts; needs an API aggregate).
 - A global "Add Task" sidebar action (Quick-Add is currently per-List).

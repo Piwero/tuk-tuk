@@ -552,6 +552,38 @@ button.folder-name {
   color: var(--text-tertiary);
 }
 
+/* Open-Task count on a Smart List / Inbox / List row (issue #195). Trailing,
+ * right-aligned inside the flex button, tabular like every other count; it is
+ * aria-hidden, with the spoken form carried by a `.visually-hidden` sibling
+ * wired to the control through aria-describedby. A zero count renders no
+ * element at all — never a literal "0". */
+.nav-count {
+  flex: none;
+  margin-left: auto;
+  padding-left: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.list-button.selected .nav-count {
+  color: var(--text-accent);
+}
+
+/* Off-screen but in the accessibility tree — the spoken open-Task count
+ * (issue #195). Standard clip technique; used only for the count so far. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .lists-nav h2,
 .tags-nav h2,
 .archived h2 {
@@ -4160,6 +4192,7 @@ li[data-overdue] .date-chip {
 }
 
 .sidebar.collapsed .nav-label,
+.sidebar.collapsed .nav-count,
 .sidebar.collapsed .sidebar-brand,
 .sidebar.collapsed .focus-nav-badge,
 .sidebar.collapsed .row-actions,
@@ -4347,6 +4380,10 @@ li[data-overdue] .date-chip {
      element is restored to the display it has when expanded — `revert` would
      drop them to the UA default and break the flex rows. */
   .sidebar.collapsed .nav-label {
+    display: inline;
+  }
+
+  .sidebar.collapsed .nav-count {
     display: inline;
   }
 
