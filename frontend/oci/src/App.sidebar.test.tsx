@@ -41,6 +41,14 @@ describe("Sidebar structure", () => {
     expect(buttons[0]).toHaveAccessibleName("Inbox");
   });
 
+  it("shows the app version as a tooltip on the brand wordmark", async () => {
+    installFakeApi();
+    render(<App />);
+
+    // Nothing sets VITE_APP_VERSION in the suite, so it falls back to "dev".
+    expect(await screen.findByText("Tuk Tuk")).toHaveAttribute("title", "tuk-tuk version dev");
+  });
+
   it("shows a Lists heading with a single Create control, and no bottom-pinned add buttons", async () => {
     installFakeApi();
     render(<App />);
