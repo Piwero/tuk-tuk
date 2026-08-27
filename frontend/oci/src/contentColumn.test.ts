@@ -1,0 +1,68 @@
+import { describe, expect, it } from "vitest";
+
+// @ts-expect-error - node builtin; this project ships no @types/node, but the
+// test runs under Node where `node:fs` / `node:path` resolve fine.
+import { readFileSync } from "node:fs";
+// @ts-expect-error - see above.
+import { resolve } from "node:path";
+// @ts-expect-error - see above.
+import process from "node:process";
+
+/** Which views fill the content area and which keep the shared reading
+ * measure is a pure CSS decision (issue #196). jsdom applies no stylesheet
+ * and Vitest strips `.css` imports, so this test reads `index.css` off disk
+ * and pins the content-column rule: the dense, columnar surfaces (task
+ * list, Search, Kanban) fill the width; the prose surfaces (Settings,
+ * Stand-up) stay on `--content-max`. */
+
+const css: string = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+
+/** The selector list of the first rule whose body is `max-width:
+ * var(--content-max)` — the App-layout content-column rule. */
+function measureSelectors(): string[] {
+  const declMatch = /max-width:\s*var\(--content-max\)/.exec(css);
+  expect(declMatch, "content-column declaration not found").not.toBeNull();
+  const declIndex = (declMatch as RegExpExecArray).index;
+  const before = css.slice(0, declIndex);
+  const braceIndex = before.lastIndexOf("{");
+  const prevRuleEnd = before.lastIndexOf("}");
+  const commentEnd = before.lastIndexOf("*/");
+  const selectorStart = Math.max(prevRuleEnd, commentEnd + 1) + 1;
+  return before
+    .slice(selectorStart, braceIndex)
+    .split(",")
+    .map((selector) => selector.trim())
+    .filter((selector) => selector.length > 0 && !selector.startsWith("/*"));
+}
+
+describe("content column (issue #196)", () => {
+  const selectors = measureSelectors();
+
+  it("keeps Settings and Stand-up on the reading measure", () => {
+    expect(selectors).toContain(".settings-view");
+    expect(selectors).toContain(".standup-view");
+  });
+
+  it("lets the task list, Search and Kanban fill the content area", () => {
+    expect(selectors).not.toContain(".task-groups");
+    expect(selectors).not.toContain(".search-view");
+    expect(selectors).not.toContain(".search-results");
+    expect(selectors).not.toContain(".kanban");
+  });
+
+  it("keeps the task list's own chrome aligned with the list", () => {
+    // The title bar, QuickAdd bar and view controls fill with the list.
+    expect(selectors).not.toContain(".main-header");
+    expect(selectors).not.toContain(".view-controls");
+    expect(selectors).not.toContain("main > form");
+  });
+
+  it("never caps `.tasks`, so the aligned-row container query keys off the real width", () => {
+    // The aligned single-line row is a container query on `.tasks` with a
+    // 620px floor; the wrapped fallback still stands below that. Widening
+    // the column must not be undone by a max-width on the list itself.
+    expect(selectors).not.toContain(".tasks");
+    expect(css).toMatch(/container-type: inline-size/);
+    expect(css).toMatch(/@container tasklist \(min-width: 620px\)/);
+  });
+});
