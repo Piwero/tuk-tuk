@@ -5,8 +5,9 @@ import { heatLevel } from "../habitStats";
 import { Icon } from "./Icon";
 
 /** How many of the Habit's most recent scheduled days the card's strip
- * shows — a week, so a glance covers "did I keep it up this week". */
-const STRIP_LENGTH = 7;
+ * shows — three weeks, enough to read a pattern (a slipping habit, a
+ * steady one) at a glance rather than just the current week. */
+const STRIP_LENGTH = 21;
 
 interface HabitCardStatsProps {
   habit: Habit;

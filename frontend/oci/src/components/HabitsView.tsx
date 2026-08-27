@@ -16,6 +16,7 @@ import {
 } from "../api";
 import { localDayOf } from "../dates";
 import { habitFrequencyLabel } from "../habitFrequency";
+import { HabitActionsMenu } from "./HabitActionsMenu";
 import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
 import { HabitHistory } from "./HabitHistory";
@@ -162,7 +163,7 @@ export function HabitsView(): JSX.Element {
   function renderHabit(habit: Habit, showCheckInControls: boolean): JSX.Element {
     if (editor?.mode === "edit" && editor.habitId === habit.id) {
       return (
-        <li key={habit.id}>
+        <li key={habit.id} className="habit-editing">
           <HabitForm
             initial={habit}
             onSubmit={(values) => void handleEdit(habit, values)}
@@ -174,81 +175,74 @@ export function HabitsView(): JSX.Element {
     const checkIn = checkInOf(habit);
     const value = checkIn?.value ?? 0;
     const complete = value >= habit.goal;
+    const goalMet = complete && showCheckInControls;
     return (
-      <li key={habit.id} className={complete && showCheckInControls ? "habit complete" : "habit"}>
-        {habit.color !== null && <span className="color-dot" style={{ background: habit.color }} />}
-        {habit.icon !== null && <span className="habit-icon">{habit.icon}</span>}
-        <div className="habit-body">
-          <h3>{habit.name}</h3>
-          {habit.encouragement !== "" && (
-            <p className="habit-encouragement">{habit.encouragement}</p>
+      <li key={habit.id} className={goalMet ? "habit complete" : "habit"}>
+        <div className="habit-head">
+          {habit.color !== null && (
+            <span className="color-dot" style={{ background: habit.color }} />
           )}
-          <p className="habit-frequency">{habitFrequencyLabel(habit.frequency)}</p>
-          {/* The expanded history panel already shows the Streak (plus the
-           * full grid and heatmap); skip the compact badge so it isn't
-           * repeated. */}
-          {historyId !== habit.id && (
-            <HabitCardStats habit={habit} stats={statsByHabit.get(habit.id)} today={today} />
-          )}
+          {habit.icon !== null && <span className="habit-icon">{habit.icon}</span>}
+          <div className="habit-body">
+            <h3>{habit.name}</h3>
+            {habit.encouragement !== "" && (
+              <p className="habit-encouragement">{habit.encouragement}</p>
+            )}
+            <p className="habit-frequency">{habitFrequencyLabel(habit.frequency)}</p>
+          </div>
+          <HabitActionsMenu
+            habit={habit}
+            onHistory={() => setHistoryId((current) => (current === habit.id ? null : habit.id))}
+            onEdit={() => setEditor({ mode: "edit", habitId: habit.id })}
+            onToggleArchive={() => void setArchived(habit, !habit.is_archived)}
+            onDelete={() => void handleDelete(habit)}
+          />
         </div>
-        {showCheckInControls &&
-          (habit.type === "boolean" ? (
-            <button
-              type="button"
-              className="habit-check"
-              aria-label={complete ? `Undo check-in ${habit.name}` : `Check in ${habit.name}`}
-              aria-pressed={complete}
-              onClick={() => void toggleCheckIn(habit)}
-            >
-              {complete && <Icon name="check" size={18} />}
-            </button>
-          ) : (
-            <>
-              <span className="habit-progress">
-                {value} / {habit.goal}
-                {habit.unit === null ? "" : ` ${habit.unit}`}
-                {complete && <span className="habit-done"> — Done</span>}
-              </span>
+        {/* A met Goal is called out in words and with a mark, not by the
+         * card's green wash alone. */}
+        {goalMet && (
+          <p className="habit-goal-met">
+            <Icon name="check" size={14} />
+            Goal met
+          </p>
+        )}
+        {/* The expanded history panel already shows the Streak (plus the
+         * full grid and heatmap); skip the compact badge so it isn't
+         * repeated. */}
+        {historyId !== habit.id && (
+          <HabitCardStats habit={habit} stats={statsByHabit.get(habit.id)} today={today} />
+        )}
+        {showCheckInControls && (
+          <div className="habit-checkin">
+            {habit.type === "boolean" ? (
               <button
                 type="button"
-                className="habit-step"
-                aria-label={`Add ${habit.step} to ${habit.name}`}
-                onClick={() => void addStep(habit)}
+                className="habit-check"
+                aria-label={complete ? `Undo check-in ${habit.name}` : `Check in ${habit.name}`}
+                aria-pressed={complete}
+                onClick={() => void toggleCheckIn(habit)}
               >
-                +{habit.step}
+                {complete && <Icon name="check" size={18} />}
               </button>
-            </>
-          ))}
-        <span className="row-actions">
-          <button
-            type="button"
-            aria-label={`History ${habit.name}`}
-            onClick={() => setHistoryId((current) => (current === habit.id ? null : habit.id))}
-          >
-            <Icon name="chart-column" />
-          </button>
-          <button
-            type="button"
-            aria-label={`Edit ${habit.name}`}
-            onClick={() => setEditor({ mode: "edit", habitId: habit.id })}
-          >
-            <Icon name="pencil" />
-          </button>
-          <button
-            type="button"
-            aria-label={habit.is_archived ? `Unarchive ${habit.name}` : `Archive ${habit.name}`}
-            onClick={() => void setArchived(habit, !habit.is_archived)}
-          >
-            {habit.is_archived ? <Icon name="archive-restore" /> : <Icon name="archive" />}
-          </button>
-          <button
-            type="button"
-            aria-label={`Delete habit ${habit.name}`}
-            onClick={() => void handleDelete(habit)}
-          >
-            <Icon name="x" />
-          </button>
-        </span>
+            ) : (
+              <>
+                <span className="habit-progress">
+                  {value} / {habit.goal}
+                  {habit.unit === null ? "" : ` ${habit.unit}`}
+                  {complete && <span className="habit-done"> — Done</span>}
+                </span>
+                <button
+                  type="button"
+                  className="habit-step"
+                  aria-label={`Add ${habit.step} to ${habit.name}`}
+                  onClick={() => void addStep(habit)}
+                >
+                  +{habit.step}
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {historyId === habit.id && <HabitHistory habit={habit} onChanged={() => void load()} />}
       </li>
     );
@@ -261,18 +255,24 @@ export function HabitsView(): JSX.Element {
           Habits are things you check in on daily or weekly — add one below to start tracking it.
         </p>
       ) : (
-        <ul aria-label="Today's Habits">{dueToday.map((habit) => renderHabit(habit, true))}</ul>
+        <ul className="habits-grid" aria-label="Today's Habits">
+          {dueToday.map((habit) => renderHabit(habit, true))}
+        </ul>
       )}
       {others.length > 0 && (
         <section className="other-habits">
           <h2>Other habits</h2>
-          <ul aria-label="Other habits">{others.map((habit) => renderHabit(habit, false))}</ul>
+          <ul className="habits-grid" aria-label="Other habits">
+            {others.map((habit) => renderHabit(habit, false))}
+          </ul>
         </section>
       )}
       {archived.length > 0 && (
         <section className="archived-habits">
           <h2>Archived</h2>
-          <ul aria-label="Archived habits">{archived.map((habit) => renderHabit(habit, false))}</ul>
+          <ul className="habits-grid" aria-label="Archived habits">
+            {archived.map((habit) => renderHabit(habit, false))}
+          </ul>
         </section>
       )}
       {editor?.mode === "create" ? (

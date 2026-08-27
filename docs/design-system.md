@@ -92,6 +92,14 @@ Bricolage Grotesque, semibold/bold, type only.
   two-line layout of #157, which is what a phone gets — and what a desktop
   window gets once the detail panel has taken the list's width. Query the
   container, not the viewport, or the fallback misses that second case.
+- **Habits are a card grid**, not a column: `.habits-grid` is
+  `repeat(auto-fill, minmax(260px, 1fr))`, reflowing to one column once the
+  content column can't hold two cards. Each card carries its recent-days
+  strip (three weeks), current Streak, one Check-in control, and a single
+  actions menu — History, Edit, Archive, Delete fold behind one kebab
+  trigger rather than four permanent buttons. A met Goal is called out in
+  words ("Goal met") and a check mark, never by the card's green wash
+  alone.
 - Radii: 6px inputs/buttons/chips (`--radius-sm`), 8px cards/panels
   (`--radius-md`), 12px modals (`--radius-lg`), full-round pills
   (`--radius-full`: timer presets, habit check, tag chips).

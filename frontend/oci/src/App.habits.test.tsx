@@ -25,6 +25,12 @@ async function openHabits(): Promise<void> {
   await screen.findByRole("heading", { name: "Habits" });
 }
 
+/** History, Edit, Archive and Delete live behind one per-card menu now. */
+async function openHabitMenu(name: string): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: `Actions for ${name}` }));
+  await screen.findByRole("menu", { name: `Actions for ${name}` });
+}
+
 describe("Today's Habits", () => {
   it("opens from the sidebar and queries the local day", async () => {
     const api = installFakeApi();
@@ -141,16 +147,15 @@ describe("Habit card stats", () => {
 
     const strip = screen.getByRole("group", { name: "Recent days for Meditate" });
     const days = within(strip).getAllByRole("img");
-    expect(days).toHaveLength(7);
-    expect(days.map((day) => day.getAttribute("aria-label"))).toEqual([
-      "Jun 27: missed",
-      "Jun 28: missed",
-      "Jun 29: missed",
+    // Three weeks of scheduled days, oldest first — enough to read a pattern.
+    expect(days).toHaveLength(21);
+    expect(days.slice(-4).map((day) => day.getAttribute("aria-label"))).toEqual([
       "Jun 30: checked in",
       "Jul 1: checked in",
       "Jul 2: checked in",
       "Jul 3: not yet checked in",
     ]);
+    expect(days[0]?.getAttribute("aria-label")).toBe("Jun 13: missed");
   });
 
   it("refreshes the Streak when a Check-in is made or undone, without a reload", async () => {
@@ -185,15 +190,14 @@ describe("Habit card stats", () => {
     // never appears in the strip at all — it can't be shown as missed.
     const strip = screen.getByRole("group", { name: "Recent days for Review week" });
     const days = await within(strip).findAllByRole("img");
-    expect(days.map((day) => day.getAttribute("aria-label"))).toEqual([
-      "May 18: missed",
-      "May 25: missed",
-      "Jun 1: missed",
-      "Jun 8: missed",
-      "Jun 15: missed",
+    // Only Mondays appear — Friday 2026-07-03 is never in the strip, so it
+    // can't read as missed. Three weeks' worth means 21 scheduled Mondays.
+    expect(days).toHaveLength(21);
+    expect(days.slice(-2).map((day) => day.getAttribute("aria-label"))).toEqual([
       "Jun 22: missed",
       "Jun 29: checked in",
     ]);
+    expect(days[0]?.getAttribute("aria-label")).toBe("Feb 9: missed");
   });
 
   it("shows a Numeric Habit's partial progress toward its Goal, not a binary state", async () => {
@@ -287,7 +291,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Meditate" }));
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Meditate" }));
     const field = screen.getByRole("button", { name: "Icon" });
     expect(field).toHaveTextContent("🧘");
 
@@ -304,7 +309,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Meditate" }));
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Meditate" }));
     fireEvent.click(screen.getByRole("button", { name: "Icon" }));
     const picker = await screen.findByRole("dialog", { name: "Choose an icon" });
     fireEvent.click(within(picker).getByRole("button", { name: "No icon" }));
@@ -366,7 +372,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Meditate" }));
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Meditate" }));
     expect(screen.getByRole("radio", { name: "Red" })).toBeChecked();
 
     fireEvent.click(screen.getByRole("radio", { name: "No colour" }));
@@ -396,7 +403,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Drink water" }));
+    await openHabitMenu("Drink water");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Drink water" }));
 
     expect(screen.getByLabelText("Name")).toHaveValue("Drink water");
     expect(screen.getByRole("combobox", { name: "Habit type" })).toHaveValue("numeric");
@@ -416,7 +424,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Meditate" }));
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Meditate" }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Sit still" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -430,7 +439,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Meditate" }));
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Meditate" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Habit type" }), {
       target: { value: "numeric" },
     });
@@ -464,7 +474,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete habit Meditate" }));
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete habit Meditate" }));
 
     await waitFor(() => expect(screen.queryByText("Meditate")).not.toBeInTheDocument());
     expect(api.habits).toHaveLength(0);
@@ -475,7 +486,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Archive Meditate" }));
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Archive Meditate" }));
 
     const archived = await screen.findByRole("list", { name: "Archived habits" });
     expect(within(archived).getByText("Meditate")).toBeInTheDocument();
@@ -485,7 +497,8 @@ describe("Managing Habits", () => {
     // Archived habits keep no check-in controls — today is not their screen.
     expect(screen.queryByRole("button", { name: "Check in Meditate" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Unarchive Meditate" }));
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Unarchive Meditate" }));
 
     await waitFor(() =>
       expect(
@@ -493,6 +506,60 @@ describe("Managing Habits", () => {
       ).toBeInTheDocument(),
     );
     expect(api.habits[0]?.is_archived).toBe(false);
+  });
+
+  it("folds History, Edit, Archive and Delete into one keyboard-reachable menu", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate")] });
+    render(<App />);
+    await openHabits();
+
+    const trigger = await screen.findByRole("button", { name: "Actions for Meditate" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    // No permanent action buttons on the card — only the one trigger.
+    expect(screen.queryByRole("button", { name: "Edit Meditate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete habit Meditate" })).not.toBeInTheDocument();
+
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    fireEvent.click(trigger);
+    const menu = await screen.findByRole("menu", { name: "Actions for Meditate" });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.getAttribute("aria-label")),
+    ).toEqual(["History Meditate", "Edit Meditate", "Archive Meditate", "Delete habit Meditate"]);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("menu", { name: "Actions for Meditate" })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("opens History from the actions menu", async () => {
+    const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
+    checkIn(api, api.habits[0]?.id ?? 0, "2026-07-02");
+    render(<App />);
+    await openHabits();
+
+    await openHabitMenu("Meditate");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "History Meditate" }));
+
+    expect(await screen.findByText("July 2026")).toBeInTheDocument();
+  });
+
+  it("marks a met Goal with words and a mark, not colour alone", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Drink water", { type: "numeric", goal: 2, step: 2, unit: "glasses" })],
+    });
+    checkIn(api, api.habits[0]?.id ?? 0, "2026-07-03", 2);
+    render(<App />);
+    await openHabits();
+
+    const card = (await screen.findByRole("heading", { name: "Drink water" })).closest("li");
+    expect(card).toHaveClass("complete");
+    expect(within(card as HTMLElement).getByText("Goal met")).toBeInTheDocument();
   });
 
   it("explains what a Habit is when none exist yet", async () => {
