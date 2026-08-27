@@ -23,6 +23,7 @@ import { currentDragPayload, endDrag, readDragPayload, startDrag } from "../dnd"
 import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
 import { pathForStaticView } from "../routes";
+import { APP_VERSION } from "../version";
 import { CreateMenu } from "./CreateMenu";
 import { FocusNavBadge } from "./FocusNavBadge";
 import { FolderForm } from "./FolderForm";
@@ -626,7 +627,9 @@ export function Sidebar({
           this wrapper) along with it. */}
       <div className="sidebar-scroll">
         <div className="sidebar-top">
-          <div className="sidebar-brand">Tuk Tuk</div>
+          <div className="sidebar-brand" title={`tuk-tuk version ${APP_VERSION}`}>
+            Tuk Tuk
+          </div>
           <FocusNavBadge onOpen={onSelectFocus} />
           <button
             type="button"
