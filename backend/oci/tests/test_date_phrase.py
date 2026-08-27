@@ -90,3 +90,46 @@ class TestDaypartPhrases:
         assert is_all_day is False
         assert (due_date.hour, due_date.minute) == (18, 0)
         assert due_date.date() == _LOCAL_DATE
+
+
+class TestSpelledOutTimes:
+    """A spelled-out clock hour is as ordinary as a digit (issue #176): the
+    model lifts "four pm" / "las cuatro" out of the text verbatim, and the
+    resolver — never the model — turns it into a concrete time."""
+
+    def test_english_spelled_hour_with_meridiem(self) -> None:
+        resolved = resolve_date_phrase("tomorrow at four pm", _LOCAL_DATE, _ZONE)
+        assert resolved is not None
+        due_date, is_all_day = resolved
+        assert is_all_day is False
+        assert (due_date.hour, due_date.minute) == (16, 0)
+        assert due_date.date() == dt.date(2026, 8, 21)
+
+    def test_capitalised_and_o_clock_filler(self) -> None:
+        resolved = resolve_date_phrase("Tomorrow four o'clock pm", _LOCAL_DATE, _ZONE)
+        assert resolved is not None
+        assert resolved[0].hour == 16
+
+    def test_noon_is_a_named_time(self) -> None:
+        resolved = resolve_date_phrase("tomorrow noon", _LOCAL_DATE, _ZONE)
+        assert resolved is not None
+        assert (resolved[0].hour, resolved[0].minute) == (12, 0)
+
+    def test_midnight_is_a_named_time(self) -> None:
+        resolved = resolve_date_phrase("tomorrow midnight", _LOCAL_DATE, _ZONE)
+        assert resolved is not None
+        assert (resolved[0].hour, resolved[0].minute) == (0, 0)
+
+    def test_spanish_spelled_hour_with_afternoon_qualifier(self) -> None:
+        # "a las cuatro de la tarde" is 16:00, not 04:00.
+        resolved = resolve_date_phrase("manana a las cuatro de la tarde", _LOCAL_DATE, _ZONE)
+        assert resolved is not None
+        assert resolved[0].hour == 16
+
+    def test_spanish_morning_qualifier_keeps_the_hour(self) -> None:
+        resolved = resolve_date_phrase("manana a las once de la manana", _LOCAL_DATE, _ZONE)
+        assert resolved is not None
+        assert resolved[0].hour == 11
+
+    def test_a_word_that_is_not_a_clock_hour_still_fails(self) -> None:
+        assert resolve_date_phrase("tomorrow at teatime", _LOCAL_DATE, _ZONE) is None

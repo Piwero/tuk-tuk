@@ -43,6 +43,60 @@ _NEXT_MARKERS = ("proximo", "proxima")
 # of Europe: "18.00"), so both resolve rather than degrading to "no date".
 _TIME_RE = re.compile(r"^(\d{1,2})(?:[:.](\d{2}))?(am|pm)?$")
 
+# Spelled-out clock hours (issue #176): the model extracts "four pm" /
+# "las cuatro" verbatim, so the resolver rewrites the number word to its
+# digit before the pattern above sees it — "four pm" is as ordinary a way
+# to say a time as "4pm". English one–twelve and Spanish una–doce only:
+# a clock hour never exceeds twelve.
+_HOUR_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "una": 1,
+    "un": 1,
+    "dos": 2,
+    "tres": 3,
+    "cuatro": 4,
+    "cinco": 5,
+    "seis": 6,
+    "siete": 7,
+    "ocho": 8,
+    "nueve": 9,
+    "diez": 10,
+    "once": 11,
+    "doce": 12,
+}
+
+# Whole-phrase clock times that name no hour digit at all.
+_NAMED_TIMES = {
+    "noon": time(12, 0),
+    "mediodia": time(12, 0),
+    "midnight": time(0, 0),
+    "medianoche": time(0, 0),
+}
+
+# Filler around a spelled hour that carries no meaning of its own:
+# "four o'clock", "las cuatro en punto".
+_CLOCK_FILLERS = ("oclock", "o'clock", "punto")
+
+# Trailing Spanish qualifiers that fix an otherwise-24h hour to AM or PM —
+# "a las cuatro de la tarde" is 16:00, not 04:00. English uses am/pm, which
+# the pattern already captures.
+_SPANISH_MERIDIEM_TAILS: dict[tuple[str, ...], str] = {
+    ("de", "la", "tarde"): "pm",
+    ("de", "la", "noche"): "pm",
+    ("de", "la", "manana"): "am",
+}
+
 # Daypart qualifiers (issue #173): trailing words like "afternoon"/"tarde"
 # name an imprecise time-of-day rather than a clock time, so each maps to a
 # reasonable default hour instead of failing to resolve at all — the same
@@ -78,12 +132,29 @@ def _fold(word: str) -> str:
 
 
 def _parse_time(words: list[str]) -> time | None:
-    """The remaining words after the date portion, joined and matched
-    against a bare hour, "hh:mm", or a 12-hour "3pm"/"3:30pm" form. Returns
-    None for anything else, including a 24-hour hour out of range."""
+    """The remaining words after the date portion, matched against a bare
+    hour, "hh:mm", or a 12-hour "3pm"/"3:30pm" form — with a spelled-out
+    hour ("four pm", "las cuatro"), a named time ("noon", "medianoche"),
+    trailing filler ("o'clock"), and a trailing Spanish AM/PM qualifier
+    ("de la tarde") all rewritten to that shape first. Returns None for
+    anything else, including a 24-hour hour out of range."""
     if not words:
         return None
-    joined = "".join(words)
+
+    if len(words) == 1 and words[0] in _NAMED_TIMES:
+        return _NAMED_TIMES[words[0]]
+
+    words = [word for word in words if word not in _CLOCK_FILLERS]
+
+    tail_meridiem: str | None = None
+    if len(words) >= 3 and tuple(words[-3:]) in _SPANISH_MERIDIEM_TAILS:
+        tail_meridiem = _SPANISH_MERIDIEM_TAILS[tuple(words[-3:])]
+        words = words[:-3]
+
+    joined = "".join(str(_HOUR_WORDS.get(word, word)) for word in words)
+    if tail_meridiem is not None and not joined.endswith(("am", "pm")):
+        joined += tail_meridiem
+
     match = _TIME_RE.match(joined)
     if match is None:
         return None
