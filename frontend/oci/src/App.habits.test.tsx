@@ -153,6 +153,25 @@ describe("Habit card stats", () => {
     ]);
   });
 
+  it("refreshes the Streak when a Check-in is made or undone, without a reload", async () => {
+    const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
+    const habitId = api.habits[0]?.id ?? 0;
+    checkIn(api, habitId, "2026-06-30");
+    checkIn(api, habitId, "2026-07-01");
+    checkIn(api, habitId, "2026-07-02");
+    render(<App />);
+    await openHabits();
+
+    // Today is graced while un-checked, so the run so far reads as 3.
+    expect(await screen.findByText("Streak: 3")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Check in Meditate" }));
+    expect(await screen.findByText("Streak: 4")).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Undo check-in Meditate" }));
+    expect(await screen.findByText("Streak: 3")).toBeInTheDocument();
+  });
+
   it("skips a non-daily Habit's off days rather than reading them as missed", async () => {
     const api = installFakeApi({
       habits: [fakeHabit("Review week", { frequency: "FREQ=WEEKLY;BYDAY=MO" })],

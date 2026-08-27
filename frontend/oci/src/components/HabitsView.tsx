@@ -76,15 +76,27 @@ export function HabitsView(): JSX.Element {
     ]);
   }
 
+  /** Re-read one Habit's stats after a Check-in write. The Streak and the
+   * recent-days strip are the server's call, so a tap that changes the day's
+   * Check-in leaves the numbers on screen stale until they are refetched. */
+  const refreshStats = useCallback(
+    async (habitId: number): Promise<void> => {
+      const stats = await fetchHabitStats(habitId, today);
+      setStatsByHabit((current) => new Map(current).set(habitId, stats));
+    },
+    [today],
+  );
+
   /** A Boolean tap checks the day in; tapping again undoes it. */
   async function toggleCheckIn(habit: Habit): Promise<void> {
     const existing = checkInOf(habit);
     if (existing === undefined) {
       applyCheckIn(await putCheckIn(habit.id, today, 1));
-      return;
+    } else {
+      await removeCheckIn(habit.id, today);
+      setCheckIns((current) => current.filter((checkIn) => checkIn.habit_id !== habit.id));
     }
-    await removeCheckIn(habit.id, today);
-    setCheckIns((current) => current.filter((checkIn) => checkIn.habit_id !== habit.id));
+    await refreshStats(habit.id);
   }
 
   /** A Numeric tap accumulates one step into the day's Check-in. The tap's
@@ -98,6 +110,7 @@ export function HabitsView(): JSX.Element {
     try {
       const value = (checkInOf(habit)?.value ?? 0) + habit.step;
       applyCheckIn(await putCheckIn(habit.id, today, value));
+      await refreshStats(habit.id);
     } finally {
       setPending((current) => {
         const next = new Set(current);
