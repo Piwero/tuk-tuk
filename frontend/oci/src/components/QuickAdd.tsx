@@ -4,12 +4,16 @@ import {
   createList,
   createTag,
   createTask,
-  parseAssistCapture,
   type Priority,
   type Tag,
   type Task,
   type TaskList,
 } from "../api";
+import {
+  formatRecurrenceRule,
+  formatReminderOffset,
+  parseCaptureWithTimeout,
+} from "../assistCapture";
 import { PRIORITY_LABELS } from "../grouping";
 import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
@@ -18,22 +22,6 @@ import { applyTagPick, suggestTags } from "../tagSuggest";
 import { useAssistAvailable } from "../useAssistAvailable";
 import { Icon } from "./Icon";
 import { TokenInput, type TokenChannel } from "./TokenInput";
-
-/** A client-enforced backstop on top of the backend's own parse timeout
- * (issue #43): Assist only ever adds value, never subtracts it, so a slow
- * or hung parse must never hold Quick-Add's Enter beyond a couple of
- * seconds. */
-const PARSE_TIMEOUT_MS = 5000;
-
-/** The caller's own local day as YYYY-MM-DD — what a relative date phrase
- * ("tomorrow", "tuesday") resolves against, server-side. */
-function localDateString(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 function formatDraftDate(dueDate: string, isAllDay: boolean): string {
   const date = new Date(dueDate);
@@ -84,91 +72,6 @@ interface CaptureDraft {
   suggestedListName: string | null;
   suggestedTagNames: string[];
   suggestedPriority: Priority | null;
-}
-
-const FREQ_LABELS: Record<string, string> = {
-  DAILY: "daily",
-  WEEKLY: "weekly",
-  MONTHLY: "monthly",
-  YEARLY: "yearly",
-};
-
-const FREQ_UNIT_PLURALS: Record<string, string> = {
-  DAILY: "days",
-  WEEKLY: "weeks",
-  MONTHLY: "months",
-  YEARLY: "years",
-};
-
-const BYDAY_LABELS: Record<string, string> = {
-  MO: "Mon",
-  TU: "Tue",
-  WE: "Wed",
-  TH: "Thu",
-  FR: "Fri",
-  SA: "Sat",
-  SU: "Sun",
-};
-
-/** A human-readable label for the RRULE content Assisted Capture's own
- * recurrence-phrase resolver emits (app.recurrence_phrase); anything this
- * doesn't recognize falls back to the raw rule so the chip never goes
- * blank. */
-function formatRecurrenceRule(recurrence: string): string {
-  const parts = Object.fromEntries(
-    recurrence.split(";").map((part) => part.split("=") as [string, string]),
-  );
-  const freq = parts.FREQ;
-  if (freq === undefined) {
-    return recurrence;
-  }
-  if (parts.BYMONTHDAY !== undefined) {
-    return `monthly on the ${parts.BYMONTHDAY}${dayOrdinalSuffix(Number(parts.BYMONTHDAY))}`;
-  }
-  if (parts.BYDAY !== undefined) {
-    const days = parts.BYDAY.split(",")
-      .map((code) => BYDAY_LABELS[code] ?? code)
-      .join(", ");
-    return `weekly on ${days}`;
-  }
-  if (parts.INTERVAL !== undefined) {
-    return `every ${parts.INTERVAL} ${FREQ_UNIT_PLURALS[freq] ?? freq.toLowerCase()}`;
-  }
-  return FREQ_LABELS[freq] ?? freq.toLowerCase();
-}
-
-function dayOrdinalSuffix(day: number): string {
-  if (day % 10 === 1 && day !== 11) return "st";
-  if (day % 10 === 2 && day !== 12) return "nd";
-  if (day % 10 === 3 && day !== 13) return "rd";
-  return "th";
-}
-
-/** A human-readable label for a reminder's signed ISO-8601 duration offset
- * (the wire format Task.reminders already uses). Only the closed set
- * Assisted Capture's own reminder-phrase resolver ever emits is rendered
- * specially; anything else falls back to the raw offset so the chip never
- * goes blank. */
-function formatReminderOffset(offset: string): string {
-  if (offset === "PT0S") {
-    return "at the time";
-  }
-  const daysMatch = /^-P(\d+)D$/.exec(offset);
-  if (daysMatch !== null) {
-    const n = Number(daysMatch[1]);
-    return n === 1 ? "1 day before" : `${n} days before`;
-  }
-  const hoursMatch = /^-PT(\d+)H$/.exec(offset);
-  if (hoursMatch !== null) {
-    const n = Number(hoursMatch[1]);
-    return n === 1 ? "1 hour before" : `${n} hours before`;
-  }
-  const minutesMatch = /^-PT(\d+)M$/.exec(offset);
-  if (minutesMatch !== null) {
-    const n = Number(minutesMatch[1]);
-    return n === 1 ? "1 minute before" : `${n} minutes before`;
-  }
-  return offset;
 }
 
 interface QuickAddProps {
@@ -462,19 +365,13 @@ export function QuickAdd({
     // themselves (tokenPlan) are carried through the draft so they still
     // outrank whatever Assist proposes for the same fields on confirm.
     setParsing(true);
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), PARSE_TIMEOUT_MS);
     try {
-      const suggestion = await parseAssistCapture(
-        {
-          text: tokenPlan.title,
-          local_date: localDateString(),
-          time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          list_names: lists.map((list) => list.name),
-          tag_names: tags.map((tag) => tag.name),
-        },
-        controller.signal,
-      );
+      const suggestion = await parseCaptureWithTimeout(tokenPlan.title, lists, tags);
+      if (suggestion === null) {
+        // Parse failure or timeout: degrade to plain capture, no error shown.
+        await saveAsTyped(submittedTitle, snapshot);
+        return;
+      }
       const hasSuggestion =
         suggestion.due_date !== null ||
         suggestion.list_name !== null ||
@@ -505,10 +402,10 @@ export function QuickAdd({
         suggestedPriority: suggestion.priority,
       });
     } catch {
-      // Parse failure or timeout: degrade to plain capture, no error shown.
+      // A throw from the create call on the no-date/empty-suggestion paths
+      // above: degrade to plain capture, no error shown.
       await saveAsTyped(submittedTitle, snapshot);
     } finally {
-      window.clearTimeout(timeoutId);
       setParsing(false);
     }
   }
