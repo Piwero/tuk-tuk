@@ -1,20 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   createSection,
   deleteSection,
   deleteTask,
   updateSection,
+  updateTask,
   type Section,
+  type Tag,
   type Task,
   type TaskList,
+  type TaskPatch,
 } from "../api";
+import { allDaySchedule } from "../dates";
 import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
 import { useTaskCompletion } from "../taskCompletion";
+import { useTaskSelection } from "../taskSelection";
 import { type UndoQueue } from "../undoQueue";
+import { BulkActionBar } from "./BulkActionBar";
+import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { SectionNameForm } from "./SectionNameForm";
 import { Icon } from "./Icon";
@@ -26,8 +33,14 @@ interface TaskListViewProps {
   sections: Section[];
   /** The viewed List, or null when the view is not a List (no section affordances). */
   listId: number | null;
-  /** All Lists, used to label each task's List when the view spans multiple Lists. */
+  /** All Lists, used to label each task's List when the view spans multiple
+   * Lists, and to populate the bulk "Move to list" picker (issue #202). */
   lists: TaskList[];
+  /** Every Tag, for the bulk "Add tag" picker (issue #202). */
+  tags: Tag[];
+  /** A stable key for the view on screen — the selection (issue #202) clears
+   * whenever it changes, so a marked row never carries across a view switch. */
+  viewKey: string;
   groupBy: GroupBy;
   sortBy: SortBy;
   onChanged: (update: (current: Task[]) => Task[]) => void;
@@ -46,6 +59,8 @@ export function TaskListView({
   sections,
   listId,
   lists,
+  tags,
+  viewKey,
   groupBy,
   sortBy,
   onChanged,
@@ -56,6 +71,19 @@ export function TaskListView({
 }: TaskListViewProps): JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
   const [renamingSectionId, setRenamingSectionId] = useState<number | null>(null);
+  const selection = useTaskSelection();
+  const clearSelection = selection.clear;
+  // A pending bulk completion greys its rows the same way a single pending
+  // completion does — without touching `task.completed` (a recurring Task
+  // never flips it), so an Undo simply un-greys them.
+  const [bulkPending, setBulkPending] = useState<Set<number>>(() => new Set());
+  const [bulkDialog, setBulkDialog] = useState<"reschedule" | "move" | "tag" | null>(null);
+
+  // The selection is per-view: switching Lists (or to a Smart List) drops it.
+  useEffect(() => {
+    clearSelection();
+    setBulkPending(new Set());
+  }, [viewKey, clearSelection]);
   const [quickStart, setQuickStart] = useState<{
     task: Task;
     position: { x: number; y: number };
@@ -77,6 +105,162 @@ export function TaskListView({
       "Task deleted",
       () => deleteTask(task.id),
       () => onChanged((current) => [...current, task]),
+    );
+  }
+
+  const selectedTasks = (): Task[] => tasks.filter((task) => selection.isSelected(task.id));
+
+  const plural = (n: number): string => (n === 1 ? "" : "s");
+
+  /** Run `op` against every target one Task at a time (no bulk route),
+   * tolerating partial failure: the fulfilled Tasks come back in `updated`,
+   * the rejected ones in `failed` so the caller can name them. */
+  async function runPerTask(
+    targets: Task[],
+    op: (task: Task) => Promise<Task>,
+  ): Promise<{ updated: Task[]; failed: Task[] }> {
+    const results = await Promise.allSettled(targets.map((task) => op(task)));
+    const updated: Task[] = [];
+    const failed: Task[] = [];
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        updated.push(result.value);
+      } else {
+        failed.push(targets[index]!);
+      }
+    });
+    return { updated, failed };
+  }
+
+  const applyUpdated = (updated: Task[]): void =>
+    onChanged((current) => current.map((task) => updated.find((u) => u.id === task.id) ?? task));
+
+  const reportFailures = (verb: string, failed: Task[]): void => {
+    if (failed.length > 0) {
+      toasts.notify(`Couldn't ${verb}: ${failed.map((task) => task.title).join(", ")}`);
+    }
+  };
+
+  function bulkComplete(): void {
+    const targets = selectedTasks().filter((task) => !task.completed && !bulkPending.has(task.id));
+    if (targets.length === 0) {
+      return;
+    }
+    const ids = new Set(targets.map((task) => task.id));
+    setBulkPending((current) => new Set([...current, ...ids]));
+    selection.clear();
+    const unmark = (): void =>
+      setBulkPending((current) => new Set([...current].filter((id) => !ids.has(id))));
+    toasts.push(
+      `Completed ${targets.length} task${plural(targets.length)}`,
+      async () => {
+        const { updated, failed } = await runPerTask(targets, (task) =>
+          updateTask(task.id, { completed: true }),
+        );
+        applyUpdated(updated);
+        unmark();
+        reportFailures("complete", failed);
+      },
+      unmark,
+    );
+  }
+
+  function bulkDelete(): void {
+    const targets = selectedTasks();
+    if (targets.length === 0) {
+      return;
+    }
+    const ids = new Set(targets.map((task) => task.id));
+    onChanged((current) => current.filter((task) => !ids.has(task.id)));
+    selection.clear();
+    toasts.push(
+      `Deleted ${targets.length} task${plural(targets.length)}`,
+      async () => {
+        const { failed } = await runPerTask(targets, (task) =>
+          deleteTask(task.id).then(() => task),
+        );
+        if (failed.length > 0) {
+          onChanged((current) => [...current, ...failed]);
+          reportFailures("delete", failed);
+        }
+      },
+      () => onChanged((current) => [...current, ...targets]),
+    );
+  }
+
+  /** Shared shape for reschedule / move / add-tag: an optimistic local edit,
+   * one deferred PATCH per Task, undo restores the pre-images. */
+  function bulkPatch(
+    verb: string,
+    label: string,
+    patchFor: (task: Task) => TaskPatch,
+    localEdit: (task: Task) => Task,
+  ): void {
+    const targets = selectedTasks();
+    if (targets.length === 0) {
+      return;
+    }
+    const preImages = targets.map((task) => ({ ...task }));
+    const ids = new Set(targets.map((task) => task.id));
+    onChanged((current) => current.map((task) => (ids.has(task.id) ? localEdit(task) : task)));
+    selection.clear();
+    setBulkDialog(null);
+    toasts.push(
+      label,
+      async () => {
+        const { updated, failed } = await runPerTask(targets, (task) =>
+          updateTask(task.id, patchFor(task)),
+        );
+        applyUpdated(updated);
+        if (failed.length > 0) {
+          const failedIds = new Set(failed.map((task) => task.id));
+          onChanged((current) =>
+            current.map(
+              (task) => preImages.find((p) => p.id === task.id && failedIds.has(p.id)) ?? task,
+            ),
+          );
+          reportFailures(verb, failed);
+        }
+      },
+      () =>
+        onChanged((current) =>
+          current.map((task) => preImages.find((p) => p.id === task.id) ?? task),
+        ),
+    );
+  }
+
+  function bulkReschedule(day: string): void {
+    const patch = allDaySchedule(null, day);
+    bulkPatch(
+      "reschedule",
+      `Rescheduled ${selection.size} task${plural(selection.size)}`,
+      () => patch,
+      (task) => ({
+        ...task,
+        ...patch,
+      }),
+    );
+  }
+
+  function bulkMove(targetListId: number): void {
+    bulkPatch(
+      "move",
+      `Moved ${selection.size} task${plural(selection.size)}`,
+      () => ({ list_id: targetListId }),
+      (task) => ({ ...task, list_id: targetListId }),
+    );
+  }
+
+  function bulkAddTag(tagId: number): void {
+    const tag = tags.find((t) => t.id === tagId);
+    bulkPatch(
+      "add tag",
+      `Tagged ${selection.size} task${plural(selection.size)}`,
+      (task) => ({ tag_ids: [...new Set([...task.tags.map((t) => t.id), tagId])] }),
+      (task) =>
+        task.tags.some((t) => t.id === tagId) || tag === undefined
+          ? task
+          : { ...task, tags: [...task.tags, tag] },
     );
   }
 
@@ -181,11 +365,17 @@ export function TaskListView({
       <TaskRow
         key={task.id}
         task={task}
-        completed={task.completed || completion.isPending(task.id)}
+        completed={task.completed || completion.isPending(task.id) || bulkPending.has(task.id)}
         list={taskList}
         showDate
         showTags
         showCheckProgress
+        selectable
+        selected={selection.isSelected(task.id)}
+        onSelectToggle={(shiftKey) =>
+          shiftKey ? selection.extendTo(task.id, orderedIds) : selection.toggle(task.id)
+        }
+        onSelectionClear={selection.clear}
         onToggle={completion.toggle}
         onSelect={onSelect}
         onStartFocus={onStartFocus}
@@ -266,6 +456,8 @@ export function TaskListView({
   }
 
   const groups = groupTasks(tasks, listId === null ? [] : sections, groupBy, sortBy, lists);
+  // Task ids in the order they appear on screen — what Shift-extend walks.
+  const orderedIds = groups.flatMap((group) => group.tasks.map((task) => task.id));
 
   async function moveSectionToEnd(sectionId: number): Promise<void> {
     const siblings = [...sections].sort(byOrder).filter((s) => s.id !== sectionId);
@@ -294,6 +486,97 @@ export function TaskListView({
 
   return (
     <>
+      {selection.size > 0 && (
+        <BulkActionBar
+          count={selection.size}
+          onComplete={bulkComplete}
+          onReschedule={() => setBulkDialog("reschedule")}
+          onMove={() => setBulkDialog("move")}
+          onAddTag={() => setBulkDialog("tag")}
+          onDelete={bulkDelete}
+          onClear={selection.clear}
+        />
+      )}
+      {bulkDialog === "reschedule" && (
+        <Modal title="Reschedule selected tasks" onClose={() => setBulkDialog(null)}>
+          <form
+            className="bulk-dialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const day = new FormData(event.currentTarget).get("day")?.toString() ?? "";
+              if (day !== "") {
+                bulkReschedule(day);
+              }
+            }}
+          >
+            <label>
+              Due date
+              <input type="date" name="day" aria-label="Due date" required />
+            </label>
+            <button type="submit">Reschedule</button>
+          </form>
+        </Modal>
+      )}
+      {bulkDialog === "move" && (
+        <Modal title="Move selected tasks" onClose={() => setBulkDialog(null)}>
+          <form
+            className="bulk-dialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = new FormData(event.currentTarget).get("list")?.toString() ?? "";
+              if (value !== "") {
+                bulkMove(Number(value));
+              }
+            }}
+          >
+            <label>
+              List
+              <select name="list" aria-label="List" defaultValue="">
+                <option value="" disabled>
+                  Choose a list…
+                </option>
+                {lists
+                  .filter((list) => !list.is_archived)
+                  .map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <button type="submit">Move</button>
+          </form>
+        </Modal>
+      )}
+      {bulkDialog === "tag" && (
+        <Modal title="Add a tag to selected tasks" onClose={() => setBulkDialog(null)}>
+          <form
+            className="bulk-dialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = new FormData(event.currentTarget).get("tag")?.toString() ?? "";
+              if (value !== "") {
+                bulkAddTag(Number(value));
+              }
+            }}
+          >
+            <label>
+              Tag
+              <select name="tag" aria-label="Tag" defaultValue="">
+                <option value="" disabled>
+                  Choose a tag…
+                </option>
+                {tags.map((tag) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit">Add tag</button>
+          </form>
+        </Modal>
+      )}
       <div
         className="task-groups"
         onDragOver={(event) => event.preventDefault()}
