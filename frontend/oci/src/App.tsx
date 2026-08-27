@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   fetchCompletedOccurrences,
   fetchCompletedTasks,
   fetchFolders,
   fetchLists,
+  fetchOpenTasks,
   fetchSearchTasks,
   fetchSections,
   fetchSmartTasks,
@@ -46,6 +47,7 @@ import {
   staticViewKindForPath,
   type StaticViewKind,
 } from "./routes";
+import { deriveOpenTaskCounts } from "./openCounts";
 import { useRegisterShortcut } from "./shortcuts";
 import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
@@ -196,6 +198,12 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // the converted Event disappears and the new Task appears immediately.
   const [calendarRefresh, setCalendarRefresh] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const tasksRef = useRef<Task[]>([]);
+  tasksRef.current = tasks;
+  // Every open Task across every List, held once and kept current as Tasks
+  // change — the client-side source for the sidebar's open-Task counts
+  // (issue #195), never refetched on a mutation.
+  const [openTasks, setOpenTasks] = useState<Task[]>([]);
   // Completed Occurrences of recurring tasks, shown only in the completed view.
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
@@ -345,11 +353,12 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   }, [view]);
 
   useEffect(() => {
-    void Promise.all([fetchLists(), fetchFolders(), fetchTags()]).then(
-      ([listPage, folderPage, tagPage]) => {
+    void Promise.all([fetchLists(), fetchFolders(), fetchTags(), fetchOpenTasks()]).then(
+      ([listPage, folderPage, tagPage, openTaskPage]) => {
         setLists(listPage.items);
         setFolders(folderPage.items);
         setTags(tagPage.items);
+        setOpenTasks(openTaskPage.items);
       },
     );
   }, []);
@@ -536,16 +545,62 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     setCalendarTask(null);
   }
 
+  /** Fold a single Task's new state into the open-Task snapshot behind the
+   * sidebar counts (issue #195): upsert while it is open, drop it the moment
+   * it completes. Used by the direct-Task paths — create, detail edits, a
+   * drag between Lists — where the mover hands us the Task itself. */
+  const reconcileOpenTask = useCallback((task: Task): void => {
+    setOpenTasks((current) => {
+      const without = current.filter((existing) => existing.id !== task.id);
+      return task.completed ? without : [...without, task];
+    });
+  }, []);
+
+  /** Fold a view-tasks update into the open-Task snapshot. A Task the update
+   * drops from the view (deleted, or completed and filtered out) leaves the
+   * snapshot; one it marks completed leaves it; one it adds or reopens joins
+   * it. List moves never come through here — they carry the moved Task and
+   * go through `reconcileOpenTask` — so a disappearance here is only ever a
+   * completion or a delete. */
+  const reconcileOpenTasks = useCallback((update: (current: Task[]) => Task[]): void => {
+    const before = tasksRef.current;
+    const after = update(before);
+    const afterById = new Map(after.map((task) => [task.id, task]));
+    const beforeIds = new Set(before.map((task) => task.id));
+    setOpenTasks((current) => {
+      const kept = current.filter((task) => {
+        const inView = afterById.get(task.id);
+        if (inView !== undefined) {
+          return !inView.completed;
+        }
+        return !beforeIds.has(task.id);
+      });
+      const keptIds = new Set(kept.map((task) => task.id));
+      const joined = after.filter((task) => !task.completed && !keptIds.has(task.id));
+      const refreshed = kept.map((task) => afterById.get(task.id) ?? task);
+      return [...refreshed, ...joined];
+    });
+  }, []);
+
   /** In computed views, apply the optimistic update, then re-run the query —
    * membership is the server's call, not local state's. */
   function changeTasksAndRecompute(update: (current: Task[]) => Task[]): void {
+    reconcileOpenTasks(update);
     setTasks(update);
     void loadTasks();
+  }
+
+  /** A view-tasks update that also keeps the sidebar open-Task counts in
+   * step — the setter handed to every non-computed task view. */
+  function changeTasks(update: (current: Task[]) => Task[]): void {
+    reconcileOpenTasks(update);
+    setTasks(update);
   }
 
   /** Apply a server response, evicting the task if it left the current view. */
   function applyTaskChange(updated: Task): void {
     setCalendarTask((current) => (current?.id === updated.id ? updated : current));
+    reconcileOpenTask(updated);
     if (isComputedView) {
       changeTasksAndRecompute((current) =>
         current.map((task) => (task.id === updated.id ? updated : task)),
@@ -614,6 +669,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   /** Show a newly created task, but only where it belongs: the dialog can file
    * it into another List, and computed views decide membership server-side. */
   function addCreatedTask(created: Task): void {
+    reconcileOpenTask(created);
     if (isComputedView) {
       changeTasksAndRecompute((current) => current);
     } else if (isInCurrentView(created)) {
@@ -685,6 +741,17 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       ? (lists.find((list) => list.id === selectedTask.list_id)?.name ?? null)
       : null;
 
+  // Sidebar open-Task counts (issue #195), derived from the open Tasks the
+  // client holds — scoped to Lists that still exist so a deleted List can't
+  // leave a phantom tally behind.
+  const openTaskCounts = useMemo(() => {
+    const liveListIds = new Set(lists.map((list) => list.id));
+    return deriveOpenTaskCounts(
+      openTasks.filter((task) => liveListIds.has(task.list_id)),
+      localDayOf(new Date()),
+    );
+  }, [openTasks, lists]);
+
   return (
     <FocusRunProvider>
       <ShortcutsProvider>
@@ -707,6 +774,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             selectedTagId={view?.kind === "tag" ? view.id : null}
             selectedFolderId={view?.kind === "folder" ? view.id : null}
             selectedSmart={smartView}
+            smartOpenCounts={openTaskCounts.smart}
+            listOpenCounts={openTaskCounts.byList}
             calendarSelected={calendarSelected}
             habitsSelected={habitsSelected}
             standupSelected={standupSelected}
@@ -740,13 +809,14 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             onTagCreated={(tag) => setTags((current) => [...current, tag])}
             onTagSaved={applyTagChange}
             onTagDeleted={applyTagDeletion}
-            onTaskMoved={(moved) =>
+            onTaskMoved={(moved) => {
+              reconcileOpenTask(moved);
               setTasks((current) =>
                 view?.kind === "list" && moved.list_id !== view.id
                   ? current.filter((task) => task.id !== moved.id)
                   : current.map((task) => (task.id === moved.id ? moved : task)),
-              )
-            }
+              );
+            }}
           />
           {drawerOpen && (
             <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
@@ -991,6 +1061,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                   onTagCreated={(tag) => setTags((current) => [...current, tag])}
                   onListCreated={(list) => setLists((current) => [...current, list])}
                   onCreated={(task) => {
+                    reconcileOpenTask(task);
                     // A ~list token may have filed the task elsewhere in the Folder.
                     if (folderMembers.some((list) => list.id === task.list_id)) {
                       setTasks((current) => [...current, task]);
@@ -1063,7 +1134,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 lists={folderMembers}
                 tasks={tasks}
                 sortBy={folderSortBy}
-                onChanged={setTasks}
+                onChanged={changeTasks}
                 onSelect={setSelectedTaskId}
                 onSelectList={(listId) => switchView({ kind: "list", id: listId })}
                 onStartFocus={(task) => switchView({ kind: "focus", task })}
@@ -1080,7 +1151,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 tasks={tasks}
                 sections={sections}
                 listId={selectedList.id}
-                onChanged={setTasks}
+                onChanged={changeTasks}
                 onSelect={setSelectedTaskId}
                 onSectionsChanged={setSections}
                 toasts={toasts}
@@ -1094,7 +1165,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 lists={lists}
                 groupBy={groupBy}
                 sortBy={sortBy}
-                onChanged={smartView !== null ? changeTasksAndRecompute : setTasks}
+                onChanged={smartView !== null ? changeTasksAndRecompute : changeTasks}
                 onSelect={setSelectedTaskId}
                 onSectionsChanged={setSections}
                 onStartFocus={(task) => switchView({ kind: "focus", task })}

@@ -1101,7 +1101,9 @@ export function deleteFocusSession(sessionId: number): Promise<void> {
   return request(`/api/v1/focus-sessions/${sessionId}`, { method: "DELETE" });
 }
 
-/** Open tasks across every List — the Focus link picker's choices. */
+/** Open tasks across every List — the Focus link picker's choices, and the
+ * client-side source for the sidebar's open-Task counts (issue #195): held
+ * once and reconciled as Tasks change, never an aggregate endpoint. */
 export function fetchOpenTasks(): Promise<Page<Task>> {
   return request("/api/v1/tasks?completed=false&limit=200");
 }

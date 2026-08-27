@@ -86,25 +86,31 @@ describe("Sidebar structure", () => {
     expect(screen.queryByRole("menu", { name: "Create" })).not.toBeInTheDocument();
   });
 
-  it("shows a count of the Lists a Folder contains, including zero", async () => {
+  it("shows a Folder's open-Task count — the sum of its Lists — and nothing when zero", async () => {
     const work = fakeFolder("Work");
     const empty = fakeFolder("Empty");
+    const backend = fakeList("Backend", { folder_id: work.id });
+    const frontend = fakeList("Frontend", { folder_id: work.id });
     installFakeApi({
       folders: [work, empty],
-      lists: [
-        INBOX,
-        fakeList("Backend", { folder_id: work.id }),
-        fakeList("Frontend", { folder_id: work.id }),
+      lists: [INBOX, backend, frontend],
+      tasks: [
+        ...tasksIn(backend.id, 2),
+        ...tasksIn(frontend.id, 1),
+        fakeTask("done", { list_id: backend.id, completed: true }),
       ],
     });
 
     render(<App />);
     await screen.findByText("Work");
 
+    // 2 open in Backend + 1 open in Frontend; the completed one does not count.
     const workRow = folderRowOf("Work");
-    expect(within(workRow).getByText("2")).toBeInTheDocument();
+    expect(within(workRow).getByText("3")).toBeInTheDocument();
+    // Zero renders as nothing, not "0".
     const emptyRow = folderRowOf("Empty");
-    expect(within(emptyRow).getByText("0")).toBeInTheDocument();
+    expect(within(emptyRow).queryByText("0")).not.toBeInTheDocument();
+    expect(emptyRow.querySelector(".folder-count")).toBeNull();
   });
 });
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import {
   createFolder,
@@ -21,6 +21,7 @@ import {
 } from "../api";
 import { currentDragPayload, endDrag, readDragPayload, startDrag } from "../dnd";
 import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
+import { folderOpenCount, openCountLabel } from "../openCounts";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
 import { pathForStaticView } from "../routes";
 import { APP_VERSION } from "../version";
@@ -58,6 +59,12 @@ interface SidebarProps {
    * "open". */
   selectedFolderId: number | null;
   selectedSmart: SmartView | null;
+  /** Open-Task counts (issue #195), derived client-side by App. Every Smart
+   * List, the Inbox, each Folder and each List shows how many open Tasks it
+   * holds; a count of zero shows nothing. */
+  smartOpenCounts: Record<SmartView, number>;
+  /** Open-Task count per List id — absent means zero. */
+  listOpenCounts: Map<number, number>;
   calendarSelected: boolean;
   habitsSelected: boolean;
   standupSelected: boolean;
@@ -115,36 +122,63 @@ interface ListButtonProps {
   list: TaskList;
   selected: boolean;
   collapsed: boolean;
+  /** Open-Task count (issue #195): a trailing numeral plus, off-screen, the
+   * item's accessible description. Zero renders nothing at all. */
+  openCount: number;
   onSelect: (listId: number) => void;
 }
 
-function ListButton({ list, selected, collapsed, onSelect }: ListButtonProps): JSX.Element {
+function ListButton({
+  list,
+  selected,
+  collapsed,
+  openCount,
+  onSelect,
+}: ListButtonProps): JSX.Element {
   // Collapsed, the row is only as wide as its glyph — so a List with neither a
   // color nor an emoji falls back to its initial rather than showing nothing.
   const bare = list.color === null && list.emoji === null;
+  const countId = `list-open-count-${list.id}`;
   return (
-    <button
-      type="button"
-      className={selected ? "list-button selected" : "list-button"}
-      // Only on the rail: expanded, the name comes from the label itself —
-      // emoji included, which is the name the rest of the app expects.
-      aria-label={collapsed ? list.name : undefined}
-      // Always set, not just when collapsed — expanded names can still be
-      // truncated by ellipsis, and the native tooltip is the fallback.
-      title={list.name}
-      onClick={() => onSelect(list.id)}
-    >
-      {list.is_inbox ? (
-        <Icon name="inbox" size={18} />
-      ) : (
-        <>
-          {list.color !== null && <span className="color-dot" style={{ background: list.color }} />}
-          {list.emoji !== null && <span className="list-emoji">{list.emoji}</span>}
-          {collapsed && bare && <span className="list-initial">{list.name.slice(0, 1)}</span>}
-        </>
+    <>
+      <button
+        type="button"
+        className={selected ? "list-button selected" : "list-button"}
+        // Only on the rail: expanded, the name comes from the label itself —
+        // emoji included, which is the name the rest of the app expects.
+        aria-label={collapsed ? list.name : undefined}
+        // The open-Task count rides along as the accessible description (#195),
+        // so it reaches assistive tech without disturbing the item's name.
+        aria-describedby={openCount > 0 ? countId : undefined}
+        // Always set, not just when collapsed — expanded names can still be
+        // truncated by ellipsis, and the native tooltip is the fallback.
+        title={list.name}
+        onClick={() => onSelect(list.id)}
+      >
+        {list.is_inbox ? (
+          <Icon name="inbox" size={18} />
+        ) : (
+          <>
+            {list.color !== null && (
+              <span className="color-dot" style={{ background: list.color }} />
+            )}
+            {list.emoji !== null && <span className="list-emoji">{list.emoji}</span>}
+            {collapsed && bare && <span className="list-initial">{list.name.slice(0, 1)}</span>}
+          </>
+        )}
+        <span className="nav-label">{list.name}</span>
+        {openCount > 0 && (
+          <span className="nav-count" aria-hidden="true">
+            {openCount}
+          </span>
+        )}
+      </button>
+      {openCount > 0 && (
+        <span id={countId} className="visually-hidden">
+          {openCountLabel(openCount)}
+        </span>
       )}
-      <span className="nav-label">{list.name}</span>
-    </button>
+    </>
   );
 }
 
@@ -229,6 +263,8 @@ export function Sidebar({
   selectedTagId,
   selectedFolderId,
   selectedSmart,
+  smartOpenCounts,
+  listOpenCounts,
   calendarSelected,
   habitsSelected,
   standupSelected,
@@ -587,6 +623,7 @@ export function Sidebar({
             list={list}
             selected={list.id === selectedListId}
             collapsed={collapsed}
+            openCount={listOpenCounts.get(list.id) ?? 0}
             onSelect={onSelect}
           />
           <span className="row-actions">
@@ -746,19 +783,35 @@ export function Sidebar({
           <span className="nav-label">Quick add</span>
         </button>
         <nav aria-label="Smart Lists" className="smart-lists">
-          {(Object.keys(SMART_LABELS) as SmartView[]).map((view) => (
-            <button
-              key={view}
-              type="button"
-              className={selectedSmart === view ? "list-button selected" : "list-button"}
-              aria-label={SMART_LABELS[view]}
-              title={SMART_LABELS[view]}
-              onClick={() => onSelectSmart(view)}
-            >
-              <Icon name={SMART_ICONS[view]} size={18} />
-              <span className="nav-label">{SMART_LABELS[view]}</span>
-            </button>
-          ))}
+          {(Object.keys(SMART_LABELS) as SmartView[]).map((view) => {
+            const count = smartOpenCounts[view];
+            const countId = `smart-open-count-${view}`;
+            return (
+              <Fragment key={view}>
+                <button
+                  type="button"
+                  className={selectedSmart === view ? "list-button selected" : "list-button"}
+                  aria-label={SMART_LABELS[view]}
+                  aria-describedby={count > 0 ? countId : undefined}
+                  title={SMART_LABELS[view]}
+                  onClick={() => onSelectSmart(view)}
+                >
+                  <Icon name={SMART_ICONS[view]} size={18} />
+                  <span className="nav-label">{SMART_LABELS[view]}</span>
+                  {count > 0 && (
+                    <span className="nav-count" aria-hidden="true">
+                      {count}
+                    </span>
+                  )}
+                </button>
+                {count > 0 && (
+                  <span id={countId} className="visually-hidden">
+                    {openCountLabel(count)}
+                  </span>
+                )}
+              </Fragment>
+            );
+          })}
         </nav>
         <nav
           aria-label="Lists"
@@ -806,6 +859,7 @@ export function Sidebar({
                     list={inbox}
                     selected={inbox.id === selectedListId}
                     collapsed={collapsed}
+                    openCount={listOpenCounts.get(inbox.id) ?? 0}
                     onSelect={onSelect}
                   />
                 </div>
@@ -813,6 +867,13 @@ export function Sidebar({
             )}
             {[...folders].sort(byOrder).map((folder) => {
               const members = membersOf(folder.id);
+              // A Folder's count (issue #195) is the sum of its Lists' open-Task
+              // counts. Zero shows nothing — this replaces the earlier count of
+              // how many Lists the Folder held.
+              const openCount = folderOpenCount(
+                listOpenCounts,
+                members.map((list) => list.id),
+              );
               // A drop in progress temporarily overrides a collapsed Folder so
               // the user can see (and reach) the drop, without touching the
               // persisted collapse choice underneath it.
@@ -861,12 +922,24 @@ export function Sidebar({
                         className={
                           folder.id === selectedFolderId ? "folder-name selected" : "folder-name"
                         }
+                        aria-describedby={
+                          openCount > 0 ? `folder-open-count-${folder.id}` : undefined
+                        }
                         title={folder.name}
                         onClick={() => onSelectFolder(folder.id)}
                       >
                         {folder.name}
                       </button>
-                      <span className="folder-count">{members.length}</span>
+                      {openCount > 0 && (
+                        <>
+                          <span className="folder-count" aria-hidden="true">
+                            {openCount}
+                          </span>
+                          <span id={`folder-open-count-${folder.id}`} className="visually-hidden">
+                            {openCountLabel(openCount)}
+                          </span>
+                        </>
+                      )}
                       <span className="row-actions">
                         <button
                           type="button"
@@ -994,6 +1067,9 @@ export function Sidebar({
                         list={list}
                         selected={list.id === selectedListId}
                         collapsed={collapsed}
+                        // Archived Lists are put away — no live tally (their
+                        // Tasks are out of the tree and Folder views too).
+                        openCount={0}
                         onSelect={onSelect}
                       />
                       {originFolder !== undefined && (
