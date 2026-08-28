@@ -9,33 +9,36 @@
 export type PaletteKind = "smart" | "view" | "list" | "folder" | "tag" | "task";
 
 /** The verbs the palette offers when it is opened scoped to one Task
- * (issue #205) — the same set the row hides behind hover. `takesValue` marks
- * the ones that open a picker inside the palette surface rather than running
- * straight away. */
+ * (issue #205) — the same set the row hides behind hover. A non-null
+ * `pickerHeading` marks the ones that open a picker inside the palette
+ * surface rather than running straight away. */
 export type TaskVerbId = "complete" | "focus" | "reschedule" | "move" | "tag" | "repeat" | "delete";
 
 export interface TaskVerb {
   id: TaskVerbId;
   label: string;
-  takesValue: boolean;
+  /** Heading shown above the in-palette picker this verb opens, or null for
+   * a verb that runs straight away without one. */
+  pickerHeading: string | null;
 }
 
 /** The verb list for `task`, in the order arrow keys walk it. A recurring
  * Task's "complete" is relabelled so it reads as advancing an occurrence
- * rather than closing the Task (ADR 0003). */
+ * rather than closing the Task (ADR 0003). A non-null `pickerHeading` is what
+ * marks a verb as value-taking. */
 export function taskVerbs(task: { recurrence: string | null }): TaskVerb[] {
   return [
     {
       id: "complete",
       label: task.recurrence === null ? "Complete" : "Complete this occurrence",
-      takesValue: false,
+      pickerHeading: null,
     },
-    { id: "focus", label: "Start Focus", takesValue: false },
-    { id: "reschedule", label: "Reschedule", takesValue: true },
-    { id: "move", label: "Move to a List", takesValue: true },
-    { id: "tag", label: "Add a Tag", takesValue: true },
-    { id: "repeat", label: "Set repeat", takesValue: true },
-    { id: "delete", label: "Delete", takesValue: false },
+    { id: "focus", label: "Start Focus", pickerHeading: null },
+    { id: "reschedule", label: "Reschedule", pickerHeading: "Reschedule to…" },
+    { id: "move", label: "Move to a List", pickerHeading: "Move to which List?" },
+    { id: "tag", label: "Add a Tag", pickerHeading: "Add which Tag?" },
+    { id: "repeat", label: "Set repeat", pickerHeading: "Repeat how often?" },
+    { id: "delete", label: "Delete", pickerHeading: null },
   ];
 }
 

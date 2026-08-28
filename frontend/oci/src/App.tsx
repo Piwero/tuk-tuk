@@ -27,6 +27,7 @@ import {
   type Tag,
   type Task,
   type TaskList,
+  type TaskPatch,
 } from "./api";
 import { type CalendarMode } from "./calendar";
 import { clearedSchedule, localDayOf, rescheduledToDay } from "./dates";
@@ -652,6 +653,12 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
    * window elapses, so Undo is just "never send it" and a recurring Task's
    * completion still branches server-side (ADR 0003). The value-taking verbs
    * PATCH straight away — the palette's picker already gathered the value. */
+  /** Fire a PATCH now and fold the response back into the view. The
+   * value-taking palette verbs all share this shape — only the patch differs. */
+  function patchTaskNow(taskId: number, patch: TaskPatch): void {
+    void (async () => applyTaskChange(await updateTask(taskId, patch)))();
+  }
+
   const paletteActions: TaskActionHandlers = {
     onComplete: (task) => {
       if (task.completed) {
@@ -664,24 +671,14 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       );
     },
     onStartFocus: (task) => switchView({ kind: "focus", task }),
-    onReschedule: (task, day) => {
-      void (async () => {
-        const patch = day === null ? clearedSchedule() : rescheduledToDay(task, day);
-        applyTaskChange(await updateTask(task.id, patch));
-      })();
-    },
-    onMove: (task, listId) => {
-      void (async () => applyTaskChange(await updateTask(task.id, { list_id: listId })))();
-    },
-    onAddTag: (task, tagId) => {
-      void (async () => {
-        const tagIds = [...new Set([...task.tags.map((tag) => tag.id), tagId])];
-        applyTaskChange(await updateTask(task.id, { tag_ids: tagIds }));
-      })();
-    },
-    onSetRepeat: (task, recurrence) => {
-      void (async () => applyTaskChange(await updateTask(task.id, { recurrence })))();
-    },
+    onReschedule: (task, day) =>
+      patchTaskNow(task.id, day === null ? clearedSchedule() : rescheduledToDay(task, day)),
+    onMove: (task, listId) => patchTaskNow(task.id, { list_id: listId }),
+    onAddTag: (task, tagId) =>
+      patchTaskNow(task.id, {
+        tag_ids: [...new Set([...task.tags.map((tag) => tag.id), tagId])],
+      }),
+    onSetRepeat: (task, recurrence) => patchTaskNow(task.id, { recurrence }),
     onDelete: (task) => {
       changeTasks((current) => current.filter((t) => t.id !== task.id));
       toasts.push(
