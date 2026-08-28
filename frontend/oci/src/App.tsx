@@ -37,6 +37,7 @@ import {
   applyThemePreference,
   loadSidebarCollapsed,
   loadThemePreference,
+  resolveThemePreference,
   saveSidebarCollapsed,
   saveThemePreference,
   type ThemePreference,
@@ -550,6 +551,13 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     setThemePreference(preference);
   }
 
+  // The nav-bar shortcut (this feature): flip to the opposite of whatever is
+  // on screen right now. Lands on a concrete "light"/"dark" — picking "system"
+  // back up is left to the Settings radio group.
+  function toggleTheme(): void {
+    chooseTheme(resolveThemePreference(themePreference) === "dark" ? "light" : "dark");
+  }
+
   function toggleSidebar(): void {
     setSidebarCollapsed((current) => {
       saveSidebarCollapsed(!current);
@@ -986,6 +994,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             onQuickAdd={() => setQuickAddOpen(true)}
             collapsed={sidebarCollapsed}
             onToggleCollapsed={toggleSidebar}
+            resolvedTheme={resolveThemePreference(themePreference)}
+            onToggleTheme={toggleTheme}
             onCloseDrawer={() => setDrawerOpen(false)}
             onLogout={onLogout}
             onSearch={(query) =>
