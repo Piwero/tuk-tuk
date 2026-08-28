@@ -446,7 +446,7 @@ export function CommandPalette({
           ) : (
             <TokenInput
               ariaLabel="Search views and Tasks, or type a new Task"
-              placeholder="Jump to anything — or #tag !priority ~list a new Task…"
+              placeholder="Jump to anything, or type a new Task…"
               value={captureText}
               onValueChange={setCaptureText}
               autoFocus
@@ -455,6 +455,13 @@ export function CommandPalette({
                 listChannel as TokenChannel<unknown>,
                 priorityChannel as TokenChannel<unknown>,
               ]}
+              sigilHints={
+                <>
+                  <span className="quick-add-sigil-hint">{tagChannel.sigil}tag</span>
+                  <span className="quick-add-sigil-hint">{priorityChannel.sigil}priority</span>
+                  <span className="quick-add-sigil-hint">{listChannel.sigil}list</span>
+                </>
+              }
             />
           )}
           <div id="command-palette-results" role="listbox" className="command-palette-results">
