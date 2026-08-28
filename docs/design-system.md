@@ -104,8 +104,55 @@ Three faces, loaded from Google Fonts in `index.html`:
 | JetBrains Mono | `--font-mono` | Timers, date chips, counts — anything tabular |
 
 Uppercase 12px labels with `--tracking-caps` head sections, folders, and
-sidebar groups. **There is no logo**: the wordmark is "Tuk Tuk" in
-Bricolage Grotesque, semibold/bold, type only.
+sidebar groups. The wordmark is "Tuk Tuk" in Bricolage Grotesque,
+semibold/bold — type only, no lettering of its own. It is paired with the
+mark below.
+
+## Logo
+
+The mark is two `t` stems sharing one crossbar, each turning into a foot at
+the bottom: the doubled name drawn as a single ligature. It reads as
+letterforms, not as a hash — the feet are what do that, so they are not
+decoration and must survive any redraw.
+
+- **Source of truth** is `frontend/src/components/Logo.tsx`. It is authored
+  on a **48-unit grid**; the mark's bounding box is `x 6.5…41`,
+  `y 7.75…40.25`, centred on `(23.75, 24)`. Scale it with the `size` prop;
+  never edit the viewBox.
+- **Colour** is `currentColor`, so the mark re-points between themes from
+  CSS exactly like the Lucide subset — the component never learns which
+  theme is on. One rule, `.logo`, makes it `--accent`; no surface restates
+  the colour.
+- **Decorative everywhere.** The wordmark sits beside it in both places it
+  appears, so the mark is `aria-hidden` and carries no accessible name;
+  naming it would announce the app twice.
+- **Sizes:** 21px in the sidebar brand, beside the 17px wordmark; 32px on
+  the auth screen.
+
+### Regenerating the raster set
+
+The assets in `public/` are cut from the geometry above, not drawn
+separately, so they can be rebuilt from it with any rasteriser. Each is a
+full-bleed `--blue-600` (`#4772fa`) tile with a white mark, centred by
+`transform="translate(24 24) scale(S) translate(-23.75 -24)"` inside a
+`viewBox="0 0 48 48"`:
+
+| Asset | Size | `S` | Mark width |
+| --- | --- | --- | --- |
+| `icons/icon-512.png` | 512 | `0.807` | ~58% |
+| `icons/icon-192.png` | 192 | `0.807` | ~58% |
+| `icons/apple-touch-icon.png` | 180 | `0.807` | ~58% |
+| `icons/favicon-32x32.png` | 32 | `1.0` | ~72% |
+| `icons/favicon-16x16.png` | 16 | `1.0` | ~72% |
+| `favicon.ico` | 16 + 32 + 48 | `1.0` | ~72% |
+
+App icons sit back from the edge at 58%; favicons keep the natural 72%,
+which is the extra mass 16px needs to stay readable. Render each tile at
+512 and downsample — rasterising straight to 16px loses the feet.
+
+The sidebar's collapsed rail still hides the brand entirely, as it did when
+the brand was type only — the mark is not yet used as a standalone rail
+glyph.
 
 ## Spacing, layout, and radii
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { App } from "./App";
 import { ApiError, checkSession, login, logout, onUnauthorized, setup } from "./api";
+import { Logo } from "./components/Logo";
 
 type GateState = "checking" | "setup" | "locked" | "unlocked";
 
@@ -91,6 +92,7 @@ function SetupScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
             });
         }}
       >
+        <Logo size={32} />
         <h1>Tuk Tuk</h1>
         <p>Choose a password to finish setting up this deployment.</p>
         <label htmlFor="auth-gate-setup-password">Password</label>
@@ -157,6 +159,7 @@ function PasswordScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
             });
         }}
       >
+        <Logo size={32} />
         <h1>Tuk Tuk</h1>
         <label htmlFor="auth-gate-password">Password</label>
         <input
