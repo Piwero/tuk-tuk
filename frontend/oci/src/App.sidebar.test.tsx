@@ -63,6 +63,14 @@ describe("Sidebar structure", () => {
     expect(mark).toBeInTheDocument();
     expect(mark).toHaveAttribute("aria-hidden", "true");
     expect(brand.textContent).toBe("Tuk Tuk");
+
+    // The wordmark needs its own element rather than sitting in the brand as
+    // a bare text node: the collapsed rail hides `.sidebar-brand-name` to
+    // leave the mark standing alone, and the ellipsis at a squeezed width
+    // keys off it too. jsdom applies no CSS, so this is the only part of
+    // that contract a unit test can hold.
+    const wordmark = brand.querySelector(".sidebar-brand-name");
+    expect(wordmark).toHaveTextContent("Tuk Tuk");
   });
 
   it("shows a Lists heading with a single Create control, and no bottom-pinned add buttons", async () => {
