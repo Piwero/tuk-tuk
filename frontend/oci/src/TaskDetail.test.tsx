@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
 import { closestOrThrow, fakeDataTransfer } from "./test/dnd";
-import { fakeCheckItem, fakeTask, installFakeApi } from "./test/fakeApi";
+import { fakeCheckItem, fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
 // Restoring the real fetch between tests would let a late in-flight request
@@ -70,6 +70,25 @@ describe("Task detail panel", () => {
       (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${report.id}`,
     );
     expect(patch?.body).toEqual({ description: "# Heading" });
+  });
+
+  it("moves the task to another List from the breadcrumb picker", async () => {
+    const groceries = fakeList("Groceries");
+    const report = fakeTask("Write report");
+    const api = installFakeApi({ lists: [INBOX, groceries], tasks: [report] });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const panel = await openDetail("Write report");
+    await user.selectOptions(
+      within(panel).getByRole("combobox", { name: "List for this task" }),
+      "Groceries",
+    );
+
+    const patch = api.requests.find(
+      (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${report.id}`,
+    );
+    expect(patch?.body).toEqual({ list_id: groceries.id });
   });
 
   it("sets Priority from the four named levels and marks the task row", async () => {

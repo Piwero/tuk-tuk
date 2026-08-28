@@ -1396,6 +1396,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               task={selectedTask}
               allTags={tags}
               listName={selectedTaskListName}
+              lists={lists}
               onTaskChanged={applyTaskChange}
               onClose={closeTaskDetail}
             />
