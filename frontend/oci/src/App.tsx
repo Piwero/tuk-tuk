@@ -29,7 +29,7 @@ import {
   type TaskList,
 } from "./api";
 import { type CalendarMode } from "./calendar";
-import { allDaySchedule, clearedSchedule, localDayOf } from "./dates";
+import { clearedSchedule, localDayOf, rescheduledToDay } from "./dates";
 import { FocusRunProvider } from "./focusRunContext";
 import { PRIORITY_LABELS, type GroupBy, type SortBy } from "./grouping";
 import {
@@ -666,7 +666,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     onStartFocus: (task) => switchView({ kind: "focus", task }),
     onReschedule: (task, day) => {
       void (async () => {
-        const patch = day === null ? clearedSchedule() : allDaySchedule(null, day);
+        const patch = day === null ? clearedSchedule() : rescheduledToDay(task, day);
         applyTaskChange(await updateTask(task.id, patch));
       })();
     },

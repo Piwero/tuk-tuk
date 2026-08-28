@@ -7,6 +7,7 @@ import {
   formatSchedule,
   fromDayIso,
   isDueToday,
+  rescheduledToDay,
   shortDayLabel,
   taskZonedDate,
   weekdayRecordLabel,
@@ -131,5 +132,34 @@ describe("isDueToday", () => {
     // suppresses the accent on a completed row itself.
     const done = fakeTask("Done", { due_date: "2026-08-27", is_all_day: true, completed: true });
     expect(isDueToday(done, now)).toBe(true);
+  });
+});
+
+describe("rescheduledToDay", () => {
+  it("keeps a timed task's local start and due times on the new day", () => {
+    const task = fakeTask("Standup", {
+      start_date: "2026-08-27T09:00:00Z",
+      due_date: "2026-08-27T09:30:00Z",
+      is_all_day: false,
+    });
+    const patch = rescheduledToDay(task, "2026-09-01");
+    expect(patch.is_all_day).toBe(false);
+    expect(patch.start_date).toBe("2026-09-01T09:00:00.000Z");
+    expect(patch.due_date).toBe("2026-09-01T09:30:00.000Z");
+  });
+
+  it("leaves an all-day task all-day", () => {
+    const task = fakeTask("Review", { due_date: "2026-08-27", is_all_day: true });
+    const patch = rescheduledToDay(task, "2026-09-01");
+    expect(patch.is_all_day).toBe(true);
+    expect(patch.start_date).toBeNull();
+    expect(patch.due_date).toBe("2026-09-01T00:00:00Z");
+  });
+
+  it("schedules an unscheduled task as all-day on the day", () => {
+    const task = fakeTask("Someday", { due_date: null });
+    const patch = rescheduledToDay(task, "2026-09-01");
+    expect(patch.is_all_day).toBe(true);
+    expect(patch.due_date).toBe("2026-09-01T00:00:00Z");
   });
 });

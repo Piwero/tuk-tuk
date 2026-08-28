@@ -147,6 +147,22 @@ export function clearedSchedule(): TaskPatch {
   return { start_date: null, due_date: null, is_all_day: false, time_zone: null };
 }
 
+/** Move a Task to a new due day without otherwise reshaping its schedule: a
+ * timed Task keeps its local start/due times (and its start→due gap), an
+ * all-day or unscheduled Task stays all-day. Used by the command palette's
+ * quick reschedule, where the picker only names a day. */
+export function rescheduledToDay(
+  task: Pick<Task, "start_date" | "due_date" | "is_all_day">,
+  day: string,
+): TaskPatch {
+  if (task.due_date === null || task.is_all_day) {
+    return allDaySchedule(null, day);
+  }
+  const dueTime = localTimeOf(new Date(task.due_date));
+  const startTime = task.start_date === null ? null : localTimeOf(new Date(task.start_date));
+  return timedSchedule(day, startTime, dueTime);
+}
+
 /** Draft state of the date editor; empty strings mean "not set". */
 export interface DateDraft {
   allDay: boolean;
