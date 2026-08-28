@@ -4972,8 +4972,8 @@ a.button:hover {
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
