@@ -191,19 +191,49 @@ export function CommandPalette({
   onCreated,
   onClose,
 }: CommandPaletteProps): JSX.Element {
+  // Scoped mode's verb filter text.
   const [query, setQuery] = useState("");
+  // Jump mode's field doubles as a Task-capture bar (issue #204): the typed
+  // text, plus any #tag / ~list / !priority chips picked from the sigil
+  // dropdowns. The same three channels the Quick-Add bar uses.
+  const [captureText, setCaptureText] = useState("");
+  const [tagChips, setTagChips] = useState<Tag[]>([]);
+  const [listChip, setListChip] = useState<TaskList[]>([]);
+  const [priorityChip, setPriorityChip] = useState<Priority[]>([]);
   const [active, setActive] = useState(0);
-  const [mode, setMode] = useState<"jump" | "capture">("jump");
   // Which value-taking verb's picker is open, or null for the verb list.
   const [picker, setPicker] = useState<TaskVerbId | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Blocks a second createTask while the first is still in flight — an Enter
+  // repeat, or Enter racing a click on the "New task" row.
+  const committing = useRef(false);
   // The last moment the opener still holds focus (see Modal.tsx for the same
   // trick) — restored when the palette unmounts.
   const [opener] = useState(() => document.activeElement as HTMLElement | null);
 
   const scoped = task !== undefined;
 
-  const groups = useMemo(() => (scoped ? [] : groupItems(items, query)), [items, query, scoped]);
+  // The typed text with its #tag / ~list / !priority tokens parsed out — a
+  // chip preview and, once there's a title, the exact createTask payload.
+  // Jump results filter on the *stripped* title, so "Buy milk ~read" narrows
+  // the jump list to "Buy milk".
+  const capturePlan = useMemo(
+    () =>
+      planPaletteCapture(
+        captureText,
+        { tags: tagChips, list: listChip, priority: priorityChip },
+        lists,
+        tags,
+        defaultListId,
+      ),
+    [captureText, tagChips, listChip, priorityChip, lists, tags, defaultListId],
+  );
+  const jumpQuery = capturePlan.preview.title;
+
+  const groups = useMemo(
+    () => (scoped ? [] : groupItems(items, jumpQuery)),
+    [items, jumpQuery, scoped],
+  );
   const jumpFlat = useMemo(() => flattenGroups(groups), [groups]);
 
   // Scoped mode: the verb list, or the open picker's choices — filtered by
@@ -243,11 +273,77 @@ export function CommandPalette({
   }, [total]);
 
   useEffect(() => {
-    if (mode === "jump") {
-      inputRef.current?.focus();
-    }
+    inputRef.current?.focus();
     return () => opener?.focus();
-  }, [opener, mode]);
+  }, [opener]);
+
+  /** The "New task" row's commit — the same createTask payload
+   * `planPaletteCapture` builds, guarded against a double submit. */
+  async function commitCapture(): Promise<void> {
+    const commit = capturePlan.commit;
+    if (commit === null || committing.current) {
+      return;
+    }
+    committing.current = true;
+    try {
+      const created = await createTask({
+        title: commit.title,
+        list_id: commit.listId,
+        ...(commit.priority === null ? {} : { priority: commit.priority }),
+        ...(commit.tagIds.length === 0 ? {} : { tag_ids: commit.tagIds }),
+      });
+      onCreated(created);
+      onClose();
+    } finally {
+      committing.current = false;
+    }
+  }
+
+  const tagChannel: TokenChannel<Tag> = {
+    sigil: "#",
+    mode: "multi",
+    chips: tagChips,
+    onChipsChange: setTagChips,
+    getId: (tag) => tag.id,
+    getLabel: (tag) => tag.name,
+    suggest: (text, caret) => suggestTags(text, caret, tags),
+    applyPick: applyTagPick,
+    allowCreate: true,
+    onCreate: (name) => createTag({ name }),
+    onCreated: onTagCreated,
+    createLabel: (name) => `Create tag "${name}"`,
+    removeAriaLabel: (tag) => `Remove ${tag.name}`,
+  };
+
+  const listChannel: TokenChannel<TaskList> = {
+    sigil: "~",
+    mode: "single",
+    chips: listChip,
+    onChipsChange: setListChip,
+    getId: (list) => list.id,
+    getLabel: (list) => list.name,
+    suggest: (text, caret) => suggestLists(text, caret, lists),
+    applyPick: applyListPick,
+    allowCreate: true,
+    onCreate: (name) => createList({ name }),
+    onCreated: onListCreated,
+    createLabel: (name) => `Create list "${name}"`,
+    removeAriaLabel: (list) => `Remove ${list.name}`,
+  };
+
+  const priorityChannel: TokenChannel<Priority> = {
+    sigil: "!",
+    mode: "single",
+    chips: priorityChip,
+    onChipsChange: setPriorityChip,
+    getId: (priority) => priority,
+    getLabel: (priority) => PRIORITY_LABELS[priority],
+    suggest: (text, caret) => suggestPriority(text, caret),
+    applyPick: applyPriorityPick,
+    allowCreate: false,
+    createLabel: (name) => name,
+    removeAriaLabel: (priority) => `Remove ${priority}`,
+  };
 
   function choose(row: Row | PaletteItem | undefined): void {
     if (row === undefined) {
@@ -274,9 +370,6 @@ export function CommandPalette({
       onClose();
       return;
     }
-    if (mode === "capture") {
-      return;
-    }
     if (event.key === "Tab") {
       // Only the field is a tab stop — nothing to cycle to, so the trap is
       // just "focus never leaves".
@@ -298,7 +391,7 @@ export function CommandPalette({
       if (scoped) {
         choose(rows[active]);
       } else if (active === 0) {
-        setMode("capture");
+        void commitCapture();
       } else {
         choose(rows[active - 1]);
       }
@@ -311,9 +404,8 @@ export function CommandPalette({
       : `Actions · ${task.title}`
     : null;
 
-  const captureRowLabel = query.trim() === "" ? "New task" : `New task: "${query.trim()}"`;
-  const activeId =
-    mode === "capture" || active >= total ? undefined : `command-palette-option-${active}`;
+  const captureRowLabel = jumpQuery.trim() === "" ? "New task" : `New task: "${jumpQuery.trim()}"`;
+  const activeId = active >= total ? undefined : `command-palette-option-${active}`;
 
   return (
     <div
@@ -331,24 +423,13 @@ export function CommandPalette({
         aria-label={scoped ? `Actions for ${task.title}` : "Command palette"}
         onKeyDown={handleKeyDown}
       >
-        {mode === "capture" ? (
-          <CaptureSurface
-            initialText={query}
-            lists={lists}
-            tags={tags}
-            defaultListId={defaultListId}
-            onTagCreated={onTagCreated}
-            onListCreated={onListCreated}
-            onCreated={onCreated}
-            onClose={onClose}
-          />
-        ) : (
-          <>
-            {heading !== null && (
-              <div className="command-palette-scope" aria-hidden="true">
-                {heading}
-              </div>
-            )}
+        <>
+          {heading !== null && (
+            <div className="command-palette-scope" aria-hidden="true">
+              {heading}
+            </div>
+          )}
+          {scoped ? (
             <input
               ref={inputRef}
               type="text"
@@ -357,63 +438,108 @@ export function CommandPalette({
               aria-expanded="true"
               aria-controls="command-palette-results"
               aria-activedescendant={activeId}
-              aria-label={
-                scoped
-                  ? `Filter actions for ${task.title}`
-                  : "Search Lists, Folders, Tags and Tasks"
-              }
-              placeholder={
-                scoped ? "Type to filter actions…" : "Jump to a List, Tag, view or Task…"
-              }
+              aria-label={`Filter actions for ${task.title}`}
+              placeholder="Type to filter actions…"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <div id="command-palette-results" role="listbox" className="command-palette-results">
-              {scoped ? (
-                <>
-                  {taskRows.map((row, index) => (
-                    <PaletteOption
-                      key={row.key}
-                      index={index}
-                      label={row.label}
-                      active={index === active}
-                      setActive={setActive}
-                      onPick={() => choose(row)}
-                    />
-                  ))}
-                  {taskRows.length === 0 && <p className="command-palette-empty">No matches</p>}
-                </>
-              ) : (
-                <>
-                  <div role="group" aria-label="Create">
-                    <div className="command-palette-heading" aria-hidden="true">
-                      Create
-                    </div>
-                    <PaletteOption
-                      index={0}
-                      label={captureRowLabel}
-                      active={active === 0}
-                      setActive={setActive}
-                      onPick={() => setMode("capture")}
-                    />
+          ) : (
+            <TokenInput
+              ariaLabel="Search views and Tasks, or type a new Task"
+              placeholder="Jump to anything — or #tag !priority ~list a new Task…"
+              value={captureText}
+              onValueChange={setCaptureText}
+              autoFocus
+              channels={[
+                tagChannel as TokenChannel<unknown>,
+                listChannel as TokenChannel<unknown>,
+                priorityChannel as TokenChannel<unknown>,
+              ]}
+            />
+          )}
+          <div id="command-palette-results" role="listbox" className="command-palette-results">
+            {scoped ? (
+              <>
+                {taskRows.map((row, index) => (
+                  <PaletteOption
+                    key={row.key}
+                    index={index}
+                    label={row.label}
+                    active={index === active}
+                    setActive={setActive}
+                    onPick={() => choose(row)}
+                  />
+                ))}
+                {taskRows.length === 0 && <p className="command-palette-empty">No matches</p>}
+              </>
+            ) : (
+              <>
+                <div role="group" aria-label="Create">
+                  <div className="command-palette-heading" aria-hidden="true">
+                    Create
                   </div>
-                  {groups.map((group) => (
-                    <PaletteGroupRows
-                      key={group.kind}
-                      group={group}
-                      flat={jumpFlat}
-                      active={active}
-                      indexOffset={1}
-                      setActive={setActive}
-                      choose={choose}
-                    />
-                  ))}
-                  {groups.length === 0 && <p className="command-palette-empty">No matches</p>}
-                </>
-              )}
-            </div>
-          </>
-        )}
+                  <PaletteOption
+                    index={0}
+                    label={captureRowLabel}
+                    active={active === 0}
+                    setActive={setActive}
+                    onPick={() => void commitCapture()}
+                  />
+                  {captureText.trim() !== "" && (
+                    <div
+                      className="command-palette-capture-preview"
+                      role="group"
+                      aria-label="New task"
+                    >
+                      <span className="tag-chip token-chip">
+                        {capturePlan.preview.title === "" ? "New task" : capturePlan.preview.title}
+                      </span>
+                      {capturePlan.preview.list !== null && (
+                        <span className="list-chip token-chip">
+                          {capturePlan.preview.list.name}
+                        </span>
+                      )}
+                      {capturePlan.preview.priority !== null && (
+                        <span className="tag-chip token-chip">
+                          {PRIORITY_LABELS[capturePlan.preview.priority]}
+                        </span>
+                      )}
+                      {capturePlan.preview.tags.map((tag) => (
+                        <span
+                          key={tag.name}
+                          className={
+                            tag.tagId === null
+                              ? "tag-chip token-chip command-palette-chip-unmatched"
+                              : "tag-chip token-chip"
+                          }
+                          title={
+                            tag.tagId === null
+                              ? "No matching Tag — pick one or it is dropped"
+                              : undefined
+                          }
+                        >
+                          #{tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {groups.map((group) => (
+                  <PaletteGroupRows
+                    key={group.kind}
+                    group={group}
+                    flat={jumpFlat}
+                    active={active}
+                    indexOffset={1}
+                    setActive={setActive}
+                    choose={choose}
+                  />
+                ))}
+                {groups.length === 0 && <p className="command-palette-empty">No matches</p>}
+              </>
+            )}
+          </div>
+        </>
       </div>
     </div>
   );
@@ -486,165 +612,6 @@ function PaletteGroupRows({
           />
         );
       })}
-    </div>
-  );
-}
-
-/** The capture surface reached from the "New task" row (issue #204): the
- * same `#`/`~`/`!` token channels the Quick-Add bar uses, a live chip
- * preview, and a commit button. Self-contained so the jump/scoped palette
- * above stays about navigation and verbs. */
-function CaptureSurface({
-  initialText,
-  lists,
-  tags,
-  defaultListId,
-  onTagCreated,
-  onListCreated,
-  onCreated,
-  onClose,
-}: {
-  initialText: string;
-  lists: TaskList[];
-  tags: Tag[];
-  defaultListId: number;
-  onTagCreated: (tag: Tag) => void;
-  onListCreated: (list: TaskList) => void;
-  onCreated: (task: Task) => void;
-  onClose: () => void;
-}): JSX.Element {
-  const [captureText, setCaptureText] = useState(initialText);
-  const [tagChips, setTagChips] = useState<Tag[]>([]);
-  const [listChip, setListChip] = useState<TaskList[]>([]);
-  const [priorityChip, setPriorityChip] = useState<Priority[]>([]);
-  const committing = useRef(false);
-
-  const { preview, commit } = planPaletteCapture(
-    captureText,
-    { tags: tagChips, list: listChip, priority: priorityChip },
-    lists,
-    tags,
-    defaultListId,
-  );
-
-  async function commitCapture(): Promise<void> {
-    if (commit === null || committing.current) {
-      return;
-    }
-    committing.current = true;
-    try {
-      const created = await createTask({
-        title: commit.title,
-        list_id: commit.listId,
-        ...(commit.priority === null ? {} : { priority: commit.priority }),
-        ...(commit.tagIds.length === 0 ? {} : { tag_ids: commit.tagIds }),
-      });
-      onCreated(created);
-      onClose();
-    } finally {
-      committing.current = false;
-    }
-  }
-
-  const tagChannel: TokenChannel<Tag> = {
-    sigil: "#",
-    mode: "multi",
-    chips: tagChips,
-    onChipsChange: setTagChips,
-    getId: (tag) => tag.id,
-    getLabel: (tag) => tag.name,
-    suggest: (text, caret) => suggestTags(text, caret, tags),
-    applyPick: applyTagPick,
-    allowCreate: true,
-    onCreate: (name) => createTag({ name }),
-    onCreated: onTagCreated,
-    createLabel: (name) => `Create tag "${name}"`,
-    removeAriaLabel: (tag) => `Remove ${tag.name}`,
-  };
-
-  const listChannel: TokenChannel<TaskList> = {
-    sigil: "~",
-    mode: "single",
-    chips: listChip,
-    onChipsChange: setListChip,
-    getId: (list) => list.id,
-    getLabel: (list) => list.name,
-    suggest: (text, caret) => suggestLists(text, caret, lists),
-    applyPick: applyListPick,
-    allowCreate: true,
-    onCreate: (name) => createList({ name }),
-    onCreated: onListCreated,
-    createLabel: (name) => `Create list "${name}"`,
-    removeAriaLabel: (list) => `Remove ${list.name}`,
-  };
-
-  const priorityChannel: TokenChannel<Priority> = {
-    sigil: "!",
-    mode: "single",
-    chips: priorityChip,
-    onChipsChange: setPriorityChip,
-    getId: (priority) => priority,
-    getLabel: (priority) => PRIORITY_LABELS[priority],
-    suggest: (text, caret) => suggestPriority(text, caret),
-    applyPick: applyPriorityPick,
-    allowCreate: false,
-    createLabel: (name) => name,
-    removeAriaLabel: (priority) => `Remove ${priority}`,
-  };
-
-  return (
-    <div
-      className="command-palette-capture"
-      onKeyDown={(event) => {
-        if (event.key === "Enter" && !event.defaultPrevented) {
-          event.preventDefault();
-          event.stopPropagation();
-          void commitCapture();
-        }
-      }}
-    >
-      <TokenInput
-        ariaLabel="New task title"
-        placeholder="Task title — #tag !priority ~list"
-        value={captureText}
-        onValueChange={setCaptureText}
-        autoFocus
-        channels={[
-          tagChannel as TokenChannel<unknown>,
-          listChannel as TokenChannel<unknown>,
-          priorityChannel as TokenChannel<unknown>,
-        ]}
-      />
-      <div className="command-palette-capture-preview" role="group" aria-label="New task">
-        <span className="tag-chip token-chip">
-          {preview.title === "" ? "New task" : preview.title}
-        </span>
-        {preview.list !== null && <span className="list-chip token-chip">{preview.list.name}</span>}
-        {preview.priority !== null && (
-          <span className="tag-chip token-chip">{PRIORITY_LABELS[preview.priority]}</span>
-        )}
-        {preview.tags.map((tag) => (
-          <span
-            key={tag.name}
-            className={
-              tag.tagId === null
-                ? "tag-chip token-chip command-palette-chip-unmatched"
-                : "tag-chip token-chip"
-            }
-            title={tag.tagId === null ? "No matching Tag — pick one or it is dropped" : undefined}
-          >
-            #{tag.name}
-          </span>
-        ))}
-      </div>
-      <button
-        type="button"
-        className="command-palette-capture-commit"
-        disabled={!preview.ready}
-        onClick={() => void commitCapture()}
-      >
-        Create task
-      </button>
     </div>
   );
 }

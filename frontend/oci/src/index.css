@@ -5070,6 +5070,21 @@ a.button:hover {
   outline: none;
 }
 
+/* Jump mode's field is a TokenInput (issue #204 follow-up) — render it flush
+   with the palette header rather than as a bordered box. */
+.command-palette > .token-input {
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+}
+
+.command-palette > .token-input:focus-within {
+  box-shadow: none;
+  border-bottom-color: var(--border-subtle);
+}
+
 .command-palette-results {
   flex: 1;
   overflow-y: auto;

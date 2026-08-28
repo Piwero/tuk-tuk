@@ -34,18 +34,17 @@ function tagPosts(api: Awaited<ReturnType<typeof seed>>) {
   return api.requests.filter((r) => r.method === "POST" && r.url === "/api/v1/tags");
 }
 
-/** Opens the palette, steps into the capture surface via the "New task"
- * row, and types `query` there — all keyboard, no pointer. */
+/** Opens the palette and types `query` straight into its field — which is
+ * the Task-capture bar itself (issue #204 follow-up): #tag / ~list /
+ * !priority parse inline, and Enter on the "New task" row (index 0, active
+ * by default) commits. All keyboard, no pointer. */
 async function enterCapture(user: ReturnType<typeof userEvent.setup>, query: string) {
   openPalette();
   const dialog = await screen.findByRole("dialog", { name: "Command palette" });
-  const combobox = within(dialog).getByRole("combobox", {
-    name: "Search Lists, Folders, Tags and Tasks",
+  const input = within(dialog).getByRole("combobox", {
+    name: "Search views and Tasks, or type a new Task",
   });
-  await user.click(combobox);
-  // The "New task" row is the first stop — Enter steps into capture.
-  await user.keyboard("{Enter}");
-  const input = await screen.findByRole("combobox", { name: "New task title" });
+  await user.click(input);
   await user.type(input, query);
   return input;
 }
@@ -130,6 +129,33 @@ describe("command palette — capture a Task", () => {
     expect(
       api.requests.filter((r) => r.method === "POST" && r.url === "/api/v1/lists"),
     ).toHaveLength(0);
+  });
+
+  it("suggests matching Lists inline as ~ is typed, right in the palette field", async () => {
+    const api = await seed();
+    const user = userEvent.setup();
+
+    const input = await enterCapture(user, "Return book ~Rea");
+    // The ~list dropdown opens in the palette's own field — no extra step.
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(input).toHaveValue("Return book ");
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(taskPosts(api)).toHaveLength(1));
+    expect(taskPosts(api)[0]).toEqual({ title: "Return book", list_id: 11 });
+  });
+
+  it("arrowing the sigil dropdown never moves the palette's own selection", async () => {
+    await seed();
+    const user = userEvent.setup();
+
+    await enterCapture(user, "urg #urg");
+    // ArrowDown belongs to the #tag dropdown here; the "New task" row must
+    // stay the active palette row so Enter still commits.
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    // The tag chip was picked (dropdown consumed the keys), not a jump target.
+    expect(screen.getByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
   });
 
   it("the Create row is the only way capture brings a new Tag into being", async () => {
