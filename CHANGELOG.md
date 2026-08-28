@@ -4,6 +4,32 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.1.0](https://github.com/Piwero/tuk-tuk/compare/v2.0.0...v2.1.0) - 2026-08-28
+
+### Features
+
+- **shell:** Global keyboard shortcut layer ([92e8956](https://github.com/Piwero/tuk-tuk/commit/92e89567f5ef73f08375cc7de35b763e0cc42f35))
+- **calendar:** Now-line and a readable time grid ([5026b14](https://github.com/Piwero/tuk-tuk/commit/5026b14f9e3fc5cba5227fe93854650426b6d9c5))
+- **habits:** Card grid, longer strip, single actions menu ([9aa6e03](https://github.com/Piwero/tuk-tuk/commit/9aa6e0397f327b9491bdd875f7f8f537fefe7a4c))
+- **settings:** Dark theme ([53d33ef](https://github.com/Piwero/tuk-tuk/commit/53d33ef6d78cda2f4c1c6ba61a50a0c63cf352a4))
+- **tasks:** Show Quick-Add sigils on the capture bar ([eaeeaf0](https://github.com/Piwero/tuk-tuk/commit/eaeeaf0a365d5fe32fb7a947e2c4997b82d4f4a0))
+- **focus:** Stage the clock, Task and decisions with a progress dial ([594e8a5](https://github.com/Piwero/tuk-tuk/commit/594e8a5c8893c096af760e4b7677392d79d68589))
+- **tasks:** List views fill their content column ([f1f13fd](https://github.com/Piwero/tuk-tuk/commit/f1f13fda134b79989991c8380b5ed918c12c6d21))
+- **sidebar:** Vertical labelled feature nav and Tag chips ([f2504ef](https://github.com/Piwero/tuk-tuk/commit/f2504eff79a786614e409d57246acbc27075136d))
+- **sidebar:** Open-task counts on Lists and Smart Lists ([06e0c1e](https://github.com/Piwero/tuk-tuk/commit/06e0c1e86af3c99955ef233cd7728358e9a7eaa3))
+- **shell:** Command palette shell and jump ([c5a2f56](https://github.com/Piwero/tuk-tuk/commit/c5a2f562ddd703bfac089f0a542d78840d704545))
+- **tasks:** Multi-select and bulk action bar ([31fc7e2](https://github.com/Piwero/tuk-tuk/commit/31fc7e2b25fac9999719547fcb88d70c2336e958))
+- **calendar:** Colour Entries by List and add an unscheduled rail ([5d5afa1](https://github.com/Piwero/tuk-tuk/commit/5d5afa14d65dafb40d9d81cfebc34c7a43b087eb))
+- **shell:** Capture a Task from the command palette ([a95ba12](https://github.com/Piwero/tuk-tuk/commit/a95ba128b368b33972e22e1724ee3ab712fb7248))
+- **shell:** Merge palette Task capture (#204) ([99a893a](https://github.com/Piwero/tuk-tuk/commit/99a893acd39ca2ba125e985757e38d93a534ec04))
+- **shell:** Act on a Task from the command palette ([b661d60](https://github.com/Piwero/tuk-tuk/commit/b661d608bd57083725b7e2d016cb7379c85d6a29))
+- **shell:** Merge palette Task actions (#205) ([bc4d111](https://github.com/Piwero/tuk-tuk/commit/bc4d1111df2647c9e52a1ab2528c2c13143dc825))
+- **shell:** Open command palette scoped to the selected Task (#205) ([fa1fb27](https://github.com/Piwero/tuk-tuk/commit/fa1fb2718247c789d060edff1cd02a74d6966916))
+
+### Bug Fixes
+
+- **shell:** Preserve time-of-day on palette reschedule; use type tokens ([3b2fdac](https://github.com/Piwero/tuk-tuk/commit/3b2fdace7892170a3161538533118f5190c6dd70))
+
 ## [2.0.0](https://github.com/Piwero/tuk-tuk/compare/v1.6.1...v2.0.0) - 2026-08-27
 
 ### Features
