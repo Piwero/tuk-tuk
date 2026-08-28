@@ -4215,7 +4215,7 @@ li[data-overdue] .date-chip {
 
 .sidebar.collapsed .nav-label,
 .sidebar.collapsed .nav-count,
-.sidebar.collapsed .sidebar-brand,
+.sidebar.collapsed .sidebar-brand-name,
 .sidebar.collapsed .focus-nav-badge,
 .sidebar.collapsed .row-actions,
 .sidebar.collapsed .folder-row,
@@ -4249,8 +4249,20 @@ li[data-overdue] .date-chip {
   padding: 0;
 }
 
+/* The rail keeps the brand, but only the mark of it: the wordmark steps
+   aside with every other label, and the 56px rail (40px inside its padding)
+   has no room for a 21px mark beside a 28px toggle, so the two stack. The
+   version tooltip stays on the brand, so hovering the mark still reports it.
+   `flex: none` undoes `.sidebar-top .sidebar-brand`'s `flex: 1`, which in a
+   column would stretch the brand down the rail instead of across it. */
 .sidebar.collapsed .sidebar-top {
+  flex-direction: column;
   justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  flex: none;
+  padding: 2px 0 var(--space-2);
 }
 
 /* A List with no color or emoji still needs something to click. */
@@ -4409,11 +4421,23 @@ li[data-overdue] .date-chip {
     display: inline;
   }
 
-  /* The brand is a flex row (the mark beside the wordmark), so it restores
-     to flex — `block` would drop the gap and, because `.sidebar-brand-name`
-     would then be inline, its ellipsis with it. */
+  /* The drawer shows the whole lockup, not the rail's lone mark: the
+     wordmark comes back, the brand row un-stacks, and the brand takes its
+     expanded flex and padding again. `block` would not do for
+     `.sidebar-brand-name` alone — it must be a flex item beside the mark for
+     its ellipsis to work at a squeezed width. */
+  .sidebar.collapsed .sidebar-top {
+    flex-direction: row;
+  }
+
   .sidebar.collapsed .sidebar-brand {
     display: flex;
+    flex: 1;
+    padding: 2px 10px var(--space-3);
+  }
+
+  .sidebar.collapsed .sidebar-brand-name {
+    display: block;
   }
 
   .sidebar.collapsed .lists-nav h2,

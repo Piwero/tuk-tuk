@@ -150,9 +150,21 @@ App icons sit back from the edge at 58%; favicons keep the natural 72%,
 which is the extra mass 16px needs to stay readable. Render each tile at
 512 and downsample — rasterising straight to 16px loses the feet.
 
-The sidebar's collapsed rail still hides the brand entirely, as it did when
-the brand was type only — the mark is not yet used as a standalone rail
-glyph.
+**Where the lockup appears.** Three states, one markup:
+
+- **Expanded sidebar** — mark beside the wordmark, the collapse toggle
+  opposite.
+- **Collapsed rail** — the mark alone. The wordmark steps aside with every
+  other label, and since the 56px rail leaves 40px inside its padding, the
+  mark stacks above the expand toggle rather than sitting beside it. The
+  version tooltip stays on the brand, so hovering the mark still reports it.
+- **Mobile drawer** — the full lockup again. The drawer reuses the
+  `.collapsed` class, so it has to restore the brand's row direction, flex
+  and padding, and bring `.sidebar-brand-name` back explicitly.
+
+`.sidebar-brand-name` is a real element, not a bare text node, for two
+reasons: a bare text node is an anonymous flex item that `text-overflow`
+cannot reach, and the rail needs something to hide that isn't the mark.
 
 ## Spacing, layout, and radii
 
