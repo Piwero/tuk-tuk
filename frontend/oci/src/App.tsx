@@ -867,7 +867,18 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       <ShortcutsProvider>
         <ShellShortcuts onQuickAdd={() => setQuickAddOpen(true)} />
         {paletteOpen && (
-          <CommandPalette items={paletteItems} onClose={() => setPaletteOpen(false)} />
+          <CommandPalette
+            items={paletteItems}
+            lists={lists}
+            tags={tags}
+            defaultListId={
+              selectedList?.id ?? lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? 0
+            }
+            onTagCreated={(tag) => setTags((current) => [...current, tag])}
+            onListCreated={(list) => setLists((current) => [...current, list])}
+            onCreated={addCreatedTask}
+            onClose={() => setPaletteOpen(false)}
+          />
         )}
         <div
           className={[
