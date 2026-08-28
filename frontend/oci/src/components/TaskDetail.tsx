@@ -10,6 +10,7 @@ import {
   type Priority,
   type Tag,
   type Task,
+  type TaskList,
 } from "../api";
 import {
   addDays,
@@ -45,6 +46,10 @@ interface TaskDetailProps {
    * rather than reading as an unfamiliar screen with no context. Null only
    * while `lists` hasn't loaded yet. */
   listName: string | null;
+  /** Every List, so the breadcrumb doubles as a picker for moving the Task
+   * to another List without leaving the detail view. Empty only while lists
+   * haven't loaded — the breadcrumb falls back to plain text then. */
+  lists: TaskList[];
   onTaskChanged: (task: Task) => void;
   onClose: () => void;
 }
@@ -53,6 +58,7 @@ export function TaskDetail({
   task,
   allTags,
   listName,
+  lists,
   onTaskChanged,
   onClose,
 }: TaskDetailProps): JSX.Element {
@@ -104,6 +110,13 @@ export function TaskDetail({
 
   async function tickCheckItem(item: CheckItem): Promise<void> {
     onTaskChanged(await updateCheckItem(task.id, item.id, { done: !item.done }));
+  }
+
+  async function moveToList(listId: number): Promise<void> {
+    if (listId === task.list_id) {
+      return;
+    }
+    onTaskChanged(await updateTask(task.id, { list_id: listId }));
   }
 
   async function toggleTag(tag: Tag): Promise<void> {
@@ -269,7 +282,22 @@ export function TaskDetail({
       />
       <div className="task-detail-header">
         <div className="task-detail-titles">
-          {listName !== null && <p className="task-detail-breadcrumb">{listName}</p>}
+          {lists.length > 0 ? (
+            <select
+              className="task-detail-breadcrumb"
+              aria-label="List for this task"
+              value={task.list_id}
+              onChange={(event) => void moveToList(Number(event.target.value))}
+            >
+              {lists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            listName !== null && <p className="task-detail-breadcrumb">{listName}</p>
+          )}
           <form
             onSubmit={(event) => {
               event.preventDefault();

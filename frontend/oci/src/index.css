@@ -3348,6 +3348,21 @@ li[data-overdue] .date-chip {
   color: var(--text-secondary);
 }
 
+select.task-detail-breadcrumb {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+select.task-detail-breadcrumb:hover,
+select.task-detail-breadcrumb:focus-visible {
+  border-color: var(--border-default);
+}
+
 .task-detail-header form {
   flex: 1;
 }
