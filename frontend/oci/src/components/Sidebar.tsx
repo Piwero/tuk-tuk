@@ -104,6 +104,10 @@ interface SidebarProps {
    * the main view its width back. */
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  /** The concrete theme on screen right now ("light"/"dark") and a handler
+   * that flips it — the nav-bar shortcut for Settings › Appearance. */
+  resolvedTheme: "light" | "dark";
+  onToggleTheme: () => void;
   /** Closes the off-canvas mobile drawer explicitly (issue #170) — until
    * now the only way out was tapping the backdrop. Ignored by the desktop
    * layout, where this button stays hidden. */
@@ -290,6 +294,8 @@ export function Sidebar({
   onQuickAdd,
   collapsed,
   onToggleCollapsed,
+  resolvedTheme,
+  onToggleTheme,
   onCloseDrawer,
   onListsChanged,
   onFoldersChanged,
@@ -1100,6 +1106,17 @@ export function Sidebar({
         )}
       </div>
       <div className="sidebar-footer">
+        <button
+          type="button"
+          className="sidebar-theme-toggle"
+          aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          aria-pressed={resolvedTheme === "dark"}
+          onClick={onToggleTheme}
+        >
+          <Icon name={resolvedTheme === "dark" ? "sun" : "moon"} size={18} />
+          <span className="nav-label">{resolvedTheme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
         <a
           href={pathForStaticView("settings")}
           className={settingsSelected ? "sidebar-settings selected" : "sidebar-settings"}

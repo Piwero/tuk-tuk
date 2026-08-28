@@ -61,6 +61,16 @@ function prefersDark(): MediaQueryList | null {
   }
 }
 
+/** Collapses the Light / Dark / System choice to the concrete theme showing
+ * right now — "system" defers to the OS. Used by the nav-bar toggle, which
+ * flips to the opposite of whatever is currently on screen. */
+export function resolveThemePreference(preference: ThemePreference): "light" | "dark" {
+  if (preference !== "system") {
+    return preference;
+  }
+  return prefersDark()?.matches ? "dark" : "light";
+}
+
 let systemListener: (() => void) | null = null;
 let systemQuery: MediaQueryList | null = null;
 

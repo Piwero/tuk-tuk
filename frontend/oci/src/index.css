@@ -637,7 +637,8 @@ button.folder-name {
   border-top: 1px solid var(--border-default);
 }
 
-.sidebar .sidebar-logout .icon {
+.sidebar .sidebar-logout .icon,
+.sidebar .sidebar-theme-toggle .icon {
   color: var(--text-secondary);
 }
 
