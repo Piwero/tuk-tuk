@@ -8,6 +8,37 @@
 
 export type PaletteKind = "smart" | "view" | "list" | "folder" | "tag" | "task";
 
+/** The verbs the palette offers when it is opened scoped to one Task
+ * (issue #205) — the same set the row hides behind hover. `takesValue` marks
+ * the ones that open a picker inside the palette surface rather than running
+ * straight away. */
+export type TaskVerbId = "complete" | "focus" | "reschedule" | "move" | "tag" | "repeat" | "delete";
+
+export interface TaskVerb {
+  id: TaskVerbId;
+  label: string;
+  takesValue: boolean;
+}
+
+/** The verb list for `task`, in the order arrow keys walk it. A recurring
+ * Task's "complete" is relabelled so it reads as advancing an occurrence
+ * rather than closing the Task (ADR 0003). */
+export function taskVerbs(task: { recurrence: string | null }): TaskVerb[] {
+  return [
+    {
+      id: "complete",
+      label: task.recurrence === null ? "Complete" : "Complete this occurrence",
+      takesValue: false,
+    },
+    { id: "focus", label: "Start Focus", takesValue: false },
+    { id: "reschedule", label: "Reschedule", takesValue: true },
+    { id: "move", label: "Move to a List", takesValue: true },
+    { id: "tag", label: "Add a Tag", takesValue: true },
+    { id: "repeat", label: "Set repeat", takesValue: true },
+    { id: "delete", label: "Delete", takesValue: false },
+  ];
+}
+
 export interface PaletteItem {
   /** Stable and unique across the whole palette. */
   key: string;
