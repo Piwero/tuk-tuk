@@ -195,8 +195,12 @@ export function TokenInput({
     if (!open || active === null) {
       return;
     }
+    // While the dropdown owns a key, stop it there — a host that also
+    // key-navigates a list on the same events (the command palette) must not
+    // see the keystroke too.
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      event.stopPropagation();
       setActiveIndex((current) => (current === null ? 0 : Math.min(current + 1, rows.length - 1)));
       return;
     }
@@ -205,18 +209,21 @@ export function TokenInput({
         return;
       }
       event.preventDefault();
+      event.stopPropagation();
       setActiveIndex(activeIndex === 0 ? null : activeIndex - 1);
       return;
     }
     if (event.key === "Escape") {
       if (activeIndex !== null) {
         event.preventDefault();
+        event.stopPropagation();
         setActiveIndex(null);
       }
       return;
     }
     if (event.key === "Enter" && activeIndex !== null) {
       event.preventDefault();
+      event.stopPropagation();
       const picked = rows[activeIndex];
       if (picked !== undefined) {
         void pick(picked);
@@ -230,6 +237,7 @@ export function TokenInput({
       const first = rows.find((row) => row.kind === "item");
       if (first !== undefined) {
         event.preventDefault();
+        event.stopPropagation();
         void pick(first);
       }
     }
