@@ -5020,6 +5020,41 @@ a.button:hover {
   color: var(--text-tertiary);
 }
 
+/* Palette Task capture (issue #204). */
+.command-palette-capture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.command-palette-capture-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.command-palette-chip-unmatched {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.command-palette-capture-commit {
+  align-self: flex-start;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+.command-palette-capture-commit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ------------------------------------------------------------------ *
  * Multi-select bulk action bar (issue #202).                         *
  * ------------------------------------------------------------------ */
