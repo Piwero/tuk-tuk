@@ -70,6 +70,10 @@ export interface TaskRowProps {
   onStartFocus?: (task: Task) => void;
   onKebabClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete?: (task: Task) => void;
+  /** Opens the command palette scoped to this Task (issue #205) — the full
+   * verb set the hover actions only sample. Keyboard-reachable like every
+   * other row action. */
+  onOpenActions?: (task: Task) => void;
   draggable?: boolean;
   onDragStart?: (event: React.DragEvent<HTMLLIElement>) => void;
   onDragEnd?: (event: React.DragEvent<HTMLLIElement>) => void;
@@ -114,6 +118,7 @@ export function TaskRow({
   onStartFocus,
   onKebabClick,
   onDelete,
+  onOpenActions,
   draggable,
   onDragStart,
   onDragEnd,
@@ -128,7 +133,8 @@ export function TaskRow({
   const overdue = isOverdue(task);
   const hasDescription = task.description.trim() !== "";
   const schedule = formatSchedule(task);
-  const hasActions = onStartFocus !== undefined || onDelete !== undefined;
+  const hasActions =
+    onStartFocus !== undefined || onDelete !== undefined || onOpenActions !== undefined;
 
   // Today's date reads in the accent, everything else in the secondary ink —
   // the accent used to be on every dated row, which made it mean nothing.
@@ -283,6 +289,15 @@ export function TaskRow({
         </span>
         {hasActions && (
           <span className="row-actions">
+            {onOpenActions !== undefined && (
+              <button
+                type="button"
+                aria-label={`Actions for ${task.title}`}
+                onClick={() => onOpenActions(task)}
+              >
+                <Icon name="list-checks" />
+              </button>
+            )}
             {onStartFocus !== undefined && onKebabClick !== undefined && (
               <button
                 type="button"

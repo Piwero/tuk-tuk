@@ -13,7 +13,9 @@ import {
   fetchTags,
   fetchTasks,
   fetchTasksByTag,
+  deleteTask,
   updateList,
+  updateTask,
   SMART_LABELS,
   type AllFilters,
   type CompletedOccurrence,
@@ -27,7 +29,7 @@ import {
   type TaskList,
 } from "./api";
 import { type CalendarMode } from "./calendar";
-import { localDayOf } from "./dates";
+import { allDaySchedule, clearedSchedule, localDayOf } from "./dates";
 import { FocusRunProvider } from "./focusRunContext";
 import { PRIORITY_LABELS, type GroupBy, type SortBy } from "./grouping";
 import {
@@ -54,7 +56,7 @@ import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { AssistantView } from "./components/AssistantView";
 import { CalendarView } from "./components/CalendarView";
-import { CommandPalette } from "./components/CommandPalette";
+import { CommandPalette, type TaskActionHandlers } from "./components/CommandPalette";
 import { CompletedView } from "./components/CompletedView";
 import { EventDetail } from "./components/EventDetail";
 import { FocusStatsView } from "./components/FocusStatsPanel";
@@ -211,6 +213,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const [sections, setSections] = useState<Section[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // The command palette opened scoped to one Task (issue #205) — its verb
+  // menu. Independent of `paletteOpen` (the jump surface); at most one is
+  // ever on screen. Scope guard: exactly one Task, never a selection.
+  const [paletteTask, setPaletteTask] = useState<Task | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
   // Appearance (issue #193) — a browser-local preference, like the collapsed
   // state above. The resolved `data-theme` is (re)applied on every change,
@@ -640,6 +646,52 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     );
   }
 
+  /** What the command palette's Task verbs (issue #205) do. Complete and
+   * delete route through the same deferred-PATCH / deferred-DELETE undo path
+   * their row equivalents use (#155): the request only fires once the toast
+   * window elapses, so Undo is just "never send it" and a recurring Task's
+   * completion still branches server-side (ADR 0003). The value-taking verbs
+   * PATCH straight away — the palette's picker already gathered the value. */
+  const paletteActions: TaskActionHandlers = {
+    onComplete: (task) => {
+      if (task.completed) {
+        return;
+      }
+      toasts.push(
+        "Completed",
+        async () => applyTaskChange(await updateTask(task.id, { completed: true })),
+        () => {},
+      );
+    },
+    onStartFocus: (task) => switchView({ kind: "focus", task }),
+    onReschedule: (task, day) => {
+      void (async () => {
+        const patch = day === null ? clearedSchedule() : allDaySchedule(null, day);
+        applyTaskChange(await updateTask(task.id, patch));
+      })();
+    },
+    onMove: (task, listId) => {
+      void (async () => applyTaskChange(await updateTask(task.id, { list_id: listId })))();
+    },
+    onAddTag: (task, tagId) => {
+      void (async () => {
+        const tagIds = [...new Set([...task.tags.map((tag) => tag.id), tagId])];
+        applyTaskChange(await updateTask(task.id, { tag_ids: tagIds }));
+      })();
+    },
+    onSetRepeat: (task, recurrence) => {
+      void (async () => applyTaskChange(await updateTask(task.id, { recurrence })))();
+    },
+    onDelete: (task) => {
+      changeTasks((current) => current.filter((t) => t.id !== task.id));
+      toasts.push(
+        "Task deleted",
+        () => deleteTask(task.id),
+        () => changeTasks((current) => [...current, task]),
+      );
+    },
+  };
+
   /** Whether a Task belongs to the view currently on screen. False for a
    * computed view (Today, Search): membership is decided server-side by the
    * query, so we never claim the Task is visible when we can't know. */
@@ -866,18 +918,23 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     <FocusRunProvider>
       <ShortcutsProvider>
         <ShellShortcuts onQuickAdd={() => setQuickAddOpen(true)} />
-        {paletteOpen && (
+        {(paletteOpen || paletteTask !== null) && (
           <CommandPalette
             items={paletteItems}
+            task={paletteTask ?? undefined}
             lists={lists}
             tags={tags}
+            actions={paletteActions}
             defaultListId={
               selectedList?.id ?? lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? 0
             }
             onTagCreated={(tag) => setTags((current) => [...current, tag])}
             onListCreated={(list) => setLists((current) => [...current, list])}
             onCreated={addCreatedTask}
-            onClose={() => setPaletteOpen(false)}
+            onClose={() => {
+              setPaletteOpen(false);
+              setPaletteTask(null);
+            }}
           />
         )}
         <div
@@ -1295,6 +1352,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 onSelect={setSelectedTaskId}
                 onSectionsChanged={setSections}
                 onStartFocus={(task) => switchView({ kind: "focus", task })}
+                onOpenActions={setPaletteTask}
                 toasts={toasts}
               />
             )}
