@@ -48,6 +48,8 @@ interface TaskListViewProps {
   onSectionsChanged: (update: (current: Section[]) => Section[]) => void;
   /** The task row's "Start Focus" shortcut, when the app offers Focus here. */
   onStartFocus?: (task: Task) => void;
+  /** Opens the command palette scoped to one Task (issue #205). */
+  onOpenActions?: (task: Task) => void;
   /** The app-wide toast queue (see App.tsx). This view raises toasts but no
    * longer renders them: the single <ToastStack> lives at the app root so a
    * toast survives — and covers — any screen (#191). */
@@ -67,6 +69,7 @@ export function TaskListView({
   onSelect,
   onSectionsChanged,
   onStartFocus,
+  onOpenActions,
   toasts,
 }: TaskListViewProps): JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
@@ -381,6 +384,7 @@ export function TaskListView({
         onStartFocus={onStartFocus}
         onKebabClick={onStartFocus === undefined ? undefined : handleKebabClick}
         onDelete={(t) => void remove(t)}
+        onOpenActions={onOpenActions}
         draggable
         onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
         onDragEnd={endDrag}
