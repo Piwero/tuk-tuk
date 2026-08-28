@@ -30,6 +30,7 @@ import { FocusNavBadge } from "./FocusNavBadge";
 import { FolderForm } from "./FolderForm";
 import { Icon, type IconName } from "./Icon";
 import { ListForm, type ListFormValues } from "./ListForm";
+import { Logo } from "./Logo";
 import { TagForm, type TagFormValues } from "./TagForm";
 
 const SMART_ICONS: Record<SmartView, IconName> = {
@@ -673,7 +674,8 @@ export function Sidebar({
       <div className="sidebar-scroll">
         <div className="sidebar-top">
           <div className="sidebar-brand" title={`tuk-tuk version ${APP_VERSION}`}>
-            Tuk Tuk
+            <Logo />
+            <span className="sidebar-brand-name">Tuk Tuk</span>
           </div>
           <FocusNavBadge onOpen={onSelectFocus} />
           <button

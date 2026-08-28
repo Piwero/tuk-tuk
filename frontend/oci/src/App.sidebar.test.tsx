@@ -46,7 +46,23 @@ describe("Sidebar structure", () => {
     render(<App />);
 
     // Nothing sets VITE_APP_VERSION in the suite, so it falls back to "dev".
-    expect(await screen.findByText("Tuk Tuk")).toHaveAttribute("title", "tuk-tuk version dev");
+    // The tooltip sits on the brand lockup, so hovering the mark or the
+    // wordmark both report the version.
+    const brand = await screen.findByTitle("tuk-tuk version dev");
+    expect(brand).toHaveTextContent("Tuk Tuk");
+  });
+
+  it("locks up the mark with the wordmark in the brand", async () => {
+    installFakeApi();
+    render(<App />);
+
+    const brand = await screen.findByTitle("tuk-tuk version dev");
+    // Decorative: the mark is hidden from the accessibility tree and adds no
+    // text, so the brand still reads "Tuk Tuk" once rather than twice.
+    const mark = brand.querySelector("svg.logo");
+    expect(mark).toBeInTheDocument();
+    expect(mark).toHaveAttribute("aria-hidden", "true");
+    expect(brand.textContent).toBe("Tuk Tuk");
   });
 
   it("shows a Lists heading with a single Create control, and no bottom-pinned add buttons", async () => {

@@ -283,12 +283,35 @@ main {
   flex: none;
 }
 
+/* The brand mark (Logo.tsx). It paints with `currentColor`, so this one rule
+   is what makes it accent in both themes — every surface that shows it wants
+   the accent, so none of them restate the colour. */
+.logo {
+  flex: none;
+  color: var(--accent);
+}
+
+/* The brand lockup: the mark, then the wordmark. The mark is decorative
+   (Logo.tsx) — the tooltip and the text both live on this row. */
 .sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   padding: 2px 10px var(--space-3);
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
+}
+
+/* The wordmark, not `.sidebar-brand`, owns the truncation: once the brand is
+   a flex row, a bare text node is an anonymous flex item and `text-overflow`
+   on the container no longer reaches it. */
+.sidebar-brand-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* Feature nav: Tasks, Calendar, Habits, Stand-up, Focus, Search (+ Assistant
@@ -4125,16 +4148,15 @@ li[data-overdue] .date-chip {
 .sidebar-top .sidebar-brand {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 /* Specificity has to beat `.sidebar button` (width: 100%, transparent
    background) — matched here the same way `.sidebar .sidebar-collapse` does.
-   `margin-left` gives the pill its own breathing room from the wordmark
-   rather than relying entirely on `.sidebar-brand`'s flex-driven gap, so it
-   never reads as crowding the brand even at a squeezed width (#162). */
+   `margin-left` gives the pill its own breathing room from the brand rather
+   than relying entirely on `.sidebar-top`'s flex-driven gap, so it never
+   reads as crowding the brand even at a squeezed width (#162). (`.sidebar-
+   brand`'s own gap is a different one — it spaces the mark from the
+   wordmark inside the lockup.) */
 .sidebar .focus-nav-badge {
   display: flex;
   flex: none;
@@ -4387,7 +4409,13 @@ li[data-overdue] .date-chip {
     display: inline;
   }
 
-  .sidebar.collapsed .sidebar-brand,
+  /* The brand is a flex row (the mark beside the wordmark), so it restores
+     to flex — `block` would drop the gap and, because `.sidebar-brand-name`
+     would then be inline, its ellipsis with it. */
+  .sidebar.collapsed .sidebar-brand {
+    display: flex;
+  }
+
   .sidebar.collapsed .lists-nav h2,
   .sidebar.collapsed .tags-nav h2,
   .sidebar.collapsed .archived h2 {
@@ -4678,6 +4706,12 @@ li[data-overdue] .date-chip {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   background: var(--surface-card);
+}
+
+/* The mark sits above the wordmark on the app's first screen. It is
+   decorative (Logo.tsx) — the <h1> carries the name. */
+.auth-gate-form .logo {
+  align-self: center;
 }
 
 .auth-gate-form h1 {
