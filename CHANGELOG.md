@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.2.0](https://github.com/Piwero/tuk-tuk/compare/v2.1.0...v2.2.0) - 2026-08-28
+
+### Features
+
+- **brand:** Add the Tuk Tuk mark and retire the placeholder T ([8785782](https://github.com/Piwero/tuk-tuk/commit/87857823d21a4143c7a0ba689502fa508e9e1f9f))
+- **brand:** Show the mark in the collapsed sidebar rail ([01b9f9d](https://github.com/Piwero/tuk-tuk/commit/01b9f9dab3885876fce3dfb550167bfffc96a42b))
+
 ## [2.1.0](https://github.com/Piwero/tuk-tuk/compare/v2.0.0...v2.1.0) - 2026-08-28
 
 ### Features
