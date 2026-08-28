@@ -111,6 +111,21 @@ describe("acting on a Task from the command palette", () => {
     expect(screen.getByRole("checkbox", { name: "Complete Morning run" })).not.toBeChecked();
   });
 
+  it("opens scoped to the selected Task on cmd/ctrl+K", async () => {
+    installFakeApi({ tasks: [fakeTask("Call the plumber")] });
+    render(<App />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open details for Call the plumber" }),
+    );
+    await screen.findByRole("complementary", { name: "Task details" });
+
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    const dialog = await screen.findByRole("dialog", { name: "Actions for Call the plumber" });
+    expect(within(dialog).getByRole("option", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+  });
+
   it("steps back from a picker to the verb list on Escape", async () => {
     installFakeApi({
       tags: [{ id: 5, name: "urgent", color: null }],

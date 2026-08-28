@@ -380,12 +380,20 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // The command palette (issue #201): cmd/ctrl+K from anywhere, including a
   // focused text field or an open dialog — this is a raw listener rather than
   // a registration against the shortcut layer precisely so the typing-context
-  // suppression there doesn't apply.
+  // suppression there doesn't apply. With a Task selected it opens scoped to
+  // that Task's verbs (issue #205) instead of the jump surface; the ref keeps
+  // the listener from needing a re-subscribe on every selection change.
+  const selectedTaskRef = useRef<Task | null>(null);
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setPaletteOpen(true);
+        const scopedTask = selectedTaskRef.current;
+        if (scopedTask !== null) {
+          setPaletteTask(scopedTask);
+        } else {
+          setPaletteOpen(true);
+        }
       }
     }
     document.addEventListener("keydown", onKeyDown);
@@ -512,6 +520,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const selectedTask =
     tasks.find((task) => task.id === selectedTaskId) ??
     (calendarTask?.id === selectedTaskId ? calendarTask : null);
+  // Read by the cmd/ctrl+K listener, which is subscribed once (see above).
+  selectedTaskRef.current = selectedTask;
   // Computed views can't be patched locally: membership depends on the query.
   const isComputedView = smartView !== null || completedMode || view?.kind === "search";
   // The completed view exists per List and for All (not Today / Next 7 Days).
