@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.3.0](https://github.com/Piwero/tuk-tuk/compare/v2.2.0...v2.3.0) - 2026-08-28
+
+### Features
+
+- **appearance:** Add a dark mode toggle to the sidebar nav ([a7acb5a](https://github.com/Piwero/tuk-tuk/commit/a7acb5a1eb6e27f8f8158e4bc9b6ab813fbcd2ff))
+- **tasks:** Move a task to another list from the detail view ([25130b1](https://github.com/Piwero/tuk-tuk/commit/25130b1d28dbe9ce4190acdd5c5ff383aed145b1))
+
 ## [2.2.0](https://github.com/Piwero/tuk-tuk/compare/v2.1.0...v2.2.0) - 2026-08-28
 
 ### Features
