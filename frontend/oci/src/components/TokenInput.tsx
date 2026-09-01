@@ -29,6 +29,12 @@ export interface TokenChannel<T> {
     suggestion: { start: number; query: string },
     item: T,
   ) => { text: string; caret: number };
+  /** Opt-in composition for a `single`-mode channel: when a chip is already
+   * held and a new pick comes in, `mergePick(current, incoming)` returns
+   * the chip to keep instead of `incoming` replacing `current` outright.
+   * Only the `@` schedule channel supplies this — every other channel
+   * replaces on pick, and must leave this undefined. */
+  mergePick?: (current: T, incoming: T) => T;
   /** Whether a query with no exact match offers a "Create …" row. The set
    * of Priority levels is closed, so its channel always sets this false. */
   allowCreate: boolean;
@@ -178,7 +184,12 @@ export function TokenInput({
     }
     const fresh = channelsRef.current.find((c) => c.sigil === channel.sigil) ?? channel;
     if (fresh.mode === "single") {
-      fresh.onChipsChange([item]);
+      const current = fresh.chips[0];
+      const next =
+        current !== undefined && fresh.mergePick !== undefined
+          ? fresh.mergePick(current, item)
+          : item;
+      fresh.onChipsChange([next]);
     } else if (!fresh.chips.some((chip) => fresh.getId(chip) === fresh.getId(item))) {
       fresh.onChipsChange([...fresh.chips, item]);
     }

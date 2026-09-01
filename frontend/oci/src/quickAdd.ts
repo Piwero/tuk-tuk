@@ -4,7 +4,14 @@
  */
 
 import { type Priority, type TaskList } from "./api";
-import { resolveDayToken, type ScheduleChip } from "./dateSuggest";
+import {
+  type ClockTime,
+  composeSchedule,
+  resolveClockTime,
+  resolveDayToken,
+  type ScheduleChip,
+} from "./dateSuggest";
+import { browserTimeZone } from "./dates";
 
 export interface QuickAddPlan {
   /** The input with all consumed tokens stripped (whitespace collapsed). */
@@ -15,10 +22,15 @@ export interface QuickAddPlan {
   listId: number | null;
   /** `#tag` names in first-seen order, deduplicated case-insensitively. */
   tagNames: string[];
-  /** From the first recognised `@day` token, resolved against `options.now`
-   * — null when no `now` was supplied (date tokens are then left in the
-   * title untouched) or no token resolved. */
+  /** The composed `@` schedule — a day half (`@tomorrow`) and/or a clock
+   * time (`@8am`), each token overwriting only its own half. Null when no
+   * `now` was supplied (date tokens are then left in the title untouched)
+   * or nothing resolved. A time with no day means today. */
   due: ScheduleChip | null;
+  /** The raw clock-time half on its own, exposed so a caller holding a
+   * picked day chip (which makes `skipDateToken` true) can still compose a
+   * typed `@8am` onto it. Null when no time token was typed. */
+  dueTime: ClockTime | null;
 }
 
 const PRIORITY_TOKENS: Record<string, Priority> = {
@@ -37,7 +49,9 @@ export interface ParseQuickAddOptions {
   skipListToken?: boolean;
   /** Same, for a `!priority` chip already picked from the dropdown. */
   skipPriorityToken?: boolean;
-  /** Same, for an `@day` schedule chip already picked from the dropdown. */
+  /** Same, for an `@day` schedule chip already picked from the dropdown —
+   * suppresses only the *day* half; a typed clock time still resolves, so
+   * it can be composed onto the picked day. */
   skipDateToken?: boolean;
   /** The clock `@day` tokens resolve against. Absent (the palette, the
    * Quick-Add dialog, the calendar draft — all of which carry their own
@@ -54,8 +68,17 @@ export function parseQuickAdd(
   lists: TaskList[],
   options: ParseQuickAddOptions = {},
 ): QuickAddPlan {
-  const plan: QuickAddPlan = { title: "", priority: null, listId: null, tagNames: [], due: null };
+  const plan: QuickAddPlan = {
+    title: "",
+    priority: null,
+    listId: null,
+    tagNames: [],
+    due: null,
+    dueTime: null,
+  };
   const rest: string[] = [];
+  let dayHalf: ScheduleChip | null = null;
+  let timeHalf: ClockTime | null = null;
   for (const word of input.split(/\s+/)) {
     if (word.startsWith("#") && word.length > 1) {
       const name = word.slice(1);
@@ -71,16 +94,21 @@ export function parseQuickAdd(
         continue;
       }
     }
-    if (
-      options.now !== undefined &&
-      !options.skipDateToken &&
-      word.startsWith("@") &&
-      word.length > 1 &&
-      plan.due === null
-    ) {
-      const resolved = resolveDayToken(word.slice(1), options.now);
-      if (resolved !== null) {
-        plan.due = resolved;
+    if (options.now !== undefined && word.startsWith("@") && word.length > 1) {
+      const body = word.slice(1);
+      if (!options.skipDateToken) {
+        const resolvedDay = resolveDayToken(body, options.now);
+        if (resolvedDay !== null) {
+          // Last day token wins — a later `@monday` replaces an earlier
+          // `@tomorrow` and keeps any time half, mirroring the dropdown's
+          // merge behaviour.
+          dayHalf = resolvedDay;
+          continue;
+        }
+      }
+      const resolvedTime = resolveClockTime(body);
+      if (resolvedTime !== null) {
+        timeHalf = resolvedTime;
         continue;
       }
     }
@@ -95,6 +123,11 @@ export function parseQuickAdd(
       rest.push(word);
     }
   }
+  if (options.now !== undefined && (dayHalf !== null || timeHalf !== null)) {
+    const base = dayHalf ?? (resolveDayToken("today", options.now) as ScheduleChip);
+    plan.due = composeSchedule(base, timeHalf, browserTimeZone());
+  }
+  plan.dueTime = timeHalf;
   plan.title = rest.join(" ");
   return plan;
 }
