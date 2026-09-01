@@ -9,6 +9,8 @@ end-to-end.
 """
 
 import datetime as dt
+import json
+from pathlib import Path
 
 from app.date_phrase import resolve_date_phrase
 
@@ -133,3 +135,29 @@ class TestSpelledOutTimes:
 
     def test_a_word_that_is_not_a_clock_hour_still_fails(self) -> None:
         assert resolve_date_phrase("tomorrow at teatime", _LOCAL_DATE, _ZONE) is None
+
+
+_SHARED_VECTORS = json.loads(
+    (Path(__file__).resolve().parents[3] / "shared" / "quick-add-date-vectors.json").read_text()
+)["vectors"]
+
+
+class TestSharedQuickAddDateVectors:
+    """The Quick-Add `@` day-token grammar (frontend issue #211) is resolved
+    by its own pure `dateSuggest.ts` module, deliberately not by calling this
+    backend resolver. `shared/quick-add-date-vectors.json` pins the overlap
+    so the two implementations cannot drift on the vocabulary they share
+    (`today`, `tomorrow`, plain weekday names). Tokens unique to the frontend
+    grammar — `weekend`, `next-week`, same-weekday-as-today — are covered by
+    frontend-only tests, since this resolver's weekday semantics differ.
+    """
+
+    def test_every_shared_vector_resolves_identically_here(self) -> None:
+        for vector in _SHARED_VECTORS:
+            local_date = dt.date.fromisoformat(vector["localDate"])
+            expected = dt.datetime.fromisoformat(vector["expected"].replace("Z", "+00:00"))
+            resolved = resolve_date_phrase(vector["phrase"], local_date, "UTC")
+            assert resolved is not None, vector["phrase"]
+            due_date, is_all_day = resolved
+            assert is_all_day is True, vector["phrase"]
+            assert due_date == expected, vector["phrase"]

@@ -4,6 +4,7 @@
  */
 
 import { type Priority, type TaskList } from "./api";
+import { resolveDayToken, type ScheduleChip } from "./dateSuggest";
 
 export interface QuickAddPlan {
   /** The input with all consumed tokens stripped (whitespace collapsed). */
@@ -14,6 +15,10 @@ export interface QuickAddPlan {
   listId: number | null;
   /** `#tag` names in first-seen order, deduplicated case-insensitively. */
   tagNames: string[];
+  /** From the first recognised `@day` token, resolved against `options.now`
+   * — null when no `now` was supplied (date tokens are then left in the
+   * title untouched) or no token resolved. */
+  due: ScheduleChip | null;
 }
 
 const PRIORITY_TOKENS: Record<string, Priority> = {
@@ -32,6 +37,13 @@ export interface ParseQuickAddOptions {
   skipListToken?: boolean;
   /** Same, for a `!priority` chip already picked from the dropdown. */
   skipPriorityToken?: boolean;
+  /** Same, for an `@day` schedule chip already picked from the dropdown. */
+  skipDateToken?: boolean;
+  /** The clock `@day` tokens resolve against. Absent (the palette, the
+   * Quick-Add dialog, the calendar draft — all of which carry their own
+   * date) means `@day` tokens are left in the title verbatim, exactly as
+   * before this sigil existed. */
+  now?: Date;
 }
 
 /** Tokens are consumed at most once (first wins); anything not consumed —
@@ -42,7 +54,7 @@ export function parseQuickAdd(
   lists: TaskList[],
   options: ParseQuickAddOptions = {},
 ): QuickAddPlan {
-  const plan: QuickAddPlan = { title: "", priority: null, listId: null, tagNames: [] };
+  const plan: QuickAddPlan = { title: "", priority: null, listId: null, tagNames: [], due: null };
   const rest: string[] = [];
   for (const word of input.split(/\s+/)) {
     if (word.startsWith("#") && word.length > 1) {
@@ -56,6 +68,19 @@ export function parseQuickAdd(
       const priority = PRIORITY_TOKENS[word.toLowerCase()];
       if (priority !== undefined && plan.priority === null) {
         plan.priority = priority;
+        continue;
+      }
+    }
+    if (
+      options.now !== undefined &&
+      !options.skipDateToken &&
+      word.startsWith("@") &&
+      word.length > 1 &&
+      plan.due === null
+    ) {
+      const resolved = resolveDayToken(word.slice(1), options.now);
+      if (resolved !== null) {
+        plan.due = resolved;
         continue;
       }
     }

@@ -1,0 +1,13 @@
+{
+  "_comment": "Shared test vectors for Quick-Add `@` day-token resolution (issue #211). Asserted by BOTH frontend/oci/src/dateSuggest.test.ts and backend/oci/tests/test_date_phrase.py so the two independent resolvers cannot drift on the vocabulary they share. Only phrases that BOTH resolvers must agree on live here — tokens unique to the frontend grammar (`weekend`, `next-week`, same-weekday-as-today) are covered by frontend-only tests. `phrase` is the text after the `@` sigil; `localDate` is the client's local calendar date; `expected` is the resolved all-day due date (UTC midnight, ISO-8601 with a `Z`).",
+  "vectors": [
+    { "phrase": "today", "localDate": "2026-09-01", "expected": "2026-09-01T00:00:00Z" },
+    { "phrase": "tomorrow", "localDate": "2026-09-01", "expected": "2026-09-02T00:00:00Z" },
+    { "phrase": "monday", "localDate": "2026-09-01", "expected": "2026-09-07T00:00:00Z" },
+    { "phrase": "wednesday", "localDate": "2026-09-01", "expected": "2026-09-02T00:00:00Z" },
+    { "phrase": "thursday", "localDate": "2026-09-01", "expected": "2026-09-03T00:00:00Z" },
+    { "phrase": "friday", "localDate": "2026-09-01", "expected": "2026-09-04T00:00:00Z" },
+    { "phrase": "saturday", "localDate": "2026-09-01", "expected": "2026-09-05T00:00:00Z" },
+    { "phrase": "sunday", "localDate": "2026-09-01", "expected": "2026-09-06T00:00:00Z" }
+  ]
+}
