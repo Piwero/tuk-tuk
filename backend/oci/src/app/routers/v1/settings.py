@@ -4,17 +4,53 @@ GoogleStatus precedent in app.routers.v1.google rather than exposing the
 whole AppSettings singleton for editing).
 """
 
+import re
+
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from app.app_settings import require_app_settings
 from app.db import SessionDep
+from app.models import AppSettings
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 
 class StandupSettings(BaseModel):
     enabled: bool
+
+
+# Active hours (issue #210). The band is aligned to 30 minutes, must have
+# start strictly before end, and must not wrap past midnight — a wrapping
+# band makes "the start of your day" ambiguous, which leaks into the
+# Calendar's initial scroll. Night-shift support is explicitly out of scope.
+ACTIVE_HOURS_GRANULARITY_MINUTES = 30
+_HH_MM = re.compile(r"^\d{2}:\d{2}$")
+
+
+def _minutes(label: str) -> int:
+    hours, minutes = label.split(":")
+    return int(hours) * 60 + int(minutes)
+
+
+class ActiveHoursSettings(BaseModel):
+    enabled: bool
+    start: str
+    end: str
+
+    @model_validator(mode="after")
+    def _check_band(self) -> "ActiveHoursSettings":
+        for label in (self.start, self.end):
+            if not _HH_MM.match(label):
+                raise ValueError(f"{label!r} is not an HH:MM time")
+            minute = _minutes(label)
+            if not 0 <= minute <= 24 * 60:
+                raise ValueError(f"{label!r} is outside the day")
+            if minute % ACTIVE_HOURS_GRANULARITY_MINUTES != 0:
+                raise ValueError(f"{label!r} is not aligned to 30 minutes")
+        if _minutes(self.start) >= _minutes(self.end):
+            raise ValueError("Active hours must start before they end")
+        return self
 
 
 @router.get("/stand-up")
@@ -34,3 +70,33 @@ async def update_standup_settings(payload: StandupSettings, session: SessionDep)
     app_settings.standup_enabled = payload.enabled
     await session.commit()
     return StandupSettings(enabled=app_settings.standup_enabled)
+
+
+def _active_hours(app_settings: AppSettings) -> ActiveHoursSettings:
+    return ActiveHoursSettings(
+        enabled=app_settings.active_hours_enabled,
+        start=app_settings.active_hours_start,
+        end=app_settings.active_hours_end,
+    )
+
+
+@router.get("/active-hours")
+async def read_active_hours_settings(session: SessionDep) -> ActiveHoursSettings:
+    return _active_hours(await require_app_settings(session))
+
+
+@router.put("/active-hours")
+async def update_active_hours_settings(
+    payload: ActiveHoursSettings, session: SessionDep
+) -> ActiveHoursSettings:
+    """Active hours describe the user (issue #210): the Calendar renders this
+    band at double height and compresses the hours outside it. Stored on the
+    settings singleton, not per-device. The payload is validated for the
+    30-minute grid, start-before-end, and no midnight wrap before it lands.
+    """
+    app_settings = await require_app_settings(session)
+    app_settings.active_hours_enabled = payload.enabled
+    app_settings.active_hours_start = payload.start
+    app_settings.active_hours_end = payload.end
+    await session.commit()
+    return _active_hours(app_settings)

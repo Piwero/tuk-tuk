@@ -24,6 +24,10 @@ _Avoid_: Calendar item
 
 Entries render in different timezones by kind, and this is deliberate, not a bug: a Task renders in whatever timezone it was scheduled in (a commitment the user made), while an Event renders in the **viewer's own** timezone, whatever timezone it was organised in (an artefact of whoever set it up). Rendering a Tokyo-organised meeting at its Tokyo hour would place it in the wrong row of the grid and cause a missed meeting. This asymmetry is the single most likely thing for a future reader to mistake for a bug — do not "fix" it into symmetry.
 
+**Active hours**:
+The band of the day the user marks as when they are usually active (issue #210). Inside it the Week/Day time grid renders at double height (96px/hour) so short tasks stay readable in place; outside it the grid compresses (24px/hour) so dead hours cost little scroll. A user-level setting stored server-side on the settings singleton — it describes the user, not a device — disabled by default, prefilling 09:00–17:00 on first enable. The band is aligned to 30 minutes, must start strictly before it ends, and may not wrap past midnight: a wrapping band makes "the start of your day" ambiguous, and night-shift support (a movable day boundary) is out of scope. Degenerate bands (the whole day, or a single 30-minute band) are allowed. Only the Week and Day views are affected; Month has no time axis, and the all-day lane is untouched. See ADR 0010 for the piecewise time-axis invariant this rests on.
+_Avoid_: Working hours (the band is about activity, not work), office hours, business hours
+
 **Check Item**:
 A lightweight line in a task's checklist — a title with its own done/undone state and optional reminder. Belongs to exactly one Task and is not a Task itself (no tags, priority, or list). The only nesting mechanism in v1.
 _Avoid_: Subtask (a separate recursive-task concept, out of v1), checklist item
