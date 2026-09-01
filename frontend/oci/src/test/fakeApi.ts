@@ -249,6 +249,7 @@ export interface FakeApiState {
   /** The Stand-up visibility toggle (issue #140) — server-defaulted to
    * true, matching the backend's default. */
   standupEnabled: boolean;
+  activeHours: { enabled: boolean; start: string; end: string };
   /** Mirrors the backend's Assist status probe (ADR 0005, issue #42):
    * whether Ollama is reachable and the configured model is installed.
    * Defaults to false, matching a fresh deployment with no Ollama
@@ -508,6 +509,7 @@ export function installFakeApi({
   standupYesterdaySuggestions = [],
   sprintGoal = "",
   standupEnabled = true,
+  activeHours = { enabled: false, start: "09:00", end: "17:00" },
   assistAvailable = false,
   assistOllamaBaseUrl = null,
   assistModel = null,
@@ -566,6 +568,9 @@ export function installFakeApi({
   /** The Stand-up visibility toggle (issue #140). Defaults to true, matching
    * the backend's server-defaulted-true column. */
   standupEnabled?: boolean;
+  /** Active hours (issue #210) -- the Calendar's double-height band.
+   * Defaults to disabled, matching the backend. */
+  activeHours?: { enabled: boolean; start: string; end: string };
   /** The Assist availability probe's answer (ADR 0005, issue #42). */
   assistAvailable?: boolean;
   /** The saved Assist config Settings reads on mount (ADR 0005). */
@@ -624,6 +629,7 @@ export function installFakeApi({
     })),
     sprintGoal,
     standupEnabled,
+    activeHours: { ...activeHours },
     assistAvailable,
     assistOllamaBaseUrl,
     assistModel,
@@ -1936,6 +1942,34 @@ export function installFakeApi({
         const input = body as { enabled: boolean };
         state.standupEnabled = input.enabled;
         return json({ enabled: state.standupEnabled });
+      }
+    }
+    if (url.pathname === "/api/v1/settings/active-hours") {
+      if (method === "GET") {
+        return json({ ...state.activeHours });
+      }
+      if (method === "PUT") {
+        const input = body as { enabled: boolean; start: string; end: string };
+        const toMinutes = (label: string): number =>
+          Number(label.slice(0, 2)) * 60 + Number(label.slice(3));
+        const aligned = (label: string): boolean =>
+          /^\d\d:\d\d$/.test(label) && toMinutes(label) % 30 === 0;
+        if (
+          !aligned(input.start) ||
+          !aligned(input.end) ||
+          toMinutes(input.start) >= toMinutes(input.end)
+        ) {
+          return json(
+            { error: { code: "validation_error", message: "invalid active hours band" } },
+            422,
+          );
+        }
+        state.activeHours = {
+          enabled: input.enabled,
+          start: input.start,
+          end: input.end,
+        };
+        return json({ ...state.activeHours });
       }
     }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/suggestions/today") {

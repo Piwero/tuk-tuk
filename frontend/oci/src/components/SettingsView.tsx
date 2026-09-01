@@ -4,6 +4,8 @@ import {
   ApiError,
   changePassword,
   disconnectGoogleAccount,
+  fetchActiveHoursSettings,
+  updateActiveHoursSettings,
   fetchAssistConfig,
   fetchAssistModels,
   fetchAssistStatus,
@@ -25,10 +27,12 @@ import {
   updateStandupSettings,
   type AssistConfig,
   type AssistantConfig,
+  type ActiveHoursSettings,
   type GoogleAccount,
   type GoogleCalendar,
   type GoogleStatus,
 } from "../api";
+import { timeMinutes } from "../calendar";
 import { type ThemePreference } from "../layoutPrefs";
 import { ACCENT_PALETTE } from "../theme";
 import { APP_VERSION } from "../version";
@@ -812,6 +816,88 @@ function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX
   );
 }
 
+/** Half-hour labels "00:00" … "24:00" — the Active-hours grid (issue #210). */
+const HALF_HOUR_LABELS: string[] = Array.from({ length: 49 }, (_, index) => {
+  const minutes = index * 30;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+});
+
+/** Active hours (issue #210): the band of the day the Calendar renders at
+ * double height. The selects only offer valid half-hour times, so the one
+ * reachable invalid state is start ≥ end (which includes a band that would
+ * wrap past midnight); that shows inline and isn't saved. */
+function ActiveHoursSettingsForm(): JSX.Element {
+  const [settings, setSettings] = useState<ActiveHoursSettings>({
+    enabled: false,
+    start: "09:00",
+    end: "17:00",
+  });
+
+  useEffect(() => {
+    void fetchActiveHoursSettings().then(setSettings);
+  }, []);
+
+  const invalid = timeMinutes(settings.start) >= timeMinutes(settings.end);
+
+  function apply(next: ActiveHoursSettings): void {
+    setSettings(next);
+    if (timeMinutes(next.start) < timeMinutes(next.end)) {
+      void updateActiveHoursSettings(next).then(setSettings);
+    }
+  }
+
+  return (
+    <div className="settings-field">
+      <label>
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={() => apply({ ...settings, enabled: !settings.enabled })}
+        />
+        Active hours
+      </label>
+      <p className="settings-hint">
+        Marks the part of the day you&rsquo;re usually active. The calendar&rsquo;s Week and Day
+        grids draw those hours at double height, so short tasks stay readable in place, and compress
+        the hours outside — dead time costs little scroll.
+      </p>
+      <div className="settings-field-with-action">
+        <label>
+          Start
+          <select
+            value={settings.start}
+            onChange={(event) => apply({ ...settings, start: event.target.value })}
+          >
+            {HALF_HOUR_LABELS.slice(0, -1).map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          End
+          <select
+            value={settings.end}
+            onChange={(event) => apply({ ...settings, end: event.target.value })}
+          >
+            {HALF_HOUR_LABELS.slice(1).map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {invalid && (
+        <p role="alert">
+          Active hours must start before they end, and can&rsquo;t wrap past midnight.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** The Settings screen. Asks the Google status endpoint once on mount. The
  * Google Calendar section itself is always shown once that answer is in —
  * unlike before issue #117, its credentials form is how an operator gets
@@ -913,6 +999,10 @@ export function SettingsView({
           />
           Stand-up
         </label>
+      </section>
+      <section aria-label="Active hours" className="settings-section">
+        <h2>Active hours</h2>
+        <ActiveHoursSettingsForm />
       </section>
       <section aria-label="About" className="settings-section">
         <h2>About</h2>

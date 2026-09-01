@@ -214,6 +214,36 @@ describe("The Week and Day views", () => {
     expect(screen.getByText("10:00–11:30")).toBeInTheDocument();
   });
 
+  it("renders the active-hours band at double height with off-hours tint (issue #210)", async () => {
+    installFakeApi({
+      activeHours: { enabled: true, start: "09:00", end: "17:00" },
+      tasks: [
+        fakeTask("Deep work", {
+          start_date: "2026-07-03T10:00:00Z",
+          due_date: "2026-07-03T11:00:00Z",
+          time_zone: "UTC",
+        }),
+      ],
+    });
+    render(<App />);
+    await openCalendar();
+    fireEvent.click(screen.getByRole("button", { name: "Day" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
+
+    // An active hour is 96px, so a 10:00 cell sits at 9 off-hours * 24 + 1h.
+    const tenAm = screen.getByLabelText("2026-07-03 10:00");
+    expect(tenAm).toHaveStyle({ height: "96px" });
+    const midnight = screen.getByLabelText("2026-07-03 00:00");
+    expect(midnight).toHaveStyle({ height: "24px" });
+
+    const block = closestOrThrow(await screen.findByText("Deep work"), ".time-block");
+    expect(block).toHaveStyle({ top: `${9 * 24 + 96}px`, height: "96px" });
+
+    // The recessed tint marks the compressed regions.
+    const column = closestOrThrow(tenAm, ".day-column");
+    expect(column.querySelectorAll(".off-hours-band")).toHaveLength(2);
+  });
+
   it("shows a single day with only that day's tasks", async () => {
     installFakeApi({
       tasks: [

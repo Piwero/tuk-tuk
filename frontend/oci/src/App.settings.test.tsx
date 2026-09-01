@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -400,6 +400,56 @@ describe("Appearance (issue #193)", () => {
     render(<App />);
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     expect(await screen.findByRole("radio", { name: "Dark" })).toBeChecked();
+  });
+});
+
+describe("Active hours (issue #210)", () => {
+  it("defaults to disabled with the 09:00–17:00 prefill", async () => {
+    installFakeApi({ googleConfigured: false });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+
+    const section = await screen.findByRole("region", { name: "Active hours" });
+    const toggle = within(section).getByLabelText("Active hours");
+    expect(toggle).not.toBeChecked();
+    expect(within(section).getByLabelText("Start")).toHaveValue("09:00");
+    expect(within(section).getByLabelText("End")).toHaveValue("17:00");
+  });
+
+  it("persists an enabled band to the server", async () => {
+    const api = installFakeApi({ googleConfigured: false });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    const section = await screen.findByRole("region", { name: "Active hours" });
+
+    await user.click(within(section).getByLabelText("Active hours"));
+    await user.selectOptions(within(section).getByLabelText("Start"), "08:00");
+    await user.selectOptions(within(section).getByLabelText("End"), "16:00");
+
+    await waitFor(() =>
+      expect(api.activeHours).toEqual({ enabled: true, start: "08:00", end: "16:00" }),
+    );
+  });
+
+  it("flags a band that would start after it ends and does not save it", async () => {
+    const api = installFakeApi({
+      googleConfigured: false,
+      activeHours: { enabled: true, start: "09:00", end: "17:00" },
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    const section = await screen.findByRole("region", { name: "Active hours" });
+
+    await user.selectOptions(within(section).getByLabelText("Start"), "18:00");
+
+    expect(await within(section).findByRole("alert")).toHaveTextContent(/start before they end/i);
+    expect(api.activeHours).toEqual({ enabled: true, start: "09:00", end: "17:00" });
   });
 });
 

@@ -373,6 +373,38 @@ describe("Resizing blocks in the Day view", () => {
     );
   });
 
+  it("maps resize by absolute position under the Active-hours axis (issue #210)", async () => {
+    // Band 09:00–17:00 renders active hours at 96px. The block is 14:00–
+    // 15:30, inside the band. Dragging the end down 96px is one active hour
+    // of travel — +60 minutes → 16:30 — not the +120 a flat 48px/hour delta
+    // would have given.
+    const api = installFakeApi({
+      activeHours: { enabled: true, start: "09:00", end: "17:00" },
+      tasks: [
+        fakeTask("Deep work", {
+          start_date: "2026-07-03T14:00:00Z",
+          due_date: "2026-07-03T15:30:00Z",
+          time_zone: "UTC",
+        }),
+      ],
+    });
+    render(<App />);
+    await openDay();
+
+    fireEvent.mouseDown(await screen.findByLabelText('Resize end of "Deep work"'), {
+      clientY: 500,
+    });
+    fireEvent.mouseMove(window, { clientY: 500 + 96 });
+    expect(screen.getByText("14:00–16:30")).toBeInTheDocument();
+    fireEvent.mouseUp(window);
+
+    await waitFor(() =>
+      expect(api.tasks.find((task) => task.title === "Deep work")).toMatchObject({
+        due_date: "2026-07-03T16:30:00.000Z",
+      }),
+    );
+  });
+
   it("caps a move through the end of the day at 23:59", async () => {
     const api = seedBlock();
     render(<App />);

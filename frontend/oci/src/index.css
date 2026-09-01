@@ -2150,9 +2150,25 @@ li[data-overdue] .date-chip {
 
 .hour-label,
 .hour-cell {
-  /* Kept in sync with HOUR_PX in CalendarView.tsx (#198). */
-  height: 48px;
+  /* Height is set inline per-hour from the calendar time axis (#210): a
+     uniform 48px with Active hours off, 96px / 24px inside / outside the
+     band when it's on. Positioned so it layers over the off-hours tint. */
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+}
+
+/* The recessed tint over the compressed off-hours region (#210): behind the
+   hour cells and the time blocks, marking the band as de-emphasised. */
+.off-hours-band {
+  position: absolute;
+  /* Clears the 2px inset accent rule on today's column so it stays visible
+     through the off-hours regions. */
+  left: 2px;
+  right: 0;
+  background: var(--calendar-offhours-tint);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .hour-label {
@@ -2198,12 +2214,15 @@ li[data-overdue] .date-chip {
   flex-direction: column;
   cursor: grab;
   user-select: none;
+  /* Above the hour cells (z-index 1), which are positioned so they layer
+     over the off-hours tint (#210). */
+  z-index: 2;
 }
 
 .time-block[data-resizing] {
   box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.15));
   border-left-color: var(--accent-hover, var(--accent));
-  z-index: 2;
+  z-index: 3;
 }
 
 /* Events are read-only Google context: no drag/resize affordance, marked
@@ -2360,7 +2379,7 @@ li[data-overdue] .date-chip {
   height: 0;
   border-top: 2px solid var(--danger);
   pointer-events: none;
-  z-index: 1;
+  z-index: 4;
 }
 
 .now-line::before {
@@ -4892,7 +4911,8 @@ select.task-detail-breadcrumb:focus-visible {
   color: var(--text-success);
 }
 
-.settings-form [role="alert"] {
+.settings-form [role="alert"],
+.settings-section [role="alert"] {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--text-danger);

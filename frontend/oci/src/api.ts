@@ -1324,3 +1324,27 @@ export function updateStandupSettings(enabled: boolean): Promise<StandupSettings
     body: JSON.stringify({ enabled }),
   });
 }
+
+/** Active hours (issue #210): the band of the day the Calendar renders at
+ * double height, compressing the hours outside it. Server-side, not in
+ * layoutPrefs — the band describes the user, not a browser. `start`/`end`
+ * are "HH:MM" wall-clock labels aligned to 30 minutes, start before end,
+ * no wrap past midnight (the server rejects a band that breaks those). */
+export interface ActiveHoursSettings {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export function fetchActiveHoursSettings(): Promise<ActiveHoursSettings> {
+  return request("/api/v1/settings/active-hours");
+}
+
+export function updateActiveHoursSettings(
+  settings: ActiveHoursSettings,
+): Promise<ActiveHoursSettings> {
+  return request("/api/v1/settings/active-hours", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}

@@ -420,3 +420,213 @@ export function eventAttendees(event: Event): EventAttendee[] {
   const organizer = event.organizer;
   return [organizer, ...event.attendees.filter((attendee) => attendee.email !== organizer.email)];
 }
+
+/** The piecewise calendar time axis (issue #210, ADR 0010).
+ *
+ * The Week/Day time grid maps minutes of the day to vertical pixels. With
+ * Active hours off this is one linear scale (48px/hour, exactly as before).
+ * With it on the axis is *piecewise*: the active band renders at 96px/hour
+ * so short tasks stay readable in place, and the hours outside it compress
+ * to 24px/hour so dead time costs little scroll.
+ *
+ * Every minute↔pixel conversion in the Calendar MUST route through the
+ * `TimeAxis` built here — `minuteToY` / `yToMinute`. A stray `(min / 60) *
+ * HOUR_PX` somewhere silently breaks drag behaviour across a band boundary,
+ * because the same pixel travel is a different number of minutes on each
+ * side. That invariant is the whole point of ADR 0010. */
+
+/** Minutes in a full day. Minute 1440 is the exclusive end of the axis. */
+export const MINUTES_IN_DAY = 1440;
+
+/** Rendered height, in px, of one hour in each region of the axis. */
+export const DISABLED_HOUR_PX = 48;
+export const ACTIVE_HOUR_PX = 96;
+export const OFF_HOUR_PX = 24;
+
+/** Active-hours band granularity: 30 minutes, half of an hour cell. The
+ * Settings selects offer times on this grid; the band's start/end always
+ * land on it. Distinct from SNAP_MINUTES (15), which is the drag/resize
+ * snap and is unchanged by this feature. */
+export const ACTIVE_HOURS_SNAP_MINUTES = 30;
+
+/** The band a first enable prefills — a narrow default makes the toggle's
+ * effect on the grid obvious. */
+export const DEFAULT_ACTIVE_HOURS_START = "09:00";
+export const DEFAULT_ACTIVE_HOURS_END = "17:00";
+
+/** Where the grid scrolls to when Active hours is off: the working morning,
+ * exactly as before the feature. */
+export const SCROLL_TO_HOUR = 8;
+
+/** The user's Active-hours setting, as it rides the wire and props. */
+export interface ActiveHours {
+  readonly enabled: boolean;
+  readonly start: string; // "HH:MM", aligned to ACTIVE_HOURS_SNAP_MINUTES
+  readonly end: string; // "HH:MM", strictly after start, no wrap past midnight
+}
+
+/** One span of the axis rendered at a single, constant px-per-minute scale.
+ * Segments tile [0, MINUTES_IN_DAY] gaplessly and in order. */
+export interface AxisSegment {
+  readonly startMinute: number;
+  readonly endMinute: number;
+  readonly pxPerMinute: number;
+  readonly kind: "uniform" | "active" | "off";
+}
+
+/** A recessed-tint band over the off-hours region of a day column — the
+ * de-emphasis that stops the height change from reading as a glitch. */
+export interface OffHoursBand {
+  readonly top: number;
+  readonly height: number;
+}
+
+/** The minute↔pixel mapping for one configuration of the axis. Immutable;
+ * rebuild it (cheaply) when the Active-hours setting changes. */
+export interface TimeAxis {
+  readonly enabled: boolean;
+  readonly segments: readonly AxisSegment[];
+  /** Total rendered height of the 24-hour grid, in px. */
+  readonly totalHeight: number;
+  /** Recessed-tint bands for the off-hours regions (empty when disabled). */
+  readonly offHoursBands: readonly OffHoursBand[];
+  /** The y offset, in px, of a minute of the day (clamped to the day). */
+  minuteToY(minute: number): number;
+  /** The minute of the day at a y offset, in px (clamped to the day). The
+   * inverse of minuteToY on segment boundaries; within a segment it inverts
+   * that segment's linear scale. */
+  yToMinute(y: number): number;
+  /** The rendered height of a block spanning [startMinute, endMinute], with
+   * a scale-aware minimum so a short task in an active hour isn't clamped to
+   * an off-hour sliver. */
+  blockHeight(startMinute: number, endMinute: number): number;
+}
+
+function clamp(value: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(value, hi));
+}
+
+/** Build the axis for a given Active-hours setting (null / disabled ⇒ the
+ * uniform 48px/hour scale the grid has always used). */
+export function buildTimeAxis(active: ActiveHours | null | undefined): TimeAxis {
+  const perMin = (hourPx: number): number => hourPx / 60;
+  const segments: AxisSegment[] = [];
+
+  if (active === null || active === undefined || !active.enabled) {
+    segments.push({
+      startMinute: 0,
+      endMinute: MINUTES_IN_DAY,
+      pxPerMinute: perMin(DISABLED_HOUR_PX),
+      kind: "uniform",
+    });
+  } else {
+    const startMin = clamp(timeMinutes(active.start), 0, MINUTES_IN_DAY);
+    const endMin = clamp(timeMinutes(active.end), 0, MINUTES_IN_DAY);
+    const push = (a: number, b: number, kind: AxisSegment["kind"], hourPx: number): void => {
+      if (b > a) {
+        segments.push({ startMinute: a, endMinute: b, pxPerMinute: perMin(hourPx), kind });
+      }
+    };
+    push(0, startMin, "off", OFF_HOUR_PX);
+    push(startMin, endMin, "active", ACTIVE_HOUR_PX);
+    push(endMin, MINUTES_IN_DAY, "off", OFF_HOUR_PX);
+    // A wrapping or empty band shouldn't reach here (the server rejects it),
+    // but never render a zero-height axis if one somehow does.
+    if (segments.length === 0) {
+      segments.push({
+        startMinute: 0,
+        endMinute: MINUTES_IN_DAY,
+        pxPerMinute: perMin(DISABLED_HOUR_PX),
+        kind: "uniform",
+      });
+    }
+  }
+
+  const heights = segments.map((s) => (s.endMinute - s.startMinute) * s.pxPerMinute);
+  const totalHeight = heights.reduce((sum, h) => sum + h, 0);
+  const enabled = segments.some((s) => s.kind !== "uniform");
+
+  const minuteToY = (minute: number): number => {
+    const target = clamp(minute, 0, MINUTES_IN_DAY);
+    let y = 0;
+    for (let i = 0; i < segments.length; i += 1) {
+      const seg = segments[i]!;
+      if (target >= seg.endMinute) {
+        y += heights[i]!;
+      } else {
+        y += (target - seg.startMinute) * seg.pxPerMinute;
+        return y;
+      }
+    }
+    return y;
+  };
+
+  const yToMinute = (yPx: number): number => {
+    let y = clamp(yPx, 0, totalHeight);
+    for (let i = 0; i < segments.length; i += 1) {
+      const seg = segments[i]!;
+      const h = heights[i]!;
+      if (y > h && i < segments.length - 1) {
+        y -= h;
+      } else {
+        return seg.startMinute + (seg.pxPerMinute === 0 ? 0 : y / seg.pxPerMinute);
+      }
+    }
+    return MINUTES_IN_DAY;
+  };
+
+  const segmentAt = (minute: number): AxisSegment => {
+    const target = clamp(minute, 0, MINUTES_IN_DAY);
+    for (const seg of segments) {
+      if (target < seg.endMinute) {
+        return seg;
+      }
+    }
+    return segments[segments.length - 1]!;
+  };
+
+  const blockHeight = (startMinute: number, endMinute: number): number => {
+    const natural = minuteToY(endMinute) - minuteToY(startMinute);
+    const start = segmentAt(startMinute);
+    // Disabled: the flat floor the grid has always used (HOUR_PX / 3).
+    // Active: 15 minutes' worth of px at the band's scale — a 15-min active
+    // task reads at its true 24px, not clamped up.
+    // Off: a fixed 12px — an off-hour block is a "there's something here"
+    // marker to click, not read in place, so it needs a visible minimum but
+    // 15 min at 24px/hour (6px) is too thin to notice.
+    const floor =
+      start.kind === "uniform"
+        ? DISABLED_HOUR_PX / 3
+        : start.kind === "active"
+          ? start.pxPerMinute * SNAP_MINUTES
+          : OFF_HOUR_PX / 2;
+    return Math.max(natural, floor);
+  };
+
+  const offHoursBands: OffHoursBand[] = segments
+    .filter((seg) => seg.kind === "off")
+    .map((seg) => ({
+      top: minuteToY(seg.startMinute),
+      height: minuteToY(seg.endMinute) - minuteToY(seg.startMinute),
+    }));
+
+  return {
+    enabled,
+    segments,
+    totalHeight,
+    offHoursBands,
+    minuteToY,
+    yToMinute,
+    blockHeight,
+  };
+}
+
+/** The minute the grid should scroll to on open: 30 minutes of lead-in
+ * above the band start when Active hours is on (the quiet sliver signals
+ * there's more above), else the working morning. */
+export function initialScrollMinute(active: ActiveHours | null | undefined): number {
+  if (active !== null && active !== undefined && active.enabled) {
+    return Math.max(0, timeMinutes(active.start) - ACTIVE_HOURS_SNAP_MINUTES);
+  }
+  return SCROLL_TO_HOUR * 60;
+}

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createList,
   createTag,
   createTask,
+  fetchActiveHoursSettings,
   fetchCalendarEvents,
   fetchCalendarTasks,
   fetchUnscheduledTasks,
@@ -21,6 +22,7 @@ import {
   allDayCreate,
   blockMinutes,
   blockSegment,
+  buildTimeAxis,
   calendarTitle,
   CALENDAR_NARROW_BREAKPOINT,
   draggedEdgeMinute,
@@ -30,6 +32,7 @@ import {
   entryTimeShape,
   eventEntry,
   hourLabel,
+  initialScrollMinute,
   isBanner,
   isNarrowWidth,
   laneBanners,
@@ -43,6 +46,7 @@ import {
   timedCreate,
   timeMinutes,
   weekDays,
+  type ActiveHours,
   type CalendarMode,
   type Entry,
 } from "../calendar";
@@ -63,13 +67,9 @@ const MODE_LABELS: Record<CalendarMode, string> = { month: "Month", week: "Week"
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const WEEKDAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-/** One rendered hour of the time grid, in px — the scale every block position,
- * resize delta, and the now-line are computed against. Tall enough that a
- * 30-minute Entry (half of this) still clears one line of its title (#198). */
-const HOUR_PX = 48;
-
-/** Where the time grid first scrolls to: the start of the working morning. */
-const SCROLL_TO_HOUR = 8;
+/** The Active-hours setting before the real value has loaded: off, so the
+ * grid is the uniform scale it's always been until told otherwise. */
+const ACTIVE_HOURS_LOADING: ActiveHours = { enabled: false, start: "09:00", end: "17:00" };
 
 /** What the click/drag gesture is about to create: a day, plus an editable
  * timeframe. `allDay` starts true from a Month-cell click and false from a
@@ -94,9 +94,12 @@ interface HourDrag {
   to: number;
 }
 
-/** An in-progress edge resize of a timed block. The pointer's travel from
- * originY maps to minutes at HOUR_PX per hour; `minute` is the edge's current
- * snapped, clamped position, rendered live until mouseup commits it. */
+/** An in-progress edge resize of a timed block. The grabbed edge's pixel
+ * position (its y at grab, plus the pointer's travel since) is mapped back
+ * through the time axis to a minute — so the edge tracks the cursor across
+ * an Active-hours band boundary instead of drifting (ADR 0010). `minute` is
+ * the edge's current snapped, clamped position, rendered live until mouseup
+ * commits it. */
 interface EdgeDrag {
   task: Task;
   edge: "start" | "end";
@@ -262,6 +265,12 @@ export function CalendarView({
   const [drag, setDrag] = useState<HourDrag | null>(null);
   const [edgeDrag, setEdgeDrag] = useState<EdgeDrag | null>(null);
   const [now, setNow] = useState(() => new Date());
+  // Active hours (issue #210): the band the time grid renders at double
+  // height. A Calendar concern, fetched here like SettingsView fetches its
+  // own copy — so re-entering the Calendar after changing it in Settings
+  // picks up the new band without threading it through App.
+  const [activeHours, setActiveHours] = useState<ActiveHours>(ACTIVE_HOURS_LOADING);
+  const axis = useMemo(() => buildTimeAxis(activeHours), [activeHours]);
   const [quickStart, setQuickStart] = useState<{
     task: Task;
     position: { x: number; y: number };
@@ -371,6 +380,12 @@ export function CalendarView({
     }
   }
 
+  useEffect(() => {
+    void fetchActiveHoursSettings()
+      .then(setActiveHours)
+      .catch(() => setActiveHours(ACTIVE_HOURS_LOADING));
+  }, []);
+
   // The now-line's clock: one tick a minute while a time grid is shown.
   useEffect(() => {
     if (mode === "month") {
@@ -381,12 +396,14 @@ export function CalendarView({
     return () => clearInterval(timer);
   }, [mode]);
 
-  // Land the time grid on the working morning, not midnight.
+  // Land the time grid on the start of the day: 30 minutes of lead-in above
+  // the Active-hours band when it's on, else the working morning. Re-runs
+  // when the band loads or changes, since its pixel offset moves with it.
   useEffect(() => {
     if (mode !== "month" && timeColumnsRef.current !== null) {
-      timeColumnsRef.current.scrollTop = SCROLL_TO_HOUR * HOUR_PX;
+      timeColumnsRef.current.scrollTop = axis.minuteToY(initialScrollMinute(activeHours));
     }
-  }, [mode]);
+  }, [mode, axis, activeHours]);
 
   /** Commit a block edge's new minute: optimistic render, then PATCH. */
   const applyResize = useCallback(
@@ -418,15 +435,14 @@ export function CalendarView({
         if (current === null) {
           return current;
         }
-        const deltaMinutes = ((event.clientY - current.originY) / HOUR_PX) * 60;
+        // Position-based, not delta-based: map the grabbed edge's current
+        // pixel position back through the axis, so it tracks the cursor
+        // across a band boundary instead of accumulating error (ADR 0010).
+        const edgeY = axis.minuteToY(current.baseMinute) + (event.clientY - current.originY);
+        const rawMinute = axis.yToMinute(edgeY);
         return {
           ...current,
-          minute: draggedEdgeMinute(
-            current.edge,
-            current.baseMinute,
-            deltaMinutes,
-            current.otherMinute,
-          ),
+          minute: draggedEdgeMinute(current.edge, rawMinute, 0, current.otherMinute),
         };
       });
     };
@@ -451,7 +467,7 @@ export function CalendarView({
       window.removeEventListener("mouseup", onUp);
       window.removeEventListener("keydown", onKey);
     };
-  }, [resizing, applyResize]);
+  }, [resizing, applyResize, axis]);
 
   function beginEdgeDrag(
     event: React.MouseEvent,
@@ -804,8 +820,8 @@ export function CalendarView({
         data-resizing={pending !== null || undefined}
         data-list-color={listColor["data-list-color"]}
         style={{
-          top: (startMin / 60) * HOUR_PX,
-          height: Math.max(((endMin - startMin) / 60) * HOUR_PX, HOUR_PX / 3),
+          top: axis.minuteToY(startMin),
+          height: axis.blockHeight(startMin, endMin),
           ...listColor.style,
         }}
         {...entryDragProps(entry)}
@@ -921,7 +937,11 @@ export function CalendarView({
         >
           <div className="hour-gutter">
             {HOURS.map((hour) => (
-              <div key={hour} className="hour-label" style={{ height: HOUR_PX }}>
+              <div
+                key={hour}
+                className="hour-label"
+                style={{ height: axis.minuteToY((hour + 1) * 60) - axis.minuteToY(hour * 60) }}
+              >
                 {hourLabel(hour)}
               </div>
             ))}
@@ -933,12 +953,24 @@ export function CalendarView({
               data-day={day}
               data-today={day === today || undefined}
             >
+              {/* The off-hours regions get a recessed tint (issue #210) so
+                the compressed band reads as deliberately de-emphasised, not
+                as a rendering glitch at the height change. Behind the hour
+                cells and blocks; never a drop target itself. */}
+              {axis.offHoursBands.map((band, index) => (
+                <div
+                  key={index}
+                  className="off-hours-band"
+                  aria-hidden="true"
+                  style={{ top: band.top, height: band.height }}
+                />
+              ))}
               {HOURS.map((hour) => (
                 <div
                   key={hour}
                   aria-label={`${day} ${hourLabel(hour)}`}
                   className="hour-cell"
-                  style={{ height: HOUR_PX }}
+                  style={{ height: axis.minuteToY((hour + 1) * 60) - axis.minuteToY(hour * 60) }}
                   data-selected={
                     (drag !== null &&
                       drag.day === day &&
@@ -963,7 +995,7 @@ export function CalendarView({
                 <div
                   className="now-line"
                   aria-hidden="true"
-                  style={{ top: (nowMinute / 60) * HOUR_PX }}
+                  style={{ top: axis.minuteToY(nowMinute) }}
                 />
               )}
             </div>

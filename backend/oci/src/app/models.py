@@ -69,6 +69,17 @@ class AppSettings(Base):
     # turning it off hides the nav item and route, nothing more — no route
     # is blocked and no stored data is ever touched by this flag.
     standup_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Active hours (issue #210): the band of the day the Calendar renders at
+    # double height, so short tasks stay readable in place. Describes the
+    # user, not a browser — hence server-side, like standup_enabled above,
+    # not in the frontend's per-device layoutPrefs. Disabled by default so an
+    # existing install's grid is byte-identical after upgrade; the first
+    # enable prefills 09:00–17:00 in the UI. Start/end are "HH:MM" wall-clock
+    # labels aligned to 30 minutes, start strictly before end, no wrap past
+    # midnight (validated in the router).
+    active_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    active_hours_start: Mapped[str] = mapped_column(String(5), default="09:00")
+    active_hours_end: Mapped[str] = mapped_column(String(5), default="17:00")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
