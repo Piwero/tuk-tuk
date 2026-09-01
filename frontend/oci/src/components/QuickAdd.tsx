@@ -15,6 +15,7 @@ import {
   parseCaptureWithTimeout,
 } from "../assistCapture";
 import { PRIORITY_LABELS } from "../grouping";
+import { applyDatePick, type ScheduleChip, suggestDates } from "../dateSuggest";
 import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
 import { parseQuickAdd, sameName } from "../quickAdd";
@@ -36,17 +37,23 @@ function formatDraftDate(dueDate: string, isAllDay: boolean): string {
   });
 }
 
+/** The four Quick-Add chip slots a submission is snapshotted against, so a
+ * chip picked or removed mid-flight isn't clobbered by the reset. */
+interface ChipSnapshot {
+  tagChips: Tag[];
+  listChip: TaskList[];
+  priorityChip: Priority[];
+  scheduleChip: ScheduleChip[];
+}
+
 /** One Assisted Capture confirmation beat (ADR 0005; issue #43): the
  * chip/tag/list/priority state a parse was triggered against, plus the
  * proposed title and resolved date it came back with. Confirming (Enter)
  * creates the Task from `suggestedTitle` + the resolved date; discarding
  * (Escape / the dismiss button) creates it from `typedTitle` instead, with
  * no date — "exactly as typed". */
-interface CaptureDraft {
+interface CaptureDraft extends ChipSnapshot {
   typedTitle: string;
-  tagChips: Tag[];
-  listChip: TaskList[];
-  priorityChip: Priority[];
   suggestedTitle: string;
   dueDate: string | null;
   isAllDay: boolean;
@@ -102,6 +109,12 @@ export function QuickAdd({
   const [tagChips, setTagChips] = useState<Tag[]>([]);
   const [listChip, setListChip] = useState<TaskList[]>([]);
   const [priorityChip, setPriorityChip] = useState<Priority[]>([]);
+  // The `@day` schedule chip (issue #211): single-valued like the list and
+  // priority chips. Resolved client-side against the current clock.
+  const [scheduleChip, setScheduleChip] = useState<ScheduleChip[]>([]);
+  // The clock every `@day` token resolves against — read once per render so
+  // the dropdown's resolution and the submit-time parse always agree.
+  const now = new Date();
   // ADR 0005 / issue #42: invisible, not greyed out, when Ollama isn't
   // reachable.
   const assistAvailable = useAssistAvailable();
@@ -148,7 +161,7 @@ export function QuickAdd({
       recurrence?: string;
       reminders?: string[];
     },
-    snapshot: { tagChips: Tag[]; listChip: TaskList[]; priorityChip: Priority[] },
+    snapshot: ChipSnapshot,
     extra?: AssistExtra,
   ): Promise<void> {
     // A chip is a deliberate pick — it wins over a same-named raw token, and
@@ -156,9 +169,24 @@ export function QuickAdd({
     const plan = parseQuickAdd(rawTitle, lists, {
       skipListToken: snapshot.listChip.length > 0,
       skipPriorityToken: snapshot.priorityChip.length > 0,
+      skipDateToken: snapshot.scheduleChip.length > 0,
+      now,
     });
     if (plan.title === "") {
       return;
+    }
+    // The `@day` schedule (issue #211): a picked chip wins over a raw
+    // `@token` left in the title, exactly as `~list` / `!priority` do.
+    // Skipped entirely when `schedule` already carries a `due_date` — the
+    // Assisted-Capture confirm path resolves the date itself and passes it
+    // in, so `rawTitle` there has already had the token stripped.
+    const resolvedSchedule = { ...schedule };
+    if (resolvedSchedule.due_date === undefined) {
+      const due = snapshot.scheduleChip[0] ?? plan.due;
+      if (due != null) {
+        resolvedSchedule.due_date = due.dueDate;
+        resolvedSchedule.is_all_day = true;
+      }
     }
     // Chips, any raw #tokens left in the title, and any #tokens Assist's
     // parse already consumed from the typed text (issue #45) are unioned
@@ -212,19 +240,17 @@ export function QuickAdd({
       list_id: finalListId,
       ...(finalPriority === null || finalPriority === undefined ? {} : { priority: finalPriority }),
       ...(tagIds.length === 0 ? {} : { tag_ids: tagIds }),
-      ...schedule,
+      ...resolvedSchedule,
     });
     onCreated(task);
   }
 
-  function resetInput(
-    submittedTitle: string,
-    snapshot: { tagChips: Tag[]; listChip: TaskList[]; priorityChip: Priority[] },
-  ): void {
+  function resetInput(submittedTitle: string, snapshot: ChipSnapshot): void {
     setTitle((current) => (current === submittedTitle ? "" : current));
     setTagChips((current) => (current === snapshot.tagChips ? [] : current));
     setListChip((current) => (current === snapshot.listChip ? [] : current));
     setPriorityChip((current) => (current === snapshot.priorityChip ? [] : current));
+    setScheduleChip((current) => (current === snapshot.scheduleChip ? [] : current));
     setDraft(null);
   }
 
@@ -232,10 +258,7 @@ export function QuickAdd({
    * unavailable, an extraction with no date, a parse failure/timeout, and
    * an explicit discard all funnel here: create the task exactly as typed,
    * with no date, and reset the input. */
-  async function saveAsTyped(
-    rawTitle: string,
-    snapshot: { tagChips: Tag[]; listChip: TaskList[]; priorityChip: Priority[] },
-  ): Promise<void> {
+  async function saveAsTyped(rawTitle: string, snapshot: ChipSnapshot): Promise<void> {
     await finalizeCreate(rawTitle, {}, snapshot);
     resetInput(rawTitle, snapshot);
   }
@@ -251,6 +274,7 @@ export function QuickAdd({
       tagChips: draft.tagChips,
       listChip: draft.listChip,
       priorityChip: draft.priorityChip,
+      scheduleChip: draft.scheduleChip,
     });
   }
 
@@ -320,6 +344,7 @@ export function QuickAdd({
       tagChips: draft.tagChips,
       listChip: draft.listChip,
       priorityChip: draft.priorityChip,
+      scheduleChip: draft.scheduleChip,
     };
     await finalizeCreate(draft.suggestedTitle, schedule, snapshot, {
       tokenTagNames: draft.tokenTagNames,
@@ -344,6 +369,8 @@ export function QuickAdd({
     const tokenPlan = parseQuickAdd(title, lists, {
       skipListToken: listChip.length > 0,
       skipPriorityToken: priorityChip.length > 0,
+      skipDateToken: scheduleChip.length > 0,
+      now,
     });
     if (tokenPlan.title === "") {
       return;
@@ -351,7 +378,7 @@ export function QuickAdd({
     // Snapshots so a chip or title edit made while this submission is still
     // awaiting the network isn't wiped out by the reset below.
     const submittedTitle = title;
-    const snapshot = { tagChips, listChip, priorityChip };
+    const snapshot = { tagChips, listChip, priorityChip, scheduleChip };
     if (!assistAvailable) {
       await saveAsTyped(submittedTitle, snapshot);
       return;
@@ -389,9 +416,12 @@ export function QuickAdd({
         typedTitle: submittedTitle,
         ...snapshot,
         suggestedTitle,
-        dueDate: suggestion.due_date,
-        isAllDay: suggestion.is_all_day,
-        timeZone: suggestion.time_zone,
+        // A deterministic `@day` chip or raw token outranks whatever Assist
+        // proposed for the date — a token-derived field is never overridden
+        // by a model suggestion (CONTEXT.md).
+        dueDate: scheduleChip[0]?.dueDate ?? tokenPlan.due?.dueDate ?? suggestion.due_date,
+        isAllDay: scheduleChip[0] != null || tokenPlan.due != null ? true : suggestion.is_all_day,
+        timeZone: scheduleChip[0] != null || tokenPlan.due != null ? null : suggestion.time_zone,
         recurrence: suggestion.recurrence,
         reminders: suggestion.reminders,
         tokenTagNames: tokenPlan.tagNames,
@@ -470,6 +500,20 @@ export function QuickAdd({
     allowCreate: false,
     createLabel: (name) => name,
     removeAriaLabel: (priority) => `Remove ${priority}`,
+  };
+
+  const dateChannel: TokenChannel<ScheduleChip> = {
+    sigil: "@",
+    mode: "single",
+    chips: scheduleChip,
+    onChipsChange: setScheduleChip,
+    getId: (schedule) => schedule.token,
+    getLabel: (schedule) => schedule.token,
+    suggest: (text, caret) => suggestDates(text, caret, now),
+    applyPick: applyDatePick,
+    allowCreate: false,
+    createLabel: (name) => name,
+    removeAriaLabel: () => "Remove schedule",
   };
 
   return (
@@ -582,6 +626,7 @@ export function QuickAdd({
             tagChannel as TokenChannel<unknown>,
             listChannel as TokenChannel<unknown>,
             priorityChannel as TokenChannel<unknown>,
+            dateChannel as TokenChannel<unknown>,
           ]}
           sigilHints={
             <>
@@ -596,6 +641,10 @@ export function QuickAdd({
               <span className="quick-add-sigil-hint">
                 {listChannel.sigil}
                 list
+              </span>
+              <span className="quick-add-sigil-hint">
+                {dateChannel.sigil}
+                date
               </span>
             </>
           }
