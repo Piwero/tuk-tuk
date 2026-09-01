@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.4.1](https://github.com/Piwero/tuk-tuk/compare/v2.4.0...v2.4.1) - 2026-09-01
+
+### Bug Fixes
+
+- **calendar:** Keep block titles legible in short time blocks ([dd38f60](https://github.com/Piwero/tuk-tuk/commit/dd38f6059d4befffc3ec3dab70732fe3eca7e9ee))
+
 ## [2.4.0](https://github.com/Piwero/tuk-tuk/compare/v2.3.0...v2.4.0) - 2026-08-28
 
 ### Features
