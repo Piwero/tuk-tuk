@@ -2228,8 +2228,17 @@ li[data-overdue] .date-chip {
 
 /* The title is first and never wraps, so a 30-minute block still shows it
  * on one line without clipping (#198); a tight block clips the time below
- * it instead. How Entries are fully drawn is a later slice. */
+ * it instead. How Entries are fully drawn is a later slice.
+ *
+ * `flex: 0 0 auto` is what makes that true. The block is a fixed-height
+ * flex column, so at 30 minutes its two children (a 16px title and a 16px
+ * time) want 32px inside a 20px content box — with the default
+ * `flex-shrink: 1` the browser squashes BOTH, and the title collapsed to
+ * under 4px of clipped glyph tops. Refusing to shrink keeps the title at
+ * its full line and pushes the time past `overflow: hidden` instead,
+ * which is the intended sacrifice. */
 .time-block .block-title {
+  flex: 0 0 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
