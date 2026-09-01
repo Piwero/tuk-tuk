@@ -5,9 +5,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyDatePick,
+  composeSchedule,
   DAY_TOKENS,
   type DateSuggestion,
+  formatScheduleChipLabel,
+  mergeSchedule,
+  resolveClockTime,
   resolveDayToken,
+  type ScheduleChip,
   suggestDates,
 } from "./dateSuggest";
 
@@ -31,9 +36,11 @@ const localNoon = (isoDate: string): Date => {
 describe("resolveDayToken — shared test vectors", () => {
   for (const { phrase, localDate, expected } of vectors) {
     it(`@${phrase} on ${localDate} resolves to ${expected}`, () => {
-      expect(resolveDayToken(phrase, localNoon(localDate))).toEqual({
+      expect(resolveDayToken(phrase, localNoon(localDate))).toMatchObject({
         token: phrase,
         dueDate: expected,
+        isAllDay: true,
+        time: null,
       });
     });
   }
@@ -99,7 +106,7 @@ describe("suggestDates", () => {
   const now = localNoon("2026-09-01");
 
   it("lists the whole vocabulary for a bare @ with no query", () => {
-    const suggestion = suggestDates("@", 1, now);
+    const suggestion = suggestDates("@", 1, now, "UTC");
     expect(suggestion?.sigil).toBe("@");
     expect(suggestion?.start).toBe(0);
     expect(suggestion?.query).toBe("");
@@ -108,32 +115,134 @@ describe("suggestDates", () => {
   });
 
   it("narrows by case-insensitive prefix on the token", () => {
-    const suggestion = suggestDates("buy milk @to", 12, now);
+    const suggestion = suggestDates("buy milk @to", 12, now, "UTC");
     expect(suggestion?.start).toBe(9);
     expect(suggestion?.query).toBe("to");
     expect(suggestion?.options.map((o) => o.token)).toEqual(["today", "tomorrow"]);
   });
 
   it("carries the resolved due date on each option", () => {
-    const suggestion = suggestDates("@tomorrow", 9, now);
-    expect(suggestion?.options[0]).toEqual({ token: "tomorrow", dueDate: "2026-09-02T00:00:00Z" });
+    const suggestion = suggestDates("@tomorrow", 9, now, "UTC");
+    expect(suggestion?.options[0]).toMatchObject({
+      token: "tomorrow",
+      dueDate: "2026-09-02T00:00:00Z",
+      isAllDay: true,
+    });
+  });
+
+  it("resolves a clock-time query to a single time chip anchored on today", () => {
+    const suggestion = suggestDates("gym @8am", 8, now, "UTC");
+    expect(suggestion?.options).toHaveLength(1);
+    expect(suggestion?.options[0]).toMatchObject({
+      dayIso: "2026-09-01",
+      isAllDay: false,
+      timeZone: "UTC",
+      dueDate: "2026-09-01T08:00:00.000Z",
+    });
+    expect(suggestion?.options[0]?.time).toEqual({ token: "8am", hour: 8, minute: 0 });
   });
 
   it("stays inert when the sigil follows a non-whitespace character (me@work)", () => {
-    expect(suggestDates("me@work", 7, now)).toBeNull();
+    expect(suggestDates("me@work", 7, now, "UTC")).toBeNull();
   });
 
   it("closes once a space ends the query", () => {
-    expect(suggestDates("@today ", 7, now)).toBeNull();
+    expect(suggestDates("@today ", 7, now, "UTC")).toBeNull();
   });
 
   it("returns no options when nothing matches the prefix", () => {
-    const suggestion = suggestDates("@zzz", 4, now);
+    const suggestion = suggestDates("@zzz", 4, now, "UTC");
     expect(suggestion?.options).toEqual([]);
   });
 });
 
+describe("resolveClockTime", () => {
+  it("parses 12-hour times with a meridiem", () => {
+    expect(resolveClockTime("8am")).toEqual({ token: "8am", hour: 8, minute: 0 });
+    expect(resolveClockTime("8:30pm")).toEqual({ token: "8:30pm", hour: 20, minute: 30 });
+    expect(resolveClockTime("12am")).toEqual({ token: "12am", hour: 0, minute: 0 });
+    expect(resolveClockTime("12pm")).toEqual({ token: "12pm", hour: 12, minute: 0 });
+  });
+
+  it("parses 24-hour times, which need their colon", () => {
+    expect(resolveClockTime("14:00")).toEqual({ token: "14:00", hour: 14, minute: 0 });
+    expect(resolveClockTime("09:05")).toEqual({ token: "09:05", hour: 9, minute: 5 });
+  });
+
+  it("rejects an ambiguous bare hour and out-of-range values", () => {
+    expect(resolveClockTime("8")).toBeNull();
+    expect(resolveClockTime("25:00")).toBeNull();
+    expect(resolveClockTime("13pm")).toBeNull();
+    expect(resolveClockTime("8:99")).toBeNull();
+    expect(resolveClockTime("dave")).toBeNull();
+  });
+});
+
+describe("composeSchedule / mergeSchedule", () => {
+  const monday = resolveDayToken("today", localNoon("2026-09-07")) as ScheduleChip;
+  const tuesday = resolveDayToken("tomorrow", localNoon("2026-09-07")) as ScheduleChip;
+
+  it("a day with no time stays an all-day UTC-midnight chip", () => {
+    expect(composeSchedule(monday, null, "UTC")).toMatchObject({
+      dueDate: "2026-09-07T00:00:00Z",
+      isAllDay: true,
+      timeZone: null,
+    });
+  });
+
+  it("a time attaches to the chip's day, stamping is_all_day false and the zone", () => {
+    const timed = composeSchedule(monday, { token: "8am", hour: 8, minute: 0 }, "Europe/London");
+    expect(timed).toMatchObject({ isAllDay: false, timeZone: "Europe/London" });
+    expect(timed.dueDate).toContain("2026-09-07T");
+  });
+
+  it("a day pick keeps the standing time; a time pick keeps the standing day", () => {
+    const withTime = composeSchedule(monday, { token: "8am", hour: 8, minute: 0 }, "UTC");
+    // second day token → new day, same time
+    const movedDay = mergeSchedule(withTime, tuesday, "UTC");
+    expect(movedDay.dayIso).toBe("2026-09-08");
+    expect(movedDay.time).toEqual({ token: "8am", hour: 8, minute: 0 });
+    // a later time pick → same day, new time
+    const timeOnly = composeSchedule(
+      resolveDayToken("today", localNoon("2026-09-07")) as ScheduleChip,
+      { token: "9pm", hour: 21, minute: 0 },
+      "UTC",
+    );
+    const movedTime = mergeSchedule(movedDay, timeOnly, "UTC");
+    expect(movedTime.dayIso).toBe("2026-09-08");
+    expect(movedTime.time?.hour).toBe(21);
+  });
+});
+
+describe("formatScheduleChipLabel", () => {
+  const monday = resolveDayToken("monday", localNoon("2026-09-01")) as ScheduleChip;
+
+  it("renders the day alone when there is no time", () => {
+    expect(formatScheduleChipLabel(monday)).toBe("Monday");
+  });
+
+  it("renders the composed schedule when a time is attached", () => {
+    expect(
+      formatScheduleChipLabel(composeSchedule(monday, { token: "8am", hour: 8, minute: 0 }, "UTC")),
+    ).toBe("Monday 8:00 AM");
+    expect(
+      formatScheduleChipLabel(
+        composeSchedule(monday, { token: "14:30", hour: 14, minute: 30 }, "UTC"),
+      ),
+    ).toBe("Monday 2:30 PM");
+  });
+});
+
 describe("applyDatePick", () => {
+  const schedule: ScheduleChip = {
+    token: "tomorrow",
+    dayIso: "2026-09-02",
+    time: null,
+    dueDate: "2026-09-02T00:00:00Z",
+    isAllDay: true,
+    timeZone: null,
+  };
+
   it("removes the sigil+query text and reports the committed schedule", () => {
     const suggestion: DateSuggestion = {
       sigil: "@",
@@ -142,7 +251,6 @@ describe("applyDatePick", () => {
       options: [],
       create: null,
     };
-    const schedule = { token: "tomorrow", dueDate: "2026-09-02T00:00:00Z" };
     expect(applyDatePick("read @tom", suggestion, schedule)).toEqual({
       text: "read ",
       caret: 5,
@@ -158,7 +266,6 @@ describe("applyDatePick", () => {
       options: [],
       create: null,
     };
-    const schedule = { token: "today", dueDate: "2026-09-01T00:00:00Z" };
     expect(applyDatePick("@today #fun", suggestion, schedule).text).toBe("day #fun");
   });
 });

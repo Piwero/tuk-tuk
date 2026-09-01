@@ -15,7 +15,16 @@ import {
   parseCaptureWithTimeout,
 } from "../assistCapture";
 import { PRIORITY_LABELS } from "../grouping";
-import { applyDatePick, type ScheduleChip, suggestDates } from "../dateSuggest";
+import {
+  applyDatePick,
+  type ClockTime,
+  composeSchedule,
+  formatScheduleChipLabel,
+  mergeSchedule,
+  type ScheduleChip,
+  suggestDates,
+} from "../dateSuggest";
+import { browserTimeZone } from "../dates";
 import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
 import { parseQuickAdd, sameName } from "../quickAdd";
@@ -35,6 +44,21 @@ function formatDraftDate(dueDate: string, isAllDay: boolean): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** The Quick-Add bar's `@` schedule for a create call. A picked chip owns
+ * the day; a clock time typed raw after it (`typedTime`) overwrites just
+ * the time half, so the two compose in either order. With no chip, the
+ * parsed `@` tokens stand on their own. Null when nothing scheduled it. */
+function resolveTokenSchedule(
+  chip: ScheduleChip | undefined,
+  parsedDue: ScheduleChip | null,
+  typedTime: ClockTime | null,
+): ScheduleChip | null {
+  if (chip === undefined) {
+    return parsedDue;
+  }
+  return composeSchedule(chip, typedTime ?? chip.time, browserTimeZone());
 }
 
 /** The four Quick-Add chip slots a submission is snapshotted against, so a
@@ -182,10 +206,13 @@ export function QuickAdd({
     // in, so `rawTitle` there has already had the token stripped.
     const resolvedSchedule = { ...schedule };
     if (resolvedSchedule.due_date === undefined) {
-      const due = snapshot.scheduleChip[0] ?? plan.due;
+      const due = resolveTokenSchedule(snapshot.scheduleChip[0], plan.due, plan.dueTime);
       if (due != null) {
         resolvedSchedule.due_date = due.dueDate;
-        resolvedSchedule.is_all_day = true;
+        resolvedSchedule.is_all_day = due.isAllDay;
+        if (due.timeZone !== null) {
+          resolvedSchedule.time_zone = due.timeZone;
+        }
       }
     }
     // Chips, any raw #tokens left in the title, and any #tokens Assist's
@@ -412,16 +439,18 @@ export function QuickAdd({
         return;
       }
       const suggestedTitle = suggestion.title.trim() === "" ? submittedTitle : suggestion.title;
+      const tokenSchedule = resolveTokenSchedule(scheduleChip[0], tokenPlan.due, tokenPlan.dueTime);
       setDraft({
         typedTitle: submittedTitle,
         ...snapshot,
         suggestedTitle,
-        // A deterministic `@day` chip or raw token outranks whatever Assist
+        // A deterministic `@` chip or raw token outranks whatever Assist
         // proposed for the date — a token-derived field is never overridden
-        // by a model suggestion (CONTEXT.md).
-        dueDate: scheduleChip[0]?.dueDate ?? tokenPlan.due?.dueDate ?? suggestion.due_date,
-        isAllDay: scheduleChip[0] != null || tokenPlan.due != null ? true : suggestion.is_all_day,
-        timeZone: scheduleChip[0] != null || tokenPlan.due != null ? null : suggestion.time_zone,
+        // by a model suggestion (CONTEXT.md). A timed `@` schedule carries
+        // its own `is_all_day: false` and IANA zone through.
+        dueDate: tokenSchedule?.dueDate ?? suggestion.due_date,
+        isAllDay: tokenSchedule != null ? tokenSchedule.isAllDay : suggestion.is_all_day,
+        timeZone: tokenSchedule != null ? tokenSchedule.timeZone : suggestion.time_zone,
         recurrence: suggestion.recurrence,
         reminders: suggestion.reminders,
         tokenTagNames: tokenPlan.tagNames,
@@ -508,9 +537,10 @@ export function QuickAdd({
     chips: scheduleChip,
     onChipsChange: setScheduleChip,
     getId: (schedule) => schedule.token,
-    getLabel: (schedule) => schedule.token,
-    suggest: (text, caret) => suggestDates(text, caret, now),
+    getLabel: formatScheduleChipLabel,
+    suggest: (text, caret) => suggestDates(text, caret, now, browserTimeZone()),
     applyPick: applyDatePick,
+    mergePick: (current, incoming) => mergeSchedule(current, incoming, browserTimeZone()),
     allowCreate: false,
     createLabel: (name) => name,
     removeAriaLabel: () => "Remove schedule",
