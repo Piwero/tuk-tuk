@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.5.1](https://github.com/Piwero/tuk-tuk/compare/v2.5.0...v2.5.1) - 2026-09-01
+
+### Features
+
+- **calendar:** Lay out overlapping day-column blocks side by side ([e561c17](https://github.com/Piwero/tuk-tuk/commit/e561c171bf950cfe4ea4335938f4dd221247b44e))
+
 ## [2.5.0](https://github.com/Piwero/tuk-tuk/compare/v2.4.1...v2.5.0) - 2026-09-01
 
 ### Features
