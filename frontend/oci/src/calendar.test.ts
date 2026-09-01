@@ -5,6 +5,7 @@ import {
   CALENDAR_NARROW_BREAKPOINT,
   initialScrollMinute,
   isNarrowWidth,
+  layoutDayColumns,
   monthGridDays,
   rangeOf,
   shiftAnchor,
@@ -168,5 +169,69 @@ describe("initialScrollMinute", () => {
 
   it("never scrolls above midnight", () => {
     expect(initialScrollMinute({ enabled: true, start: "00:00", end: "24:00" })).toBe(0);
+  });
+});
+
+describe("layoutDayColumns", () => {
+  const placements = (blocks: { key: string; start: number; end: number }[]) =>
+    Object.fromEntries(layoutDayColumns(blocks));
+
+  it("gives a lone block a single full-width column", () => {
+    expect(placements([{ key: "a", start: 540, end: 600 }])).toEqual({
+      a: { column: 0, columnCount: 1 },
+    });
+  });
+
+  it("keeps two non-overlapping blocks in one column", () => {
+    expect(
+      placements([
+        { key: "a", start: 540, end: 600 },
+        { key: "b", start: 600, end: 660 },
+      ]),
+    ).toEqual({
+      a: { column: 0, columnCount: 1 },
+      b: { column: 0, columnCount: 1 },
+    });
+  });
+
+  it("splits two overlapping blocks into side-by-side columns", () => {
+    expect(
+      placements([
+        { key: "a", start: 540, end: 660 },
+        { key: "b", start: 600, end: 720 },
+      ]),
+    ).toEqual({
+      a: { column: 0, columnCount: 2 },
+      b: { column: 1, columnCount: 2 },
+    });
+  });
+
+  it("reports the widest simultaneous overlap for every block in a cluster", () => {
+    // a covers the whole span; b and c overlap a but not each other.
+    expect(
+      placements([
+        { key: "a", start: 540, end: 720 },
+        { key: "b", start: 540, end: 600 },
+        { key: "c", start: 600, end: 720 },
+      ]),
+    ).toEqual({
+      a: { column: 1, columnCount: 2 },
+      b: { column: 0, columnCount: 2 },
+      c: { column: 0, columnCount: 2 },
+    });
+  });
+
+  it("isolates a separate cluster after a gap", () => {
+    expect(
+      placements([
+        { key: "a", start: 540, end: 600 },
+        { key: "b", start: 550, end: 610 },
+        { key: "c", start: 700, end: 760 },
+      ]),
+    ).toEqual({
+      a: { column: 0, columnCount: 2 },
+      b: { column: 1, columnCount: 2 },
+      c: { column: 0, columnCount: 1 },
+    });
   });
 });

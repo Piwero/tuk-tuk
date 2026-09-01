@@ -36,6 +36,7 @@ import {
   isBanner,
   isNarrowWidth,
   laneBanners,
+  layoutDayColumns,
   minuteLabel,
   monthGridDays,
   rangeOf,
@@ -793,11 +794,25 @@ export function CalendarView({
     );
   }
 
-  function renderBlock(entry: Entry, day: string): JSX.Element | null {
+  function renderBlock(
+    entry: Entry,
+    day: string,
+    placement?: { column: number; columnCount: number },
+  ): JSX.Element | null {
     const segment = blockSegment(entryTimeShape(entry), day);
     if (segment === null) {
       return null;
     }
+    // Side-by-side placement when this block shares its time with others
+    // (issue #221); a lone block keeps the CSS full-width default.
+    const columnStyle =
+      placement !== undefined && placement.columnCount > 1
+        ? {
+            left: `calc(${(placement.column / placement.columnCount) * 100}% + 2px)`,
+            width: `calc(${100 / placement.columnCount}% - 4px)`,
+            right: "auto" as const,
+          }
+        : null;
     const { continuesBefore, continuesAfter } = segment;
     const task = entry.kind === "task" ? entry.task : null;
     const pending =
@@ -822,6 +837,7 @@ export function CalendarView({
         style={{
           top: axis.minuteToY(startMin),
           height: axis.blockHeight(startMin, endMin),
+          ...columnStyle,
           ...listColor.style,
         }}
         {...entryDragProps(entry)}
@@ -988,9 +1004,20 @@ export function CalendarView({
                   onDrop={(event) => void handleDrop(event, day, hour)}
                 />
               ))}
-              {entriesOn(entries, day)
-                .filter((entry) => !isBanner(entryTimeShape(entry)))
-                .map((entry) => renderBlock(entry, day))}
+              {(() => {
+                const timed = entriesOn(entries, day).filter(
+                  (entry) => !isBanner(entryTimeShape(entry)),
+                );
+                const columns = layoutDayColumns(
+                  timed.flatMap((entry) => {
+                    const seg = blockSegment(entryTimeShape(entry), day);
+                    return seg === null
+                      ? []
+                      : [{ key: entryKey(entry), start: seg.minutes[0], end: seg.minutes[1] }];
+                  }),
+                );
+                return timed.map((entry) => renderBlock(entry, day, columns.get(entryKey(entry))));
+              })()}
               {day === today && (
                 <div
                   className="now-line"
