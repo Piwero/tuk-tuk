@@ -288,6 +288,70 @@ export function blockSegment(entry: EntryTimeShape, day: string): BlockSegment |
   };
 }
 
+/** The minimal shape layoutDayColumns needs for one timed block: a stable
+ * key and the block's [start, end] minutes of the day (from blockSegment). */
+export interface ColumnInput {
+  readonly key: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+/** One timed block's horizontal placement in a day column: it occupies
+ * column `column` of `columnCount` equal-width side-by-side columns. A block
+ * that overlaps nothing gets `{ column: 0, columnCount: 1 }` — full width. */
+export interface ColumnPlacement {
+  readonly column: number;
+  readonly columnCount: number;
+}
+
+/** Side-by-side placement for a day's timed blocks so blocks that overlap in
+ * time render in parallel instead of stacking on top of each other (issue
+ * #221). Blocks are swept in start order and grouped into clusters of
+ * transitively overlapping blocks; each cluster's members are packed
+ * left-to-right into the fewest columns that keep any two overlapping blocks
+ * in different columns. Every block in a cluster reports that cluster's
+ * column count, so all columns in a run of overlaps render the same width.
+ * Blocks that merely touch (one ends exactly when the next starts) don't
+ * overlap and share a column. */
+export function layoutDayColumns(blocks: readonly ColumnInput[]): Map<string, ColumnPlacement> {
+  const placement = new Map<string, ColumnPlacement>();
+  const sorted = [...blocks].sort((a, b) => a.start - b.start || a.end - b.end);
+
+  let cluster: ColumnInput[] = [];
+  let clusterEnd = -Infinity;
+
+  const flush = (): void => {
+    const columnEnds: number[] = [];
+    for (const block of cluster) {
+      let column = columnEnds.findIndex((end) => end <= block.start);
+      if (column === -1) {
+        column = columnEnds.length;
+      }
+      columnEnds[column] = block.end;
+      placement.set(block.key, { column, columnCount: 0 });
+    }
+    for (const block of cluster) {
+      const found = placement.get(block.key);
+      if (found !== undefined) {
+        placement.set(block.key, { column: found.column, columnCount: columnEnds.length });
+      }
+    }
+  };
+
+  for (const block of sorted) {
+    if (cluster.length > 0 && block.start >= clusterEnd) {
+      flush();
+      cluster = [];
+      clusterEnd = -Infinity;
+    }
+    cluster.push(block);
+    clusterEnd = Math.max(clusterEnd, block.end);
+  }
+  flush();
+
+  return placement;
+}
+
 /** Where a dragged block edge lands: snapped to the grid and clamped so the
  * block keeps at least one snap step and stays within its day. */
 export function draggedEdgeMinute(
