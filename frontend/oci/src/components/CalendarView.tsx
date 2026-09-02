@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  createList,
   createTag,
   createTask,
   fetchActiveHoursSettings,
@@ -52,11 +51,8 @@ import {
   type Entry,
 } from "../calendar";
 import { clearedSchedule, formatDate, fromDayIso, localDayOf } from "../dates";
-import { PRIORITY_LABELS } from "../grouping";
-import { applyListPick, suggestLists } from "../listSuggest";
-import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
+import { makeListChannel, makePriorityChannel, makeTagChannel } from "../captureChannels";
 import { parseQuickAdd, sameName } from "../quickAdd";
-import { applyTagPick, suggestTags } from "../tagSuggest";
 import { Icon } from "./Icon";
 import { readDragPayload, startDrag } from "../dnd";
 import { Modal } from "./Modal";
@@ -1038,51 +1034,13 @@ export function CalendarView({
   // Same three channels as Quick Add (#126) — the calendar's inline draft
   // input gets the same `#tag`/`~list`/`!priority` autosuggest rather than a
   // second, divergent implementation.
-  const draftTagChannel: TokenChannel<Tag> = {
-    sigil: "#",
-    mode: "multi",
-    chips: draftTagChips,
-    onChipsChange: setDraftTagChips,
-    getId: (tag) => tag.id,
-    getLabel: (tag) => tag.name,
-    suggest: (text, caret) => suggestTags(text, caret, tags),
-    applyPick: applyTagPick,
-    allowCreate: true,
-    onCreate: (name) => createTag({ name }),
-    onCreated: (tag) => onTagCreated?.(tag),
-    createLabel: (name) => `Create tag "${name}"`,
-    removeAriaLabel: (tag) => `Remove ${tag.name}`,
-  };
-
-  const draftListChannel: TokenChannel<TaskList> = {
-    sigil: "~",
-    mode: "single",
-    chips: draftListChip,
-    onChipsChange: setDraftListChip,
-    getId: (list) => list.id,
-    getLabel: (list) => list.name,
-    suggest: (text, caret) => suggestLists(text, caret, lists),
-    applyPick: applyListPick,
-    allowCreate: true,
-    onCreate: (name) => createList({ name }),
-    onCreated: (list) => onListCreated?.(list),
-    createLabel: (name) => `Create list "${name}"`,
-    removeAriaLabel: (list) => `Remove ${list.name}`,
-  };
-
-  const draftPriorityChannel: TokenChannel<Priority> = {
-    sigil: "!",
-    mode: "single",
-    chips: draftPriorityChip,
-    onChipsChange: setDraftPriorityChip,
-    getId: (priority) => priority,
-    getLabel: (priority) => PRIORITY_LABELS[priority],
-    suggest: (text, caret) => suggestPriority(text, caret),
-    applyPick: applyPriorityPick,
-    allowCreate: false,
-    createLabel: (name) => name,
-    removeAriaLabel: (priority) => `Remove ${priority}`,
-  };
+  const draftTagChannel = makeTagChannel(tags, draftTagChips, setDraftTagChips, (tag) =>
+    onTagCreated?.(tag),
+  );
+  const draftListChannel = makeListChannel(lists, draftListChip, setDraftListChip, (list) =>
+    onListCreated?.(list),
+  );
+  const draftPriorityChannel = makePriorityChannel(draftPriorityChip, setDraftPriorityChip);
 
   return (
     <div className="calendar">

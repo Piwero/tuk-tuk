@@ -1,33 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 
-import {
-  createList,
-  createTag,
-  createTask,
-  type Priority,
-  type Tag,
-  type Task,
-  type TaskList,
-} from "../api";
+import { createTag, createTask, type Priority, type Tag, type Task, type TaskList } from "../api";
 import {
   formatRecurrenceRule,
   formatReminderOffset,
   parseCaptureWithTimeout,
 } from "../assistCapture";
-import { PRIORITY_LABELS } from "../grouping";
 import {
-  applyDatePick,
-  formatScheduleChipLabel,
-  mergeSchedule,
-  resolveTokenSchedule,
-  type ScheduleChip,
-  suggestDates,
-} from "../dateSuggest";
+  makeDateChannel,
+  makeListChannel,
+  makePriorityChannel,
+  makeTagChannel,
+} from "../captureChannels";
+import { PRIORITY_LABELS } from "../grouping";
+import { resolveTokenSchedule, type ScheduleChip } from "../dateSuggest";
 import { browserTimeZone } from "../dates";
-import { applyListPick, suggestLists } from "../listSuggest";
-import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
 import { parseQuickAdd, sameName } from "../quickAdd";
-import { applyTagPick, suggestTags } from "../tagSuggest";
 import { useAssistAvailable } from "../useAssistAvailable";
 import { Icon } from "./Icon";
 import { TokenInput, type TokenChannel } from "./TokenInput";
@@ -479,66 +467,10 @@ export function QuickAdd({
     }
   }
 
-  const tagChannel: TokenChannel<Tag> = {
-    sigil: "#",
-    mode: "multi",
-    chips: tagChips,
-    onChipsChange: setTagChips,
-    getId: (tag) => tag.id,
-    getLabel: (tag) => tag.name,
-    suggest: (text, caret) => suggestTags(text, caret, tags),
-    applyPick: applyTagPick,
-    allowCreate: true,
-    onCreate: (name) => createTag({ name }),
-    onCreated: onTagCreated,
-    createLabel: (name) => `Create tag "${name}"`,
-    removeAriaLabel: (tag) => `Remove ${tag.name}`,
-  };
-
-  const listChannel: TokenChannel<TaskList> = {
-    sigil: "~",
-    mode: "single",
-    chips: listChip,
-    onChipsChange: setListChip,
-    getId: (list) => list.id,
-    getLabel: (list) => list.name,
-    suggest: (text, caret) => suggestLists(text, caret, lists),
-    applyPick: applyListPick,
-    allowCreate: true,
-    onCreate: (name) => createList({ name }),
-    onCreated: onListCreated,
-    createLabel: (name) => `Create list "${name}"`,
-    removeAriaLabel: (list) => `Remove ${list.name}`,
-  };
-
-  const priorityChannel: TokenChannel<Priority> = {
-    sigil: "!",
-    mode: "single",
-    chips: priorityChip,
-    onChipsChange: setPriorityChip,
-    getId: (priority) => priority,
-    getLabel: (priority) => PRIORITY_LABELS[priority],
-    suggest: (text, caret) => suggestPriority(text, caret),
-    applyPick: applyPriorityPick,
-    allowCreate: false,
-    createLabel: (name) => name,
-    removeAriaLabel: (priority) => `Remove ${priority}`,
-  };
-
-  const dateChannel: TokenChannel<ScheduleChip> = {
-    sigil: "@",
-    mode: "single",
-    chips: scheduleChip,
-    onChipsChange: setScheduleChip,
-    getId: (schedule) => schedule.token,
-    getLabel: formatScheduleChipLabel,
-    suggest: (text, caret) => suggestDates(text, caret, now, browserTimeZone()),
-    applyPick: applyDatePick,
-    mergePick: (current, incoming) => mergeSchedule(current, incoming, browserTimeZone()),
-    allowCreate: false,
-    createLabel: (name) => name,
-    removeAriaLabel: () => "Remove schedule",
-  };
+  const tagChannel = makeTagChannel(tags, tagChips, setTagChips, onTagCreated);
+  const listChannel = makeListChannel(lists, listChip, setListChip, onListCreated);
+  const priorityChannel = makePriorityChannel(priorityChip, setPriorityChip);
+  const dateChannel = makeDateChannel(scheduleChip, setScheduleChip, now);
 
   return (
     <form onSubmit={(event) => void submit(event)} onKeyDown={onKeyDown}>

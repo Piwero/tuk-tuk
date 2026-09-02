@@ -26,9 +26,9 @@ the Quick-Add bar being "one keystroke away" assumes the user knows that —
 the palette is often the surface they reached for precisely because they
 did not want to think about where the capture bar is.
 
-The cost of wiring it in turned out small: one `dateChannel` on the
-`TokenInput` (a straight copy of the Quick-Add bar's), `now` threaded into
-`planPaletteCapture` (frozen once per palette open via `useState`), and a
+The cost of wiring it in turned out small: the `@` channel is the same
+`makeDateChannel` factory (`captureChannels.ts`) the Quick-Add surfaces
+call, `now` threaded into `planPaletteCapture` (frozen once per palette open via `useState`), and a
 `schedule` field kept as a sibling of `commit` on the `CapturePlan` so the
 `createTask` payload shape is unchanged. `resolveTokenSchedule` — already
 shared by both Quick-Add surfaces — does the day/time composition, so a
