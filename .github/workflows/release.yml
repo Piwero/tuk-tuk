@@ -142,3 +142,30 @@ jobs:
         run: |
           echo "::error::Build and push failed after 3 attempts"
           exit 1
+
+  # --- Publish a GitHub Release whose notes are the CHANGELOG section for this tag ---
+  github-release:
+    needs: build-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Extract changelog section for this tag
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { grab=1; next }
+            grab && /^## \[/       { exit }
+            grab                   { print }
+          ' CHANGELOG.md > release-notes.md
+          echo "Extracted $(wc -l < release-notes.md) lines for $VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
