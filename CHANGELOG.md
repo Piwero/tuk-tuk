@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.6.0](https://github.com/Piwero/tuk-tuk/compare/v2.5.1...v2.6.0) - 2026-09-02
+
+### Features
+
+- **quick-add:** Schedule a Task with @ day tokens ([c36f5bf](https://github.com/Piwero/tuk-tuk/commit/c36f5bf4f796321137ec60483594b72129fcd5be))
+- **quick-add:** Compose a clock time onto an @ schedule chip ([e9a6201](https://github.com/Piwero/tuk-tuk/commit/e9a6201591b96779335b926e9e6cc751ef599876))
+- **quick-add:** @ tokens fill the Quick-Add dialog's Date fieldset ([b6872a4](https://github.com/Piwero/tuk-tuk/commit/b6872a411434a205ff7f64642b95eb425149f949))
+- **quick-add:** @ tokens fill the Quick-Add dialog's Date fieldset (#214) ([01309cc](https://github.com/Piwero/tuk-tuk/commit/01309ccdf803b6cb2996b0dc8244d17e426d05aa))
+
 ## [2.5.1](https://github.com/Piwero/tuk-tuk/compare/v2.5.0...v2.5.1) - 2026-09-01
 
 ### Features
