@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-// @ts-expect-error - node builtin; this project ships no @types/node, but the
-// test runs under Node where `node:fs` / `node:path` resolve fine.
 import { readFileSync } from "node:fs";
-// @ts-expect-error - see above.
 import { resolve } from "node:path";
-// @ts-expect-error - see above.
 import process from "node:process";
 
 /** Which views fill the content area and which keep the shared reading
