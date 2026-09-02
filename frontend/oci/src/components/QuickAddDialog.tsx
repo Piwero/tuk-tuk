@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import {
-  createList,
   createTag,
   createTask,
   type Priority,
@@ -16,14 +15,7 @@ import {
   formatReminderOffset,
   parseCaptureWithTimeout,
 } from "../assistCapture";
-import {
-  applyDatePick,
-  formatScheduleChipLabel,
-  mergeSchedule,
-  resolveTokenSchedule,
-  type ScheduleChip,
-  suggestDates,
-} from "../dateSuggest";
+import { resolveTokenSchedule, type ScheduleChip } from "../dateSuggest";
 import {
   addDays,
   browserTimeZone,
@@ -34,11 +26,14 @@ import {
   scheduleFromDraft,
   type DateDraft,
 } from "../dates";
+import {
+  makeDateChannel,
+  makeListChannel,
+  makePriorityChannel,
+  makeTagChannel,
+} from "../captureChannels";
 import { PRIORITY_LABELS } from "../grouping";
-import { applyListPick, suggestLists } from "../listSuggest";
-import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
 import { parseQuickAdd, sameName } from "../quickAdd";
-import { applyTagPick, suggestTags } from "../tagSuggest";
 import { useAssistAvailable } from "../useAssistAvailable";
 import { DateFieldset } from "./DateFieldset";
 import { Icon } from "./Icon";
@@ -357,72 +352,26 @@ export function QuickAddDialog({
   // Each channel's "chips" are read straight off the form's own state, so a
   // pick is indistinguishable from having used the control by hand, and the
   // already-picked check the dropdown does still works.
-  const tagChannel: TokenChannel<Tag> = {
-    sigil: "#",
-    mode: "multi",
-    chips: tags.filter((tag) => tagIds.includes(tag.id)),
-    onChipsChange: (chips) => setTagIds(chips.map((tag) => tag.id)),
-    getId: (tag) => tag.id,
-    getLabel: (tag) => tag.name,
-    suggest: (text, caret) => suggestTags(text, caret, tags),
-    applyPick: applyTagPick,
-    allowCreate: true,
-    onCreate: (name) => createTag({ name }),
-    onCreated: onTagCreated,
-    createLabel: (name) => `Create tag "${name}"`,
-    removeAriaLabel: (tag) => `Remove ${tag.name}`,
-  };
-
-  const listChannel: TokenChannel<TaskList> = {
-    sigil: "~",
-    mode: "single",
-    chips: lists.filter((list) => list.id === listId),
-    onChipsChange: (chips) => {
+  const tagChannel = makeTagChannel(
+    tags,
+    tags.filter((tag) => tagIds.includes(tag.id)),
+    (chips) => setTagIds(chips.map((tag) => tag.id)),
+    onTagCreated,
+  );
+  const listChannel = makeListChannel(
+    lists,
+    lists.filter((list) => list.id === listId),
+    (chips) => {
       setListId(chips[0]?.id ?? null);
       setListChosen(true);
     },
-    getId: (list) => list.id,
-    getLabel: (list) => list.name,
-    suggest: (text, caret) => suggestLists(text, caret, lists),
-    applyPick: applyListPick,
-    allowCreate: true,
-    onCreate: (name) => createList({ name }),
-    onCreated: onListCreated,
-    createLabel: (name) => `Create list "${name}"`,
-    removeAriaLabel: (list) => `Remove ${list.name}`,
-  };
-
-  const priorityChannel: TokenChannel<Priority> = {
-    sigil: "!",
-    mode: "single",
-    chips: priority === "none" ? [] : [priority],
-    onChipsChange: (chips) => {
-      setPriority(chips[0] ?? "none");
-      setPriorityChosen(true);
-    },
-    getId: (level) => level,
-    getLabel: (level) => PRIORITY_LABELS[level],
-    suggest: (text, caret) => suggestPriority(text, caret),
-    applyPick: applyPriorityPick,
-    allowCreate: false,
-    createLabel: (name) => name,
-    removeAriaLabel: (level) => `Remove ${level}`,
-  };
-
-  const dateChannel: TokenChannel<ScheduleChip> = {
-    sigil: "@",
-    mode: "single",
-    chips: scheduleChip,
-    onChipsChange: onScheduleChips,
-    getId: (schedule) => schedule.token,
-    getLabel: formatScheduleChipLabel,
-    suggest: (text, caret) => suggestDates(text, caret, now, browserTimeZone()),
-    applyPick: applyDatePick,
-    mergePick: (current, incoming) => mergeSchedule(current, incoming, browserTimeZone()),
-    allowCreate: false,
-    createLabel: (name) => name,
-    removeAriaLabel: () => "Remove schedule",
-  };
+    onListCreated,
+  );
+  const priorityChannel = makePriorityChannel(priority === "none" ? [] : [priority], (chips) => {
+    setPriority(chips[0] ?? "none");
+    setPriorityChosen(true);
+  });
+  const dateChannel = makeDateChannel(scheduleChip, onScheduleChips, now);
 
   return (
     <form className="quick-add-dialog" onSubmit={(event) => void submit(event)}>
