@@ -229,6 +229,23 @@ export function mergeSchedule(
     : composeSchedule(incoming, current.time, timeZone);
 }
 
+/** The `@` schedule a create call should use, shared by both Quick-Add
+ * surfaces. A picked chip owns the day; a clock time typed raw after it
+ * (`typedTime`) overwrites just the time half, so the two compose in either
+ * order. With no chip, the parsed `@` tokens stand on their own. Null when
+ * nothing scheduled it. */
+export function resolveTokenSchedule(
+  chip: ScheduleChip | undefined,
+  parsedDue: ScheduleChip | null,
+  typedTime: ClockTime | null,
+  timeZone: string,
+): ScheduleChip | null {
+  if (chip === undefined) {
+    return parsedDue;
+  }
+  return composeSchedule(chip, typedTime ?? chip.time, timeZone);
+}
+
 /** The chip's rendered label — the composed schedule, e.g. `Tomorrow` or
  * `Tomorrow 8:00 AM`. */
 export function formatScheduleChipLabel(chip: ScheduleChip): string {

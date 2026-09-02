@@ -69,12 +69,12 @@ describe("Quick add dialog — @ schedule tokens", () => {
     await user.click(screen.getByRole("button", { name: "Add task" }));
 
     await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    // An all-day pick carries no time_zone — identical to the inline bar.
     expect(taskPosts(api.requests)[0]).toEqual({
       title: "groceries",
       list_id: INBOX.id,
       due_date: "2026-09-02T00:00:00Z",
       is_all_day: true,
-      time_zone: expect.any(String),
     });
   });
 
@@ -92,6 +92,26 @@ describe("Quick add dialog — @ schedule tokens", () => {
     expect(screen.getByLabelText("Day")).toHaveValue("2026-09-02");
     expect(screen.getByLabelText("Due time")).toHaveValue("09:00");
 
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toMatchObject({
+      title: "standup",
+      is_all_day: false,
+      due_date: new Date(2026, 8, 2, 9, 0).toISOString(),
+    });
+  });
+
+  it("composes a typed-but-never-picked @9am onto the picked day, like the bar", async () => {
+    const api = installFakeApi({ lists: [INBOX] });
+    render(<App />);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await openDialog(user);
+
+    await user.type(screen.getByLabelText("Title"), "standup @tomorrow");
+    await user.keyboard("{ArrowDown}{Enter}");
+    // Type the clock time but submit without picking it from the dropdown.
+    await user.type(screen.getByLabelText("Title"), " @9am");
     await user.click(screen.getByRole("button", { name: "Add task" }));
 
     await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
