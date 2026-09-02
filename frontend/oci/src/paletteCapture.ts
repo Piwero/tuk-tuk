@@ -12,6 +12,8 @@
  * "Create …" row in the dropdown is the only path to a new List or Tag. */
 
 import { type Priority, type Tag, type TaskList } from "./api";
+import { resolveTokenSchedule, type ScheduleChip } from "./dateSuggest";
+import { browserTimeZone } from "./dates";
 import { parseQuickAdd, sameName } from "./quickAdd";
 
 export interface CaptureTagChip {
@@ -27,6 +29,9 @@ export interface CapturePreview {
   priority: Priority | null;
   list: { id: number; name: string } | null;
   tags: CaptureTagChip[];
+  /** The resolved `@day` / `@time` schedule, shown back as a chip. Null
+   * when no `@` token (or picked chip) scheduled it. */
+  schedule: ScheduleChip | null;
   /** False until there's a non-empty title — nothing to commit yet. */
   ready: boolean;
 }
@@ -42,11 +47,14 @@ export interface CaptureChips {
   tags: Tag[];
   list: TaskList[];
   priority: Priority[];
+  schedule: ScheduleChip[];
 }
 
 export interface CapturePlan {
   preview: CapturePreview;
-  /** The `createTask` payload, or null when there's no title to save. */
+  /** The `createTask` payload, or null when there's no title to save. The
+   * resolved `@` schedule rides on `preview.schedule` rather than here, so
+   * the payload shape stays stable for callers that compare it. */
   commit: CaptureCommit | null;
 }
 
@@ -56,6 +64,7 @@ export function planPaletteCapture(
   lists: TaskList[],
   tags: Tag[],
   defaultListId: number,
+  now: Date,
 ): CapturePlan {
   // A deliberately-picked chip wins over a same-named raw token, and that
   // token is left in the title rather than silently consumed too — exactly
@@ -63,7 +72,18 @@ export function planPaletteCapture(
   const plan = parseQuickAdd(text, lists, {
     skipListToken: chips.list.length > 0,
     skipPriorityToken: chips.priority.length > 0,
+    skipDateToken: chips.schedule.length > 0,
+    now,
   });
+
+  // A picked `@` chip owns the day; a raw `@8am` still composes its time
+  // half onto it — the same resolution the Quick-Add bar uses (ADR 0011).
+  const schedule = resolveTokenSchedule(
+    chips.schedule[0],
+    plan.due,
+    plan.dueTime,
+    browserTimeZone(),
+  );
 
   const tagChips: CaptureTagChip[] = [];
   const seen: string[] = [];
@@ -93,6 +113,7 @@ export function planPaletteCapture(
     priority,
     list: list === null ? null : { id: list.id, name: list.name },
     tags: tagChips,
+    schedule,
     ready: plan.title !== "",
   };
 

@@ -64,16 +64,47 @@ describe("command palette — capture a Task", () => {
     expect(await screen.findByText("Buy milk")).toBeInTheDocument();
   });
 
-  it("leaves an @day token as literal title text — the @ sigil is Quick-Add only (ADR 0011)", async () => {
+  it("resolves an @day token into a schedule and strips it from the title (ADR 0011 reversed)", async () => {
     const api = await seed();
     const user = userEvent.setup();
     fireEvent.click(await screen.findByRole("button", { name: "Errands" }));
 
     await enterCapture(user, "Buy milk @tomorrow");
+    const preview = screen.getByRole("group", { name: "New task" });
+    expect(within(preview).getByText("Buy milk")).toBeInTheDocument();
+    expect(within(preview).getByText("Tomorrow")).toBeInTheDocument();
+
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(taskPosts(api)).toHaveLength(1));
-    expect(taskPosts(api)[0]).toEqual({ title: "Buy milk @tomorrow", list_id: 10 });
+    const posted = taskPosts(api)[0] as {
+      title: string;
+      list_id: number;
+      due_date: string;
+      is_all_day: boolean;
+    };
+    expect(posted.title).toBe("Buy milk");
+    expect(posted.list_id).toBe(10);
+    expect(posted.is_all_day).toBe(true);
+    expect(posted.due_date).toMatch(/T00:00:00Z$/);
+  });
+
+  it("opens the @date dropdown on a bare @ and picks a day with the keyboard", async () => {
+    const api = await seed();
+    const user = userEvent.setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Errands" }));
+
+    const input = await enterCapture(user, "Water plants @");
+    await screen.findByRole("option", { name: "Today" });
+    // Arrow past "Today" to "Tomorrow", commit the pick.
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+    expect(input).toHaveValue("Water plants ");
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(taskPosts(api)).toHaveLength(1));
+    const posted = taskPosts(api)[0] as { title: string; is_all_day: boolean };
+    expect(posted.title).toBe("Water plants");
+    expect(posted.is_all_day).toBe(true);
   });
 
   it("parses the !priority sigil exactly as the capture bar does", async () => {

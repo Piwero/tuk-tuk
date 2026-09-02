@@ -17,7 +17,14 @@ import {
   type PaletteItem,
   type TaskVerbId,
 } from "../commandPalette";
-import { addDays, localDayOf, nextMonday } from "../dates";
+import {
+  applyDatePick,
+  formatScheduleChipLabel,
+  mergeSchedule,
+  suggestDates,
+  type ScheduleChip,
+} from "../dateSuggest";
+import { addDays, browserTimeZone, localDayOf, nextMonday } from "../dates";
 import { PRIORITY_LABELS } from "../grouping";
 import { applyListPick, suggestLists } from "../listSuggest";
 import { applyPriorityPick, suggestPriority } from "../prioritySuggest";
@@ -168,7 +175,8 @@ function pickerChoices(
  * Jump mode: searches Lists, Folders, Tags, Smart Lists, feature views and
  * open Tasks and navigates to the pick, and — via the "New task" row
  * (issue #204) — captures a Task with the same `#tag` / `!priority` / `~list`
- * shortcuts the Quick-Add bar parses, all without touching the pointer.
+ * / `@date` shortcuts the Quick-Add bar parses, all without touching the
+ * pointer (ADR 0011 reversal wired `@` in here too).
  *
  * Task mode (`task` set, issue #205): lists that Task's verbs — complete,
  * start Focus, reschedule, move, add a Tag, set repeat, delete. Verbs that
@@ -194,12 +202,18 @@ export function CommandPalette({
   // Scoped mode's verb filter text.
   const [query, setQuery] = useState("");
   // Jump mode's field doubles as a Task-capture bar (issue #204): the typed
-  // text, plus any #tag / ~list / !priority chips picked from the sigil
-  // dropdowns. The same three channels the Quick-Add bar uses.
+  // text, plus any #tag / ~list / !priority / @date chips picked from the
+  // sigil dropdowns. The same four channels the Quick-Add bar uses.
   const [captureText, setCaptureText] = useState("");
   const [tagChips, setTagChips] = useState<Tag[]>([]);
   const [listChip, setListChip] = useState<TaskList[]>([]);
   const [priorityChip, setPriorityChip] = useState<Priority[]>([]);
+  // The `@day` / `@time` schedule chip (ADR 0011 reversal): single-valued,
+  // the same channel the Quick-Add bar wires. Frozen for the palette's
+  // (short) lifetime so the dropdown's resolution and the commit-time parse
+  // always agree on what "today" is.
+  const [scheduleChip, setScheduleChip] = useState<ScheduleChip[]>([]);
+  const [now] = useState(() => new Date());
   const [active, setActive] = useState(0);
   // Which value-taking verb's picker is open, or null for the verb list.
   const [picker, setPicker] = useState<TaskVerbId | null>(null);
@@ -221,12 +235,13 @@ export function CommandPalette({
     () =>
       planPaletteCapture(
         captureText,
-        { tags: tagChips, list: listChip, priority: priorityChip },
+        { tags: tagChips, list: listChip, priority: priorityChip, schedule: scheduleChip },
         lists,
         tags,
         defaultListId,
+        now,
       ),
-    [captureText, tagChips, listChip, priorityChip, lists, tags, defaultListId],
+    [captureText, tagChips, listChip, priorityChip, scheduleChip, lists, tags, defaultListId, now],
   );
   const jumpQuery = capturePlan.preview.title;
 
@@ -286,11 +301,19 @@ export function CommandPalette({
     }
     committing.current = true;
     try {
+      const schedule = capturePlan.preview.schedule;
       const created = await createTask({
         title: commit.title,
         list_id: commit.listId,
         ...(commit.priority === null ? {} : { priority: commit.priority }),
         ...(commit.tagIds.length === 0 ? {} : { tag_ids: commit.tagIds }),
+        ...(schedule === null
+          ? {}
+          : {
+              due_date: schedule.dueDate,
+              is_all_day: schedule.isAllDay,
+              ...(schedule.timeZone === null ? {} : { time_zone: schedule.timeZone }),
+            }),
       });
       onCreated(created);
       onClose();
@@ -343,6 +366,21 @@ export function CommandPalette({
     allowCreate: false,
     createLabel: (name) => name,
     removeAriaLabel: (priority) => `Remove ${priority}`,
+  };
+
+  const dateChannel: TokenChannel<ScheduleChip> = {
+    sigil: "@",
+    mode: "single",
+    chips: scheduleChip,
+    onChipsChange: setScheduleChip,
+    getId: (schedule) => schedule.token,
+    getLabel: formatScheduleChipLabel,
+    suggest: (text, caret) => suggestDates(text, caret, now, browserTimeZone()),
+    applyPick: applyDatePick,
+    mergePick: (current, incoming) => mergeSchedule(current, incoming, browserTimeZone()),
+    allowCreate: false,
+    createLabel: (name) => name,
+    removeAriaLabel: () => "Remove schedule",
   };
 
   function choose(row: Row | PaletteItem | undefined): void {
@@ -454,12 +492,14 @@ export function CommandPalette({
                 tagChannel as TokenChannel<unknown>,
                 listChannel as TokenChannel<unknown>,
                 priorityChannel as TokenChannel<unknown>,
+                dateChannel as TokenChannel<unknown>,
               ]}
               sigilHints={
                 <>
                   <span className="quick-add-sigil-hint">{tagChannel.sigil}tag</span>
                   <span className="quick-add-sigil-hint">{priorityChannel.sigil}priority</span>
                   <span className="quick-add-sigil-hint">{listChannel.sigil}list</span>
+                  <span className="quick-add-sigil-hint">{dateChannel.sigil}date</span>
                 </>
               }
             />
@@ -509,6 +549,11 @@ export function CommandPalette({
                       {capturePlan.preview.priority !== null && (
                         <span className="tag-chip token-chip">
                           {PRIORITY_LABELS[capturePlan.preview.priority]}
+                        </span>
+                      )}
+                      {capturePlan.preview.schedule !== null && (
+                        <span className="date-chip token-chip">
+                          {formatScheduleChipLabel(capturePlan.preview.schedule)}
                         </span>
                       )}
                       {capturePlan.preview.tags.map((tag) => (
