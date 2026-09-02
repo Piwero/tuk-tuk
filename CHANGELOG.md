@@ -4,6 +4,10 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.6.2](https://github.com/Piwero/tuk-tuk/compare/v2.6.1...v2.6.2) - 2026-09-02
+
+_Maintenance release; no user-facing changes._
+
 ## [2.6.1](https://github.com/Piwero/tuk-tuk/compare/v2.6.0...v2.6.1) - 2026-09-02
 
 ### Bug Fixes
