@@ -128,6 +128,25 @@ describe("The Month view", () => {
     ).toBeInTheDocument();
   });
 
+  it("leaves an @day token as literal title text, keeping the clicked day (ADR 0011)", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openCalendar();
+
+    fireEvent.click(screen.getByLabelText("2026-07-15"));
+    const input = await screen.findByRole("combobox", { name: "New task title" });
+    fireEvent.change(input, { target: { value: "Dentist @tomorrow" } });
+    fireEvent.submit(input);
+
+    await waitFor(() => expect(taskPosts(api.requests)).toHaveLength(1));
+    expect(taskPosts(api.requests)[0]).toEqual({
+      title: "Dentist @tomorrow",
+      due_date: "2026-07-15T00:00:00Z",
+      is_all_day: true,
+      time_zone: "UTC",
+    });
+  });
+
   it("opens the new-task draft as a popup dialog, not an inline row", async () => {
     installFakeApi();
     render(<App />);
