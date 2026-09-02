@@ -74,6 +74,17 @@ describe("planPaletteCapture", () => {
     expect(commit?.tagIds).toEqual([30, 31]);
   });
 
+  it("leaves an @day token as literal title text — the @ sigil is Quick-Add only (ADR 0011)", () => {
+    const { preview, commit } = planPaletteCapture("Buy milk @tomorrow", noChips, lists, tags, 10);
+    expect(preview.title).toBe("Buy milk @tomorrow");
+    expect(commit).toEqual({
+      title: "Buy milk @tomorrow",
+      listId: 10,
+      priority: null,
+      tagIds: [],
+    });
+  });
+
   it("is not ready when the title is empty", () => {
     const { preview, commit } = planPaletteCapture("#urgent", noChips, lists, tags, 10);
     expect(preview.ready).toBe(false);
