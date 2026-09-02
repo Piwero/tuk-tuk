@@ -20,6 +20,7 @@ import {
   applyDatePick,
   formatScheduleChipLabel,
   mergeSchedule,
+  resolveTokenSchedule,
   type ScheduleChip,
   suggestDates,
 } from "../dateSuggest";
@@ -42,6 +43,15 @@ import { useAssistAvailable } from "../useAssistAvailable";
 import { DateFieldset } from "./DateFieldset";
 import { Icon } from "./Icon";
 import { TokenInput, type TokenChannel } from "./TokenInput";
+
+/** A resolved `@` schedule chip as a Task create payload. */
+function chipCreate(chip: ScheduleChip): Partial<TaskCreateInput> {
+  return {
+    due_date: chip.dueDate,
+    is_all_day: chip.isAllDay,
+    ...(chip.timeZone === null ? {} : { time_zone: chip.timeZone }),
+  };
+}
 
 interface QuickAddDialogProps {
   lists: TaskList[];
@@ -134,6 +144,7 @@ export function QuickAddDialog({
    * an all-day task, exactly as in the detail panel. */
   function pickDay(dayIso: string): void {
     setDateDraft((current) => ({ ...current, dueDay: dayIso }));
+    setScheduleChip([]);
   }
 
   function toggleTag(tagId: number): void {
@@ -151,12 +162,13 @@ export function QuickAddDialog({
    * visible chip that would be silently dropped at save must not survive. */
   function changeDate(next: DateDraft): void {
     setDateDraft(next);
-    if (next.dueDay === "") {
-      setScheduleChip([]);
-      if (recurrence !== null || reminders.length > 0) {
-        setRecurrence(null);
-        setReminders([]);
-      }
+    // Any hand-edit of the fieldset supersedes a standing `@` pick — the
+    // fieldset is now the source of truth, so the picked chip must not
+    // re-compose over it at submit.
+    setScheduleChip([]);
+    if (next.dueDay === "" && (recurrence !== null || reminders.length > 0)) {
+      setRecurrence(null);
+      setReminders([]);
     }
   }
 
@@ -270,6 +282,7 @@ export function QuickAddDialog({
     const plan = parseQuickAdd(title, lists, {
       skipListToken: listChosen,
       skipPriorityToken: priorityChosen,
+      skipDateToken: scheduleChip.length > 0,
       now,
     });
     const trimmed = plan.title.trim();
@@ -312,17 +325,19 @@ export function QuickAddDialog({
     }
     const finalListId = listChosen ? listId : (plan.listId ?? listId);
     const finalPriority = priorityChosen ? priority : (plan.priority ?? priority);
-    // The fieldset (hand-set or filled by an `@` pick) wins; failing that, a
-    // raw `@tomorrow` typed but never picked still resolves at submit.
+    // Precedence, mirroring the bar's `resolveTokenSchedule`: a picked `@`
+    // chip owns the day and composes with any raw clock time typed after it;
+    // failing that the fieldset (hand-set, or a quick-pick button) wins;
+    // failing that a raw `@tomorrow` typed but never picked resolves here.
     const draftSchedule = scheduleFromDraft(dateDraft);
-    let scheduleCreate: Partial<TaskCreateInput> | null =
-      draftSchedule === null ? null : scheduleForCreate(draftSchedule);
-    if (scheduleCreate === null && plan.due !== null) {
-      scheduleCreate = {
-        due_date: plan.due.dueDate,
-        is_all_day: plan.due.isAllDay,
-        ...(plan.due.timeZone === null ? {} : { time_zone: plan.due.timeZone }),
-      };
+    let scheduleCreate: Partial<TaskCreateInput> | null;
+    if (scheduleChip.length > 0) {
+      const due = resolveTokenSchedule(scheduleChip[0], plan.due, plan.dueTime, browserTimeZone());
+      scheduleCreate = due === null ? null : chipCreate(due);
+    } else if (draftSchedule !== null) {
+      scheduleCreate = scheduleForCreate(draftSchedule);
+    } else {
+      scheduleCreate = plan.due === null ? null : chipCreate(plan.due);
     }
     const task = await createTask({
       title: trimmed,

@@ -17,10 +17,9 @@ import {
 import { PRIORITY_LABELS } from "../grouping";
 import {
   applyDatePick,
-  type ClockTime,
-  composeSchedule,
   formatScheduleChipLabel,
   mergeSchedule,
+  resolveTokenSchedule,
   type ScheduleChip,
   suggestDates,
 } from "../dateSuggest";
@@ -44,21 +43,6 @@ function formatDraftDate(dueDate: string, isAllDay: boolean): string {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-/** The Quick-Add bar's `@` schedule for a create call. A picked chip owns
- * the day; a clock time typed raw after it (`typedTime`) overwrites just
- * the time half, so the two compose in either order. With no chip, the
- * parsed `@` tokens stand on their own. Null when nothing scheduled it. */
-function resolveTokenSchedule(
-  chip: ScheduleChip | undefined,
-  parsedDue: ScheduleChip | null,
-  typedTime: ClockTime | null,
-): ScheduleChip | null {
-  if (chip === undefined) {
-    return parsedDue;
-  }
-  return composeSchedule(chip, typedTime ?? chip.time, browserTimeZone());
 }
 
 /** The four Quick-Add chip slots a submission is snapshotted against, so a
@@ -206,7 +190,12 @@ export function QuickAdd({
     // in, so `rawTitle` there has already had the token stripped.
     const resolvedSchedule = { ...schedule };
     if (resolvedSchedule.due_date === undefined) {
-      const due = resolveTokenSchedule(snapshot.scheduleChip[0], plan.due, plan.dueTime);
+      const due = resolveTokenSchedule(
+        snapshot.scheduleChip[0],
+        plan.due,
+        plan.dueTime,
+        browserTimeZone(),
+      );
       if (due != null) {
         resolvedSchedule.due_date = due.dueDate;
         resolvedSchedule.is_all_day = due.isAllDay;
@@ -439,7 +428,12 @@ export function QuickAdd({
         return;
       }
       const suggestedTitle = suggestion.title.trim() === "" ? submittedTitle : suggestion.title;
-      const tokenSchedule = resolveTokenSchedule(scheduleChip[0], tokenPlan.due, tokenPlan.dueTime);
+      const tokenSchedule = resolveTokenSchedule(
+        scheduleChip[0],
+        tokenPlan.due,
+        tokenPlan.dueTime,
+        browserTimeZone(),
+      );
       setDraft({
         typedTitle: submittedTitle,
         ...snapshot,
