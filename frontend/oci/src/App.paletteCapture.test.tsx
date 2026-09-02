@@ -64,6 +64,18 @@ describe("command palette — capture a Task", () => {
     expect(await screen.findByText("Buy milk")).toBeInTheDocument();
   });
 
+  it("leaves an @day token as literal title text — the @ sigil is Quick-Add only (ADR 0011)", async () => {
+    const api = await seed();
+    const user = userEvent.setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Errands" }));
+
+    await enterCapture(user, "Buy milk @tomorrow");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(taskPosts(api)).toHaveLength(1));
+    expect(taskPosts(api)[0]).toEqual({ title: "Buy milk @tomorrow", list_id: 10 });
+  });
+
   it("parses the !priority sigil exactly as the capture bar does", async () => {
     const api = await seed();
     const user = userEvent.setup();
