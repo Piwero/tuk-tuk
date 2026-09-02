@@ -7,6 +7,7 @@ import {
   type Priority,
   type Tag,
   type Task,
+  type TaskCreateInput,
   type TaskList,
 } from "../api";
 import {
@@ -16,7 +17,15 @@ import {
   parseCaptureWithTimeout,
 } from "../assistCapture";
 import {
+  applyDatePick,
+  formatScheduleChipLabel,
+  mergeSchedule,
+  type ScheduleChip,
+  suggestDates,
+} from "../dateSuggest";
+import {
   addDays,
+  browserTimeZone,
   emptyDraft,
   localDayOf,
   nextMonday,
@@ -80,6 +89,13 @@ export function QuickAddDialog({
   const [tagIds, setTagIds] = useState<number[]>([]);
   const [newTag, setNewTag] = useState("");
   const [dateDraft, setDateDraft] = useState<DateDraft>(emptyDraft);
+  // The `@day` schedule chip, tracked so the dropdown's "already picked"
+  // dedupe still works — but a pick lands in the Date fieldset below (one
+  // visible source of truth per field), never in a chip row.
+  const [scheduleChip, setScheduleChip] = useState<ScheduleChip[]>([]);
+  // The clock every `@day` token resolves against — read once per render so
+  // the dropdown and the submit-time parse always agree.
+  const now = new Date();
   // Whether the List / Priority now shown was chosen by the user — through
   // the select or a dropdown pick — rather than left at its default. A raw
   // `~list` / `!priority` token still sitting in the title only claims a
@@ -135,10 +151,27 @@ export function QuickAddDialog({
    * visible chip that would be silently dropped at save must not survive. */
   function changeDate(next: DateDraft): void {
     setDateDraft(next);
-    if (next.dueDay === "" && (recurrence !== null || reminders.length > 0)) {
-      setRecurrence(null);
-      setReminders([]);
+    if (next.dueDay === "") {
+      setScheduleChip([]);
+      if (recurrence !== null || reminders.length > 0) {
+        setRecurrence(null);
+        setReminders([]);
+      }
     }
+  }
+
+  /** An `@` pick (or merge) lands in the Date fieldset: the picked
+   * ScheduleChip becomes the dateDraft — its day, plus a due time when the
+   * chip carries a clock time. The chip itself is kept in state only so the
+   * dropdown's already-picked dedupe keeps working; nothing renders it. */
+  function onScheduleChips(chips: ScheduleChip[]): void {
+    setScheduleChip(chips);
+    const chip = chips[0];
+    if (chip === undefined) {
+      setDateDraft(emptyDraft());
+      return;
+    }
+    setDateDraft(dateDraftFromAssist({ due_date: chip.dueDate, is_all_day: chip.isAllDay }));
   }
 
   /** One Assisted Capture parse of the residual title (tokens already
@@ -160,7 +193,7 @@ export function QuickAddDialog({
       // A day already in the Date fieldset is the user's — Assist fills that
       // control, it never overwrites a hand-entered date, and it leaves an
       // untouched fieldset alone rather than wiping it.
-      const dateTouched = dateDraft.dueDay !== "";
+      const dateTouched = dateDraft.dueDay !== "" || scheduleChip.length > 0 || plan.due !== null;
       const willApplyDate = suggestion.due_date !== null && !dateTouched;
       // Recurrence / reminders can only attach to a dated Task (backend
       // invariant), so they apply only when a date will be present.
@@ -230,9 +263,14 @@ export function QuickAddDialog({
     // Tokens typed but never picked from the dropdown are still honoured at
     // submit, exactly as in the bar — otherwise a fully-typed `~expenses`
     // would be saved as literal title text.
+    // `@` tokens are always parsed out of the title (so a fully-typed
+    // `@tomorrow` never lands as literal text), but a date already in the
+    // fieldset — hand-set or from an earlier `@` pick — outranks `plan.due`
+    // below, mirroring how a chip wins in the bar.
     const plan = parseQuickAdd(title, lists, {
       skipListToken: listChosen,
       skipPriorityToken: priorityChosen,
+      now,
     });
     const trimmed = plan.title.trim();
     if (trimmed === "") {
@@ -274,17 +312,28 @@ export function QuickAddDialog({
     }
     const finalListId = listChosen ? listId : (plan.listId ?? listId);
     const finalPriority = priorityChosen ? priority : (plan.priority ?? priority);
-    const schedule = scheduleFromDraft(dateDraft);
+    // The fieldset (hand-set or filled by an `@` pick) wins; failing that, a
+    // raw `@tomorrow` typed but never picked still resolves at submit.
+    const draftSchedule = scheduleFromDraft(dateDraft);
+    let scheduleCreate: Partial<TaskCreateInput> | null =
+      draftSchedule === null ? null : scheduleForCreate(draftSchedule);
+    if (scheduleCreate === null && plan.due !== null) {
+      scheduleCreate = {
+        due_date: plan.due.dueDate,
+        is_all_day: plan.due.isAllDay,
+        ...(plan.due.timeZone === null ? {} : { time_zone: plan.due.timeZone }),
+      };
+    }
     const task = await createTask({
       title: trimmed,
       ...(finalListId === null ? {} : { list_id: finalListId }),
       ...(finalPriority === "none" ? {} : { priority: finalPriority }),
       ...(chosen.length === 0 ? {} : { tag_ids: chosen }),
-      ...(schedule === null ? {} : scheduleForCreate(schedule)),
+      ...(scheduleCreate === null ? {} : scheduleCreate),
       // Recurrence and reminders can't attach to a dateless Task (backend
       // invariant), so they ride only alongside a resolved schedule.
-      ...(schedule !== null && recurrence !== null ? { recurrence } : {}),
-      ...(schedule !== null && reminders.length > 0 ? { reminders } : {}),
+      ...(scheduleCreate !== null && recurrence !== null ? { recurrence } : {}),
+      ...(scheduleCreate !== null && reminders.length > 0 ? { reminders } : {}),
     });
     onCreated(task);
     onClose();
@@ -345,6 +394,21 @@ export function QuickAddDialog({
     removeAriaLabel: (level) => `Remove ${level}`,
   };
 
+  const dateChannel: TokenChannel<ScheduleChip> = {
+    sigil: "@",
+    mode: "single",
+    chips: scheduleChip,
+    onChipsChange: onScheduleChips,
+    getId: (schedule) => schedule.token,
+    getLabel: formatScheduleChipLabel,
+    suggest: (text, caret) => suggestDates(text, caret, now, browserTimeZone()),
+    applyPick: applyDatePick,
+    mergePick: (current, incoming) => mergeSchedule(current, incoming, browserTimeZone()),
+    allowCreate: false,
+    createLabel: (name) => name,
+    removeAriaLabel: () => "Remove schedule",
+  };
+
   return (
     <form className="quick-add-dialog" onSubmit={(event) => void submit(event)}>
       <label>
@@ -358,6 +422,7 @@ export function QuickAddDialog({
             tagChannel as TokenChannel<unknown>,
             listChannel as TokenChannel<unknown>,
             priorityChannel as TokenChannel<unknown>,
+            dateChannel as TokenChannel<unknown>,
           ]}
           showChips={false}
           autoFocus
