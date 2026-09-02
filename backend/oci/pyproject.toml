@@ -12,7 +12,7 @@ license = "MIT"
 authors = [{ name = "Piwero" }]
 dependencies = [
     "fastapi>=0.141.1",
-    "uvicorn[standard]>=0.52.1",
+    "uvicorn[standard]>=0.52.4",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.15.0",
     "sqlalchemy[asyncio]>=2.0.52",
