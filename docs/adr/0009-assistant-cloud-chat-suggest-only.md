@@ -96,9 +96,10 @@ does not.
 Each turn sends a snapshot of the current week — today and the next seven
 days: tasks with their ids, titles, dates and priorities; today's Events;
 List and Tag names; habits. Every Suggestion must target an id that appeared
-in the snapshot just sent. A Suggestion referencing anything else is not
-rejected as suspicious; it is unrepresentable, because there is no other
-identifier in play.
+in the snapshot just sent, or was returned by a read-only tool call this
+same turn (see below) — those are the only two identifiers ever in play. A
+Suggestion referencing anything else is not rejected as suspicious; it is
+unrepresentable.
 
 This makes the failure mode that would otherwise dominate — a confident
 model rewriting a task the user never mentioned, because it invented a
@@ -111,7 +112,11 @@ tools (fewer than six) for questions the week's window cannot answer, and
 a cap of three tool iterations per turn. Reaching the cap returns whatever
 Suggestions exist rather than failing the turn, following ADR 0005's rule
 that Assist only ever adds value and never subtracts it. A well-formed
-turn is expected to use no tools at all.
+turn is expected to use no tools at all. A task id a tool call returns
+joins the writable allow-list the snapshot's own ids populate, exactly as
+the snapshot's: every id a tool can ever hand back came from a real,
+read-only query run this turn, never from the model, so widening the
+allow-list this way cannot be gamed into inventing an id (issue #189).
 
 Task `description` bodies and Check Item text are never sent. A planner
 needs to know what and when; the substance of a task is where the

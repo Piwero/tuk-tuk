@@ -24,6 +24,7 @@ from app.assistant_chat import (
     build_messages,
     fallback_turn,
     request_assistant_turn,
+    tool_cap_turn,
     validate_turn,
 )
 from app.assistant_provider import assistant_available
@@ -194,7 +195,9 @@ async def assistant_chat(
     messages = build_messages(
         app_settings.assistant_planning_preferences, snapshot, payload.transcript
     )
-    raw = await request_assistant_turn(base_url, model, api_key, messages)
+    raw, extra_task_ids, hit_tool_cap = await request_assistant_turn(
+        base_url, model, api_key, messages, session, payload.local_date
+    )
     if raw is None:
-        return fallback_turn()
-    return validate_turn(raw, snapshot)
+        return tool_cap_turn() if hit_tool_cap else fallback_turn()
+    return validate_turn(raw, snapshot, extra_task_ids)
