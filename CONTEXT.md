@@ -86,7 +86,7 @@ The Assist feature that plans a day in conversation: the user describes what the
 _Avoid_: Chat, bot, agent (it takes no actions), Copilot
 
 **Suggestion**:
-One suggestion produced by Assist (a parsed task draft, a proposed order, a proposed date, a proposed time block). Ephemeral: computed on demand, shown inline, and gone once confirmed or discarded — never stored. A Suggestion names a change, never performs one: the Assistant's Suggestions in particular are structured output, never tool calls the model could invoke, which is what makes "Assist takes no actions" an architectural property rather than a promise (ADR 0009).
+One suggestion produced by Assist (a parsed task draft, a proposed order, a proposed date, a proposed time block). Ephemeral: computed on demand, shown inline, and gone once confirmed or discarded — never stored. A Suggestion names a change, never performs one: the Assistant's Suggestions in particular arrive only as structured output, never as a tool call — the model may call a small set of read-only drill-down tools (fewer than six, capped at three iterations per turn), but there is no write tool of any kind, which is what makes "Assist takes no actions" an architectural property rather than a promise (ADR 0009).
 _Avoid_: Recommendation, action (Assist takes no actions), Proposal (the same concept under a second name)
 
 **Assisted Capture**:

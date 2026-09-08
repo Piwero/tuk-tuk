@@ -19,19 +19,43 @@ rather than merely rejected. `set_list`/`add_tags` resolve only against
 List/Tag names the snapshot carried, through the same `resolve_name_phrase`
 discipline Assisted Capture uses (issue #45) — the Assistant brings no List
 or Tag into being, exactly as an unpicked Quick-Add token does not.
+
+**Read-only drill-down tools (issue #189).** Beyond the snapshot, the model
+may call two read-only tools (`find_tasks`, `habit_status`) for questions
+the week's window can't answer — capped at `_TOOL_ITERATION_CAP` round
+trips per turn (ADR 0009). No tool ever writes; a tool call is answered by
+`_execute_tool_call` with a plain result dict, never an exception, and
+never anything the caller applies directly. Reaching the cap without a
+final answer degrades to the fallback turn, same as an unreachable
+provider — never a 5xx.
+
+**Explicit decision (issue #189): tool-surfaced task ids join the writable
+allow-list.** `find_tasks` can return a task id from outside the snapshot
+(e.g. an overdue task from last week); `validate_turn` unions those ids
+into the same set snapshot ids populate, rather than withholding them. This
+still can't be gamed into inventing an id — every id `find_tasks` returns
+came from a real, read-only database query this turn, never from the
+model — and withholding them would silently break the feature's own
+example use ("what did I drop last week?" → propose rescheduling it).
 """
 
 import json
 import logging
-from datetime import UTC, datetime, tzinfo
+import time
+from datetime import UTC, date, datetime, tzinfo
 from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant_snapshot import WeekSnapshot
+from app.habit_stats import current_streak
+from app.models import CheckIn, Habit, Task, TaskList
 from app.name_phrase import resolve_name_phrase
+from app.routers.v1.tasks import in_range_window
 from app.schemas import Priority
 
 logger = logging.getLogger(__name__)
@@ -47,8 +71,22 @@ _TIMEOUT_SECONDS = 30.0
 # this list — it is always sent in addition to it.
 _TRANSCRIPT_MESSAGE_CAP = 20
 
+# ADR 0009: "a cap of three tool iterations per turn... reaching the cap
+# returns whatever Suggestions exist rather than failing the turn." A
+# well-formed turn is expected to need none of them.
+_TOOL_ITERATION_CAP = 3
+
 _FALLBACK_MESSAGE = (
     "Sorry, I couldn't reach the planning assistant just now. Please try again in a moment."
+)
+
+# Distinct from _FALLBACK_MESSAGE: reaching the tool-iteration cap is not a
+# provider failure — the provider answered every time, it just never
+# stopped asking for tools. Telling the owner "couldn't reach" for that
+# would misreport what actually happened (issue #189).
+_TOOL_CAP_MESSAGE = (
+    "I wasn't able to finish looking into that within the usual number of steps. "
+    "Please try asking again, maybe with a narrower question."
 )
 
 _SUGGESTION_TYPES = (
@@ -109,6 +147,65 @@ _RESPONSE_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+# Read-only drill-down tools (ADR 0009; issue #189) — fewer than six, for
+# questions the week's snapshot can't answer. Every tool call is answered
+# by `_execute_tool_call` with a plain read; none of them can write, and
+# none of them is a Suggestion — the model still proposes changes only
+# through `suggestions[]`.
+_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "find_tasks",
+            "description": (
+                "Search tasks outside the current week's snapshot — e.g. "
+                "unfinished tasks from last week, or tasks in a past date "
+                "range. Returns tasks the same shape as the snapshot, so "
+                "any id returned can be used in a suggestion."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "range_start": {
+                        "type": "string",
+                        "description": "Inclusive start date (YYYY-MM-DD) of the search window.",
+                    },
+                    "range_end": {
+                        "type": "string",
+                        "description": "Inclusive end date (YYYY-MM-DD) of the search window.",
+                    },
+                    "completed": {
+                        "type": ["boolean", "null"],
+                        "description": "Filter by completion state; omit/null for either.",
+                    },
+                },
+                "required": ["range_start", "range_end", "completed"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "habit_status",
+            "description": (
+                "The current streak for one habit by name (a name from the "
+                "snapshot's 'habits' list) — for questions like 'which "
+                "habits am I behind on?' the snapshot's name-only list can't "
+                "answer on its own."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "habit_name": {"type": "string", "description": "An exact habit name."},
+                },
+                "required": ["habit_name"],
+                "additionalProperties": False,
+            },
+        },
+    },
+]
+
 _SYSTEM_PROMPT_TEMPLATE = """You are the Assistant inside tuk-tuk, a task manager. The owner \
 describes their day or week in prose; you reply with a short, friendly \
 plan in the same language they wrote in (English or Spanish — never \
@@ -126,10 +223,18 @@ written every turn:
 
 Planning preferences: {planning_preferences}
 
-You may only reference a task by the "id" it already has in the snapshot \
-below — never invent an id, and never reference a task that isn't listed. \
+You may only reference a task by an "id" that already appeared this turn — \
+either in the snapshot below, or in the result of a tool call you made — \
+never invent an id, and never reference a task that isn't listed. \
 You may only reference a List or Tag by a name that already appears in \
 "list_names" / "tag_names" below — never invent a new List or Tag name.
+
+Two read-only tools are available for questions this week's snapshot \
+can't answer: find_tasks (tasks outside the current week, e.g. last \
+week's unfinished tasks) and habit_status (one habit's current streak). \
+Use them only when the owner's question needs them — most turns need \
+neither. Every tool result you use to answer honestly reflects reality; \
+never guess an answer a tool would give.
 
 Today is {local_date} in the {time_zone} timezone. Snapshot of today and \
 the next seven days:
@@ -275,17 +380,11 @@ def build_messages(
     return messages
 
 
-async def request_assistant_turn(
-    base_url: str, model: str, api_key: str, messages: list[dict[str, str]]
-) -> dict[str, Any] | None:
-    """One `/chat/completions` call against an OpenAI-compatible provider.
-    Returns the parsed `{message, suggestions}` object, or None on any
-    failure — unreachable, non-200, or a response that isn't the JSON
-    object asked for — so the caller always has an apologetic fallback to
-    degrade to (never raises, per ADR 0009 mirroring `app.assist`)."""
-    payload = {
+def _completion_payload(model: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
         "model": model,
         "messages": messages,
+        "tools": _TOOLS,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -295,26 +394,205 @@ async def request_assistant_turn(
             },
         },
     }
+
+
+async def _post_completion(
+    client: httpx.AsyncClient, api_key: str, payload: dict[str, Any], remaining_seconds: float
+) -> dict[str, Any] | None:
+    """One `/chat/completions` call, given the time left in the turn's
+    budget. Returns the raw `message` object, or None on any failure —
+    no time left, unreachable, non-200, or an unparseable body — so the
+    caller always has an apologetic fallback to degrade to (never raises,
+    per ADR 0009 mirroring `app.assist`)."""
+    if remaining_seconds <= 0:
+        return None
     try:
-        async with httpx.AsyncClient(base_url=base_url, timeout=_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                "/chat/completions",
-                json=payload,
-                headers={"Authorization": f"Bearer {api_key}"},
-            )
+        response = await client.post(
+            "/chat/completions",
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=remaining_seconds,
+        )
     except httpx.HTTPError:
         return None
     if response.status_code != 200:
         return None
     try:
         body = response.json()
-        content = body["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
+        message = body["choices"][0]["message"]
     except (ValueError, KeyError, TypeError, IndexError):
         return None
-    if not isinstance(parsed, dict):
+    return message if isinstance(message, dict) else None
+
+
+def _parse_date(value: object) -> date | None:
+    if not isinstance(value, str):
         return None
-    return parsed
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+async def _find_tasks(
+    session: AsyncSession, arguments: dict[str, Any]
+) -> tuple[dict[str, Any], set[int]]:
+    """The `find_tasks` tool: tasks whose scheduled window intersects
+    [range_start, range_end], outside the week the snapshot already
+    covers. Reuses `in_range_window`, the same predicate the calendar's
+    own range query runs in Python, rather than a second date dialect."""
+    range_start = _parse_date(arguments.get("range_start"))
+    range_end = _parse_date(arguments.get("range_end"))
+    if range_start is None or range_end is None or range_start > range_end:
+        return {
+            "error": "range_start and range_end must be YYYY-MM-DD dates, start on or before end"
+        }, set()
+    completed = arguments.get("completed")
+    list_names = {row.id: row.name for row in await session.scalars(select(TaskList))}
+    rows = await session.scalars(select(Task).order_by(Task.sort_order, Task.id))
+    matches = [
+        task
+        for task in rows
+        if in_range_window(task, range_start, range_end)
+        and (completed is None or task.completed == bool(completed))
+    ]
+    # Breadth here costs tokens the same way the snapshot's does — capped
+    # well below what a real week could return, per ADR 0009's "breadth in
+    # a tool loop costs reliability."
+    matches = matches[:20]
+    tasks = [
+        {
+            "id": task.id,
+            "title": task.title,
+            "start_date": task.start_date.isoformat() if task.start_date is not None else None,
+            "due_date": task.due_date.isoformat() if task.due_date is not None else None,
+            "is_all_day": task.is_all_day,
+            "priority": task.priority,
+            "list_name": list_names.get(task.list_id, ""),
+            "tag_names": [tag.name for tag in task.tags],
+            "completed": task.completed,
+        }
+        for task in matches
+    ]
+    return {"tasks": tasks}, {task.id for task in matches}
+
+
+async def _habit_status(
+    session: AsyncSession, arguments: dict[str, Any], local_date: date
+) -> tuple[dict[str, Any], set[int]]:
+    """The `habit_status` tool: one habit's current streak, judged as of
+    the caller's own local day — never server time, same discipline as the
+    snapshot itself."""
+    habit_name = arguments.get("habit_name")
+    if not isinstance(habit_name, str) or not habit_name.strip():
+        return {"error": "habit_name is required"}, set()
+    habit = await session.scalar(select(Habit).where(Habit.name == habit_name, ~Habit.is_archived))
+    if habit is None:
+        return {"error": f"no habit named {habit_name!r}"}, set()
+    checked = {
+        row.date
+        for row in await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit.id))
+    }
+    streak = current_streak(habit.frequency, checked, local_date)
+    return {"habit_name": habit.name, "current_streak": streak}, set()
+
+
+async def _execute_tool_call(
+    call: dict[str, Any], session: AsyncSession, local_date: date
+) -> tuple[dict[str, Any], set[int]]:
+    """Runs one read-only tool call, never raising: malformed arguments, an
+    unknown tool name, or a bad query all degrade to an `{"error": ...}`
+    result the model can react to conversationally, rather than failing
+    the whole turn (issue #189: tool errors degrade into the turn)."""
+    function = call.get("function")
+    name = function.get("name") if isinstance(function, dict) else None
+    raw_arguments = function.get("arguments") if isinstance(function, dict) else None
+    try:
+        arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else {}
+    except ValueError:
+        return {"error": "invalid tool arguments"}, set()
+    if not isinstance(arguments, dict):
+        return {"error": "invalid tool arguments"}, set()
+    if name == "find_tasks":
+        return await _find_tasks(session, arguments)
+    if name == "habit_status":
+        return await _habit_status(session, arguments, local_date)
+    return {"error": f"unknown tool {name!r}"}, set()
+
+
+async def request_assistant_turn(
+    base_url: str,
+    model: str,
+    api_key: str,
+    messages: list[dict[str, Any]],
+    session: AsyncSession,
+    local_date: date,
+) -> tuple[dict[str, Any] | None, set[int], bool]:
+    """The whole turn against an OpenAI-compatible provider, including any
+    read-only tool round trips (ADR 0009; issue #189). Returns the parsed
+    final `{message, suggestions}` object, every task id surfaced by a tool
+    call this turn (the writable allow-list `validate_turn` unions into the
+    snapshot's own ids — see the module docstring's explicit decision), and
+    whether the tool-iteration cap was reached without a final answer.
+
+    The cap-hit flag matters because it is a *different* failure than an
+    unreachable provider — the provider answered every time, it just never
+    stopped asking for tools — and the caller reports it with a distinct,
+    honest message (`_TOOL_CAP_MESSAGE`) rather than the generic
+    "couldn't reach" fallback.
+
+    One deadline covers the whole turn, tool calls included: each
+    `/chat/completions` call gets whatever's left of `_TIMEOUT_SECONDS`,
+    not a fresh budget of its own. At most `_TOOL_ITERATION_CAP` tool
+    round trips run; reaching the cap without a final answer still
+    degrades non-fatally — no Suggestions, never a 5xx — per ADR 0009's
+    "reaching the cap returns whatever Suggestions exist rather than
+    failing the turn" (which is none, since Suggestions only ever arrive
+    in a final answer)."""
+    deadline = time.monotonic() + _TIMEOUT_SECONDS
+    extra_task_ids: set[int] = set()
+    messages = list(messages)
+    async with httpx.AsyncClient(base_url=base_url, timeout=_TIMEOUT_SECONDS) as client:
+        for iteration in range(_TOOL_ITERATION_CAP + 1):
+            payload = _completion_payload(model, messages)
+            message = await _post_completion(client, api_key, payload, deadline - time.monotonic())
+            if message is None:
+                return None, extra_task_ids, False
+
+            tool_calls = message.get("tool_calls")
+            if not tool_calls or not isinstance(tool_calls, list):
+                content = message.get("content")
+                try:
+                    parsed = json.loads(content) if isinstance(content, str) else None
+                except ValueError:
+                    return None, extra_task_ids, False
+                if not isinstance(parsed, dict):
+                    return None, extra_task_ids, False
+                return parsed, extra_task_ids, False
+
+            if iteration >= _TOOL_ITERATION_CAP:
+                # The cap is reached and the model still wants to call a
+                # tool rather than answer: no further tool round trips run.
+                return None, extra_task_ids, True
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": message.get("content"),
+                    "tool_calls": tool_calls,
+                }
+            )
+            for call in tool_calls:
+                result, ids = await _execute_tool_call(call, session, local_date)
+                extra_task_ids |= ids
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.get("id") if isinstance(call, dict) else None,
+                        "content": json.dumps(result),
+                    }
+                )
+    return None, extra_task_ids, False  # pragma: no cover - loop always returns above
 
 
 def _coerce_datetime(value: object) -> datetime | None:
@@ -526,8 +804,13 @@ def _build_suggestion(raw: object, snapshot: WeekSnapshot, task_ids: set[int]) -
     return None
 
 
-def validate_turn(raw: dict[str, Any], snapshot: WeekSnapshot) -> AssistantChatTurn:
-    """Validates one provider response against the snapshot just sent.
+def validate_turn(
+    raw: dict[str, Any], snapshot: WeekSnapshot, extra_task_ids: set[int] | None = None
+) -> AssistantChatTurn:
+    """Validates one provider response against the snapshot just sent, plus
+    any task ids a read-only tool call surfaced this same turn
+    (`extra_task_ids` — issue #189's explicit decision that tool-surfaced
+    ids join the writable allow-list, documented in the module docstring).
     Never raises: an unparseable shape degrades to the apologetic fallback
     message with no Suggestions, exactly like an unreachable provider."""
     message = raw.get("message")
@@ -538,7 +821,7 @@ def validate_turn(raw: dict[str, Any], snapshot: WeekSnapshot) -> AssistantChatT
     if not isinstance(raw_suggestions, list):
         return AssistantChatTurn(message=message, suggestions=[], discarded_count=0)
 
-    task_ids = {task.id for task in snapshot.tasks}
+    task_ids = {task.id for task in snapshot.tasks} | (extra_task_ids or set())
     valid: list[Suggestion] = []
     discarded = 0
     for item in raw_suggestions:
@@ -552,3 +835,11 @@ def validate_turn(raw: dict[str, Any], snapshot: WeekSnapshot) -> AssistantChatT
 
 def fallback_turn() -> AssistantChatTurn:
     return AssistantChatTurn(message=_FALLBACK_MESSAGE, suggestions=[], discarded_count=0)
+
+
+def tool_cap_turn() -> AssistantChatTurn:
+    """The turn shown when `request_assistant_turn` hits the tool-iteration
+    cap without a final answer (issue #189) — distinct from `fallback_turn`
+    because this is not a provider failure, and telling the owner
+    "couldn't reach" would misreport what happened."""
+    return AssistantChatTurn(message=_TOOL_CAP_MESSAGE, suggestions=[], discarded_count=0)
