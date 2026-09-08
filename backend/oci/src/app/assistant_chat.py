@@ -76,6 +76,11 @@ _TRANSCRIPT_MESSAGE_CAP = 20
 # well-formed turn is expected to need none of them.
 _TOOL_ITERATION_CAP = 3
 
+# Provider error bodies are logged verbatim so a rejected payload names
+# itself, but truncated: a provider is free to echo the whole request back,
+# and the request carries the week's snapshot.
+_ERROR_BODY_LOG_LIMIT = 500
+
 _FALLBACK_MESSAGE = (
     "Sorry, I couldn't reach the planning assistant just now. Please try again in a moment."
 )
@@ -403,26 +408,72 @@ async def _post_completion(
     budget. Returns the raw `message` object, or None on any failure —
     no time left, unreachable, non-200, or an unparseable body — so the
     caller always has an apologetic fallback to degrade to (never raises,
-    per ADR 0009 mirroring `app.assist`)."""
+    per ADR 0009 mirroring `app.assist`).
+
+    Every degrade-to-None path logs why at WARNING. The turn is a 200 to
+    the caller either way, so without a log line a broken provider is
+    indistinguishable from a working one that had nothing to suggest —
+    which is exactly how a payload rejected by every request went
+    unnoticed until someone replayed it by hand.
+
+    Reasoning models split on `reasoning_effort`: some (gpt-5 class)
+    reject `tools` in this endpoint *unless* it is `"none"`, while
+    others (gpt-4o class) reject the argument as unrecognised. Neither
+    is knowable ahead of time from the model name, and ADR 0008 keeps
+    the model a free-text UI field, so the split is discovered rather
+    than configured: send the plain payload, and on a 400 that names
+    `reasoning_effort`, retry once with it set. One wasted round trip on
+    the affected models only, no new setting for an owner to get wrong."""
     if remaining_seconds <= 0:
+        logger.warning("assistant: no time left in the turn budget for a provider call")
+        return None
+    response = await _send_completion(client, api_key, payload, remaining_seconds)
+    if response is None:
+        return None
+    if response.status_code == 400 and "reasoning_effort" in response.text:
+        logger.warning(
+            "assistant: provider rejected the payload over reasoning_effort, retrying with "
+            "reasoning_effort=none: %s",
+            response.text[:_ERROR_BODY_LOG_LIMIT],
+        )
+        response = await _send_completion(
+            client, api_key, {**payload, "reasoning_effort": "none"}, remaining_seconds
+        )
+        if response is None:
+            return None
+    if response.status_code != 200:
+        logger.warning(
+            "assistant: provider returned %s: %s",
+            response.status_code,
+            response.text[:_ERROR_BODY_LOG_LIMIT],
+        )
         return None
     try:
-        response = await client.post(
+        body = response.json()
+        message = body["choices"][0]["message"]
+    except (ValueError, KeyError, TypeError, IndexError) as exc:
+        logger.warning("assistant: provider returned an unreadable 200 body: %r", exc)
+        return None
+    if not isinstance(message, dict):
+        logger.warning("assistant: provider returned a non-object message: %r", type(message))
+        return None
+    return message
+
+
+async def _send_completion(
+    client: httpx.AsyncClient, api_key: str, payload: dict[str, Any], remaining_seconds: float
+) -> httpx.Response | None:
+    """One HTTP round trip, or None when the provider is unreachable."""
+    try:
+        return await client.post(
             "/chat/completions",
             json=payload,
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=remaining_seconds,
         )
-    except httpx.HTTPError:
+    except httpx.HTTPError as exc:
+        logger.warning("assistant: provider unreachable: %r", exc)
         return None
-    if response.status_code != 200:
-        return None
-    try:
-        body = response.json()
-        message = body["choices"][0]["message"]
-    except (ValueError, KeyError, TypeError, IndexError):
-        return None
-    return message if isinstance(message, dict) else None
 
 
 def _parse_date(value: object) -> date | None:
@@ -565,14 +616,22 @@ async def request_assistant_turn(
                 try:
                     parsed = json.loads(content) if isinstance(content, str) else None
                 except ValueError:
+                    logger.warning("assistant: provider answered with non-JSON content")
                     return None, extra_task_ids, False
                 if not isinstance(parsed, dict):
+                    logger.warning(
+                        "assistant: provider answered with a non-object turn: %r", type(parsed)
+                    )
                     return None, extra_task_ids, False
                 return parsed, extra_task_ids, False
 
             if iteration >= _TOOL_ITERATION_CAP:
                 # The cap is reached and the model still wants to call a
                 # tool rather than answer: no further tool round trips run.
+                logger.warning(
+                    "assistant: reached the %s-iteration tool cap without a final answer",
+                    _TOOL_ITERATION_CAP,
+                )
                 return None, extra_task_ids, True
 
             messages.append(

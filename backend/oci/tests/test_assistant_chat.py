@@ -7,6 +7,7 @@ the transport.
 """
 
 import json
+import logging
 import socket
 import threading
 import time
@@ -237,6 +238,72 @@ class TestUnconfiguredAndUnreachable:
 
         assert body["suggestions"] == []
         assert body["discarded_count"] == 0
+
+    def test_a_provider_failure_is_logged_not_swallowed(
+        self,
+        database_url: str,
+        fake_clock: FakeClock,
+        stub_chat: StubChatProvider,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # The turn is a 200 either way, so the log line is the only thing
+        # that distinguishes a broken provider from a quiet one.
+        stub_chat.set_responses([(500, b'{"error": {"message": "upstream exploded"}}')])
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_chat.base_url)
+            with caplog.at_level(logging.WARNING, logger="app.assistant_chat"):
+                body = _chat(client)
+
+        assert body["suggestions"] == []
+        assert "500" in caplog.text
+        assert "upstream exploded" in caplog.text
+
+    def test_retries_once_when_the_provider_rejects_reasoning_effort(
+        self, database_url: str, fake_clock: FakeClock, stub_chat: StubChatProvider
+    ) -> None:
+        # gpt-5-class models reject `tools` in /chat/completions unless
+        # `reasoning_effort` is "none", while gpt-4o-class models reject
+        # the argument outright — so it is sent only after a 400 says so.
+        stub_chat.set_responses(
+            [
+                (
+                    400,
+                    json.dumps(
+                        {
+                            "error": {
+                                "message": (
+                                    "Function tools with reasoning_effort are not supported "
+                                    "for this model. Set reasoning_effort to 'none'."
+                                )
+                            }
+                        }
+                    ).encode(),
+                ),
+                (200, _chat_completion_body({"message": "Here's a plan.", "suggestions": []})),
+            ]
+        )
+
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_chat.base_url)
+            body = _chat(client)
+
+        assert body["message"] == "Here's a plan."
+        assert stub_chat.request_count == 2
+        assert "reasoning_effort" not in stub_chat.request_at(0)
+        assert stub_chat.request_at(1)["reasoning_effort"] == "none"
+
+    def test_no_reasoning_effort_retry_when_the_provider_is_happy(
+        self, database_url: str, fake_clock: FakeClock, stub_chat: StubChatProvider
+    ) -> None:
+        stub_chat.set_json_content({"message": "Here's a plan.", "suggestions": []})
+
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_chat.base_url)
+            body = _chat(client)
+
+        assert body["message"] == "Here's a plan."
+        assert stub_chat.request_count == 1
+        assert "reasoning_effort" not in stub_chat.request_at(0)
 
 
 class TestWellFormedSuggestions:
