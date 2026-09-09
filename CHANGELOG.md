@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.7.1](https://github.com/Piwero/tuk-tuk/compare/v2.7.0...v2.7.1) - 2026-09-09
+
+### Features
+
+- **assistant:** Read-only drill-down tools ([5c7969e](https://github.com/Piwero/tuk-tuk/commit/5c7969e95a477be08c01df95ba3b18fdc7fada6f))
+
+### Bug Fixes
+
+- **assistant:** Retry without reasoning_effort and log provider failures ([799bb49](https://github.com/Piwero/tuk-tuk/commit/799bb493b3ba6fcf2eec828e2ac9fe2853e836f4))
+
 ## [2.7.0](https://github.com/Piwero/tuk-tuk/compare/v2.6.2...v2.7.0) - 2026-09-02
 
 ### Features
