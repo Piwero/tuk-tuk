@@ -215,4 +215,86 @@ describe("Goals", () => {
       expect(api.goals.find((g) => g.title === "B")?.is_focused).toBe(true);
     });
   });
+
+  it("abandons a Goal in one click, keeping it visible under Abandoned", async () => {
+    const api = installFakeApi({ goals: [fakeGoal("Give up on this")] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Abandon Give up on this" }));
+
+    await waitFor(() => {
+      expect(api.goals.find((g) => g.title === "Give up on this")?.status).toBe("abandoned");
+    });
+    expect(
+      within(await screen.findByRole("list", { name: "Abandoned goals" })).getByText(
+        "Give up on this",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("groups Goals into Active, Closed and Abandoned sections", async () => {
+    const closedGoal = fakeGoal("Ship v1", {
+      status: "closed",
+      final_score: 0.5,
+      end_date: "2020-03-31",
+    });
+    const abandonedGoal = fakeGoal("Dropped", { status: "abandoned" });
+    installFakeApi({ goals: [fakeGoal("Ship v2"), closedGoal, abandonedGoal] });
+    render(<App />);
+    await openGoals();
+
+    expect(
+      within(await screen.findByRole("list", { name: "Goals" })).getByText("Ship v2"),
+    ).toBeInTheDocument();
+    expect(
+      within(await screen.findByRole("list", { name: "Closed goals" })).getByText("Ship v1"),
+    ).toBeInTheDocument();
+    expect(
+      within(await screen.findByRole("list", { name: "Abandoned goals" })).getByText("Dropped"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a closed Goal's frozen final score and an optional retro field", async () => {
+    const api = installFakeApi({
+      goals: [fakeGoal("Ship v1", { status: "closed", final_score: 0.5, end_date: "2020-03-31" })],
+    });
+    render(<App />);
+    await openGoals();
+
+    expect(screen.getByText("Final score: 50%")).toBeInTheDocument();
+
+    const retro = screen.getByLabelText("Retro for Ship v1");
+    fireEvent.change(retro, { target: { value: "Shipped late but shipped." } });
+    fireEvent.blur(retro);
+
+    await waitFor(() => {
+      expect(api.goals[0]?.retro).toBe("Shipped late but shipped.");
+    });
+  });
+
+  it("groups active Goals by window, this quarter separate from last", async () => {
+    const q1 = fakeGoal("Ship v1", { start_date: "2099-01-01", end_date: "2099-03-31" });
+    const q2 = fakeGoal("Ship v2", { start_date: "2099-04-01", end_date: "2099-06-30" });
+    installFakeApi({ goals: [q1, q2] });
+    render(<App />);
+    await openGoals();
+
+    const q1Section = await screen.findByRole("region", { name: "2099-01-01 – 2099-03-31" });
+    const q2Section = await screen.findByRole("region", { name: "2099-04-01 – 2099-06-30" });
+    expect(within(q1Section).getByText("Ship v1")).toBeInTheDocument();
+    expect(within(q2Section).getByText("Ship v2")).toBeInTheDocument();
+  });
+
+  it("does not show Focus or Abandon buttons for a closed Goal", async () => {
+    installFakeApi({
+      goals: [fakeGoal("Ship v1", { status: "closed", final_score: 0.5, end_date: "2020-03-31" })],
+    });
+    render(<App />);
+    await openGoals();
+
+    await screen.findByText("Ship v1");
+    expect(screen.queryByRole("button", { name: "Focus Ship v1" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Abandon Ship v1" })).not.toBeInTheDocument();
+  });
 });
