@@ -170,3 +170,262 @@ class TestUpdateAndDeleteGoal:
     def test_unknown_goal_is_404(self, client: TestClient) -> None:
         assert client.patch("/api/v1/goals/999", json={"title": "X"}).status_code == 404
         assert client.delete("/api/v1/goals/999").status_code == 404
+
+
+def make_key_result(client: TestClient, goal_id: int, name: str, **fields: object) -> dict:
+    response = client.post(f"/api/v1/goals/{goal_id}/key-results", json={"name": name, **fields})
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+class TestManualKeyResults:
+    def test_creating_a_key_result_returns_the_parent_goal(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+
+        body = make_key_result(
+            client, goal["id"], "Lines shipped", start_value=0, target_value=100, current_value=25
+        )
+
+        assert body["id"] == goal["id"]
+        assert len(body["key_results"]) == 1
+        kr = body["key_results"][0]
+        assert kr["name"] == "Lines shipped"
+        assert kr["source"] == "manual"
+        assert kr["current_value"] == 25
+        assert kr["ratio"] == 0.25
+        assert body["score"] == 0.25
+
+    def test_a_goal_with_no_key_results_has_no_score(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+
+        assert goal["key_results"] == []
+        assert goal["score"] is None
+
+    def test_score_is_the_unweighted_mean_of_ratios(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        make_key_result(client, goal["id"], "A", start_value=0, target_value=10, current_value=10)
+        body = make_key_result(
+            client, goal["id"], "B", start_value=0, target_value=10, current_value=0
+        )
+
+        assert body["score"] == 0.5
+
+    def test_descending_key_result(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+
+        body = make_key_result(
+            client, goal["id"], "Bugs open", start_value=20, target_value=0, current_value=5
+        )
+
+        assert body["key_results"][0]["ratio"] == 0.75
+
+    def test_overshoot_is_clamped_to_one(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+
+        body = make_key_result(
+            client, goal["id"], "Overachieved", start_value=0, target_value=10, current_value=30
+        )
+
+        assert body["key_results"][0]["ratio"] == 1.0
+
+    def test_target_equal_start_is_guarded(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+
+        not_reached = make_key_result(
+            client, goal["id"], "Flat", start_value=5, target_value=5, current_value=0
+        )
+        assert not_reached["key_results"][0]["ratio"] == 0.0
+
+        reached = make_key_result(
+            client, goal["id"], "Flat, met", start_value=5, target_value=5, current_value=5
+        )
+        assert reached["key_results"][1]["ratio"] == 1.0
+
+    def test_editing_target_updates_ratio(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(
+            client, goal["id"], "A", start_value=0, target_value=10, current_value=5
+        )["key_results"][0]
+
+        response = client.patch(
+            f"/api/v1/goals/{goal['id']}/key-results/{kr['id']}", json={"target_value": 5}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["key_results"][0]["ratio"] == 1.0
+
+    def test_manual_current_value_round_trips(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(
+            client, goal["id"], "A", start_value=0, target_value=10, current_value=0
+        )["key_results"][0]
+
+        response = client.patch(
+            f"/api/v1/goals/{goal['id']}/key-results/{kr['id']}", json={"current_value": 7}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["key_results"][0]["current_value"] == 7
+
+    def test_deleting_a_key_result_removes_it_from_the_goal(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(client, goal["id"], "A")["key_results"][0]
+
+        response = client.delete(f"/api/v1/goals/{goal['id']}/key-results/{kr['id']}")
+
+        assert response.status_code == 204
+        assert client.get(f"/api/v1/goals/{goal['id']}").json()["key_results"] == []
+
+    def test_reordering_key_results(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        first = make_key_result(client, goal["id"], "First")["key_results"][0]
+        second_body = make_key_result(client, goal["id"], "Second")
+        second = second_body["key_results"][1]
+        assert [kr["name"] for kr in second_body["key_results"]] == ["First", "Second"]
+
+        response = client.patch(
+            f"/api/v1/goals/{goal['id']}/key-results/{second['id']}",
+            json={"sort_order": first["sort_order"] - 1},
+        )
+
+        assert [kr["name"] for kr in response.json()["key_results"]] == ["Second", "First"]
+
+    def test_unknown_key_result_is_404(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+
+        assert (
+            client.patch(
+                f"/api/v1/goals/{goal['id']}/key-results/999", json={"name": "X"}
+            ).status_code
+            == 404
+        )
+        assert client.delete(f"/api/v1/goals/{goal['id']}/key-results/999").status_code == 404
+
+
+class TestHabitSourcedKeyResults:
+    def test_value_sums_check_ins_within_the_goal_window(self, client: TestClient) -> None:
+        habit = client.post("/api/v1/habits", json={"name": "Meditate"}).json()
+        goal = make_goal(client, "Ship v2", start_date="2026-01-01", end_date="2026-01-31")
+        client.put(f"/api/v1/habits/{habit['id']}/check-ins/2026-01-05", json={"value": 1})
+        client.put(f"/api/v1/habits/{habit['id']}/check-ins/2026-01-10", json={"value": 1})
+        # Outside the window entirely, so must not count.
+        client.put(f"/api/v1/habits/{habit['id']}/check-ins/2025-12-31", json={"value": 1})
+
+        body = make_key_result(
+            client,
+            goal["id"],
+            "Meditation days",
+            source="habit_checkins",
+            source_habit_id=habit["id"],
+            start_value=0,
+            target_value=10,
+        )
+
+        kr = body["key_results"][0]
+        assert kr["current_value"] == 2
+        assert kr["source"] == "habit_checkins"
+
+    def test_a_backfilled_check_in_is_reflected_on_the_next_read(self, client: TestClient) -> None:
+        habit = client.post("/api/v1/habits", json={"name": "Meditate"}).json()
+        goal = make_goal(client, "Ship v2", start_date="2026-01-01", end_date="2026-01-31")
+        kr = make_key_result(
+            client,
+            goal["id"],
+            "Meditation days",
+            source="habit_checkins",
+            source_habit_id=habit["id"],
+            target_value=10,
+        )["key_results"][0]
+        assert kr["current_value"] == 0
+
+        client.put(f"/api/v1/habits/{habit['id']}/check-ins/2026-01-15", json={"value": 1})
+
+        refreshed = client.get(f"/api/v1/goals/{goal['id']}").json()["key_results"][0]
+        assert refreshed["current_value"] == 1
+
+    def test_writing_to_an_automatic_value_is_rejected(self, client: TestClient) -> None:
+        habit = client.post("/api/v1/habits", json={"name": "Meditate"}).json()
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(
+            client,
+            goal["id"],
+            "Meditation days",
+            source="habit_checkins",
+            source_habit_id=habit["id"],
+        )["key_results"][0]
+
+        response = client.patch(
+            f"/api/v1/goals/{goal['id']}/key-results/{kr['id']}", json={"current_value": 5}
+        )
+
+        assert response.status_code == 409
+
+    def test_a_deleted_source_habit_degrades_the_key_result(self, client: TestClient) -> None:
+        habit = client.post("/api/v1/habits", json={"name": "Meditate"}).json()
+        goal = make_goal(client, "Ship v2", start_date="2026-01-01", end_date="2026-01-31")
+        client.put(f"/api/v1/habits/{habit['id']}/check-ins/2026-01-05", json={"value": 1})
+        kr = make_key_result(
+            client,
+            goal["id"],
+            "Meditation days",
+            source="habit_checkins",
+            source_habit_id=habit["id"],
+            target_value=10,
+        )["key_results"][0]
+        assert kr["current_value"] == 1
+
+        response = client.delete(f"/api/v1/habits/{habit['id']}")
+        assert response.status_code == 204
+
+        refreshed = client.get(f"/api/v1/goals/{goal['id']}").json()
+        assert refreshed["key_results"][0]["current_value"] == 0
+        assert refreshed["key_results"][0]["source_habit_id"] is None
+
+
+class TestTaskSourcedKeyResults:
+    def test_completed_attached_tasks_are_counted(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(client, goal["id"], "Tasks done", source="task_count", target_value=3)[
+            "key_results"
+        ][0]
+        task_a = client.post("/api/v1/tasks", json={"title": "A", "key_result_id": kr["id"]}).json()
+        client.post("/api/v1/tasks", json={"title": "B", "key_result_id": kr["id"]}).json()
+
+        refreshed = client.get(f"/api/v1/goals/{goal['id']}").json()["key_results"][0]
+        assert refreshed["current_value"] == 0
+
+        client.patch(f"/api/v1/tasks/{task_a['id']}", json={"completed": True})
+
+        refreshed = client.get(f"/api/v1/goals/{goal['id']}").json()["key_results"][0]
+        assert refreshed["current_value"] == 1
+
+    def test_deleting_a_counted_task_reduces_the_count(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(client, goal["id"], "Tasks done", source="task_count", target_value=3)[
+            "key_results"
+        ][0]
+        task = client.post("/api/v1/tasks", json={"title": "A", "key_result_id": kr["id"]}).json()
+        client.patch(f"/api/v1/tasks/{task['id']}", json={"completed": True})
+        assert (
+            client.get(f"/api/v1/goals/{goal['id']}").json()["key_results"][0]["current_value"] == 1
+        )
+
+        client.delete(f"/api/v1/tasks/{task['id']}")
+
+        refreshed = client.get(f"/api/v1/goals/{goal['id']}").json()["key_results"][0]
+        assert refreshed["current_value"] == 0
+
+    def test_a_task_can_be_detached(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(client, goal["id"], "Tasks done", source="task_count", target_value=3)[
+            "key_results"
+        ][0]
+        task = client.post("/api/v1/tasks", json={"title": "A", "key_result_id": kr["id"]}).json()
+        client.patch(f"/api/v1/tasks/{task['id']}", json={"completed": True})
+
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json={"key_result_id": None})
+
+        assert response.status_code == 200
+        assert response.json()["key_result_id"] is None
+        refreshed = client.get(f"/api/v1/goals/{goal['id']}").json()["key_results"][0]
+        assert refreshed["current_value"] == 0

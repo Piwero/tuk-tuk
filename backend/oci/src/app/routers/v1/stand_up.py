@@ -14,9 +14,11 @@ from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import NotFoundError
+from app.goal_read import build_goal_read
 from app.models import (
     DEFAULT_OWNER,
     CompletedOccurrence,
+    Goal,
     SprintGoal,
     StandupBullet,
     StandupEntry,
@@ -24,6 +26,7 @@ from app.models import (
 )
 from app.routers.v1.tasks import in_smart_view
 from app.schemas import (
+    GoalRead,
     Page,
     SprintGoalRead,
     SprintGoalUpdate,
@@ -69,16 +72,21 @@ async def get_or_create_sprint_goal(session: SessionDep) -> SprintGoal:
 async def get_or_create_entry(day: date, session: SessionDep) -> StandupEntry:
     entry = await get_entry_by_date(day, session)
     if entry is None:
-        goal = await get_sprint_goal(session)
+        # Sprint Goal is superseded by the focused Goal (ADR 0012, issue
+        # #238) — new Entries no longer snapshot it. Existing Entries keep
+        # whatever they were created with, unbackfilled.
         # bullets defaults to [] here without a query, since the relationship
         # is touched on a still-transient object — but it must be touched,
         # or a post-commit read of a freshly-flushed, never-queried Entry
         # would trigger the async "selectin" loader outside of await.
-        entry = StandupEntry(
-            date=day, bullets=[], sprint_goal_snapshot=goal.text if goal is not None else ""
-        )
+        entry = StandupEntry(date=day, bullets=[], sprint_goal_snapshot="")
         session.add(entry)
     return entry
+
+
+async def get_focused_goal(session: SessionDep) -> Goal | None:
+    result = await session.execute(select(Goal).where(Goal.is_focused.is_(True)))
+    return result.scalar_one_or_none()
 
 
 def get_bullet_or_404(entry: StandupEntry, bullet_id: int) -> StandupBullet:
@@ -147,6 +155,18 @@ async def read_yesterday_suggestions(
             seen.add(title)
             deduped.append(title)
     return [StandupYesterdaySuggestion(title=title) for title in deduped]
+
+
+@router.get("/focused-goal")
+async def read_focused_goal(session: SessionDep) -> GoalRead | None:
+    """The Goal Stand-up shows (ADR 0012, issue #238): only the focused one,
+    with its Key Result progress — never every active Goal, and never null
+    to mean "no Key Results" (that's an empty key_results list with a null
+    score instead)."""
+    goal = await get_focused_goal(session)
+    if goal is None:
+        return None
+    return await build_goal_read(goal, session)
 
 
 @router.get("/sprint-goal")

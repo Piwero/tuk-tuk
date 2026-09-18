@@ -201,6 +201,13 @@ class Task(Base):
         ForeignKey("google_calendars.id", ondelete="SET NULL"), default=None
     )
     source_google_event_id: Mapped[str | None] = mapped_column(String(255), default=None)
+    # The Key Result this Task's completion counts toward, if any (ADR 0012,
+    # issue #236). A nullable FK, not a join table: a Task serves at most
+    # one outcome. SET NULL on Key Result deletion — deleting a Key Result
+    # never costs the user the Task.
+    key_result_id: Mapped[int | None] = mapped_column(
+        ForeignKey("key_results.id", ondelete="SET NULL"), index=True, default=None
+    )
 
     task_list: Mapped[TaskList] = relationship(back_populates="tasks")
     # Check Items always travel with their Task (composition), so load them
@@ -316,9 +323,8 @@ class CheckIn(Base):
 class Goal(Base):
     """A Goal — a durable outcome with a window (ADR 0012). OKR spine (title
     is the Wish, description the Outcome) with WOOP's obstacle/if_then_plan
-    on top, both nullable so a Goal is creatable in seconds. Key Results are
-    a later slice; this ships with none. Goals do not nest and there is no
-    Theme entity.
+    on top, both nullable so a Goal is creatable in seconds. Goals do not
+    nest and there is no Theme entity.
     """
 
     __tablename__ = "goals"
@@ -328,14 +334,60 @@ class Goal(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     obstacle: Mapped[str | None] = mapped_column(Text, default=None)
     if_then_plan: Mapped[str | None] = mapped_column(Text, default=None)
-    start_date: Mapped[date] = mapped_column(Date)
-    end_date: Mapped[date] = mapped_column(Date)
+    # Nullable only for the Sprint Goal seed migration's carried-over Goal
+    # (ADR 0012, issue #238): "no window". Every user-created Goal still
+    # gets a window — the router fills in the current quarter by default.
+    start_date: Mapped[date | None] = mapped_column(Date, default=None)
+    end_date: Mapped[date | None] = mapped_column(Date, default=None)
     status: Mapped[str] = mapped_column(String(9), default="active")
     is_focused: Mapped[bool] = mapped_column(default=False)
     final_score: Mapped[float | None] = mapped_column(default=None)
     retro: Mapped[str | None] = mapped_column(Text, default=None)
     owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    # Key Results always travel with their Goal (composition), so load them
+    # eagerly — async lazy loading would raise on serialization anyway.
+    key_results: Mapped[list["KeyResult"]] = relationship(
+        back_populates="goal",
+        cascade="all, delete-orphan",
+        order_by="KeyResult.sort_order, KeyResult.id",
+        lazy="selectin",
+    )
+
+
+class KeyResult(Base):
+    """A Key Result — one measurable number belonging to a Goal (ADR 0012).
+    `source` is "manual" (typed in, `current_value` is a stored column),
+    "habit_checkins" (summed from the linked Habit's Check-ins inside the
+    Goal's window, computed on read), or "task_count" (count of completed
+    Tasks linking to this Key Result, computed on read). `current_value` is
+    only meaningful/writable for "manual" — automatic sources reject writes
+    to it with a 409 and compute the value in the read path instead.
+
+    Composition under a Goal (deleted with it), so no owner column —
+    ownership flows through the parent Goal.
+    """
+
+    __tablename__ = "key_results"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    source: Mapped[str] = mapped_column(String(16), default="manual")
+    start_value: Mapped[float] = mapped_column(default=0.0)
+    target_value: Mapped[float] = mapped_column(default=1.0)
+    current_value: Mapped[float] = mapped_column(default=0.0)
+    # Set only when source == "habit_checkins". SET NULL on Habit deletion:
+    # the Key Result degrades to counting nothing rather than breaking the
+    # Goal (ADR 0012).
+    source_habit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("habits.id", ondelete="SET NULL"), index=True, default=None
+    )
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    goal: Mapped[Goal] = relationship(back_populates="key_results")
 
 
 class FocusSession(Base):

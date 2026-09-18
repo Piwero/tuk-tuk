@@ -2,7 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeStandupEntry, fakeTask, installFakeApi } from "./test/fakeApi";
+import {
+  fakeGoal,
+  fakeKeyResult,
+  fakeStandupEntry,
+  fakeTask,
+  installFakeApi,
+} from "./test/fakeApi";
 
 // All tests pin the clock to Friday 2026-07-03, local noon, so "today" is
 // deterministic in any timezone.
@@ -262,42 +268,51 @@ describe("Stand-up", () => {
     expect(api.standupEntries[0]?.bullets.map((b) => b.text)).toEqual(["Second", "First"]);
   });
 
-  it("editing the Sprint goal persists it and updates the header", async () => {
-    const api = installFakeApi();
+  it("shows no focused goal message when none is focused", async () => {
+    installFakeApi();
     render(<App />);
     await openStandup();
 
-    const goalField = await screen.findByRole("textbox", { name: "Sprint goal" });
-    fireEvent.change(goalField, { target: { value: "Ship v1" } });
-    fireEvent.blur(goalField);
-
-    await waitFor(() => expect(api.sprintGoal).toBe("Ship v1"));
-    expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v1");
+    expect(await screen.findByText("No Goal is focused right now.")).toBeInTheDocument();
   });
 
-  it("opening an old entry shows its snapshotted goal, not the current live goal", async () => {
+  it("shows the focused Goal and its Key Result progress, not every active Goal", async () => {
+    const focused = fakeGoal("Ship v2", { is_focused: true });
+    focused.key_results = [
+      fakeKeyResult(focused.id, "Lines shipped", { target_value: 100, current_value: 40 }),
+    ];
+    installFakeApi({ goals: [fakeGoal("Not focused"), focused] });
+    render(<App />);
+    await openStandup();
+
+    const panel = await screen.findByLabelText("Focused goal");
+    expect(within(panel).getByText("Ship v2")).toBeInTheDocument();
+    expect(within(panel).queryByText("Not focused")).not.toBeInTheDocument();
+    expect(within(panel).getByText(/Lines shipped: 40%/)).toBeInTheDocument();
+  });
+
+  it("switching Stand-up dates does not change the focused Goal shown", async () => {
+    const focused = fakeGoal("Ship v2", { is_focused: true });
     installFakeApi({
-      sprintGoal: "Ship v2",
+      goals: [focused],
       standupEntries: [
         fakeStandupEntry("2026-07-01", {
-          sprint_goal_snapshot: "Ship v1",
           bullets: [{ id: 1, section: "today", text: "Old work", sort_order: 1024 }],
         }),
       ],
     });
     render(<App />);
     await openStandup();
-
-    await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v2");
-    });
+    await screen.findByText("Ship v2");
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Stand-up entry, Wednesday: 01/07/26" }),
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v1");
+      expect(
+        within(screen.getByLabelText("Focused goal")).getByText("Ship v2"),
+      ).toBeInTheDocument();
     });
   });
 
@@ -362,30 +377,6 @@ describe("Stand-up", () => {
     expect(
       screen.queryByRole("button", { name: "Ship the release notes" }),
     ).not.toBeInTheDocument();
-  });
-
-  it("merely viewing (and blurring away from) a past entry's snapshot does not overwrite the live goal", async () => {
-    const api = installFakeApi({
-      sprintGoal: "Ship v2",
-      standupEntries: [
-        fakeStandupEntry("2026-07-01", {
-          sprint_goal_snapshot: "Ship v1",
-          bullets: [{ id: 1, section: "today", text: "Old work", sort_order: 1024 }],
-        }),
-      ],
-    });
-    render(<App />);
-    await openStandup();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Stand-up entry, Wednesday: 01/07/26" }),
-    );
-    await waitFor(() => {
-      expect(screen.getByRole("textbox", { name: "Sprint goal" })).toHaveValue("Ship v1");
-    });
-
-    fireEvent.blur(screen.getByRole("textbox", { name: "Sprint goal" }));
-
-    await waitFor(() => expect(api.sprintGoal).toBe("Ship v2"));
   });
 
   it("renders Today suggestion chips from Tasks due today, and none for another day", async () => {

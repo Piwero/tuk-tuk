@@ -76,6 +76,8 @@ export interface Task {
    * an ordinary Task. */
   source_google_calendar_id: number | null;
   source_google_event_id: string | null;
+  /** The Key Result this Task's completion counts toward, if any (ADR 0012). */
+  key_result_id: number | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
@@ -739,6 +741,8 @@ export interface TaskCreateInput {
   /** Set only when creating a Task by converting an Event (issue #111). */
   source_google_calendar_id?: number;
   source_google_event_id?: string;
+  /** The Key Result this Task's completion should count toward, if any. */
+  key_result_id?: number;
 }
 
 export function createTask(input: TaskCreateInput): Promise<Task> {
@@ -867,6 +871,8 @@ export interface TaskPatch {
   time_zone?: string | null;
   reminders?: string[];
   recurrence?: string | null;
+  /** null detaches the Task from its Key Result. */
+  key_result_id?: number | null;
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {
@@ -1038,9 +1044,50 @@ export function fetchHabitStats(
 /** A Goal's status (ADR 0012); only "active" is exercised in this slice. */
 export type GoalStatus = "active" | "closed" | "abandoned";
 
+/** A Key Result's value source (ADR 0012). "manual" is typed in; the other
+ * two are computed on read and reject writes to current_value (409). */
+export type KeyResultSource = "manual" | "habit_checkins" | "task_count";
+
+/** One measurable number belonging to a Goal (ADR 0012). `ratio` and, for
+ * automatic sources, `current_value` are computed server-side on every
+ * read — never edited locally as if they were plain fields. */
+export interface KeyResult {
+  id: number;
+  goal_id: number;
+  name: string;
+  source: KeyResultSource;
+  start_value: number;
+  target_value: number;
+  current_value: number;
+  source_habit_id: number | null;
+  sort_order: number;
+  ratio: number;
+}
+
+export interface KeyResultCreateInput {
+  name: string;
+  source?: KeyResultSource;
+  start_value?: number;
+  target_value?: number;
+  current_value?: number;
+  source_habit_id?: number;
+}
+
+/** Absent fields stay unchanged. current_value is rejected with 409 for
+ * automatic Key Results. */
+export interface KeyResultPatch {
+  name?: string;
+  start_value?: number;
+  target_value?: number;
+  current_value?: number;
+  sort_order?: number;
+}
+
 /** A Goal — a durable outcome with a window (ADR 0012). `obstacle` and
  * `if_then_plan` are WOOP framing on top of the OKR spine, both optional so
- * a Goal is creatable in seconds. Key Results are a later slice. */
+ * a Goal is creatable in seconds. `start_date`/`end_date` are null only for
+ * the Sprint-Goal-seeded focused Goal (issue #238). `score` is the
+ * unweighted mean of the Key Results' ratios, or null with none. */
 export interface Goal {
   id: number;
   title: string;
@@ -1048,12 +1095,14 @@ export interface Goal {
   obstacle: string | null;
   if_then_plan: string | null;
   /** YYYY-MM-DD, defaulting to the current quarter on create. */
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   status: GoalStatus;
   is_focused: boolean;
   final_score: number | null;
   retro: string | null;
+  key_results: KeyResult[];
+  score: number | null;
   created_at: string;
 }
 
@@ -1093,6 +1142,36 @@ export function updateGoal(goalId: number, patch: GoalPatch): Promise<Goal> {
 
 export function deleteGoal(goalId: number): Promise<void> {
   return request(`/api/v1/goals/${goalId}`, { method: "DELETE" });
+}
+
+/** Key Result mutations return the full parent Goal (ADR 0012) — a Key
+ * Result has no life outside its Goal, so there's no top-level collection. */
+export function createKeyResult(goalId: number, input: KeyResultCreateInput): Promise<Goal> {
+  return request(`/api/v1/goals/${goalId}/key-results`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateKeyResult(
+  goalId: number,
+  keyResultId: number,
+  patch: KeyResultPatch,
+): Promise<Goal> {
+  return request(`/api/v1/goals/${goalId}/key-results/${keyResultId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteKeyResult(goalId: number, keyResultId: number): Promise<void> {
+  return request(`/api/v1/goals/${goalId}/key-results/${keyResultId}`, { method: "DELETE" });
+}
+
+/** The Goal Stand-up shows (ADR 0012, issue #238): only the focused one,
+ * with its Key Result progress, or null if none is focused. */
+export function fetchFocusedGoal(): Promise<Goal | null> {
+  return request("/api/v1/stand-up/focused-goal");
 }
 
 /** The two Focus Session modes: a Pomo counts down, a Stopwatch counts up. */

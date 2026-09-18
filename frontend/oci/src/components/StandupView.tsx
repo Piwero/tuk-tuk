@@ -5,13 +5,13 @@ import {
   createStandupBullet,
   deleteStandupBullet,
   deleteStandupEntry,
-  fetchSprintGoal,
+  fetchFocusedGoal,
   fetchStandupEntries,
   fetchStandupEntry,
   fetchTodaySuggestions,
   fetchYesterdaySuggestions,
   updateStandupBullet,
-  updateSprintGoal,
+  type Goal,
   type StandupBullet,
   type StandupEntry,
   type StandupEntrySummary,
@@ -63,25 +63,18 @@ export function StandupView(): JSX.Element {
   // dismissal/seen-state. Blockers has no structured "blocked" concept to
   // suggest from, so only Today gets this treatment.
   const [todaySuggestions, setTodaySuggestions] = useState<StandupSuggestion[]>([]);
-  // The live Sprint goal (edited via the header) vs. `goalDraft`, the header
-  // input's current text — the entry's snapshot when one exists (a past
-  // day's goal never changes retroactively), the live goal otherwise.
-  const [liveGoal, setLiveGoal] = useState("");
-  const liveGoalRef = useRef("");
-  const [goalDraft, setGoalDraft] = useState("");
-  // Only a real edit should write the live goal — merely viewing a past
-  // Entry's snapshot (which can differ from the live text) and then
-  // blurring away, e.g. by picking another date, must not overwrite it.
-  const [goalDirty, setGoalDirty] = useState(false);
+  // The Focused Goal (ADR 0012, issue #238), superseding the Sprint Goal
+  // input: read-only here, shown with its Key Result progress. Not tied to
+  // the selected date — it's the live focused Goal regardless of which
+  // Stand-up day is open, so switching dates never touches it.
+  const [focusedGoal, setFocusedGoal] = useState<Goal | null>(null);
 
   const loadHistory = useCallback(async (): Promise<void> => {
     setHistory((await fetchStandupEntries()).items);
   }, []);
 
-  const loadGoal = useCallback(async (): Promise<void> => {
-    const goal = await fetchSprintGoal();
-    liveGoalRef.current = goal.text;
-    setLiveGoal(goal.text);
+  const loadFocusedGoal = useCallback(async (): Promise<void> => {
+    setFocusedGoal(await fetchFocusedGoal());
   }, []);
 
   const loadTodaySuggestions = useCallback(async (date: string): Promise<void> => {
@@ -105,16 +98,12 @@ export function StandupView(): JSX.Element {
         return;
       }
       setEntry(loaded);
-      setGoalDraft(loaded.sprint_goal_snapshot);
-      setGoalDirty(false);
     } catch (error) {
       if (error instanceof ApiError && error.code === "not_found") {
         if (selectedDateRef.current !== date) {
           return;
         }
         setEntry(null);
-        setGoalDraft(liveGoalRef.current);
-        setGoalDirty(false);
         return;
       }
       throw error;
@@ -126,17 +115,8 @@ export function StandupView(): JSX.Element {
   }, [loadHistory]);
 
   useEffect(() => {
-    void loadGoal();
-  }, [loadGoal]);
-
-  // A date with no persisted Entry tracks the live goal, including updates
-  // that land after this date was already selected (e.g. the initial load).
-  useEffect(() => {
-    if (entry === null) {
-      setGoalDraft(liveGoal);
-      setGoalDirty(false);
-    }
-  }, [liveGoal, entry]);
+    void loadFocusedGoal();
+  }, [loadFocusedGoal]);
 
   useEffect(() => {
     setBulletEditor(null);
@@ -145,17 +125,6 @@ export function StandupView(): JSX.Element {
     void loadTodaySuggestions(selectedDate);
     void loadYesterdaySuggestions(selectedDate);
   }, [selectedDate, loadEntry, loadTodaySuggestions, loadYesterdaySuggestions]);
-
-  async function saveGoal(): Promise<void> {
-    if (!goalDirty) {
-      return;
-    }
-    const goal = await updateSprintGoal(goalDraft);
-    liveGoalRef.current = goal.text;
-    setLiveGoal(goal.text);
-    setGoalDraft(goal.text);
-    setGoalDirty(false);
-  }
 
   function bulletsOf(section: StandupSection): StandupBullet[] {
     return entry?.bullets.filter((bullet) => bullet.section === section) ?? [];
@@ -425,27 +394,26 @@ export function StandupView(): JSX.Element {
         </ul>
       </aside>
       <div className="standup-detail">
-        <div className="standup-goal">
-          <label>
-            Sprint goal
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void saveGoal();
-              }}
-            >
-              <input
-                aria-label="Sprint goal"
-                placeholder="What's the sprint trying to achieve?"
-                value={goalDraft}
-                onChange={(event) => {
-                  setGoalDraft(event.target.value);
-                  setGoalDirty(true);
-                }}
-                onBlur={() => void saveGoal()}
-              />
-            </form>
-          </label>
+        <div className="standup-goal" aria-label="Focused goal">
+          {focusedGoal === null ? (
+            <p className="standup-goal-empty">No Goal is focused right now.</p>
+          ) : (
+            <>
+              <h3>{focusedGoal.title}</h3>
+              {focusedGoal.score !== null && (
+                <p className="standup-goal-score">Score: {Math.round(focusedGoal.score * 100)}%</p>
+              )}
+              {focusedGoal.key_results.length > 0 && (
+                <ul aria-label={`${focusedGoal.title} key results`}>
+                  {focusedGoal.key_results.map((kr) => (
+                    <li key={kr.id}>
+                      {kr.name}: {Math.round(kr.ratio * 100)}%
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </div>
         <div className="standup-sections">
           {SECTIONS.map(({ key, label }) => renderSection(key, label))}

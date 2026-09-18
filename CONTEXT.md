@@ -82,8 +82,22 @@ The count of consecutive scheduled days a Habit has been checked in without a mi
 ## Goals
 
 **Goal**:
-A durable outcome with a window (ADR 0012): title (the Wish), description (the Outcome), an optional Obstacle and If-Then Plan (WOOP), a start/end date defaulting to the current calendar quarter, a status (active/closed/abandoned), a focused flag, and — once graded — a final score and retro. Carries Key Results (a later slice); this entity ships with none. Goals do not nest, and there is no Theme or life-area entity.
+A durable outcome with a window (ADR 0012): title (the Wish), description (the Outcome), an optional Obstacle and If-Then Plan (WOOP), a start/end date defaulting to the current calendar quarter, a status (active/closed/abandoned), a focused flag, and — once graded — a final score and retro. Carries Key Results. Goals do not nest, and there is no Theme or life-area entity.
 _Avoid_: SprintGoal (the untracked text line it supersedes), Objective (OKR's term; tuk-tuk just says Goal)
+
+**Key Result**:
+One measurable number belonging to a Goal (ADR 0012): a name, a start value, a target value, and a current value. Its value is either typed in directly (`manual`), or computed on read from work already tracked elsewhere — summed from a linked Habit's Check-ins within the Goal's window (`habit_checkins`), or counted from completed Tasks attached to it (`task_count`). Automatic sources are read-only: writing to their value is rejected with a 409, and no counter is ever stored or updated by a write hook — the value is recomputed every read. A Key Result has no life outside its Goal (nested API, no top-level collection), the same relationship a Stand-up Bullet has to its Entry.
+_Avoid_: Metric, KR without spelling it out on first use
+
+**Ratio**:
+A Key Result's progress: `(current - start) / (target - start)`, clamped to 0.0-1.0. Falls out the same for descending Key Results (target below start). Not stored.
+
+**Score**:
+A Goal's overall progress: the unweighted mean of its Key Results' ratios, rounded to two places. Null (not zero) for a Goal with no Key Results, so "unmeasured" never reads as "failed." Frozen as `final_score` the moment a Goal closes; a Check-in backfilled afterward never rewrites it.
+_Avoid_: Weighted score (rejected — see ADR 0012)
+
+**Focused Goal**:
+The one Goal, of possibly several active ones, carrying `is_focused`. Setting it clears the previous one in the same transaction, enforced at the service layer (not a database constraint) — the rule the next reader will actually find. Stand-up shows only the Focused Goal and its Key Result progress, never a list of every active Goal.
 
 **Obstacle**:
 The Goal field naming what is expected to get in the way of it (WOOP's mental-contrasting step) — free text, nullable, since a Goal must be creatable in seconds.

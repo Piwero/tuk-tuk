@@ -12,6 +12,8 @@ from pydantic import (
     field_validator,
 )
 
+from app.goal_score import goal_score
+
 # The four named Priority levels — named, not numbered, on the wire.
 Priority = Literal["none", "low", "medium", "high"]
 
@@ -26,6 +28,10 @@ StandupSection = Literal["yesterday", "today", "blockers"]
 
 # A Goal's status (ADR 0012): only "active" is exercised in this slice.
 GoalStatus = Literal["active", "closed", "abandoned"]
+
+# A Key Result's value source (ADR 0012): "manual" is typed in; the other
+# two are computed on read and reject writes to current_value.
+KeyResultSource = Literal["manual", "habit_checkins", "task_count"]
 
 
 def reject_explicit_null(value: object) -> object:
@@ -177,14 +183,17 @@ class TaskCreate(BaseModel):
     # absent for an ordinary Task.
     source_google_calendar_id: int | None = None
     source_google_event_id: str | None = Field(default=None, max_length=255)
+    # The Key Result this Task's completion counts toward, if any (ADR 0012).
+    key_result_id: int | None = None
 
     _normalize_dates = field_validator("start_date", "due_date")(normalize_to_utc)
 
 
 # PATCH fields: absent means "leave unchanged". An explicit null is rejected,
 # except section_id, where null moves the task out of its Section,
-# start_date / due_date / time_zone, where null clears the schedule, and
-# recurrence, where null stops the task repeating.
+# start_date / due_date / time_zone, where null clears the schedule,
+# recurrence, where null stops the task repeating, and key_result_id, where
+# null detaches the Task from its Key Result.
 # tag_ids replaces the task's whole tag set; reminders replaces the whole
 # reminder set ([] clears it).
 class TaskUpdate(BaseModel):
@@ -202,6 +211,7 @@ class TaskUpdate(BaseModel):
     time_zone: str | None = Field(default=None, max_length=64)
     reminders: list[str] | None = None
     recurrence: str | None = Field(default=None, max_length=255)
+    key_result_id: int | None = None
 
     _reject_nulls = field_validator(
         "title",
@@ -565,6 +575,7 @@ class TaskRead(BaseModel):
     recurrence: str | None
     source_google_calendar_id: int | None
     source_google_event_id: str | None
+    key_result_id: int | None
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime
@@ -608,24 +619,78 @@ class GoalUpdate(BaseModel):
     )
 
 
-class GoalRead(BaseModel):
-    """Shaped to later embed Key Results (ADR 0012): a `key_results: []`
-    field arrives with that slice; this Goal has none yet."""
+class KeyResultCreate(BaseModel):
+    """`source` defaults to "manual". `source_habit_id` is required when
+    source is "habit_checkins" and ignored otherwise (ADR 0012)."""
 
-    model_config = ConfigDict(from_attributes=True)
+    name: str = Field(min_length=1, max_length=255)
+    source: KeyResultSource = "manual"
+    start_value: float = 0.0
+    target_value: float = 1.0
+    current_value: float = 0.0
+    source_habit_id: int | None = None
+
+
+# PATCH fields: absent means "leave unchanged". `current_value` is rejected
+# with a 409 (not 422 — the field is well-formed, just not writable) for
+# automatic Key Results; the router enforces that, not this schema.
+class KeyResultUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    start_value: float | None = None
+    target_value: float | None = None
+    current_value: float | None = None
+    sort_order: int | None = None
+
+    _reject_nulls = field_validator("name", "start_value", "target_value", "sort_order")(
+        reject_explicit_null
+    )
+
+
+class KeyResultRead(BaseModel):
+    """`current_value` and `ratio` are resolved by app.goal_read before
+    validation — for automatic sources, `current_value` is computed on
+    read, never the ORM column (see app.goal_read.resolve_key_result)."""
+
+    id: int
+    goal_id: int
+    name: str
+    source: KeyResultSource
+    start_value: float
+    target_value: float
+    current_value: float
+    source_habit_id: int | None
+    sort_order: int
+    ratio: float
+
+
+class GoalRead(BaseModel):
+    """Embeds Key Results eager-loaded and ordered (ADR 0012) — a Key Result
+    has no life outside its Goal, so mutations return the full parent here,
+    the same pattern Check Items and Stand-up Bullets already follow.
+    `score` is the unweighted mean of the Key Results' ratios, or null for a
+    Goal with none (never a misleading 0%). Built by app.goal_read, never
+    `.model_validate(goal)` directly, since automatic Key Result values
+    require an async resolve step."""
 
     id: int
     title: str
     description: str
     obstacle: str | None
     if_then_plan: str | None
-    start_date: date
-    end_date: date
+    # Null only for the Sprint-Goal-seeded focused Goal (ADR 0012).
+    start_date: date | None
+    end_date: date | None
     status: GoalStatus
     is_focused: bool
     final_score: float | None
     retro: str | None
+    key_results: list[KeyResultRead]
     created_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def score(self) -> float | None:
+        return goal_score([kr.ratio for kr in self.key_results])
 
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:
