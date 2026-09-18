@@ -429,3 +429,101 @@ class TestTaskSourcedKeyResults:
         assert response.json()["key_result_id"] is None
         refreshed = client.get(f"/api/v1/goals/{goal['id']}").json()["key_results"][0]
         assert refreshed["current_value"] == 0
+
+
+class TestCloseAbandonAndRetro:
+    """Issue #234 (ADR 0012): a Goal whose window has passed closes on
+    read, freezing its Score. Abandoning is one click and keeps the Goal.
+    A retro can be written on a closed Goal, optionally."""
+
+    def test_a_past_window_goal_closes_on_read(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v1")
+        make_key_result(
+            client, goal["id"], "Lines shipped", start_value=0, target_value=100, current_value=50
+        )
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"end_date": "2020-03-31"})
+
+        body = client.get(f"/api/v1/goals/{goal['id']}").json()
+
+        assert body["status"] == "closed"
+        assert body["final_score"] == 0.5
+
+    def test_an_active_window_goal_does_not_close(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+
+        body = client.get(f"/api/v1/goals/{goal['id']}").json()
+
+        assert body["status"] == "active"
+        assert body["final_score"] is None
+
+    def test_a_windowless_goal_does_not_close(self, client: TestClient) -> None:
+        """The Sprint-Goal-seeded focused Goal (ADR 0012) has no window and
+        must never auto-close."""
+        goal = client.post("/api/v1/goals", json={"title": "Legacy sprint goal"}).json()
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"start_date": None, "end_date": None})
+
+        body = client.get(f"/api/v1/goals/{goal['id']}").json()
+
+        assert body["status"] == "active"
+
+    def test_a_value_backfilled_after_close_does_not_change_the_frozen_score(
+        self, client: TestClient
+    ) -> None:
+        goal = make_goal(client, "Ship v1")
+        kr = make_key_result(
+            client, goal["id"], "Lines shipped", start_value=0, target_value=100, current_value=50
+        )["key_results"][0]
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"end_date": "2020-03-31"})
+        closed = client.get(f"/api/v1/goals/{goal['id']}").json()
+        assert closed["status"] == "closed"
+        assert closed["final_score"] == 0.5
+
+        client.patch(
+            f"/api/v1/goals/{goal['id']}/key-results/{kr['id']}", json={"current_value": 100}
+        )
+
+        reread = client.get(f"/api/v1/goals/{goal['id']}").json()
+        assert reread["final_score"] == 0.5
+
+    def test_a_retro_can_be_written_on_a_closed_goal(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v1", start_date="2020-01-01", end_date="2020-03-31")
+        client.get(f"/api/v1/goals/{goal['id']}")
+
+        response = client.patch(
+            f"/api/v1/goals/{goal['id']}", json={"retro": "Shipped late but shipped."}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["retro"] == "Shipped late but shipped."
+
+    def test_closing_never_requires_a_retro(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v1", start_date="2020-01-01", end_date="2020-03-31")
+
+        body = client.get(f"/api/v1/goals/{goal['id']}").json()
+
+        assert body["status"] == "closed"
+        assert body["retro"] is None
+
+    def test_abandoning_a_goal_is_one_request(self, client: TestClient) -> None:
+        goal = make_goal(client, "Give up on this")
+
+        response = client.patch(f"/api/v1/goals/{goal['id']}", json={"status": "abandoned"})
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "abandoned"
+
+    def test_an_abandoned_goal_is_kept_not_deleted(self, client: TestClient) -> None:
+        goal = make_goal(client, "Give up on this")
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"status": "abandoned"})
+
+        response = client.get(f"/api/v1/goals/{goal['id']}")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "abandoned"
+
+    def test_the_list_endpoint_also_closes_past_window_goals(self, client: TestClient) -> None:
+        make_goal(client, "Ship v1", start_date="2020-01-01", end_date="2020-03-31")
+
+        body = client.get("/api/v1/goals").json()
+
+        assert body["items"][0]["status"] == "closed"

@@ -300,6 +300,27 @@ function KeyResultsPanel({
   );
 }
 
+/** Groups active Goals by their (start, end) window — "this quarter's
+ * commitments read separately from last quarter's" (ADR 0012, issue #234).
+ * A windowless Goal (the Sprint Goal seed) gets its own "No window" group.
+ * Preserves first-seen order. */
+function groupByWindow(goals: Goal[]): [string, Goal[]][] {
+  const groups = new Map<string, Goal[]>();
+  for (const goal of goals) {
+    const key =
+      goal.start_date === null || goal.end_date === null
+        ? "No window"
+        : `${goal.start_date} – ${goal.end_date}`;
+    const group = groups.get(key);
+    if (group) {
+      group.push(goal);
+    } else {
+      groups.set(key, [goal]);
+    }
+  }
+  return [...groups.entries()];
+}
+
 function toCreateInput(values: GoalFormValues): GoalCreateInput {
   return {
     title: values.title,
@@ -394,6 +415,112 @@ export function GoalsView(): JSX.Element {
     await load();
   }
 
+  async function handleAbandon(goal: Goal): Promise<void> {
+    await updateGoal(goal.id, { status: "abandoned" });
+    await load();
+  }
+
+  async function handleRetro(goal: Goal, retro: string): Promise<void> {
+    await updateGoal(goal.id, { retro: retro === "" ? null : retro });
+    await load();
+  }
+
+  function renderGoal(goal: Goal): JSX.Element {
+    if (editor?.mode === "edit" && editor.goalId === goal.id) {
+      return (
+        <li key={goal.id} className="goal-editing">
+          <GoalForm
+            initial={valuesOf(goal)}
+            onSubmit={(values) => void handleEdit(goal, values)}
+            onCancel={() => setEditor(null)}
+          />
+        </li>
+      );
+    }
+    return (
+      <li key={goal.id} className={goal.is_focused ? "goal goal-focused" : "goal"}>
+        <h3>
+          {goal.title}
+          {goal.is_focused && <span className="goal-focused-badge">Focused</span>}
+        </h3>
+        {goal.description !== "" && <p>{goal.description}</p>}
+        <p className="goal-window">
+          {goal.start_date ?? "No window"} – {goal.end_date ?? ""}
+        </p>
+        {goal.obstacle !== null && (
+          <p className="goal-obstacle">
+            <strong>Obstacle:</strong> {goal.obstacle}
+          </p>
+        )}
+        {goal.if_then_plan !== null && (
+          <p className="goal-if-then">
+            <strong>If-Then Plan:</strong> {goal.if_then_plan}
+          </p>
+        )}
+        <KeyResultsPanel
+          goal={goal}
+          habits={habits}
+          onCreate={(values) => handleCreateKeyResult(goal, values)}
+          onUpdate={(keyResultId, patch) => handleUpdateKeyResult(goal, keyResultId, patch)}
+          onDelete={(keyResultId) => handleDeleteKeyResult(goal, keyResultId)}
+        />
+        {goal.status === "closed" && goal.final_score !== null && (
+          <p className="goal-final-score">Final score: {Math.round(goal.final_score * 100)}%</p>
+        )}
+        {goal.status === "closed" && (
+          <label className="goal-retro">
+            Retro
+            <textarea
+              aria-label={`Retro for ${goal.title}`}
+              placeholder="What did I learn? (optional)"
+              defaultValue={goal.retro ?? ""}
+              onBlur={(event) => void handleRetro(goal, event.target.value)}
+            />
+          </label>
+        )}
+        <div className="goal-actions">
+          {goal.status === "active" && (
+            <>
+              <button
+                type="button"
+                aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
+                onClick={() => void handleToggleFocus(goal)}
+              >
+                {goal.is_focused ? "Unfocus" : "Focus"}
+              </button>
+              <button
+                type="button"
+                aria-label={`Abandon ${goal.title}`}
+                onClick={() => void handleAbandon(goal)}
+              >
+                Abandon
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            aria-label={`Edit ${goal.title}`}
+            onClick={() => setEditor({ mode: "edit", goalId: goal.id })}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete goal ${goal.title}`}
+            onClick={() => void handleDelete(goal)}
+          >
+            Delete
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  const active = goals.filter((g) => g.status === "active");
+  const closed = goals.filter((g) => g.status === "closed");
+  const abandoned = goals.filter((g) => g.status === "abandoned");
+  const activeByWindow = groupByWindow(active);
+
   return (
     <div className="goals-view">
       {goals.length === 0 && editor === null ? (
@@ -401,70 +528,32 @@ export function GoalsView(): JSX.Element {
           A Goal is a durable outcome with a window — add one below to start tracking it.
         </p>
       ) : (
-        <ul className="goals-list" aria-label="Goals">
-          {goals.map((goal) =>
-            editor?.mode === "edit" && editor.goalId === goal.id ? (
-              <li key={goal.id} className="goal-editing">
-                <GoalForm
-                  initial={valuesOf(goal)}
-                  onSubmit={(values) => void handleEdit(goal, values)}
-                  onCancel={() => setEditor(null)}
-                />
-              </li>
-            ) : (
-              <li key={goal.id} className={goal.is_focused ? "goal goal-focused" : "goal"}>
-                <h3>
-                  {goal.title}
-                  {goal.is_focused && <span className="goal-focused-badge">Focused</span>}
-                </h3>
-                {goal.description !== "" && <p>{goal.description}</p>}
-                <p className="goal-window">
-                  {goal.start_date ?? "No window"} – {goal.end_date ?? ""}
-                </p>
-                {goal.obstacle !== null && (
-                  <p className="goal-obstacle">
-                    <strong>Obstacle:</strong> {goal.obstacle}
-                  </p>
-                )}
-                {goal.if_then_plan !== null && (
-                  <p className="goal-if-then">
-                    <strong>If-Then Plan:</strong> {goal.if_then_plan}
-                  </p>
-                )}
-                <KeyResultsPanel
-                  goal={goal}
-                  habits={habits}
-                  onCreate={(values) => handleCreateKeyResult(goal, values)}
-                  onUpdate={(keyResultId, patch) => handleUpdateKeyResult(goal, keyResultId, patch)}
-                  onDelete={(keyResultId) => handleDeleteKeyResult(goal, keyResultId)}
-                />
-                <div className="goal-actions">
-                  <button
-                    type="button"
-                    aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
-                    onClick={() => void handleToggleFocus(goal)}
-                  >
-                    {goal.is_focused ? "Unfocus" : "Focus"}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Edit ${goal.title}`}
-                    onClick={() => setEditor({ mode: "edit", goalId: goal.id })}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete goal ${goal.title}`}
-                    onClick={() => void handleDelete(goal)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ),
+        <>
+          {activeByWindow.map(([window, windowGoals]) => (
+            <section key={window} aria-label={window}>
+              {activeByWindow.length > 1 && <h4>{window}</h4>}
+              <ul className="goals-list" aria-label="Goals">
+                {windowGoals.map((goal) => renderGoal(goal))}
+              </ul>
+            </section>
+          ))}
+          {closed.length > 0 && (
+            <section>
+              <h4>Closed</h4>
+              <ul className="goals-list" aria-label="Closed goals">
+                {closed.map((goal) => renderGoal(goal))}
+              </ul>
+            </section>
           )}
-        </ul>
+          {abandoned.length > 0 && (
+            <section>
+              <h4>Abandoned</h4>
+              <ul className="goals-list" aria-label="Abandoned goals">
+                {abandoned.map((goal) => renderGoal(goal))}
+              </ul>
+            </section>
+          )}
+        </>
       )}
       {editor?.mode === "create" ? (
         <GoalForm

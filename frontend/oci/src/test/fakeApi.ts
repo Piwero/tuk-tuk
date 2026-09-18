@@ -537,6 +537,19 @@ function keyResultCurrentValue(kr: FakeKeyResult, goal: FakeGoal, state: FakeApi
   return kr.current_value;
 }
 
+/** A past-window `active` Goal closes on read, freezing its Score — the one
+ * mutation this read path performs, mirroring app.goal_read._close_if_past_window.
+ * A windowless Goal (the Sprint Goal seed) never auto-closes. */
+function closeIfPastWindow(goal: FakeGoal, ratios: number[]): void {
+  if (goal.status !== "active" || goal.end_date === null) return;
+  if (goal.end_date >= new Date().toISOString().slice(0, 10)) return;
+  goal.status = "closed";
+  goal.final_score =
+    ratios.length === 0
+      ? null
+      : Math.round((ratios.reduce((sum, r) => sum + r, 0) / ratios.length) * 100) / 100;
+}
+
 /** Builds the GoalRead wire shape: resolves each Key Result's current_value
  * and ratio, and the Goal's score (unweighted mean of ratios, null with no
  * Key Results) — mirrors app.goal_read.build_goal_read. */
@@ -549,6 +562,10 @@ function serializeGoal(goal: FakeGoal, state: FakeApiState): unknown {
       ratio: keyResultRatio(kr.start_value, kr.target_value, current_value),
     };
   });
+  closeIfPastWindow(
+    goal,
+    keyResults.map((kr) => kr.ratio),
+  );
   const score =
     keyResults.length === 0
       ? null
