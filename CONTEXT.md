@@ -79,6 +79,18 @@ _Avoid_: Completion, log
 **Streak**:
 The count of consecutive scheduled days a Habit has been checked in without a miss.
 
+## Goals
+
+**Goal**:
+A durable outcome with a window (ADR 0012): title (the Wish), description (the Outcome), an optional Obstacle and If-Then Plan (WOOP), a start/end date defaulting to the current calendar quarter, a status (active/closed/abandoned), a focused flag, and — once graded — a final score and retro. Carries Key Results (a later slice); this entity ships with none. Goals do not nest, and there is no Theme or life-area entity.
+_Avoid_: SprintGoal (the untracked text line it supersedes), Objective (OKR's term; tuk-tuk just says Goal)
+
+**Obstacle**:
+The Goal field naming what is expected to get in the way of it (WOOP's mental-contrasting step) — free text, nullable, since a Goal must be creatable in seconds.
+
+**If-Then Plan**:
+The Goal field pairing an Obstacle with the action to take when it shows up, in the form "If [obstacle happens], then I will [action]" (WOOP's implementation intention) — free text, nullable, and shown with that format as its placeholder so what gets written is a concrete plan rather than a vague note.
+
 ## Assist (v2)
 
 **Assist**:

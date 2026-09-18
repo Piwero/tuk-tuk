@@ -3,6 +3,7 @@ import { vi } from "vitest";
 import {
   type AssistantChatTurn,
   type AssistCaptureDraft,
+  type GoalStatus,
   type HabitType,
   type Priority,
   type ViewMode,
@@ -102,6 +103,21 @@ export interface FakeHabit {
   encouragement: string;
   frequency: string;
   is_archived: boolean;
+  created_at: string;
+}
+
+export interface FakeGoal {
+  id: number;
+  title: string;
+  description: string;
+  obstacle: string | null;
+  if_then_plan: string | null;
+  start_date: string;
+  end_date: string;
+  status: GoalStatus;
+  is_focused: boolean;
+  final_score: number | null;
+  retro: string | null;
   created_at: string;
 }
 
@@ -219,6 +235,7 @@ export interface FakeApiState {
   completedOccurrences: FakeCompletedOccurrence[];
   habits: FakeHabit[];
   checkIns: FakeCheckIn[];
+  goals: FakeGoal[];
   focusSessions: FakeFocusSession[];
   timers: FakeTimer[];
   requests: RecordedRequest[];
@@ -324,6 +341,7 @@ let nextSectionId = 800;
 let nextOccurrenceId = 950;
 let nextHabitId = 300;
 let nextCheckInId = 9000;
+let nextGoalId = 1300;
 let nextFocusSessionId = 400;
 let nextTimerId = 450;
 let nextStandupEntryId = 600;
@@ -429,6 +447,24 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
   };
 }
 
+export function fakeGoal(title: string, overrides: Partial<FakeGoal> = {}): FakeGoal {
+  return {
+    id: nextGoalId++,
+    title,
+    description: "",
+    obstacle: null,
+    if_then_plan: null,
+    start_date: "2026-07-01",
+    end_date: "2026-09-30",
+    status: "active",
+    is_focused: false,
+    final_score: null,
+    retro: null,
+    created_at: "2026-07-03T10:00:00Z",
+    ...overrides,
+  };
+}
+
 let nextEventId = 1;
 
 export function fakeEvent(title: string, overrides: Partial<FakeEvent> = {}): FakeEvent {
@@ -494,6 +530,7 @@ export function installFakeApi({
   completedOccurrences = [],
   habits = [],
   checkIns = [],
+  goals = [],
   focusSessions = [],
   timers = [],
   loggedIn = true,
@@ -531,6 +568,7 @@ export function installFakeApi({
   completedOccurrences?: FakeCompletedOccurrence[];
   habits?: FakeHabit[];
   checkIns?: FakeCheckIn[];
+  goals?: FakeGoal[];
   focusSessions?: FakeFocusSession[];
   timers?: FakeTimer[];
   /** Start unauthenticated: every non-auth route is rejected until a fake
@@ -607,6 +645,7 @@ export function installFakeApi({
     completedOccurrences: completedOccurrences.map((occurrence) => ({ ...occurrence })),
     habits: habits.map((habit) => ({ ...habit })),
     checkIns: checkIns.map((checkIn) => ({ ...checkIn })),
+    goals: goals.map((goal) => ({ ...goal })),
     focusSessions: focusSessions.map((focusSession) => ({ ...focusSession })),
     timers: timers.map((timer) => ({ ...timer })),
     requests: [],
@@ -1625,6 +1664,34 @@ export function installFakeApi({
             timer.habit_id = null;
           }
         }
+        return new Response(null, { status: 204 });
+      }
+    }
+    if (method === "GET" && url.pathname === "/api/v1/goals") {
+      return json(page(state.goals));
+    }
+    if (method === "POST" && url.pathname === "/api/v1/goals") {
+      const input = body as { title: string } & Partial<Omit<FakeGoal, "id" | "title">>;
+      const created = fakeGoal(input.title, input);
+      state.goals.push(created);
+      return json(created, 201);
+    }
+    const goalMatch = url.pathname.match(/^\/api\/v1\/goals\/(\d+)$/);
+    if (goalMatch) {
+      const goalId = Number(goalMatch[1]);
+      const goal = state.goals.find((g) => g.id === goalId);
+      if (!goal) {
+        return notFound(`Goal ${goalId} not found`);
+      }
+      if (method === "GET") {
+        return json(goal);
+      }
+      if (method === "PATCH") {
+        Object.assign(goal, body);
+        return json(goal);
+      }
+      if (method === "DELETE") {
+        state.goals = state.goals.filter((g) => g.id !== goalId);
         return new Response(null, { status: 204 });
       }
     }

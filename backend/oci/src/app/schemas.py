@@ -24,6 +24,9 @@ HabitType = Literal["boolean", "numeric"]
 # A Stand-up Bullet's section, in display order.
 StandupSection = Literal["yesterday", "today", "blockers"]
 
+# A Goal's status (ADR 0012): only "active" is exercised in this slice.
+GoalStatus = Literal["active", "closed", "abandoned"]
+
 
 def reject_explicit_null(value: object) -> object:
     """Shared PATCH-field rule: absent means "leave unchanged"; explicit null is rejected.
@@ -573,3 +576,57 @@ class TaskRead(BaseModel):
     @field_serializer("start_date", "due_date", "completed_at")
     def serialize_schedule_dates(self, value: datetime | None) -> str | None:
         return None if value is None else utc_z(value)
+
+
+class GoalCreate(BaseModel):
+    """`start_date`/`end_date` default to the current quarter when omitted
+    (the router fills them in) — see ADR 0012."""
+
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(default="", max_length=5000)
+    obstacle: str | None = Field(default=None, max_length=2000)
+    if_then_plan: str | None = Field(default=None, max_length=2000)
+    start_date: date | None = None
+    end_date: date | None = None
+
+
+# PATCH fields: absent means "leave unchanged". An explicit null is rejected,
+# except obstacle / if_then_plan / retro, where null clears the field.
+class GoalUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    obstacle: str | None = Field(default=None, max_length=2000)
+    if_then_plan: str | None = Field(default=None, max_length=2000)
+    start_date: date | None = None
+    end_date: date | None = None
+    status: GoalStatus | None = None
+    is_focused: bool | None = None
+    retro: str | None = Field(default=None, max_length=5000)
+
+    _reject_nulls = field_validator("title", "description", "start_date", "end_date", "status")(
+        reject_explicit_null
+    )
+
+
+class GoalRead(BaseModel):
+    """Shaped to later embed Key Results (ADR 0012): a `key_results: []`
+    field arrives with that slice; this Goal has none yet."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: str
+    obstacle: str | None
+    if_then_plan: str | None
+    start_date: date
+    end_date: date
+    status: GoalStatus
+    is_focused: bool
+    final_score: float | None
+    retro: str | None
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        return utc_z(value)

@@ -313,6 +313,31 @@ class CheckIn(Base):
     habit: Mapped[Habit] = relationship(back_populates="check_ins")
 
 
+class Goal(Base):
+    """A Goal — a durable outcome with a window (ADR 0012). OKR spine (title
+    is the Wish, description the Outcome) with WOOP's obstacle/if_then_plan
+    on top, both nullable so a Goal is creatable in seconds. Key Results are
+    a later slice; this ships with none. Goals do not nest and there is no
+    Theme entity.
+    """
+
+    __tablename__ = "goals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text, default="")
+    obstacle: Mapped[str | None] = mapped_column(Text, default=None)
+    if_then_plan: Mapped[str | None] = mapped_column(Text, default=None)
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(9), default="active")
+    is_focused: Mapped[bool] = mapped_column(default=False)
+    final_score: Mapped[float | None] = mapped_column(default=None)
+    retro: Mapped[str | None] = mapped_column(Text, default=None)
+    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class FocusSession(Base):
     """A Focus Session — one persisted period of focused work, Pomo or
     Stopwatch, optionally linked to a Task or Habit for statistics. Timers
