@@ -13,6 +13,7 @@ function task(overrides: Partial<Task> & { id: number; list_id: number }): Task 
     description: "",
     priority: "none",
     section_id: null,
+    key_result_id: null,
     sort_order: 0,
     start_date: null,
     due_date: null,
