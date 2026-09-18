@@ -64,6 +64,7 @@ import { EventDetail } from "./components/EventDetail";
 import { FocusStatsView } from "./components/FocusStatsPanel";
 import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
+import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { Icon } from "./components/Icon";
 import { KanbanView } from "./components/KanbanView";
@@ -90,6 +91,7 @@ type View =
   | { kind: "folder"; id: number }
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar"; mode: CalendarMode }
+  | { kind: "goals" }
   | { kind: "habits" }
   | { kind: "standup" }
   | { kind: "assistant" }
@@ -128,6 +130,7 @@ const BLANK_ALL_FILTERS: AllFilters = { listId: null, tagId: null, priority: nul
 function staticViewKindOf(view: View): StaticViewKind | null {
   if (
     view?.kind === "calendar" ||
+    view?.kind === "goals" ||
     view?.kind === "habits" ||
     view?.kind === "standup" ||
     view?.kind === "assistant" ||
@@ -155,6 +158,8 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
       return { kind: "calendar", mode: calendarModeForPath(pathname) ?? "day" };
     case "smart":
       return { kind: "smart", view: smartViewForPath(pathname) ?? "all" };
+    case "goals":
+      return { kind: "goals" };
     case "habits":
       return { kind: "habits" };
     case "standup":
@@ -415,6 +420,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     } else if (
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
+      view?.kind === "goals" ||
       view?.kind === "habits" ||
       view?.kind === "standup" ||
       view?.kind === "assistant" ||
@@ -448,6 +454,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     if (
       view === null ||
       view.kind === "calendar" ||
+      view.kind === "goals" ||
       view.kind === "habits" ||
       view.kind === "standup" ||
       view.kind === "assistant" ||
@@ -802,6 +809,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // Shared with both the sidebar's top nav and the mobile tab bar (#170),
   // so the two surfaces never disagree about which destination is active.
   const calendarSelected = view?.kind === "calendar";
+  const goalsSelected = view?.kind === "goals";
   const habitsSelected = view?.kind === "habits";
   const standupSelected = view?.kind === "standup";
   const assistantSelected = view?.kind === "assistant";
@@ -810,6 +818,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   const searchSelected = view?.kind === "search";
   const tasksSelected =
     !calendarSelected &&
+    !goalsSelected &&
     !habitsSelected &&
     !standupSelected &&
     !assistantSelected &&
@@ -852,6 +861,12 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       kind: "view" as const,
       label: "Calendar",
       run: () => switchView({ kind: "calendar", mode: "day" }),
+    },
+    {
+      key: "view-goals",
+      kind: "view" as const,
+      label: "Goals",
+      run: () => switchView({ kind: "goals" }),
     },
     {
       key: "view-habits",
@@ -973,6 +988,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             smartOpenCounts={openTaskCounts.smart}
             listOpenCounts={openTaskCounts.byList}
             calendarSelected={calendarSelected}
+            goalsSelected={goalsSelected}
             habitsSelected={habitsSelected}
             standupSelected={standupSelected}
             standupEnabled={standupEnabled}
@@ -986,6 +1002,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
             onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
             onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
+            onSelectGoals={() => switchView({ kind: "goals" })}
             onSelectHabits={() => switchView({ kind: "habits" })}
             onSelectStandup={() => switchView({ kind: "standup" })}
             onSelectAssistant={() => switchView({ kind: "assistant" })}
@@ -1059,6 +1076,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                   SMART_LABELS[smartView]
                 ) : view?.kind === "calendar" ? (
                   "Calendar"
+                ) : view?.kind === "goals" ? (
+                  "Goals"
                 ) : view?.kind === "habits" ? (
                   "Habits"
                 ) : view?.kind === "standup" ? (
@@ -1302,6 +1321,8 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 initialMode={view.mode}
                 onModeChange={handleCalendarModeChange}
               />
+            ) : view?.kind === "goals" ? (
+              <GoalsView />
             ) : view?.kind === "habits" ? (
               <HabitsView />
             ) : view?.kind === "standup" ? (

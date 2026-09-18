@@ -67,6 +67,7 @@ interface SidebarProps {
   /** Open-Task count per List id — absent means zero. */
   listOpenCounts: Map<number, number>;
   calendarSelected: boolean;
+  goalsSelected: boolean;
   habitsSelected: boolean;
   standupSelected: boolean;
   /** Settings toggle (issue #140): hides the Stand-up nav item entirely
@@ -88,6 +89,7 @@ interface SidebarProps {
   onSelectTag: (tagId: number) => void;
   onSelectSmart: (view: SmartView) => void;
   onSelectCalendar: () => void;
+  onSelectGoals: () => void;
   onSelectHabits: () => void;
   onSelectStandup: () => void;
   onSelectAssistant: () => void;
@@ -271,6 +273,7 @@ export function Sidebar({
   smartOpenCounts,
   listOpenCounts,
   calendarSelected,
+  goalsSelected,
   habitsSelected,
   standupSelected,
   standupEnabled,
@@ -284,6 +287,7 @@ export function Sidebar({
   onSelectTag,
   onSelectSmart,
   onSelectCalendar,
+  onSelectGoals,
   onSelectHabits,
   onSelectStandup,
   onSelectAssistant,
@@ -664,6 +668,7 @@ export function Sidebar({
 
   const tasksSelected =
     !calendarSelected &&
+    !goalsSelected &&
     !habitsSelected &&
     !standupSelected &&
     !assistantSelected &&
@@ -719,6 +724,13 @@ export function Sidebar({
             href={pathForStaticView("calendar")}
             selected={calendarSelected}
             onClick={onSelectCalendar}
+          />
+          <TopNavItem
+            icon="target"
+            label="Goals"
+            href={pathForStaticView("goals")}
+            selected={goalsSelected}
+            onClick={onSelectGoals}
           />
           <TopNavItem
             icon="repeat"

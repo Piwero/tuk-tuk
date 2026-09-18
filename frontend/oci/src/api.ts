@@ -1035,6 +1035,66 @@ export function fetchHabitStats(
   return request(`/api/v1/habits/${habitId}/stats?today=${today}${scope}`);
 }
 
+/** A Goal's status (ADR 0012); only "active" is exercised in this slice. */
+export type GoalStatus = "active" | "closed" | "abandoned";
+
+/** A Goal — a durable outcome with a window (ADR 0012). `obstacle` and
+ * `if_then_plan` are WOOP framing on top of the OKR spine, both optional so
+ * a Goal is creatable in seconds. Key Results are a later slice. */
+export interface Goal {
+  id: number;
+  title: string;
+  description: string;
+  obstacle: string | null;
+  if_then_plan: string | null;
+  /** YYYY-MM-DD, defaulting to the current quarter on create. */
+  start_date: string;
+  end_date: string;
+  status: GoalStatus;
+  is_focused: boolean;
+  final_score: number | null;
+  retro: string | null;
+  created_at: string;
+}
+
+export interface GoalCreateInput {
+  title: string;
+  description?: string;
+  obstacle?: string;
+  if_then_plan?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export function fetchGoals(): Promise<Page<Goal>> {
+  return request("/api/v1/goals");
+}
+
+export function createGoal(input: GoalCreateInput): Promise<Goal> {
+  return request("/api/v1/goals", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** Absent fields stay unchanged; explicit null clears obstacle / if_then_plan / retro. */
+export interface GoalPatch {
+  title?: string;
+  description?: string;
+  obstacle?: string | null;
+  if_then_plan?: string | null;
+  start_date?: string;
+  end_date?: string;
+  status?: GoalStatus;
+  is_focused?: boolean;
+  retro?: string | null;
+}
+
+export function updateGoal(goalId: number, patch: GoalPatch): Promise<Goal> {
+  return request(`/api/v1/goals/${goalId}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export function deleteGoal(goalId: number): Promise<void> {
+  return request(`/api/v1/goals/${goalId}`, { method: "DELETE" });
+}
+
 /** The two Focus Session modes: a Pomo counts down, a Stopwatch counts up. */
 export type FocusMode = "pomo" | "stopwatch";
 
