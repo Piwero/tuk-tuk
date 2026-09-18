@@ -110,11 +110,12 @@ def test_seed_migration_carries_sprint_goal_text_and_preserves_standup_snapshots
     tmp_path: Path,
 ) -> None:
     """Upgrades a database seeded at 0029 (pre-seed-migration) with a real
-    Sprint Goal and Stand-up Entries to head, and asserts: the Sprint Goal
-    text becomes a focused, windowless Goal with no Key Results; existing
-    Stand-up Entries keep their original sprint_goal_snapshot untouched
-    (not backfilled); and the sprint_goals table/row survive (issue #238's
-    contract — #239 drops it, not this ticket)."""
+    Sprint Goal and Stand-up Entries to 0030 (pre-drop, issue #238's
+    contract), and asserts: the Sprint Goal text becomes a focused,
+    windowless Goal with no Key Results; existing Stand-up Entries keep
+    their original sprint_goal_snapshot untouched (not backfilled); and the
+    sprint_goals table/row survive at this revision (issue #239 drops it,
+    tested separately below)."""
     db_path = tmp_path / "pre_seed.db"
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
@@ -133,7 +134,7 @@ def test_seed_migration_carries_sprint_goal_text_and_preserves_standup_snapshots
         )
         conn.commit()
 
-    command.upgrade(config, "head")
+    command.upgrade(config, "0030")
 
     with sqlite3.connect(db_path) as conn:
         goal_rows = conn.execute(
@@ -153,6 +154,54 @@ def test_seed_migration_carries_sprint_goal_text_and_preserves_standup_snapshots
         assert snapshot == "An old snapshot"
         (text,) = conn.execute("SELECT text FROM sprint_goals WHERE id = 1").fetchone()
         assert text == "Ship v2"
+
+
+def test_drop_sprint_goal_migration_preserves_standup_snapshots(tmp_path: Path) -> None:
+    """Issue #239: upgrading to head against a database containing a real
+    Sprint Goal row and real Stand-up Entries drops the sprint_goals table
+    while leaving standup_entries and its sprint_goal_snapshot column (the
+    frozen history) fully intact. The down migration restores the table."""
+    db_path = tmp_path / "drop_sprint_goal.db"
+    config = Config()
+    config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    command.upgrade(config, "0030")
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO sprint_goals (id, text, owner, created_at, updated_at) VALUES "
+            "(1, 'Ship v2', 'local', '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00')"
+        )
+        conn.execute(
+            "INSERT INTO standup_entries (id, date, sprint_goal_snapshot, owner, created_at) "
+            "VALUES (1, '2026-01-05', 'An old snapshot', 'local', '2026-01-05T00:00:00+00:00')"
+        )
+        conn.commit()
+
+    command.upgrade(config, "head")
+
+    with sqlite3.connect(db_path) as conn:
+        tables = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        assert "sprint_goals" not in tables
+        (snapshot,) = conn.execute(
+            "SELECT sprint_goal_snapshot FROM standup_entries WHERE id = 1"
+        ).fetchone()
+        assert snapshot == "An old snapshot"
+
+    command.downgrade(config, "0030")
+
+    with sqlite3.connect(db_path) as conn:
+        tables = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        assert "sprint_goals" in tables
+        (snapshot,) = conn.execute(
+            "SELECT sprint_goal_snapshot FROM standup_entries WHERE id = 1"
+        ).fetchone()
+        assert snapshot == "An old snapshot"
 
 
 def test_seed_migration_seeds_nothing_when_no_sprint_goal_exists(tmp_path: Path) -> None:

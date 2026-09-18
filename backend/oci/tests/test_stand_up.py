@@ -215,30 +215,14 @@ class TestTodaySuggestions:
         assert response.status_code == 422
 
 
-class TestSprintGoal:
-    def test_the_goal_defaults_to_empty(self, client: TestClient) -> None:
-        response = client.get("/api/v1/stand-up/sprint-goal")
+def test_a_new_entry_snapshots_nothing(client: TestClient) -> None:
+    """The Sprint Goal is gone (ADR 0012, issue #239): new Entries carry an
+    empty snapshot. Past Entries keep whatever they were created with,
+    unbackfilled — that frozen history lives in the snapshot column, not
+    behind any live endpoint."""
+    body = add_bullet(client, DAY, "today", "Ship the stand-up feature")
 
-        assert response.status_code == 200
-        assert response.json() == {"text": ""}
-
-    def test_the_goal_round_trips_through_a_write_and_read(self, client: TestClient) -> None:
-        write = client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v1"})
-        assert write.status_code == 200
-        assert write.json() == {"text": "Ship v1"}
-
-        read_back = client.get("/api/v1/stand-up/sprint-goal")
-        assert read_back.json() == {"text": "Ship v1"}
-
-    def test_a_new_entry_no_longer_snapshots_the_sprint_goal(self, client: TestClient) -> None:
-        """Superseded by the focused Goal (ADR 0012, issue #238): Stand-up
-        no longer reads or writes SprintGoal at Entry-creation time, even
-        though the sprint-goal endpoints above still exist."""
-        client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v1"})
-
-        body = add_bullet(client, DAY, "today", "Ship the stand-up feature")
-
-        assert body["sprint_goal_snapshot"] == ""
+    assert body["sprint_goal_snapshot"] == ""
 
 
 class TestFocusedGoal:

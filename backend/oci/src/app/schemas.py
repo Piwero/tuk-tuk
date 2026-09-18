@@ -563,16 +563,6 @@ class StandupYesterdaySuggestion(BaseModel):
     title: str
 
 
-class SprintGoalRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    text: str
-
-
-class SprintGoalUpdate(BaseModel):
-    text: str = Field(max_length=1000)
-
-
 class TaskRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
