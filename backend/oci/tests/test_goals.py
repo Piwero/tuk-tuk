@@ -7,6 +7,12 @@ No Key Results yet — this slice is the OKR spine plus WOOP framing
 from fastapi.testclient import TestClient
 
 
+def only_task(client: TestClient, task_id: int) -> dict:
+    """Tasks have no GET-by-id route; read the row back off the collection."""
+    items = client.get("/api/v1/tasks").json()["items"]
+    return next(item for item in items if item["id"] == task_id)
+
+
 def make_goal(client: TestClient, title: str, **fields: object) -> dict:
     response = client.post("/api/v1/goals", json={"title": title, **fields})
     assert response.status_code == 201, response.text
@@ -527,3 +533,131 @@ class TestCloseAbandonAndRetro:
         body = client.get("/api/v1/goals").json()
 
         assert body["items"][0]["status"] == "closed"
+
+
+class TestSettledGoalsStayHonest:
+    """A Goal that leaves `active` freezes its Score and drops focus — the
+    Stand-up must not keep showing an outcome the user has closed or
+    abandoned, and a later Check-in must not rewrite what the Score was."""
+
+    def test_a_closed_goal_reports_its_frozen_score_not_a_live_one(
+        self, client: TestClient
+    ) -> None:
+        goal = make_goal(client, "Ship v1")
+        kr = make_key_result(
+            client, goal["id"], "Lines shipped", start_value=0, target_value=100, current_value=20
+        )["key_results"][0]
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"end_date": "2020-03-31"})
+        assert client.get(f"/api/v1/goals/{goal['id']}").json()["final_score"] == 0.2
+
+        client.patch(
+            f"/api/v1/goals/{goal['id']}/key-results/{kr['id']}", json={"current_value": 90}
+        )
+
+        reread = client.get(f"/api/v1/goals/{goal['id']}").json()
+        assert reread["final_score"] == 0.2
+        assert reread["score"] == 0.2
+
+    def test_abandoning_freezes_the_score(self, client: TestClient) -> None:
+        goal = make_goal(client, "Give up")
+        make_key_result(
+            client, goal["id"], "Lines", start_value=0, target_value=100, current_value=40
+        )
+
+        body = client.patch(f"/api/v1/goals/{goal['id']}", json={"status": "abandoned"}).json()
+
+        assert body["final_score"] == 0.4
+        assert body["score"] == 0.4
+
+    def test_abandoning_drops_focus(self, client: TestClient) -> None:
+        goal = make_goal(client, "Give up")
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"is_focused": True})
+
+        body = client.patch(f"/api/v1/goals/{goal['id']}", json={"status": "abandoned"}).json()
+
+        assert body["is_focused"] is False
+
+    def test_a_goal_that_closes_on_read_drops_focus(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v1")
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"is_focused": True})
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"end_date": "2020-03-31"})
+
+        body = client.get(f"/api/v1/goals/{goal['id']}").json()
+
+        assert body["status"] == "closed"
+        assert body["is_focused"] is False
+
+
+class TestDeletingAKeyResultDetachesItsTasks:
+    """SQLite does not enforce ON DELETE SET NULL without PRAGMA
+    foreign_keys=ON, and it recycles rowids — so a Task left pointing at a
+    deleted Key Result becomes a phantom count on the next one created."""
+
+    def test_deleting_a_key_result_detaches_its_tasks(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(client, goal["id"], "Tasks done", source="task_count")["key_results"][
+            0
+        ]
+        task = client.post("/api/v1/tasks", json={"title": "A", "key_result_id": kr["id"]}).json()
+
+        client.delete(f"/api/v1/goals/{goal['id']}/key-results/{kr['id']}")
+
+        assert only_task(client, task["id"])["key_result_id"] is None
+
+    def test_a_new_key_result_does_not_inherit_a_deleted_one_s_tasks(
+        self, client: TestClient
+    ) -> None:
+        goal = make_goal(client, "Ship v2")
+        first = make_key_result(client, goal["id"], "Old", source="task_count")["key_results"][0]
+        task = client.post(
+            "/api/v1/tasks", json={"title": "A", "key_result_id": first["id"]}
+        ).json()
+        client.patch(f"/api/v1/tasks/{task['id']}", json={"completed": True})
+        client.delete(f"/api/v1/goals/{goal['id']}/key-results/{first['id']}")
+
+        fresh = make_key_result(client, goal["id"], "New", source="task_count")["key_results"][0]
+
+        assert fresh["current_value"] == 0
+
+    def test_deleting_a_goal_detaches_its_key_results_tasks(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+        kr = make_key_result(client, goal["id"], "Tasks done", source="task_count")["key_results"][
+            0
+        ]
+        task = client.post("/api/v1/tasks", json={"title": "A", "key_result_id": kr["id"]}).json()
+
+        client.delete(f"/api/v1/goals/{goal['id']}")
+
+        assert only_task(client, task["id"])["key_result_id"] is None
+
+
+class TestGoalInputValidation:
+    def test_attaching_a_task_to_an_unknown_key_result_is_404(self, client: TestClient) -> None:
+        response = client.post("/api/v1/tasks", json={"title": "A", "key_result_id": 999999})
+
+        assert response.status_code == 404
+
+    def test_patching_a_task_onto_an_unknown_key_result_is_404(self, client: TestClient) -> None:
+        task = client.post("/api/v1/tasks", json={"title": "A"}).json()
+
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json={"key_result_id": 999999})
+
+        assert response.status_code == 404
+
+    def test_an_end_date_before_the_start_date_is_rejected(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/goals",
+            json={"title": "Backwards", "start_date": "2026-06-30", "end_date": "2026-01-01"},
+        )
+
+        assert response.status_code == 422
+
+    def test_a_habit_key_result_requires_a_habit(self, client: TestClient) -> None:
+        goal = make_goal(client, "Ship v2")
+
+        response = client.post(
+            f"/api/v1/goals/{goal['id']}/key-results",
+            json={"name": "Check-ins", "source": "habit_checkins"},
+        )
+
+        assert response.status_code == 422

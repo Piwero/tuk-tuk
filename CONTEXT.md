@@ -93,11 +93,11 @@ _Avoid_: Metric, KR without spelling it out on first use
 A Key Result's progress: `(current - start) / (target - start)`, clamped to 0.0-1.0. Falls out the same for descending Key Results (target below start). Not stored.
 
 **Score**:
-A Goal's overall progress: the unweighted mean of its Key Results' ratios, rounded to two places. Null (not zero) for a Goal with no Key Results, so "unmeasured" never reads as "failed." Frozen as `final_score` the moment a Goal closes; a Check-in backfilled afterward never rewrites it.
+A Goal's overall progress: the unweighted mean of its Key Results' ratios, rounded to two places. Null (not zero) for a Goal with no Key Results, so "unmeasured" never reads as "failed." Computed live only while a Goal is active. The moment it leaves `active` — closed by its window passing, or abandoned — it **settles**: the Score is frozen as `final_score` and reported from there, so a Check-in backfilled afterward never rewrites it, and never contradicts it on the same payload.
 _Avoid_: Weighted score (rejected — see ADR 0012)
 
 **Focused Goal**:
-The one Goal, of possibly several active ones, carrying `is_focused`. Setting it clears the previous one in the same transaction, enforced at the service layer (not a database constraint) — the rule the next reader will actually find. Stand-up shows only the Focused Goal and its Key Result progress, never a list of every active Goal.
+The one Goal, of possibly several active ones, carrying `is_focused`. Setting it clears the previous one in the same transaction, enforced at the service layer (not a database constraint) — the rule the next reader will actually find. Stand-up shows only the Focused Goal and its Key Result progress, never a list of every active Goal. Only an active Goal can be focused: settling drops the flag, since the morning ritual must not keep showing an outcome already closed or abandoned.
 
 **Obstacle**:
 The Goal field naming what is expected to get in the way of it (WOOP's mental-contrasting step) — free text, nullable, since a Goal must be creatable in seconds.

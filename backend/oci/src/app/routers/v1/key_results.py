@@ -10,7 +10,7 @@ from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.goal_read import build_goal_read
 from app.models import Goal, KeyResult
-from app.routers.v1.goals import get_goal_or_404
+from app.routers.v1.goals import detach_tasks, get_goal_or_404
 from app.schemas import GoalRead, KeyResultCreate, KeyResultUpdate
 from app.sparse_order import append_order
 
@@ -71,5 +71,6 @@ async def update_key_result(
 async def delete_key_result(goal_id: int, key_result_id: int, session: SessionDep) -> None:
     goal = await get_goal_or_404(goal_id, session)
     kr = get_key_result_or_404(goal, key_result_id)
+    await detach_tasks([kr.id], session)
     goal.key_results.remove(kr)
     await session.commit()

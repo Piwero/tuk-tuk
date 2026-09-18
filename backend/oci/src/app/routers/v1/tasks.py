@@ -16,6 +16,7 @@ from app.models import (
     CheckItem,
     CompletedOccurrence,
     FocusSession,
+    KeyResult,
     Section,
     Tag,
     Task,
@@ -92,6 +93,13 @@ def validate_schedule(
             raise invalid_schedule("A timed start+due duration must stay within one day")
 
 
+async def validate_key_result(session: SessionDep, key_result_id: int | None) -> None:
+    """Key Results are only reachable nested under a Goal, so this flat id is
+    the one place the Goal scoping is bypassable — check it at the boundary."""
+    if key_result_id is not None and await session.get(KeyResult, key_result_id) is None:
+        raise NotFoundError(f"Key result {key_result_id} not found")
+
+
 async def resolve_section(session: SessionDep, section_id: int, list_id: int) -> Section:
     """A Section belongs to one List: 404 when unknown, 409 when foreign."""
     section = await session.get(Section, section_id)
@@ -127,6 +135,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         raise NotFoundError("Inbox not found")
     if payload.section_id is not None:
         await resolve_section(session, payload.section_id, list_id)
+    await validate_key_result(session, payload.key_result_id)
     validate_schedule(payload.start_date, payload.due_date, payload.is_all_day, payload.time_zone)
     validate_recurrence(payload.recurrence, payload.due_date)
     reminders = validate_reminders(payload.reminders, payload.due_date)
@@ -170,6 +179,7 @@ async def read_tasks(
     session: SessionDep,
     list_id: int | None = None,
     tag_id: int | None = None,
+    key_result_id: int | None = None,
     completed: bool | None = None,
     priority: Priority | None = None,
     scheduled: bool | None = None,
@@ -188,8 +198,9 @@ async def read_tasks(
     `scheduled=false` keeps only undated tasks — the unscheduled panel's query.
     `search` matches titles, descriptions and Check Item titles (an empty
     query matches nothing); it combines with the List / Tag / Priority /
-    completion filters. `priority` also filters on its own, like `list_id`
-    and `tag_id`. `completed=true` is the completed view: newest
+    completion filters. `priority` also filters on its own, like `list_id`,
+    `tag_id` and `key_result_id` — the last being what a Key Result's count
+    is made of, so the user can see it rather than trust it. `completed=true` is the completed view: newest
     completion first.
     """
     if view is not None:
@@ -238,6 +249,8 @@ async def read_tasks(
         query = query.where(Task.list_id == list_id)
     if tag_id is not None:
         query = query.where(Task.tags.any(Tag.id == tag_id))
+    if key_result_id is not None:
+        query = query.where(Task.key_result_id == key_result_id)
     if completed is not None:
         query = query.where(Task.completed == completed)
     if priority is not None:
@@ -337,6 +350,8 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
             changes["section_id"] = None
     if changes.get("section_id") is not None:
         await resolve_section(session, changes["section_id"], changes.get("list_id", task.list_id))
+    if "key_result_id" in changes:
+        await validate_key_result(session, changes["key_result_id"])
     # Validate the schedule the task would end up with after this patch.
     validate_schedule(
         changes.get("start_date", task.start_date),

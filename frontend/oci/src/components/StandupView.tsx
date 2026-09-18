@@ -395,6 +395,7 @@ export function StandupView(): JSX.Element {
       </aside>
       <div className="standup-detail">
         <div className="standup-goal" aria-label="Focused goal">
+          <p className="standup-goal-label">Focused goal</p>
           {focusedGoal === null ? (
             <p className="standup-goal-empty">No Goal is focused right now.</p>
           ) : (

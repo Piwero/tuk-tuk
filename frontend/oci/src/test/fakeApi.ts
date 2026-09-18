@@ -540,20 +540,31 @@ function keyResultCurrentValue(kr: FakeKeyResult, goal: FakeGoal, state: FakeApi
 /** A past-window `active` Goal closes on read, freezing its Score — the one
  * mutation this read path performs, mirroring app.goal_read._close_if_past_window.
  * A windowless Goal (the Sprint Goal seed) never auto-closes. */
+function meanRatio(ratios: number[]): number | null {
+  if (ratios.length === 0) return null;
+  return Math.round((ratios.reduce((sum, r) => sum + r, 0) / ratios.length) * 100) / 100;
+}
+
+/** Leaving `active` freezes the Score and drops focus — mirrors
+ * app.goal_read.settle. */
+function settle(goal: FakeGoal, ratios: number[]): void {
+  goal.final_score = meanRatio(ratios);
+  goal.is_focused = false;
+}
+
 function closeIfPastWindow(goal: FakeGoal, ratios: number[]): void {
   if (goal.status !== "active" || goal.end_date === null) return;
   if (goal.end_date >= new Date().toISOString().slice(0, 10)) return;
   goal.status = "closed";
-  goal.final_score =
-    ratios.length === 0
-      ? null
-      : Math.round((ratios.reduce((sum, r) => sum + r, 0) / ratios.length) * 100) / 100;
+  settle(goal, ratios);
 }
 
 /** Builds the GoalRead wire shape: resolves each Key Result's current_value
  * and ratio, and the Goal's score (unweighted mean of ratios, null with no
  * Key Results) — mirrors app.goal_read.build_goal_read. */
 function serializeGoal(goal: FakeGoal, state: FakeApiState): unknown {
+  // Key Results are served in sort_order — that is what reordering moves.
+  goal.key_results.sort((a, b) => a.sort_order - b.sort_order);
   const keyResults = goal.key_results.map((kr) => {
     const current_value = keyResultCurrentValue(kr, goal, state);
     return {
@@ -566,11 +577,9 @@ function serializeGoal(goal: FakeGoal, state: FakeApiState): unknown {
     goal,
     keyResults.map((kr) => kr.ratio),
   );
+  // A settled Goal reports its frozen snapshot, never a live recomputation.
   const score =
-    keyResults.length === 0
-      ? null
-      : Math.round((keyResults.reduce((sum, kr) => sum + kr.ratio, 0) / keyResults.length) * 100) /
-        100;
+    goal.status === "active" ? meanRatio(keyResults.map((kr) => kr.ratio)) : goal.final_score;
   return { ...goal, key_results: keyResults, score };
 }
 
@@ -1309,6 +1318,7 @@ export function installFakeApi({
     if (method === "GET" && url.pathname === "/api/v1/tasks") {
       const listId = url.searchParams.get("list_id");
       const tagId = url.searchParams.get("tag_id");
+      const keyResultId = url.searchParams.get("key_result_id");
       const view = url.searchParams.get("view");
       const today = url.searchParams.get("today");
       const rangeStart = url.searchParams.get("range_start");
@@ -1322,6 +1332,7 @@ export function installFakeApi({
         (task) =>
           (listId === null || task.list_id === Number(listId)) &&
           (tagId === null || task.tags.some((tag) => tag.id === Number(tagId))) &&
+          (keyResultId === null || task.key_result_id === Number(keyResultId)) &&
           (completed === null || task.completed === (completed === "true")) &&
           (priority === null || task.priority === priority),
       );
@@ -1818,7 +1829,17 @@ export function installFakeApi({
             if (other.id !== goalId) other.is_focused = false;
           }
         }
+        const wasActive = goal.status === "active";
         Object.assign(goal, body);
+        if (wasActive && goal.status !== "active") {
+          settle(
+            goal,
+            goal.key_results.map((kr) => {
+              const current = keyResultCurrentValue(kr, goal, state);
+              return keyResultRatio(kr.start_value, kr.target_value, current);
+            }),
+          );
+        }
         return json(serializeGoal(goal, state));
       }
       if (method === "DELETE") {
@@ -1863,6 +1884,11 @@ export function installFakeApi({
         return json(serializeGoal(goal, state));
       }
       if (method === "DELETE") {
+        // Deleting a Key Result detaches its Tasks (mirrors the backend's
+        // explicit UPDATE — SQLite's ON DELETE SET NULL never fires).
+        for (const task of state.tasks) {
+          if (task.key_result_id === keyResultId) task.key_result_id = null;
+        }
         goal.key_results = goal.key_results.filter((k) => k.id !== keyResultId);
         return new Response(null, { status: 204 });
       }

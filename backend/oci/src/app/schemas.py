@@ -10,6 +10,7 @@ from pydantic import (
     computed_field,
     field_serializer,
     field_validator,
+    model_validator,
 )
 
 from app.goal_score import goal_score
@@ -26,7 +27,7 @@ HabitType = Literal["boolean", "numeric"]
 # A Stand-up Bullet's section, in display order.
 StandupSection = Literal["yesterday", "today", "blockers"]
 
-# A Goal's status (ADR 0012): only "active" is exercised in this slice.
+# A Goal's status (ADR 0012). Leaving "active" freezes the Score.
 GoalStatus = Literal["active", "closed", "abandoned"]
 
 # A Key Result's value source (ADR 0012): "manual" is typed in; the other
@@ -42,6 +43,23 @@ def reject_explicit_null(value: object) -> object:
     if value is None:
         raise ValueError("Field may not be null; omit it to leave it unchanged")
     return value
+
+
+class GoalWindow(BaseModel):
+    """Shared window rule for Goal payloads: an inverted window would sum no
+    Check-ins forever and auto-close the moment it was created. Only checked
+    when both dates are present in the payload; a PATCH supplying one date
+    against a stored other is checked in the router."""
+
+    start_date: date | None = None
+    end_date: date | None = None
+
+    @model_validator(mode="after")
+    def check_window(self) -> "GoalWindow":
+        start, end = self.start_date, self.end_date
+        if start is not None and end is not None and end < start:
+            raise ValueError("end_date may not be before start_date")
+        return self
 
 
 def as_utc(value: datetime) -> datetime:
@@ -589,7 +607,7 @@ class TaskRead(BaseModel):
         return None if value is None else utc_z(value)
 
 
-class GoalCreate(BaseModel):
+class GoalCreate(GoalWindow):
     """`start_date`/`end_date` default to the current quarter when omitted
     (the router fills them in) — see ADR 0012."""
 
@@ -597,19 +615,15 @@ class GoalCreate(BaseModel):
     description: str = Field(default="", max_length=5000)
     obstacle: str | None = Field(default=None, max_length=2000)
     if_then_plan: str | None = Field(default=None, max_length=2000)
-    start_date: date | None = None
-    end_date: date | None = None
 
 
 # PATCH fields: absent means "leave unchanged". An explicit null is rejected,
 # except obstacle / if_then_plan / retro, where null clears the field.
-class GoalUpdate(BaseModel):
+class GoalUpdate(GoalWindow):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
     obstacle: str | None = Field(default=None, max_length=2000)
     if_then_plan: str | None = Field(default=None, max_length=2000)
-    start_date: date | None = None
-    end_date: date | None = None
     status: GoalStatus | None = None
     is_focused: bool | None = None
     retro: str | None = Field(default=None, max_length=5000)
@@ -629,6 +643,14 @@ class KeyResultCreate(BaseModel):
     target_value: float = 1.0
     current_value: float = 0.0
     source_habit_id: int | None = None
+
+    @model_validator(mode="after")
+    def check_source_habit(self) -> "KeyResultCreate":
+        # Without it the Key Result sums nothing forever and drags the Score
+        # down — a measure that can never move is worse than no measure.
+        if self.source == "habit_checkins" and self.source_habit_id is None:
+            raise ValueError("source_habit_id is required when source is habit_checkins")
+        return self
 
 
 # PATCH fields: absent means "leave unchanged". `current_value` is rejected
@@ -690,6 +712,11 @@ class GoalRead(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def score(self) -> float | None:
+        # Once a Goal is closed or abandoned its Score is the frozen snapshot:
+        # a Check-in backfilled later must not rewrite what the Score was
+        # (ADR 0012). Live computation applies only while it is active.
+        if self.status != "active":
+            return self.final_score
         return goal_score([kr.ratio for kr in self.key_results])
 
     @field_serializer("created_at")
