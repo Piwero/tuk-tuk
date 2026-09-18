@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  ApiError,
   createGoal,
   createKeyResult,
   deleteGoal,
   deleteKeyResult,
   fetchGoals,
   fetchHabits,
+  fetchTasksByKeyResult,
   updateGoal,
   updateKeyResult,
   type Goal,
   type GoalCreateInput,
   type Habit,
   type KeyResult,
+  type KeyResultPatch,
   type KeyResultSource,
+  type Task,
 } from "../api";
+import { Icon } from "./Icon";
 
 interface GoalFormValues {
   title: string;
@@ -31,8 +36,8 @@ function valuesOf(goal: Goal): GoalFormValues {
     description: goal.description,
     obstacle: goal.obstacle ?? "",
     if_then_plan: goal.if_then_plan ?? "",
-    start_date: goal.start_date,
-    end_date: goal.end_date,
+    start_date: goal.start_date ?? "",
+    end_date: goal.end_date ?? "",
   };
 }
 
@@ -145,24 +150,152 @@ const BLANK_KEY_RESULT: KeyResultFormValues = {
   source_habit_id: "",
 };
 
+/** Where an automatic Key Result's number comes from, said plainly — system
+ * copy carries no jargon and no emoji (design system, Content rules). */
+const SOURCE_NOTE: Record<KeyResultSource, string> = {
+  manual: "",
+  habit_checkins: "From Check-ins",
+  task_count: "From completed Tasks",
+};
+
+/** One Key Result row: name, progress, its value, and the controls that
+ * reorder or remove it. A "task_count" row can expand to show the Tasks its
+ * count is made of, so the number can be checked rather than trusted. */
+function KeyResultRow({
+  keyResult: kr,
+  isFirst,
+  isLast,
+  onUpdate,
+  onMove,
+  onDelete,
+}: {
+  keyResult: KeyResult;
+  isFirst: boolean;
+  isLast: boolean;
+  onUpdate: (keyResultId: number, patch: KeyResultPatch) => void;
+  onMove: (keyResultId: number, direction: -1 | 1) => void;
+  onDelete: (keyResultId: number) => void;
+}): JSX.Element {
+  const [showTasks, setShowTasks] = useState(false);
+  const [tasks, setTasks] = useState<Task[] | null>(null);
+  const percent = Math.round(kr.ratio * 100);
+
+  useEffect(() => {
+    if (!showTasks) {
+      return;
+    }
+    void fetchTasksByKeyResult(kr.id).then((page) => setTasks(page.items));
+  }, [showTasks, kr.id, kr.current_value]);
+
+  return (
+    <li className="key-result">
+      <div className="key-result-row">
+        <span className="key-result-name">{kr.name}</span>
+        <span className="key-result-progress" aria-label={`${kr.name} progress`}>
+          {percent}%
+        </span>
+        <span
+          className="key-result-meter"
+          aria-hidden="true"
+          style={{ ["--kr-fill" as string]: `${Math.min(100, percent)}%` }}
+        />
+        {kr.source === "manual" ? (
+          <input
+            aria-label={`${kr.name} current value`}
+            type="number"
+            defaultValue={kr.current_value}
+            onBlur={(event) => onUpdate(kr.id, { current_value: Number(event.target.value) })}
+          />
+        ) : (
+          <span
+            aria-label={`${kr.name} current value`}
+            className="key-result-readonly"
+            title={SOURCE_NOTE[kr.source]}
+          >
+            {kr.current_value}
+          </span>
+        )}
+        <input
+          aria-label={`${kr.name} target value`}
+          className="key-result-target"
+          type="number"
+          defaultValue={kr.target_value}
+          onBlur={(event) => onUpdate(kr.id, { target_value: Number(event.target.value) })}
+        />
+        <div className="key-result-actions">
+          <button
+            type="button"
+            aria-label={`Move key result ${kr.name} up`}
+            disabled={isFirst}
+            onClick={() => onMove(kr.id, -1)}
+          >
+            <Icon name="chevron-up" size={16} />
+          </button>
+          <button
+            type="button"
+            aria-label={`Move key result ${kr.name} down`}
+            disabled={isLast}
+            onClick={() => onMove(kr.id, 1)}
+          >
+            <Icon name="chevron-down" size={16} />
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete key result ${kr.name}`}
+            onClick={() => onDelete(kr.id)}
+          >
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+      </div>
+      {kr.source !== "manual" && <p className="key-result-source">{SOURCE_NOTE[kr.source]}</p>}
+      {kr.source === "task_count" && (
+        <>
+          <button
+            type="button"
+            className="key-result-tasks-toggle"
+            aria-expanded={showTasks}
+            onClick={() => setShowTasks((current) => !current)}
+          >
+            {showTasks ? "Hide attached tasks" : "Show attached tasks"}
+          </button>
+          {showTasks && (
+            <ul className="key-result-tasks" aria-label={`Tasks attached to ${kr.name}`}>
+              {tasks !== null && tasks.length === 0 && (
+                <li className="key-result-tasks-empty">No tasks attached yet.</li>
+              )}
+              {(tasks ?? []).map((task) => (
+                <li key={task.id}>
+                  {task.title}
+                  {task.completed && <Icon name="check" size={14} />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </li>
+  );
+}
+
 /** A Goal's Key Results: list with progress, add form, and per-row edit /
- * delete. Automatic sources (habit_checkins, task_count) render their value
- * read-only (ADR 0012) — only "manual" Key Results get an editable value. */
+ * reorder / delete. Automatic sources (habit_checkins, task_count) render
+ * their value read-only (ADR 0012) — only "manual" Key Results get an
+ * editable value; the target is editable on every Key Result. */
 function KeyResultsPanel({
   goal,
   habits,
   onCreate,
   onUpdate,
+  onMove,
   onDelete,
 }: {
   goal: Goal;
   habits: Habit[];
-  onCreate: (values: KeyResultFormValues) => Promise<void>;
-  onUpdate: (
-    keyResultId: number,
-    patch: { target_value?: number; current_value?: number },
-  ) => Promise<void>;
-  onDelete: (keyResultId: number) => Promise<void>;
+  onCreate: (values: KeyResultFormValues) => void;
+  onUpdate: (keyResultId: number, patch: KeyResultPatch) => void;
+  onMove: (keyResultId: number, direction: -1 | 1) => void;
+  onDelete: (keyResultId: number) => void;
 }): JSX.Element {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<KeyResultFormValues>(BLANK_KEY_RESULT);
@@ -176,32 +309,16 @@ function KeyResultsPanel({
       {goal.score !== null && <p className="goal-score">Score: {Math.round(goal.score * 100)}%</p>}
       {goal.key_results.length > 0 && (
         <ul aria-label="Key results">
-          {goal.key_results.map((kr: KeyResult) => (
-            <li key={kr.id} className="key-result">
-              <span>{kr.name}</span>
-              <span>{Math.round(kr.ratio * 100)}%</span>
-              {kr.source === "manual" ? (
-                <input
-                  aria-label={`${kr.name} current value`}
-                  type="number"
-                  defaultValue={kr.current_value}
-                  onBlur={(event) =>
-                    void onUpdate(kr.id, { current_value: Number(event.target.value) })
-                  }
-                />
-              ) : (
-                <span aria-label={`${kr.name} current value`} className="key-result-readonly">
-                  {kr.current_value} (auto)
-                </span>
-              )}
-              <button
-                type="button"
-                aria-label={`Delete key result ${kr.name}`}
-                onClick={() => void onDelete(kr.id)}
-              >
-                Delete
-              </button>
-            </li>
+          {goal.key_results.map((kr: KeyResult, index: number) => (
+            <KeyResultRow
+              key={kr.id}
+              keyResult={kr}
+              isFirst={index === 0}
+              isLast={index === goal.key_results.length - 1}
+              onUpdate={onUpdate}
+              onMove={onMove}
+              onDelete={onDelete}
+            />
           ))}
         </ul>
       )}
@@ -210,10 +327,9 @@ function KeyResultsPanel({
           className="key-result-form"
           onSubmit={(event) => {
             event.preventDefault();
-            void onCreate(draft).then(() => {
-              setDraft(BLANK_KEY_RESULT);
-              setAdding(false);
-            });
+            onCreate(draft);
+            setDraft(BLANK_KEY_RESULT);
+            setAdding(false);
           }}
         >
           <label>
@@ -340,89 +456,147 @@ export function GoalsView(): JSX.Element {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [editor, setEditor] = useState<Editor>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const page = await fetchGoals();
     setGoals(page.items);
+    setLoaded(true);
   }, []);
 
+  /** Every mutation goes through here: a failure says so in the view rather
+   * than rejecting into nothing. The 409 on writing an automatic Key Result's
+   * value (ADR 0012) is an expected outcome, not a crash. */
+  const run = useCallback(
+    (work: () => Promise<void>): void => {
+      setError(null);
+      void work().catch((cause: unknown) => {
+        setError(cause instanceof ApiError ? cause.message : "Something went wrong. Try again.");
+        void load();
+      });
+    },
+    [load],
+  );
+
   useEffect(() => {
-    void load();
+    void load().catch(() => {
+      setError("Couldn't load your goals.");
+      setLoaded(true);
+    });
   }, [load]);
 
   useEffect(() => {
-    void fetchHabits().then((page) => setHabits(page.items));
+    void fetchHabits()
+      .then((page) => setHabits(page.items))
+      .catch(() => setHabits([]));
   }, []);
 
-  async function handleCreateKeyResult(goal: Goal, values: KeyResultFormValues): Promise<void> {
-    const updated = await createKeyResult(goal.id, {
-      name: values.name,
-      source: values.source,
-      start_value: Number(values.start_value),
-      target_value: Number(values.target_value),
-      ...(values.source === "manual" ? { current_value: Number(values.current_value) } : {}),
-      ...(values.source === "habit_checkins" && values.source_habit_id !== ""
-        ? { source_habit_id: Number(values.source_habit_id) }
-        : {}),
+  function handleCreateKeyResult(goal: Goal, values: KeyResultFormValues): void {
+    run(async () => {
+      const updated = await createKeyResult(goal.id, {
+        name: values.name,
+        source: values.source,
+        start_value: Number(values.start_value),
+        target_value: Number(values.target_value),
+        ...(values.source === "manual" ? { current_value: Number(values.current_value) } : {}),
+        ...(values.source === "habit_checkins" && values.source_habit_id !== ""
+          ? { source_habit_id: Number(values.source_habit_id) }
+          : {}),
+      });
+      setGoals((current) => current.map((g) => (g.id === updated.id ? updated : g)));
     });
-    setGoals((current) => current.map((g) => (g.id === updated.id ? updated : g)));
   }
 
-  async function handleUpdateKeyResult(
-    goal: Goal,
-    keyResultId: number,
-    patch: { target_value?: number; current_value?: number },
-  ): Promise<void> {
-    const updated = await updateKeyResult(goal.id, keyResultId, patch);
-    setGoals((current) => current.map((g) => (g.id === updated.id ? updated : g)));
-  }
-
-  async function handleDeleteKeyResult(goal: Goal, keyResultId: number): Promise<void> {
-    await deleteKeyResult(goal.id, keyResultId);
-    await load();
-  }
-
-  async function handleToggleFocus(goal: Goal): Promise<void> {
-    await updateGoal(goal.id, { is_focused: !goal.is_focused });
-    await load();
-  }
-
-  async function handleCreate(values: GoalFormValues): Promise<void> {
-    await createGoal(toCreateInput(values));
-    setEditor(null);
-    await load();
-  }
-
-  async function handleEdit(goal: Goal, values: GoalFormValues): Promise<void> {
-    await updateGoal(goal.id, {
-      title: values.title,
-      description: values.description,
-      obstacle: values.obstacle === "" ? null : values.obstacle,
-      if_then_plan: values.if_then_plan === "" ? null : values.if_then_plan,
-      start_date: values.start_date,
-      end_date: values.end_date,
+  function handleUpdateKeyResult(goal: Goal, keyResultId: number, patch: KeyResultPatch): void {
+    run(async () => {
+      const updated = await updateKeyResult(goal.id, keyResultId, patch);
+      setGoals((current) => current.map((g) => (g.id === updated.id ? updated : g)));
     });
-    setEditor(null);
-    await load();
   }
 
-  async function handleDelete(goal: Goal): Promise<void> {
-    const confirmed = window.confirm(`Delete the goal "${goal.title}"?`);
+  /** Reorder by swapping sort_order with the neighbour in the direction of
+   * travel — the list is already served in sort_order, so a swap is the whole
+   * move. */
+  function handleMoveKeyResult(goal: Goal, keyResultId: number, direction: -1 | 1): void {
+    const index = goal.key_results.findIndex((kr) => kr.id === keyResultId);
+    const neighbour = goal.key_results[index + direction];
+    const moving = goal.key_results[index];
+    if (neighbour === undefined || moving === undefined) {
+      return;
+    }
+    run(async () => {
+      await updateKeyResult(goal.id, moving.id, { sort_order: neighbour.sort_order });
+      const updated = await updateKeyResult(goal.id, neighbour.id, {
+        sort_order: moving.sort_order,
+      });
+      setGoals((current) => current.map((g) => (g.id === updated.id ? updated : g)));
+    });
+  }
+
+  function handleDeleteKeyResult(goal: Goal, keyResultId: number): void {
+    run(async () => {
+      await deleteKeyResult(goal.id, keyResultId);
+      await load();
+    });
+  }
+
+  function handleToggleFocus(goal: Goal): void {
+    run(async () => {
+      await updateGoal(goal.id, { is_focused: !goal.is_focused });
+      // A full reload, not a splice: focusing one Goal unfocuses the other.
+      await load();
+    });
+  }
+
+  function handleCreate(values: GoalFormValues): void {
+    run(async () => {
+      await createGoal(toCreateInput(values));
+      setEditor(null);
+      await load();
+    });
+  }
+
+  function handleEdit(goal: Goal, values: GoalFormValues): void {
+    run(async () => {
+      await updateGoal(goal.id, {
+        title: values.title,
+        description: values.description,
+        obstacle: values.obstacle === "" ? null : values.obstacle,
+        if_then_plan: values.if_then_plan === "" ? null : values.if_then_plan,
+        start_date: values.start_date,
+        end_date: values.end_date,
+      });
+      setEditor(null);
+      await load();
+    });
+  }
+
+  function handleDelete(goal: Goal): void {
+    const confirmed = window.confirm(
+      `Delete "${goal.title}" and its key results. Attached tasks are kept.`,
+    );
     if (!confirmed) {
       return;
     }
-    await deleteGoal(goal.id);
-    await load();
+    run(async () => {
+      await deleteGoal(goal.id);
+      await load();
+    });
   }
 
-  async function handleAbandon(goal: Goal): Promise<void> {
-    await updateGoal(goal.id, { status: "abandoned" });
-    await load();
+  function handleAbandon(goal: Goal): void {
+    run(async () => {
+      await updateGoal(goal.id, { status: "abandoned" });
+      await load();
+    });
   }
 
-  async function handleRetro(goal: Goal, retro: string): Promise<void> {
-    await updateGoal(goal.id, { retro: retro === "" ? null : retro });
-    await load();
+  function handleRetro(goal: Goal, retro: string): void {
+    run(async () => {
+      await updateGoal(goal.id, { retro: retro === "" ? null : retro });
+      await load();
+    });
   }
 
   function renderGoal(goal: Goal): JSX.Element {
@@ -431,7 +605,7 @@ export function GoalsView(): JSX.Element {
         <li key={goal.id} className="goal-editing">
           <GoalForm
             initial={valuesOf(goal)}
-            onSubmit={(values) => void handleEdit(goal, values)}
+            onSubmit={(values) => handleEdit(goal, values)}
             onCancel={() => setEditor(null)}
           />
         </li>
@@ -445,7 +619,9 @@ export function GoalsView(): JSX.Element {
         </h3>
         {goal.description !== "" && <p>{goal.description}</p>}
         <p className="goal-window">
-          {goal.start_date ?? "No window"} – {goal.end_date ?? ""}
+          {goal.start_date === null || goal.end_date === null
+            ? "No window"
+            : `${goal.start_date} – ${goal.end_date}`}
         </p>
         {goal.obstacle !== null && (
           <p className="goal-obstacle">
@@ -462,6 +638,7 @@ export function GoalsView(): JSX.Element {
           habits={habits}
           onCreate={(values) => handleCreateKeyResult(goal, values)}
           onUpdate={(keyResultId, patch) => handleUpdateKeyResult(goal, keyResultId, patch)}
+          onMove={(keyResultId, direction) => handleMoveKeyResult(goal, keyResultId, direction)}
           onDelete={(keyResultId) => handleDeleteKeyResult(goal, keyResultId)}
         />
         {goal.status === "closed" && goal.final_score !== null && (
@@ -483,16 +660,19 @@ export function GoalsView(): JSX.Element {
             <>
               <button
                 type="button"
+                aria-pressed={goal.is_focused}
                 aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
-                onClick={() => void handleToggleFocus(goal)}
+                onClick={() => handleToggleFocus(goal)}
               >
+                <Icon name="target" size={16} />
                 {goal.is_focused ? "Unfocus" : "Focus"}
               </button>
               <button
                 type="button"
                 aria-label={`Abandon ${goal.title}`}
-                onClick={() => void handleAbandon(goal)}
+                onClick={() => handleAbandon(goal)}
               >
+                <Icon name="x" size={16} />
                 Abandon
               </button>
             </>
@@ -502,13 +682,15 @@ export function GoalsView(): JSX.Element {
             aria-label={`Edit ${goal.title}`}
             onClick={() => setEditor({ mode: "edit", goalId: goal.id })}
           >
+            <Icon name="pencil" size={16} />
             Edit
           </button>
           <button
             type="button"
             aria-label={`Delete goal ${goal.title}`}
-            onClick={() => void handleDelete(goal)}
+            onClick={() => handleDelete(goal)}
           >
+            <Icon name="trash-2" size={16} />
             Delete
           </button>
         </div>
@@ -523,9 +705,17 @@ export function GoalsView(): JSX.Element {
 
   return (
     <div className="goals-view">
-      {goals.length === 0 && editor === null ? (
+      {error !== null && (
+        <p className="goals-error" role="alert">
+          {error}
+        </p>
+      )}
+      {/* Gate on `loaded`, not on the array: an unloaded view is not an empty
+       * one, and flashing "add your first goal" at someone who has twelve is
+       * a lie the fetch corrects a moment later. */}
+      {loaded && goals.length === 0 && editor === null ? (
         <p className="goals-empty-hint">
-          A Goal is a durable outcome with a window — add one below to start tracking it.
+          A Goal is a durable outcome with a window — add one to start tracking it.
         </p>
       ) : (
         <>
@@ -556,12 +746,10 @@ export function GoalsView(): JSX.Element {
         </>
       )}
       {editor?.mode === "create" ? (
-        <GoalForm
-          onSubmit={(values) => void handleCreate(values)}
-          onCancel={() => setEditor(null)}
-        />
+        <GoalForm onSubmit={(values) => handleCreate(values)} onCancel={() => setEditor(null)} />
       ) : (
-        <button type="button" onClick={() => setEditor({ mode: "create" })}>
+        <button type="button" className="goals-add" onClick={() => setEditor({ mode: "create" })}>
+          <Icon name="plus" size={16} />
           Add Goal
         </button>
       )}
