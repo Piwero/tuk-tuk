@@ -61,9 +61,9 @@ describe("Habit history", () => {
     ).toBe(true);
   });
 
-  it("scales heatmap intensity by value / Goal for Numeric habits", async () => {
+  it("scales heatmap intensity by value / Target for Numeric habits", async () => {
     const api = installFakeApi({
-      habits: [fakeHabit("Drink water", { type: "numeric", goal: 8, step: 2, unit: "glasses" })],
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 8, step: 2, unit: "glasses" })],
     });
     const habitId = api.habits[0]?.id ?? 0;
     checkIn(api, habitId, "2026-07-01", 4);
@@ -112,7 +112,7 @@ describe("Habit history", () => {
 
   it("accumulates +step on a past day and a tap on a complete day clears it", async () => {
     const api = installFakeApi({
-      habits: [fakeHabit("Drink water", { type: "numeric", goal: 4, step: 2, unit: "glasses" })],
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 4, step: 2, unit: "glasses" })],
     });
     render(<App />);
 

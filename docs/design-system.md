@@ -200,8 +200,8 @@ cannot reach, and the rail needs something to hide that isn't the mark.
   content column can't hold two cards. Each card carries its recent-days
   strip (three weeks), current Streak, one Check-in control, and a single
   actions menu — History, Edit, Archive, Delete fold behind one kebab
-  trigger rather than four permanent buttons. A met Goal is called out in
-  words ("Goal met") and a check mark, never by the card's green wash
+  trigger rather than four permanent buttons. A met Target is called out in
+  words ("Target met") and a check mark, never by the card's green wash
   alone.
 - Radii: 6px inputs/buttons/chips (`--radius-sm`), 8px cards/panels
   (`--radius-md`), 12px modals (`--radius-lg`), full-round pills

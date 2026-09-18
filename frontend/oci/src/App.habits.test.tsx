@@ -107,9 +107,9 @@ describe("Today's Habits", () => {
     expect(api.checkIns).toHaveLength(1);
   });
 
-  it("accumulates a Numeric Habit by +step and completes at the Goal", async () => {
+  it("accumulates a Numeric Habit by +step and completes at the Target", async () => {
     const api = installFakeApi({
-      habits: [fakeHabit("Drink water", { type: "numeric", goal: 4, step: 2, unit: "glasses" })],
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 4, step: 2, unit: "glasses" })],
     });
     render(<App />);
     await openHabits();
@@ -200,9 +200,9 @@ describe("Habit card stats", () => {
     expect(days[0]?.getAttribute("aria-label")).toBe("Feb 9: missed");
   });
 
-  it("shows a Numeric Habit's partial progress toward its Goal, not a binary state", async () => {
+  it("shows a Numeric Habit's partial progress toward its Target, not a binary state", async () => {
     const api = installFakeApi({
-      habits: [fakeHabit("Drink water", { type: "numeric", goal: 4, step: 2, unit: "glasses" })],
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 4, step: 2, unit: "glasses" })],
     });
     const habitId = api.habits[0]?.id ?? 0;
     checkIn(api, habitId, "2026-07-01", 4);
@@ -231,7 +231,9 @@ describe("Managing Habits", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Habit type" }), {
       target: { value: "numeric" },
     });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Goal" }), { target: { value: "8" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Target" }), {
+      target: { value: "8" },
+    });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Step" }), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText("Unit"), { target: { value: "glasses" } });
     fireEvent.click(screen.getByRole("button", { name: "Icon" }));
@@ -257,7 +259,7 @@ describe("Managing Habits", () => {
     expect(post?.body).toEqual({
       name: "Drink water",
       type: "numeric",
-      goal: 8,
+      target: 8,
       step: 2,
       unit: "glasses",
       icon: "💧",
@@ -390,7 +392,7 @@ describe("Managing Habits", () => {
       habits: [
         fakeHabit("Drink water", {
           type: "numeric",
-          goal: 8,
+          target: 8,
           step: 2,
           unit: "glasses",
           icon: "💧",
@@ -408,7 +410,7 @@ describe("Managing Habits", () => {
 
     expect(screen.getByLabelText("Name")).toHaveValue("Drink water");
     expect(screen.getByRole("combobox", { name: "Habit type" })).toHaveValue("numeric");
-    expect(screen.getByRole("spinbutton", { name: "Goal" })).toHaveValue(8);
+    expect(screen.getByRole("spinbutton", { name: "Target" })).toHaveValue(8);
     expect(screen.getByRole("spinbutton", { name: "Step" })).toHaveValue(2);
     expect(screen.getByLabelText("Unit")).toHaveValue("glasses");
     expect(screen.getByRole("button", { name: "Icon" })).toHaveTextContent("💧");
@@ -434,7 +436,7 @@ describe("Managing Habits", () => {
     expect(api.habits[0]?.name).toBe("Sit still");
   });
 
-  it("edits a Boolean Habit into a Numeric one with goal, unit and frequency", async () => {
+  it("edits a Boolean Habit into a Numeric one with target, unit and frequency", async () => {
     const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
     render(<App />);
     await openHabits();
@@ -444,7 +446,7 @@ describe("Managing Habits", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Habit type" }), {
       target: { value: "numeric" },
     });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Goal" }), {
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Target" }), {
       target: { value: "20" },
     });
     fireEvent.change(screen.getByLabelText("Unit"), { target: { value: "minutes" } });
@@ -460,12 +462,12 @@ describe("Managing Habits", () => {
     const patch = api.requests.find((r) => r.method === "PATCH");
     expect(patch?.body).toMatchObject({
       type: "numeric",
-      goal: 20,
+      target: 20,
       step: 1,
       unit: "minutes",
       frequency: "FREQ=WEEKLY;TT_TIMES=5",
     });
-    expect(api.habits[0]?.goal).toBe(20);
+    expect(api.habits[0]?.target).toBe(20);
   });
 
   it("deletes a Habit after confirming", async () => {
@@ -549,9 +551,9 @@ describe("Managing Habits", () => {
     expect(await screen.findByText("July 2026")).toBeInTheDocument();
   });
 
-  it("marks a met Goal with words and a mark, not colour alone", async () => {
+  it("marks a met Target with words and a mark, not colour alone", async () => {
     const api = installFakeApi({
-      habits: [fakeHabit("Drink water", { type: "numeric", goal: 2, step: 2, unit: "glasses" })],
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 2, step: 2, unit: "glasses" })],
     });
     checkIn(api, api.habits[0]?.id ?? 0, "2026-07-03", 2);
     render(<App />);
@@ -559,7 +561,7 @@ describe("Managing Habits", () => {
 
     const card = (await screen.findByRole("heading", { name: "Drink water" })).closest("li");
     expect(card).toHaveClass("complete");
-    expect(within(card as HTMLElement).getByText("Goal met")).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByText("Target met")).toBeInTheDocument();
   });
 
   it("explains what a Habit is when none exist yet", async () => {

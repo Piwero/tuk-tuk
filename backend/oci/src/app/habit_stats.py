@@ -35,7 +35,7 @@ def current_streak(frequency: str, checked: set[date], today: date) -> int:
     return streak
 
 
-def intensity(value: float, goal: float) -> float:
-    """How filled a heatmap day renders: the value's share of the Goal,
-    capped at 1 (a Boolean check-in is always the whole goal)."""
-    return min(value / goal, 1.0)
+def intensity(value: float, target: float) -> float:
+    """How filled a heatmap day renders: the value's share of the Target,
+    capped at 1 (a Boolean check-in is always the whole target)."""
+    return min(value / target, 1.0)

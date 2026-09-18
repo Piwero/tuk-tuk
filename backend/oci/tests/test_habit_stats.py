@@ -71,8 +71,8 @@ class TestStreak:
 
 
 class TestHeatmap:
-    def test_numeric_intensity_scales_by_goal_and_caps_at_one(self, client: TestClient) -> None:
-        habit = make_habit(client, "Drink water", type="numeric", goal=8, unit="glasses")
+    def test_numeric_intensity_scales_by_target_and_caps_at_one(self, client: TestClient) -> None:
+        habit = make_habit(client, "Drink water", type="numeric", target=8, unit="glasses")
         check_in(client, habit["id"], "2026-07-01", value=4)
         check_in(client, habit["id"], "2026-07-02", value=8)
         check_in(client, habit["id"], "2026-07-03", value=12)

@@ -23,7 +23,7 @@ class TestCreateHabit:
         body = response.json()
         assert body["name"] == "Meditate"
         assert body["type"] == "boolean"
-        assert body["goal"] == 1
+        assert body["target"] == 1
         assert body["step"] == 1
         assert body["unit"] is None
         assert body["icon"] is None
@@ -32,13 +32,13 @@ class TestCreateHabit:
         assert body["frequency"] == "FREQ=DAILY"
         assert isinstance(body["id"], int)
 
-    def test_numeric_habit_with_goal_step_unit_and_looks(self, client: TestClient) -> None:
+    def test_numeric_habit_with_target_step_unit_and_looks(self, client: TestClient) -> None:
         response = client.post(
             "/api/v1/habits",
             json={
                 "name": "Drink water",
                 "type": "numeric",
-                "goal": 8,
+                "target": 8,
                 "step": 2,
                 "unit": "glasses",
                 "icon": "💧",
@@ -51,7 +51,7 @@ class TestCreateHabit:
         assert response.status_code == 201
         body = response.json()
         assert body["type"] == "numeric"
-        assert body["goal"] == 8
+        assert body["target"] == 8
         assert body["step"] == 2
         assert body["unit"] == "glasses"
         assert body["icon"] == "💧"
@@ -60,18 +60,18 @@ class TestCreateHabit:
         assert body["frequency"] == "FREQ=WEEKLY;BYDAY=MO,TH"
 
     def test_numeric_step_defaults_to_one(self, client: TestClient) -> None:
-        body = make_habit(client, "Read", type="numeric", goal=30, unit="pages")
+        body = make_habit(client, "Read", type="numeric", target=30, unit="pages")
 
         assert body["step"] == 1
 
-    def test_numeric_without_goal_is_rejected(self, client: TestClient) -> None:
+    def test_numeric_without_target_is_rejected(self, client: TestClient) -> None:
         response = client.post("/api/v1/habits", json={"name": "Read", "type": "numeric"})
 
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "invalid_habit"
 
-    def test_boolean_with_goal_fields_is_rejected(self, client: TestClient) -> None:
-        for fields in ({"goal": 5}, {"step": 2}, {"unit": "times"}):
+    def test_boolean_with_target_fields_is_rejected(self, client: TestClient) -> None:
+        for fields in ({"target": 5}, {"step": 2}, {"unit": "times"}):
             response = client.post("/api/v1/habits", json={"name": "Meditate", **fields})
 
             assert response.status_code == 422, fields
@@ -149,7 +149,7 @@ class TestUpdateAndDeleteHabit:
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "invalid_frequency"
 
-    def test_becoming_numeric_requires_a_goal(self, client: TestClient) -> None:
+    def test_becoming_numeric_requires_a_target(self, client: TestClient) -> None:
         habit = make_habit(client, "Read")
 
         rejected = client.patch(f"/api/v1/habits/{habit['id']}", json={"type": "numeric"})
@@ -158,19 +158,19 @@ class TestUpdateAndDeleteHabit:
 
         accepted = client.patch(
             f"/api/v1/habits/{habit['id']}",
-            json={"type": "numeric", "goal": 30, "unit": "pages"},
+            json={"type": "numeric", "target": 30, "unit": "pages"},
         )
         assert accepted.status_code == 200
-        assert accepted.json()["goal"] == 30
+        assert accepted.json()["target"] == 30
 
-    def test_becoming_boolean_sweeps_goal_fields(self, client: TestClient) -> None:
-        habit = make_habit(client, "Read", type="numeric", goal=30, step=5, unit="pages")
+    def test_becoming_boolean_sweeps_target_fields(self, client: TestClient) -> None:
+        habit = make_habit(client, "Read", type="numeric", target=30, step=5, unit="pages")
 
         response = client.patch(f"/api/v1/habits/{habit['id']}", json={"type": "boolean"})
 
         assert response.status_code == 200
         body = response.json()
-        assert body["goal"] == 1
+        assert body["target"] == 1
         assert body["step"] == 1
         assert body["unit"] is None
 
@@ -233,7 +233,7 @@ class TestCheckIns:
         assert response.json()["error"]["code"] == "invalid_habit"
 
     def test_numeric_upsert_replaces_the_days_value(self, client: TestClient) -> None:
-        habit = make_habit(client, "Drink water", type="numeric", goal=8, unit="glasses")
+        habit = make_habit(client, "Drink water", type="numeric", target=8, unit="glasses")
         path = f"/api/v1/habits/{habit['id']}/check-ins/2026-07-03"
 
         client.put(path, json={"value": 2})
@@ -267,7 +267,7 @@ class TestCheckIns:
         assert page["items"][0]["habit_id"] == gym["id"]
 
     def test_rejects_zero_and_negative_values(self, client: TestClient) -> None:
-        habit = make_habit(client, "Drink water", type="numeric", goal=8)
+        habit = make_habit(client, "Drink water", type="numeric", target=8)
         path = f"/api/v1/habits/{habit['id']}/check-ins/2026-07-03"
 
         for value in (0, -1):

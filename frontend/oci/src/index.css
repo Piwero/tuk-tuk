@@ -2507,10 +2507,10 @@ li[data-overdue] .date-chip {
   border-color: var(--green-100);
 }
 
-/* Goal met, said in words + a mark — not signalled by the card's green
+/* Target met, said in words + a mark — not signalled by the card's green
  * wash alone (which fails for anyone who can't tell the two grounds
  * apart). */
-.habit-goal-met {
+.habit-target-met {
   display: inline-flex;
   align-items: center;
   gap: 4px;

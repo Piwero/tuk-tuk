@@ -94,7 +94,7 @@ export interface FakeHabit {
   id: number;
   name: string;
   type: HabitType;
-  goal: number;
+  target: number;
   step: number;
   unit: string | null;
   icon: string | null;
@@ -416,7 +416,7 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
     id: nextHabitId++,
     name,
     type: "boolean",
-    goal: 1,
+    target: 1,
     step: 1,
     unit: null,
     icon: null,
@@ -1593,20 +1593,20 @@ export function installFakeApi({
         return notFound(`Habit ${habitId} not found`);
       }
       if (method === "PATCH") {
-        // Mirror the backend: becoming Numeric requires a goal in the same
-        // request, and becoming Boolean sweeps the goal fields back.
-        const patch = body as { type?: HabitType; goal?: number };
-        if (patch.type === "numeric" && habit.type === "boolean" && patch.goal === undefined) {
+        // Mirror the backend: becoming Numeric requires a target in the same
+        // request, and becoming Boolean sweeps the target fields back.
+        const patch = body as { type?: HabitType; target?: number };
+        if (patch.type === "numeric" && habit.type === "boolean" && patch.target === undefined) {
           return json(
             {
-              error: { code: "invalid_habit", message: "A Numeric habit requires a goal" },
+              error: { code: "invalid_habit", message: "A Numeric habit requires a target" },
             },
             422,
           );
         }
         Object.assign(habit, body);
         if (habit.type === "boolean") {
-          Object.assign(habit, { goal: 1, step: 1, unit: null });
+          Object.assign(habit, { target: 1, step: 1, unit: null });
         }
         return json(habit);
       }
@@ -1668,7 +1668,7 @@ export function installFakeApi({
         .map((checkIn) => ({
           date: checkIn.date,
           value: checkIn.value,
-          intensity: Math.min(checkIn.value / habit.goal, 1),
+          intensity: Math.min(checkIn.value / habit.target, 1),
         }));
       return json({ streak, heatmap });
     }

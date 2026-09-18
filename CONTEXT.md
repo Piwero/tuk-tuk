@@ -66,7 +66,11 @@ _Avoid_: Alarm, notification (the delivery mechanism, not the domain concept)
 ## Habits
 
 **Habit**:
-A recurring practice tracked by Check-ins rather than completion — either Boolean (done / not done) or Numeric (an amount toward a Goal, e.g. 8 glasses of water).
+A recurring practice tracked by Check-ins rather than completion — either Boolean (done / not done) or Numeric (an amount toward a Target, e.g. 8 glasses of water).
+
+**Target**:
+The amount a Numeric Habit's Check-ins count toward in one day. Boolean Habits have a Target of 1, so a single tap fills it. Not a Goal — a Goal is a separate entity with its own window and Key Results (ADR 0012).
+_Avoid_: Goal (the field was called `goal` before ADR 0012 and is now `target`)
 
 **Check-in**:
 The record of one day's progress on a Habit: a date stamp and, for Numeric habits, a value. Check-ins can be backfilled for missed days.

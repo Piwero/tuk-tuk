@@ -132,7 +132,7 @@ export function HabitsView(): JSX.Element {
     await updateHabit(habit.id, {
       name: input.name,
       type: input.type,
-      goal: input.goal,
+      target: input.target,
       step: input.step,
       unit: input.unit ?? null,
       icon: input.icon ?? null,
@@ -174,10 +174,10 @@ export function HabitsView(): JSX.Element {
     }
     const checkIn = checkInOf(habit);
     const value = checkIn?.value ?? 0;
-    const complete = value >= habit.goal;
-    const goalMet = complete && showCheckInControls;
+    const complete = value >= habit.target;
+    const targetMet = complete && showCheckInControls;
     return (
-      <li key={habit.id} className={goalMet ? "habit complete" : "habit"}>
+      <li key={habit.id} className={targetMet ? "habit complete" : "habit"}>
         <div className="habit-head">
           {habit.color !== null && (
             <span className="color-dot" style={{ background: habit.color }} />
@@ -198,12 +198,12 @@ export function HabitsView(): JSX.Element {
             onDelete={() => void handleDelete(habit)}
           />
         </div>
-        {/* A met Goal is called out in words and with a mark, not by the
+        {/* A met Target is called out in words and with a mark, not by the
          * card's green wash alone. */}
-        {goalMet && (
-          <p className="habit-goal-met">
+        {targetMet && (
+          <p className="habit-target-met">
             <Icon name="check" size={14} />
-            Goal met
+            Target met
           </p>
         )}
         {/* The expanded history panel already shows the Streak (plus the
@@ -227,7 +227,7 @@ export function HabitsView(): JSX.Element {
             ) : (
               <>
                 <span className="habit-progress">
-                  {value} / {habit.goal}
+                  {value} / {habit.target}
                   {habit.unit === null ? "" : ` ${habit.unit}`}
                   {complete && <span className="habit-done"> — Done</span>}
                 </span>
@@ -290,14 +290,14 @@ export function HabitsView(): JSX.Element {
 }
 
 /** The API payload a form submission builds: Boolean habits must not carry
- * goal fields, and blank optional strings mean "unset". */
+ * target fields, and blank optional strings mean "unset". */
 function toCreateInput(values: HabitFormValues): HabitCreateInput {
   return {
     name: values.name,
     type: values.type,
     ...(values.type === "numeric"
       ? {
-          goal: values.goal,
+          target: values.target,
           step: values.step,
           ...(values.unit === "" ? {} : { unit: values.unit }),
         }
