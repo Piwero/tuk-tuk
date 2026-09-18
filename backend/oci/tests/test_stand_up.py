@@ -230,22 +230,68 @@ class TestSprintGoal:
         read_back = client.get("/api/v1/stand-up/sprint-goal")
         assert read_back.json() == {"text": "Ship v1"}
 
-    def test_a_new_entry_snapshots_the_current_goal(self, client: TestClient) -> None:
+    def test_a_new_entry_no_longer_snapshots_the_sprint_goal(self, client: TestClient) -> None:
+        """Superseded by the focused Goal (ADR 0012, issue #238): Stand-up
+        no longer reads or writes SprintGoal at Entry-creation time, even
+        though the sprint-goal endpoints above still exist."""
         client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v1"})
 
         body = add_bullet(client, DAY, "today", "Ship the stand-up feature")
 
-        assert body["sprint_goal_snapshot"] == "Ship v1"
+        assert body["sprint_goal_snapshot"] == ""
 
-    def test_editing_the_goal_later_does_not_change_an_existing_entrys_snapshot(
+
+class TestFocusedGoal:
+    """Stand-up reads the focused Goal in place of the Sprint Goal input
+    (ADR 0012, issue #238)."""
+
+    def test_no_focused_goal_returns_null(self, client: TestClient) -> None:
+        response = client.get("/api/v1/stand-up/focused-goal")
+
+        assert response.status_code == 200
+        assert response.json() is None
+
+    def test_the_focused_goal_is_returned_with_key_result_progress(
         self, client: TestClient
     ) -> None:
-        client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v1"})
-        body = add_bullet(client, DAY, "today", "Ship the stand-up feature")
-        assert body["sprint_goal_snapshot"] == "Ship v1"
+        goal = client.post("/api/v1/goals", json={"title": "Ship v2"}).json()
+        client.post(
+            f"/api/v1/goals/{goal['id']}/key-results",
+            json={"name": "Lines shipped", "target_value": 100, "current_value": 40},
+        )
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"is_focused": True})
 
-        client.put("/api/v1/stand-up/sprint-goal", json={"text": "Ship v2"})
+        response = client.get("/api/v1/stand-up/focused-goal")
 
-        read_back = client.get(f"/api/v1/stand-up/entries/{DAY}")
-        assert read_back.json()["sprint_goal_snapshot"] == "Ship v1"
-        assert client.get("/api/v1/stand-up/sprint-goal").json() == {"text": "Ship v2"}
+        assert response.status_code == 200
+        body = response.json()
+        assert body["title"] == "Ship v2"
+        assert body["is_focused"] is True
+        assert body["key_results"][0]["ratio"] == 0.4
+        assert body["score"] == 0.4
+
+    def test_only_the_focused_goal_is_returned_not_every_active_one(
+        self, client: TestClient
+    ) -> None:
+        client.post("/api/v1/goals", json={"title": "Not focused"})
+        focused = client.post("/api/v1/goals", json={"title": "Focused"}).json()
+        client.patch(f"/api/v1/goals/{focused['id']}", json={"is_focused": True})
+
+        body = client.get("/api/v1/stand-up/focused-goal").json()
+
+        assert body["title"] == "Focused"
+
+    def test_viewing_a_past_entry_does_not_change_the_focused_goal(
+        self, client: TestClient
+    ) -> None:
+        """Regression: reading Stand-up history (or the current day) is a
+        pure read and must never mutate which Goal is focused."""
+        goal = client.post("/api/v1/goals", json={"title": "Ship v2"}).json()
+        client.patch(f"/api/v1/goals/{goal['id']}", json={"is_focused": True})
+        add_bullet(client, DAY, "today", "Something")
+
+        client.get(f"/api/v1/stand-up/entries/{DAY}")
+        client.get("/api/v1/stand-up/entries/1999-01-01")
+
+        still_focused = client.get("/api/v1/stand-up/focused-goal").json()
+        assert still_focused["title"] == "Ship v2"

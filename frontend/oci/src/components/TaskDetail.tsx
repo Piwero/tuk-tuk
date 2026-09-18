@@ -4,9 +4,11 @@ import ReactMarkdown from "react-markdown";
 import {
   createCheckItem,
   deleteCheckItem,
+  fetchGoals,
   updateCheckItem,
   updateTask,
   type CheckItem,
+  type Goal,
   type Priority,
   type Tag,
   type Task,
@@ -54,6 +56,17 @@ interface TaskDetailProps {
   onClose: () => void;
 }
 
+/** The `task_count` Key Results across every Goal — the picker's options.
+ * ADR 0012 deliberately gives Goals no capture sigil; this dropdown is the
+ * only way to attach a Task. */
+function taskCountKeyResults(goals: Goal[]): { goalTitle: string; id: number; name: string }[] {
+  return goals.flatMap((goal) =>
+    goal.key_results
+      .filter((kr) => kr.source === "task_count")
+      .map((kr) => ({ goalTitle: goal.title, id: kr.id, name: kr.name })),
+  );
+}
+
 export function TaskDetail({
   task,
   allTags,
@@ -63,6 +76,11 @@ export function TaskDetail({
   onClose,
 }: TaskDetailProps): JSX.Element {
   const [title, setTitle] = useState(task.title);
+  const [goals, setGoals] = useState<Goal[]>([]);
+
+  useEffect(() => {
+    void fetchGoals().then((page) => setGoals(page.items));
+  }, []);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
   const [dateDraft, setDateDraft] = useState<DateDraft | null>(null);
   const [offsetDraft, setOffsetDraft] = useState<{ amount: string; unit: OffsetUnit } | null>(null);
@@ -329,6 +347,26 @@ export function TaskDetail({
           {(Object.keys(PRIORITY_LABELS) as Priority[]).map((level) => (
             <option key={level} value={level}>
               {PRIORITY_LABELS[level]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="task-key-result">
+        Key Result
+        <select
+          aria-label="Key result"
+          value={task.key_result_id ?? ""}
+          onChange={(event) => {
+            const value = event.target.value;
+            void updateTask(task.id, {
+              key_result_id: value === "" ? null : Number(value),
+            }).then(onTaskChanged);
+          }}
+        >
+          <option value="">No Key Result</option>
+          {taskCountKeyResults(goals).map((kr) => (
+            <option key={kr.id} value={kr.id}>
+              {kr.goalTitle}: {kr.name}
             </option>
           ))}
         </select>

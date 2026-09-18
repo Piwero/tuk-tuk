@@ -150,6 +150,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         recurrence=payload.recurrence,
         source_google_calendar_id=payload.source_google_calendar_id,
         source_google_event_id=payload.source_google_event_id,
+        key_result_id=payload.key_result_id,
         sort_order=(max_order or 0) + SORT_GAP,
         check_items=[],
         tags=tags,

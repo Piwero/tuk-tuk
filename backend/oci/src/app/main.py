@@ -34,6 +34,7 @@ from app.routers.v1 import (
     goals,
     google,
     habits,
+    key_results,
     lists,
     sections,
     stand_up,
@@ -118,6 +119,7 @@ def create_app(
     app.include_router(google.router)
     app.include_router(habits.router)
     app.include_router(habits.check_ins_router)
+    app.include_router(key_results.router)
     app.include_router(lists.router)
     app.include_router(sections.router)
     app.include_router(settings_router.router)

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeGoal, installFakeApi } from "./test/fakeApi";
+import { fakeGoal, fakeHabit, fakeKeyResult, installFakeApi } from "./test/fakeApi";
 
 async function openGoals(): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Views" });
@@ -123,5 +123,96 @@ describe("Goals", () => {
 
     await waitFor(() => expect(screen.queryByText("Ship v2")).not.toBeInTheDocument());
     expect(api.goals).toHaveLength(0);
+  });
+
+  it("adds a manual Key Result and shows its progress", async () => {
+    const api = installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(
+      within(await screen.findByLabelText("Ship v2 key results")).getByRole("button", {
+        name: "Add key result",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Key result name"), {
+      target: { value: "Lines shipped" },
+    });
+    fireEvent.change(screen.getByLabelText("Target value"), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText("Current value"), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add key result" }));
+
+    await waitFor(() => {
+      const post = api.requests.find(
+        (r) => r.method === "POST" && r.url === `/api/v1/goals/${api.goals[0]!.id}/key-results`,
+      );
+      expect(post?.body).toMatchObject({ name: "Lines shipped", target_value: 100 });
+    });
+    expect(await screen.findByText("Lines shipped")).toBeInTheDocument();
+    expect(screen.getByText("40%")).toBeInTheDocument();
+  });
+
+  it("an automatic Key Result's value renders read-only", async () => {
+    const habit = fakeHabit("Meditate");
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [
+      fakeKeyResult(goal.id, "Meditation days", {
+        source: "habit_checkins",
+        source_habit_id: habit.id,
+        target_value: 10,
+      }),
+    ];
+    installFakeApi({ goals: [goal], habits: [habit] });
+    render(<App />);
+    await openGoals();
+
+    const value = await screen.findByLabelText("Meditation days current value");
+    expect(value.tagName).not.toBe("INPUT");
+    expect(value).toHaveTextContent("(auto)");
+  });
+
+  it("editing a manual Key Result's value round-trips", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [fakeKeyResult(goal.id, "Lines shipped", { target_value: 100 })];
+    const api = installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    const input = await screen.findByLabelText("Lines shipped current value");
+    fireEvent.change(input, { target: { value: "25" } });
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      expect(api.goals[0]!.key_results[0]!.current_value).toBe(25);
+    });
+  });
+
+  it("deleting a Key Result removes it", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [fakeKeyResult(goal.id, "Lines shipped")];
+    const api = installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete key result Lines shipped" }));
+
+    await waitFor(() => expect(api.goals[0]!.key_results).toHaveLength(0));
+    expect(screen.queryByText("Lines shipped")).not.toBeInTheDocument();
+  });
+
+  it("focusing a Goal unfocuses the previous one", async () => {
+    const api = installFakeApi({ goals: [fakeGoal("A"), fakeGoal("B")] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Focus A" }));
+    await waitFor(() => expect(api.goals.find((g) => g.title === "A")?.is_focused).toBe(true));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Focus B" }));
+
+    await waitFor(() => {
+      expect(api.goals.find((g) => g.title === "A")?.is_focused).toBe(false);
+      expect(api.goals.find((g) => g.title === "B")?.is_focused).toBe(true);
+    });
   });
 });

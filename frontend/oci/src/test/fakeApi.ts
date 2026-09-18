@@ -5,6 +5,7 @@ import {
   type AssistCaptureDraft,
   type GoalStatus,
   type HabitType,
+  type KeyResultSource,
   type Priority,
   type ViewMode,
 } from "../api";
@@ -70,6 +71,7 @@ export interface FakeTask {
   recurrence: string | null;
   source_google_calendar_id: number | null;
   source_google_event_id: string | null;
+  key_result_id: number | null;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -106,18 +108,33 @@ export interface FakeHabit {
   created_at: string;
 }
 
+export interface FakeKeyResult {
+  id: number;
+  goal_id: number;
+  name: string;
+  source: KeyResultSource;
+  start_value: number;
+  target_value: number;
+  /** Stored only for "manual"; ignored (recomputed) for automatic sources,
+   * mirroring the backend, where these never persist. */
+  current_value: number;
+  source_habit_id: number | null;
+  sort_order: number;
+}
+
 export interface FakeGoal {
   id: number;
   title: string;
   description: string;
   obstacle: string | null;
   if_then_plan: string | null;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   status: GoalStatus;
   is_focused: boolean;
   final_score: number | null;
   retro: string | null;
+  key_results: FakeKeyResult[];
   created_at: string;
 }
 
@@ -380,6 +397,7 @@ export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): Fake
     recurrence: null,
     source_google_calendar_id: null,
     source_google_event_id: null,
+    key_result_id: null,
     check_items: [],
     tags: [],
     created_at: "2026-07-03T10:00:00Z",
@@ -460,9 +478,83 @@ export function fakeGoal(title: string, overrides: Partial<FakeGoal> = {}): Fake
     is_focused: false,
     final_score: null,
     retro: null,
+    key_results: [],
     created_at: "2026-07-03T10:00:00Z",
     ...overrides,
   };
+}
+
+let nextKeyResultId = 1400;
+
+export function fakeKeyResult(
+  goalId: number,
+  name: string,
+  overrides: Partial<FakeKeyResult> = {},
+): FakeKeyResult {
+  return {
+    id: nextKeyResultId++,
+    goal_id: goalId,
+    name,
+    source: "manual",
+    start_value: 0,
+    target_value: 1,
+    current_value: 0,
+    source_habit_id: null,
+    sort_order: nextKeyResultId * SORT_GAP,
+    ...overrides,
+  };
+}
+
+/** A Key Result's ratio — duplicated from app.goal_score.key_result_ratio
+ * (backend, source of truth for this arithmetic; see ADR 0012's noted
+ * drift risk). Clamped 0-1; guards target == start. */
+function keyResultRatio(start: number, target: number, current: number): number {
+  if (target === start) return current >= target ? 1 : 0;
+  return Math.max(0, Math.min(1, (current - start) / (target - start)));
+}
+
+/** A Key Result's current_value: stored for "manual", computed on read for
+ * the automatic sources — duplicated from app.goal_read (see ADR 0012's
+ * noted drift risk: the backend HTTP tests are the source of truth for
+ * this arithmetic, this fake only needs to stay plausible for rendering). */
+function keyResultCurrentValue(kr: FakeKeyResult, goal: FakeGoal, state: FakeApiState): number {
+  if (kr.source === "habit_checkins") {
+    if (kr.source_habit_id === null || goal.start_date === null || goal.end_date === null) {
+      return 0;
+    }
+    return state.checkIns
+      .filter(
+        (c) =>
+          c.habit_id === kr.source_habit_id &&
+          c.date >= goal.start_date! &&
+          c.date <= goal.end_date!,
+      )
+      .reduce((sum, c) => sum + c.value, 0);
+  }
+  if (kr.source === "task_count") {
+    return state.tasks.filter((t) => t.key_result_id === kr.id && t.completed).length;
+  }
+  return kr.current_value;
+}
+
+/** Builds the GoalRead wire shape: resolves each Key Result's current_value
+ * and ratio, and the Goal's score (unweighted mean of ratios, null with no
+ * Key Results) — mirrors app.goal_read.build_goal_read. */
+function serializeGoal(goal: FakeGoal, state: FakeApiState): unknown {
+  const keyResults = goal.key_results.map((kr) => {
+    const current_value = keyResultCurrentValue(kr, goal, state);
+    return {
+      ...kr,
+      current_value,
+      ratio: keyResultRatio(kr.start_value, kr.target_value, current_value),
+    };
+  });
+  const score =
+    keyResults.length === 0
+      ? null
+      : Math.round((keyResults.reduce((sum, kr) => sum + kr.ratio, 0) / keyResults.length) * 100) /
+        100;
+  return { ...goal, key_results: keyResults, score };
 }
 
 let nextEventId = 1;
@@ -1347,6 +1439,7 @@ export function installFakeApi({
         time_zone?: string;
         source_google_calendar_id?: number;
         source_google_event_id?: string;
+        key_result_id?: number;
       };
       const listId = input.list_id ?? INBOX.id;
       if (input.section_id !== undefined) {
@@ -1371,6 +1464,7 @@ export function installFakeApi({
         time_zone: input.time_zone ?? null,
         source_google_calendar_id: input.source_google_calendar_id ?? null,
         source_google_event_id: input.source_google_event_id ?? null,
+        key_result_id: input.key_result_id ?? null,
         tags: state.tags
           .filter((tag) => tagIds.includes(tag.id))
           .sort(byName)
@@ -1664,17 +1758,30 @@ export function installFakeApi({
             timer.habit_id = null;
           }
         }
+        // Mirror the backend: a habit_checkins Key Result stops counting
+        // rather than breaking its Goal (ADR 0012, issue #235).
+        for (const goal of state.goals) {
+          for (const kr of goal.key_results) {
+            if (kr.source_habit_id === habitId) kr.source_habit_id = null;
+          }
+        }
         return new Response(null, { status: 204 });
       }
     }
     if (method === "GET" && url.pathname === "/api/v1/goals") {
-      return json(page(state.goals));
+      const items = state.goals.map((g) => serializeGoal(g, state));
+      return json({
+        items,
+        total: state.goals.length,
+        limit: 50,
+        offset: 0,
+      });
     }
     if (method === "POST" && url.pathname === "/api/v1/goals") {
       const input = body as { title: string } & Partial<Omit<FakeGoal, "id" | "title">>;
       const created = fakeGoal(input.title, input);
       state.goals.push(created);
-      return json(created, 201);
+      return json(serializeGoal(created, state), 201);
     }
     const goalMatch = url.pathname.match(/^\/api\/v1\/goals\/(\d+)$/);
     if (goalMatch) {
@@ -1684,14 +1791,62 @@ export function installFakeApi({
         return notFound(`Goal ${goalId} not found`);
       }
       if (method === "GET") {
-        return json(goal);
+        return json(serializeGoal(goal, state));
       }
       if (method === "PATCH") {
+        if ((body as { is_focused?: boolean }).is_focused === true) {
+          // ADR 0012: only one Goal may be focused at a time, enforced here
+          // in the same "transaction" as setting the new one.
+          for (const other of state.goals) {
+            if (other.id !== goalId) other.is_focused = false;
+          }
+        }
         Object.assign(goal, body);
-        return json(goal);
+        return json(serializeGoal(goal, state));
       }
       if (method === "DELETE") {
         state.goals = state.goals.filter((g) => g.id !== goalId);
+        return new Response(null, { status: 204 });
+      }
+    }
+    const keyResultsMatch = url.pathname.match(/^\/api\/v1\/goals\/(\d+)\/key-results$/);
+    if (keyResultsMatch && method === "POST") {
+      const goalId = Number(keyResultsMatch[1]);
+      const goal = state.goals.find((g) => g.id === goalId);
+      if (!goal) return notFound(`Goal ${goalId} not found`);
+      const input = body as { name: string } & Partial<
+        Omit<FakeKeyResult, "id" | "goal_id" | "name">
+      >;
+      goal.key_results.push(fakeKeyResult(goalId, input.name, input));
+      return json(serializeGoal(goal, state), 201);
+    }
+    const keyResultMatch = url.pathname.match(/^\/api\/v1\/goals\/(\d+)\/key-results\/(\d+)$/);
+    if (keyResultMatch) {
+      const goalId = Number(keyResultMatch[1]);
+      const keyResultId = Number(keyResultMatch[2]);
+      const goal = state.goals.find((g) => g.id === goalId);
+      if (!goal) return notFound(`Goal ${goalId} not found`);
+      const kr = goal.key_results.find((k) => k.id === keyResultId);
+      if (!kr) return notFound(`Key result ${keyResultId} not found on goal ${goalId}`);
+      if (method === "PATCH") {
+        const patch = body as Partial<FakeKeyResult>;
+        if (patch.current_value !== undefined && kr.source !== "manual") {
+          return json(
+            {
+              error: {
+                code: "automatic_key_result",
+                message:
+                  "current_value is computed for automatic Key Results and cannot be written",
+              },
+            },
+            409,
+          );
+        }
+        Object.assign(kr, patch);
+        return json(serializeGoal(goal, state));
+      }
+      if (method === "DELETE") {
+        goal.key_results = goal.key_results.filter((k) => k.id !== keyResultId);
         return new Response(null, { status: 204 });
       }
     }
@@ -2062,6 +2217,10 @@ export function installFakeApi({
         return json({ text: state.sprintGoal });
       }
     }
+    if (method === "GET" && url.pathname === "/api/v1/stand-up/focused-goal") {
+      const focused = state.goals.find((g) => g.is_focused);
+      return json(focused ? serializeGoal(focused, state) : null);
+    }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/suggestions/yesterday") {
       return json(state.standupYesterdaySuggestions);
     }
@@ -2098,7 +2257,9 @@ export function installFakeApi({
       const day = standupBulletsMatch[1] as string;
       let entry = state.standupEntries.find((e) => e.date === day);
       if (!entry) {
-        entry = fakeStandupEntry(day, { sprint_goal_snapshot: state.sprintGoal });
+        // Sprint Goal is superseded by the focused Goal (ADR 0012, issue
+        // #238) — new Entries no longer snapshot it.
+        entry = fakeStandupEntry(day, { sprint_goal_snapshot: "" });
         state.standupEntries.push(entry);
       }
       const input = body as { section: StandupSection; text: string };
