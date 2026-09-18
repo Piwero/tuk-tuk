@@ -10,6 +10,7 @@ export type StaticViewKind =
   | "focus"
   | "focus-stats"
   | "calendar"
+  | "goals"
   | "habits"
   | "search"
   | "settings"
@@ -17,6 +18,7 @@ export type StaticViewKind =
 
 const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
   calendar: "/calendar/day",
+  goals: "/goals",
   habits: "/habits",
   standup: "/standup",
   assistant: "/assistant",
