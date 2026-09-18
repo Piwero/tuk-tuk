@@ -8,10 +8,11 @@ from fastapi import APIRouter
 
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.models import SORT_GAP, CheckItem, Task, utcnow
+from app.models import CheckItem, Task, utcnow
 from app.recurrence import advance_in_place
 from app.routers.v1.tasks import get_task_or_404
 from app.schemas import CheckItemCreate, CheckItemUpdate, TaskRead
+from app.sparse_order import append_order
 
 router = APIRouter(prefix="/api/v1/tasks/{task_id}/check-items", tags=["check-items"])
 
@@ -30,7 +31,7 @@ async def create_check_item(
     task = await get_task_or_404(task_id, session)
     # check_items is eagerly loaded and ordered, so the last row has the max order.
     last = task.check_items[-1] if task.check_items else None
-    sort_order = (last.sort_order if last is not None else 0) + SORT_GAP
+    sort_order = append_order(last.sort_order if last is not None else None)
     task.check_items.append(CheckItem(title=payload.title, sort_order=sort_order))
     await session.commit()
     return TaskRead.model_validate(task)

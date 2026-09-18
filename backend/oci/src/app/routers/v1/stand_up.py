@@ -16,7 +16,6 @@ from app.db import SessionDep
 from app.errors import NotFoundError
 from app.models import (
     DEFAULT_OWNER,
-    SORT_GAP,
     CompletedOccurrence,
     SprintGoal,
     StandupBullet,
@@ -35,6 +34,7 @@ from app.schemas import (
     StandupSuggestionRead,
     StandupYesterdaySuggestion,
 )
+from app.sparse_order import append_order
 
 router = APIRouter(prefix="/api/v1/stand-up", tags=["stand-up"])
 
@@ -207,7 +207,7 @@ async def create_bullet(
     # bullets is eagerly loaded and ordered, so the section's last row has the max order.
     siblings = [bullet for bullet in entry.bullets if bullet.section == payload.section]
     last = siblings[-1] if siblings else None
-    sort_order = (last.sort_order if last is not None else 0) + SORT_GAP
+    sort_order = append_order(last.sort_order if last is not None else None)
     entry.bullets.append(
         StandupBullet(section=payload.section, text=payload.text, sort_order=sort_order)
     )
