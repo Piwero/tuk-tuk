@@ -188,3 +188,11 @@ preserve the ambiguity in the one place it is most confusing.
   scale; if the Goals view ever gets slow, the fix is to batch the
   aggregate across Key Results in one query, not to start storing the
   counter.
+- Detaching a Task from a deleted Key Result runs as an explicit `UPDATE`,
+  not as `ON DELETE SET NULL`. SQLite only enforces foreign keys when a
+  connection sets `PRAGMA foreign_keys=ON`, which this app does not, so the
+  declared clause never fires — and SQLite recycles rowids, so an orphaned
+  Task would reattach itself to the next Key Result created and inflate its
+  count. Same pattern the Habit deletion path already uses for
+  `source_habit_id`. The clause stays on the column as documentation of
+  intent and as correctness on any engine that does enforce it.

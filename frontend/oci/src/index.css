@@ -3657,9 +3657,28 @@ select.task-detail-breadcrumb:focus-visible {
   gap: var(--space-1);
 }
 
-.standup-goal input {
+/* The Sprint Goal's input became the focused Goal's title (ADR 0012) —
+ * the emphasis follows it, and the caps label names the panel for sighted
+ * readers the way its aria-label already did for screen readers. */
+.standup-goal h3 {
+  margin: 0;
   font-size: 1.1em;
   font-weight: 600;
+}
+
+.standup-goal-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--text-tertiary);
+}
+
+.standup-goal-score {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .standup-sections {
@@ -5311,4 +5330,241 @@ a.button:hover {
 
 .unscheduled-card:hover {
   background: var(--surface-hover);
+}
+
+/* ── Goals ───────────────────────────────────────────────────────── */
+
+/* Goals is prose, not a dense columnar surface — it opts into the reading
+ * measure, like Stand-up and Habits. */
+.goals-view {
+  max-width: var(--content-max);
+}
+
+.goals-error {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--text-danger);
+  font-size: var(--text-sm);
+}
+
+.goals-empty-hint {
+  max-width: 480px;
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.goals-view section > h4 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--text-tertiary);
+}
+
+.goals-view ul.goals-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.goals-view .goal,
+.goals-view .goal-editing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  transition:
+    background var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out);
+}
+
+.goals-view .goal h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+/* The focused Goal is told apart by an inset accent bar and the badge's
+ * words, never by colour alone. */
+.goals-view .goal-focused {
+  border-left: 2px solid var(--accent);
+  background: var(--surface-selected);
+}
+
+.goal-focused-badge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--accent);
+}
+
+/* A window and a Score are tabular: mono, so digits line up down the list. */
+.goal-window,
+.goal-score,
+.goal-final-score,
+.key-result-progress,
+.key-result-readonly {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.goal-window,
+.goal-score,
+.goal-final-score,
+.goal-obstacle,
+.goal-if-then {
+  margin: 0;
+}
+
+.goal-obstacle,
+.goal-if-then {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.goal-retro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--text-tertiary);
+}
+
+/* Row actions stay hidden until the card is hovered or something inside it
+ * takes keyboard focus. The reveal is keyed off the card, not the action
+ * group: a hidden button can't be tabbed to, so keying it off the group
+ * alone would leave the actions unreachable by keyboard. */
+.goals-view .goal-actions {
+  display: flex;
+  gap: var(--space-2);
+  visibility: hidden;
+}
+
+.goals-view .goal:hover .goal-actions,
+.goals-view .goal:focus-within .goal-actions {
+  visibility: visible;
+}
+
+.goals-view .goal-actions button,
+.key-result-actions button,
+.goals-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* ── Key Results ──────────────────────────────────────────────────── */
+
+.key-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.key-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.key-result-row {
+  display: grid;
+  grid-template-columns: 1fr auto 72px auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.key-result-name {
+  font-size: var(--text-sm);
+}
+
+/* A hairline meter, flat fill, no gradient and no transition — so a lagging
+ * measure reads at a glance without the card animating on every check-in. */
+.key-result-meter {
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--border-subtle);
+}
+
+.key-result-meter::before {
+  content: "";
+  display: block;
+  width: var(--kr-fill, 0%);
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+
+.key-result-row input {
+  width: 80px;
+}
+
+.key-result-source,
+.key-result-tasks-empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.key-result-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.key-result-tasks-toggle {
+  align-self: flex-start;
+  font-size: var(--text-xs);
+}
+
+.key-result-tasks li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.key-result-form,
+.goal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.goal-form label,
+.key-result-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--text-tertiary);
+}
+
+.goal-form-actions,
+.key-result-form-actions {
+  display: flex;
+  gap: var(--space-2);
 }

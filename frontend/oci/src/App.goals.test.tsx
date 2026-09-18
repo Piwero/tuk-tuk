@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeGoal, fakeHabit, fakeKeyResult, installFakeApi } from "./test/fakeApi";
+import { fakeGoal, fakeHabit, fakeKeyResult, fakeTask, installFakeApi } from "./test/fakeApi";
 
 async function openGoals(): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Views" });
@@ -168,7 +168,8 @@ describe("Goals", () => {
 
     const value = await screen.findByLabelText("Meditation days current value");
     expect(value.tagName).not.toBe("INPUT");
-    expect(value).toHaveTextContent("(auto)");
+    // Where the number comes from is said in words, not in a "(auto)" tag.
+    expect(await screen.findByText("From Check-ins")).toBeInTheDocument();
   });
 
   it("editing a manual Key Result's value round-trips", async () => {
@@ -296,5 +297,100 @@ describe("Goals", () => {
     await screen.findByText("Ship v1");
     expect(screen.queryByRole("button", { name: "Focus Ship v1" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Abandon Ship v1" })).not.toBeInTheDocument();
+  });
+
+  it("reorders Key Results so the one that matters most reads first", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [
+      fakeKeyResult(goal.id, "First", { sort_order: 100 }),
+      fakeKeyResult(goal.id, "Second", { sort_order: 200 }),
+    ];
+    installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Move key result Second up" }));
+
+    await waitFor(() => {
+      const names = within(screen.getByRole("list", { name: "Key results" }))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent);
+      expect(names[0]).toContain("Second");
+    });
+  });
+
+  it("edits a Key Result's target without destroying its progress", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [
+      fakeKeyResult(goal.id, "Lines", { start_value: 0, target_value: 100, current_value: 50 }),
+    ];
+    const api = installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    const target = await screen.findByLabelText("Lines target value");
+    fireEvent.blur(target, { target: { value: "200" } });
+
+    await waitFor(() => {
+      expect(api.goals[0]?.key_results[0]?.target_value).toBe(200);
+      expect(api.goals[0]?.key_results[0]?.current_value).toBe(50);
+    });
+  });
+
+  it("shows which Tasks a counted Key Result is made of", async () => {
+    const goal = fakeGoal("Ship v2");
+    const kr = fakeKeyResult(goal.id, "Tasks done", { source: "task_count", target_value: 3 });
+    goal.key_results = [kr];
+    installFakeApi({
+      goals: [goal],
+      tasks: [fakeTask("Write the migration", { key_result_id: kr.id })],
+    });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Show attached tasks" }));
+
+    const list = await screen.findByRole("list", { name: "Tasks attached to Tasks done" });
+    expect(within(list).getByText("Write the migration")).toBeInTheDocument();
+  });
+
+  it("says so when a mutation fails rather than failing silently", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [fakeKeyResult(goal.id, "Lines", { target_value: 100 })];
+    const api = installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+    await screen.findByLabelText("Lines target value");
+
+    // The Goal is gone by the time the write lands — a 404 the user must see,
+    // not an unhandled rejection that silently reverts the field.
+    api.goals.length = 0;
+    fireEvent.blur(screen.getByLabelText("Lines target value"), { target: { value: "200" } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/not found/i);
+  });
+
+  it("does not flash the empty state before the Goals have loaded", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+
+    await openGoals();
+
+    expect(screen.queryByText(/a goal is a durable outcome with a window/i)).toBeNull();
+    expect(await screen.findByText("Ship v2")).toBeInTheDocument();
+  });
+
+  it("abandoning a Goal drops it from the Stand-up", async () => {
+    const goal = fakeGoal("Give up", { is_focused: true });
+    const api = installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Abandon Give up" }));
+
+    await waitFor(() => {
+      expect(api.goals[0]?.status).toBe("abandoned");
+      expect(api.goals[0]?.is_focused).toBe(false);
+    });
   });
 });

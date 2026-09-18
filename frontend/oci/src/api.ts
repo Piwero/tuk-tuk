@@ -591,6 +591,12 @@ export function fetchTasksByTag(tagId: number): Promise<Page<Task>> {
   return request(`/api/v1/tasks?tag_id=${tagId}`);
 }
 
+/** What a Key Result's count is made of — so the number can be checked
+ * rather than trusted (ADR 0012). */
+export function fetchTasksByKeyResult(keyResultId: number): Promise<Page<Task>> {
+  return request(`/api/v1/tasks?key_result_id=${keyResultId}`);
+}
+
 /** The built-in Smart Lists — computed queries, never storage. */
 export type SmartView = "today" | "next7" | "all";
 

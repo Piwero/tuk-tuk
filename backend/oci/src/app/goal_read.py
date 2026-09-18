@@ -40,16 +40,25 @@ async def _current_value(kr: KeyResult, goal: Goal, session: SessionDep) -> floa
     return kr.current_value
 
 
+def settle(goal: Goal, ratios: list[float]) -> None:
+    """Leaving `active` freezes the Score and drops focus. Frozen, because a
+    Check-in backfilled in March must not rewrite what January's Score was
+    (ADR 0012). Unfocused, because the Stand-up must not keep showing an
+    outcome the user has closed or abandoned — and the UI offers no Unfocus
+    on a settled Goal, so a stuck flag would be unrecoverable."""
+    goal.final_score = goal_score(ratios)
+    goal.is_focused = False
+
+
 def _close_if_past_window(goal: Goal, key_results: list[KeyResultRead]) -> bool:
     """A windowless Goal (the Sprint Goal seed) never auto-closes. Returns
-    whether the Goal was just transitioned, so the caller knows to persist
-    the frozen Score."""
+    whether the Goal was just transitioned, so the caller knows to persist."""
     if goal.status != "active" or goal.end_date is None:
         return False
     if goal.end_date >= datetime.now(UTC).date():
         return False
     goal.status = "closed"
-    goal.final_score = goal_score([kr.ratio for kr in key_results])
+    settle(goal, [kr.ratio for kr in key_results])
     return True
 
 
