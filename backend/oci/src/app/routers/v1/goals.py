@@ -6,7 +6,7 @@ built).
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.db import SessionDep
 from app.errors import NotFoundError
@@ -62,6 +62,13 @@ async def read_goal(goal_id: int, session: SessionDep) -> GoalRead:
 async def update_goal(goal_id: int, payload: GoalUpdate, session: SessionDep) -> GoalRead:
     goal = await get_goal_or_404(goal_id, session)
     changes = payload.model_dump(exclude_unset=True)
+    if changes.get("is_focused") is True:
+        # ADR 0012: only one Goal may be focused at a time.
+        await session.execute(
+            update(Goal)
+            .where(Goal.id != goal_id, Goal.is_focused.is_(True))
+            .values(is_focused=False)
+        )
     for field, value in changes.items():
         setattr(goal, field, value)
     await session.commit()

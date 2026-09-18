@@ -128,6 +128,18 @@ class TestUpdateAndDeleteGoal:
         assert response.status_code == 200
         assert response.json()["obstacle"] is None
 
+    def test_focusing_a_goal_clears_the_previous_focus(self, client: TestClient) -> None:
+        first = make_goal(client, "Ship v2")
+        second = make_goal(client, "Ship v3")
+        client.patch(f"/api/v1/goals/{first['id']}", json={"is_focused": True})
+
+        response = client.patch(f"/api/v1/goals/{second['id']}", json={"is_focused": True})
+
+        assert response.status_code == 200
+        assert response.json()["is_focused"] is True
+        first_now = client.get(f"/api/v1/goals/{first['id']}").json()
+        assert first_now["is_focused"] is False
+
     def test_title_may_not_be_set_to_explicit_null(self, client: TestClient) -> None:
         goal = make_goal(client, "Ship v2")
 
