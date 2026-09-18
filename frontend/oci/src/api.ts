@@ -919,7 +919,7 @@ export interface Habit {
   name: string;
   type: HabitType;
   /** The Numeric target and one tap's increment; Boolean habits keep 1 / 1. */
-  goal: number;
+  target: number;
   step: number;
   unit: string | null;
   icon: string | null;
@@ -951,7 +951,7 @@ export function fetchHabits(due?: string): Promise<Page<Habit>> {
 export interface HabitCreateInput {
   name: string;
   type?: HabitType;
-  goal?: number;
+  target?: number;
   step?: number;
   unit?: string;
   icon?: string;
@@ -965,12 +965,12 @@ export function createHabit(input: HabitCreateInput): Promise<Habit> {
 }
 
 /** Absent fields stay unchanged; explicit null clears unit / icon / color.
- * Becoming Numeric requires a goal in the same patch; becoming Boolean
- * sweeps goal / step / unit back to their defaults. */
+ * Becoming Numeric requires a target in the same patch; becoming Boolean
+ * sweeps target / step / unit back to their defaults. */
 export interface HabitPatch {
   name?: string;
   type?: HabitType;
-  goal?: number;
+  target?: number;
   step?: number;
   unit?: string | null;
   icon?: string | null;
@@ -1010,7 +1010,7 @@ export function fetchCheckIns(date: string): Promise<Page<CheckIn>> {
 }
 
 /** One checked-in day of the yearly heatmap; intensity is the value's share
- * of the Goal (0..1], so Numeric habits render partial fills. */
+ * of the Target (0..1], so Numeric habits render partial fills. */
 export interface HeatmapDay {
   date: string;
   value: number;

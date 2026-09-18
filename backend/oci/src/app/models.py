@@ -260,7 +260,8 @@ class CompletedOccurrence(Base):
 
 class Habit(Base):
     """A Habit — a recurring practice tracked by Check-ins rather than
-    completion: Boolean (done / not done) or Numeric (an amount toward a Goal).
+    completion: Boolean (done / not done) or Numeric (an amount toward a
+    Target). Not to be confused with a Goal, which is its own entity.
     """
 
     __tablename__ = "habits"
@@ -269,8 +270,8 @@ class Habit(Base):
     name: Mapped[str] = mapped_column(String(255))
     type: Mapped[str] = mapped_column(String(7), default="boolean")
     # The Numeric target and one tap's increment; Boolean habits keep the
-    # defaults (a check-in is the whole goal).
-    goal: Mapped[float] = mapped_column(default=1.0)
+    # defaults (a check-in is the whole target).
+    target: Mapped[float] = mapped_column(default=1.0)
     step: Mapped[float] = mapped_column(default=1.0)
     unit: Mapped[str | None] = mapped_column(String(32), default=None)
     icon: Mapped[str | None] = mapped_column(String(16), default=None)

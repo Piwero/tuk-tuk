@@ -31,7 +31,7 @@ function dayStatus(
   }
   if (level > 0) {
     const unit = habit.unit === null ? "" : ` ${habit.unit}`;
-    return { level, text: `in progress: ${entry?.value ?? 0} of ${habit.goal}${unit}` };
+    return { level, text: `in progress: ${entry?.value ?? 0} of ${habit.target}${unit}` };
   }
   // Today is graced — the day isn't over, so it reads as pending, not missed
   // (the same grace the server's Streak gives it).
@@ -39,7 +39,7 @@ function dayStatus(
 }
 
 /** The Streak and a strip of the Habit's most recent scheduled days —
- * checked in, missed, or (Numeric) partially filled toward the Goal. Reuses
+ * checked in, missed, or (Numeric) partially filled toward the Target. Reuses
  * habitFrequency's due-day logic, so a non-daily Habit's off days never
  * appear (and so never read as missed). Renders nothing until `stats`
  * loads. */

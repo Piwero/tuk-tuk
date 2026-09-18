@@ -257,9 +257,9 @@ class CompletedOccurrenceRead(BaseModel):
 class HabitCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     type: HabitType = "boolean"
-    # Numeric habits: goal is required, step defaults to 1, unit is optional.
+    # Numeric habits: target is required, step defaults to 1, unit is optional.
     # Boolean habits may not carry any of them (the router enforces both).
-    goal: float | None = Field(default=None, gt=0)
+    target: float | None = Field(default=None, gt=0)
     step: float | None = Field(default=None, gt=0)
     unit: str | None = Field(default=None, min_length=1, max_length=32)
     icon: str | None = Field(default=None, max_length=16)
@@ -273,7 +273,7 @@ class HabitCreate(BaseModel):
 class HabitUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     type: HabitType | None = None
-    goal: float | None = Field(default=None, gt=0)
+    target: float | None = Field(default=None, gt=0)
     step: float | None = Field(default=None, gt=0)
     unit: str | None = Field(default=None, min_length=1, max_length=32)
     icon: str | None = Field(default=None, max_length=16)
@@ -283,7 +283,7 @@ class HabitUpdate(BaseModel):
     is_archived: bool | None = None
 
     _reject_nulls = field_validator(
-        "name", "type", "goal", "step", "encouragement", "frequency", "is_archived"
+        "name", "type", "target", "step", "encouragement", "frequency", "is_archived"
     )(reject_explicit_null)
 
 
@@ -293,7 +293,7 @@ class HabitRead(BaseModel):
     id: int
     name: str
     type: HabitType
-    goal: float
+    target: float
     step: float
     unit: str | None
     icon: str | None
@@ -326,7 +326,7 @@ class CheckInRead(BaseModel):
 
 class HeatmapDay(BaseModel):
     """One checked-in day of the yearly heatmap; intensity is the value's
-    share of the Goal (0..1], so Numeric habits render partial fills."""
+    share of the Target (0..1], so Numeric habits render partial fills."""
 
     date: date
     value: float

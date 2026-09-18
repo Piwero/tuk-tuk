@@ -15,7 +15,7 @@ import { IconPicker } from "./IconPicker";
 export interface HabitFormValues {
   name: string;
   type: HabitType;
-  goal: number;
+  target: number;
   step: number;
   unit: string;
   icon: string;
@@ -49,7 +49,7 @@ function frequencyDraftFrom(rule: string | undefined): FrequencyDraft {
 export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
   const [type, setType] = useState<HabitType>(initial?.type ?? "boolean");
-  const [goal, setGoal] = useState(String(initial?.goal ?? 1));
+  const [target, setTarget] = useState(String(initial?.target ?? 1));
   const [step, setStep] = useState(String(initial?.step ?? 1));
   const [unit, setUnit] = useState(initial?.unit ?? "");
   const [icon, setIcon] = useState(initial?.icon ?? "");
@@ -70,13 +70,13 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
   function handleSubmit(event: React.FormEvent): void {
     event.preventDefault();
     const trimmed = name.trim();
-    const goalNumber = Number(goal);
+    const targetNumber = Number(target);
     const stepNumber = Number(step);
     const times = Number(frequency.times);
     if (trimmed === "") {
       return;
     }
-    if (type === "numeric" && (!(goalNumber > 0) || !(stepNumber > 0))) {
+    if (type === "numeric" && (!(targetNumber > 0) || !(stepNumber > 0))) {
       return;
     }
     if (frequency.kind === "weekdays" && frequency.byday.length === 0) {
@@ -88,7 +88,7 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
     onSubmit({
       name: trimmed,
       type,
-      goal: goalNumber,
+      target: targetNumber,
       step: stepNumber,
       unit: unit.trim(),
       icon: icon.trim(),
@@ -124,14 +124,14 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
       {type === "numeric" && (
         <>
           <label>
-            Goal
+            Target
             <input
               type="number"
               min={0}
               step="any"
-              aria-label="Goal"
-              value={goal}
-              onChange={(event) => setGoal(event.target.value)}
+              aria-label="Target"
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
             />
           </label>
           <label>

@@ -46,7 +46,7 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Eleme
     const value = valueOf(day);
     if (habit.type === "boolean") {
       await (value > 0 ? removeCheckIn(habit.id, day) : putCheckIn(habit.id, day, 1));
-    } else if (value >= habit.goal) {
+    } else if (value >= habit.target) {
       await removeCheckIn(habit.id, day);
     } else {
       await putCheckIn(habit.id, day, value + habit.step);
@@ -82,7 +82,7 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Eleme
               <button
                 key={day}
                 type="button"
-                className={value >= habit.goal ? "grid-day complete" : "grid-day"}
+                className={value >= habit.target ? "grid-day complete" : "grid-day"}
                 aria-label={day}
                 aria-pressed={value > 0}
                 disabled={day > today}

@@ -34,33 +34,35 @@ def invalid_habit(message: str) -> APIError:
     return APIError(status_code=422, code="invalid_habit", message=message)
 
 
-def validate_goal_fields(
+def validate_target_fields(
     type_: HabitType,
-    goal: float | None,
+    target: float | None,
     step: float | None,
     unit: str | None,
 ) -> tuple[float, float, str | None]:
-    """The goal/step/unit a habit stores: Numeric habits need a Goal (step
-    defaults to 1); Boolean habits may not carry any of them — a check-in
-    is the whole goal.
+    """The target/step/unit a habit stores: Numeric habits need a Target
+    (step defaults to 1); Boolean habits may not carry any of them — a
+    check-in is the whole target.
     """
     if type_ == "boolean":
-        if goal is not None or step is not None or unit is not None:
-            raise invalid_habit("A Boolean habit has no goal, step or unit")
+        if target is not None or step is not None or unit is not None:
+            raise invalid_habit("A Boolean habit has no target, step or unit")
         return 1.0, 1.0, None
-    if goal is None:
-        raise invalid_habit("A Numeric habit requires a goal")
-    return goal, step if step is not None else 1.0, unit
+    if target is None:
+        raise invalid_habit("A Numeric habit requires a target")
+    return target, step if step is not None else 1.0, unit
 
 
 @router.post("", status_code=201)
 async def create_habit(payload: HabitCreate, session: SessionDep) -> HabitRead:
     validate_frequency(payload.frequency)
-    goal, step, unit = validate_goal_fields(payload.type, payload.goal, payload.step, payload.unit)
+    target, step, unit = validate_target_fields(
+        payload.type, payload.target, payload.step, payload.unit
+    )
     habit = Habit(
         name=payload.name,
         type=payload.type,
-        goal=goal,
+        target=target,
         step=step,
         unit=unit,
         icon=payload.icon,
@@ -109,19 +111,19 @@ async def update_habit(habit_id: int, payload: HabitUpdate, session: SessionDep)
     changes = payload.model_dump(exclude_unset=True)
     if "frequency" in changes:
         validate_frequency(changes["frequency"])
-    # Validate the goal fields the habit would end up with after this patch.
+    # Validate the target fields the habit would end up with after this patch.
     # Stored values carry over only while the habit stays Numeric: becoming
-    # Numeric requires a goal in the same request (the Boolean defaults are
+    # Numeric requires a target in the same request (the Boolean defaults are
     # not a real target), and becoming Boolean sweeps the fields back.
     new_type = changes.get("type", habit.type)
     carry = habit.type == "numeric" and new_type == "numeric"
-    goal, step, unit = validate_goal_fields(
+    target, step, unit = validate_target_fields(
         new_type,
-        changes.get("goal", habit.goal if carry else None),
+        changes.get("target", habit.target if carry else None),
         changes.get("step", habit.step if carry else None),
         changes.get("unit", habit.unit if carry else None),
     )
-    changes.update(goal=goal, step=step, unit=unit)
+    changes.update(target=target, step=step, unit=unit)
     for field, value in changes.items():
         setattr(habit, field, value)
     await session.commit()
@@ -195,7 +197,7 @@ async def read_habit_stats(
     return HabitStats(
         streak=current_streak(habit.frequency, {row.date for row in rows}, today),
         heatmap=[
-            HeatmapDay(date=row.date, value=row.value, intensity=intensity(row.value, habit.goal))
+            HeatmapDay(date=row.date, value=row.value, intensity=intensity(row.value, habit.target))
             for row in sorted(rows, key=lambda row: row.date)
             if row.date.year == heatmap_year
         ],
