@@ -19,7 +19,6 @@ from app.models import (
     DEFAULT_OWNER,
     CompletedOccurrence,
     Goal,
-    SprintGoal,
     StandupBullet,
     StandupEntry,
     Task,
@@ -28,8 +27,6 @@ from app.routers.v1.tasks import in_smart_view
 from app.schemas import (
     GoalRead,
     Page,
-    SprintGoalRead,
-    SprintGoalUpdate,
     StandupBulletCreate,
     StandupBulletUpdate,
     StandupEntryRead,
@@ -54,19 +51,6 @@ async def get_entry_or_404(day: date, session: SessionDep) -> StandupEntry:
     if entry is None:
         raise NotFoundError(f"No stand-up entry on {day.isoformat()}")
     return entry
-
-
-async def get_sprint_goal(session: SessionDep) -> SprintGoal | None:
-    result = await session.execute(select(SprintGoal).where(SprintGoal.owner == DEFAULT_OWNER))
-    return result.scalar_one_or_none()
-
-
-async def get_or_create_sprint_goal(session: SessionDep) -> SprintGoal:
-    goal = await get_sprint_goal(session)
-    if goal is None:
-        goal = SprintGoal()
-        session.add(goal)
-    return goal
 
 
 async def get_or_create_entry(day: date, session: SessionDep) -> StandupEntry:
@@ -167,20 +151,6 @@ async def read_focused_goal(session: SessionDep) -> GoalRead | None:
     if goal is None:
         return None
     return await build_goal_read(goal, session)
-
-
-@router.get("/sprint-goal")
-async def read_sprint_goal(session: SessionDep) -> SprintGoalRead:
-    goal = await get_sprint_goal(session)
-    return SprintGoalRead(text=goal.text if goal is not None else "")
-
-
-@router.put("/sprint-goal")
-async def update_sprint_goal(payload: SprintGoalUpdate, session: SessionDep) -> SprintGoalRead:
-    goal = await get_or_create_sprint_goal(session)
-    goal.text = payload.text
-    await session.commit()
-    return SprintGoalRead.model_validate(goal)
 
 
 @router.get("/entries")

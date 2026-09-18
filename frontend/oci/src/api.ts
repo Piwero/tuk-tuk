@@ -1434,27 +1434,11 @@ export function fetchYesterdaySuggestions(date: string): Promise<StandupYesterda
   return request(`/api/v1/stand-up/suggestions/yesterday?date=${date}`);
 }
 
-export interface SprintGoal {
-  text: string;
-}
-
-/** The single, persistent Sprint-goal text shown above every Stand-up Entry. */
-export function fetchSprintGoal(): Promise<SprintGoal> {
-  return request("/api/v1/stand-up/sprint-goal");
-}
-
-export function updateSprintGoal(text: string): Promise<SprintGoal> {
-  return request("/api/v1/stand-up/sprint-goal", {
-    method: "PUT",
-    body: JSON.stringify({ text }),
-  });
-}
-
 /** Whether the Stand-up nav item/route is visible at all (issue #140). A
  * UI-only visibility switch: turning it off never blocks the stand-up
- * routes above and never touches stored entries, bullets, or the Sprint
- * goal — the app fetches this once at load to decide whether to show the
- * nav item, mirroring how GoogleStatus is fetched once for Settings. */
+ * routes above and never touches stored entries or bullets — the app
+ * fetches this once at load to decide whether to show the nav item,
+ * mirroring how GoogleStatus is fetched once for Settings. */
 export interface StandupSettings {
   enabled: boolean;
 }

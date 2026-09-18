@@ -279,7 +279,6 @@ export interface FakeApiState {
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
   standupYesterdaySuggestions: FakeStandupYesterdaySuggestion[];
-  sprintGoal: string;
   /** The Stand-up visibility toggle (issue #140) — server-defaulted to
    * true, matching the backend's default. */
   standupEnabled: boolean;
@@ -662,7 +661,6 @@ export function installFakeApi({
   eventFailures = [],
   standupEntries = [],
   standupYesterdaySuggestions = [],
-  sprintGoal = "",
   standupEnabled = true,
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
   assistAvailable = false,
@@ -718,9 +716,6 @@ export function installFakeApi({
   /** Yesterday-section suggestion chips (issue #141), served as-is by the
    * fake's suggestions route regardless of the requested `date`. */
   standupYesterdaySuggestions?: FakeStandupYesterdaySuggestion[];
-  /** The live Sprint goal (issue #139) — never touches existing Entries'
-   * `sprint_goal_snapshot`, only what a newly-created Entry copies. */
-  sprintGoal?: string;
   /** The Stand-up visibility toggle (issue #140). Defaults to true, matching
    * the backend's server-defaulted-true column. */
   standupEnabled?: boolean;
@@ -784,7 +779,6 @@ export function installFakeApi({
     standupYesterdaySuggestions: standupYesterdaySuggestions.map((suggestion) => ({
       ...suggestion,
     })),
-    sprintGoal,
     standupEnabled,
     activeHours: { ...activeHours },
     assistAvailable,
@@ -2249,16 +2243,6 @@ export function installFakeApi({
         .filter((task) => !task.completed && inSmartView(task, "today", today))
         .map((task) => ({ task_id: task.id, title: task.title }));
       return json(items);
-    }
-    if (url.pathname === "/api/v1/stand-up/sprint-goal") {
-      if (method === "GET") {
-        return json({ text: state.sprintGoal });
-      }
-      if (method === "PUT") {
-        const input = body as { text: string };
-        state.sprintGoal = input.text;
-        return json({ text: state.sprintGoal });
-      }
     }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/focused-goal") {
       const focused = state.goals.find((g) => g.is_focused);
