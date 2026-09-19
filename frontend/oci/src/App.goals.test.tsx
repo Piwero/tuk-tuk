@@ -100,6 +100,18 @@ describe("Goals", () => {
     });
   });
 
+  it("says blank dates default to the current quarter", async () => {
+    installFakeApi();
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Goal" }));
+
+    expect(screen.getByText(/blank uses the current quarter/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Start date")).not.toBeRequired();
+    expect(screen.getByLabelText("End date")).not.toBeRequired();
+  });
+
   it("edits a Goal in place", async () => {
     const api = installFakeApi({ goals: [fakeGoal("Ship v2")] });
     render(<App />);
@@ -150,6 +162,26 @@ describe("Goals", () => {
     });
     expect(await screen.findByText("Lines shipped")).toBeInTheDocument();
     expect(screen.getByText("40%")).toBeInTheDocument();
+  });
+
+  it("explains itself when Habit check-ins is chosen with no Habits", async () => {
+    const goal = fakeGoal("Ship v2");
+    installFakeApi({ goals: [goal], habits: [] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(
+      within(await screen.findByLabelText("Ship v2 key results")).getByRole("button", {
+        name: "Add key result",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Key result source"), {
+      target: { value: "habit_checkins" },
+    });
+
+    expect(screen.queryByLabelText("Source habit")).not.toBeInTheDocument();
+    expect(screen.getByText(/no habits exist yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no habits exist yet/i)).toHaveTextContent(/habits/i);
   });
 
   it("an automatic Key Result's value renders read-only", async () => {
@@ -226,6 +258,26 @@ describe("Goals", () => {
     });
     // Halving the target halves the progress, so the Score moves too.
     expect(await screen.findByText("Score: 25%")).toBeInTheDocument();
+  });
+
+  it("says a Goal with no Key Results is unmeasured, not scored", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    expect(await screen.findByText(/no key results yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/score:/i)).not.toBeInTheDocument();
+  });
+
+  it("replaces the unmeasured line with a Score once a Key Result exists", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [fakeKeyResult(goal.id, "Lines shipped", { target_value: 100 })];
+    installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    expect(await screen.findByText("Score: 0%")).toBeInTheDocument();
+    expect(screen.queryByText(/no key results yet/i)).not.toBeInTheDocument();
   });
 
   it("deleting a Key Result removes it", async () => {

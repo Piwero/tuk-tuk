@@ -123,6 +123,7 @@ function GoalForm({ initial, onSubmit, onCancel }: GoalFormProps): JSX.Element {
           onChange={(event) => set("end_date", event.target.value)}
         />
       </label>
+      <p className="goal-form-date-hint">Blank uses the current quarter.</p>
       <div className="goal-form-actions">
         <button type="submit">Save</button>
         <button type="button" onClick={onCancel}>
@@ -321,7 +322,11 @@ function KeyResultsPanel({
 
   return (
     <div className="key-results" aria-label={`${goal.title} key results`}>
-      {goal.score !== null && <p className="goal-score">Score: {Math.round(goal.score * 100)}%</p>}
+      {goal.score !== null ? (
+        <p className="goal-score">Score: {Math.round(goal.score * 100)}%</p>
+      ) : (
+        <p className="goal-score-unmeasured">No Key Results yet — unmeasured.</p>
+      )}
       {goal.key_results.length > 0 && (
         <ul aria-label="Key results">
           {goal.key_results.map((kr: KeyResult, index: number) => (
@@ -368,24 +373,29 @@ function KeyResultsPanel({
               <option value="task_count">Task count</option>
             </select>
           </label>
-          {draft.source === "habit_checkins" && (
-            <label>
-              Habit
-              <select
-                aria-label="Source habit"
-                value={draft.source_habit_id}
-                onChange={(event) => set("source_habit_id", event.target.value)}
-                required
-              >
-                <option value="">Choose a habit…</option>
-                {habits.map((habit) => (
-                  <option key={habit.id} value={habit.id}>
-                    {habit.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          {draft.source === "habit_checkins" &&
+            (habits.length > 0 ? (
+              <label>
+                Habit
+                <select
+                  aria-label="Source habit"
+                  value={draft.source_habit_id}
+                  onChange={(event) => set("source_habit_id", event.target.value)}
+                  required
+                >
+                  <option value="">Choose a habit…</option>
+                  {habits.map((habit) => (
+                    <option key={habit.id} value={habit.id}>
+                      {habit.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="key-result-no-habits">
+                No Habits exist yet. Create one in Habits first.
+              </p>
+            ))}
           <label>
             Start value
             <input
