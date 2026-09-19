@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createHabit,
@@ -16,6 +16,7 @@ import {
 } from "../api";
 import { localDayOf } from "../dates";
 import { habitFrequencyLabel } from "../habitFrequency";
+import { nextCheckIn, stripDays } from "../habitStats";
 import { HabitActionsMenu } from "./HabitActionsMenu";
 import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
@@ -36,8 +37,10 @@ export function HabitsView(): JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
   // The habit whose history (grid + heatmap) is expanded, if any.
   const [historyId, setHistoryId] = useState<number | null>(null);
-  // Habits with a check-in write in flight (see addStep).
-  const [pending, setPending] = useState<Set<number>>(new Set());
+  // The habit-and-day Check-in writes in flight (see addStep). A ref, not
+  // state: a second tap in the same tick would still read the old state and
+  // slip through, and nothing here is rendered.
+  const pending = useRef<Set<string>>(new Set());
   // Each card's server-computed Streak + heatmap, for the Streak count and
   // recent-days strip — keyed by habit id, absent while still loading.
   const [statsByHabit, setStatsByHabit] = useState<Map<number, HabitStats>>(new Map());
@@ -53,9 +56,7 @@ export function HabitsView(): JSX.Element {
     setHabits(allPage.items);
     setCheckIns(checkInPage.items);
     const statsEntries = await Promise.all(
-      allPage.items.map(
-        async (habit) => [habit.id, await fetchHabitStats(habit.id, today)] as const,
-      ),
+      allPage.items.map(async (habit) => [habit.id, await habitStatsFor(habit, today)] as const),
     );
     setStatsByHabit(new Map(statsEntries));
   }, [today]);
@@ -81,44 +82,70 @@ export function HabitsView(): JSX.Element {
    * recent-days strip are the server's call, so a tap that changes the day's
    * Check-in leaves the numbers on screen stale until they are refetched. */
   const refreshStats = useCallback(
-    async (habitId: number): Promise<void> => {
-      const stats = await fetchHabitStats(habitId, today);
-      setStatsByHabit((current) => new Map(current).set(habitId, stats));
+    async (habit: Habit): Promise<void> => {
+      const stats = await habitStatsFor(habit, today);
+      setStatsByHabit((current) => new Map(current).set(habit.id, stats));
     },
     [today],
   );
 
-  /** A Boolean tap checks the day in; tapping again undoes it. */
-  async function toggleCheckIn(habit: Habit): Promise<void> {
-    const existing = checkInOf(habit);
-    if (existing === undefined) {
-      applyCheckIn(await putCheckIn(habit.id, today, 1));
-    } else {
-      await removeCheckIn(habit.id, today);
-      setCheckIns((current) => current.filter((checkIn) => checkIn.habit_id !== habit.id));
+  /** What a Habit has recorded on a day. Today is read from the day's
+   * Check-in (what the card's own controls show); an earlier day from the
+   * card's stats, the strip's own source. */
+  function valueOn(habit: Habit, day: string): number {
+    if (day === today) {
+      return checkInOf(habit)?.value ?? 0;
     }
-    await refreshStats(habit.id);
+    const entry = statsByHabit.get(habit.id)?.heatmap.find((day_) => day_.date === day);
+    return entry?.value ?? 0;
   }
 
-  /** A Numeric tap accumulates one step into the day's Check-in. The tap's
-   * read-modify-write settles before the next is allowed (`pending`), so a
-   * rapid double-tap can't overwrite itself and lose a step. */
-  async function addStep(habit: Habit): Promise<void> {
-    if (pending.has(habit.id)) {
+  /** Runs one Check-in write for a Habit's day, and not a second while it is
+   * still in flight — the writes are read-modify-write, so a rapid double-tap
+   * would otherwise compute both from the same stale value and lose a step. */
+  async function writeDay(habit: Habit, day: string, write: () => Promise<void>): Promise<void> {
+    const key = `${habit.id}:${day}`;
+    if (pending.current.has(key)) {
       return;
     }
-    setPending((current) => new Set(current).add(habit.id));
+    pending.current.add(key);
     try {
-      const value = (checkInOf(habit)?.value ?? 0) + habit.step;
-      applyCheckIn(await putCheckIn(habit.id, today, value));
-      await refreshStats(habit.id);
+      await write();
+      await refreshStats(habit);
     } finally {
-      setPending((current) => {
-        const next = new Set(current);
-        next.delete(habit.id);
-        return next;
-      });
+      pending.current.delete(key);
     }
+  }
+
+  /** A tap on one day of a Habit — the card's check control for today, or a
+   * square in the recent-days strip for an earlier one. A Boolean day
+   * toggles; a Numeric day accumulates one step, and a tap on a day that
+   * already met its Target clears it. Backfilling a missed day is the same
+   * gesture as checking today in, so it needs no separate screen. */
+  async function toggleDay(habit: Habit, day: string): Promise<void> {
+    await writeDay(habit, day, async () => {
+      const next = nextCheckIn(habit, valueOn(habit, day));
+      if (next.clear) {
+        await removeCheckIn(habit.id, day);
+        if (day === today) {
+          setCheckIns((current) => current.filter((checkIn) => checkIn.habit_id !== habit.id));
+        }
+        return;
+      }
+      const saved = await putCheckIn(habit.id, day, next.value);
+      if (day === today) {
+        applyCheckIn(saved);
+      }
+    });
+  }
+
+  /** The Numeric card's "+step" control: it only ever adds, whatever its
+   * label promises — clearing a met Target is the strip's job, not this
+   * button's. */
+  async function addStep(habit: Habit): Promise<void> {
+    await writeDay(habit, today, async () => {
+      applyCheckIn(await putCheckIn(habit.id, today, valueOn(habit, today) + habit.step));
+    });
   }
 
   async function handleCreate(values: HabitFormValues): Promise<void> {
@@ -210,7 +237,12 @@ export function HabitsView(): JSX.Element {
          * full grid and heatmap); skip the compact badge so it isn't
          * repeated. */}
         {historyId !== habit.id && (
-          <HabitCardStats habit={habit} stats={statsByHabit.get(habit.id)} today={today} />
+          <HabitCardStats
+            habit={habit}
+            stats={statsByHabit.get(habit.id)}
+            today={today}
+            onToggleDay={habit.is_archived ? null : (day) => void toggleDay(habit, day)}
+          />
         )}
         {showCheckInControls && (
           <div className="habit-checkin">
@@ -220,7 +252,7 @@ export function HabitsView(): JSX.Element {
                 className="habit-check"
                 aria-label={complete ? `Undo check-in ${habit.name}` : `Check in ${habit.name}`}
                 aria-pressed={complete}
-                onClick={() => void toggleCheckIn(habit)}
+                onClick={() => void toggleDay(habit, today)}
               >
                 {complete && <Icon name="check" size={18} />}
               </button>
@@ -287,6 +319,25 @@ export function HabitsView(): JSX.Element {
       )}
     </div>
   );
+}
+
+/** One Habit's stats, covering every day its card's strip shows. The
+ * server's heatmap is one calendar year at a time, and in early January the
+ * strip still reaches back into last December — so at a year boundary this
+ * asks for both years and merges them. Otherwise those days would read as
+ * missed however faithfully they were checked in, and a tap meaning "undo"
+ * would check them in again. */
+async function habitStatsFor(habit: Habit, today: string): Promise<HabitStats> {
+  const years = [...new Set(stripDays(habit.frequency, today).map((day) => day.slice(0, 4)))];
+  const pages = await Promise.all(
+    years.map(async (year) => fetchHabitStats(habit.id, today, Number(year))),
+  );
+  // The Streak is as of `today` whichever year was asked for, so any page's
+  // will do; the heatmaps are disjoint years, so they simply concatenate.
+  return {
+    streak: pages[0]?.streak ?? 0,
+    heatmap: pages.flatMap((page) => page.heatmap),
+  };
 }
 
 /** The API payload a form submission builds: Boolean habits must not carry

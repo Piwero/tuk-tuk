@@ -1,13 +1,7 @@
 import { type Habit, type HabitStats } from "../api";
 import { shortDayLabel } from "../dates";
-import { recentScheduledDays } from "../habitFrequency";
-import { heatLevel } from "../habitStats";
+import { heatLevel, stripDays } from "../habitStats";
 import { Icon } from "./Icon";
-
-/** How many of the Habit's most recent scheduled days the card's strip
- * shows — three weeks, enough to read a pattern (a slipping habit, a
- * steady one) at a glance rather than just the current week. */
-const STRIP_LENGTH = 21;
 
 interface HabitCardStatsProps {
   habit: Habit;
@@ -15,6 +9,10 @@ interface HabitCardStatsProps {
   stats: HabitStats | undefined;
   /** The caller's local day (YYYY-MM-DD). */
   today: string;
+  /** Fired when a day in the strip is tapped (YYYY-MM-DD). Null makes the
+   * strip a picture rather than a control — an archived Habit is a record,
+   * not something to still be checking in on. */
+  onToggleDay: ((day: string) => void) | null;
 }
 
 /** A day cell's fill level plus its accessible status, read from the
@@ -42,13 +40,21 @@ function dayStatus(
  * checked in, missed, or (Numeric) partially filled toward the Target. Reuses
  * habitFrequency's due-day logic, so a non-daily Habit's off days never
  * appear (and so never read as missed). Renders nothing until `stats`
- * loads. */
-export function HabitCardStats({ habit, stats, today }: HabitCardStatsProps): JSX.Element | null {
+ * loads.
+ *
+ * Each day is a control, not a picture: a missed day is fixed by tapping its
+ * own square, so backfilling never means opening the history panel first. */
+export function HabitCardStats({
+  habit,
+  stats,
+  today,
+  onToggleDay,
+}: HabitCardStatsProps): JSX.Element | null {
   if (stats === undefined) {
     return null;
   }
   const entries = new Map(stats.heatmap.map((entry) => [entry.date, entry]));
-  const days = recentScheduledDays(habit.frequency, today, STRIP_LENGTH);
+  const days = stripDays(habit.frequency, today);
 
   return (
     <div className="habit-card-stats">
@@ -59,12 +65,19 @@ export function HabitCardStats({ habit, stats, today }: HabitCardStatsProps): JS
       <div className="habit-strip" role="group" aria-label={`Recent days for ${habit.name}`}>
         {days.map((day) => {
           const { level, text } = dayStatus(habit, today, day, entries.get(day));
+          const className = `habit-strip-day heatmap-day level-${level}${day === today ? " today" : ""}`;
+          const label = `${shortDayLabel(day)}: ${text}`;
+          if (onToggleDay === null) {
+            return <span key={day} role="img" className={className} aria-label={label} />;
+          }
           return (
-            <span
+            <button
               key={day}
-              role="img"
-              className={`habit-strip-day heatmap-day level-${level}${day === today ? " today" : ""}`}
-              aria-label={`${shortDayLabel(day)}: ${text}`}
+              type="button"
+              className={className}
+              aria-label={label}
+              aria-pressed={level > 0}
+              onClick={() => onToggleDay(day)}
             />
           );
         })}

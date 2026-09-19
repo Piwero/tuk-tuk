@@ -2702,13 +2702,44 @@ li[data-overdue] .date-chip {
   gap: 3px;
 }
 
-.habit-strip .heatmap-day {
+/* Each day in the strip is a button — tapping it checks that day in — but
+   it still reads as the same 12px square as the heatmap's. The affordance
+   is the cursor and a hover ring outside the square, so it can't be read as
+   the inset ring that marks today. */
+.habit-strip button.heatmap-day {
   width: 12px;
   height: 12px;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  transition: outline-color var(--duration-fast) var(--ease-out);
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+}
+
+.habit-strip button.heatmap-day:hover {
+  outline-color: var(--ink-400);
 }
 
 .habit-strip-day.today {
   box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+
+/* On touch a 12px square is far under --tap-target, and a near miss checks
+   in the wrong day. Per the touch-target rule below, the hit area grows by
+   padding while the square itself stays 12px — the strip already wraps, so
+   the taller rows just wrap sooner. Horizontal padding is kept to
+   --space-1 so three weeks still reads as a strip rather than a grid. */
+@media (hover: none), (pointer: coarse) {
+  .habit-strip {
+    gap: 0;
+  }
+
+  .habit-strip button.heatmap-day {
+    box-sizing: content-box;
+    padding: calc((var(--tap-target) - 12px) / 2) var(--space-1);
+    background-clip: content-box;
+  }
 }
 
 .habit-check {

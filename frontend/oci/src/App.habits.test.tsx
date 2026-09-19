@@ -146,7 +146,7 @@ describe("Habit card stats", () => {
     expect(await screen.findByText("Streak: 3")).toBeInTheDocument();
 
     const strip = screen.getByRole("group", { name: "Recent days for Meditate" });
-    const days = within(strip).getAllByRole("img");
+    const days = within(strip).getAllByRole("button");
     // Three weeks of scheduled days, oldest first — enough to read a pattern.
     expect(days).toHaveLength(21);
     expect(days.slice(-4).map((day) => day.getAttribute("aria-label"))).toEqual([
@@ -189,7 +189,7 @@ describe("Habit card stats", () => {
     // Friday 2026-07-03 is not one of this Habit's scheduled days, so it
     // never appears in the strip at all — it can't be shown as missed.
     const strip = screen.getByRole("group", { name: "Recent days for Review week" });
-    const days = await within(strip).findAllByRole("img");
+    const days = await within(strip).findAllByRole("button");
     // Only Mondays appear — Friday 2026-07-03 is never in the strip, so it
     // can't read as missed. Three weeks' worth means 21 scheduled Mondays.
     expect(days).toHaveLength(21);
@@ -211,12 +211,132 @@ describe("Habit card stats", () => {
     await openHabits();
 
     const strip = await screen.findByRole("group", { name: "Recent days for Drink water" });
-    const full = within(strip).getByRole("img", { name: "Jul 1: checked in" });
-    const partial = within(strip).getByRole("img", {
+    const full = within(strip).getByRole("button", { name: "Jul 1: checked in" });
+    const partial = within(strip).getByRole("button", {
       name: "Jul 2: in progress: 2 of 4 glasses",
     });
     expect(full).toHaveClass("level-4");
     expect(partial).toHaveClass("level-2");
+  });
+
+  it("backfills a missed day straight from the card strip, and a second tap clears it", async () => {
+    const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
+    const habitId = api.habits[0]?.id ?? 0;
+    render(<App />);
+    await openHabits();
+
+    const strip = await screen.findByRole("group", { name: "Recent days for Meditate" });
+    fireEvent.click(within(strip).getByRole("button", { name: "Jul 2: missed" }));
+
+    // The square turns green in place — no Edit, no history panel.
+    const checked = await within(strip).findByRole("button", { name: "Jul 2: checked in" });
+    expect(checked).toHaveClass("level-4");
+    expect(checked).toHaveAttribute("aria-pressed", "true");
+    expect(
+      api.requests.some(
+        (r) => r.method === "PUT" && r.url === `/api/v1/habits/${habitId}/check-ins/2026-07-02`,
+      ),
+    ).toBe(true);
+    // Yesterday backfilled, today graced: the Streak follows without a reload.
+    expect(await screen.findByText("Streak: 1")).toBeInTheDocument();
+
+    fireEvent.click(checked);
+
+    await within(strip).findByRole("button", { name: "Jul 2: missed" });
+    expect(api.checkIns).toHaveLength(0);
+    expect(await screen.findByText("Streak: 0")).toBeInTheDocument();
+  });
+
+  it("adds one step per tap on a Numeric Habit's past day, clearing a met Target", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 4, step: 2, unit: "glasses" })],
+    });
+    render(<App />);
+    await openHabits();
+
+    const strip = await screen.findByRole("group", { name: "Recent days for Drink water" });
+    fireEvent.click(within(strip).getByRole("button", { name: "Jul 1: missed" }));
+
+    await within(strip).findByRole("button", { name: "Jul 1: in progress: 2 of 4 glasses" });
+    fireEvent.click(
+      within(strip).getByRole("button", { name: "Jul 1: in progress: 2 of 4 glasses" }),
+    );
+
+    await within(strip).findByRole("button", { name: "Jul 1: checked in" });
+    expect(api.checkIns).toHaveLength(1);
+    expect(api.checkIns[0]?.value).toBe(4);
+
+    fireEvent.click(within(strip).getByRole("button", { name: "Jul 1: checked in" }));
+
+    await within(strip).findByRole("button", { name: "Jul 1: missed" });
+    expect(api.checkIns).toHaveLength(0);
+  });
+
+  it("keeps the card's check control in step when today's square is tapped", async () => {
+    const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
+    render(<App />);
+    await openHabits();
+
+    const strip = await screen.findByRole("group", { name: "Recent days for Meditate" });
+    fireEvent.click(within(strip).getByRole("button", { name: "Jul 3: not yet checked in" }));
+
+    // The strip and the big check control are two views of the same day.
+    expect(
+      await screen.findByRole("button", { name: "Undo check-in Meditate" }),
+    ).toBeInTheDocument();
+    expect(api.checkIns).toHaveLength(1);
+
+    fireEvent.click(await within(strip).findByRole("button", { name: "Jul 3: checked in" }));
+
+    expect(await screen.findByRole("button", { name: "Check in Meditate" })).toBeInTheDocument();
+    expect(api.checkIns).toHaveLength(0);
+  });
+
+  it("reads days on the far side of New Year, where the strip outruns one calendar year", async () => {
+    vi.setSystemTime(new Date(2026, 0, 5, 12, 0, 0));
+    const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
+    const habitId = api.habits[0]?.id ?? 0;
+    checkIn(api, habitId, "2025-12-30");
+    render(<App />);
+    await openHabits();
+
+    // The strip walks 21 days back from Jan 5, so most of it is last
+    // December — days a single year's heatmap would never mention.
+    const strip = await screen.findByRole("group", { name: "Recent days for Meditate" });
+    const done = await within(strip).findByRole("button", { name: "Dec 30: checked in" });
+
+    // And a day that reads as done must clear on tap, not check in again.
+    fireEvent.click(done);
+    await within(strip).findByRole("button", { name: "Dec 30: missed" });
+    expect(api.checkIns).toHaveLength(0);
+  });
+
+  it("leaves an archived Habit's strip a record rather than something to check in on", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate", { is_archived: true })] });
+    render(<App />);
+    await openHabits();
+
+    const strip = await screen.findByRole("group", { name: "Recent days for Meditate" });
+    expect(within(strip).queryAllByRole("button")).toHaveLength(0);
+    expect(within(strip).getAllByRole("img")).toHaveLength(21);
+  });
+
+  it("never lets a rapid double tap on one day lose a step", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 6, step: 2, unit: "glasses" })],
+    });
+    render(<App />);
+    await openHabits();
+
+    const strip = await screen.findByRole("group", { name: "Recent days for Drink water" });
+    const day = within(strip).getByRole("button", { name: "Jul 1: missed" });
+    fireEvent.click(day);
+    fireEvent.click(day);
+
+    // The second tap lands on a stale value, so it is dropped rather than
+    // writing 2 twice — the day reads 2, not a silently lost step.
+    await within(strip).findByRole("button", { name: "Jul 1: in progress: 2 of 6 glasses" });
+    expect(api.requests.filter((r) => r.method === "PUT")).toHaveLength(1);
   });
 });
 

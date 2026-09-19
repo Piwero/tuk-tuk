@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { fetchHabitStats, putCheckIn, removeCheckIn, type Habit, type HabitStats } from "../api";
 import { formatDate, localDayOf } from "../dates";
-import { heatLevel } from "../habitStats";
+import { heatLevel, nextCheckIn } from "../habitStats";
 import { Icon } from "./Icon";
 
 const pad = (n: number): string => String(n).padStart(2, "0");
@@ -40,17 +40,11 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Eleme
   const entries = new Map((stats?.heatmap ?? []).map((entry) => [entry.date, entry]));
   const valueOf = (day: string): number => entries.get(day)?.value ?? 0;
 
-  /** Backfill (or edit) a day's Check-in: a Boolean tap toggles it; a Numeric
-   * tap accumulates one step, and a tap on a complete day clears it. */
+  /** Backfill (or edit) a day's Check-in, on the same rule as the card's
+   * recent-days strip (see nextCheckIn). */
   async function tapDay(day: string): Promise<void> {
-    const value = valueOf(day);
-    if (habit.type === "boolean") {
-      await (value > 0 ? removeCheckIn(habit.id, day) : putCheckIn(habit.id, day, 1));
-    } else if (value >= habit.target) {
-      await removeCheckIn(habit.id, day);
-    } else {
-      await putCheckIn(habit.id, day, value + habit.step);
-    }
+    const next = nextCheckIn(habit, valueOf(day));
+    await (next.clear ? removeCheckIn(habit.id, day) : putCheckIn(habit.id, day, next.value));
     await load();
     onChanged();
   }
