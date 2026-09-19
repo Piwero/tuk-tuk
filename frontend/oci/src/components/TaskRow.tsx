@@ -1,7 +1,6 @@
-import { useRef, useState } from "react";
-
 import { type Task, type TaskList } from "../api";
 import { formatSchedule, isDueToday, isOverdue } from "../dates";
+import { useLongPressReveal } from "../longPressReveal";
 import { Icon } from "./Icon";
 import { PriorityIndicator } from "./PriorityIndicator";
 
@@ -33,11 +32,6 @@ function highlightedTitle(title: string, query: string | undefined): React.React
     </>
   );
 }
-
-/** How long a touch has to hold still before Focus/Delete reveal (#168).
- * Long enough that a scroll or a normal tap never trips it, short enough
- * not to feel unresponsive. */
-const LONG_PRESS_MS = 500;
 
 export interface TaskRowProps {
   task: Task;
@@ -154,35 +148,8 @@ export function TaskRow({
   // Focus/Delete stay off-screen at rest on touch (CSS, `[data-actions-
   // open]`) — a mis-tap must not be able to trigger a no-confirmation
   // Delete. A long-press is the deliberate gesture that reveals them; a
-  // plain tap or a scroll never does (#168).
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressed = useRef(false);
-
-  function clearPressTimer(): void {
-    if (pressTimer.current !== null) {
-      clearTimeout(pressTimer.current);
-      pressTimer.current = null;
-    }
-  }
-
-  function handleTouchStart(): void {
-    longPressed.current = false;
-    clearPressTimer();
-    pressTimer.current = setTimeout(() => {
-      longPressed.current = true;
-      setActionsOpen(true);
-    }, LONG_PRESS_MS);
-  }
-
-  function handleTouchEnd(event: React.TouchEvent<HTMLLIElement>): void {
-    clearPressTimer();
-    if (longPressed.current) {
-      // Swallow the trailing synthetic click so revealing the actions
-      // doesn't also open the task or toggle its checkbox.
-      event.preventDefault();
-    }
-  }
+  // plain tap or a scroll never does (#168). Shared with Goal cards (#245).
+  const reveal = useLongPressReveal();
 
   function handleSelectionKeyDown(event: React.KeyboardEvent<HTMLLIElement>): void {
     if (!selectable) {
@@ -201,7 +168,7 @@ export function TaskRow({
       className={rowClassName}
       data-priority={task.priority}
       data-overdue={overdue || undefined}
-      data-actions-open={actionsOpen || undefined}
+      data-actions-open={reveal.dataActionsOpen}
       data-selected={selected || undefined}
       aria-selected={selectable ? Boolean(selected) : undefined}
       tabIndex={selectable ? 0 : undefined}
@@ -212,11 +179,11 @@ export function TaskRow({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onContextMenu={onContextMenu}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchMove={clearPressTimer}
-      onTouchCancel={clearPressTimer}
-      onClick={() => setActionsOpen(false)}
+      onTouchStart={reveal.onTouchStart}
+      onTouchEnd={reveal.onTouchEnd}
+      onTouchMove={reveal.onTouchMove}
+      onTouchCancel={reveal.onTouchCancel}
+      onClick={reveal.onClick}
     >
       <div className="task-row-head">
         {selectable && selected && <span className="visually-hidden">{task.title} selected</span>}
