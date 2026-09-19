@@ -5486,19 +5486,24 @@ a.button:hover {
   color: var(--text-tertiary);
 }
 
-/* Row actions stay hidden until the card is hovered or something inside it
- * takes keyboard focus. The reveal is keyed off the card, not the action
- * group: a hidden button can't be tabbed to, so keying it off the group
- * alone would leave the actions unreachable by keyboard. */
+/* Row actions rest de-emphasised, not hidden (issue #247): a newly made
+ * Goal must show that Focus/Abandon/Edit/Delete exist, so someone who
+ * never thinks to hover isn't left concluding the app can't do those
+ * things. Full prominence still needs hover or focus-within, matching the
+ * hover-reveal convention elsewhere (Task rows, group headers, month
+ * cells) — this only changes the resting opacity, not the mechanism, and
+ * `visibility: hidden` is dropped because it pulls buttons out of the
+ * accessibility tree and off the hit-test path. */
 .goals-view .goal-actions {
   display: flex;
   gap: var(--space-2);
-  visibility: hidden;
+  opacity: 0.45;
+  transition: opacity var(--duration-base) var(--ease-out);
 }
 
 .goals-view .goal:hover .goal-actions,
 .goals-view .goal:focus-within .goal-actions {
-  visibility: visible;
+  opacity: 1;
 }
 
 .goals-view .goal-actions button,
