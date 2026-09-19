@@ -300,6 +300,24 @@ main {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* A thin, always-visible scrollbar rather than the OS's overlay-on-hover
+     default — the only signal that Lists/Tags below the fold exist at all
+     (issue #250). `auto` already hides it entirely once content fits. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .icon {
