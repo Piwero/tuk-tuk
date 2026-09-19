@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.9.0](https://github.com/Piwero/tuk-tuk/compare/v2.8.0...v2.9.0) - 2026-09-19
+
+### Features
+
+- **goals:** Tell the truth about blank dates, no Habits, and no Key Results ([9357750](https://github.com/Piwero/tuk-tuk/commit/935775044be6523b19805e3e6a62592ed4cef286))
+- **habits:** Back-fill a missed day by tapping its square on the card ([406ef81](https://github.com/Piwero/tuk-tuk/commit/406ef81475754a6f295fe61bb3ade41942d5d2ee))
+
+### Bug Fixes
+
+- **goals:** Commit a Key Result's value on Enter ([8b4ad41](https://github.com/Piwero/tuk-tuk/commit/8b4ad411ffcd3dd71e921120ff7a3daa4c9aa429))
+- **goals:** De-emphasize goal card actions at rest instead of hiding (#251) ([b8d6fd3](https://github.com/Piwero/tuk-tuk/commit/b8d6fd3a89f47d7706fcd608edeced9130090c4c))
+- **goals:** Reveal goal card actions on touch behind a long-press ([489e3b8](https://github.com/Piwero/tuk-tuk/commit/489e3b87559dce09abc5ed4f9c5596a26b8bad0d))
+
 ## [2.8.0](https://github.com/Piwero/tuk-tuk/compare/v2.7.1...v2.8.0) - 2026-09-19
 
 ### Features
