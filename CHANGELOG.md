@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.8.0](https://github.com/Piwero/tuk-tuk/compare/v2.7.1...v2.8.0) - 2026-09-19
+
+### Features
+
+- **goals:** Add Goal entity with create, list, edit, delete ([3163d33](https://github.com/Piwero/tuk-tuk/commit/3163d33b9bd6424e637a960a0a0762b47c4f9155))
+- **goals:** Key Results, Focused Goal, and Stand-up superseding Sprint Goal ([84a7743](https://github.com/Piwero/tuk-tuk/commit/84a77437a1a92c4927458a5865df85d918e04cfc))
+- **goals:** Close on read, freeze Score, retro, abandon, group by window ([0f6da80](https://github.com/Piwero/tuk-tuk/commit/0f6da80e4399bfc4c45f9da7f416d3f373200c51))
+- **settings:** Toggle Calendar, Goals, Habits, Focus, Assistant sections ([63c3226](https://github.com/Piwero/tuk-tuk/commit/63c3226c9d2ec0c692532766c198e70527ef5975))
+
+### Bug Fixes
+
+- **goals:** Clear previous focused Goal when focusing another ([b8e4999](https://github.com/Piwero/tuk-tuk/commit/b8e4999f931e23907ec51e3c8c7dd90cfa31edfc))
+- **goals:** Repair the frontend typecheck ([8464b14](https://github.com/Piwero/tuk-tuk/commit/8464b1475fcea0e7829775c59f31c9ac5dcd2de5))
+- **goals:** Settle Goals honestly and stop orphaning Tasks ([155c29d](https://github.com/Piwero/tuk-tuk/commit/155c29dce297f2269c58a66dbb3d813bb9d62801))
+
 ## [2.7.1](https://github.com/Piwero/tuk-tuk/compare/v2.7.0...v2.7.1) - 2026-09-09
 
 ### Features
