@@ -10,6 +10,8 @@ import {
   fetchSections,
   fetchSmartTasks,
   fetchStandupSettings,
+  fetchSectionSettings,
+  type SectionSettings,
   fetchTags,
   fetchTasks,
   fetchTasksByTag,
@@ -236,6 +238,16 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // at load, defaulting to true so the nav item doesn't flash away on a slow
   // network before the real value arrives.
   const [standupEnabled, setStandupEnabled] = useState(true);
+  // Whether the Calendar/Goals/Habits/Focus/Assistant nav items/routes are
+  // shown (this feature) — same fetched-once-at-load pattern as
+  // standupEnabled above, defaulting to all-true so nothing flashes away.
+  const [sectionSettings, setSectionSettings] = useState<SectionSettings>({
+    calendar: true,
+    goals: true,
+    habits: true,
+    focus: true,
+    assistant: true,
+  });
   // Whether the Assistant nav item/route is shown (ADR 0009, issue #185):
   // polled on load and window refocus, mirroring Quick-Add's Assist gate.
   // No settings toggle — unlike Stand-up, this is never independently
@@ -245,7 +257,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // a settled `false`, or a hard load of /assistant redirects itself away
   // before the answer arrives.
   const assistantStatus = useAssistantAvailable();
-  const assistantAvailable = assistantStatus === true;
+  const assistantAvailable = assistantStatus === true && sectionSettings.assistant;
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
   // The Folder view's own sort preference (#126) — kept separate from the
@@ -383,6 +395,10 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
   }, []);
 
+  useEffect(() => {
+    void fetchSectionSettings().then(setSectionSettings);
+  }, []);
+
   // The command palette (issue #201): cmd/ctrl+K from anywhere, including a
   // focused text field or an open dialog — this is a raw listener rather than
   // a registration against the shortcut layer precisely so the typing-context
@@ -414,6 +430,17 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       // route was showing — fall through to the same Inbox fallback as a
       // deleted List/Tag/Folder, rather than leaving an inaccessible route
       // selected in the sidebar.
+    } else if (view?.kind === "calendar" && !sectionSettings.calendar) {
+      // Same fallback as Stand-up above, for each of the other
+      // independently-toggleable sections (this feature).
+    } else if (view?.kind === "goals" && !sectionSettings.goals) {
+      // no-op — falls through to the shared reset below
+    } else if (view?.kind === "habits" && !sectionSettings.habits) {
+      // no-op — falls through to the shared reset below
+    } else if ((view?.kind === "focus" || view?.kind === "focus-stats") && !sectionSettings.focus) {
+      // no-op — falls through to the shared reset below
+    } else if (view?.kind === "assistant" && !sectionSettings.assistant) {
+      // no-op — falls through to the shared reset below
     } else if (view?.kind === "assistant" && assistantStatus === false) {
       // Same fallback, for the Assistant becoming (or already being)
       // unconfigured while this route was showing.
@@ -446,7 +473,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     // effect's render and it running (e.g. the user clicks Calendar just as
     // the lists load). Never stomp a view that changed in the meantime.
     setView((current) => (current === view ? next : current));
-  }, [lists, tags, folders, view, standupEnabled, assistantStatus]);
+  }, [lists, tags, folders, view, standupEnabled, sectionSettings, assistantStatus]);
 
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
@@ -856,24 +883,36 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       label: SMART_LABELS[smart],
       run: () => switchView({ kind: "smart", view: smart }),
     })),
-    {
-      key: "view-calendar",
-      kind: "view" as const,
-      label: "Calendar",
-      run: () => switchView({ kind: "calendar", mode: "day" }),
-    },
-    {
-      key: "view-goals",
-      kind: "view" as const,
-      label: "Goals",
-      run: () => switchView({ kind: "goals" }),
-    },
-    {
-      key: "view-habits",
-      kind: "view" as const,
-      label: "Habits",
-      run: () => switchView({ kind: "habits" }),
-    },
+    ...(sectionSettings.calendar
+      ? [
+          {
+            key: "view-calendar",
+            kind: "view" as const,
+            label: "Calendar",
+            run: () => switchView({ kind: "calendar", mode: "day" }),
+          },
+        ]
+      : []),
+    ...(sectionSettings.goals
+      ? [
+          {
+            key: "view-goals",
+            kind: "view" as const,
+            label: "Goals",
+            run: () => switchView({ kind: "goals" }),
+          },
+        ]
+      : []),
+    ...(sectionSettings.habits
+      ? [
+          {
+            key: "view-habits",
+            kind: "view" as const,
+            label: "Habits",
+            run: () => switchView({ kind: "habits" }),
+          },
+        ]
+      : []),
     ...(standupEnabled
       ? [
           {
@@ -894,12 +933,16 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           },
         ]
       : []),
-    {
-      key: "view-focus",
-      kind: "view" as const,
-      label: "Focus",
-      run: () => switchView({ kind: "focus" }),
-    },
+    ...(sectionSettings.focus
+      ? [
+          {
+            key: "view-focus",
+            kind: "view" as const,
+            label: "Focus",
+            run: () => switchView({ kind: "focus" }),
+          },
+        ]
+      : []),
     {
       key: "view-search",
       kind: "view" as const,
@@ -988,13 +1031,17 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             smartOpenCounts={openTaskCounts.smart}
             listOpenCounts={openTaskCounts.byList}
             calendarSelected={calendarSelected}
+            calendarEnabled={sectionSettings.calendar}
             goalsSelected={goalsSelected}
+            goalsEnabled={sectionSettings.goals}
             habitsSelected={habitsSelected}
+            habitsEnabled={sectionSettings.habits}
             standupSelected={standupSelected}
             standupEnabled={standupEnabled}
             assistantSelected={assistantSelected}
             assistantAvailable={assistantAvailable}
             focusSelected={focusSelected}
+            focusEnabled={sectionSettings.focus}
             settingsSelected={settingsSelected}
             searchSelected={searchSelected}
             onSelect={(listId) => switchView({ kind: "list", id: listId })}
@@ -1402,8 +1449,11 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           <MobileTabBar
             tasksSelected={tasksSelected}
             calendarSelected={calendarSelected}
+            calendarEnabled={sectionSettings.calendar}
             habitsSelected={habitsSelected}
+            habitsEnabled={sectionSettings.habits}
             focusSelected={focusSelected}
+            focusEnabled={sectionSettings.focus}
             onSelectTasks={() => switchView({ kind: "smart", view: "today" })}
             onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
             onSelectHabits={() => switchView({ kind: "habits" })}

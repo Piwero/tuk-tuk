@@ -59,6 +59,54 @@ class TestStandupSettings:
         assert response.status_code == 401
 
 
+class TestSectionSettings:
+    """The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
+    feature) — same UI-only contract as Stand-up above, exposed as one
+    GET/PUT pair. Tasks is never included: it can't be hidden."""
+
+    ALL_ENABLED = {
+        "calendar": True,
+        "goals": True,
+        "habits": True,
+        "focus": True,
+        "assistant": True,
+    }
+
+    def test_defaults_to_all_enabled(self, client: TestClient) -> None:
+        response = client.get("/api/v1/settings/sections")
+
+        assert response.status_code == 200
+        assert response.json() == self.ALL_ENABLED
+
+    def test_put_disables_one_section(self, client: TestClient) -> None:
+        payload = {**self.ALL_ENABLED, "habits": False}
+
+        response = client.put("/api/v1/settings/sections", json=payload)
+
+        assert response.status_code == 200
+        assert response.json() == payload
+
+    def test_put_then_get_round_trips(self, client: TestClient) -> None:
+        payload = {**self.ALL_ENABLED, "calendar": False, "focus": False}
+        client.put("/api/v1/settings/sections", json=payload)
+
+        response = client.get("/api/v1/settings/sections")
+
+        assert response.json() == payload
+
+    def test_put_persists_to_the_settings_row(self, client: TestClient) -> None:
+        client.put("/api/v1/settings/sections", json={**self.ALL_ENABLED, "goals": False})
+
+        row = app_settings_row(client.app)
+        assert row.goals_enabled is False
+        assert row.calendar_enabled is True
+
+    def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
+        response = unauthenticated_client.get("/api/v1/settings/sections")
+
+        assert response.status_code == 401
+
+
 class TestActiveHoursSettings:
     """Active hours (issue #210): the Calendar's double-height band. Disabled
     by default so an existing install's grid is unchanged after upgrade."""

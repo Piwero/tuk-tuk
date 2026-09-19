@@ -17,6 +17,7 @@ import {
   googleConnectUrl,
   refreshGoogleCalendars,
   fetchStandupSettings,
+  fetchSectionSettings,
   removeAssistConfig,
   removeAssistantConfig,
   removeGoogleIntegration,
@@ -25,12 +26,14 @@ import {
   saveGoogleCredentials,
   updateGoogleCalendar,
   updateStandupSettings,
+  updateSectionSettings,
   type AssistConfig,
   type AssistantConfig,
   type ActiveHoursSettings,
   type GoogleAccount,
   type GoogleCalendar,
   type GoogleStatus,
+  type SectionSettings,
 } from "../api";
 import { timeMinutes } from "../calendar";
 import { type ThemePreference } from "../layoutPrefs";
@@ -915,11 +918,24 @@ export function SettingsView({
   // Enabled by default (issue #140) so the toggle doesn't flash off before
   // the real value loads — mirrors the App-level nav item's own default.
   const [standupEnabled, setStandupEnabled] = useState(true);
+  // Enabled by default (this feature), same reasoning as standupEnabled
+  // above — mirrors the App-level nav items' own default.
+  const [sectionSettings, setSectionSettings] = useState<SectionSettings>({
+    calendar: true,
+    goals: true,
+    habits: true,
+    focus: true,
+    assistant: true,
+  });
   const [assistConfig, setAssistConfig] = useState<AssistConfig | null>(null);
   const [assistantConfig, setAssistantConfig] = useState<AssistantConfig | null>(null);
 
   useEffect(() => {
     void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
+  }, []);
+
+  useEffect(() => {
+    void fetchSectionSettings().then(setSectionSettings);
   }, []);
 
   useEffect(() => {
@@ -933,6 +949,14 @@ export function SettingsView({
   async function handleStandupToggle(): Promise<void> {
     const updated = await updateStandupSettings(!standupEnabled);
     setStandupEnabled(updated.enabled);
+  }
+
+  async function handleSectionToggle(section: keyof SectionSettings): Promise<void> {
+    const updated = await updateSectionSettings({
+      ...sectionSettings,
+      [section]: !sectionSettings[section],
+    });
+    setSectionSettings(updated);
   }
 
   useEffect(() => {
@@ -991,14 +1015,56 @@ export function SettingsView({
       </section>
       <section aria-label="Features" className="settings-section">
         <h2>Features</h2>
-        <label>
-          <input
-            type="checkbox"
-            checked={standupEnabled}
-            onChange={() => void handleStandupToggle()}
-          />
-          Stand-up
-        </label>
+        <div className="settings-feature-toggles">
+          <label>
+            <input
+              type="checkbox"
+              checked={sectionSettings.calendar}
+              onChange={() => void handleSectionToggle("calendar")}
+            />
+            Calendar
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={sectionSettings.goals}
+              onChange={() => void handleSectionToggle("goals")}
+            />
+            Goals
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={sectionSettings.habits}
+              onChange={() => void handleSectionToggle("habits")}
+            />
+            Habits
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={sectionSettings.focus}
+              onChange={() => void handleSectionToggle("focus")}
+            />
+            Focus
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={sectionSettings.assistant}
+              onChange={() => void handleSectionToggle("assistant")}
+            />
+            Assistant
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={standupEnabled}
+              onChange={() => void handleStandupToggle()}
+            />
+            Stand-up
+          </label>
+        </div>
       </section>
       <section aria-label="Active hours" className="settings-section">
         <h2>Active hours</h2>

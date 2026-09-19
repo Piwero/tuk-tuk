@@ -20,6 +20,28 @@ class StandupSettings(BaseModel):
     enabled: bool
 
 
+# Section visibility toggles (this feature): same UI-only pattern as
+# standup_enabled above — one flag per nav item/route, all default True —
+# but exposed as a single GET/PUT pair instead of five hand-copied
+# endpoints. Tasks is deliberately not one of these: it's the one section
+# that can never be hidden.
+_SECTION_FIELDS = {
+    "calendar": "calendar_enabled",
+    "goals": "goals_enabled",
+    "habits": "habits_enabled",
+    "focus": "focus_enabled",
+    "assistant": "assistant_enabled",
+}
+
+
+class SectionSettings(BaseModel):
+    calendar: bool
+    goals: bool
+    habits: bool
+    focus: bool
+    assistant: bool
+
+
 # Active hours (issue #210). The band is aligned to 30 minutes, must have
 # start strictly before end, and must not wrap past midnight — a wrapping
 # band makes "the start of your day" ambiguous, which leaks into the
@@ -70,6 +92,30 @@ async def update_standup_settings(payload: StandupSettings, session: SessionDep)
     app_settings.standup_enabled = payload.enabled
     await session.commit()
     return StandupSettings(enabled=app_settings.standup_enabled)
+
+
+def _sections(app_settings: AppSettings) -> SectionSettings:
+    return SectionSettings(
+        **{name: getattr(app_settings, field) for name, field in _SECTION_FIELDS.items()}
+    )
+
+
+@router.get("/sections")
+async def read_section_settings(session: SessionDep) -> SectionSettings:
+    return _sections(await require_app_settings(session))
+
+
+@router.put("/sections")
+async def update_section_settings(payload: SectionSettings, session: SessionDep) -> SectionSettings:
+    """Purely UI-visibility flags, same contract as the Stand-up toggle:
+    turning one off hides its nav item and route, never blocks the section's
+    own API routes and never touches its stored data.
+    """
+    app_settings = await require_app_settings(session)
+    for name, field in _SECTION_FIELDS.items():
+        setattr(app_settings, field, getattr(payload, name))
+    await session.commit()
+    return _sections(app_settings)
 
 
 def _active_hours(app_settings: AppSettings) -> ActiveHoursSettings:

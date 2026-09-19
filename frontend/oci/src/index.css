@@ -99,7 +99,11 @@ fieldset button,
 .focus-timers > button,
 .focus-history > button,
 .focus-view > button,
-.task-description > button {
+.task-description > button,
+.goals-view > button,
+.goals-view .goal-actions button,
+.key-result-actions button,
+.key-results > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -123,13 +127,32 @@ fieldset button:hover,
 .focus-timers > button:hover,
 .focus-history > button:hover,
 .focus-view > button:hover,
-.task-description > button:hover {
+.task-description > button:hover,
+.goals-view > button:hover,
+.goals-view .goal-actions button:hover,
+.key-result-actions button:hover,
+.key-results > button:hover {
   background: var(--ink-50);
 }
 
 form button:active,
-fieldset button:active {
+fieldset button:active,
+.goals-view > button:active,
+.goals-view .goal-actions button:active,
+.key-result-actions button:active,
+.key-results > button:active {
   background: var(--ink-100);
+}
+
+/* Disabled row actions (e.g. a Key Result that is already first or last and
+ * has nowhere to move) read as inert while keeping their row layout. */
+.key-result-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.key-result-actions button:disabled:hover {
+  background: var(--surface-card);
 }
 
 /* The task checkbox. Priority no longer colors it (#166) — Priority now
@@ -4862,6 +4885,23 @@ select.task-detail-breadcrumb:focus-visible {
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--text-secondary);
+}
+
+/* Section visibility toggles (Features): a checkbox grid rather than an
+   inline run — cramped inline labels/checkboxes read as unpolished at any
+   count past two or three. */
+.settings-feature-toggles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+.settings-feature-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+  color: var(--text-primary);
 }
 
 .settings-subsection + .settings-subsection {
