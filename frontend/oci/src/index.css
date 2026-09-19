@@ -4427,6 +4427,30 @@ select.task-detail-breadcrumb:focus-visible {
     visibility: visible;
   }
 
+  /* A Goal card's actions (Focus, Abandon, Edit, Delete) adopt the same
+     long-press gesture as a Task row (#168, #245, #248): de-emphasised at
+     rest (#247) isn't enough on touch, since there's no hover to bring them
+     to full prominence — a plain tap must not reveal Delete either, so it
+     stays behind the deliberate long-press (`data-actions-open`, set by
+     GoalCard) or keyboard focus, sized to the tap-target floor so Delete
+     can't be hit when Edit was meant. */
+  .goals-view .goal-actions {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .goals-view .goal[data-actions-open="true"] .goal-actions,
+  .goals-view .goal-actions:focus-within {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .goals-view .goal-actions button {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    padding: 10px 14px;
+  }
+
   /* The Folder view's flat row layout (no Delete, only Focus — see
      FolderView.tsx) isn't destructive, so it's simply made reachable and
      correctly sized rather than gated. */

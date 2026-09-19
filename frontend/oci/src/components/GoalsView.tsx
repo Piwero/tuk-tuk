@@ -19,6 +19,7 @@ import {
   type KeyResultSource,
   type Task,
 } from "../api";
+import { useLongPressReveal } from "../longPressReveal";
 import { Icon } from "./Icon";
 
 interface GoalFormValues {
@@ -462,6 +463,122 @@ function toCreateInput(values: GoalFormValues): GoalCreateInput {
   };
 }
 
+/** A Goal card, at rest and revealed. On touch, Focus/Abandon/Edit/Delete
+ * stay behind the same long-press gesture as a Task row (#168, #245): a
+ * plain tap never opens them and a touch move (a scroll) cancels the
+ * press, so an unreachable-on-touch action group never becomes an
+ * accidentally-triggered one. Hover and focus-within reveal them too
+ * (#247), unchanged by this. */
+function GoalCard({
+  goal,
+  habits,
+  onCreateKeyResult,
+  onUpdateKeyResult,
+  onMoveKeyResult,
+  onDeleteKeyResult,
+  onRetro,
+  onToggleFocus,
+  onAbandon,
+  onEdit,
+  onDelete,
+}: {
+  goal: Goal;
+  habits: Habit[];
+  onCreateKeyResult: (values: KeyResultFormValues) => void;
+  onUpdateKeyResult: (keyResultId: number, patch: KeyResultPatch) => void;
+  onMoveKeyResult: (keyResultId: number, direction: -1 | 1) => void;
+  onDeleteKeyResult: (keyResultId: number) => void;
+  onRetro: (retro: string) => void;
+  onToggleFocus: () => void;
+  onAbandon: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}): JSX.Element {
+  const reveal = useLongPressReveal();
+
+  return (
+    <li
+      className={goal.is_focused ? "goal goal-focused" : "goal"}
+      data-actions-open={reveal.dataActionsOpen}
+      onTouchStart={reveal.onTouchStart}
+      onTouchEnd={reveal.onTouchEnd}
+      onTouchMove={reveal.onTouchMove}
+      onTouchCancel={reveal.onTouchCancel}
+      onClick={reveal.onClick}
+    >
+      <h3>
+        {goal.title}
+        {goal.is_focused && <span className="goal-focused-badge">Focused</span>}
+      </h3>
+      {goal.description !== "" && <p>{goal.description}</p>}
+      <p className="goal-window">
+        {goal.start_date === null || goal.end_date === null
+          ? "No window"
+          : `${goal.start_date} – ${goal.end_date}`}
+      </p>
+      {goal.obstacle !== null && (
+        <p className="goal-obstacle">
+          <strong>Obstacle:</strong> {goal.obstacle}
+        </p>
+      )}
+      {goal.if_then_plan !== null && (
+        <p className="goal-if-then">
+          <strong>If-Then Plan:</strong> {goal.if_then_plan}
+        </p>
+      )}
+      <KeyResultsPanel
+        goal={goal}
+        habits={habits}
+        onCreate={onCreateKeyResult}
+        onUpdate={onUpdateKeyResult}
+        onMove={onMoveKeyResult}
+        onDelete={onDeleteKeyResult}
+      />
+      {goal.status === "closed" && goal.final_score !== null && (
+        <p className="goal-final-score">Final score: {Math.round(goal.final_score * 100)}%</p>
+      )}
+      {goal.status === "closed" && (
+        <label className="goal-retro">
+          Retro
+          <textarea
+            aria-label={`Retro for ${goal.title}`}
+            placeholder="What did I learn? (optional)"
+            defaultValue={goal.retro ?? ""}
+            onBlur={(event) => onRetro(event.target.value)}
+          />
+        </label>
+      )}
+      <div className="goal-actions">
+        {goal.status === "active" && (
+          <>
+            <button
+              type="button"
+              aria-pressed={goal.is_focused}
+              aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
+              onClick={onToggleFocus}
+            >
+              <Icon name="target" size={16} />
+              {goal.is_focused ? "Unfocus" : "Focus"}
+            </button>
+            <button type="button" aria-label={`Abandon ${goal.title}`} onClick={onAbandon}>
+              <Icon name="x" size={16} />
+              Abandon
+            </button>
+          </>
+        )}
+        <button type="button" aria-label={`Edit ${goal.title}`} onClick={onEdit}>
+          <Icon name="pencil" size={16} />
+          Edit
+        </button>
+        <button type="button" aria-label={`Delete goal ${goal.title}`} onClick={onDelete}>
+          <Icon name="trash-2" size={16} />
+          Delete
+        </button>
+      </div>
+    </li>
+  );
+}
+
 type Editor = { mode: "create" } | { mode: "edit"; goalId: number } | null;
 
 /** The Goals view: list, create, edit, delete, Key Results, and focus
@@ -626,89 +743,22 @@ export function GoalsView(): JSX.Element {
       );
     }
     return (
-      <li key={goal.id} className={goal.is_focused ? "goal goal-focused" : "goal"}>
-        <h3>
-          {goal.title}
-          {goal.is_focused && <span className="goal-focused-badge">Focused</span>}
-        </h3>
-        {goal.description !== "" && <p>{goal.description}</p>}
-        <p className="goal-window">
-          {goal.start_date === null || goal.end_date === null
-            ? "No window"
-            : `${goal.start_date} – ${goal.end_date}`}
-        </p>
-        {goal.obstacle !== null && (
-          <p className="goal-obstacle">
-            <strong>Obstacle:</strong> {goal.obstacle}
-          </p>
-        )}
-        {goal.if_then_plan !== null && (
-          <p className="goal-if-then">
-            <strong>If-Then Plan:</strong> {goal.if_then_plan}
-          </p>
-        )}
-        <KeyResultsPanel
-          goal={goal}
-          habits={habits}
-          onCreate={(values) => handleCreateKeyResult(goal, values)}
-          onUpdate={(keyResultId, patch) => handleUpdateKeyResult(goal, keyResultId, patch)}
-          onMove={(keyResultId, direction) => handleMoveKeyResult(goal, keyResultId, direction)}
-          onDelete={(keyResultId) => handleDeleteKeyResult(goal, keyResultId)}
-        />
-        {goal.status === "closed" && goal.final_score !== null && (
-          <p className="goal-final-score">Final score: {Math.round(goal.final_score * 100)}%</p>
-        )}
-        {goal.status === "closed" && (
-          <label className="goal-retro">
-            Retro
-            <textarea
-              aria-label={`Retro for ${goal.title}`}
-              placeholder="What did I learn? (optional)"
-              defaultValue={goal.retro ?? ""}
-              onBlur={(event) => void handleRetro(goal, event.target.value)}
-            />
-          </label>
-        )}
-        <div className="goal-actions">
-          {goal.status === "active" && (
-            <>
-              <button
-                type="button"
-                aria-pressed={goal.is_focused}
-                aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
-                onClick={() => handleToggleFocus(goal)}
-              >
-                <Icon name="target" size={16} />
-                {goal.is_focused ? "Unfocus" : "Focus"}
-              </button>
-              <button
-                type="button"
-                aria-label={`Abandon ${goal.title}`}
-                onClick={() => handleAbandon(goal)}
-              >
-                <Icon name="x" size={16} />
-                Abandon
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            aria-label={`Edit ${goal.title}`}
-            onClick={() => setEditor({ mode: "edit", goalId: goal.id })}
-          >
-            <Icon name="pencil" size={16} />
-            Edit
-          </button>
-          <button
-            type="button"
-            aria-label={`Delete goal ${goal.title}`}
-            onClick={() => handleDelete(goal)}
-          >
-            <Icon name="trash-2" size={16} />
-            Delete
-          </button>
-        </div>
-      </li>
+      <GoalCard
+        key={goal.id}
+        goal={goal}
+        habits={habits}
+        onCreateKeyResult={(values) => handleCreateKeyResult(goal, values)}
+        onUpdateKeyResult={(keyResultId, patch) => handleUpdateKeyResult(goal, keyResultId, patch)}
+        onMoveKeyResult={(keyResultId, direction) =>
+          handleMoveKeyResult(goal, keyResultId, direction)
+        }
+        onDeleteKeyResult={(keyResultId) => handleDeleteKeyResult(goal, keyResultId)}
+        onRetro={(retro) => handleRetro(goal, retro)}
+        onToggleFocus={() => handleToggleFocus(goal)}
+        onAbandon={() => handleAbandon(goal)}
+        onEdit={() => setEditor({ mode: "edit", goalId: goal.id })}
+        onDelete={() => handleDelete(goal)}
+      />
     );
   }
 

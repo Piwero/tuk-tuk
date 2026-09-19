@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { fakeGoal, fakeHabit, fakeKeyResult, fakeTask, installFakeApi } from "./test/fakeApi";
@@ -432,5 +432,101 @@ describe("Goals", () => {
       expect(api.goals[0]?.status).toBe("abandoned");
       expect(api.goals[0]?.is_focused).toBe(false);
     });
+  });
+});
+
+describe("Goal card touch: Focus/Abandon/Edit/Delete stay behind a long-press (#248)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function card(): Promise<HTMLElement> {
+    const heading = await screen.findByRole("heading", { name: "Ship v2" });
+    const el = heading.closest("li");
+    if (el === null) {
+      throw new Error("goal card not found");
+    }
+    return el;
+  }
+
+  it("is closed at rest", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    expect(await card()).not.toHaveAttribute("data-actions-open");
+  });
+
+  it("opens after holding a touch for the long-press window", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    const el = await card();
+    fireEvent.touchStart(el);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(el).toHaveAttribute("data-actions-open", "true");
+  });
+
+  it("does not open on a plain, short tap", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    const el = await card();
+    fireEvent.touchStart(el);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    fireEvent.touchEnd(el);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(el).not.toHaveAttribute("data-actions-open");
+  });
+
+  it("cancels the long-press on a touch move (a scroll)", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    const el = await card();
+    fireEvent.touchStart(el);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    fireEvent.touchMove(el);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(el).not.toHaveAttribute("data-actions-open");
+  });
+
+  it("closes again once Delete is tapped, and still asks for confirmation", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    const el = await card();
+    fireEvent.touchStart(el);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(el).toHaveAttribute("data-actions-open", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete goal Ship v2" }));
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(el).not.toHaveAttribute("data-actions-open");
   });
 });
