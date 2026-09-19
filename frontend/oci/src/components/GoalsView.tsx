@@ -205,6 +205,13 @@ function KeyResultRow({
             type="number"
             defaultValue={kr.current_value}
             onBlur={(event) => onUpdate(kr.id, { current_value: Number(event.target.value) })}
+            onKeyDown={(event) => {
+              // Enter commits through the same blur handler above — one
+              // write path, not two (issue #246).
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
           />
         ) : (
           <span
@@ -221,6 +228,13 @@ function KeyResultRow({
           type="number"
           defaultValue={kr.target_value}
           onBlur={(event) => onUpdate(kr.id, { target_value: Number(event.target.value) })}
+          onKeyDown={(event) => {
+            // Enter commits through the same blur handler above — one write
+            // path, not two (issue #246).
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+          }}
         />
         <div className="key-result-actions">
           <button
