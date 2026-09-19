@@ -1454,6 +1454,29 @@ export function updateStandupSettings(enabled: boolean): Promise<StandupSettings
   });
 }
 
+/** Whether each of Calendar/Goals/Habits/Focus/Assistant's nav item/route is
+ * visible (this feature) — same UI-only visibility contract as Stand-up
+ * above, one flag per section, fetched once at load. Tasks is never
+ * included: it can't be hidden. */
+export interface SectionSettings {
+  calendar: boolean;
+  goals: boolean;
+  habits: boolean;
+  focus: boolean;
+  assistant: boolean;
+}
+
+export function fetchSectionSettings(): Promise<SectionSettings> {
+  return request("/api/v1/settings/sections");
+}
+
+export function updateSectionSettings(settings: SectionSettings): Promise<SectionSettings> {
+  return request("/api/v1/settings/sections", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
 /** Active hours (issue #210): the band of the day the Calendar renders at
  * double height, compressing the hours outside it. Server-side, not in
  * layoutPrefs — the band describes the user, not a browser. `start`/`end`

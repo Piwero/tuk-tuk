@@ -67,19 +67,30 @@ interface SidebarProps {
   /** Open-Task count per List id — absent means zero. */
   listOpenCounts: Map<number, number>;
   calendarSelected: boolean;
+  /** Settings toggle (this feature): hides the Calendar nav item entirely
+   * when off, same contract as `standupEnabled` below. */
+  calendarEnabled: boolean;
   goalsSelected: boolean;
+  /** Settings toggle (this feature): hides the Goals nav item entirely
+   * when off, same contract as `standupEnabled` below. */
+  goalsEnabled: boolean;
   habitsSelected: boolean;
+  /** Settings toggle (this feature): hides the Habits nav item entirely
+   * when off, same contract as `standupEnabled` below. */
+  habitsEnabled: boolean;
   standupSelected: boolean;
   /** Settings toggle (issue #140): hides the Stand-up nav item entirely
    * when off — the feature's data isn't touched, only its visibility. */
   standupEnabled: boolean;
   assistantSelected: boolean;
-  /** The Assistant's availability gate (ADR 0009, issue #185): hides the
-   * nav item entirely until a configured provider is reachable — unlike
-   * `standupEnabled`, this is never a user-facing toggle, only a direct
-   * read of whether the feature is configured at all. */
+  /** The Assistant's availability gate (ADR 0009, issue #185) combined with
+   * its Settings toggle (this feature): hides the nav item unless the
+   * provider is configured AND the section is enabled. */
   assistantAvailable: boolean;
   focusSelected: boolean;
+  /** Settings toggle (this feature): hides the Focus nav item entirely
+   * when off, same contract as `standupEnabled` above. */
+  focusEnabled: boolean;
   settingsSelected: boolean;
   /** Selected when viewing /search — distinct from having typed a query,
    * so the nav item highlights for a blank search too (issue #143). */
@@ -273,13 +284,17 @@ export function Sidebar({
   smartOpenCounts,
   listOpenCounts,
   calendarSelected,
+  calendarEnabled,
   goalsSelected,
+  goalsEnabled,
   habitsSelected,
+  habitsEnabled,
   standupSelected,
   standupEnabled,
   assistantSelected,
   assistantAvailable,
   focusSelected,
+  focusEnabled,
   settingsSelected,
   searchSelected,
   onSelect,
@@ -718,27 +733,33 @@ export function Sidebar({
             selected={tasksSelected}
             onClick={() => onSelectSmart("today")}
           />
-          <TopNavItem
-            icon="calendar-days"
-            label="Calendar"
-            href={pathForStaticView("calendar")}
-            selected={calendarSelected}
-            onClick={onSelectCalendar}
-          />
-          <TopNavItem
-            icon="target"
-            label="Goals"
-            href={pathForStaticView("goals")}
-            selected={goalsSelected}
-            onClick={onSelectGoals}
-          />
-          <TopNavItem
-            icon="repeat"
-            label="Habits"
-            href={pathForStaticView("habits")}
-            selected={habitsSelected}
-            onClick={onSelectHabits}
-          />
+          {calendarEnabled && (
+            <TopNavItem
+              icon="calendar-days"
+              label="Calendar"
+              href={pathForStaticView("calendar")}
+              selected={calendarSelected}
+              onClick={onSelectCalendar}
+            />
+          )}
+          {goalsEnabled && (
+            <TopNavItem
+              icon="target"
+              label="Goals"
+              href={pathForStaticView("goals")}
+              selected={goalsSelected}
+              onClick={onSelectGoals}
+            />
+          )}
+          {habitsEnabled && (
+            <TopNavItem
+              icon="repeat"
+              label="Habits"
+              href={pathForStaticView("habits")}
+              selected={habitsSelected}
+              onClick={onSelectHabits}
+            />
+          )}
           {standupEnabled && (
             <TopNavItem
               icon="users"
@@ -757,13 +778,15 @@ export function Sidebar({
               onClick={onSelectAssistant}
             />
           )}
-          <TopNavItem
-            icon="timer"
-            label="Focus"
-            href={pathForStaticView("focus")}
-            selected={focusSelected}
-            onClick={onSelectFocus}
-          />
+          {focusEnabled && (
+            <TopNavItem
+              icon="timer"
+              label="Focus"
+              href={pathForStaticView("focus")}
+              selected={focusSelected}
+              onClick={onSelectFocus}
+            />
+          )}
           <TopNavItem
             icon="search"
             label="Search"

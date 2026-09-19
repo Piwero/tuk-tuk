@@ -69,6 +69,14 @@ class AppSettings(Base):
     # turning it off hides the nav item and route, nothing more — no route
     # is blocked and no stored data is ever touched by this flag.
     standup_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Same UI-only visibility pattern as standup_enabled above, one flag per
+    # section (this feature): all default to True so an upgrade shows every
+    # nav item exactly as before, until someone turns one off in Settings.
+    calendar_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    goals_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    habits_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    focus_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    assistant_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # Active hours (issue #210): the band of the day the Calendar renders at
     # double height, so short tasks stay readable in place. Describes the
     # user, not a browser — hence server-side, like standup_enabled above,

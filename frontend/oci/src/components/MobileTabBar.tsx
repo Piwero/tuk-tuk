@@ -3,8 +3,11 @@ import { Icon, type IconName } from "./Icon";
 interface MobileTabBarProps {
   tasksSelected: boolean;
   calendarSelected: boolean;
+  calendarEnabled: boolean;
   habitsSelected: boolean;
+  habitsEnabled: boolean;
   focusSelected: boolean;
+  focusEnabled: boolean;
   onSelectTasks: () => void;
   onSelectCalendar: () => void;
   onSelectHabits: () => void;
@@ -46,8 +49,11 @@ function TabItem({ icon, label, selected, onClick }: TabItemProps): JSX.Element 
 export function MobileTabBar({
   tasksSelected,
   calendarSelected,
+  calendarEnabled,
   habitsSelected,
+  habitsEnabled,
   focusSelected,
+  focusEnabled,
   onSelectTasks,
   onSelectCalendar,
   onSelectHabits,
@@ -56,14 +62,20 @@ export function MobileTabBar({
   return (
     <nav aria-label="Primary" className="mobile-tab-bar">
       <TabItem icon="list-checks" label="Tasks" selected={tasksSelected} onClick={onSelectTasks} />
-      <TabItem
-        icon="calendar-days"
-        label="Calendar"
-        selected={calendarSelected}
-        onClick={onSelectCalendar}
-      />
-      <TabItem icon="repeat" label="Habits" selected={habitsSelected} onClick={onSelectHabits} />
-      <TabItem icon="timer" label="Focus" selected={focusSelected} onClick={onSelectFocus} />
+      {calendarEnabled && (
+        <TabItem
+          icon="calendar-days"
+          label="Calendar"
+          selected={calendarSelected}
+          onClick={onSelectCalendar}
+        />
+      )}
+      {habitsEnabled && (
+        <TabItem icon="repeat" label="Habits" selected={habitsSelected} onClick={onSelectHabits} />
+      )}
+      {focusEnabled && (
+        <TabItem icon="timer" label="Focus" selected={focusSelected} onClick={onSelectFocus} />
+      )}
     </nav>
   );
 }

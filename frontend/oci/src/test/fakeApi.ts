@@ -282,6 +282,15 @@ export interface FakeApiState {
   /** The Stand-up visibility toggle (issue #140) — server-defaulted to
    * true, matching the backend's default. */
   standupEnabled: boolean;
+  /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
+   * feature) — server-defaulted to all-true, matching the backend. */
+  sectionSettings: {
+    calendar: boolean;
+    goals: boolean;
+    habits: boolean;
+    focus: boolean;
+    assistant: boolean;
+  };
   activeHours: { enabled: boolean; start: string; end: string };
   /** Mirrors the backend's Assist status probe (ADR 0005, issue #42):
    * whether Ollama is reachable and the configured model is installed.
@@ -662,6 +671,7 @@ export function installFakeApi({
   standupEntries = [],
   standupYesterdaySuggestions = [],
   standupEnabled = true,
+  sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
   assistAvailable = false,
   assistOllamaBaseUrl = null,
@@ -719,6 +729,15 @@ export function installFakeApi({
   /** The Stand-up visibility toggle (issue #140). Defaults to true, matching
    * the backend's server-defaulted-true column. */
   standupEnabled?: boolean;
+  /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
+   * feature). Defaults to all-true, matching the backend's default. */
+  sectionSettings?: {
+    calendar: boolean;
+    goals: boolean;
+    habits: boolean;
+    focus: boolean;
+    assistant: boolean;
+  };
   /** Active hours (issue #210) -- the Calendar's double-height band.
    * Defaults to disabled, matching the backend. */
   activeHours?: { enabled: boolean; start: string; end: string };
@@ -780,6 +799,7 @@ export function installFakeApi({
       ...suggestion,
     })),
     standupEnabled,
+    sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
     assistAvailable,
     assistOllamaBaseUrl,
@@ -2201,6 +2221,15 @@ export function installFakeApi({
         const input = body as { enabled: boolean };
         state.standupEnabled = input.enabled;
         return json({ enabled: state.standupEnabled });
+      }
+    }
+    if (url.pathname === "/api/v1/settings/sections") {
+      if (method === "GET") {
+        return json({ ...state.sectionSettings });
+      }
+      if (method === "PUT") {
+        state.sectionSettings = body as typeof state.sectionSettings;
+        return json({ ...state.sectionSettings });
       }
     }
     if (url.pathname === "/api/v1/settings/active-hours") {
