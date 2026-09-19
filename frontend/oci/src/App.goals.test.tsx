@@ -188,6 +188,46 @@ describe("Goals", () => {
     });
   });
 
+  it("pressing Enter in a manual Key Result's current value commits it, same as blur", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [fakeKeyResult(goal.id, "Lines shipped", { target_value: 100 })];
+    const api = installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    const input = await screen.findByLabelText("Lines shipped current value");
+    input.focus();
+    fireEvent.change(input, { target: { value: "25" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(api.goals[0]!.key_results[0]!.current_value).toBe(25);
+    });
+    // The progress percentage on the row updates once the save lands.
+    expect(await screen.findByText("25%")).toBeInTheDocument();
+  });
+
+  it("pressing Enter in a Key Result's target value commits it, same as blur", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [
+      fakeKeyResult(goal.id, "Lines", { start_value: 0, target_value: 100, current_value: 50 }),
+    ];
+    const api = installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    const target = await screen.findByLabelText("Lines target value");
+    target.focus();
+    fireEvent.change(target, { target: { value: "200" } });
+    fireEvent.keyDown(target, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(api.goals[0]?.key_results[0]?.target_value).toBe(200);
+    });
+    // Halving the target halves the progress, so the Score moves too.
+    expect(await screen.findByText("Score: 25%")).toBeInTheDocument();
+  });
+
   it("deleting a Key Result removes it", async () => {
     const goal = fakeGoal("Ship v2");
     goal.key_results = [fakeKeyResult(goal.id, "Lines shipped")];
