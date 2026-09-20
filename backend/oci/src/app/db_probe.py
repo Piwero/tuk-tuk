@@ -8,17 +8,22 @@ that must not end up in a response body or on disk.
 
 import re
 from typing import Literal
-from urllib.parse import urlsplit
 
 import psycopg
 from pydantic import BaseModel
 
-# A table that only exists once tuk-tuk's own migrations have run — good
-# enough to tell "empty/fresh Postgres" from "already holds tuk-tuk data"
-# without needing every table name kept in sync here.
-_MARKER_TABLE = "settings"
+from app.db import Base, DatabaseUrl
 
-_SUPPORTED_SCHEMES = {"postgresql", "postgresql+psycopg"}
+# "already holds tuk-tuk data" means any of tuk-tuk's own tables carries a
+# row — not just `settings`. A database with Lists and Tasks but no settings
+# row is emphatically not ready to receive a copy, and the copy tool would
+# refuse it, so the probe must not call it empty either.
+_TUKTUK_TABLES: tuple[str, ...] = tuple(t.name for t in Base.metadata.sorted_tables)
+
+# `SELECT version()` returns the full build banner ("PostgreSQL 16.4 on
+# x86_64-pc-linux-gnu, compiled by gcc…"). The operator wants the server
+# version, so keep the leading "PostgreSQL <version>" and drop the rest.
+_VERSION_BANNER = re.compile(r"^(PostgreSQL\s+\S+)")
 
 
 def is_valid_postgres_url(url: str) -> bool:
@@ -26,15 +31,14 @@ def is_valid_postgres_url(url: str) -> bool:
     connection attempt so a malformed URL never reaches psycopg.
     """
     try:
-        parts = urlsplit(url)
+        return DatabaseUrl(url).is_supported_postgres
     except ValueError:
         return False
-    return parts.scheme in _SUPPORTED_SCHEMES and bool(parts.hostname)
 
 
-def _psycopg_url(url: str) -> str:
-    # psycopg doesn't understand SQLAlchemy's "+psycopg" driver suffix.
-    return re.sub(r"^postgresql\+psycopg://", "postgresql://", url)
+def _short_version(banner: str) -> str:
+    match = _VERSION_BANNER.match(banner.strip())
+    return match.group(1) if match else banner.strip()
 
 
 ProbeReason = Literal["unreachable", "auth_rejected", "database_not_found", "unknown"]
@@ -70,32 +74,37 @@ def _classify_operational_error(error: psycopg.OperationalError) -> tuple[ProbeR
     return "unknown", str(error).strip() or "The connection attempt failed."
 
 
+def _has_tuktuk_data(cur: psycopg.Cursor[tuple[object, ...]]) -> bool:
+    cur.execute(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = current_schema() AND table_name = ANY(%s)",
+        (list(_TUKTUK_TABLES),),
+    )
+    present = [str(row[0]) for row in cur.fetchall()]
+    for table_name in present:
+        # Identifiers come from Base.metadata, never from the request.
+        cur.execute(f'SELECT EXISTS (SELECT 1 FROM "{table_name}")')  # noqa: S608
+        row = cur.fetchone()
+        if row and row[0]:
+            return True
+    return False
+
+
 def probe_connection(url: str, *, connect_timeout: int = 5) -> ProbeResult:
     """Attempts a real connection with a short timeout. Read-only — issues
     only SELECTs, opens no transaction that writes, and always closes the
-    connection itself.
+    connection itself. Blocking: callers on the event loop must hand this to
+    a thread (see the settings router).
     """
     try:
         with (
-            psycopg.connect(_psycopg_url(url), connect_timeout=connect_timeout) as conn,
+            psycopg.connect(DatabaseUrl(url).psycopg_url, connect_timeout=connect_timeout) as conn,
             conn.cursor() as cur,
         ):
             cur.execute("SELECT version()")
             row = cur.fetchone()
-            version = str(row[0]) if row else ""
-
-            cur.execute(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s)",
-                (_MARKER_TABLE,),
-            )
-            marker_row = cur.fetchone()
-            table_exists = bool(marker_row and marker_row[0])
-
-            has_data = False
-            if table_exists:
-                cur.execute(f"SELECT EXISTS (SELECT 1 FROM {_MARKER_TABLE})")  # noqa: S608
-                data_row = cur.fetchone()
-                has_data = bool(data_row and data_row[0])
+            version = _short_version(str(row[0])) if row else ""
+            has_data = _has_tuktuk_data(cur)
 
         return ProbeResult(ok=True, version=version, has_existing_data=has_data)
     except psycopg.OperationalError as error:

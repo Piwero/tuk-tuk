@@ -4,15 +4,15 @@ GoogleStatus precedent in app.routers.v1.google rather than exposing the
 whole AppSettings singleton for editing).
 """
 
+import asyncio
 import re
 from typing import Literal
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, field_validator, model_validator
 
 from app.app_settings import require_app_settings
-from app.db import SessionDep
+from app.db import DatabaseUrl, SessionDep
 from app.db_probe import ProbeResult, is_valid_postgres_url, probe_connection
 from app.models import AppSettings
 
@@ -176,15 +176,9 @@ class TestConnectionRequest(BaseModel):
 
 @router.get("/database")
 async def read_database_status(request: Request) -> DatabaseStatus:
-    url = request.app.state.settings.database_url
-    scheme = urlsplit(url).scheme
-    if scheme.startswith("postgresql"):
-        parts = urlsplit(url)
-        return DatabaseStatus(
-            engine="postgresql",
-            host=parts.hostname,
-            database=parts.path.lstrip("/") or None,
-        )
+    url = DatabaseUrl(request.app.state.settings.database_url)
+    if url.is_postgres:
+        return DatabaseStatus(engine="postgresql", host=url.hostname, database=url.database)
     return DatabaseStatus(engine="sqlite")
 
 
@@ -194,5 +188,9 @@ async def test_database_connection(payload: TestConnectionRequest) -> ProbeResul
     `settings` row or the app's own engine; validation of the URL's scheme
     happens before this handler even runs (TestConnectionRequest), so a
     malformed URL never reaches the connection attempt.
+
+    `probe_connection` blocks for up to its connect timeout, so it runs in a
+    thread: an unreachable host must fail only this request, not stall every
+    other one sharing the event loop.
     """
-    return probe_connection(payload.connection_url)
+    return await asyncio.to_thread(probe_connection, payload.connection_url)

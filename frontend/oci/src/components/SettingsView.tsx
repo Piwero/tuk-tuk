@@ -908,7 +908,9 @@ function ActiveHoursSettingsForm(): JSX.Element {
 function databaseTestConnectionMessage(result: DatabaseTestConnectionResult): string {
   if (result.ok) {
     const dataState = result.has_existing_data ? "already holds tuk-tuk data" : "is empty";
-    return `Connected — PostgreSQL ${result.version ?? "unknown version"}. The database ${dataState}.`;
+    // `version` already reads "PostgreSQL 16.4" — the server sends the
+    // version, not the build banner, so don't prefix the name again.
+    return `Connected — ${result.version ?? "unknown version"}. The database ${dataState}.`;
   }
   return result.message ?? "The connection attempt failed.";
 }
