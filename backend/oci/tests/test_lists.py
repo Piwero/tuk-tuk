@@ -2,7 +2,9 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD
+from tests.conftest import TEST_PASSWORD, make_task
+from tests.test_focus_sessions import make_session
+from tests.test_timers import make_timer
 
 
 def test_first_boot_creates_the_inbox(client: TestClient) -> None:
@@ -96,6 +98,161 @@ def test_deleting_a_list_removes_its_tasks(client: TestClient) -> None:
     assert all(item["id"] != task_list["id"] for item in remaining_lists)
     remaining_tasks = client.get("/api/v1/tasks").json()["items"]
     assert all(task["id"] != task_id for task in remaining_tasks)
+
+
+def test_deleting_a_list_removes_its_section(client: TestClient) -> None:
+    task_list = client.post("/api/v1/lists", json={"name": "Old project"}).json()
+    client.post("/api/v1/sections", json={"list_id": task_list["id"], "name": "Doing"})
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    sections = client.get("/api/v1/sections", params={"list_id": task_list["id"]}).json()
+    assert sections["items"] == []
+
+
+def test_deleting_a_list_removes_all_its_sections(client: TestClient) -> None:
+    task_list = client.post("/api/v1/lists", json={"name": "Old project"}).json()
+    client.post("/api/v1/sections", json={"list_id": task_list["id"], "name": "Backlog"})
+    client.post("/api/v1/sections", json={"list_id": task_list["id"], "name": "Doing"})
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    sections = client.get("/api/v1/sections", params={"list_id": task_list["id"]}).json()
+    assert sections["items"] == []
+
+
+def test_deleting_a_list_leaves_another_lists_sections_and_tasks_alone(
+    client: TestClient,
+) -> None:
+    doomed = client.post("/api/v1/lists", json={"name": "Doomed"}).json()
+    survivor_list = client.post("/api/v1/lists", json={"name": "Survivor"}).json()
+    survivor_section = client.post(
+        "/api/v1/sections", json={"list_id": survivor_list["id"], "name": "Doing"}
+    ).json()
+    survivor_task = make_task(client, "Keep me", list_id=survivor_list["id"])
+
+    response = client.delete(f"/api/v1/lists/{doomed['id']}")
+
+    assert response.status_code == 204
+    sections = client.get("/api/v1/sections", params={"list_id": survivor_list["id"]}).json()
+    assert [s["id"] for s in sections["items"]] == [survivor_section["id"]]
+    tasks = client.get("/api/v1/tasks", params={"list_id": survivor_list["id"]}).json()["items"]
+    assert [t["id"] for t in tasks] == [survivor_task["id"]]
+
+
+def test_deleting_a_list_unlinks_but_keeps_focus_sessions_of_its_tasks(
+    client: TestClient,
+) -> None:
+    task_list = client.post("/api/v1/lists", json={"name": "Old project"}).json()
+    task = make_task(client, "Obsolete", list_id=task_list["id"])
+    session = make_session(client, task_id=task["id"])
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    page = client.get("/api/v1/focus-sessions").json()
+    assert page["total"] == 1
+    assert page["items"][0]["id"] == session["id"]
+    assert page["items"][0]["task_id"] is None
+
+
+def test_deleting_a_list_unlinks_but_keeps_timers_of_its_tasks(client: TestClient) -> None:
+    task_list = client.post("/api/v1/lists", json={"name": "Old project"}).json()
+    task = make_task(client, "Obsolete", list_id=task_list["id"])
+    timer = make_timer(client, "Preset", task_id=task["id"])
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    page = client.get("/api/v1/timers").json()
+    assert page["total"] == 1
+    assert page["items"][0]["id"] == timer["id"]
+    assert page["items"][0]["task_id"] is None
+
+
+def test_deleting_a_habit_linked_focus_session_is_unaffected_by_list_deletion(
+    client: TestClient,
+) -> None:
+    from tests.test_habits import make_habit
+
+    task_list = client.post("/api/v1/lists", json={"name": "Old project"}).json()
+    habit = make_habit(client, "Reading")
+    session = make_session(client, habit_id=habit["id"])
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    page = client.get("/api/v1/focus-sessions").json()
+    assert page["total"] == 1
+    assert page["items"][0]["id"] == session["id"]
+    assert page["items"][0]["habit_id"] == habit["id"]
+
+
+def test_deleting_a_list_with_sections_tasks_sessions_and_timers_leaves_expected_survivors(
+    client: TestClient,
+) -> None:
+    task_list = client.post("/api/v1/lists", json={"name": "Old project"}).json()
+    client.post("/api/v1/sections", json={"list_id": task_list["id"], "name": "Doing"})
+    task = make_task(client, "Obsolete", list_id=task_list["id"])
+    session = make_session(client, task_id=task["id"])
+    timer = make_timer(client, "Preset", task_id=task["id"])
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    assert client.get("/api/v1/sections", params={"list_id": task_list["id"]}).json()["items"] == []
+    remaining_tasks = client.get("/api/v1/tasks").json()["items"]
+    assert all(t["id"] != task["id"] for t in remaining_tasks)
+    session_page = client.get("/api/v1/focus-sessions").json()
+    assert session_page["total"] == 1
+    assert session_page["items"][0]["id"] == session["id"]
+    assert session_page["items"][0]["task_id"] is None
+    timer_page = client.get("/api/v1/timers").json()
+    assert timer_page["total"] == 1
+    assert timer_page["items"][0]["id"] == timer["id"]
+    assert timer_page["items"][0]["task_id"] is None
+
+
+def test_deleting_a_list_removes_check_items_of_its_tasks(client: TestClient) -> None:
+    task_list = client.post("/api/v1/lists", json={"name": "Old project"}).json()
+    task = make_task(client, "Obsolete", list_id=task_list["id"])
+    task_with_item = client.post(
+        f"/api/v1/tasks/{task['id']}/check-items", json={"title": "Step 1"}
+    ).json()
+    assert task_with_item["check_items"]
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    remaining_tasks = client.get("/api/v1/tasks").json()["items"]
+    assert all(t["id"] != task["id"] for t in remaining_tasks)
+
+
+def test_deleting_a_list_survives_a_tag_shared_with_another_list(client: TestClient) -> None:
+    tag = client.post("/api/v1/tags", json={"name": "shared"}).json()
+    doomed = client.post("/api/v1/lists", json={"name": "Doomed"}).json()
+    make_task(client, "Obsolete", list_id=doomed["id"], tag_ids=[tag["id"]])
+
+    response = client.delete(f"/api/v1/lists/{doomed['id']}")
+
+    assert response.status_code == 204
+    tags = client.get("/api/v1/tags").json()
+    assert any(item["id"] == tag["id"] for item in tags["items"])
+
+
+def test_deleting_a_list_leaves_its_folder_intact(client: TestClient) -> None:
+    folder = client.post("/api/v1/folders", json={"name": "Work"}).json()
+    task_list = client.post(
+        "/api/v1/lists", json={"name": "Backend", "folder_id": folder["id"]}
+    ).json()
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    folders = client.get("/api/v1/folders").json()["items"]
+    assert any(item["id"] == folder["id"] for item in folders)
 
 
 def test_list_can_be_moved_into_and_out_of_a_folder(client: TestClient) -> None:
