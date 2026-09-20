@@ -1,11 +1,20 @@
 """Lists collection endpoints."""
 
 from fastapi import APIRouter, Query
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import SORT_GAP, CompletedOccurrence, Folder, Task, TaskList
+from app.models import (
+    SORT_GAP,
+    CompletedOccurrence,
+    FocusSession,
+    Folder,
+    Section,
+    Task,
+    TaskList,
+    Timer,
+)
 from app.schemas import ListCreate, ListRead, ListUpdate, Page
 
 router = APIRouter(prefix="/api/v1/lists", tags=["lists"])
@@ -75,10 +84,17 @@ async def delete_list(list_id: int, session: SessionDep) -> None:
         )
     # History travels with its Task, and the tasks go with the List (SQLite
     # leaves ON DELETE CASCADE unenforced, so sweep the occurrences by hand).
+    task_ids = select(Task.id).where(Task.list_id == list_id)
     await session.execute(
-        delete(CompletedOccurrence).where(
-            CompletedOccurrence.task_id.in_(select(Task.id).where(Task.list_id == list_id))
-        )
+        delete(CompletedOccurrence).where(CompletedOccurrence.task_id.in_(task_ids))
     )
+    # Focus Sessions and Timers are history/presets of their own: they outlive
+    # the Task, only the link goes (mirrors the single-Task delete path).
+    await session.execute(
+        update(FocusSession).where(FocusSession.task_id.in_(task_ids)).values(task_id=None)
+    )
+    await session.execute(update(Timer).where(Timer.task_id.in_(task_ids)).values(task_id=None))
+    # A Section has no meaning outside its List; it goes with it.
+    await session.execute(delete(Section).where(Section.list_id == list_id))
     await session.delete(task_list)
     await session.commit()
