@@ -128,6 +128,12 @@ focus session is logged time, and dropping it silently during a database
 migration is exactly the kind of loss that is undiscoverable afterward.
 `--prune-orphans` makes the deletion explicit and opt-in.
 
+Pruning re-scans until stable, because deleting an orphaned parent orphans
+its own children — a pruned Task takes its Check Items with it. Leaving
+them would only re-fail the same preflight, so the deletion cascades; the
+protection against silent loss is that every id deleted, first pass or
+tenth, is named in the report.
+
 **Copy.** Row-by-row through the existing SQLAlchemy models, in foreign-key
 dependency order, preserving `id` values exactly. Preserving ids is not
 cosmetic: `tasks.key_result_id`, `focus_sessions.task_id`, and the
@@ -142,12 +148,22 @@ The dataset is one person's tasks, so copy speed is irrelevant.
 inserting explicit ids does not advance the backing sequence. Left alone,
 the first row the application inserts after cutover fails with a duplicate
 key violation. All 18 sequences (19 tables, less `task_tags`, which has a
-composite key and no sequence) need `setval` to the table's `MAX(id)`.
-Verification compares per-table row counts and `MAX(id)` between source and
-target — `MAX(id)` is not decorative here, it is the same number `setval`
-requires, so verifying it and fixing the sequence are one operation. The
-tool refuses to run against a non-empty target without an explicit
-`--force`.
+composite key and no sequence) need `setval` to the table's `MAX(id)` —
+marked as consumed only where the table actually has rows, since a table
+copied empty must still hand out id 1. Verification compares per-table row
+counts and `MAX(id)` between source and target — `MAX(id)` is not
+decorative here, it is the same number `setval` requires, so verifying it
+and fixing the sequence are one operation.
+
+The tool refuses to run against a non-empty target without an explicit
+`--force`, which empties the target and replaces it with the source rather
+than merging into it — merging two datasets under preserved ids is not a
+thing that can succeed. `--force` exists to retry a failed attempt, so
+every row it deletes is counted per table in the report, and the refusal
+message says plainly what `--force` would destroy. The migration chain runs
+against the target only when it is empty: a database that already has data
+already has its schema, and re-running migrations against a live database
+is not this tool's business.
 
 ## Decision: multi-replica is explicitly not supported by this change
 

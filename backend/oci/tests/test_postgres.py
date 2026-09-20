@@ -1,11 +1,15 @@
 """The opt-in PostgreSQL job (ADR 0013, issue #254): migrations to head,
 the List-delete paths foreign key enforcement affects, a core API slice,
-and sequence correctness after an id-preserving insert. Skips locally
-(see tests/postgres_fixtures.py); CI's postgres job exercises it.
+the connection probe's success path, and sequence correctness after a real
+copy. Skips locally (see tests/postgres_fixtures.py); CI's postgres job
+exercises it.
 """
 
 import asyncio
+import shutil
+import sqlite3
 from datetime import UTC, datetime
+from pathlib import Path
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -14,7 +18,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import Settings
+from app.copy_database import copy_database
 from app.db import BACKEND_DIR
+from app.db_probe import probe_connection
 from app.main import create_app
 from tests.conftest import TEST_PASSWORD, FakeClock
 
@@ -92,6 +98,92 @@ def test_core_api_slice_create_read_and_search(postgres_url: str) -> None:
         search = client.get("/api/v1/tasks", params={"search": "milk"})
         assert search.status_code == 200
         assert any(t["id"] == task["id"] for t in search.json()["items"])
+
+
+def test_probe_reports_version_and_that_a_fresh_database_is_empty(postgres_url: str) -> None:
+    """The probe's success path — the half no server-less test can reach.
+    The fixture's database is migrated but carries no tuk-tuk rows."""
+    result = probe_connection(postgres_url)
+
+    assert result.ok, result.message
+    assert result.version is not None
+    assert result.version.startswith("PostgreSQL ")
+    assert "compiled by" not in result.version  # the build banner, not the version
+    assert result.has_existing_data is False
+
+
+def test_probe_reports_existing_data_even_with_no_settings_row(postgres_url: str) -> None:
+    """Any tuk-tuk table carrying a row means "not ready to receive a copy",
+    not just `settings` — the copy tool would refuse this database, so the
+    probe must not call it empty."""
+
+    async def _insert_a_list() -> None:
+        engine = create_async_engine(postgres_url)
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO lists (id, name, is_inbox, sort_order, owner, created_at) "
+                    "VALUES (1, 'Pre-existing', false, 0, 'local', now())"
+                )
+            )
+            await session.commit()
+        await engine.dispose()
+
+    asyncio.run(_insert_a_list())
+
+    result = probe_connection(postgres_url)
+
+    assert result.ok, result.message
+    assert result.has_existing_data is True
+
+
+def test_copy_from_sqlite_reseeds_sequences_so_new_rows_insert(
+    postgres_url: str, tmp_path: Path, migrated_template_db: Path
+) -> None:
+    """The reseed path end to end: copy real ids across, then create a Task
+    through the API. Without `setval` this is a duplicate-key violation."""
+    source_path = tmp_path / "source.db"
+    shutil.copyfile(migrated_template_db, source_path)
+    with sqlite3.connect(source_path) as conn:
+        conn.execute(
+            "INSERT INTO lists (id, name, is_inbox, is_archived, sort_order, view_mode, owner, "
+            "created_at) VALUES (7, 'Inbox', 1, 0, 0, 'list', 'local', '2026-01-01T00:00:00+00:00')"
+        )
+        conn.execute(
+            "INSERT INTO tasks (id, title, completed, description, priority, is_all_day, "
+            "reminders, list_id, sort_order, owner, created_at) VALUES "
+            "(42, 'Copied task', 0, '', 'none', 0, '[]', 7, 0, 'local', "
+            "'2026-01-01T00:00:00+00:00')"
+        )
+        conn.commit()
+
+    report = copy_database(f"sqlite:///{source_path}", postgres_url, force=True)
+    assert report.success, str(report)
+
+    app = create_app(Settings(database_url=postgres_url), clock=FakeClock(datetime.now(UTC)))
+    with TestClient(app) as client:
+        _login(client)
+        response = client.post("/api/v1/tasks", json={"title": "After the move", "list_id": 7})
+        assert response.status_code == 201, response.text
+        assert response.json()["id"] > 42
+
+
+def test_reseed_leaves_an_empty_table_starting_at_one(
+    postgres_url: str, tmp_path: Path, migrated_template_db: Path
+) -> None:
+    """`setval(…, MAX(id), true)` on an empty table would burn id 1. A copy
+    of an empty source must still hand out 1 for the first row."""
+    source_path = tmp_path / "source.db"
+    shutil.copyfile(migrated_template_db, source_path)
+
+    copy_database(f"sqlite:///{source_path}", postgres_url, force=True)
+
+    app = create_app(Settings(database_url=postgres_url), clock=FakeClock(datetime.now(UTC)))
+    with TestClient(app) as client:
+        _login(client)
+        created = client.post("/api/v1/folders", json={"name": "First"})
+        assert created.status_code == 201, created.text
+        assert created.json()["id"] == 1
 
 
 def test_sequence_correct_after_explicit_id_insert(postgres_url: str) -> None:

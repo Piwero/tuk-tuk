@@ -145,15 +145,27 @@ copy the other direction.
    ```
 
    The tool refuses to proceed if it finds orphaned rows in the source
-   (add `--prune-orphans` to delete them explicitly) or if the target
-   already has data (add `--force` to overwrite it). An empty target is
-   migrated to head automatically. It reports per-table row counts and
-   confirms the copy before exiting.
+   (add `--prune-orphans` to delete them explicitly — this also deletes
+   rows orphaned by those deletions, and every id it deletes is listed in
+   the report) or if the target already has data. `--force` **deletes
+   every row in the target** and replaces it with the source; it exists so
+   a failed attempt can be retried, not to merge two datasets. An empty
+   target is migrated to head automatically. The tool reports per-table row
+   counts and confirms the copy before exiting.
 4. **Set `DATABASE_URL`** to the PostgreSQL URL used above and **restart**
    the application.
 5. **Verify**: log in, confirm your Lists/Tasks/Habits/Goals are all
    present, and that any connected Google account still shows as
    connected.
+
+**Do not run more than one replica.** Moving off the PersistentVolumeClaim
+makes horizontal scaling look available; it is not supported, and the worst
+failure is silent. The login throttle counts consecutive failures in process
+memory, so N replicas behind a round-robin balancer weaken brute-force
+protection roughly N-fold with no error surfaced. Migrations also run on
+every boot of every replica with no advisory lock, and the Inbox seed is an
+unguarded read-then-insert. See
+[ADR 0013](docs/adr/0013-optional-external-postgres.md).
 
 ## Development
 

@@ -66,6 +66,8 @@ describe("Settings > Database test connection", () => {
 
     expect(await screen.findByText(/PostgreSQL 16\.1/)).toBeInTheDocument();
     expect(screen.getByText(/is empty/)).toBeInTheDocument();
+    // The server already says "PostgreSQL 16.1" — don't say it twice.
+    expect(screen.queryByText(/PostgreSQL PostgreSQL/)).not.toBeInTheDocument();
   });
 
   it("shows the populated state when the database already holds data", async () => {

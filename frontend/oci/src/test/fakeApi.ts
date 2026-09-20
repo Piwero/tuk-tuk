@@ -3,6 +3,8 @@ import { vi } from "vitest";
 import {
   type AssistantChatTurn,
   type AssistCaptureDraft,
+  type DatabaseStatus,
+  type DatabaseTestConnectionResult,
   type GoalStatus,
   type HabitType,
   type KeyResultSource,
@@ -294,14 +296,8 @@ export interface FakeApiState {
   activeHours: { enabled: boolean; start: string; end: string };
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
-  databaseStatus: { engine: "sqlite" | "postgresql"; host: string | null; database: string | null };
-  databaseTestConnectionResult: {
-    ok: boolean;
-    version: string | null;
-    has_existing_data: boolean | null;
-    reason: "unreachable" | "auth_rejected" | "database_not_found" | "unknown" | null;
-    message: string | null;
-  };
+  databaseStatus: DatabaseStatus;
+  databaseTestConnectionResult: DatabaseTestConnectionResult;
   /** Mirrors the backend's Assist status probe (ADR 0005, issue #42):
    * whether Ollama is reachable and the configured model is installed.
    * Defaults to false, matching a fresh deployment with no Ollama
@@ -762,18 +758,8 @@ export function installFakeApi({
   /** Settings > Database (issue #256). Defaults to sqlite, matching a
    * fresh deployment; databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
-  databaseStatus?: {
-    engine: "sqlite" | "postgresql";
-    host: string | null;
-    database: string | null;
-  };
-  databaseTestConnectionResult?: {
-    ok: boolean;
-    version: string | null;
-    has_existing_data: boolean | null;
-    reason: "unreachable" | "auth_rejected" | "database_not_found" | "unknown" | null;
-    message: string | null;
-  };
+  databaseStatus?: DatabaseStatus;
+  databaseTestConnectionResult?: DatabaseTestConnectionResult;
   /** The Assist availability probe's answer (ADR 0005, issue #42). */
   assistAvailable?: boolean;
   /** The saved Assist config Settings reads on mount (ADR 0005). */
