@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app import __version__
 from app.app_settings import bootstrap_app_settings, google_configured
@@ -15,7 +15,7 @@ from app.calendar_source import CalendarSource
 from app.config import Settings
 from app.config import settings as default_settings
 from app.crypto import decrypt_credential
-from app.db import run_migrations
+from app.db import check_database_reachable, create_engine, run_migrations
 from app.errors import register_error_handlers
 from app.event_cache import EventCache
 from app.google_adapter import GoogleCalendarSource
@@ -69,8 +69,9 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        engine = create_engine(app_settings.database_url)
+        await check_database_reachable(engine, app_settings.database_url)
         await asyncio.to_thread(run_migrations, app_settings.database_url)
-        engine = create_async_engine(app_settings.database_url)
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         app.state.session_factory = session_factory
         async with session_factory() as session:

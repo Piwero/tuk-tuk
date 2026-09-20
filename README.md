@@ -128,6 +128,33 @@ There is no `.env` in the cluster: `APP_MASTER_KEY` lives in the
 `tuk-tuk-auth` 1Password item and reaches the backend as a Secret — see
 [`backend/chart/README.md`](backend/chart/README.md).
 
+## Moving to PostgreSQL
+
+Moving from the default SQLite file to PostgreSQL is one-way: the SQLite
+file is left untouched as a point-in-time backup, but there's no tool to
+copy the other direction.
+
+1. **Test the connection.** Confirm your PostgreSQL `DATABASE_URL` is
+   reachable before touching anything running.
+2. **Stop the application** so nothing writes to the SQLite file while it's
+   being copied.
+3. **Run the copy**:
+
+   ```sh
+   mise run backend:copy-db -- sqlite:///path/to/tuk-tuk.db postgresql+psycopg://user:pass@host/db
+   ```
+
+   The tool refuses to proceed if it finds orphaned rows in the source
+   (add `--prune-orphans` to delete them explicitly) or if the target
+   already has data (add `--force` to overwrite it). An empty target is
+   migrated to head automatically. It reports per-table row counts and
+   confirms the copy before exiting.
+4. **Set `DATABASE_URL`** to the PostgreSQL URL used above and **restart**
+   the application.
+5. **Verify**: log in, confirm your Lists/Tasks/Habits/Goals are all
+   present, and that any connected Google account still shows as
+   connected.
+
 ## Development
 
 Dev servers run in Docker (source bind-mounted, hot reload on both sides).
