@@ -1500,3 +1500,38 @@ export function updateActiveHoursSettings(
     body: JSON.stringify(settings),
   });
 }
+
+/** The Settings > Database section (issue #256): which engine the running
+ * app is actually configured for, and a connection probe for a candidate
+ * PostgreSQL URL that never switches anything. `host`/`database` are only
+ * populated for postgresql; the username, password, and full URL are never
+ * reported. */
+export interface DatabaseStatus {
+  engine: "sqlite" | "postgresql";
+  host: string | null;
+  database: string | null;
+}
+
+export function fetchDatabaseStatus(): Promise<DatabaseStatus> {
+  return request("/api/v1/settings/database");
+}
+
+export type DatabaseTestConnectionReason =
+  "unreachable" | "auth_rejected" | "database_not_found" | "unknown";
+
+export interface DatabaseTestConnectionResult {
+  ok: boolean;
+  version: string | null;
+  has_existing_data: boolean | null;
+  reason: DatabaseTestConnectionReason | null;
+  message: string | null;
+}
+
+export function testDatabaseConnection(
+  connectionUrl: string,
+): Promise<DatabaseTestConnectionResult> {
+  return request("/api/v1/settings/database/test-connection", {
+    method: "POST",
+    body: JSON.stringify({ connection_url: connectionUrl }),
+  });
+}

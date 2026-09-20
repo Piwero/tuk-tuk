@@ -5,12 +5,15 @@ whole AppSettings singleton for editing).
 """
 
 import re
+from typing import Literal
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter
-from pydantic import BaseModel, model_validator
+from fastapi import APIRouter, Request
+from pydantic import BaseModel, field_validator, model_validator
 
 from app.app_settings import require_app_settings
 from app.db import SessionDep
+from app.db_probe import ProbeResult, is_valid_postgres_url, probe_connection
 from app.models import AppSettings
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
@@ -146,3 +149,50 @@ async def update_active_hours_settings(
     app_settings.active_hours_end = payload.end
     await session.commit()
     return _active_hours(app_settings)
+
+
+# Database status + connection probe (issue #256). Read-only: the status
+# endpoint only inspects the running app's own configured database_url
+# (never the settings table), and the test-connection endpoint only ever
+# probes a candidate URL supplied in the request body — neither can switch
+# the app's engine, and the submitted URL is never logged, stored, or
+# echoed back.
+class DatabaseStatus(BaseModel):
+    engine: Literal["sqlite", "postgresql"]
+    host: str | None = None
+    database: str | None = None
+
+
+class TestConnectionRequest(BaseModel):
+    connection_url: str
+
+    @field_validator("connection_url")
+    @classmethod
+    def _check_postgres_url(cls, value: str) -> str:
+        if not is_valid_postgres_url(value):
+            raise ValueError("connection_url must be a postgresql:// or postgresql+psycopg:// URL")
+        return value
+
+
+@router.get("/database")
+async def read_database_status(request: Request) -> DatabaseStatus:
+    url = request.app.state.settings.database_url
+    scheme = urlsplit(url).scheme
+    if scheme.startswith("postgresql"):
+        parts = urlsplit(url)
+        return DatabaseStatus(
+            engine="postgresql",
+            host=parts.hostname,
+            database=parts.path.lstrip("/") or None,
+        )
+    return DatabaseStatus(engine="sqlite")
+
+
+@router.post("/database/test-connection")
+async def test_database_connection(payload: TestConnectionRequest) -> ProbeResult:
+    """A pure probe — see app.db_probe. No path from here touches the
+    `settings` row or the app's own engine; validation of the URL's scheme
+    happens before this handler even runs (TestConnectionRequest), so a
+    malformed URL never reaches the connection attempt.
+    """
+    return probe_connection(payload.connection_url)

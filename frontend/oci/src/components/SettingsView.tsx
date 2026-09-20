@@ -6,6 +6,8 @@ import {
   disconnectGoogleAccount,
   fetchActiveHoursSettings,
   updateActiveHoursSettings,
+  fetchDatabaseStatus,
+  testDatabaseConnection,
   fetchAssistConfig,
   fetchAssistModels,
   fetchAssistStatus,
@@ -30,6 +32,8 @@ import {
   type AssistConfig,
   type AssistantConfig,
   type ActiveHoursSettings,
+  type DatabaseStatus,
+  type DatabaseTestConnectionResult,
   type GoogleAccount,
   type GoogleCalendar,
   type GoogleStatus,
@@ -901,6 +905,82 @@ function ActiveHoursSettingsForm(): JSX.Element {
   );
 }
 
+function databaseTestConnectionMessage(result: DatabaseTestConnectionResult): string {
+  if (result.ok) {
+    const dataState = result.has_existing_data ? "already holds tuk-tuk data" : "is empty";
+    return `Connected — PostgreSQL ${result.version ?? "unknown version"}. The database ${dataState}.`;
+  }
+  return result.message ?? "The connection attempt failed.";
+}
+
+/** Settings > Database (issue #256). Read-only status plus a connection
+ * probe that never switches or saves anything — the connection-url field
+ * is local component state only, cleared on every mount, and the probe
+ * result is never fed back into anything persisted. */
+function DatabaseSettingsForm(): JSX.Element {
+  const [status, setStatus] = useState<DatabaseStatus | null>(null);
+  const [connectionUrl, setConnectionUrl] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<DatabaseTestConnectionResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchDatabaseStatus().then(setStatus);
+  }, []);
+
+  async function handleTestConnection(): Promise<void> {
+    setTesting(true);
+    setResult(null);
+    setError(null);
+    try {
+      const outcome = await testDatabaseConnection(connectionUrl);
+      setResult(outcome);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "The connection attempt failed.");
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="settings-field">
+      <p className="settings-hint">
+        {status === null
+          ? "Loading…"
+          : status.engine === "sqlite"
+            ? "Currently using SQLite, the default embedded database."
+            : `Currently using PostgreSQL — host ${status.host ?? "unknown"}, database ${status.database ?? "unknown"}.`}
+      </p>
+      <p className="settings-hint">
+        Testing a connection here does not switch the database and does not save the address — it
+        only checks whether the server responds. See the README&rsquo;s &ldquo;Moving to
+        PostgreSQL&rdquo; section for the real switching steps.
+      </p>
+      <label>
+        Connection URL
+        <input
+          type="text"
+          autoComplete="off"
+          value={connectionUrl}
+          onChange={(event) => setConnectionUrl(event.target.value)}
+          placeholder="postgresql://user:password@host:5432/database"
+        />
+      </label>
+      <button
+        type="button"
+        disabled={testing || connectionUrl.trim() === ""}
+        onClick={() => void handleTestConnection()}
+      >
+        {testing ? "Testing database connection…" : "Test database connection"}
+      </button>
+      {error !== null && <p role="alert">{error}</p>}
+      {result !== null && (
+        <p role={result.ok ? "status" : "alert"}>{databaseTestConnectionMessage(result)}</p>
+      )}
+    </div>
+  );
+}
+
 /** The Settings screen. Asks the Google status endpoint once on mount. The
  * Google Calendar section itself is always shown once that answer is in —
  * unlike before issue #117, its credentials form is how an operator gets
@@ -1069,6 +1149,10 @@ export function SettingsView({
       <section aria-label="Active hours" className="settings-section">
         <h2>Active hours</h2>
         <ActiveHoursSettingsForm />
+      </section>
+      <section aria-label="Database" className="settings-section">
+        <h2>Database</h2>
+        <DatabaseSettingsForm />
       </section>
       <section aria-label="About" className="settings-section">
         <h2>About</h2>

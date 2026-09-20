@@ -292,6 +292,16 @@ export interface FakeApiState {
     assistant: boolean;
   };
   activeHours: { enabled: boolean; start: string; end: string };
+  /** Settings > Database (issue #256): the engine the fake app reports
+   * itself as running, and what the test-connection probe answers with. */
+  databaseStatus: { engine: "sqlite" | "postgresql"; host: string | null; database: string | null };
+  databaseTestConnectionResult: {
+    ok: boolean;
+    version: string | null;
+    has_existing_data: boolean | null;
+    reason: "unreachable" | "auth_rejected" | "database_not_found" | "unknown" | null;
+    message: string | null;
+  };
   /** Mirrors the backend's Assist status probe (ADR 0005, issue #42):
    * whether Ollama is reachable and the configured model is installed.
    * Defaults to false, matching a fresh deployment with no Ollama
@@ -673,6 +683,14 @@ export function installFakeApi({
   standupEnabled = true,
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
+  databaseStatus = { engine: "sqlite", host: null, database: null },
+  databaseTestConnectionResult = {
+    ok: true,
+    version: "PostgreSQL 16.0",
+    has_existing_data: false,
+    reason: null,
+    message: null,
+  },
   assistAvailable = false,
   assistOllamaBaseUrl = null,
   assistModel = null,
@@ -741,6 +759,21 @@ export function installFakeApi({
   /** Active hours (issue #210) -- the Calendar's double-height band.
    * Defaults to disabled, matching the backend. */
   activeHours?: { enabled: boolean; start: string; end: string };
+  /** Settings > Database (issue #256). Defaults to sqlite, matching a
+   * fresh deployment; databaseTestConnectionResult is what every
+   * test-connection POST answers with, regardless of the submitted URL. */
+  databaseStatus?: {
+    engine: "sqlite" | "postgresql";
+    host: string | null;
+    database: string | null;
+  };
+  databaseTestConnectionResult?: {
+    ok: boolean;
+    version: string | null;
+    has_existing_data: boolean | null;
+    reason: "unreachable" | "auth_rejected" | "database_not_found" | "unknown" | null;
+    message: string | null;
+  };
   /** The Assist availability probe's answer (ADR 0005, issue #42). */
   assistAvailable?: boolean;
   /** The saved Assist config Settings reads on mount (ADR 0005). */
@@ -801,6 +834,8 @@ export function installFakeApi({
     standupEnabled,
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
+    databaseStatus: { ...databaseStatus },
+    databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
     assistOllamaBaseUrl,
     assistModel,
@@ -2258,6 +2293,16 @@ export function installFakeApi({
           end: input.end,
         };
         return json({ ...state.activeHours });
+      }
+    }
+    if (url.pathname === "/api/v1/settings/database") {
+      if (method === "GET") {
+        return json({ ...state.databaseStatus });
+      }
+    }
+    if (url.pathname === "/api/v1/settings/database/test-connection") {
+      if (method === "POST") {
+        return json({ ...state.databaseTestConnectionResult });
       }
     }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/suggestions/today") {
