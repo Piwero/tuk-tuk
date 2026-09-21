@@ -37,6 +37,7 @@ import { FocusRunProvider } from "./focusRunContext";
 import { PRIORITY_LABELS, type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
+  hasReorderedTasks,
   loadSidebarCollapsed,
   loadThemePreference,
   resolveThemePreference,
@@ -1235,13 +1236,23 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                     <select
                       value={sortBy}
                       onChange={(event) => setSortBy(event.target.value as SortBy)}
+                      aria-describedby="sort-custom-hint"
                     >
-                      <option value="custom">Custom</option>
+                      <option value="custom">
+                        {hasReorderedTasks() ? "Custom (your order)" : "Custom (not yet arranged)"}
+                      </option>
                       <option value="date">Date</option>
                       <option value="priority">Priority</option>
                       <option value="title">Title</option>
                     </select>
                   </label>
+                  {sortBy === "custom" && (
+                    <span id="sort-custom-hint" className="hint">
+                      {hasReorderedTasks()
+                        ? "Drag a Task to reorder it."
+                        : "Drag a Task to start your own order."}
+                    </span>
+                  )}
                 </div>
               </>
             )}
@@ -1328,13 +1339,23 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                   <select
                     value={sortBy}
                     onChange={(event) => setSortBy(event.target.value as SortBy)}
+                    aria-describedby="sort-custom-hint-all"
                   >
-                    <option value="custom">Custom</option>
+                    <option value="custom">
+                      {hasReorderedTasks() ? "Custom (your order)" : "Custom (not yet arranged)"}
+                    </option>
                     <option value="date">Date</option>
                     <option value="priority">Priority</option>
                     <option value="title">Title</option>
                   </select>
                 </label>
+                {sortBy === "custom" && (
+                  <span id="sort-custom-hint-all" className="hint">
+                    {hasReorderedTasks()
+                      ? "Drag a Task to reorder it."
+                      : "Drag a Task to start your own order."}
+                  </span>
+                )}
               </div>
             )}
             {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
