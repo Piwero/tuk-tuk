@@ -20,6 +20,7 @@ import {
   type Task,
 } from "../api";
 import { useLongPressReveal } from "../longPressReveal";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 
 interface GoalFormValues {
@@ -323,24 +324,30 @@ function KeyResultsPanel({
   return (
     <div className="key-results" aria-label={`${goal.title} key results`}>
       {goal.score !== null ? (
-        <p className="goal-score">Score: {Math.round(goal.score * 100)}%</p>
+        <Hint hintKey="score">
+          <p className="goal-score" tabIndex={0}>
+            Score: {Math.round(goal.score * 100)}%
+          </p>
+        </Hint>
       ) : (
         <p className="goal-score-unmeasured">No Key Results yet — unmeasured.</p>
       )}
       {goal.key_results.length > 0 && (
-        <ul aria-label="Key results">
-          {goal.key_results.map((kr: KeyResult, index: number) => (
-            <KeyResultRow
-              key={kr.id}
-              keyResult={kr}
-              isFirst={index === 0}
-              isLast={index === goal.key_results.length - 1}
-              onUpdate={onUpdate}
-              onMove={onMove}
-              onDelete={onDelete}
-            />
-          ))}
-        </ul>
+        <Hint hintKey="key-result">
+          <ul aria-label="Key results" tabIndex={0}>
+            {goal.key_results.map((kr: KeyResult, index: number) => (
+              <KeyResultRow
+                key={kr.id}
+                keyResult={kr}
+                isFirst={index === 0}
+                isLast={index === goal.key_results.length - 1}
+                onUpdate={onUpdate}
+                onMove={onMove}
+                onDelete={onDelete}
+              />
+            ))}
+          </ul>
+        </Hint>
       )}
       {adding ? (
         <form
@@ -561,19 +568,23 @@ function GoalCard({
       <div className="goal-actions">
         {goal.status === "active" && (
           <>
-            <button
-              type="button"
-              aria-pressed={goal.is_focused}
-              aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
-              onClick={onToggleFocus}
-            >
-              <Icon name="target" size={16} />
-              {goal.is_focused ? "Unfocus" : "Focus"}
-            </button>
-            <button type="button" aria-label={`Abandon ${goal.title}`} onClick={onAbandon}>
-              <Icon name="x" size={16} />
-              Abandon
-            </button>
+            <Hint hintKey="focused-goal">
+              <button
+                type="button"
+                aria-pressed={goal.is_focused}
+                aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
+                onClick={onToggleFocus}
+              >
+                <Icon name="target" size={16} />
+                {goal.is_focused ? "Unfocus" : "Focus"}
+              </button>
+            </Hint>
+            <Hint hintKey="abandon" destructive>
+              <button type="button" aria-label={`Abandon ${goal.title}`} onClick={onAbandon}>
+                <Icon name="x" size={16} />
+                Abandon
+              </button>
+            </Hint>
           </>
         )}
         <button type="button" aria-label={`Edit ${goal.title}`} onClick={onEdit}>

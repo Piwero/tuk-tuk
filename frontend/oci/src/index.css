@@ -1322,6 +1322,52 @@ main > form input {
   color: var(--priority-high);
 }
 
+/* Contextual help (#261): a hover/focus-triggered popover that never
+ * occludes its trigger — anchored below-right of the wrapper rather than
+ * on top of it. `prefers-reduced-motion` drops the fade so motion-sensitive
+ * users get an instant show/hide instead. */
+.icon-button-wrap,
+.hint-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.icon-button-hint,
+.hint-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  margin-top: 6px;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  white-space: normal;
+  animation: hint-fade-in 100ms ease-out;
+}
+
+@keyframes hint-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon-button-hint,
+  .hint-popover {
+    animation: none;
+  }
+}
+
 .task-title {
   flex: 1;
   display: flex;

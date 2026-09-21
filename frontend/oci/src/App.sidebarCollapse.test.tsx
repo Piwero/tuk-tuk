@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeList, INBOX, installFakeApi } from "./test/fakeApi";
+import { fakeFolder, fakeList, fakeTag, INBOX, installFakeApi } from "./test/fakeApi";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
 // Restoring the real fetch between tests would let a late in-flight request
@@ -37,6 +37,27 @@ describe("Collapsing the sidebar", () => {
 
     await user.click(within(sidebar).getByRole("button", { name: "Expand sidebar" }));
     expect(within(sidebar).getByRole("search")).toBeInTheDocument();
+  });
+
+  // #261: collapsing must not turn a List, Folder or Tag into an anonymous
+  // glyph — each keeps a discoverable accessible name on the rail.
+  it("keeps every List, Folder and Tag discoverably named once collapsed", async () => {
+    const folder = fakeFolder("Work");
+    const filed = fakeList("Reports", { folder_id: folder.id });
+    const loose = fakeList("Errands");
+    const tag = fakeTag("Urgent");
+    installFakeApi({ lists: [INBOX, filed, loose], folders: [folder], tags: [tag] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "All" });
+
+    const sidebar = screen.getByRole("complementary");
+    await user.click(within(sidebar).getByRole("button", { name: "Collapse sidebar" }));
+
+    expect(within(sidebar).getByRole("button", { name: "Errands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Reports" })).toBeInTheDocument();
+    expect(within(sidebar).getByTitle("Work")).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Urgent" })).toBeInTheDocument();
   });
 
   // Below the mobile breakpoint the sidebar is off-canvas, so the header

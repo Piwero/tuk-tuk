@@ -74,16 +74,16 @@ describe("The Month view", () => {
     render(<App />);
     await openCalendar();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
     await screen.findByRole("heading", { name: "August 2026" });
     await waitFor(() =>
       expect(api.requests.some((r) => r.url.includes("range_start=2026-07-27"))).toBe(true),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
     await screen.findByRole("heading", { name: "July 2026" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
     fireEvent.click(screen.getByRole("button", { name: "Go to today" }));
     await screen.findByRole("heading", { name: "July 2026" });
   });
@@ -309,7 +309,7 @@ describe("The Week and Day views", () => {
 
     expect(document.querySelectorAll(".now-line")).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next day" }));
     await screen.findByRole("heading", { name: "Saturday, July 4, 2026" });
 
     expect(document.querySelectorAll(".now-line")).toHaveLength(0);
@@ -500,16 +500,16 @@ describe("The Week view", () => {
 
     await openWeek();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next week" }));
     await screen.findByRole("heading", { name: "Jul 6 – Jul 12, 2026" });
     await waitFor(() =>
       expect(api.requests.some((r) => r.url.includes("range_start=2026-07-06"))).toBe(true),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
     await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    fireEvent.click(screen.getByRole("button", { name: "Previous week" }));
     await screen.findByRole("heading", { name: "Jun 22 – Jun 28, 2026" });
   });
 
