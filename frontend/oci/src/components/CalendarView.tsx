@@ -53,6 +53,7 @@ import {
 import { clearedSchedule, formatDate, fromDayIso, localDayOf } from "../dates";
 import { makeListChannel, makePriorityChannel, makeTagChannel } from "../captureChannels";
 import { parseQuickAdd, sameName } from "../quickAdd";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import { readDragPayload, startDrag } from "../dnd";
@@ -1058,13 +1059,15 @@ export function CalendarView({
             label={`Previous ${STEP_UNIT[mode]}`}
             onClick={() => setAnchor(shiftAnchor(mode, anchor, -1))}
           />
-          <button
-            type="button"
-            aria-label="Go to today"
-            onClick={() => setAnchor(localDayOf(new Date()))}
-          >
-            Today
-          </button>
+          <Hint hintKey="calendar-today">
+            <button
+              type="button"
+              aria-label="Go to today"
+              onClick={() => setAnchor(localDayOf(new Date()))}
+            >
+              Today
+            </button>
+          </Hint>
           <IconButton
             icon="chevron-right"
             label={`Next ${STEP_UNIT[mode]}`}
@@ -1086,6 +1089,7 @@ export function CalendarView({
         <IconButton
           icon="refresh-cw"
           label="Refetch Events from your connected calendars"
+          descriptionKey="calendar-refresh"
           className="calendar-refresh-button"
           onClick={() => void handleRefreshEvents()}
           disabled={refreshingEvents}
@@ -1222,13 +1226,15 @@ export function CalendarView({
               schedule it.
             </p>
           ) : (
-            <ul>
-              {unscheduled.map((task) => (
-                <li key={task.id} className="unscheduled-card" {...taskDragProps(task)}>
-                  {task.title}
-                </li>
-              ))}
-            </ul>
+            <Hint hintKey="unscheduled-chips">
+              <ul tabIndex={0}>
+                {unscheduled.map((task) => (
+                  <li key={task.id} className="unscheduled-card" {...taskDragProps(task)}>
+                    {task.title}
+                  </li>
+                ))}
+              </ul>
+            </Hint>
           )}
         </aside>
       </div>
