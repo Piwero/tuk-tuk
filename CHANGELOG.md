@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.2](https://github.com/Piwero/tuk-tuk/compare/v2.10.1...v2.10.2) - 2026-09-21
+
+### Bug Fixes
+
+- **tasks:** Overdue and repeating Tasks are communicated by more than colour ([8b23883](https://github.com/Piwero/tuk-tuk/commit/8b23883b151b5a0e9aff175b9fbf2f601db110f7))
+
 ## [2.10.1](https://github.com/Piwero/tuk-tuk/compare/v2.10.0...v2.10.1) - 2026-09-21
 
 ### Bug Fixes
