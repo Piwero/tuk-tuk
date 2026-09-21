@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.3](https://github.com/Piwero/tuk-tuk/compare/v2.10.2...v2.10.3) - 2026-09-21
+
+### Features
+
+- **deploy:** Kubernetes path for moving to PostgreSQL ([97e54ca](https://github.com/Piwero/tuk-tuk/commit/97e54cafaf4696dbe022ea1e2e52ae0d33a89e42))
+
+### Bug Fixes
+
+- **quick-add:** Flag prose captures that read like a date, with a one-click fix ([12fd3b1](https://github.com/Piwero/tuk-tuk/commit/12fd3b11221e3673fe49763b0a7d471801a6795f))
+
 ## [2.10.2](https://github.com/Piwero/tuk-tuk/compare/v2.10.1...v2.10.2) - 2026-09-21
 
 ### Bug Fixes
