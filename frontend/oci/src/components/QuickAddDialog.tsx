@@ -36,6 +36,7 @@ import { PRIORITY_LABELS } from "../grouping";
 import { parseQuickAdd, sameName } from "../quickAdd";
 import { useAssistAvailable } from "../useAssistAvailable";
 import { DateFieldset } from "./DateFieldset";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
@@ -397,13 +398,15 @@ export function QuickAddDialog({
               </span>
             ) : (
               assistAvailable && (
-                <span
-                  className="quick-add-assist-affordance"
-                  aria-label="Assist available"
-                  title="Assist"
-                >
-                  <Icon name="sparkles" size={16} />
-                </span>
+                <Hint hintKey="assisted-capture">
+                  <span
+                    className="quick-add-assist-affordance"
+                    aria-label="Assist available"
+                    tabIndex={0}
+                  >
+                    <Icon name="sparkles" size={16} />
+                  </span>
+                </Hint>
               )
             )
           }

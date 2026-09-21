@@ -6,7 +6,7 @@
  * `CONTEXT.md` is a bug in the entry, not in the glossary. */
 export const HINT_REGISTRY = {
   "key-result":
-    "A measurable number belonging to a Goal. Attaching this Task counts it toward the Key Result's progress.",
+    "A measurable number belonging to a Goal. Attaching this Task counts it toward the Key Result's progress — recomputed on every read, never stored.",
   score:
     "A Goal's overall progress: the mean of its Key Results' ratios. Blank means unmeasured, not failed.",
   "focused-goal":
@@ -43,6 +43,8 @@ export const HINT_REGISTRY = {
     "Saved presets for recurring sessions. Starting one fills in the Mode, duration and Link above and begins right away.",
   assist:
     "Runs locally and only ever suggests — nothing is written until you confirm it, and it's never required.",
+  "assisted-capture":
+    "Parses what you've typed into a proposed Task — date, list, tags, priority — for you to confirm or discard. Nothing saves until you do, and the conversation isn't kept.",
   "group-by": "Groups rows under headings — same rows, arranged into clusters.",
   "sort-by":
     "Orders rows within their group — doesn't change what's grouped, only what comes first.",
