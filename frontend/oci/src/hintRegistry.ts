@@ -33,6 +33,10 @@ export const HINT_REGISTRY = {
     "Orders rows within their group — doesn't change what's grouped, only what comes first.",
   "settings-feature-toggle":
     "Hides this destination from navigation. The data underneath is kept, not deleted.",
+  "calendar-today": "Jumps the view back to today's date.",
+  "calendar-refresh":
+    "Refetches Events from your connected Google Calendar. Google Calendar is read only, so this pulls in changes but never pushes any out.",
+  "unscheduled-chips": "Drag a chip onto the calendar to schedule that Task.",
 } as const satisfies Record<string, string>;
 
 export type HintKey = keyof typeof HINT_REGISTRY;
