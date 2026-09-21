@@ -12,6 +12,7 @@ interface IconButtonProps {
   size?: number;
   type?: "button" | "submit";
   "aria-pressed"?: boolean;
+  "aria-expanded"?: boolean;
   disabled?: boolean;
   /** Appends a registry explanation below the name hint — e.g. Archive
    * distinguishing itself from Delete (#261 story 11). Delegates entirely
@@ -48,6 +49,7 @@ export function IconButton({
       className={className}
       aria-label={label}
       aria-pressed={rest["aria-pressed"]}
+      aria-expanded={rest["aria-expanded"]}
       disabled={disabled}
       onClick={onClick}
       {...handlers}

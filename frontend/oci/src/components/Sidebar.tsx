@@ -24,6 +24,7 @@ import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { folderOpenCount, openCountLabel } from "../openCounts";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
 import { pathForStaticView } from "../routes";
+import { useHoverHint } from "../useHoverHint";
 import { APP_VERSION } from "../version";
 import { CreateMenu } from "./CreateMenu";
 import { FocusNavBadge } from "./FocusNavBadge";
@@ -158,8 +159,14 @@ function ListButton({
   // color nor an emoji falls back to its initial rather than showing nothing.
   const bare = list.color === null && list.emoji === null;
   const countId = `list-open-count-${list.id}`;
+  // Native `title` only ever surfaces on mouse hover — collapsed, this is a
+  // List's only name, so keyboard focus needs the same reveal (#264). The
+  // popover rides alongside `title` rather than replacing it; expanded, the
+  // label text is already visible and `title` alone remains the truncation
+  // fallback the sidebar already relied on.
+  const { open, handlers } = useHoverHint();
   return (
-    <>
+    <span className="icon-button-wrap">
       <button
         type="button"
         className={selected ? "list-button selected" : "list-button"}
@@ -173,6 +180,7 @@ function ListButton({
         // truncated by ellipsis, and the native tooltip is the fallback.
         title={list.name}
         onClick={() => onSelect(list.id)}
+        {...handlers}
       >
         {list.is_inbox ? (
           <Icon name="inbox" size={18} />
@@ -197,7 +205,90 @@ function ListButton({
           {openCountLabel(openCount)}
         </span>
       )}
-    </>
+      {collapsed && open && (
+        <span role="tooltip" className="icon-button-hint">
+          {list.name}
+        </span>
+      )}
+    </span>
+  );
+}
+
+interface FolderNameButtonProps {
+  folder: Folder;
+  selected: boolean;
+  collapsed: boolean;
+  openCount: number;
+  onSelect: (folderId: number) => void;
+}
+
+/** Mirrors `ListButton`'s hint: `title` alone only ever reveals a Folder's
+ * name on mouse hover, so a collapsed rail leaves keyboard users with
+ * nothing (#264) — the popover rides alongside it rather than replacing it. */
+function FolderNameButton({
+  folder,
+  selected,
+  collapsed,
+  openCount,
+  onSelect,
+}: FolderNameButtonProps): JSX.Element {
+  const { open, handlers } = useHoverHint();
+  return (
+    <span className="icon-button-wrap">
+      <button
+        type="button"
+        className={selected ? "folder-name selected" : "folder-name"}
+        aria-describedby={openCount > 0 ? `folder-open-count-${folder.id}` : undefined}
+        title={folder.name}
+        onClick={() => onSelect(folder.id)}
+        {...handlers}
+      >
+        {folder.name}
+      </button>
+      {collapsed && open && (
+        <span role="tooltip" className="icon-button-hint">
+          {folder.name}
+        </span>
+      )}
+    </span>
+  );
+}
+
+interface TagButtonProps {
+  tag: Tag;
+  selected: boolean;
+  collapsed: boolean;
+  onSelect: (tagId: number) => void;
+}
+
+/** Mirrors `ListButton`'s hint: `title` alone only ever reveals a Tag's
+ * name on mouse hover, so a collapsed rail leaves keyboard users with
+ * nothing (#264) — the popover rides alongside it rather than replacing it. */
+function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): JSX.Element {
+  const { open, handlers } = useHoverHint();
+  return (
+    <span className="icon-button-wrap">
+      <button
+        type="button"
+        className={selected ? "list-button selected" : "list-button"}
+        aria-label={tag.name}
+        title={tag.name}
+        onClick={() => onSelect(tag.id)}
+        {...handlers}
+      >
+        {tag.color !== null ? (
+          <span className="color-dot" style={{ background: tag.color }} />
+        ) : (
+          collapsed && <span className="list-initial">{tag.name.slice(0, 1)}</span>
+        )}
+        <span className="nav-label">{tag.name}</span>
+      </button>
+      {collapsed && open && (
+        <span role="tooltip" className="icon-button-hint">
+          {tag.name}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -701,16 +792,13 @@ export function Sidebar({
             <span className="sidebar-brand-name">Tuk Tuk</span>
           </div>
           <FocusNavBadge onOpen={onSelectFocus} />
-          <button
-            type="button"
+          <IconButton
+            icon={collapsed ? "chevron-right" : "chevron-left"}
             className="sidebar-collapse"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!collapsed}
             onClick={onToggleCollapsed}
-          >
-            <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={18} />
-          </button>
+          />
           {/* Mobile only (hidden by CSS on desktop, issue #170): the drawer's
               own close control, so dismissing it no longer requires hunting
               for the backdrop. */}
@@ -957,19 +1045,13 @@ export function Sidebar({
                         <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={14} />
                       </button>
                       <Icon name="folder" size={16} />
-                      <button
-                        type="button"
-                        className={
-                          folder.id === selectedFolderId ? "folder-name selected" : "folder-name"
-                        }
-                        aria-describedby={
-                          openCount > 0 ? `folder-open-count-${folder.id}` : undefined
-                        }
-                        title={folder.name}
-                        onClick={() => onSelectFolder(folder.id)}
-                      >
-                        {folder.name}
-                      </button>
+                      <FolderNameButton
+                        folder={folder}
+                        selected={folder.id === selectedFolderId}
+                        collapsed={collapsed}
+                        openCount={openCount}
+                        onSelect={onSelectFolder}
+                      />
                       {openCount > 0 && (
                         <>
                           <span className="folder-count" aria-hidden="true">
@@ -1035,20 +1117,12 @@ export function Sidebar({
               ) : (
                 <li key={tag.id} className="tag-chip">
                   <div className="list-row">
-                    <button
-                      type="button"
-                      className={tag.id === selectedTagId ? "list-button selected" : "list-button"}
-                      aria-label={tag.name}
-                      title={tag.name}
-                      onClick={() => onSelectTag(tag.id)}
-                    >
-                      {tag.color !== null ? (
-                        <span className="color-dot" style={{ background: tag.color }} />
-                      ) : (
-                        collapsed && <span className="list-initial">{tag.name.slice(0, 1)}</span>
-                      )}
-                      <span className="nav-label">{tag.name}</span>
-                    </button>
+                    <TagButton
+                      tag={tag}
+                      selected={tag.id === selectedTagId}
+                      collapsed={collapsed}
+                      onSelect={onSelectTag}
+                    />
                     <span className="row-actions">
                       <IconButton
                         icon="pencil"

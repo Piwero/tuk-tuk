@@ -472,6 +472,16 @@ main {
   min-width: 0;
 }
 
+/* The List/Tag name button and the Folder name button each grew a hint
+ * popover wrapper (#264) — the wrapper needs to fill the row the button
+ * itself used to, or the button's own `flex: 1` above has nothing to grow
+ * into. */
+.list-row > .icon-button-wrap,
+.folder-row > .icon-button-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
 .list-button > span:not(.color-dot):not(.list-emoji) {
   overflow: hidden;
   text-overflow: ellipsis;

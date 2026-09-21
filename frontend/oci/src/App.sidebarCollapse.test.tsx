@@ -60,6 +60,49 @@ describe("Collapsing the sidebar", () => {
     expect(within(sidebar).getByRole("button", { name: "Urgent" })).toBeInTheDocument();
   });
 
+  // #264: `title` alone only ever reveals on mouse hover — a keyboard user
+  // collapsing the sidebar needs the same name back on focus, for every
+  // List, Folder and Tag, not just a lucky pointer.
+  it("reveals every List, Folder and Tag's name on keyboard focus once collapsed", async () => {
+    const folder = fakeFolder("Work");
+    const filed = fakeList("Reports", { folder_id: folder.id });
+    const tag = fakeTag("Urgent");
+    installFakeApi({ lists: [INBOX, filed], folders: [folder], tags: [tag] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "All" });
+
+    const sidebar = screen.getByRole("complementary");
+    await user.click(within(sidebar).getByRole("button", { name: "Collapse sidebar" }));
+
+    // Tree order: the Folder heads its members, so "Work" is reachable
+    // before "Reports"; "Urgent" (Tags) comes after both.
+    await user.tab();
+    while (
+      document.activeElement?.getAttribute("title") !== "Work" &&
+      document.activeElement !== document.body
+    ) {
+      await user.tab();
+    }
+    expect(await within(sidebar).findByRole("tooltip", { name: "Work" })).toBeInTheDocument();
+
+    while (
+      document.activeElement?.getAttribute("aria-label") !== "Reports" &&
+      document.activeElement !== document.body
+    ) {
+      await user.tab();
+    }
+    expect(await within(sidebar).findByRole("tooltip", { name: "Reports" })).toBeInTheDocument();
+
+    while (
+      document.activeElement?.getAttribute("aria-label") !== "Urgent" &&
+      document.activeElement !== document.body
+    ) {
+      await user.tab();
+    }
+    expect(await within(sidebar).findByRole("tooltip", { name: "Urgent" })).toBeInTheDocument();
+  });
+
   // Below the mobile breakpoint the sidebar is off-canvas, so the header
   // carries its own control. jsdom applies no CSS, so the layout itself isn't
   // observable here — the drawer's state and its dismissal are.
