@@ -1178,7 +1178,6 @@ main > form input {
   display: flex;
   align-items: center;
   min-width: 0;
-  overflow: hidden;
 }
 
 /* Wherever the row is *not* a grid — the wrapped fallback and the Kanban
