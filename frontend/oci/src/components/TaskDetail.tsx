@@ -31,8 +31,9 @@ import { PRIORITY_LABELS } from "../grouping";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
 import { DateFieldset } from "./DateFieldset";
-import { RepeatFieldset } from "./RepeatFieldset";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
+import { RepeatFieldset } from "./RepeatFieldset";
 
 /** A vertical drag past this many pixels on the handle counts as a
  * swipe-to-dismiss (issue #170) — short enough to feel responsive, long
@@ -353,23 +354,25 @@ export function TaskDetail({
       </label>
       <label className="task-key-result">
         Key Result
-        <select
-          aria-label="Key result"
-          value={task.key_result_id ?? ""}
-          onChange={(event) => {
-            const value = event.target.value;
-            void updateTask(task.id, {
-              key_result_id: value === "" ? null : Number(value),
-            }).then(onTaskChanged);
-          }}
-        >
-          <option value="">No Key Result</option>
-          {taskCountKeyResults(goals).map((kr) => (
-            <option key={kr.id} value={kr.id}>
-              {kr.goalTitle}: {kr.name}
-            </option>
-          ))}
-        </select>
+        <Hint hintKey="key-result">
+          <select
+            aria-label="Key result"
+            value={task.key_result_id ?? ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              void updateTask(task.id, {
+                key_result_id: value === "" ? null : Number(value),
+              }).then(onTaskChanged);
+            }}
+          >
+            <option value="">No Key Result</option>
+            {taskCountKeyResults(goals).map((kr) => (
+              <option key={kr.id} value={kr.id}>
+                {kr.goalTitle}: {kr.name}
+              </option>
+            ))}
+          </select>
+        </Hint>
       </label>
       <fieldset className="task-dates">
         <legend>Date</legend>

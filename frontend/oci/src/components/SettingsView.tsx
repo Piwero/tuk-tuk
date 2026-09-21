@@ -43,6 +43,7 @@ import { timeMinutes } from "../calendar";
 import { type ThemePreference } from "../layoutPrefs";
 import { ACCENT_PALETTE } from "../theme";
 import { APP_VERSION } from "../version";
+import { Hint } from "./Hint";
 
 interface SettingsViewProps {
   /** Set when the browser just landed back from a Google consent round
@@ -1099,51 +1100,63 @@ export function SettingsView({
         <h2>Features</h2>
         <div className="settings-feature-toggles">
           <label>
-            <input
-              type="checkbox"
-              checked={sectionSettings.calendar}
-              onChange={() => void handleSectionToggle("calendar")}
-            />
+            <Hint hintKey="settings-feature-toggle">
+              <input
+                type="checkbox"
+                checked={sectionSettings.calendar}
+                onChange={() => void handleSectionToggle("calendar")}
+              />
+            </Hint>
             Calendar
           </label>
           <label>
-            <input
-              type="checkbox"
-              checked={sectionSettings.goals}
-              onChange={() => void handleSectionToggle("goals")}
-            />
+            <Hint hintKey="settings-feature-toggle">
+              <input
+                type="checkbox"
+                checked={sectionSettings.goals}
+                onChange={() => void handleSectionToggle("goals")}
+              />
+            </Hint>
             Goals
           </label>
           <label>
-            <input
-              type="checkbox"
-              checked={sectionSettings.habits}
-              onChange={() => void handleSectionToggle("habits")}
-            />
+            <Hint hintKey="settings-feature-toggle">
+              <input
+                type="checkbox"
+                checked={sectionSettings.habits}
+                onChange={() => void handleSectionToggle("habits")}
+              />
+            </Hint>
             Habits
           </label>
           <label>
-            <input
-              type="checkbox"
-              checked={sectionSettings.focus}
-              onChange={() => void handleSectionToggle("focus")}
-            />
+            <Hint hintKey="settings-feature-toggle">
+              <input
+                type="checkbox"
+                checked={sectionSettings.focus}
+                onChange={() => void handleSectionToggle("focus")}
+              />
+            </Hint>
             Focus
           </label>
           <label>
-            <input
-              type="checkbox"
-              checked={sectionSettings.assistant}
-              onChange={() => void handleSectionToggle("assistant")}
-            />
+            <Hint hintKey="settings-feature-toggle">
+              <input
+                type="checkbox"
+                checked={sectionSettings.assistant}
+                onChange={() => void handleSectionToggle("assistant")}
+              />
+            </Hint>
             Assistant
           </label>
           <label>
-            <input
-              type="checkbox"
-              checked={standupEnabled}
-              onChange={() => void handleStandupToggle()}
-            />
+            <Hint hintKey="settings-feature-toggle">
+              <input
+                type="checkbox"
+                checked={standupEnabled}
+                onChange={() => void handleStandupToggle()}
+              />
+            </Hint>
             Stand-up
           </label>
         </div>

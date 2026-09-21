@@ -3850,6 +3850,12 @@ select.task-detail-breadcrumb:focus-visible {
   color: var(--text-secondary);
 }
 
+.standup-goal-empty-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
 .standup-sections {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

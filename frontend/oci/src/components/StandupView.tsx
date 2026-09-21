@@ -397,7 +397,12 @@ export function StandupView(): JSX.Element {
         <div className="standup-goal" aria-label="Focused goal">
           <p className="standup-goal-label">Focused goal</p>
           {focusedGoal === null ? (
-            <p className="standup-goal-empty">No Goal is focused right now.</p>
+            <>
+              <p className="standup-goal-empty">No Goal is focused right now.</p>
+              <p className="standup-goal-empty-hint">
+                Focus a Goal from its card on the Goals page to see it here.
+              </p>
+            </>
           ) : (
             <>
               <h3>{focusedGoal.title}</h3>
