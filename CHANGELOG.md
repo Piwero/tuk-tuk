@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.4](https://github.com/Piwero/tuk-tuk/compare/v2.10.3...v2.10.4) - 2026-09-21
+
+### Features
+
+- **ui:** Contextual help for icon-only controls and domain vocabulary ([40d35e2](https://github.com/Piwero/tuk-tuk/commit/40d35e2a33123eb79941450aa9073ee30b21fb1e))
+
+### Bug Fixes
+
+- **tasks:** Custom sort explains itself as manual order ([b661c96](https://github.com/Piwero/tuk-tuk/commit/b661c963f86c7005f80972513ffc596a898441fc))
+
 ## [2.10.3](https://github.com/Piwero/tuk-tuk/compare/v2.10.2...v2.10.3) - 2026-09-21
 
 ### Features
