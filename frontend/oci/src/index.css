@@ -1286,6 +1286,17 @@ main > form input {
   color: var(--text-tertiary);
 }
 
+/* A repeating Task's glyph in the title line (#258) — a non-colour carrier
+ * so several occurrences of the same commitment don't read as the app
+ * having duplicated the user's data. Same accent as the Completed view's
+ * own repeat glyph (.completed-history .repeat-glyph), so the two surfaces
+ * agree on what "repeats" looks like. */
+.repeat-indicator {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-accent);
+}
+
 /* Priority (#166): a signal-bar glyph per level — one/two/three bars for
  * Low/Medium/High — so the levels read apart by shape, not hue. Color only
  * reinforces weight (lighter → darker as priority rises); never red, which
@@ -1372,6 +1383,9 @@ main > form input {
 /* ── Chips & metadata ────────────────────────────────────────────── */
 
 .date-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -1384,8 +1398,23 @@ main > form input {
   color: var(--text-danger);
 }
 
+/* Weight, not just hue, tells "today" and "overdue" apart from a plain
+ * future date (#258) — it survives desaturation and colour-blindness where
+ * the accent/red distinction alone did not. Overdue goes one step further
+ * (li[data-overdue] below) and adds the triangle glyph, so overdue is never
+ * only "today, but bolder". */
+.date-chip.today {
+  font-weight: var(--weight-medium);
+}
+
 li[data-overdue] .date-chip {
   font-weight: var(--weight-semibold);
+}
+
+/* The overdue glyph — aria-hidden, since the state is already spoken via
+ * the chip's accessible name (TaskRow's dateAccessibleName). */
+.date-chip .icon {
+  flex: none;
 }
 
 .tag-chip {

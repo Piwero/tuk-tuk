@@ -375,16 +375,117 @@ describe("due date chip is not clipped (issue #257)", () => {
   });
 
   it("carries the full value in title, as a hover/assistive-tech fallback", () => {
-    const task = fakeTask("Widest date", {
-      start_date: "2026-08-27T07:00:00Z",
-      due_date: "2026-08-27T08:00:00Z",
-      is_all_day: false,
+    // Pinned before the fixture's due date, so the future-vs-overdue branch
+    // can't flip depending on when the suite runs.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T00:00:00Z"));
+    try {
+      const task = fakeTask("Widest date", {
+        start_date: "2026-08-27T07:00:00Z",
+        due_date: "2026-08-27T08:00:00Z",
+        is_all_day: false,
+      });
+      renderRow({ task });
+      expect(screen.getByText(widestSchedule as string).closest(".date-chip")).toHaveAttribute(
+        "title",
+        `Due ${widestSchedule}`,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("overdue and repeat are communicated by more than colour (issue #258)", () => {
+  // Pinned: Wednesday 2026-08-19, so "today"/"overdue"/"future" fixtures
+  // land in their intended state regardless of when the suite runs.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-19T09:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function dateChip(taskTitle: string): HTMLElement {
+    const chip = screen
+      .getByRole("button", { name: `Open details for ${taskTitle}` })
+      .closest("li")
+      ?.querySelector(".date-chip");
+    if (chip === null || chip === undefined) {
+      throw new Error("date chip not found");
+    }
+    return chip as HTMLElement;
+  }
+
+  it("announces overdue, today, and a future date with distinct accessible names", () => {
+    // getByLabelText queries the computed accessible name (aria-label),
+    // not just an attribute proxy for it — this is the assertion the
+    // acceptance criterion ("a screen reader announces the overdue state")
+    // actually asks for.
+    renderRow({
+      task: fakeTask("Overdue task", { due_date: "2026-08-01T00:00:00Z", is_all_day: true }),
     });
-    renderRow({ task });
-    expect(screen.getByText(widestSchedule as string)).toHaveAttribute(
-      "title",
-      widestSchedule as string,
-    );
+    expect(screen.getByLabelText("Overdue: Aug 1")).toBeInTheDocument();
+
+    renderRow({
+      task: fakeTask("Today task", { due_date: "2026-08-19T00:00:00Z", is_all_day: true }),
+    });
+    expect(screen.getByLabelText("Due today: Aug 19")).toBeInTheDocument();
+
+    renderRow({
+      task: fakeTask("Future task", { due_date: "2026-09-30T00:00:00Z", is_all_day: true }),
+    });
+    expect(screen.getByLabelText("Due Sep 30")).toBeInTheDocument();
+  });
+
+  it("marks overdue with a non-colour glyph, absent from today and future chips", () => {
+    renderRow({
+      task: fakeTask("Overdue task", { due_date: "2026-08-01T00:00:00Z", is_all_day: true }),
+    });
+    expect(dateChip("Overdue task").querySelector(".icon")).not.toBeNull();
+
+    renderRow({
+      task: fakeTask("Today task", { due_date: "2026-08-19T00:00:00Z", is_all_day: true }),
+    });
+    expect(dateChip("Today task").querySelector(".icon")).toBeNull();
+
+    renderRow({
+      task: fakeTask("Future task", { due_date: "2026-09-30T00:00:00Z", is_all_day: true }),
+    });
+    expect(dateChip("Future task").querySelector(".icon")).toBeNull();
+  });
+
+  it("shows a repeat indicator on a recurring Task, absent from a one-off Task", () => {
+    renderRow({
+      task: fakeTask("Recurring task", { recurrence: "FREQ=WEEKLY;BYDAY=MO" }),
+    });
+    expect(screen.getByLabelText("Repeats")).toBeInTheDocument();
+
+    renderRow({ task: fakeTask("One-off task", { recurrence: null }) });
+    expect(
+      screen
+        .getByRole("button", { name: "Open details for One-off task" })
+        .closest("li")
+        ?.querySelector(".repeat-indicator"),
+    ).toBeNull();
+  });
+
+  it("keeps the title readable alongside a description indicator and a repeat indicator together", () => {
+    // Two icons in the title line, worst case: nothing here should crowd
+    // the title span itself out of the DOM or off its own track — the
+    // title stays the row's only element that truncates (#257, #258).
+    renderRow({
+      task: fakeTask("A long task title that carries both indicators at once", {
+        description: "Notes",
+        recurrence: "FREQ=DAILY",
+      }),
+    });
+    const row = screen.getByRole("button", { name: /^Open details for/ }).closest("li");
+    expect(row?.querySelector(".task-title")).not.toBeNull();
+    expect(row?.querySelector(".description-indicator")).not.toBeNull();
+    expect(row?.querySelector(".repeat-indicator")).not.toBeNull();
   });
 });
 
