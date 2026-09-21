@@ -881,14 +881,13 @@ export function Sidebar({
           {/* Mobile only (hidden by CSS on desktop, issue #170): the drawer's
               own close control, so dismissing it no longer requires hunting
               for the backdrop. */}
-          <button
-            type="button"
+          <IconButton
+            icon="x"
+            size={18}
+            label="Close navigation"
             className="drawer-close"
-            aria-label="Close navigation"
             onClick={onCloseDrawer}
-          >
-            <Icon name="x" size={18} />
-          </button>
+          />
         </div>
         <nav aria-label="Views" className="top-nav">
           <TopNavItem
@@ -1100,10 +1099,11 @@ export function Sidebar({
                       onDragLeave={(event) => handleFolderDragLeave(event, folder)}
                       onDrop={(event) => handleDropOnFolder(event, folder)}
                     >
-                      <button
-                        type="button"
+                      <IconButton
+                        icon={isCollapsed ? "chevron-right" : "chevron-down"}
+                        size={14}
                         className="folder-disclosure"
-                        aria-label={
+                        label={
                           isCollapsed
                             ? `Expand folder ${folder.name}`
                             : `Collapse folder ${folder.name}`
@@ -1113,9 +1113,7 @@ export function Sidebar({
                           event.stopPropagation();
                           toggleFolderCollapsed(folder.id);
                         }}
-                      >
-                        <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={14} />
-                      </button>
+                      />
                       <Icon name="folder" size={16} />
                       <FolderNameButton
                         folder={folder}

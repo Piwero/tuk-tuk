@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 export interface CreateMenuProps {
   onNewList: () => void;
@@ -44,17 +44,15 @@ export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): JSX.Ele
 
   return (
     <div className="create-menu" ref={root}>
-      <button
-        type="button"
+      <IconButton
+        icon="plus"
+        size={18}
+        label="Create"
         className="create-menu-trigger"
-        aria-label="Create"
-        title="Create"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-      >
-        <Icon name="plus" size={18} />
-      </button>
+      />
       {open && (
         <ul role="menu" aria-label="Create" className="create-menu-list">
           <li role="none">

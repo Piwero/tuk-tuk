@@ -1,5 +1,5 @@
 import { type UndoToastEntry } from "../undoQueue";
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 interface ToastStackProps {
   entries: UndoToastEntry[];
@@ -43,14 +43,13 @@ export function ToastStack({ entries, onUndo, onDismiss }: ToastStackProps): JSX
               {entry.action.label}
             </button>
           )}
-          <button
-            type="button"
+          <IconButton
+            icon="x"
+            size={14}
+            label="Dismiss"
             className="toast-dismiss"
-            aria-label="Dismiss"
             onClick={() => onDismiss(entry.id)}
-          >
-            <Icon name="x" size={14} />
-          </button>
+          />
         </div>
       ))}
     </div>

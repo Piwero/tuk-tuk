@@ -32,7 +32,7 @@ import { appendOrder, planInsertBefore } from "../ordering";
 import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
 import { DateFieldset } from "./DateFieldset";
 import { Hint } from "./Hint";
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import { RepeatFieldset } from "./RepeatFieldset";
 
 /** A vertical drag past this many pixels on the handle counts as a
@@ -331,9 +331,7 @@ export function TaskDetail({
             />
           </form>
         </div>
-        <button type="button" aria-label="Close details" onClick={onClose}>
-          <Icon name="x" />
-        </button>
+        <IconButton icon="x" label="Close details" onClick={onClose} />
       </div>
       <label className="task-priority">
         Priority
@@ -434,13 +432,11 @@ export function TaskDetail({
                 {task.reminders.map((offset) => (
                   <li key={offset}>
                     {reminderLabel(offset)}
-                    <button
-                      type="button"
-                      aria-label={`Remove reminder ${reminderLabel(offset)}`}
+                    <IconButton
+                      icon="x"
+                      label={`Remove reminder ${reminderLabel(offset)}`}
                       onClick={() => void removeReminder(offset)}
-                    >
-                      <Icon name="x" />
-                    </button>
+                    />
                   </li>
                 ))}
               </ul>
@@ -579,20 +575,16 @@ export function TaskDetail({
                 />
                 <span className={item.done ? "completed" : undefined}>{item.title}</span>
                 <span className="row-actions">
-                  <button
-                    type="button"
-                    aria-label={`Edit check item ${item.title}`}
+                  <IconButton
+                    icon="pencil"
+                    label={`Edit check item ${item.title}`}
                     onClick={() => setItemEditor({ id: item.id, title: item.title })}
-                  >
-                    <Icon name="pencil" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete check item ${item.title}`}
+                  />
+                  <IconButton
+                    icon="x"
+                    label={`Delete check item ${item.title}`}
                     onClick={() => void removeCheckItem(item)}
-                  >
-                    <Icon name="x" />
-                  </button>
+                  />
                 </span>
               </li>
             ),

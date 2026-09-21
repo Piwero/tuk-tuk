@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 interface ModalProps {
   /** Names the dialog for assistive tech and heads its title row. */
@@ -83,9 +83,7 @@ export function Modal({ title, onClose, children }: ModalProps): JSX.Element {
       >
         <div className="modal-header">
           <h2>{title}</h2>
-          <button type="button" className="modal-close" aria-label="Close" onClick={onClose}>
-            <Icon name="x" />
-          </button>
+          <IconButton icon="x" label="Close" className="modal-close" onClick={onClose} />
         </div>
         {children}
       </div>

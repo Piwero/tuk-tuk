@@ -22,7 +22,7 @@ import {
 import { localDayOf, shortDayLabel, weekdayRecordLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { appendOrder, planInsertBefore } from "../ordering";
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 const SECTIONS: { key: StandupSection; label: string }[] = [
   { key: "yesterday", label: "Yesterday" },
@@ -298,20 +298,16 @@ export function StandupView(): JSX.Element {
               >
                 <span>{bullet.text}</span>
                 <span className="row-actions">
-                  <button
-                    type="button"
-                    aria-label={`Edit ${label} bullet ${bullet.text}`}
+                  <IconButton
+                    icon="pencil"
+                    label={`Edit ${label} bullet ${bullet.text}`}
                     onClick={() => setBulletEditor({ id: bullet.id, text: bullet.text })}
-                  >
-                    <Icon name="pencil" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete ${label} bullet ${bullet.text}`}
+                  />
+                  <IconButton
+                    icon="x"
+                    label={`Delete ${label} bullet ${bullet.text}`}
                     onClick={() => void removeBullet(bullet)}
-                  >
-                    <Icon name="x" />
-                  </button>
+                  />
                 </span>
               </li>
             ),
@@ -381,13 +377,11 @@ export function StandupView(): JSX.Element {
                 {weekdayRecordLabel(item.date)}
               </button>
               <span className="row-actions">
-                <button
-                  type="button"
-                  aria-label={`Delete stand-up ${shortDayLabel(item.date)}`}
+                <IconButton
+                  icon="x"
+                  label={`Delete stand-up ${shortDayLabel(item.date)}`}
                   onClick={() => void removeEntry(item.date)}
-                >
-                  <Icon name="x" />
-                </button>
+                />
               </span>
             </li>
           ))}

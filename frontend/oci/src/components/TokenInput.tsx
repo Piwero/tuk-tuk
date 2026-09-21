@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 /** One sigil's slice of the input: what it suggests from, how picks are
  * committed to chips, and (optionally) how an unmatched query creates a new
@@ -262,13 +262,12 @@ export function TokenInput({
             channel.chips.map((item) => (
               <span className="tag-chip token-chip" key={`${channel.sigil}:${channel.getId(item)}`}>
                 {channel.getLabel(item)}
-                <button
-                  type="button"
-                  aria-label={channel.removeAriaLabel(item)}
+                <IconButton
+                  icon="x"
+                  size={12}
+                  label={channel.removeAriaLabel(item)}
                   onClick={() => removeChip(channel, item)}
-                >
-                  <Icon name="x" size={12} />
-                </button>
+                />
               </span>
             )),
           )}

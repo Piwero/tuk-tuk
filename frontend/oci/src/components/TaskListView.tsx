@@ -24,7 +24,7 @@ import { BulkActionBar } from "./BulkActionBar";
 import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { SectionNameForm } from "./SectionNameForm";
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import { TaskRow } from "./TaskRow";
 
 interface TaskListViewProps {
@@ -431,20 +431,16 @@ export function TaskListView({
               <h2>{group.label}</h2>
               {section !== null && (
                 <span className="row-actions">
-                  <button
-                    type="button"
-                    aria-label={`Rename section ${section.name}`}
+                  <IconButton
+                    icon="pencil"
+                    label={`Rename section ${section.name}`}
                     onClick={() => setRenamingSectionId(section.id)}
-                  >
-                    <Icon name="pencil" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Delete section ${section.name}`}
+                  />
+                  <IconButton
+                    icon="x"
+                    label={`Delete section ${section.name}`}
                     onClick={() => void removeSection(section)}
-                  >
-                    <Icon name="x" />
-                  </button>
+                  />
                 </span>
               )}
             </div>
