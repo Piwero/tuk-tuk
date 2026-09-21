@@ -20,6 +20,7 @@ import {
   type TaskList,
 } from "../api";
 import { currentDragPayload, endDrag, readDragPayload, startDrag } from "../dnd";
+import { HINT_REGISTRY } from "../hintRegistry";
 import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { folderOpenCount, openCountLabel } from "../openCounts";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
@@ -29,16 +30,35 @@ import { APP_VERSION } from "../version";
 import { CreateMenu } from "./CreateMenu";
 import { FocusNavBadge } from "./FocusNavBadge";
 import { FolderForm } from "./FolderForm";
+import { Hint, type HintKey } from "./Hint";
 import { Icon, type IconName } from "./Icon";
 import { IconButton } from "./IconButton";
 import { ListForm, type ListFormValues } from "./ListForm";
 import { Logo } from "./Logo";
 import { TagForm, type TagFormValues } from "./TagForm";
 
+/** Joins the id fragments of an accessible description together, dropping
+ * any that don't apply — used wherever a button carries more than one
+ * `aria-describedby` source (an open-count badge and a hint popover) that
+ * `Hint`'s cloneElement can't compose on its own, since it always replaces
+ * whatever `aria-describedby` was already there. */
+function joinIds(...ids: (string | null | false)[]): string | undefined {
+  const joined = ids.filter((id): id is string => typeof id === "string").join(" ");
+  return joined === "" ? undefined : joined;
+}
+
 const SMART_ICONS: Record<SmartView, IconName> = {
   today: "sun",
   next7: "calendar-range",
   all: "layers",
+};
+
+/** What each Smart List includes (#268) — a built-in view computed from Task
+ * attributes, nothing stored "in" one. */
+const SMART_HINT_KEYS: Record<SmartView, HintKey> = {
+  today: "smart-list-today",
+  next7: "smart-list-next7",
+  all: "smart-list-all",
 };
 
 type Editor =
@@ -159,12 +179,17 @@ function ListButton({
   // color nor an emoji falls back to its initial rather than showing nothing.
   const bare = list.color === null && list.emoji === null;
   const countId = `list-open-count-${list.id}`;
+  const inboxHintId = `list-inbox-hint-${list.id}`;
   // Native `title` only ever surfaces on mouse hover — collapsed, this is a
   // List's only name, so keyboard focus needs the same reveal (#264). The
   // popover rides alongside `title` rather than replacing it; expanded, the
   // label text is already visible and `title` alone remains the truncation
   // fallback the sidebar already relied on.
   const { open, handlers } = useHoverHint();
+  // The Inbox is a real List, undeletable, receiving Tasks not filed
+  // elsewhere — worth explaining wherever it appears, not just collapsed
+  // (#268), unlike an ordinary List's name-only rail tooltip below.
+  const describedBy = joinIds(openCount > 0 && countId, list.is_inbox && open && inboxHintId);
   return (
     <span className="icon-button-wrap">
       <button
@@ -173,9 +198,7 @@ function ListButton({
         // Only on the rail: expanded, the name comes from the label itself —
         // emoji included, which is the name the rest of the app expects.
         aria-label={collapsed ? list.name : undefined}
-        // The open-Task count rides along as the accessible description (#195),
-        // so it reaches assistive tech without disturbing the item's name.
-        aria-describedby={openCount > 0 ? countId : undefined}
+        aria-describedby={describedBy}
         // Always set, not just when collapsed — expanded names can still be
         // truncated by ellipsis, and the native tooltip is the fallback.
         title={list.name}
@@ -208,6 +231,62 @@ function ListButton({
       {collapsed && open && (
         <span role="tooltip" className="icon-button-hint">
           {list.name}
+        </span>
+      )}
+      {list.is_inbox && open && (
+        <span role="tooltip" id={inboxHintId} className="hint-popover">
+          {HINT_REGISTRY.inbox}
+        </span>
+      )}
+    </span>
+  );
+}
+
+interface SmartListButtonProps {
+  view: SmartView;
+  selected: boolean;
+  count: number;
+  countId: string;
+  onSelect: (view: SmartView) => void;
+}
+
+/** A Smart List's own hint (what it includes, #268) rides alongside the
+ * open-count description already on this button (issue #195) — the two
+ * ids are joined via `joinIds`, since `Hint`'s cloneElement would otherwise
+ * clobber whichever one it doesn't own. */
+function SmartListButton({
+  view,
+  selected,
+  count,
+  countId,
+  onSelect,
+}: SmartListButtonProps): JSX.Element {
+  const { open, handlers } = useHoverHint();
+  const hintKey = SMART_HINT_KEYS[view];
+  const hintId = `smart-hint-${view}`;
+  const describedBy = joinIds(count > 0 && countId, open && hintId);
+  return (
+    <span className="hint-wrap">
+      <button
+        type="button"
+        className={selected ? "list-button selected" : "list-button"}
+        aria-label={SMART_LABELS[view]}
+        aria-describedby={describedBy}
+        title={SMART_LABELS[view]}
+        onClick={() => onSelect(view)}
+        {...handlers}
+      >
+        <Icon name={SMART_ICONS[view]} size={18} />
+        <span className="nav-label">{SMART_LABELS[view]}</span>
+        {count > 0 && (
+          <span className="nav-count" aria-hidden="true">
+            {count}
+          </span>
+        )}
+      </button>
+      {open && (
+        <span role="tooltip" id={hintId} className="hint-popover">
+          {HINT_REGISTRY[hintKey]}
         </span>
       )}
     </span>
@@ -916,22 +995,13 @@ export function Sidebar({
             const countId = `smart-open-count-${view}`;
             return (
               <Fragment key={view}>
-                <button
-                  type="button"
-                  className={selectedSmart === view ? "list-button selected" : "list-button"}
-                  aria-label={SMART_LABELS[view]}
-                  aria-describedby={count > 0 ? countId : undefined}
-                  title={SMART_LABELS[view]}
-                  onClick={() => onSelectSmart(view)}
-                >
-                  <Icon name={SMART_ICONS[view]} size={18} />
-                  <span className="nav-label">{SMART_LABELS[view]}</span>
-                  {count > 0 && (
-                    <span className="nav-count" aria-hidden="true">
-                      {count}
-                    </span>
-                  )}
-                </button>
+                <SmartListButton
+                  view={view}
+                  selected={selectedSmart === view}
+                  count={count}
+                  countId={countId}
+                  onSelect={onSelectSmart}
+                />
                 {count > 0 && (
                   <span id={countId} className="visually-hidden">
                     {openCountLabel(count)}
@@ -948,7 +1018,9 @@ export function Sidebar({
           onDrop={handleDropOnNav}
         >
           <div className="lists-nav-heading">
-            <h2>Lists</h2>
+            <Hint hintKey="list-vs-tag">
+              <h2 tabIndex={0}>Lists</h2>
+            </Hint>
             <CreateMenu
               onNewList={() => setEditor({ mode: "create-list", folderId: null })}
               onNewFolder={() => setEditor({ mode: "create-folder" })}
@@ -1100,7 +1172,9 @@ export function Sidebar({
           </ul>
         </nav>
         <nav aria-label="Tags" className="tags-nav">
-          <h2>Tags</h2>
+          <Hint hintKey="list-vs-tag">
+            <h2 tabIndex={0}>Tags</h2>
+          </Hint>
           {/* A wrapped cloud of chips (issue #194) — Tags no longer take a
               full row each. Each chip navigates to its Tag view; edit/delete
               stay reachable by their accessible names. */}

@@ -70,6 +70,7 @@ import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
+import { Hint } from "./components/Hint";
 import { Icon } from "./components/Icon";
 import { KanbanView } from "./components/KanbanView";
 import { MobileTabBar } from "./components/MobileTabBar";
@@ -1236,30 +1237,34 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                   onCreated={addCreatedTask}
                 />
                 <div className="view-controls">
-                  <label>
-                    Group by
-                    <select
-                      value={groupBy}
-                      onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-                    >
-                      <option value="section">Section</option>
-                      <option value="date">Date</option>
-                      <option value="priority">Priority</option>
-                    </select>
-                  </label>
-                  <label>
-                    Sort by
-                    <select
-                      value={sortBy}
-                      onChange={(event) => setSortBy(event.target.value as SortBy)}
-                      aria-describedby="sort-custom-hint"
-                    >
-                      <option value="custom">{customSortOptionLabel()}</option>
-                      <option value="date">Date</option>
-                      <option value="priority">Priority</option>
-                      <option value="title">Title</option>
-                    </select>
-                  </label>
+                  <Hint hintKey="group-by">
+                    <label>
+                      Group by
+                      <select
+                        value={groupBy}
+                        onChange={(event) => setGroupBy(event.target.value as GroupBy)}
+                      >
+                        <option value="section">Section</option>
+                        <option value="date">Date</option>
+                        <option value="priority">Priority</option>
+                      </select>
+                    </label>
+                  </Hint>
+                  <Hint hintKey="sort-by">
+                    <label>
+                      Sort by
+                      <select
+                        value={sortBy}
+                        onChange={(event) => setSortBy(event.target.value as SortBy)}
+                        aria-describedby="sort-custom-hint"
+                      >
+                        <option value="custom">{customSortOptionLabel()}</option>
+                        <option value="date">Date</option>
+                        <option value="priority">Priority</option>
+                        <option value="title">Title</option>
+                      </select>
+                    </label>
+                  </Hint>
                   {sortBy === "custom" && <CustomSortHint id="sort-custom-hint" />}
                 </div>
               </>
@@ -1328,33 +1333,37 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             )}
             {smartView === "all" && !completedMode && (
               <div className="view-controls">
-                <label>
-                  Group by
-                  <select
-                    value={groupBy}
-                    onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-                  >
-                    {/* "section" reruns as "None" here — All has no Sections
-                      of its own, so grouping by one is really no grouping. */}
-                    <option value="section">None</option>
-                    <option value="date">Date</option>
-                    <option value="priority">Priority</option>
-                    <option value="list">List</option>
-                  </select>
-                </label>
-                <label>
-                  Sort by
-                  <select
-                    value={sortBy}
-                    onChange={(event) => setSortBy(event.target.value as SortBy)}
-                    aria-describedby="sort-custom-hint-all"
-                  >
-                    <option value="custom">{customSortOptionLabel()}</option>
-                    <option value="date">Date</option>
-                    <option value="priority">Priority</option>
-                    <option value="title">Title</option>
-                  </select>
-                </label>
+                <Hint hintKey="group-by">
+                  <label>
+                    Group by
+                    <select
+                      value={groupBy}
+                      onChange={(event) => setGroupBy(event.target.value as GroupBy)}
+                    >
+                      {/* "section" reruns as "None" here — All has no Sections
+                        of its own, so grouping by one is really no grouping. */}
+                      <option value="section">None</option>
+                      <option value="date">Date</option>
+                      <option value="priority">Priority</option>
+                      <option value="list">List</option>
+                    </select>
+                  </label>
+                </Hint>
+                <Hint hintKey="sort-by">
+                  <label>
+                    Sort by
+                    <select
+                      value={sortBy}
+                      onChange={(event) => setSortBy(event.target.value as SortBy)}
+                      aria-describedby="sort-custom-hint-all"
+                    >
+                      <option value="custom">{customSortOptionLabel()}</option>
+                      <option value="date">Date</option>
+                      <option value="priority">Priority</option>
+                      <option value="title">Title</option>
+                    </select>
+                  </label>
+                </Hint>
                 {sortBy === "custom" && <CustomSortHint id="sort-custom-hint-all" />}
               </div>
             )}

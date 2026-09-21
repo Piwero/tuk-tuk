@@ -14,12 +14,16 @@ export const HINT_REGISTRY = {
   abandon:
     "Keeps the Goal in your history, marked as dropped, with its Score frozen. Delete removes it entirely.",
   "list-archive": "Hides the List from the sidebar but keeps its Tasks. Delete removes both.",
-  "smart-list-today": "Tasks due today, or overdue.",
-  "smart-list-next7": "Tasks due within the next 7 days.",
-  "smart-list-all": "Every open Task across every List.",
-  inbox: "The built-in List that receives Tasks not filed anywhere else.",
+  "smart-list-today": "A computed view, not a place Tasks are filed: Tasks due today, or overdue.",
+  "smart-list-next7":
+    "A computed view, not a place Tasks are filed: Tasks due within the next 7 days.",
+  "smart-list-all":
+    "A computed view, not a place Tasks are filed: every open Task across every List.",
+  inbox:
+    "The built-in List that receives Tasks not filed anywhere else. A real List, but undeletable.",
   "check-item":
     "A line in this Task's checklist. It has its own done state but isn't a Task itself.",
+  "check-progress": "Counts done Check Items out of the total on this Task.",
   "list-vs-tag": "A Task lives in exactly one List, but can carry any number of Tags.",
   streak: "The count of consecutive scheduled days this Habit has been checked in without a miss.",
   target: "The amount a Numeric Habit's Check-ins count toward in one day.",
