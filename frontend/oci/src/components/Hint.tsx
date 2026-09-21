@@ -62,6 +62,10 @@ export function Hint({ hintKey, destructive = false, children }: HintProps): JSX
     onFocus: handlers.onFocus,
     onBlur: handlers.onBlur,
     onKeyDown: handlers.onKeyDown,
+    onTouchStart: handlers.onTouchStart,
+    onTouchEnd: handlers.onTouchEnd,
+    onTouchMove: handlers.onTouchMove,
+    onTouchCancel: handlers.onTouchCancel,
   } as React.HTMLAttributes<HTMLElement>);
 
   return (
