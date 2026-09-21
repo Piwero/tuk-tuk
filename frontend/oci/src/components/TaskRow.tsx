@@ -125,7 +125,9 @@ export function TaskRow({
   onSelectionClear,
 }: TaskRowProps): JSX.Element {
   const overdue = isOverdue(task);
+  const dueToday = !completed && isDueToday(task);
   const hasDescription = task.description.trim() !== "";
+  const repeats = task.recurrence !== null;
   const schedule = formatSchedule(task);
   const hasActions =
     onStartFocus !== undefined || onDelete !== undefined || onOpenActions !== undefined;
@@ -133,11 +135,29 @@ export function TaskRow({
   // Today's date reads in the accent, everything else in the secondary ink —
   // the accent used to be on every dated row, which made it mean nothing.
   // Overdue still wins, and still owns the only red on the row.
-  const dateClass = overdue
-    ? "date-chip overdue"
-    : !completed && isDueToday(task)
-      ? "date-chip today"
-      : "date-chip";
+  //
+  // Colour alone used to carry both states (#258): a user who can't
+  // separate the accent or the red from the secondary grey — or a screen
+  // reader, which reads the same string either way — got nothing. Weight
+  // now marks "today" and "overdue" alike (non-colour, so it survives
+  // desaturation); the triangle glyph then marks "overdue" apart from
+  // "today", so every pair of states differs by more than hue:
+  // today-vs-future is weight, overdue-vs-either is weight *and* the icon.
+  // One state, derived once, drives both the class and the spoken prefix
+  // below rather than two parallel branches on the same booleans.
+  const dateState = overdue ? "overdue" : dueToday ? "today" : "future";
+  const dateClass = dateState === "future" ? "date-chip" : `date-chip ${dateState}`;
+  // The visible chip stays a bare date — a screen reader gets the state as
+  // a spoken prefix instead, so sighted and non-sighted users read the same
+  // information rather than the sighted one getting more of it.
+  const dateAccessibleName =
+    schedule === null
+      ? undefined
+      : dateState === "overdue"
+        ? `Overdue: ${schedule}`
+        : dateState === "today"
+          ? `Due today: ${schedule}`
+          : `Due ${schedule}`;
 
   // `with-actions` opens the reserved actions track. Without it the track is
   // 0 wide, so a view that wires no row actions loses nothing to the gutter.
@@ -219,6 +239,14 @@ export function TaskRow({
                 <Icon name="align-left" size={14} />
               </span>
             )}
+            {repeats && (
+              // A repeating Task rendered identically to a one-off one
+              // (#258): several occurrences of the same commitment sitting
+              // near each other in a list looked like duplicated data.
+              <span className="repeat-indicator" title="Repeats" aria-label="Repeats">
+                <Icon name="repeat" size={14} />
+              </span>
+            )}
           </button>
           {showCheckProgress && task.check_items.length > 0 && (
             <span className="check-progress">
@@ -253,13 +281,17 @@ export function TaskRow({
         </span>
         <span className="task-row-date">
           {showDate && task.due_date !== null && (
-            // title carries the full value to hover and assistive tech even
-            // where CSS still lets a narrow container wrap or wrap-clip it
-            // (#257) — the visible text is the same string, not a shortened
-            // one, so this is redundant at rest and a safety net under
-            // pressure.
-            <span className={dateClass} title={schedule ?? undefined}>
-              {schedule}
+            // aria-label carries the overdue/today prefix to a screen
+            // reader (#258) and, being the same string title holds, also
+            // survives to hover and assistive tech where CSS still lets a
+            // narrow container wrap or wrap-clip the visible text (#257).
+            <span
+              className={dateClass}
+              title={dateAccessibleName ?? undefined}
+              aria-label={dateAccessibleName ?? undefined}
+            >
+              {overdue && <Icon name="alert-triangle" size={12} />}
+              <span aria-hidden="true">{schedule}</span>
             </span>
           )}
         </span>
