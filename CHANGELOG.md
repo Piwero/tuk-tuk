@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.1](https://github.com/Piwero/tuk-tuk/compare/v2.10.0...v2.10.1) - 2026-09-21
+
+### Bug Fixes
+
+- **tasks:** Widen date chip column and stop clipping the leading edge ([b8b4638](https://github.com/Piwero/tuk-tuk/commit/b8b4638520082bb3ccc49dd335c3e4e8729c2745))
+- **tasks:** Fix date chip clipping in wrapped fallback too, add title fallback ([5eb9929](https://github.com/Piwero/tuk-tuk/commit/5eb9929561fa8c44c261d6a840a3b29d458c69e3))
+
 ## [2.10.0](https://github.com/Piwero/tuk-tuk/compare/v2.9.0...v2.10.0) - 2026-09-21
 
 ### Features
