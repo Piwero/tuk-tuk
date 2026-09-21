@@ -71,7 +71,7 @@ import { FolderView, type FolderSortBy } from "./components/FolderView";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { Hint } from "./components/Hint";
-import { Icon } from "./components/Icon";
+import { IconButton } from "./components/IconButton";
 import { KanbanView } from "./components/KanbanView";
 import { MobileTabBar } from "./components/MobileTabBar";
 import { Modal } from "./components/Modal";
@@ -1129,15 +1129,14 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           )}
           <main>
             <div className="main-header">
-              <button
-                type="button"
+              <IconButton
+                icon="menu"
+                size={20}
+                label="Show navigation"
                 className="drawer-toggle"
-                aria-label="Show navigation"
                 aria-expanded={drawerOpen}
                 onClick={() => setDrawerOpen((current) => !current)}
-              >
-                <Icon name="menu" size={20} />
-              </button>
+              />
               <h1>
                 {selectedList !== null ? (
                   // A List filed in a Folder shows "Folder / List" (#126): the

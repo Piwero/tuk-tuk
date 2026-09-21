@@ -17,6 +17,7 @@ import { addDays, browserTimeZone, localDayOf, shortDayLabel } from "../dates";
 import { linkFields } from "../focusLink";
 import { FocusSessionForm, type FocusSessionFormValues } from "./FocusSessionForm";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 const minutes = (seconds: number): string => `${Math.round(seconds / 60)} min`;
 
@@ -244,20 +245,16 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
                 {linked !== null && <span className="focus-link">{linked}</span>}
                 {session.note !== "" && <span className="focus-note">{session.note}</span>}
                 <span className="row-actions">
-                  <button
-                    type="button"
-                    aria-label="Edit session"
+                  <IconButton
+                    icon="pencil"
+                    label="Edit session"
                     onClick={() => setEditor({ mode: "edit", id: session.id })}
-                  >
-                    <Icon name="pencil" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Delete session"
+                  />
+                  <IconButton
+                    icon="x"
+                    label="Delete session"
                     onClick={() => void handleDelete(session)}
-                  >
-                    <Icon name="x" />
-                  </button>
+                  />
                 </span>
               </li>
             );

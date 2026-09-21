@@ -19,6 +19,7 @@ import { parseQuickAdd, sameName } from "../quickAdd";
 import { useAssistAvailable } from "../useAssistAvailable";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
 function formatDraftDate(dueDate: string, isAllDay: boolean): string {
@@ -487,29 +488,29 @@ export function QuickAdd({
           {draft.dueDate !== null && (
             <span className="date-chip token-chip">
               {formatDraftDate(draft.dueDate, draft.isAllDay)}
-              <button type="button" aria-label="Remove date" onClick={removeDateChip}>
-                <Icon name="x" size={12} />
-              </button>
+              <IconButton icon="x" size={12} label="Remove date" onClick={removeDateChip} />
             </span>
           )}
           {draft.recurrence !== null && (
             <span className="date-chip token-chip">
               {formatRecurrenceRule(draft.recurrence)}
-              <button type="button" aria-label="Remove recurrence" onClick={removeRecurrenceChip}>
-                <Icon name="x" size={12} />
-              </button>
+              <IconButton
+                icon="x"
+                size={12}
+                label="Remove recurrence"
+                onClick={removeRecurrenceChip}
+              />
             </span>
           )}
           {draft.reminders.map((offset) => (
             <span key={offset} className="date-chip token-chip">
               {formatReminderOffset(offset)}
-              <button
-                type="button"
-                aria-label={`Remove reminder (${formatReminderOffset(offset)})`}
+              <IconButton
+                icon="x"
+                size={12}
+                label={`Remove reminder (${formatReminderOffset(offset)})`}
                 onClick={() => removeReminderChip(offset)}
-              >
-                <Icon name="x" size={12} />
-              </button>
+              />
             </span>
           ))}
           {draft.tokenListId !== null && (
@@ -522,9 +523,7 @@ export function QuickAdd({
             draft.listChip.length === 0 && (
               <span className="list-chip token-chip">
                 {draft.suggestedListName}
-                <button type="button" aria-label="Remove list" onClick={removeListChip}>
-                  <Icon name="x" size={12} />
-                </button>
+                <IconButton icon="x" size={12} label="Remove list" onClick={removeListChip} />
               </span>
             )}
           {draft.tokenTagNames.map((name) => (
@@ -541,13 +540,12 @@ export function QuickAdd({
             .map((name) => (
               <span key={name} className="tag-chip token-chip">
                 #{name}
-                <button
-                  type="button"
-                  aria-label={`Remove ${name}`}
+                <IconButton
+                  icon="x"
+                  size={12}
+                  label={`Remove ${name}`}
                   onClick={() => removeTagChip(name)}
-                >
-                  <Icon name="x" size={12} />
-                </button>
+                />
               </span>
             ))}
           {draft.tokenPriority !== null && (
@@ -558,20 +556,22 @@ export function QuickAdd({
             draft.priorityChip.length === 0 && (
               <span className="tag-chip token-chip">
                 {PRIORITY_LABELS[draft.suggestedPriority]}
-                <button type="button" aria-label="Remove priority" onClick={removePriorityChip}>
-                  <Icon name="x" size={12} />
-                </button>
+                <IconButton
+                  icon="x"
+                  size={12}
+                  label="Remove priority"
+                  onClick={removePriorityChip}
+                />
               </span>
             )}
           <span className="quick-add-assist-hint">Enter to confirm · Esc to discard</span>
-          <button
-            type="button"
+          <IconButton
+            icon="x"
+            size={12}
+            label="Discard suggestion"
             className="quick-add-assist-discard"
-            aria-label="Discard suggestion"
             onClick={() => void discardDraft()}
-          >
-            <Icon name="x" size={12} />
-          </button>
+          />
         </div>
       ) : (
         <TokenInput

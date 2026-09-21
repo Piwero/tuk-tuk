@@ -1,4 +1,4 @@
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 interface BulkActionBarProps {
   /** How many Tasks are selected — shown, and announced. */
@@ -45,14 +45,13 @@ export function BulkActionBar({
       <button type="button" className="row-action-danger" onClick={onDelete}>
         Delete
       </button>
-      <button
-        type="button"
+      <IconButton
+        icon="x"
+        size={16}
+        label="Clear selection"
         className="bulk-action-clear"
-        aria-label="Clear selection"
         onClick={onClear}
-      >
-        <Icon name="x" size={16} />
-      </button>
+      />
     </div>
   );
 }

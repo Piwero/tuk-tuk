@@ -475,11 +475,16 @@ main {
 /* The List/Tag name button and the Folder name button each grew a hint
  * popover wrapper (#264) — the wrapper needs to fill the row the button
  * itself used to, or the button's own `flex: 1` above has nothing to grow
- * into. */
+ * into. Scoped away from the disclosure wrapper (#270), which must stay
+ * a fixed 20px rather than stretching with the name. */
 .list-row > .icon-button-wrap,
-.folder-row > .icon-button-wrap {
+.folder-row > .icon-button-wrap:not(:has(> .folder-disclosure)) {
   flex: 1;
   min-width: 0;
+}
+
+.folder-row > .icon-button-wrap:has(> .folder-disclosure) {
+  flex: none;
 }
 
 .list-button > span:not(.color-dot):not(.list-emoji) {
@@ -1688,11 +1693,17 @@ li[data-overdue] .date-chip {
 
 .token-chip button {
   display: inline-flex;
-  margin-left: var(--space-1);
   padding: 0;
   border: none;
   background: none;
   color: var(--text-tertiary);
+}
+
+/* IconButton wraps the chip's remove button in a span (#270) — the wrapper
+ * is the chip's flex item now, so it carries the separating margin the
+ * button itself used to. */
+.token-chip .icon-button-wrap {
+  margin-left: var(--space-1);
 }
 
 .token-chip button:hover {
@@ -1895,12 +1906,18 @@ li[data-overdue] .date-chip {
   justify-content: center;
   height: 28px;
   width: 28px;
-  margin-left: auto;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   background: var(--surface-card);
   color: var(--text-secondary);
   transition: background var(--duration-fast) var(--ease-out);
+}
+
+/* IconButton wraps the button in a span (#265, #270) — the wrapper is the
+ * toolbar's flex item now, so it carries the auto margin pushing the
+ * control to the row's far end. */
+.calendar-toolbar > .icon-button-wrap:has(> .calendar-refresh-button) {
+  margin-left: auto;
 }
 
 .calendar-refresh-button:hover {
@@ -4288,6 +4305,12 @@ select.task-detail-breadcrumb:focus-visible {
   color: var(--text-tertiary);
 }
 
+/* IconButton wraps the button in a span (#270) — auto margins only align
+ * flex items, so the wrapper carries the alignment now. */
+.modal-header > .icon-button-wrap {
+  margin-left: auto;
+}
+
 .modal-close:hover {
   color: var(--text-primary);
 }
@@ -4629,11 +4652,25 @@ select.task-detail-breadcrumb:focus-visible {
   display: none; /* desktop keeps the sidebar in the grid */
 }
 
+/* IconButton wraps the toggle in a span (#270) — the wrapper is the
+ * header's flex item now, so it inherits the hide/show alongside the
+ * button it wraps. */
+.main-header > .icon-button-wrap:has(> .drawer-toggle) {
+  display: none;
+  flex: none;
+}
+
 /* `.sidebar button` (specificity 0,1,1) otherwise beats a bare
    `.drawer-close` (0,1,0) and forces it visible at every width — same
    trap `.sidebar .sidebar-collapse` above already sidesteps. */
 .sidebar .drawer-close {
   display: none; /* desktop has no drawer to close (issue #170) */
+}
+
+/* IconButton wraps the close control in a span (#270) — the button's own
+ * display:none can't hide its wrapper, so the wrapper hides too. */
+.sidebar-top > .icon-button-wrap:has(> .drawer-close) {
+  display: none;
 }
 
 /* Mobile-only bottom tab bar and Task detail sheet (issue #170): hidden on
@@ -4763,7 +4800,13 @@ select.task-detail-breadcrumb:focus-visible {
   /* The drawer's own close control (issue #170) — sits beside the wordmark,
      opposite the collapse toggle it replaces at this width. Scoped as
      `.sidebar .drawer-close`, matching `.sidebar .sidebar-collapse` above,
-     so its own width/flex still beat `.sidebar button`'s `width: 100%`. */
+     so its own width/flex still beat `.sidebar button`'s `width: 100%`.
+     IconButton wraps the button in a span (#270) — the wrapper is the
+     row's flex item now, so it carries the auto margin pinning the
+     control to the row's far end. */
+  .sidebar-top > .icon-button-wrap:has(> .drawer-close) {
+    margin-left: auto;
+  }
   .sidebar .drawer-close {
     display: inline-flex;
     flex: none;
@@ -4771,12 +4814,20 @@ select.task-detail-breadcrumb:focus-visible {
     justify-content: center;
     width: 32px;
     height: 32px;
-    margin-left: auto;
     padding: 0;
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-secondary);
+  }
+
+  /* IconButton wraps the close control in a span (#270) — the mobile rule
+   * above shows the button again, so the wrapper shows with it. */
+  .sidebar-top > .icon-button-wrap:has(> .drawer-close) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
   }
 
   .sidebar .drawer-close:hover {
@@ -4805,6 +4856,11 @@ select.task-detail-breadcrumb:focus-visible {
 
   .drawer-toggle:hover {
     background: var(--surface-hover);
+  }
+
+  .main-header > .icon-button-wrap:has(> .drawer-toggle) {
+    display: inline-flex;
+    flex: none;
   }
 
   /* ── Bottom tab bar ──────────────────────────────────────────────── */
@@ -5465,8 +5521,14 @@ a.button:hover {
 }
 
 .bulk-action-clear {
-  margin-left: auto;
   padding: 0 var(--space-2) !important;
+}
+
+/* IconButton wraps the bar's clear button in a span (#270) — the wrapper
+ * is the bar's flex item now, so it carries the auto margin. The text
+ * buttons keep their own rules untouched. */
+.bulk-action-bar > .icon-button-wrap:has(> .bulk-action-clear) {
+  margin-left: auto;
 }
 
 .tasks li.task-row[data-selected] {

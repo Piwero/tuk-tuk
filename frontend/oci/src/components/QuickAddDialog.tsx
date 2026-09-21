@@ -38,6 +38,7 @@ import { useAssistAvailable } from "../useAssistAvailable";
 import { DateFieldset } from "./DateFieldset";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
 /** A resolved `@` schedule chip as a Task create payload. */
@@ -468,25 +469,23 @@ export function QuickAddDialog({
             {recurrence !== null && (
               <span className="date-chip token-chip">
                 {formatRecurrenceRule(recurrence)}
-                <button
-                  type="button"
-                  aria-label="Remove recurrence"
+                <IconButton
+                  icon="x"
+                  size={12}
+                  label="Remove recurrence"
                   onClick={() => setRecurrence(null)}
-                >
-                  <Icon name="x" size={12} />
-                </button>
+                />
               </span>
             )}
             {reminders.map((offset) => (
               <span key={offset} className="date-chip token-chip">
                 {formatReminderOffset(offset)}
-                <button
-                  type="button"
-                  aria-label={`Remove reminder (${formatReminderOffset(offset)})`}
+                <IconButton
+                  icon="x"
+                  size={12}
+                  label={`Remove reminder (${formatReminderOffset(offset)})`}
                   onClick={() => removeReminder(offset)}
-                >
-                  <Icon name="x" size={12} />
-                </button>
+                />
               </span>
             ))}
           </div>

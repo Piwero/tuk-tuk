@@ -4,7 +4,7 @@ import { type Folder, type TaskList } from "../api";
 import { LIST_ICON_GROUPS } from "../listIcons";
 import { byOrder } from "../ordering";
 import { DEFAULT_ACCENT } from "../theme";
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import { IconPicker } from "./IconPicker";
 
 export interface ListFormValues {
@@ -88,14 +88,12 @@ export function ListForm({
           Emoji
           <input value={emoji} maxLength={8} onChange={(event) => setEmoji(event.target.value)} />
         </label>
-        <button
-          type="button"
+        <IconButton
+          icon="smile"
+          label="Choose emoji"
           className="icon-field"
-          aria-label="Choose emoji"
           onClick={() => setPickingEmoji(true)}
-        >
-          <Icon name="smile" />
-        </button>
+        />
       </div>
       {pickingEmoji && (
         <IconPicker

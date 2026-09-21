@@ -4,7 +4,7 @@ import { fetchHabitStats, putCheckIn, removeCheckIn, type Habit, type HabitStats
 import { formatDate, localDayOf } from "../dates";
 import { heatLevel, nextCheckIn } from "../habitStats";
 import { Hint } from "./Hint";
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 
@@ -66,13 +66,9 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Eleme
       </Hint>
       <div className="habit-month">
         <div className="habit-month-nav">
-          <button type="button" aria-label="Previous month" onClick={() => stepMonth(-1)}>
-            <Icon name="chevron-left" />
-          </button>
+          <IconButton icon="chevron-left" label="Previous month" onClick={() => stepMonth(-1)} />
           <span className="habit-month-label">{formatDate(monthStart, "month")}</span>
-          <button type="button" aria-label="Next month" onClick={() => stepMonth(1)}>
-            <Icon name="chevron-right" />
-          </button>
+          <IconButton icon="chevron-right" label="Next month" onClick={() => stepMonth(1)} />
         </div>
         <div className="habit-month-grid">
           {monthDays(year, month).map((day, index) => {

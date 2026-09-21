@@ -734,16 +734,15 @@ export function CalendarView({
                     {dayEntries.length}
                   </span>
                 )}
-                <button
-                  type="button"
-                  aria-label={`Add a task on ${day}`}
+                <IconButton
+                  icon="plus"
+                  size={14}
+                  label={`Add a task on ${day}`}
                   onClick={(event) => {
                     event.stopPropagation();
                     openAllDayDraft(day);
                   }}
-                >
-                  <Icon name="plus" size={14} />
-                </button>
+                />
               </div>
               {!isNarrow &&
                 dayEntries.map((entry) =>
