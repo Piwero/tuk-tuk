@@ -130,6 +130,7 @@ export function TaskRow({
   const dueToday = !completed && isDueToday(task);
   const hasDescription = task.description.trim() !== "";
   const repeats = task.recurrence !== null;
+  const checkItemsDone = task.check_items.filter((item) => item.done).length;
   const schedule = formatSchedule(task);
   const hasActions =
     onStartFocus !== undefined || onDelete !== undefined || onOpenActions !== undefined;
@@ -251,9 +252,13 @@ export function TaskRow({
             )}
           </button>
           {showCheckProgress && task.check_items.length > 0 && (
-            <Hint hintKey="check-item">
-              <span className="check-progress" tabIndex={0}>
-                {task.check_items.filter((item) => item.done).length}/{task.check_items.length}
+            <Hint hintKey="check-progress">
+              <span
+                className="check-progress"
+                tabIndex={0}
+                aria-label={`${checkItemsDone} of ${task.check_items.length} Check Items done`}
+              >
+                {checkItemsDone}/{task.check_items.length}
               </span>
             </Hint>
           )}
