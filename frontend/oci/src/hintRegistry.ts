@@ -23,6 +23,8 @@ export const HINT_REGISTRY = {
   "list-vs-tag": "A Task lives in exactly one List, but can carry any number of Tags.",
   streak: "The count of consecutive scheduled days this Habit has been checked in without a miss.",
   target: "The amount a Numeric Habit's Check-ins count toward in one day.",
+  "habit-checkin": "Today's Check-in for this Habit.",
+  "habit-step": "Adds one step toward today's Check-in. Tap a filled day in the strip to clear it.",
   pomo: "A fixed-length countdown focus block, default 25 minutes.",
   "break-minutes":
     "How long you rest between Pomos. A long break replaces a short one every few rounds.",

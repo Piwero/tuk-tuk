@@ -1,6 +1,8 @@
 import { type Habit, type HabitStats } from "../api";
 import { shortDayLabel } from "../dates";
 import { heatLevel, stripDays } from "../habitStats";
+import { useHoverHint } from "../useHoverHint";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 
 interface HabitCardStatsProps {
@@ -58,30 +60,66 @@ export function HabitCardStats({
 
   return (
     <div className="habit-card-stats">
-      <span className="habit-streak-count">
-        <Icon name="flame" size={14} />
-        Streak: {stats.streak}
-      </span>
+      <Hint hintKey="streak">
+        <span className="habit-streak-count">
+          <Icon name="flame" size={14} />
+          Streak: {stats.streak}
+        </span>
+      </Hint>
       <div className="habit-strip" role="group" aria-label={`Recent days for ${habit.name}`}>
         {days.map((day) => {
           const { level, text } = dayStatus(habit, today, day, entries.get(day));
           const className = `habit-strip-day heatmap-day level-${level}${day === today ? " today" : ""}`;
           const label = `${shortDayLabel(day)}: ${text}`;
-          if (onToggleDay === null) {
-            return <span key={day} role="img" className={className} aria-label={label} />;
-          }
           return (
-            <button
+            <StripDay
               key={day}
-              type="button"
               className={className}
-              aria-label={label}
-              aria-pressed={level > 0}
-              onClick={() => onToggleDay(day)}
+              label={label}
+              level={level}
+              onToggle={onToggleDay === null ? null : () => onToggleDay(day)}
             />
           );
         })}
       </div>
     </div>
+  );
+}
+
+/** One square of the history strip. Its accessible name is the only source
+ * of the hover/focus hint's copy — the two can't drift, since one string
+ * feeds both. */
+function StripDay({
+  className,
+  label,
+  level,
+  onToggle,
+}: {
+  className: string;
+  label: string;
+  level: number;
+  onToggle: (() => void) | null;
+}): JSX.Element {
+  const { open, handlers } = useHoverHint();
+  return (
+    <span className="habit-strip-day-wrap">
+      {onToggle === null ? (
+        <span role="img" className={className} aria-label={label} {...handlers} />
+      ) : (
+        <button
+          type="button"
+          className={className}
+          aria-label={label}
+          aria-pressed={level > 0}
+          onClick={onToggle}
+          {...handlers}
+        />
+      )}
+      {open && (
+        <span role="tooltip" className="habit-strip-day-hint">
+          {label}
+        </span>
+      )}
+    </span>
   );
 }

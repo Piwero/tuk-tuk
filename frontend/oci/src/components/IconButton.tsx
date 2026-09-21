@@ -13,6 +13,7 @@ interface IconButtonProps {
   type?: "button" | "submit";
   "aria-pressed"?: boolean;
   "aria-expanded"?: boolean;
+  "aria-haspopup"?: React.AriaAttributes["aria-haspopup"];
   disabled?: boolean;
   /** Appends a registry explanation below the name hint — e.g. Archive
    * distinguishing itself from Delete (#261 story 11). Delegates entirely
@@ -50,6 +51,7 @@ export function IconButton({
       aria-label={label}
       aria-pressed={rest["aria-pressed"]}
       aria-expanded={rest["aria-expanded"]}
+      aria-haspopup={rest["aria-haspopup"]}
       disabled={disabled}
       onClick={onClick}
       {...handlers}
