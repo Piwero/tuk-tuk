@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   applyThemePreference,
+  hasReorderedTasks,
   loadThemePreference,
+  markTasksReordered,
   saveThemePreference,
   type ThemePreference,
 } from "./layoutPrefs";
@@ -45,6 +47,31 @@ describe("theme preference persistence (issue #193)", () => {
       throw new Error("storage disabled");
     });
     expect(() => saveThemePreference("dark")).not.toThrow();
+  });
+});
+
+describe("reordered-Tasks flag (issue #260)", () => {
+  it("defaults to false when nothing is stored", () => {
+    expect(hasReorderedTasks()).toBe(false);
+  });
+
+  it("flips to true after a drag and survives re-reads", () => {
+    markTasksReordered();
+    expect(hasReorderedTasks()).toBe(true);
+  });
+
+  it("falls back to false without throwing when storage reads throw", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage disabled");
+    });
+    expect(hasReorderedTasks()).toBe(false);
+  });
+
+  it("does not throw when storage writes throw", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage disabled");
+    });
+    expect(() => markTasksReordered()).not.toThrow();
   });
 });
 
