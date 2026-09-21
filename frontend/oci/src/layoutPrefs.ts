@@ -133,3 +133,28 @@ export function saveCollapsedFolderIds(ids: Set<number>): void {
     // choice just won't survive a reload.
   }
 }
+
+// Whether the user has ever drag-reordered a Task (issue #260). The
+// "Custom" sort's underlying order (sort_order) always exists — new Tasks
+// append to it — so a first-time user sees a sequence that looks arbitrary
+// under a label that sounds deliberate. This flag lets the Sort by control
+// say "not yet arranged" until a drag actually happens, then "your order"
+// after. Global rather than per-List: once the user has dragged anywhere,
+// the concept is no longer a mystery.
+const REORDERED_KEY = "tuktuk.tasks.reordered";
+
+export function hasReorderedTasks(): boolean {
+  try {
+    return localStorage.getItem(REORDERED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function markTasksReordered(): void {
+  try {
+    localStorage.setItem(REORDERED_KEY, "true");
+  } catch {
+    // Storage full or unavailable: the hint just won't update this session.
+  }
+}

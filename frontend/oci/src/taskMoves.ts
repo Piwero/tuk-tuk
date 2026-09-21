@@ -2,6 +2,7 @@
 
 import { updateTask, type Task } from "./api";
 import { sortTasks } from "./grouping";
+import { markTasksReordered } from "./layoutPrefs";
 import { appendOrder, planInsertBefore } from "./ordering";
 
 /** Applies one or more server responses to the tasks state. */
@@ -28,6 +29,7 @@ export async function moveTaskBeforeTask(
   if (moved === undefined || taskId === target.id) {
     return;
   }
+  markTasksReordered();
   const siblings = sortTasks(
     tasks.filter((t) => t.section_id === target.section_id && t.id !== taskId),
     "custom",
@@ -58,6 +60,7 @@ export async function moveTaskToSectionEnd(
   sectionId: number | null,
   apply: ApplyTaskUpdates,
 ): Promise<void> {
+  markTasksReordered();
   const siblings = sortTasks(
     tasks.filter((t) => t.section_id === sectionId && t.id !== taskId),
     "custom",
