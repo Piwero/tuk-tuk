@@ -365,6 +365,27 @@ describe("due date chip is not clipped (issue #257)", () => {
     expect(rule, ".task-row-date rule not found").not.toBeNull();
     expect((rule as RegExpExecArray)[0]).not.toMatch(/overflow:\s*hidden/);
   });
+
+  it("holds the date chip to its natural width below the 620px grid floor", () => {
+    // Below the container floor the row is a wrapping flex line, not the
+    // grid: without `flex: none` here, `.task-row-date`'s `min-width: 0`
+    // (checked above) would let the chip shrink under pressure instead of
+    // the whole chip wrapping to its own line intact.
+    expect(indexCss).toMatch(/\.tasks li\.task-row \.task-row-date\s*\{\s*flex:\s*none;/);
+  });
+
+  it("carries the full value in title, as a hover/assistive-tech fallback", () => {
+    const task = fakeTask("Widest date", {
+      start_date: "2026-08-27T07:00:00Z",
+      due_date: "2026-08-27T08:00:00Z",
+      is_all_day: false,
+    });
+    renderRow({ task });
+    expect(screen.getByText(widestSchedule as string)).toHaveAttribute(
+      "title",
+      widestSchedule as string,
+    );
+  });
 });
 
 describe("TaskRow within a list", () => {

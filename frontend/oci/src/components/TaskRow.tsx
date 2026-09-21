@@ -252,7 +252,16 @@ export function TaskRow({
           )}
         </span>
         <span className="task-row-date">
-          {showDate && task.due_date !== null && <span className={dateClass}>{schedule}</span>}
+          {showDate && task.due_date !== null && (
+            // title carries the full value to hover and assistive tech even
+            // where CSS still lets a narrow container wrap or wrap-clip it
+            // (#257) — the visible text is the same string, not a shortened
+            // one, so this is redundant at rest and a safety net under
+            // pressure.
+            <span className={dateClass} title={schedule ?? undefined}>
+              {schedule}
+            </span>
+          )}
         </span>
         {hasActions && (
           <span className="row-actions">
