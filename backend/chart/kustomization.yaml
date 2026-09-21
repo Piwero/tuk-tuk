@@ -9,6 +9,10 @@ resources:
   - git-onepassworditem.yaml
   - auth-onepassworditem.yaml
   - google-onepassworditem.yaml
+  - db-onepassworditem.yaml
+  # copy-db-job.yaml is deliberately absent: a one-shot Job that Flux
+  # re-applied would re-run a destructive copy. Applied by hand instead —
+  # see the header of that file and README.md's "Moving to PostgreSQL".
   - imagerepository.yaml
   - imagepolicy.yaml
   - gitrepository.yaml

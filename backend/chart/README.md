@@ -13,6 +13,8 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
 | `git-onepassworditem.yaml`                  | OnePasswordItem               | Syncs Git credentials for Flux image automation (`tuk-tuk-git-auth`)                  |
 | `auth-onepassworditem.yaml`                 | OnePasswordItem               | Syncs the backend auth secrets — session signing key + password hash (`tuk-tuk-auth`) |
 | `google-onepassworditem.yaml`               | OnePasswordItem               | Syncs the Google Calendar integration's secrets, if enabled (`tuk-tuk-google`)        |
+| `db-onepassworditem.yaml`                   | OnePasswordItem               | Syncs the external PostgreSQL `DATABASE_URL`, if used (`tuk-tuk-db`) — ADR 0013       |
+| `copy-db-job.yaml`                          | Job                           | One-off SQLite → PostgreSQL copy. **Not in `kustomization.yaml`** — applied by hand   |
 | `gitrepository.yaml`                        | GitRepository                 | Flux source used by image automation                                                  |
 | `imagerepository.yaml` / `imagepolicy.yaml` | ImageRepository / ImagePolicy | Scans GHCR for new semver backend images                                              |
 | `imageupdateautomation.yaml`                | ImageUpdateAutomation         | Commits image bumps back to `main` (covers both charts)                               |
@@ -22,12 +24,15 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
 
 ## Notes
 
-- **No init containers.** The app runs Alembic migrations itself at startup, and
-  SQLite means there is no database service to wait for — the DB is a file on
-  the PVC (`/data/tuk_tuk.db`).
+- **No init containers.** The app runs Alembic migrations itself at startup.
+  On SQLite there is no database service to wait for — the DB is a file on the
+  PVC (`/data/tuk_tuk.db`). On PostgreSQL there still isn't anything to wait
+  for: the app fails fast and names the unreachable host, and Kubernetes
+  provides the restart backoff.
 - **Single replica, `Recreate` strategy.** The SQLite volume is `ReadWriteOnce`
   and the app is single-writer; the old pod must release the volume before the
-  new one starts. Don't scale this deployment.
+  new one starts. Don't scale this deployment — and note that moving to
+  PostgreSQL does *not* lift that restriction (see "Moving to PostgreSQL").
 - **`local-path` storage class, not the cluster default (`synology-nfs`).**
   SQLite over NFS risks corruption (unreliable locking; WAL doesn't work over
   NFS), so the database lives on node-local disk. The pod is pinned to the
@@ -158,14 +163,191 @@ appeared):
 kubectl -n tuk-tuk rollout restart deployment/backend
 ```
 
+## Moving to PostgreSQL
+
+Optional, and off by default. SQLite on the PVC stays fully supported — this
+section only matters if you'd rather your own PostgreSQL server handled the
+backups. See [ADR 0013](../../docs/adr/0013-optional-external-postgres.md) for
+why the connection lives in the environment rather than in Settings.
+
+### Before you start: what happens to your data
+
+**Nothing is deleted, and you can go back.** The copy reads the SQLite file
+and writes to PostgreSQL. The file is never modified, never moved, and stays
+on the PVC exactly as it was — it becomes a point-in-time backup from the
+moment you scaled the app down. Reverting is removing one field and
+restarting; the app finds the file untouched and picks up where it left off.
+
+Three things make that guarantee weaker, all of them things you have to ask
+for explicitly:
+
+- **`--prune-orphans` writes to the source.** It deletes rows from the SQLite
+  file. It is the only operation in this whole process that touches your
+  original data, and it is not passed by default. Every row it deletes is
+  named in the report — read them before agreeing.
+- **`--force` deletes every row in the PostgreSQL target** before copying. It
+  exists so a failed attempt can be retried, not to merge two datasets. It
+  cannot touch SQLite.
+- **Deleting the PVC deletes the file.** `local-path`'s reclaim policy is
+  `Delete`, so the fallback only exists as long as the PVC does. Keep it
+  until you're confident, and take a copy of the file if it matters.
+
+Everything you'd worry about losing comes across: Lists, Tasks, Folders,
+Sections, Tags, Check Items, Habits, Check-ins, Goals, Key Results, Focus
+Sessions, Timers, Stand-up entries, and Google account connections, with ids
+and relationships preserved exactly. You stay logged in, and connected Google
+accounts stay connected.
+
+The catch is that **going back only returns you to the moment you switched.**
+There is no tool to copy PostgreSQL to SQLite. Anything you add after the
+cutover exists only in PostgreSQL, so reverting a week later loses that week.
+Revert quickly if you're going to revert at all.
+
+### One-time setup
+
+Create a `tuk-tuk-db` item in the `homelab-supernova` vault (same vault as
+`tuk-tuk-auth`) with one field:
+
+| Field          | Value                                                     |
+| -------------- | --------------------------------------------------------- |
+| `DATABASE_URL` | `postgresql+psycopg://user:password@host:5432/tuk_tuk` |
+
+The `+psycopg` suffix is required — `app.db` accepts only the `postgresql`
+and `postgresql+psycopg` schemes, and psycopg3 drives both the async app and
+sync Alembic from this one string. No quotes, no trailing whitespace; the
+operator copies the field verbatim.
+
+Creating this item does **not** switch anything. The Deployment loads it via
+`secretRef` with `optional: true`, and env vars are only read at boot, so
+nothing changes until a pod restarts. It's safe to create it and then stop.
+
+The reason this works as a switch at all is ordering: `envFrom` applies its
+sources in sequence and later ones win, and `tuk-tuk-db` is listed after
+`backend-config`. So `DATABASE_URL` here overrides the SQLite default in
+`configmap.yaml`. **Don't edit the ConfigMap** — leaving it pinned at the
+SQLite path is what keeps the copy job's source URL correct and makes
+reverting a one-field deletion.
+
+### Cutover
+
+Read this through before starting. Step 4 is the point of no easy return,
+and steps 2–3 are where you find out whether it'll work.
+
+1. **Test the connection from the running app.** Settings → Database → Test
+   connection. It reports whether the host is reachable, whether the
+   credentials work, the server version, and whether the target database is
+   empty. It saves nothing and switches nothing — the URL you paste is
+   discarded when the probe finishes. Do this before touching anything
+   running; a typo or a firewall rule is much cheaper to find here.
+
+2. **Scale the backend to zero** so nothing writes to the SQLite file while
+   it's being copied:
+
+   ```bash
+   kubectl -n tuk-tuk scale deployment/backend --replicas=0
+   kubectl -n tuk-tuk get pods -w
+   ```
+
+   Wait for the pod to fully terminate. The PVC is `ReadWriteOnce`, so the
+   copy Job will sit `Pending` until the volume is released — that's the
+   safety net, not a problem to work around.
+
+3. **Run the copy and read the report:**
+
+   ```bash
+   kubectl -n tuk-tuk apply -f backend/chart/copy-db-job.yaml
+   kubectl -n tuk-tuk logs -f job/copy-db
+   ```
+
+   It migrates the empty target to head automatically, copies every table in
+   foreign-key order preserving ids, reseeds the PostgreSQL sequences, then
+   verifies its own work by comparing per-table row counts and maximum ids.
+   The output ends in `SUCCESS` or `FAILURE`.
+
+   **If it refuses, stop and read why.** Two refusals are expected and both
+   are deliberate:
+
+   - *Orphaned rows in the source.* Rows pointing at rows that no longer
+     exist. PostgreSQL enforces foreign keys and SQLite didn't, so they
+     cannot be inserted. The tool lists them by table and id. To delete
+     them, `kubectl -n tuk-tuk delete job copy-db`, add `--prune-orphans`
+     to the `args` in `copy-db-job.yaml`, and re-apply. This modifies your
+     SQLite file — it's the one step that does.
+   - *Target already has data.* Something is already in that PostgreSQL
+     database. If it's a previous failed attempt, add `--force` the same
+     way; it deletes every row in the target first. If it's something
+     else, use a different database.
+
+   Do not proceed to step 4 on anything but `SUCCESS`.
+
+4. **Scale back up.** The pod re-reads its environment and now boots against
+   PostgreSQL:
+
+   ```bash
+   kubectl -n tuk-tuk scale deployment/backend --replicas=1
+   kubectl -n tuk-tuk logs -f deployment/backend
+   ```
+
+   If PostgreSQL is unreachable the app refuses to start and names the host
+   it couldn't reach. It never silently falls back to the SQLite file —
+   that would serve stale data and accept writes into a database you'd
+   stopped looking at.
+
+5. **Verify before trusting it.** Settings → Database should now report
+   PostgreSQL with your host and database name. Check your Lists, Tasks,
+   Habits, and Goals are all there, and that any connected Google account
+   still shows as connected. Then **create one new Task** — that's the check
+   that the sequence reseed worked, and it's the failure you'd otherwise
+   hit at the worst moment.
+
+6. **Clean up the Job** once you're satisfied:
+
+   ```bash
+   kubectl -n tuk-tuk delete job copy-db
+   ```
+
+Leave the PVC alone. It's your rollback.
+
+### Reverting
+
+Remove the `DATABASE_URL` field from the `tuk-tuk-db` 1Password item (or
+delete the item), let the operator sync, then restart:
+
+```bash
+kubectl -n tuk-tuk rollout restart deployment/backend
+```
+
+With the override gone, `backend-config`'s SQLite URL applies again and the
+app boots against the untouched file. Confirm in Settings → Database.
+
+Remember what this costs: the file is current as of the moment you scaled
+down in step 2, so anything created in PostgreSQL after the cutover is not
+in it. There's no tool to copy back.
+
+### Don't scale beyond one replica
+
+Moving off the PVC makes horizontal scaling look available. It isn't
+supported, and the worst failure is silent: the login throttle counts
+consecutive failures in process memory, so N replicas behind a round-robin
+balancer weaken brute-force protection roughly N-fold with no error
+anywhere. Migrations also run on every boot of every replica with no
+advisory lock, and the Inbox seed is an unguarded read-then-insert with no
+unique constraint behind it. ADR 0013 records this as an explicit "no".
+
 ## Deploy
 
 ```bash
 kubectl apply -k backend/chart
 ```
 
+`copy-db-job.yaml` is deliberately not in `kustomization.yaml`, so neither
+this command nor Flux applies it. A Job is a one-shot and Flux reconciles
+continuously; a re-applied copy would run against what is by then the live
+database. Apply it by hand, once, as part of the cutover above.
+
 ## Customise
 
-Edit `configmap.yaml` to change the log level, CORS origins, or database
-location, then re-apply. If you change the PVC mount path, keep `DATABASE_URL`
-in sync.
+Edit `configmap.yaml` to change the log level or CORS origins, then
+re-apply. If you change the PVC mount path, keep `DATABASE_URL` in sync. To
+change the *database* itself, don't edit the ConfigMap — see "Moving to
+PostgreSQL" above.

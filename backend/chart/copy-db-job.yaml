@@ -1,0 +1,93 @@
+#
+#  NOT listed in kustomization.yaml — this is applied by hand, never by Flux.
+#
+#  A Job is a one-shot, and Flux reconciles continuously. If this were a
+#  managed resource, a drift correction or a re-apply would re-run the copy
+#  against a target that is by then the live database, and the only way it
+#  could succeed there is with --force, which deletes every row first. So it
+#  stays out of the kustomization and is applied deliberately, once:
+#
+#      kubectl -n tuk-tuk apply -f backend/chart/copy-db-job.yaml
+#
+#  The image tag still carries the Flux setter marker so image automation
+#  keeps it in step with the Deployment — the copy must run the same schema
+#  the app will boot against.
+#
+#  Read backend/chart/README.md, "Moving to PostgreSQL", before applying.
+#  The Job assumes the backend Deployment is already scaled to zero: the
+#  copy requires that nothing is writing to the source, and the PVC is
+#  ReadWriteOnce, so the Job will stay Pending until the app pod is gone.
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: copy-db
+  namespace: tuk-tuk
+spec:
+  # No retry. A copy that failed mid-way leaves a target the tool itself
+  # refuses to describe as safe ("no partial state is guaranteed"), and a
+  # second attempt would hit the not-empty refusal anyway. The operator
+  # reads the logs and decides.
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      # Same reason as the Deployment: the Service named "backend" would
+      # otherwise inject BACKEND_PORT as a legacy service-link env var,
+      # which collides with the pydantic Settings.backend_port int field.
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: tuk-tuk-ghcr
+      # Matches the Deployment. The backend image is amd64, and the
+      # local-path PV carries its own node affinity, so the Job lands on
+      # the node holding the SQLite file.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+      containers:
+        - name: copy-db
+          image: ghcr.io/piwero/tuk-tuk/backend:2.10.2 # {"$imagepolicy": "tuk-tuk:backend"}
+          imagePullPolicy: Always
+          # The source is the SQLite file on the PVC, spelled with the sync
+          # driver the tool wants. It is read-only here: the copy tool only
+          # ever writes to the source under an explicit --prune-orphans,
+          # which is deliberately not passed below.
+          #
+          # To prune orphans, or to retry into a target that already has
+          # rows, delete this Job and re-apply it with the flag appended to
+          # args. Both are destructive and neither is the default:
+          #   --prune-orphans  deletes the offending rows from the SQLite
+          #                    source, and any rows those deletions orphan
+          #                    in turn (each one is named in the report).
+          #   --force          deletes EVERY row in the PostgreSQL target
+          #                    before copying. For retrying a failed
+          #                    attempt, not for merging two datasets.
+          args:
+            - sqlite:////data/tuk_tuk.db
+            - $(TARGET_DATABASE_URL)
+          command:
+            - python
+            - -m
+            - app.copy_database
+          env:
+            # The target, read from the same Secret the Deployment will
+            # later pick up as DATABASE_URL — one value, so the database
+            # copied into is by construction the database booted against.
+            - name: TARGET_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tuk-tuk-db
+                  key: DATABASE_URL
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: backend-data

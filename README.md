@@ -156,7 +156,15 @@ copy the other direction.
    the application.
 5. **Verify**: log in, confirm your Lists/Tasks/Habits/Goals are all
    present, and that any connected Google account still shows as
-   connected.
+   connected, and create one new Task — that last one is the check that
+   the PostgreSQL sequence reseed worked.
+
+**On Kubernetes, follow
+[`backend/chart/README.md`](backend/chart/README.md#moving-to-postgresql)
+instead.** The same five steps, but the copy runs as a one-off Job against
+the PVC rather than a shell, and "set `DATABASE_URL`" is a field on a
+1Password item rather than an edit to the ConfigMap. That doc also spells
+out what reverting costs.
 
 **Do not run more than one replica.** Moving off the PersistentVolumeClaim
 makes horizontal scaling look available; it is not supported, and the worst
