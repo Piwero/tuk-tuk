@@ -22,6 +22,7 @@ import {
 import { useLongPressReveal } from "../longPressReveal";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 interface GoalFormValues {
   title: string;
@@ -240,29 +241,23 @@ function KeyResultRow({
           }}
         />
         <div className="key-result-actions">
-          <button
-            type="button"
-            aria-label={`Move key result ${kr.name} up`}
+          <IconButton
+            icon="chevron-up"
+            label={`Move key result ${kr.name} up`}
             disabled={isFirst}
             onClick={() => onMove(kr.id, -1)}
-          >
-            <Icon name="chevron-up" size={16} />
-          </button>
-          <button
-            type="button"
-            aria-label={`Move key result ${kr.name} down`}
+          />
+          <IconButton
+            icon="chevron-down"
+            label={`Move key result ${kr.name} down`}
             disabled={isLast}
             onClick={() => onMove(kr.id, 1)}
-          >
-            <Icon name="chevron-down" size={16} />
-          </button>
-          <button
-            type="button"
-            aria-label={`Delete key result ${kr.name}`}
+          />
+          <IconButton
+            icon="x"
+            label={`Delete key result ${kr.name}`}
             onClick={() => onDelete(kr.id)}
-          >
-            <Icon name="x" size={16} />
-          </button>
+          />
         </div>
       </div>
       {kr.source !== "manual" && <p className="key-result-source">{SOURCE_NOTE[kr.source]}</p>}
