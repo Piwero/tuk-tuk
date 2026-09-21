@@ -108,6 +108,22 @@ type View =
 /** A stable identity for a View, for use as an effect dependency: two Views
  * with the same key show the same screen. Kept next to `View` so the encoding
  * moves with the type it encodes. */
+// The "Custom" sort option's label and hint (issue #260): a first-time user
+// otherwise has no way to tell the default order is their own manual drag
+// order rather than an arbitrary one. Shared by every "Sort by" control that
+// offers "custom", so the wording only lives in one place.
+function customSortOptionLabel(): string {
+  return hasReorderedTasks() ? "Custom (your order)" : "Custom (not yet arranged)";
+}
+
+function CustomSortHint({ id }: { id: string }): JSX.Element {
+  return (
+    <span id={id} className="hint">
+      {hasReorderedTasks() ? "Drag a Task to reorder it." : "Drag a Task to start your own order."}
+    </span>
+  );
+}
+
 function keyOfView(view: View): string {
   if (view === null) {
     return "";
@@ -1238,21 +1254,13 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                       onChange={(event) => setSortBy(event.target.value as SortBy)}
                       aria-describedby="sort-custom-hint"
                     >
-                      <option value="custom">
-                        {hasReorderedTasks() ? "Custom (your order)" : "Custom (not yet arranged)"}
-                      </option>
+                      <option value="custom">{customSortOptionLabel()}</option>
                       <option value="date">Date</option>
                       <option value="priority">Priority</option>
                       <option value="title">Title</option>
                     </select>
                   </label>
-                  {sortBy === "custom" && (
-                    <span id="sort-custom-hint" className="hint">
-                      {hasReorderedTasks()
-                        ? "Drag a Task to reorder it."
-                        : "Drag a Task to start your own order."}
-                    </span>
-                  )}
+                  {sortBy === "custom" && <CustomSortHint id="sort-custom-hint" />}
                 </div>
               </>
             )}
@@ -1341,21 +1349,13 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                     onChange={(event) => setSortBy(event.target.value as SortBy)}
                     aria-describedby="sort-custom-hint-all"
                   >
-                    <option value="custom">
-                      {hasReorderedTasks() ? "Custom (your order)" : "Custom (not yet arranged)"}
-                    </option>
+                    <option value="custom">{customSortOptionLabel()}</option>
                     <option value="date">Date</option>
                     <option value="priority">Priority</option>
                     <option value="title">Title</option>
                   </select>
                 </label>
-                {sortBy === "custom" && (
-                  <span id="sort-custom-hint-all" className="hint">
-                    {hasReorderedTasks()
-                      ? "Drag a Task to reorder it."
-                      : "Drag a Task to start your own order."}
-                  </span>
-                )}
+                {sortBy === "custom" && <CustomSortHint id="sort-custom-hint-all" />}
               </div>
             )}
             {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
