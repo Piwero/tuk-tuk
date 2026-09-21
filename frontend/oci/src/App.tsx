@@ -56,6 +56,7 @@ import {
 import { deriveOpenTaskCounts } from "./openCounts";
 import { type PaletteItem } from "./commandPalette";
 import { useRegisterShortcut } from "./shortcuts";
+import { looksLikeDatePhrase } from "./quickAdd";
 import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { AssistantView } from "./components/AssistantView";
@@ -769,8 +770,33 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
    * would discard anything done to the Task inside the window. So the toast
    * answers the question the user actually has instead — where did it go —
    * by naming the List, plus a way there when the Task isn't on screen. */
+  /** Opens a Task's detail regardless of the view currently on screen —
+   * switching to its List first when it isn't already visible, the same
+   * navigation the confirmation toast's "Show Task" action performs. */
+  function openTaskDetail(task: Task): void {
+    if (!isInCurrentView(task)) {
+      switchView({ kind: "list", id: task.list_id });
+    }
+    setSelectedTaskId(task.id);
+    setCalendarTask(task);
+  }
+
   function announceCreated(created: Task): void {
     const listName = lists.find((list) => list.id === created.list_id)?.name;
+    // Issue #259: prose typed into Quick-Add with no `@` token that reads
+    // like a date/time phrase ("dentist tuesday 3pm") saves as a plain,
+    // undated title — Quick-Add deliberately does not parse it (CONTEXT.md:
+    // no NL date parsing). The confirmation toast is the one guaranteed
+    // moment to say so, with a one-click way to correct it without
+    // retyping the title. This is a static keyword check on the saved
+    // title, never a date extraction.
+    if (created.due_date === null && looksLikeDatePhrase(created.title)) {
+      toasts.notify(`"${created.title}" — no date set`, {
+        label: "Add date",
+        run: () => openTaskDetail(created),
+      });
+      return;
+    }
     // With no name to give, say only what is certainly true rather than
     // naming a destination we can't identify.
     const message = listName === undefined ? "Task added" : `Added to ${listName}`;
@@ -780,7 +806,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
         ? undefined
         : {
             label: "Show Task",
-            run: () => switchView({ kind: "list", id: created.list_id }),
+            run: () => openTaskDetail(created),
           },
     );
   }

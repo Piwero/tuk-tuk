@@ -42,6 +42,26 @@ const PRIORITY_TOKENS: Record<string, Priority> = {
 /** Case-insensitive name equality — how tokens match Lists and Tags. */
 export const sameName = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
+/** Words that commonly show up in a spoken-English date/time phrase — day
+ * names, relative-day words, month names, and a clock-time shape like
+ * `3pm` / `3:30`. This is a static keyword/regex check, not date parsing
+ * (issue #259): it never extracts or resolves a date, it only flags that
+ * the saved title *reads like* one so the "no date was set" toast can say
+ * so, rather than staying silent about text Quick-Add's `@` vocabulary
+ * didn't recognise. Deliberately over-inclusive — a false positive just
+ * means an offered "Add date" action the user ignores. */
+const DATE_WORD_RE =
+  /\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|tonight|jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b/i;
+const CLOCK_TIME_RE = /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i;
+
+/** True when `title` — the text Quick-Add is about to save verbatim —
+ * contains a date/time-shaped word or phrase. Used only to decide whether
+ * to surface a "no date set" hint after a capture with no resolved
+ * schedule; never used to resolve one. */
+export function looksLikeDatePhrase(title: string): boolean {
+  return DATE_WORD_RE.test(title) || CLOCK_TIME_RE.test(title);
+}
+
 export interface ParseQuickAddOptions {
   /** True once a `~list` chip has already been picked from the dropdown —
    * the deliberate pick wins, so a raw `~token` is left in the title
