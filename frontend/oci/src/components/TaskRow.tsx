@@ -1,7 +1,9 @@
 import { type Task, type TaskList } from "../api";
 import { formatSchedule, isDueToday, isOverdue } from "../dates";
 import { useLongPressReveal } from "../longPressReveal";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import { PriorityIndicator } from "./PriorityIndicator";
 
 /** Carries a user-chosen Tag colour into CSS as a custom property, where the
@@ -249,9 +251,11 @@ export function TaskRow({
             )}
           </button>
           {showCheckProgress && task.check_items.length > 0 && (
-            <span className="check-progress">
-              {task.check_items.filter((item) => item.done).length}/{task.check_items.length}
-            </span>
+            <Hint hintKey="check-item">
+              <span className="check-progress" tabIndex={0}>
+                {task.check_items.filter((item) => item.done).length}/{task.check_items.length}
+              </span>
+            </Hint>
           )}
         </span>
       </div>
@@ -298,41 +302,33 @@ export function TaskRow({
         {hasActions && (
           <span className="row-actions">
             {onOpenActions !== undefined && (
-              <button
-                type="button"
-                aria-label={`Actions for ${task.title}`}
+              <IconButton
+                icon="list-checks"
+                label={`Actions for ${task.title}`}
                 onClick={() => onOpenActions(task)}
-              >
-                <Icon name="list-checks" />
-              </button>
+              />
             )}
             {onStartFocus !== undefined && onKebabClick !== undefined && (
-              <button
-                type="button"
-                aria-label={`Pomo quick-start menu for ${task.title}`}
+              <IconButton
+                icon="more-vertical"
+                label={`Pomo quick-start menu for ${task.title}`}
                 onClick={onKebabClick}
-              >
-                <Icon name="more-vertical" />
-              </button>
+              />
             )}
             {onStartFocus !== undefined && (
-              <button
-                type="button"
-                aria-label={`Start Focus for ${task.title}`}
+              <IconButton
+                icon="timer"
+                label={`Start Focus for ${task.title}`}
                 onClick={() => onStartFocus(task)}
-              >
-                <Icon name="timer" />
-              </button>
+              />
             )}
             {onDelete !== undefined && (
-              <button
-                type="button"
+              <IconButton
+                icon="trash-2"
                 className="row-action-danger"
-                aria-label={`Delete ${task.title}`}
+                label={`Delete ${task.title}`}
                 onClick={() => onDelete(task)}
-              >
-                <Icon name="trash-2" />
-              </button>
+              />
             )}
           </span>
         )}

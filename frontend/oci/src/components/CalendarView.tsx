@@ -54,6 +54,7 @@ import { clearedSchedule, formatDate, fromDayIso, localDayOf } from "../dates";
 import { makeListChannel, makePriorityChannel, makeTagChannel } from "../captureChannels";
 import { parseQuickAdd, sameName } from "../quickAdd";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import { readDragPayload, startDrag } from "../dnd";
 import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
@@ -61,6 +62,11 @@ import { TokenInput, type TokenChannel } from "./TokenInput";
 
 const MODES: CalendarMode[] = ["month", "week", "day"];
 const MODE_LABELS: Record<CalendarMode, string> = { month: "Month", week: "Week", day: "Day" };
+
+// Names the step a toolbar arrow takes, unit and all (#261 story 14) — a
+// bare "Previous"/"Next" doesn't say whether it moves a day, a week, or a
+// month, which changes with the current mode.
+const STEP_UNIT: Record<CalendarMode, string> = { month: "month", week: "week", day: "day" };
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 const WEEKDAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -1047,13 +1053,11 @@ export function CalendarView({
       <div className="calendar-toolbar">
         <h2>{calendarTitle(mode, anchor)}</h2>
         <div className="calendar-nav-buttons">
-          <button
-            type="button"
-            aria-label="Previous"
+          <IconButton
+            icon="chevron-left"
+            label={`Previous ${STEP_UNIT[mode]}`}
             onClick={() => setAnchor(shiftAnchor(mode, anchor, -1))}
-          >
-            <Icon name="chevron-left" />
-          </button>
+          />
           <button
             type="button"
             aria-label="Go to today"
@@ -1061,13 +1065,11 @@ export function CalendarView({
           >
             Today
           </button>
-          <button
-            type="button"
-            aria-label="Next"
+          <IconButton
+            icon="chevron-right"
+            label={`Next ${STEP_UNIT[mode]}`}
             onClick={() => setAnchor(shiftAnchor(mode, anchor, 1))}
-          >
-            <Icon name="chevron-right" />
-          </button>
+          />
         </div>
         <div className="calendar-modes">
           {MODES.map((candidate) => (
@@ -1081,15 +1083,13 @@ export function CalendarView({
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          aria-label="Refresh Events"
+        <IconButton
+          icon="refresh-cw"
+          label="Refetch Events from your connected calendars"
           className="calendar-refresh-button"
           onClick={() => void handleRefreshEvents()}
           disabled={refreshingEvents}
-        >
-          <Icon name="refresh-cw" />
-        </button>
+        />
         {/* Narrow screens only (index.css) — Unscheduled moves off-canvas
             there (issue #169) rather than eating half the grid's width, so
             it needs its own opener instead of always sitting in view. */}

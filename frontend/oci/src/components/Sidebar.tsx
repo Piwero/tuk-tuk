@@ -29,6 +29,7 @@ import { CreateMenu } from "./CreateMenu";
 import { FocusNavBadge } from "./FocusNavBadge";
 import { FolderForm } from "./FolderForm";
 import { Icon, type IconName } from "./Icon";
+import { IconButton } from "./IconButton";
 import { ListForm, type ListFormValues } from "./ListForm";
 import { Logo } from "./Logo";
 import { TagForm, type TagFormValues } from "./TagForm";
@@ -653,28 +654,24 @@ export function Sidebar({
             onSelect={onSelect}
           />
           <span className="row-actions">
-            <button
-              type="button"
-              aria-label={`Edit ${list.name}`}
+            <IconButton
+              icon="pencil"
+              label={`Edit ${list.name}`}
               onClick={() => setEditor({ mode: "edit-list", listId: list.id })}
-            >
-              <Icon name="pencil" />
-            </button>
-            <button
-              type="button"
-              aria-label={`Archive ${list.name}`}
+            />
+            <IconButton
+              icon="archive"
+              label={`Archive ${list.name}`}
+              descriptionKey="list-archive"
+              destructive
               onClick={() => void handleSetArchived(list, true)}
-            >
-              <Icon name="archive" />
-            </button>
-            <button
-              type="button"
+            />
+            <IconButton
+              icon="trash-2"
               className="row-action-danger"
-              aria-label={`Delete list ${list.name}`}
+              label={`Delete list ${list.name}`}
               onClick={() => void handleDeleteList(list)}
-            >
-              <Icon name="trash-2" />
-            </button>
+            />
           </span>
         </div>
       </li>
@@ -984,27 +981,21 @@ export function Sidebar({
                         </>
                       )}
                       <span className="row-actions">
-                        <button
-                          type="button"
-                          aria-label={`New list in ${folder.name}`}
+                        <IconButton
+                          icon="plus"
+                          label={`New list in ${folder.name}`}
                           onClick={() => setEditor({ mode: "create-list", folderId: folder.id })}
-                        >
-                          <Icon name="plus" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Rename folder ${folder.name}`}
+                        />
+                        <IconButton
+                          icon="pencil"
+                          label={`Rename folder ${folder.name}`}
                           onClick={() => setEditor({ mode: "rename-folder", folderId: folder.id })}
-                        >
-                          <Icon name="pencil" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Delete folder ${folder.name}`}
+                        />
+                        <IconButton
+                          icon="x"
+                          label={`Delete folder ${folder.name}`}
                           onClick={() => void handleDeleteFolder(folder)}
-                        >
-                          <Icon name="x" />
-                        </button>
+                        />
                       </span>
                     </div>
                   )}
@@ -1059,20 +1050,16 @@ export function Sidebar({
                       <span className="nav-label">{tag.name}</span>
                     </button>
                     <span className="row-actions">
-                      <button
-                        type="button"
-                        aria-label={`Edit tag ${tag.name}`}
+                      <IconButton
+                        icon="pencil"
+                        label={`Edit tag ${tag.name}`}
                         onClick={() => setEditor({ mode: "edit-tag", tagId: tag.id })}
-                      >
-                        <Icon name="pencil" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete tag ${tag.name}`}
+                      />
+                      <IconButton
+                        icon="x"
+                        label={`Delete tag ${tag.name}`}
                         onClick={() => void handleDeleteTag(tag)}
-                      >
-                        <Icon name="x" />
-                      </button>
+                      />
                     </span>
                   </div>
                 </li>
@@ -1124,13 +1111,11 @@ export function Sidebar({
                         </span>
                       )}
                       <span className="row-actions">
-                        <button
-                          type="button"
-                          aria-label={`Unarchive ${list.name}`}
+                        <IconButton
+                          icon="archive-restore"
+                          label={`Unarchive ${list.name}`}
                           onClick={() => void handleSetArchived(list, false)}
-                        >
-                          <Icon name="archive-restore" />
-                        </button>
+                        />
                       </span>
                     </div>
                   </li>

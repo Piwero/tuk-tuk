@@ -278,7 +278,9 @@ describe("Per-account failure handling and Event refresh (issue #109)", () => {
 
     await screen.findByRole("alert");
     expect(screen.queryByRole("link", { name: "Reconnect" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh Events" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Refetch Events from your connected calendars" }),
+    ).toBeInTheDocument();
   });
 
   it("offers Reconnect for a terminal failure", async () => {
@@ -315,7 +317,7 @@ describe("Per-account failure handling and Event refresh (issue #109)", () => {
     );
 
     await act(async () => {
-      screen.getByRole("button", { name: "Next" }).click();
+      screen.getByRole("button", { name: "Next month" }).click();
     });
 
     await waitFor(() =>
@@ -359,7 +361,7 @@ describe("Per-account failure handling and Event refresh (issue #109)", () => {
     );
 
     await act(async () => {
-      screen.getByRole("button", { name: "Refresh Events" }).click();
+      screen.getByRole("button", { name: "Refetch Events from your connected calendars" }).click();
     });
 
     await waitFor(() =>
