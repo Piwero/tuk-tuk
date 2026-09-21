@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeList, fakeTask, installFakeApi, INBOX } from "./test/fakeApi";
+import { fakeList, fakeTask, installFakeApi } from "./test/fakeApi";
 
 afterEach(() => {
   vi.restoreAllMocks();
