@@ -15,7 +15,9 @@ import {
 } from "../api";
 import { linkOf, type FocusLink } from "../focusLink";
 import { useFocusRun } from "../focusRunContext";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import { LinkSelect } from "./LinkSelect";
 import { TimerForm } from "./TimerForm";
 
@@ -221,49 +223,57 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             </div>
           ) : running === null ? (
             <>
-              <label>
-                Mode
-                <select
-                  aria-label="Mode"
-                  value={mode}
-                  onChange={(event) => setMode(event.target.value as FocusMode)}
-                >
-                  <option value="pomo">Pomo</option>
-                  <option value="stopwatch">Stopwatch</option>
-                </select>
-              </label>
+              <Hint hintKey="focus-mode">
+                <label>
+                  Mode
+                  <select
+                    aria-label="Mode"
+                    value={mode}
+                    onChange={(event) => setMode(event.target.value as FocusMode)}
+                  >
+                    <option value="pomo">Pomo</option>
+                    <option value="stopwatch">Stopwatch</option>
+                  </select>
+                </label>
+              </Hint>
               {mode === "pomo" && (
                 <>
-                  <label>
-                    Pomo minutes
-                    <input
-                      type="number"
-                      min={1}
-                      aria-label="Pomo minutes"
-                      value={pomoMinutes}
-                      onChange={(event) => setPomoMinutes(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Break minutes
-                    <input
-                      type="number"
-                      min={1}
-                      aria-label="Break minutes"
-                      value={breakMinutes}
-                      onChange={(event) => setBreakMinutes(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Long break minutes
-                    <input
-                      type="number"
-                      min={1}
-                      aria-label="Long break minutes"
-                      value={longBreakMinutes}
-                      onChange={(event) => setLongBreakMinutes(event.target.value)}
-                    />
-                  </label>
+                  <Hint hintKey="pomo">
+                    <label>
+                      Pomo minutes
+                      <input
+                        type="number"
+                        min={1}
+                        aria-label="Pomo minutes"
+                        value={pomoMinutes}
+                        onChange={(event) => setPomoMinutes(event.target.value)}
+                      />
+                    </label>
+                  </Hint>
+                  <Hint hintKey="break-minutes">
+                    <label>
+                      Break minutes
+                      <input
+                        type="number"
+                        min={1}
+                        aria-label="Break minutes"
+                        value={breakMinutes}
+                        onChange={(event) => setBreakMinutes(event.target.value)}
+                      />
+                    </label>
+                  </Hint>
+                  <Hint hintKey="long-break-minutes">
+                    <label>
+                      Long break minutes
+                      <input
+                        type="number"
+                        min={1}
+                        aria-label="Long break minutes"
+                        value={longBreakMinutes}
+                        onChange={(event) => setLongBreakMinutes(event.target.value)}
+                      />
+                    </label>
+                  </Hint>
                 </>
               )}
               <button
@@ -304,14 +314,16 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             </>
           )}
           {pendingBreak === null && running?.phase !== "break" && (
-            <LinkSelect
-              label="Link"
-              tasks={tasks}
-              habits={habits}
-              value={link}
-              disabled={running !== null}
-              onChange={setLink}
-            />
+            <Hint hintKey="focus-link">
+              <LinkSelect
+                label="Link"
+                tasks={tasks}
+                habits={habits}
+                value={link}
+                disabled={running !== null}
+                onChange={setLink}
+              />
+            </Hint>
           )}
         </div>
       </div>
@@ -320,7 +332,9 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
       {running === null && pendingBreak === null && (
         <aside className="focus-aside">
           <section className="focus-timers">
-            <h2>Timers</h2>
+            <Hint hintKey="timers-panel">
+              <h2 tabIndex={0}>Timers</h2>
+            </Hint>
             <ul aria-label="Timers">
               {timers.map((timer) =>
                 timerEditor?.mode === "edit" && timerEditor.id === timer.id ? (
@@ -335,29 +349,27 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                   </li>
                 ) : (
                   <li key={timer.id} className="focus-timer-preset">
-                    <button
-                      type="button"
-                      aria-label={`Start timer ${timer.name}`}
-                      disabled={running !== null}
-                      onClick={() => startFromTimer(timer)}
-                    >
-                      {timer.name}
-                    </button>
+                    <Hint hintKey="start-timer">
+                      <button
+                        type="button"
+                        aria-label={`Start timer ${timer.name}`}
+                        disabled={running !== null}
+                        onClick={() => startFromTimer(timer)}
+                      >
+                        {timer.name}
+                      </button>
+                    </Hint>
                     <span className="row-actions">
-                      <button
-                        type="button"
-                        aria-label={`Edit timer ${timer.name}`}
+                      <IconButton
+                        icon="pencil"
+                        label={`Edit timer ${timer.name}`}
                         onClick={() => setTimerEditor({ mode: "edit", id: timer.id })}
-                      >
-                        <Icon name="pencil" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete timer ${timer.name}`}
+                      />
+                      <IconButton
+                        icon="x"
+                        label={`Delete timer ${timer.name}`}
                         onClick={() => void handleDeleteTimer(timer)}
-                      >
-                        <Icon name="x" />
-                      </button>
+                      />
                     </span>
                   </li>
                 ),
@@ -371,9 +383,11 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                 onCancel={() => setTimerEditor(null)}
               />
             ) : (
-              <button type="button" onClick={() => setTimerEditor({ mode: "add" })}>
-                Add Timer
-              </button>
+              <Hint hintKey="add-timer">
+                <button type="button" onClick={() => setTimerEditor({ mode: "add" })}>
+                  Add Timer
+                </button>
+              </Hint>
             )}
           </section>
           <a

@@ -25,9 +25,18 @@ export const HINT_REGISTRY = {
   target: "The amount a Numeric Habit's Check-ins count toward in one day.",
   "habit-checkin": "Today's Check-in for this Habit.",
   "habit-step": "Adds one step toward today's Check-in. Tap a filled day in the strip to clear it.",
-  pomo: "A fixed-length countdown focus block, default 25 minutes.",
-  "break-minutes":
-    "How long you rest between Pomos. A long break replaces a short one every few rounds.",
+  pomo: "A fixed-length countdown focus block, default 25 minutes. Focus runs a Pomo followed by a break.",
+  "focus-mode":
+    "Pomo counts down for a fixed length and offers a break when it ends. Stopwatch counts up with no fixed length or break.",
+  "break-minutes": "How long you rest after each Pomo.",
+  "long-break-minutes":
+    "How long you rest after every 4th Pomo, replacing the short break for that round.",
+  "focus-link":
+    "Attaches this session to a Task or Habit, so the time is recorded against it instead of floating free.",
+  "add-timer": "Saves the current Mode and duration as a reusable Timer preset.",
+  "start-timer": "Starts a Focus Session using this Timer's saved Mode, duration and link.",
+  "timers-panel":
+    "Saved presets for recurring sessions. Starting one fills in the Mode, duration and Link above and begins right away.",
   assist:
     "Runs locally and only ever suggests — nothing is written until you confirm it, and it's never required.",
   "group-by": "Groups rows under headings — same rows, arranged into clusters.",
