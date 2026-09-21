@@ -21,6 +21,7 @@ import { HabitActionsMenu } from "./HabitActionsMenu";
 import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
 import { HabitHistory } from "./HabitHistory";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 
 type Editor = { mode: "create" } | { mode: "edit"; habitId: number } | null;
@@ -247,30 +248,36 @@ export function HabitsView(): JSX.Element {
         {showCheckInControls && (
           <div className="habit-checkin">
             {habit.type === "boolean" ? (
-              <button
-                type="button"
-                className="habit-check"
-                aria-label={complete ? `Undo check-in ${habit.name}` : `Check in ${habit.name}`}
-                aria-pressed={complete}
-                onClick={() => void toggleDay(habit, today)}
-              >
-                {complete && <Icon name="check" size={18} />}
-              </button>
-            ) : (
-              <>
-                <span className="habit-progress">
-                  {value} / {habit.target}
-                  {habit.unit === null ? "" : ` ${habit.unit}`}
-                  {complete && <span className="habit-done"> — Done</span>}
-                </span>
+              <Hint hintKey="habit-checkin">
                 <button
                   type="button"
-                  className="habit-step"
-                  aria-label={`Add ${habit.step} to ${habit.name}`}
-                  onClick={() => void addStep(habit)}
+                  className="habit-check"
+                  aria-label={complete ? `Undo check-in ${habit.name}` : `Check in ${habit.name}`}
+                  aria-pressed={complete}
+                  onClick={() => void toggleDay(habit, today)}
                 >
-                  +{habit.step}
+                  {complete && <Icon name="check" size={18} />}
                 </button>
+              </Hint>
+            ) : (
+              <>
+                <Hint hintKey="target">
+                  <span className="habit-progress" tabIndex={0}>
+                    {value} / {habit.target}
+                    {habit.unit === null ? "" : ` ${habit.unit}`}
+                    {complete && <span className="habit-done"> — Done</span>}
+                  </span>
+                </Hint>
+                <Hint hintKey="habit-step">
+                  <button
+                    type="button"
+                    className="habit-step"
+                    aria-label={`Add ${habit.step} to ${habit.name}`}
+                    onClick={() => void addStep(habit)}
+                  >
+                    +{habit.step}
+                  </button>
+                </Hint>
               </>
             )}
           </div>

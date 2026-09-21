@@ -1337,13 +1337,15 @@ main > form input {
  * on top of it. `prefers-reduced-motion` drops the fade so motion-sensitive
  * users get an instant show/hide instead. */
 .icon-button-wrap,
-.hint-wrap {
+.hint-wrap,
+.habit-strip-day-wrap {
   position: relative;
   display: inline-flex;
 }
 
 .icon-button-hint,
-.hint-popover {
+.hint-popover,
+.habit-strip-day-hint {
   position: absolute;
   top: 100%;
   left: 0;
@@ -1373,7 +1375,8 @@ main > form input {
 
 @media (prefers-reduced-motion: reduce) {
   .icon-button-hint,
-  .hint-popover {
+  .hint-popover,
+  .habit-strip-day-hint {
     animation: none;
   }
 }

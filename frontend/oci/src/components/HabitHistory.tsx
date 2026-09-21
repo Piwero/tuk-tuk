@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchHabitStats, putCheckIn, removeCheckIn, type Habit, type HabitStats } from "../api";
 import { formatDate, localDayOf } from "../dates";
 import { heatLevel, nextCheckIn } from "../habitStats";
+import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 
 const pad = (n: number): string => String(n).padStart(2, "0");
@@ -58,7 +59,11 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Eleme
   const monthStart = new Date(year, month, 1);
   return (
     <div className="habit-history">
-      <p className="habit-streak">Streak: {stats?.streak ?? 0}</p>
+      <Hint hintKey="streak">
+        <p className="habit-streak" tabIndex={0}>
+          Streak: {stats?.streak ?? 0}
+        </p>
+      </Hint>
       <div className="habit-month">
         <div className="habit-month-nav">
           <button type="button" aria-label="Previous month" onClick={() => stepMonth(-1)}>

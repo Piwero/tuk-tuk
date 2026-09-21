@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { type Habit } from "../api";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 export interface HabitActionsMenuProps {
   habit: Habit;
@@ -55,17 +56,15 @@ export function HabitActionsMenu({
 
   return (
     <div className="habit-actions-menu" ref={root}>
-      <button
-        type="button"
+      <IconButton
+        icon="more-vertical"
+        size={16}
         className="habit-actions-trigger"
-        aria-label={`Actions for ${habit.name}`}
-        title="Actions"
+        label={`Actions for ${habit.name}`}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-      >
-        <Icon name="more-vertical" size={16} />
-      </button>
+      />
       {open && (
         <ul role="menu" aria-label={`Actions for ${habit.name}`} className="habit-actions-list">
           <li role="none">
