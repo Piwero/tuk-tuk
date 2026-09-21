@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.0](https://github.com/Piwero/tuk-tuk/compare/v2.9.0...v2.10.0) - 2026-09-21
+
+### Features
+
+- **db:** PostgreSQL support, operator copy tool, and connection test UI ([7b7e047](https://github.com/Piwero/tuk-tuk/commit/7b7e0475e1455116b38bd3b17657b2251a73cdd5))
+
+### Bug Fixes
+
+- **lists:** Unlink Focus Sessions/Timers and delete Sections on List delete ([82282f1](https://github.com/Piwero/tuk-tuk/commit/82282f13346933e1d3b2605471a813bfcea34dd2))
+- **db:** Correct probe reporting, sequence reseed, and destructive copy flags ([2c6475a](https://github.com/Piwero/tuk-tuk/commit/2c6475ae66c574d1a692327ca093638d0a6fa5c5))
+
 ## [2.9.0](https://github.com/Piwero/tuk-tuk/compare/v2.8.0...v2.9.0) - 2026-09-19
 
 ### Features
