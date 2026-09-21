@@ -1178,7 +1178,16 @@ main > form input {
   display: flex;
   align-items: center;
   min-width: 0;
-  overflow: hidden;
+}
+
+/* Below the 620px container floor the row is a wrapping flex line, not the
+ * grid: `.task-row-date` would otherwise shrink toward nothing under
+ * pressure (min-width: 0 above lets it), squeezing the chip's text rather
+ * than wrapping it whole. `flex: none` holds it to its content's natural
+ * width, so `.task-row-meta`'s `flex-wrap` sends the whole chip to a new
+ * line instead — the "wrapped second line" degrade issue #257 asks for. */
+.tasks li.task-row .task-row-date {
+  flex: none;
 }
 
 /* Wherever the row is *not* a grid — the wrapped fallback and the Kanban

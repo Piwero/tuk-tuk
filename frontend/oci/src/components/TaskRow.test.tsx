@@ -1,6 +1,10 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import process from "node:process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { formatSchedule } from "../dates";
 import { fakeList, fakeTag, fakeTask } from "../test/fakeApi";
 import { TaskRow, type TaskRowProps } from "./TaskRow";
 
@@ -313,6 +317,74 @@ describe("TaskRow touch: Focus/Delete stay behind a long-press (#168)", () => {
 
     expect(onDelete).toHaveBeenCalled();
     expect(row()).not.toHaveAttribute("data-actions-open");
+  });
+});
+
+describe("due date chip is not clipped (issue #257)", () => {
+  // jsdom applies no stylesheet, so the layout claim — the date column is
+  // wide enough for the widest chip formatSchedule can produce, and nothing
+  // clips it with overflow: hidden — is checked against the CSS source
+  // itself, the same approach contentColumn.test.ts uses for its own
+  // container-query claim.
+  const tokensCss = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
+  const indexCss = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+
+  // A dated, timed Task with distinct start/end times is the widest shape
+  // formatSchedule produces: "Aug 27, 07:00–08:00".
+  const widestSchedule = formatSchedule({
+    start_date: "2026-08-27T07:00:00Z",
+    due_date: "2026-08-27T08:00:00Z",
+    is_all_day: false,
+  });
+
+  it("renders the full widest schedule string, front and back intact", () => {
+    renderRow({
+      task: fakeTask("Widest date", {
+        start_date: "2026-08-27T07:00:00Z",
+        due_date: "2026-08-27T08:00:00Z",
+        is_all_day: false,
+      }),
+    });
+    expect(screen.getByText(widestSchedule as string)).toBeInTheDocument();
+  });
+
+  it("sizes the aligned grid's date column to fit the widest chip", () => {
+    // ~7px per monospace char (--text-xs, --font-mono) is a conservative
+    // floor; a narrower column would clip the chip's leading characters.
+    const minWidth = widestSchedule!.length * 7;
+    const match = /--task-col-date:\s*(\d+)px/.exec(tokensCss);
+    expect(match, "--task-col-date not found").not.toBeNull();
+    const columnWidth = Number((match as RegExpExecArray)[1]);
+    expect(columnWidth).toBeGreaterThanOrEqual(minWidth);
+  });
+
+  it("never clips the date cell with overflow: hidden", () => {
+    // A right-justified, width-constrained cell with overflow: hidden crops
+    // from the *front* — exactly the "ug 27" bug this issue reports.
+    const rule = /\.task-row-list,\s*\n\.task-row-date\s*\{[^}]*\}/.exec(indexCss);
+    expect(rule, ".task-row-date rule not found").not.toBeNull();
+    expect((rule as RegExpExecArray)[0]).not.toMatch(/overflow:\s*hidden/);
+  });
+
+  it("holds the date chip to its natural width below the 620px grid floor", () => {
+    // Below the container floor the row is a wrapping flex line, not the
+    // grid: without `flex: none` here, `.task-row-date`'s `min-width: 0`
+    // (checked above) would let the chip shrink under pressure instead of
+    // the whole chip wrapping to its own line intact.
+    expect(indexCss).toMatch(/\.tasks li\.task-row \.task-row-date\s*\{\s*flex:\s*none;/);
+  });
+
+  it("carries the full value in title, as a hover/assistive-tech fallback", () => {
+    const task = fakeTask("Widest date", {
+      start_date: "2026-08-27T07:00:00Z",
+      due_date: "2026-08-27T08:00:00Z",
+      is_all_day: false,
+    });
+    renderRow({ task });
+    expect(screen.getByText(widestSchedule as string)).toHaveAttribute(
+      "title",
+      widestSchedule as string,
+    );
   });
 });
 

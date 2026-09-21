@@ -189,7 +189,12 @@
      flexes. */
   --task-col-priority: 16px; /* holds the glyph's box even at Priority None */
   --task-col-list: 104px;
-  --task-col-date: 88px;
+  /* Fits the widest chip formatSchedule produces — a date plus a start-end
+     time range ("Aug 27, 07:00–08:00", 20 monospace chars, issue #257). An
+     84px track fit only a bare time range and clipped the date's leading
+     edge, so two same-titled Tasks due on different days read as
+     duplicates. */
+  --task-col-date: 156px;
   --task-col-actions: 68px; /* reserved, so hover never reflows the row */
   --mobile-tab-bar-height: 56px; /* the mobile bottom tab bar (issue #170) */
   --control-height: 34px; /* inputs, buttons */
