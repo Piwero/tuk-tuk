@@ -17,6 +17,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** The running stage states its link as text, not as an inert select. */
+function stageLink(): Promise<HTMLElement> {
+  return within(screen.getByRole("main")).findByText(/Focusing on/);
+}
+
 function tick(ms: number): void {
   act(() => {
     vi.advanceTimersByTime(ms);
@@ -56,7 +61,7 @@ describe("Pomo quick-start menu", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 50:00 left" }));
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+    expect(await stageLink()).toHaveTextContent(task.title);
   });
 
   it("shows a built-in 25 min default plus Custom… when there are no saved Pomo Timers", async () => {
@@ -131,7 +136,7 @@ describe("Pomo quick-start menu", () => {
       ).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 50:00 left" }));
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+    expect(await stageLink()).toHaveTextContent(task.title);
   });
 
   it("Start Focus stays reachable from Actions", async () => {
@@ -146,7 +151,7 @@ describe("Pomo quick-start menu", () => {
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+    expect(await stageLink()).toHaveTextContent(task.title);
   });
 
   it("closes the menu on outside click", async () => {
@@ -215,7 +220,7 @@ describe("Pomo quick-start menu", () => {
       ).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 25:00 left" }));
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+    expect(await stageLink()).toHaveTextContent(task.title);
   });
 
   it("canceling the confirm leaves the running session untouched and starts nothing", async () => {
@@ -245,9 +250,7 @@ describe("Pomo quick-start menu", () => {
     // The original run against otherTask is still going, unlinked to task.
     expect(screen.getByRole("button", { name: /Focus timer running/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Focus timer running/ }));
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(
-      `task:${otherTask.id}`,
-    );
+    expect(await stageLink()).toHaveTextContent(otherTask.title);
   });
 
   it("the row no longer offers hover buttons for Focus or Pomo — both live behind Actions or right-click", async () => {

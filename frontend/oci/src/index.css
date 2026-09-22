@@ -97,6 +97,7 @@ fieldset button,
 .habits-view > button,
 .other-habits > button,
 .focus-timers > button,
+.focus-timers-footer .hint-wrap > button,
 .focus-history > button,
 .focus-view > button,
 .task-description > button,
@@ -125,6 +126,7 @@ fieldset button:hover,
 .habits-view > button:hover,
 .other-habits > button:hover,
 .focus-timers > button:hover,
+.focus-timers-footer .hint-wrap > button:hover,
 .focus-history > button:hover,
 .focus-view > button:hover,
 .task-description > button:hover,
@@ -3192,18 +3194,16 @@ li[data-overdue] .date-chip {
 
 /* ── Focus ───────────────────────────────────────────────────────── */
 
+/* The stage is the screen. Presets and statistics stack under it rather than
+   beside it: a 240px rail next to a centred 220px dial pushed the clock off
+   the screen's optical centre, and the stage's own controls were then laid
+   out in a column narrower than they needed. One centred column, capped at
+   the reading measure, keeps the clock where the eye lands. */
 .focus-view {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--space-6);
-  align-items: start;
-}
-
-/* Presets/stats sit beside the stage, not stacked below it, once there's room. */
-@media (min-width: 640px) {
-  .focus-view:has(.focus-aside) {
-    grid-template-columns: minmax(0, 1fr) 240px;
-  }
 }
 
 /* The stage: one bordered room holding the clock, the Task and the decisions. */
@@ -3211,12 +3211,30 @@ li[data-overdue] .date-chip {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-6);
+  gap: var(--space-5);
+  width: 100%;
+  padding: var(--space-8) var(--space-6);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--surface-card);
   text-align: center;
+}
+
+/* Which of the five states the stage is in, above the clock: the dial alone
+   can't say "Paused" or "On a break", and without it idle and running read
+   as the same screen. */
+.focus-phase {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.focus-stage[data-phase="focus"] .focus-phase,
+.focus-stage[data-phase="break"] .focus-phase {
+  color: var(--focus-accent);
 }
 
 /* The progress dial. It never animates and never loops — the ring is redrawn
@@ -3254,6 +3272,20 @@ li[data-overdue] .date-chip {
   stroke-linecap: round;
 }
 
+/* Paused: the dial recedes to ink so a glance tells running from stopped
+   without reading the clock. */
+.focus-stage[data-phase="paused"] .focus-dial-progress,
+.focus-stage[data-phase="paused"] .focus-clock {
+  color: var(--text-tertiary);
+  stroke: var(--text-tertiary);
+}
+
+/* Idle: the empty ring is a frame, not a reading — it must not look like a
+   Pomo sitting at zero progress. */
+.focus-stage[data-phase="idle"] .focus-dial-track {
+  stroke: var(--border-subtle);
+}
+
 .focus-stage-task {
   margin: 0;
   font-size: var(--text-sm);
@@ -3265,24 +3297,81 @@ li[data-overdue] .date-chip {
   font-weight: var(--weight-semibold);
 }
 
+/* Presets and statistics, under the stage — one card, the same width. */
 .focus-aside {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  width: 100%;
 }
 
 .focus-timer {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+  gap: var(--space-4);
+  width: 100%;
 }
 
-/* The honest "records nothing" note, trailing the secondary Cancel. */
-.focus-cancel-note {
+/* Setup reads as one short form — kind, length, link — rather than a
+   wrapping row of controls orbiting the clock. */
+.focus-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 320px;
+  text-align: left;
+}
+
+.focus-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   font-size: var(--text-xs);
-  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* The Hint wrapper is an inline-flex span around each field, so it has to
+   carry the field's width or the control collapses to its content. */
+.focus-setup .hint-wrap {
+  display: flex;
+}
+
+.focus-setup .hint-wrap > .focus-field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Three lengths that share one unit: label them once, not three times. */
+.focus-lengths {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.focus-lengths input {
+  width: 100%;
+  text-align: center;
+}
+
+.focus-lengths-unit {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.focus-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 .focus-clock {
@@ -3295,61 +3384,83 @@ li[data-overdue] .date-chip {
   color: var(--focus-accent);
 }
 
-/* Session controls (Start / Pause / Resume / Finish) carry the Focus plum. */
-.focus-timer > button {
+/* Session controls (Start / Pause / Resume / Finish) carry the Focus plum.
+   Filled is reserved for the one action that commits — Start, Finish, Start
+   break; everything else is an outline, so the row never shows two equal
+   plum buttons that mean different things. */
+.focus-actions > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: var(--control-height);
-  padding: 0 14px;
+  min-width: 112px;
+  height: 40px;
+  padding: 0 var(--space-5);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--focus-accent);
   color: var(--text-inverse);
   font-size: var(--text-md);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   white-space: nowrap;
   transition: background var(--duration-fast) var(--ease-out);
 }
 
-.focus-timer > button:hover {
+.focus-actions > button:hover {
   background: var(--plum-700);
 }
 
-/* Cancel sits beside Finish but must never be mistaken for it: an outline
-   rather than a filled plum, so the honest "records nothing" action reads as
-   secondary (#162). */
-.focus-timer > button.focus-cancel {
+.focus-actions > button:disabled {
+  background: var(--surface-hover);
+  color: var(--text-tertiary);
+  cursor: default;
+}
+
+.focus-actions > button.focus-secondary {
   background: transparent;
   border-color: var(--border-default);
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+.focus-actions > button.focus-secondary:hover {
+  background: var(--surface-hover);
+}
+
+/* Cancel is the quiet way out: no border, off the action row, with its
+   consequence stated beside it so it can never be mistaken for Finish
+   (#162). */
+.focus-cancel-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.focus-cancel-row > button.focus-cancel {
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
-.focus-timer > button.focus-cancel:hover {
+.focus-cancel-row > button.focus-cancel:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
 }
 
-.focus-timer label {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.focus-break-label {
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  color: var(--focus-accent);
+.focus-cancel-note {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .focus-break-offer {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-4);
 }
 
 .focus-break-offer p {
@@ -3357,40 +3468,10 @@ li[data-overdue] .date-chip {
   color: var(--text-secondary);
 }
 
-.focus-break-offer button {
-  display: inline-flex;
-  align-items: center;
-  height: var(--control-height);
-  padding: 0 14px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--focus-accent);
-  color: var(--text-inverse);
-  font-size: var(--text-md);
-  font-weight: var(--weight-medium);
-}
-
-.focus-break-offer button:hover {
-  background: var(--plum-700);
-}
-
-.focus-break-offer button + button {
-  margin-left: var(--space-2);
-  background: transparent;
-  border-color: var(--border-default);
-  color: var(--text-secondary);
-}
-
-.focus-break-offer button + button:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-}
-
 .focus-stats-link {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  align-self: flex-start;
+  gap: var(--space-2);
   color: var(--text-secondary);
   font-size: var(--text-sm);
 }
@@ -3399,9 +3480,22 @@ li[data-overdue] .date-chip {
   color: var(--focus-accent);
 }
 
+/* The presets card: one quiet panel under the stage, with its heading and
+   the "Add Timer" / Statistics actions on the same rule. */
+.focus-timers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
 .focus-timers h2,
 .focus-history h2,
 .focus-stats h2 {
+  margin: 0;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-caps);
@@ -3411,41 +3505,90 @@ li[data-overdue] .date-chip {
 
 .focus-timers ul {
   list-style: none;
-  margin: 0 0 var(--space-3);
+  margin: 0;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
+/* Nothing saved yet: the row is one calm sentence, not an empty gap above
+   a button (design-system "Content rules"). */
+.focus-timers-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.focus-timers-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
 .focus-timer-preset {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-}
-
-.focus-timer-preset > button:first-child {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
+  padding-right: var(--space-1);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-full);
   background: var(--surface-card);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
 }
 
-.focus-timer-preset > button:first-child:hover {
+.focus-timer-preset:hover {
   border-color: var(--focus-accent);
   background: var(--focus-soft);
+}
+
+/* The preset's own Start button. It is wrapped by `Hint` in a span, so this
+   cannot be `> button:first-child` — that selector matched nothing and the
+   pill rendered as a default bordered box. */
+.focus-timer-preset .hint-wrap,
+.focus-timer-preset .hint-wrap > button {
+  display: inline-flex;
+}
+
+.focus-timer-preset .hint-wrap > button {
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 var(--space-1) 0 14px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.focus-timer-preset:hover .hint-wrap > button {
   color: var(--focus-accent);
 }
 
-.focus-timer-preset:hover .row-actions {
+/* A preset's own edit/delete stay hidden until its pill is hovered or an
+   action is focused, like every other row in the app. */
+.focus-timer-preset .row-actions {
+  width: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.focus-timer-preset:hover .row-actions,
+.focus-timer-preset .row-actions:focus-within {
+  width: auto;
+  overflow: visible;
   visibility: visible;
+}
+
+.focus-timer-preset .row-actions button {
+  width: 24px;
+  height: 24px;
 }
 
 .focus-history ul {

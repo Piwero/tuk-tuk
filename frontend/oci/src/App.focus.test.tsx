@@ -170,6 +170,37 @@ describe("Stage", () => {
     expect(within(stage as HTMLElement).getByText("Records nothing")).toBeInTheDocument();
   });
 
+  it("names the phase above the clock, so idle, running and paused never read alike", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+
+    const phase = (): string | null =>
+      screen.getByRole("main").querySelector(".focus-phase")?.textContent ?? null;
+
+    expect(phase()).toBe("Pomo");
+    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), {
+      target: { value: "stopwatch" },
+    });
+    expect(phase()).toBe("Stopwatch");
+    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), { target: { value: "pomo" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(phase()).toBe("Focusing");
+
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(phase()).toBe("Paused");
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+    expect(phase()).toBe("Focusing");
+
+    // Running it out offers a break, then the break itself says so.
+    tick(25 * 60_000);
+    expect(await screen.findByRole("button", { name: "Start break" })).toBeInTheDocument();
+    expect(phase()).toBe("Break up next");
+    fireEvent.click(screen.getByRole("button", { name: "Start break" }));
+    expect(phase()).toBe("On a break");
+  });
+
   it("keeps presets and statistics beside the stage while idle, gone while running", async () => {
     installFakeApi();
     render(<App />);
@@ -368,7 +399,7 @@ describe("Linking", () => {
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
     // Already running against the task, no extra tap needed.
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+    expect(main().getByText("Write report", { selector: "strong" })).toBeInTheDocument();
 
     tick(60_000);
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
@@ -397,7 +428,7 @@ describe("Run persistence", () => {
 
     expect(await main().findByText("22:00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+    expect(main().getByText("Write report", { selector: "strong" })).toBeInTheDocument();
   });
 
   it("keeps a pause frozen while the view is away", async () => {

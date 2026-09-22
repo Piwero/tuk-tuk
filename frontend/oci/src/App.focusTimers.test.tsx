@@ -49,7 +49,8 @@ describe("Timers", () => {
 
     expect(main().getByText("30:00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Link" })).toHaveValue(`habit:${habit.id}`);
+    // A running session states its link as text — the inert select is gone.
+    expect(main().getByText("Reading", { selector: "strong" })).toBeInTheDocument();
 
     tick(60_000);
     expect(main().getByText("29:00")).toBeInTheDocument();

@@ -159,7 +159,10 @@ describe("acting on a Task from the command palette", () => {
       ).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 15:00 left" }));
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+    // A running stage states its link as text, not as an inert select.
+    expect(await within(screen.getByRole("main")).findByText(/Focusing on/)).toHaveTextContent(
+      task.title,
+    );
   });
 
   it("offers the 25-minute default plus Custom… when no Pomo Timer is saved", async () => {
@@ -189,7 +192,10 @@ describe("acting on a Task from the command palette", () => {
     fireEvent.click(within(dialog).getByRole("option", { name: "Custom…" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+    // A running stage states its link as text, not as an inert select.
+    expect(await within(screen.getByRole("main")).findByText(/Focusing on/)).toHaveTextContent(
+      task.title,
+    );
   });
 
   it("steps back from a picker to the verb list on Escape", async () => {
