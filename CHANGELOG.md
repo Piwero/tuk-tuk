@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.5](https://github.com/Piwero/tuk-tuk/compare/v2.10.4...v2.10.5) - 2026-09-22
+
+### Features
+
+- **ui:** Wire long-press touch reveal into hint popover ([4fe119e](https://github.com/Piwero/tuk-tuk/commit/4fe119ecbf8a386924c660133c52e44b560e6ba7))
+- **sidebar:** Keyboard-discoverable names for collapsed rail glyphs ([25b415a](https://github.com/Piwero/tuk-tuk/commit/25b415a47d9d20e3aff39b4d1e26b90893be52bf))
+- **calendar:** Add hints to toolbar controls and Unscheduled chips ([54ac9a1](https://github.com/Piwero/tuk-tuk/commit/54ac9a1bc175fbac1519e59ebf90c1b5852ab826))
+- **habits:** Make history strip, check-in control and Streak readable ([0260a76](https://github.com/Piwero/tuk-tuk/commit/0260a76f6c13fa77ccffc77a37bfcc8d4ef75039))
+- **focus:** Explain Pomo, break intervals, Link and the Timers panel ([d9c802b](https://github.com/Piwero/tuk-tuk/commit/d9c802b92f7a0d076b4a8ca6f43f921b622624aa))
+- **tasks:** Explain Smart Lists, Inbox, Lists vs Tags, Group/Sort by ([aabf13f](https://github.com/Piwero/tuk-tuk/commit/aabf13f407af49932d1d11b06a2862041bb0b0a7))
+- **ui:** Explain Key Result on a Task, Settings toggles, Assist sparkle, Stand-up empty state ([604c31e](https://github.com/Piwero/tuk-tuk/commit/604c31e05886eb33d89d970f7573194b4c5de4f3))
+
+### Bug Fixes
+
+- **ui:** Remove unused INBOX import in taskRowActionNames test ([1e66f8f](https://github.com/Piwero/tuk-tuk/commit/1e66f8f1481c3a4a65d192fbc65dfaf1aa941350))
+
 ## [2.10.4](https://github.com/Piwero/tuk-tuk/compare/v2.10.3...v2.10.4) - 2026-09-21
 
 ### Features
