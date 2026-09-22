@@ -14,10 +14,11 @@ interface SortBySelectProps {
  * the option wording, the "Custom" explanation and the hint treatment can't
  * drift apart between the two places they appear.
  *
- * The "Custom" copy (issue #260) leans on whether the user has ever
- * drag-reordered: the underlying order always exists, so a first-time user
- * would otherwise see an arbitrary-looking sequence under a label that
- * sounds deliberate. */
+ * The "Custom" option reads plainly (#280): whether the user has arranged
+ * tasks yet is stated once, in the helper line beside the control, rather
+ * than hidden inside the option's own label in different words. The helper
+ * below (issue #260) is that single place — the underlying order always
+ * exists, so a first-time user sees it explained there. */
 export function SortBySelect({ value, onChange }: SortBySelectProps): JSX.Element {
   // `useId` rather than a fixed string: the All view and the List view can
   // both be mounted in the same document, and a duplicated id would be
@@ -42,9 +43,7 @@ export function SortBySelect({ value, onChange }: SortBySelectProps): JSX.Elemen
             // select.
             aria-describedby={value === "custom" ? hintId : undefined}
           >
-            <option value="custom">
-              {reordered ? "Custom (your order)" : "Custom (not yet arranged)"}
-            </option>
+            <option value="custom">Custom</option>
             <option value="date">Date</option>
             <option value="priority">Priority</option>
             <option value="title">Title</option>

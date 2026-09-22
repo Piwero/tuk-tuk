@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import { fetchTimers, type Task, type Timer } from "../api";
-import { useFocusRun } from "../focusRunContext";
+import { useStartPomo } from "../focusRunContext";
 
-const DEFAULT_POMO_MINUTES = 25;
-const POMO_LABEL = (minutes: number) => `Focus: ${minutes}min`;
+export const DEFAULT_POMO_MINUTES = 25;
+export const POMO_LABEL = (minutes: number): string => `Focus: ${minutes}min`;
 
 export interface PomoQuickStartMenuProps {
   /** The Task this quick-start session links to, regardless of any link a
@@ -26,7 +26,7 @@ export function PomoQuickStartMenu({
   position,
   onClose,
 }: PomoQuickStartMenuProps): JSX.Element {
-  const { running, finish, start } = useFocusRun();
+  const startPomoForTask = useStartPomo();
   const [timers, setTimers] = useState<Timer[]>([]);
   const [customOpen, setCustomOpen] = useState(false);
   const [customMinutes, setCustomMinutes] = useState(String(DEFAULT_POMO_MINUTES));
@@ -69,17 +69,9 @@ export function PomoQuickStartMenu({
   }, [customOpen, onClose]);
 
   async function startPomo(pomoMs: number): Promise<void> {
-    if (running !== null) {
-      const confirmed = window.confirm(
-        "A Focus session is already running. Finish it and start a new one?",
-      );
-      if (!confirmed) {
-        return;
-      }
-      await finish();
+    if (await startPomoForTask(task.id, pomoMs)) {
+      onClose();
     }
-    start({ mode: "pomo", pomoMs, link: `task:${task.id}` });
-    onClose();
   }
 
   function submitCustom(event: React.FormEvent): void {

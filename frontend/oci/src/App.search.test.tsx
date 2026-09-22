@@ -293,6 +293,20 @@ describe("Search", () => {
     expect(within(row).getByLabelText("Priority: High")).toBeInTheDocument();
   });
 
+  it("keeps the Inbox chip on a result found out of context", async () => {
+    installFakeApi({ lists: [INBOX], tasks: [fakeTask("Buy groceries")] });
+    render(<App />);
+
+    await searchFor("groceries");
+    const row = (
+      await screen.findByRole("button", { name: "Open details for Buy groceries" })
+    ).closest("li");
+    if (row === null) {
+      throw new Error("row not found");
+    }
+    expect(within(row).getByText("Inbox")).toBeInTheDocument();
+  });
+
   it("shows a distinct hint before a query and a distinct message when a query has no matches", async () => {
     installFakeApi({ tasks: [fakeTask("Buy groceries")] });
     render(<App />);

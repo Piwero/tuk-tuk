@@ -57,6 +57,54 @@ describe("Task dates in list views", () => {
     expect(within(rowFor("Upcoming")).getByText("Jul 10")).toBeInTheDocument();
   });
 
+  it("settles a date more than seven days past due: shown, announced overdue, no warning glyph", async () => {
+    installFakeApi({
+      tasks: [
+        fakeTask("Ancient", { due_date: "2026-06-20T00:00:00Z", is_all_day: true }),
+        fakeTask("Late", { due_date: "2026-07-01T00:00:00Z", is_all_day: true }),
+      ],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    await screen.findByRole("button", { name: "Open details for Ancient" });
+
+    // The date is still shown and still announced as overdue — only the
+    // visual alarm (the glyph a recent overdue keeps) goes. The glyph query
+    // scopes to the chip's own accessible name, never a class.
+    expect(within(rowFor("Ancient")).getByText("Jun 20")).toBeInTheDocument();
+    const settledChip = within(rowFor("Ancient")).getByLabelText("Overdue: Jun 20");
+    expect(settledChip.querySelector("svg")).toBeNull();
+
+    expect(within(rowFor("Late")).getByText("Jul 1")).toBeInTheDocument();
+    const recentChip = within(rowFor("Late")).getByLabelText("Overdue: Jul 1");
+    expect(recentChip.querySelector("svg")).not.toBeNull();
+  });
+
+  it("settles timed Tasks by local day and never settles completed or undated Tasks", async () => {
+    installFakeApi({
+      tasks: [
+        fakeTask("Timed ancient", { due_date: new Date(2026, 5, 20, 9, 0).toISOString() }),
+        fakeTask("Done ancient", {
+          due_date: "2026-06-20T00:00:00Z",
+          is_all_day: true,
+          completed: true,
+        }),
+        fakeTask("No date", { sort_order: 1 }),
+      ],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    await screen.findByRole("button", { name: "Open details for Timed ancient" });
+
+    const timedChip = within(rowFor("Timed ancient")).getByLabelText(/Overdue:/);
+    expect(timedChip).toBeInTheDocument();
+    expect(timedChip.querySelector("svg")).toBeNull();
+    // A completed Task keeps its ordinary rendering, never the settled one:
+    // it is not announced as overdue at all.
+    expect(within(rowFor("Done ancient")).queryByLabelText(/Overdue:/)).not.toBeInTheDocument();
+    expect(rowFor("No date").textContent).not.toMatch(/Jun|Jul/);
+  });
+
   it("flags overdue cards on the kanban board too", async () => {
     const board = fakeList("Board", { view_mode: "kanban" });
     installFakeApi({

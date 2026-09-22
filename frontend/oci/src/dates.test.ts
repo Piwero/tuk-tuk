@@ -7,6 +7,7 @@ import {
   formatSchedule,
   fromDayIso,
   isDueToday,
+  isSettled,
   rescheduledToDay,
   shortDayLabel,
   taskZonedDate,
@@ -132,6 +133,58 @@ describe("isDueToday", () => {
     // suppresses the accent on a completed row itself.
     const done = fakeTask("Done", { due_date: "2026-08-27", is_all_day: true, completed: true });
     expect(isDueToday(done, now)).toBe(true);
+  });
+});
+
+describe("isSettled", () => {
+  const now = new Date("2026-08-27T09:00:00Z");
+
+  it("is false exactly seven days past due, true beyond", () => {
+    const seven = fakeTask("Week old", { due_date: "2026-08-20", is_all_day: true });
+    const eight = fakeTask("Settled", { due_date: "2026-08-19", is_all_day: true });
+    expect(isSettled(seven, now)).toBe(false);
+    expect(isSettled(eight, now)).toBe(true);
+  });
+
+  it("compares whole local days, never elapsed hours", () => {
+    const allDay = fakeTask("All-day", { due_date: "2026-08-20", is_all_day: true });
+    const timed = fakeTask("Timed", { due_date: "2026-08-20T09:00:00Z" });
+    // Seven days and almost eight is still not settled; the state flips at
+    // local midnight, never as an hour crosses.
+    const almostEight = new Date("2026-08-27T23:59:00Z");
+    const eightDays = new Date("2026-08-28T00:00:00Z");
+    for (const task of [allDay, timed]) {
+      expect(isSettled(task, almostEight)).toBe(false);
+      expect(isSettled(task, eightDays)).toBe(true);
+    }
+  });
+
+  it("reads a timed Task by its local due day where that disagrees with the UTC day", () => {
+    // Node honours a runtime TZ switch for the local getters localDayOf
+    // reads, so this proves the comparison is local-day based without
+    // re-pinning the whole suite. Behind UTC, 00:30 UTC on the 21st is
+    // still the 20th locally: under UTC these two instants are 6 and 7 days
+    // after the UTC date (both unsettled), but locally they are 7 and 8
+    // days after the local date — settled only on the second.
+    const previousTz = process.env.TZ;
+    process.env.TZ = "Pacific/Midway";
+    try {
+      const task = fakeTask("Late night", { due_date: "2026-08-21T00:30:00Z" });
+      expect(isSettled(task, new Date("2026-08-27T12:00:00Z"))).toBe(false);
+      expect(isSettled(task, new Date("2026-08-28T12:00:00Z"))).toBe(true);
+    } finally {
+      process.env.TZ = previousTz;
+    }
+  });
+
+  it("is never settled when completed or unscheduled", () => {
+    const done = fakeTask("Done", {
+      due_date: "2026-07-01",
+      is_all_day: true,
+      completed: true,
+    });
+    expect(isSettled(done, now)).toBe(false);
+    expect(isSettled(fakeTask("Someday"), now)).toBe(false);
   });
 });
 

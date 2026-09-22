@@ -1,5 +1,5 @@
 import { type Task, type TaskList } from "../api";
-import { formatSchedule, isDueToday, isOverdue } from "../dates";
+import { formatSchedule, isDueToday, isOverdue, isSettled } from "../dates";
 import { useLongPressReveal } from "../longPressReveal";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
@@ -127,6 +127,7 @@ export function TaskRow({
   onSelectionClear,
 }: TaskRowProps): JSX.Element {
   const overdue = isOverdue(task);
+  const settled = isSettled(task);
   const dueToday = !completed && isDueToday(task);
   const hasDescription = task.description.trim() !== "";
   const repeats = task.recurrence !== null;
@@ -146,17 +147,21 @@ export function TaskRow({
   // desaturation); the triangle glyph then marks "overdue" apart from
   // "today", so every pair of states differs by more than hue:
   // today-vs-future is weight, overdue-vs-either is weight *and* the icon.
+  // A fourth state, "settled" (#280), is an overdue date past one full week:
+  // ordinary secondary text with no glyph, quieter than "future" — the alarm
+  // goes but the spoken "Overdue:" prefix stays.
   // One state, derived once, drives both the class and the spoken prefix
   // below rather than two parallel branches on the same booleans.
-  const dateState = overdue ? "overdue" : dueToday ? "today" : "future";
+  const dateState = overdue ? (settled ? "settled" : "overdue") : dueToday ? "today" : "future";
   const dateClass = dateState === "future" ? "date-chip" : `date-chip ${dateState}`;
   // The visible chip stays a bare date — a screen reader gets the state as
   // a spoken prefix instead, so sighted and non-sighted users read the same
-  // information rather than the sighted one getting more of it.
+  // information rather than the sighted one getting more of it. A settled
+  // date is still announced as overdue; only the visual alarm goes.
   const dateAccessibleName =
     schedule === null
       ? undefined
-      : dateState === "overdue"
+      : dateState === "overdue" || dateState === "settled"
         ? `Overdue: ${schedule}`
         : dateState === "today"
           ? `Due today: ${schedule}`
@@ -299,7 +304,7 @@ export function TaskRow({
               title={dateAccessibleName ?? undefined}
               aria-label={dateAccessibleName ?? undefined}
             >
-              {overdue && <Icon name="alert-triangle" size={12} />}
+              {dateState === "overdue" && <Icon name="alert-triangle" size={12} />}
               <span aria-hidden="true">{schedule}</span>
             </span>
           )}
