@@ -23,7 +23,6 @@ import {
   type CompletedOccurrence,
   type Event,
   type Folder,
-  type Priority,
   type Section,
   type SmartView,
   type Tag,
@@ -34,10 +33,9 @@ import {
 import { type CalendarMode } from "./calendar";
 import { clearedSchedule, localDayOf, rescheduledToDay } from "./dates";
 import { FocusRunProvider } from "./focusRunContext";
-import { PRIORITY_LABELS, type GroupBy, type SortBy } from "./grouping";
+import { type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
-  hasReorderedTasks,
   loadSidebarCollapsed,
   loadThemePreference,
   resolveThemePreference,
@@ -61,6 +59,8 @@ import { looksLikeDatePhrase } from "./quickAdd";
 import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { AssistantView } from "./components/AssistantView";
+import { AllViewControls } from "./components/AllViewControls";
+import { CustomSortHint, customSortOptionLabel } from "./components/CustomSortHint";
 import { CalendarView } from "./components/CalendarView";
 import { CommandPalette, type TaskActionHandlers } from "./components/CommandPalette";
 import { CompletedView } from "./components/CompletedView";
@@ -109,22 +109,6 @@ type View =
 /** A stable identity for a View, for use as an effect dependency: two Views
  * with the same key show the same screen. Kept next to `View` so the encoding
  * moves with the type it encodes. */
-// The "Custom" sort option's label and hint (issue #260): a first-time user
-// otherwise has no way to tell the default order is their own manual drag
-// order rather than an arbitrary one. Shared by every "Sort by" control that
-// offers "custom", so the wording only lives in one place.
-function customSortOptionLabel(): string {
-  return hasReorderedTasks() ? "Custom (your order)" : "Custom (not yet arranged)";
-}
-
-function CustomSortHint({ id }: { id: string }): JSX.Element {
-  return (
-    <span id={id} className="hint">
-      {hasReorderedTasks() ? "Drag a Task to reorder it." : "Drag a Task to start your own order."}
-    </span>
-  );
-}
-
 function keyOfView(view: View): string {
   if (view === null) {
     return "";
@@ -1269,102 +1253,16 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               </>
             )}
             {smartView === "all" && !completedMode && (
-              <div className="view-controls">
-                <label>
-                  List
-                  <select
-                    value={allFilters.listId ?? ""}
-                    onChange={(event) =>
-                      setAllFilters((current) => ({
-                        ...current,
-                        listId: event.target.value === "" ? null : Number(event.target.value),
-                      }))
-                    }
-                  >
-                    <option value="">Any</option>
-                    {lists.map((list) => (
-                      <option key={list.id} value={list.id}>
-                        {list.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Tag
-                  <select
-                    value={allFilters.tagId ?? ""}
-                    onChange={(event) =>
-                      setAllFilters((current) => ({
-                        ...current,
-                        tagId: event.target.value === "" ? null : Number(event.target.value),
-                      }))
-                    }
-                  >
-                    <option value="">Any</option>
-                    {tags.map((tag) => (
-                      <option key={tag.id} value={tag.id}>
-                        {tag.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Priority
-                  <select
-                    value={allFilters.priority ?? ""}
-                    onChange={(event) =>
-                      setAllFilters((current) => ({
-                        ...current,
-                        priority:
-                          event.target.value === "" ? null : (event.target.value as Priority),
-                      }))
-                    }
-                  >
-                    <option value="">Any</option>
-                    {(Object.keys(PRIORITY_LABELS) as Priority[]).map((priority) => (
-                      <option key={priority} value={priority}>
-                        {PRIORITY_LABELS[priority]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
-            {smartView === "all" && !completedMode && (
-              <div className="view-controls">
-                <Hint hintKey="group-by">
-                  <label>
-                    Group by
-                    <select
-                      value={groupBy}
-                      onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-                    >
-                      {/* "section" reruns as "None" here — All has no Sections
-                        of its own, so grouping by one is really no grouping. */}
-                      <option value="section">None</option>
-                      <option value="date">Date</option>
-                      <option value="priority">Priority</option>
-                      <option value="list">List</option>
-                    </select>
-                  </label>
-                </Hint>
-                <Hint hintKey="sort-by">
-                  <label>
-                    Sort by
-                    <select
-                      value={sortBy}
-                      onChange={(event) => setSortBy(event.target.value as SortBy)}
-                      aria-describedby="sort-custom-hint-all"
-                    >
-                      <option value="custom">{customSortOptionLabel()}</option>
-                      <option value="date">Date</option>
-                      <option value="priority">Priority</option>
-                      <option value="title">Title</option>
-                    </select>
-                  </label>
-                </Hint>
-                {sortBy === "custom" && <CustomSortHint id="sort-custom-hint-all" />}
-              </div>
+              <AllViewControls
+                filters={allFilters}
+                onFiltersChange={setAllFilters}
+                groupBy={groupBy}
+                onGroupByChange={setGroupBy}
+                sortBy={sortBy}
+                onSortByChange={setSortBy}
+                lists={lists}
+                tags={tags}
+              />
             )}
             {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
               <>
