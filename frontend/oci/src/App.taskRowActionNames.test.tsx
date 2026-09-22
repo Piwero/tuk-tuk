@@ -8,8 +8,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// #261: a Task row's revealed actions must carry four distinct names, not
-// four copies of one — the seam alone (IconButton) can't prove this at the
+// #261: a Task row's revealed actions must carry two distinct names, not
+// two copies of one — the seam alone (IconButton) can't prove this at the
 // unit level since each button is tested in isolation.
 describe("A Task row's action glyphs", () => {
   it("each carry a distinct accessible name naming both the action and the Task", async () => {
@@ -21,16 +21,14 @@ describe("A Task row's action glyphs", () => {
     const names = within(row)
       .getAllByRole("button")
       .map((button) => button.getAttribute("aria-label"))
-      .filter((name): name is string => name !== null && name.includes("Call the plumber"));
+      .filter(
+        (name): name is string =>
+          name !== null &&
+          name.includes("Call the plumber") &&
+          !name.startsWith("Open details for"),
+      );
 
     expect(new Set(names).size).toBe(names.length);
-    expect(names).toEqual(
-      expect.arrayContaining([
-        "Actions for Call the plumber",
-        "Pomo quick-start menu for Call the plumber",
-        "Start Focus for Call the plumber",
-        "Delete Call the plumber",
-      ]),
-    );
+    expect(names).toEqual(["Actions for Call the plumber", "Delete Call the plumber"]);
   });
 });

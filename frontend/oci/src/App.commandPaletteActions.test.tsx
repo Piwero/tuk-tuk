@@ -1,8 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeList, fakeTask, installFakeApi, INBOX } from "./test/fakeApi";
+import { fakeList, fakeTask, fakeTimer, installFakeApi, INBOX } from "./test/fakeApi";
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -24,7 +28,8 @@ describe("acting on a Task from the command palette", () => {
     render(<App />);
     const dialog = await openActions("Errands", "Call the plumber");
 
-    // complete(0) focus(1) reschedule(2) move(3)
+    // complete(0) focus(1) pomo(2) reschedule(3) move(4)
+    fireEvent.keyDown(dialog, { key: "ArrowDown" });
     fireEvent.keyDown(dialog, { key: "ArrowDown" });
     fireEvent.keyDown(dialog, { key: "ArrowDown" });
     fireEvent.keyDown(dialog, { key: "ArrowDown" });
@@ -124,6 +129,67 @@ describe("acting on a Task from the command palette", () => {
     const dialog = await screen.findByRole("dialog", { name: "Actions for Call the plumber" });
     expect(within(dialog).getByRole("option", { name: "Delete" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
+  });
+
+  it("starts a saved Pomo from Actions, one click deeper, by keyboard alone", async () => {
+    const task = fakeTask("Write report");
+    installFakeApi({
+      tasks: [task],
+      timers: [
+        fakeTimer("Deep Work 50", { duration_seconds: 3000 }),
+        fakeTimer("Quick 15", { duration_seconds: 900 }),
+      ],
+    });
+    render(<App />);
+    const dialog = await openActions("Inbox", "Write report");
+
+    fireEvent.click(within(dialog).getByRole("option", { name: "Start Pomo" }));
+
+    expect(await within(dialog).findByRole("option", { name: "Deep Work 50" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("option", { name: "Quick 15" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("option", { name: "Custom…" })).toBeInTheDocument();
+
+    // Picker order: Deep Work 50 (0), Quick 15 (1), Custom… (2).
+    fireEvent.keyDown(dialog, { key: "ArrowDown" });
+    fireEvent.keyDown(dialog, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Focus timer running, 15:00 left" }),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 15:00 left" }));
+    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
+  });
+
+  it("offers the 25-minute default plus Custom… when no Pomo Timer is saved", async () => {
+    installFakeApi({ tasks: [fakeTask("Write report")] });
+    render(<App />);
+    const dialog = await openActions("Inbox", "Write report");
+
+    fireEvent.click(within(dialog).getByRole("option", { name: "Start Pomo" }));
+
+    expect(within(dialog).getByRole("option", { name: "Focus: 25min" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("option", { name: "Focus: 25min" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Focus timer running, 25:00 left" }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("Custom… lands on the Focus view, where a one-off length is adjustable", async () => {
+    const task = fakeTask("Write report");
+    installFakeApi({ tasks: [task] });
+    render(<App />);
+    const dialog = await openActions("Inbox", "Write report");
+
+    fireEvent.click(within(dialog).getByRole("option", { name: "Start Pomo" }));
+    fireEvent.click(within(dialog).getByRole("option", { name: "Custom…" }));
+
+    expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
   });
 
   it("steps back from a picker to the verb list on Escape", async () => {

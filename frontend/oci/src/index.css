@@ -1564,6 +1564,15 @@ li[data-overdue] .date-chip {
   color: var(--text-danger);
 }
 
+/* A settled date is ordinary secondary text with no accent and no glyph —
+ * quieter than "future". The row still carries data-overdue (sorting,
+ * grouping and the spoken "Overdue:" prefix are untouched); only the visual
+ * alarm goes, so this undoes the weight li[data-overdue] adds above. */
+.task-row .date-chip.settled {
+  color: var(--text-secondary);
+  font-weight: var(--weight-regular);
+}
+
 /* ── Token input (Quick-Add bar) ─────────────────────────────────── */
 
 .token-input {

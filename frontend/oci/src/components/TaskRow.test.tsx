@@ -50,6 +50,19 @@ describe("TaskRow", () => {
     expect(meta?.textContent).toContain("work");
   });
 
+  it("keeps the List cell rendered when no List is passed, so the row grid doesn't reflow", () => {
+    // The All view suppresses the Inbox chip (issue #280) by passing no
+    // List — the empty cell must still hold its column open down a list
+    // that is mostly Inbox Tasks.
+    renderRow({ task: fakeTask("Filed nowhere") });
+
+    const row = screen
+      .getByRole("button", { name: "Open details for Filed nowhere" })
+      .closest("li");
+    expect(row?.querySelector(".task-row-list")).not.toBeNull();
+    expect(row?.querySelector(".task-row-list")?.textContent).toBe("");
+  });
+
   it("renders every metadata cell even when it is empty, so columns stay aligned", () => {
     // A cell left out would pull every cell after it into the wrong grid
     // track, and the columns would stop lining up down the list.
@@ -396,6 +409,25 @@ describe("due date chip is not clipped (issue #257)", () => {
   });
 });
 
+describe("settled date reads as ordinary text, light and dark (issue #280)", () => {
+  // Same approach as the #257 block above: jsdom applies no stylesheet, so
+  // the claim is checked against the CSS source itself.
+  const tokensCss = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
+  const indexCss = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+
+  it("styles the settled chip only through semantic tokens", () => {
+    // No hard-coded colour: the rule points at the secondary ink, which
+    // tokens.css re-points onto the dark ground — so the settled date reads
+    // as ordinary text in both themes with no theme-specific override.
+    const rule = /\.task-row \.date-chip\.settled\s*\{[^}]*\}/.exec(indexCss);
+    expect(rule, ".task-row .date-chip.settled rule not found").not.toBeNull();
+    expect((rule as RegExpExecArray)[0]).toMatch(/color:\s*var\(--text-secondary\)/);
+    expect((rule as RegExpExecArray)[0]).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+    expect(indexCss).not.toMatch(/\[data-theme="dark"\][^{]*\.date-chip\.settled/);
+    expect(tokensCss).toMatch(/:root\[data-theme="dark"\][\s\S]*?--text-secondary:/);
+  });
+});
+
 describe("overdue and repeat are communicated by more than colour (issue #258)", () => {
   // Pinned: Wednesday 2026-08-19, so "today"/"overdue"/"future" fixtures
   // land in their intended state regardless of when the suite runs.
@@ -440,11 +472,18 @@ describe("overdue and repeat are communicated by more than colour (issue #258)",
     expect(screen.getByLabelText("Due Sep 30")).toBeInTheDocument();
   });
 
-  it("marks overdue with a non-colour glyph, absent from today and future chips", () => {
+  it("marks overdue with a non-colour glyph, absent from settled, today and future chips", () => {
     renderRow({
-      task: fakeTask("Overdue task", { due_date: "2026-08-01T00:00:00Z", is_all_day: true }),
+      task: fakeTask("Overdue task", { due_date: "2026-08-18T00:00:00Z", is_all_day: true }),
     });
+    expect(dateChip("Overdue task")).toHaveClass("overdue");
     expect(dateChip("Overdue task").querySelector(".icon")).not.toBeNull();
+
+    renderRow({
+      task: fakeTask("Settled task", { due_date: "2026-08-01T00:00:00Z", is_all_day: true }),
+    });
+    expect(dateChip("Settled task")).toHaveClass("settled");
+    expect(dateChip("Settled task").querySelector(".icon")).toBeNull();
 
     renderRow({
       task: fakeTask("Today task", { due_date: "2026-08-19T00:00:00Z", is_all_day: true }),

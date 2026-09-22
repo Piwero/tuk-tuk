@@ -39,13 +39,14 @@ describe("SortBySelect", () => {
     expect(screen.getByText(/Drag a Task to start your own order/)).toBeInTheDocument();
   });
 
-  it("names the Custom option for whether the user has arranged tasks yet", () => {
+  it("names the Custom option plainly, before and after a drag", () => {
     const { rerender } = render(<SortBySelect value="custom" onChange={vi.fn()} />);
-    expect(screen.getByRole("option", { name: "Custom (not yet arranged)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Custom" })).toBeInTheDocument();
+    expect(screen.getByText(/Drag a Task to start your own order/)).toBeInTheDocument();
 
     markTasksReordered();
     rerender(<SortBySelect value="custom" onChange={vi.fn()} key="second" />);
-    expect(screen.getByRole("option", { name: "Custom (your order)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Custom" })).toBeInTheDocument();
     expect(screen.getByText(/Drag a Task to reorder it/)).toBeInTheDocument();
   });
 

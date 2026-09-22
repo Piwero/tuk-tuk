@@ -253,6 +253,22 @@ export function isOverdue(task: Task, now: Date = new Date()): boolean {
   return new Date(task.due_date).getTime() < now.getTime();
 }
 
+/** Past one full week of local days, lateness stops being news. */
+const SETTLED_AFTER_DAYS = 7;
+
+/** Past due by more than a full week of local days, so lateness is no longer
+ * news and the row settles into ordinary text. Reads the same `dueDay` the
+ * Today Smart List and the date groupings do, so the state flips at local
+ * midnight for all-day and timed Tasks alike. Completed and unscheduled
+ * Tasks are never settled. */
+export function isSettled(task: Task, now: Date = new Date()): boolean {
+  if (task.completed || task.due_date === null) {
+    return false;
+  }
+  const day = dueDay(task);
+  return day !== null && diffDays(localDayOf(now), day) > SETTLED_AFTER_DAYS;
+}
+
 /** Due on the viewer's current local day. Reads the same `dueDay` the Today
  * Smart List and the date groupings do, so "today" means one thing across the
  * app. Purely a display distinction: a task row paints today's date in the

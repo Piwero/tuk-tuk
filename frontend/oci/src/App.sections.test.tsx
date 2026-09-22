@@ -210,7 +210,7 @@ describe("Task drag within the list view", () => {
     expect(patch?.body).toEqual({ section_id: null, sort_order: 1024 });
   });
 
-  it("Custom sort explains itself: 'not yet arranged' until a drag happens, then 'your order' (issue #260)", async () => {
+  it("Custom sort reads 'Custom' while the helper line carries the arranged state (#260, #280)", async () => {
     const project = fakeList("Project");
     const backlog = fakeSection("Backlog", project.id, { sort_order: 1024 });
     const spec = fakeTask("Spec it", {
@@ -229,7 +229,7 @@ describe("Task drag within the list view", () => {
     await screen.findByText("Build it");
 
     const sortSelect = screen.getByRole("combobox", { name: "Sort by" });
-    expect(within(sortSelect).getByRole("option", { name: /not yet arranged/ })).toBeDefined();
+    expect(within(sortSelect).getByRole("option", { name: "Custom" })).toBeDefined();
     expect(screen.getByText("Drag a Task to start your own order.")).toBeInTheDocument();
     expect(sortSelect).toHaveAccessibleDescription("Drag a Task to start your own order.");
 
@@ -242,7 +242,7 @@ describe("Task drag within the list view", () => {
     });
     expect(
       within(screen.getByRole("combobox", { name: "Sort by" })).getByRole("option", {
-        name: /your order/,
+        name: "Custom",
       }),
     ).toBeDefined();
   });

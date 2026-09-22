@@ -46,8 +46,6 @@ interface TaskListViewProps {
   onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
   onSectionsChanged: (update: (current: Section[]) => Section[]) => void;
-  /** The task row's "Start Focus" shortcut, when the app offers Focus here. */
-  onStartFocus?: (task: Task) => void;
   /** Opens the command palette scoped to one Task (issue #205). */
   onOpenActions?: (task: Task) => void;
   /** The app-wide toast queue (see App.tsx). This view raises toasts but no
@@ -68,7 +66,6 @@ export function TaskListView({
   onChanged,
   onSelect,
   onSectionsChanged,
-  onStartFocus,
   onOpenActions,
   toasts,
 }: TaskListViewProps): JSX.Element {
@@ -355,14 +352,20 @@ export function TaskListView({
   }
 
   function renderTaskRow(task: Task): JSX.Element {
-    function handleKebabClick(event: React.MouseEvent<HTMLButtonElement>): void {
-      const rect = event.currentTarget.getBoundingClientRect();
-      setQuickStart({ task, position: { x: rect.left, y: rect.bottom } });
-    }
-
+    // The row shows only Actions and Delete (#280): Actions opens the full
+    // verb set the hover row used to sample, so Start Focus and the Pomo
+    // quick-start stay one click deeper through it. Right-click still opens
+    // the Pomo menu directly; the row keeps all four props for call sites
+    // that wire different subsets.
     // A single List's own view already says which List you're in — the
-    // badge only earns its place in views that span multiple Lists.
-    const taskList = listId === null ? lists.find((list) => list.id === task.list_id) : undefined;
+    // badge only earns its place in views that span multiple Lists. The
+    // Inbox badge is suppressed too (#280): it only names where a Task goes
+    // when the user declined to file it, the least surprising answer there
+    // is. Suppressed by the is_inbox flag, never by name; Search keeps its
+    // chips because a result found out of context still needs its origin.
+    const spanningList =
+      listId === null ? lists.find((list) => list.id === task.list_id) : undefined;
+    const taskList = spanningList?.is_inbox === true ? undefined : spanningList;
 
     return (
       <TaskRow
@@ -381,8 +384,6 @@ export function TaskListView({
         onSelectionClear={selection.clear}
         onToggle={completion.toggle}
         onSelect={onSelect}
-        onStartFocus={onStartFocus}
-        onKebabClick={onStartFocus === undefined ? undefined : handleKebabClick}
         onDelete={(t) => void remove(t)}
         onOpenActions={onOpenActions}
         draggable

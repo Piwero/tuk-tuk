@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { createTask, type Priority, type Tag, type Task, type TaskList } from "../api";
+import {
+  createTask,
+  fetchTimers,
+  type Priority,
+  type Tag,
+  type Task,
+  type TaskList,
+  type Timer,
+} from "../api";
 import {
   flattenGroups,
   groupItems,
@@ -19,6 +27,7 @@ import {
 } from "../captureChannels";
 import { PRIORITY_LABELS } from "../grouping";
 import { planPaletteCapture } from "../paletteCapture";
+import { DEFAULT_POMO_MINUTES, POMO_LABEL } from "./PomoQuickStartMenu";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
 /** What the palette does once a Task verb resolves. Every handler is
@@ -29,6 +38,9 @@ import { TokenInput, type TokenChannel } from "./TokenInput";
 export interface TaskActionHandlers {
   onComplete: (task: Task) => void;
   onStartFocus: (task: Task) => void;
+  /** Start a Pomo of `pomoMs` linked to the Task (issue #280's "Start Pomo"
+   * picker — the quick-start choices the hover row used to sample). */
+  onStartPomo: (task: Task, pomoMs: number) => void;
   /** `day` is a YYYY-MM-DD local day, or null to clear the schedule. */
   onReschedule: (task: Task, day: string | null) => void;
   onMove: (task: Task, listId: number) => void;
@@ -104,9 +116,46 @@ function pickerChoices(
   actions: TaskActionHandlers,
   lists: TaskList[],
   tags: Tag[],
+  pomoTimers: Timer[],
   close: () => void,
 ): Row[] {
   switch (picker) {
+    case "pomo": {
+      const timerRows = pomoTimers.map((timer) => ({
+        key: `pomo-${timer.id}`,
+        label: timer.name,
+        run: () => {
+          actions.onStartPomo(task, (timer.duration_seconds ?? 0) * 1000);
+          close();
+        },
+      }));
+      const fallback: Row[] =
+        timerRows.length > 0
+          ? timerRows
+          : [
+              {
+                key: "pomo-default",
+                label: POMO_LABEL(DEFAULT_POMO_MINUTES),
+                run: () => {
+                  actions.onStartPomo(task, DEFAULT_POMO_MINUTES * 60_000);
+                  close();
+                },
+              },
+            ];
+      return [
+        ...fallback,
+        // A one-off length lives in the Focus view, where the minutes field
+        // already is — the palette stays a picker, never a form.
+        {
+          key: "pomo-custom",
+          label: "Custom…",
+          run: () => {
+            actions.onStartFocus(task);
+            close();
+          },
+        },
+      ];
+    }
     case "reschedule": {
       const today = localDayOf(new Date());
       return [
@@ -206,6 +255,23 @@ export function CommandPalette({
   const [active, setActive] = useState(0);
   // Which value-taking verb's picker is open, or null for the verb list.
   const [picker, setPicker] = useState<TaskVerbId | null>(null);
+  // The saved Pomo Timers the "Start Pomo" picker offers — fetched only once
+  // that picker opens, since no other verb needs them.
+  const [pomoTimers, setPomoTimers] = useState<Timer[]>([]);
+  useEffect(() => {
+    if (picker !== "pomo") {
+      return;
+    }
+    let cancelled = false;
+    void fetchTimers().then((page) => {
+      if (!cancelled) {
+        setPomoTimers(page.items.filter((timer) => timer.mode === "pomo"));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [picker]);
   const inputRef = useRef<HTMLInputElement>(null);
   // Blocks a second createTask while the first is still in flight — an Enter
   // repeat, or Enter racing a click on the "New task" row.
@@ -262,9 +328,9 @@ export function CommandPalette({
               }
             },
           }))
-        : pickerChoices(picker, task, actions, lists, tags, onClose);
+        : pickerChoices(picker, task, actions, lists, tags, pomoTimers, onClose);
     return rows.filter((row) => matchesQuery(row.label, query));
-  }, [task, actions, picker, query, lists, tags, onClose]);
+  }, [task, actions, picker, query, lists, tags, pomoTimers, onClose]);
 
   // Jump mode reserves index 0 for the "New task" row and offsets the jump
   // results by one; scoped mode navigates `taskRows` directly.

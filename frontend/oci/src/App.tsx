@@ -32,7 +32,7 @@ import {
 } from "./api";
 import { type CalendarMode } from "./calendar";
 import { clearedSchedule, localDayOf, rescheduledToDay } from "./dates";
-import { FocusRunProvider } from "./focusRunContext";
+import { FocusRunProvider, useStartPomo } from "./focusRunContext";
 import { type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
@@ -714,35 +714,25 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
     void (async () => applyTaskChange(await updateTask(taskId, patch)))();
   }
 
-  const paletteActions: TaskActionHandlers = {
-    onComplete: (task) => {
-      if (task.completed) {
-        return;
-      }
-      toasts.push(
-        "Completed",
-        async () => applyTaskChange(await updateTask(task.id, { completed: true })),
-        () => {},
-      );
-    },
-    onStartFocus: (task) => switchView({ kind: "focus", task }),
-    onReschedule: (task, day) =>
-      patchTaskNow(task.id, day === null ? clearedSchedule() : rescheduledToDay(task, day)),
-    onMove: (task, listId) => patchTaskNow(task.id, { list_id: listId }),
-    onAddTag: (task, tagId) =>
-      patchTaskNow(task.id, {
-        tag_ids: [...new Set([...task.tags.map((tag) => tag.id), tagId])],
-      }),
-    onSetRepeat: (task, recurrence) => patchTaskNow(task.id, { recurrence }),
-    onDelete: (task) => {
-      changeTasks((current) => current.filter((t) => t.id !== task.id));
-      toasts.push(
-        "Task deleted",
-        () => deleteTask(task.id),
-        () => changeTasks((current) => [...current, task]),
-      );
-    },
-  };
+  function completeTaskNow(task: Task): void {
+    if (task.completed) {
+      return;
+    }
+    toasts.push(
+      "Completed",
+      async () => applyTaskChange(await updateTask(task.id, { completed: true })),
+      () => {},
+    );
+  }
+
+  function deleteTaskWithUndo(task: Task): void {
+    changeTasks((current) => current.filter((t) => t.id !== task.id));
+    toasts.push(
+      "Task deleted",
+      () => deleteTask(task.id),
+      () => changeTasks((current) => [...current, task]),
+    );
+  }
 
   /** Whether a Task belongs to the view currently on screen. False for a
    * computed view (Today, Search): membership is decided server-side by the
@@ -1020,15 +1010,30 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       <ShortcutsProvider>
         <ShellShortcuts onQuickAdd={() => setQuickAddOpen(true)} />
         {(paletteOpen || paletteTask !== null) && (
-          <CommandPalette
-            items={paletteItems}
+          <TaskPalette
             task={paletteTask ?? undefined}
+            items={paletteItems}
             lists={lists}
             tags={tags}
-            actions={paletteActions}
             defaultListId={
               selectedList?.id ?? lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? 0
             }
+            actions={{
+              onComplete: completeTaskNow,
+              onStartFocus: (task) => switchView({ kind: "focus", task }),
+              onReschedule: (task, day) =>
+                patchTaskNow(
+                  task.id,
+                  day === null ? clearedSchedule() : rescheduledToDay(task, day),
+                ),
+              onMove: (task, listId) => patchTaskNow(task.id, { list_id: listId }),
+              onAddTag: (task, tagId) =>
+                patchTaskNow(task.id, {
+                  tag_ids: [...new Set([...task.tags.map((tag) => tag.id), tagId])],
+                }),
+              onSetRepeat: (task, recurrence) => patchTaskNow(task.id, { recurrence }),
+              onDelete: deleteTaskWithUndo,
+            }}
             onTagCreated={(tag) => setTags((current) => [...current, tag])}
             onListCreated={(list) => setLists((current) => [...current, list])}
             onCreated={addCreatedTask}
@@ -1374,7 +1379,6 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 onChanged={smartView !== null ? changeTasksAndRecompute : changeTasks}
                 onSelect={setSelectedTaskId}
                 onSectionsChanged={setSections}
-                onStartFocus={(task) => switchView({ kind: "focus", task })}
                 onOpenActions={setPaletteTask}
                 toasts={toasts}
               />
@@ -1423,6 +1427,54 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
         </div>
       </ShortcutsProvider>
     </FocusRunProvider>
+  );
+}
+
+/** The command palette plus the Task verbs it offers (issue #205) — a
+ * module-scope child of FocusRunProvider so `onStartPomo` can reach the
+ * focus-run context. Props carry every closure it needs, so each stays
+ * current without re-creating a component type per render. */
+function TaskPalette({
+  task,
+  items,
+  lists,
+  tags,
+  defaultListId,
+  actions: verbs,
+  onTagCreated,
+  onListCreated,
+  onCreated,
+  onClose,
+}: {
+  task: Task | undefined;
+  items: PaletteItem[];
+  lists: TaskList[];
+  tags: Tag[];
+  defaultListId: number;
+  actions: Omit<TaskActionHandlers, "onStartPomo">;
+  onTagCreated: (tag: Tag) => void;
+  onListCreated: (list: TaskList) => void;
+  onCreated: (task: Task) => void;
+  onClose: () => void;
+}): JSX.Element {
+  const startPomo = useStartPomo();
+  const actions: TaskActionHandlers = {
+    ...verbs,
+    onStartPomo: (task, pomoMs) => void startPomo(task.id, pomoMs),
+  };
+  return (
+    <CommandPalette
+      items={items}
+      task={task}
+      lists={lists}
+      tags={tags}
+      actions={actions}
+      defaultListId={defaultListId}
+      onTagCreated={onTagCreated}
+      onListCreated={onListCreated}
+      onCreated={onCreated}
+      onClose={onClose}
+    />
   );
 }
 

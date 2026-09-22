@@ -294,3 +294,28 @@ export function useFocusRun(): FocusRunContextValue {
   }
   return ctx;
 }
+
+/** Start a Pomo linked to a Task, confirming first when a session is already
+ * running. The one way to begin a linked Pomo from any trigger — the
+ * right-click quick-start menu and the Actions palette's picker share it, so
+ * the confirm wording and the task link can't drift apart. Resolves true
+ * when a run started, false when the user cancelled the confirm. */
+export function useStartPomo(): (taskId: number, pomoMs: number) => Promise<boolean> {
+  const { running, finish, start } = useFocusRun();
+  return useCallback(
+    async (taskId: number, pomoMs: number): Promise<boolean> => {
+      if (running !== null) {
+        const confirmed = window.confirm(
+          "A Focus session is already running. Finish it and start a new one?",
+        );
+        if (!confirmed) {
+          return false;
+        }
+        await finish();
+      }
+      start({ mode: "pomo", pomoMs, link: `task:${taskId}` });
+      return true;
+    },
+    [running, finish, start],
+  );
+}

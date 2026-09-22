@@ -355,13 +355,15 @@ describe("Linking", () => {
     expect(api.focusSessions[0]?.habit_id).toBe(habit.id);
   });
 
-  it("starts a linked Pomo straight from the task row", async () => {
+  it("starts a linked Pomo from the task row's Actions", async () => {
     const task = fakeTask("Write report");
     const api = installFakeApi({ tasks: [task] });
     render(<App />);
     await screen.findByRole("button", { name: "Open details for Write report" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Focus for Write report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Write report" }));
+    const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
+    fireEvent.click(within(dialog).getByRole("option", { name: "Start Focus" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
     // Already running against the task, no extra tap needed.

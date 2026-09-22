@@ -9,10 +9,12 @@
 export type PaletteKind = "smart" | "view" | "list" | "folder" | "tag" | "task";
 
 /** The verbs the palette offers when it is opened scoped to one Task
- * (issue #205) — the same set the row hides behind hover. A non-null
+ * (issue #205) — the same set the row hides behind hover, plus the Pomo
+ * quick-start the hover row used to sample (#280). A non-null
  * `pickerHeading` marks the ones that open a picker inside the palette
  * surface rather than running straight away. */
-export type TaskVerbId = "complete" | "focus" | "reschedule" | "move" | "tag" | "repeat" | "delete";
+export type TaskVerbId =
+  "complete" | "focus" | "pomo" | "reschedule" | "move" | "tag" | "repeat" | "delete";
 
 export interface TaskVerb {
   id: TaskVerbId;
@@ -34,6 +36,7 @@ export function taskVerbs(task: { recurrence: string | null }): TaskVerb[] {
       pickerHeading: null,
     },
     { id: "focus", label: "Start Focus", pickerHeading: null },
+    { id: "pomo", label: "Start Pomo", pickerHeading: "Start which Pomo?" },
     { id: "reschedule", label: "Reschedule", pickerHeading: "Reschedule to…" },
     { id: "move", label: "Move to a List", pickerHeading: "Move to which List?" },
     { id: "tag", label: "Add a Tag", pickerHeading: "Add which Tag?" },

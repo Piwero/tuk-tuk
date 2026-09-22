@@ -134,13 +134,15 @@ describe("Pomo quick-start menu", () => {
     expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
   });
 
-  it("existing Focus button behavior is unchanged", async () => {
+  it("Start Focus stays reachable from Actions", async () => {
     const task = fakeTask("Write report");
     installFakeApi({ tasks: [task] });
     render(<App />);
     await screen.findByRole("button", { name: "Open details for Write report" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Focus for Write report" }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Write report" }));
+    const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
+    fireEvent.click(within(dialog).getByRole("option", { name: "Start Focus" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
@@ -186,10 +188,11 @@ describe("Pomo quick-start menu", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App />);
 
-    // Start a run against the other task via the existing Focus button.
-    fireEvent.click(
-      await screen.findByRole("button", { name: `Start Focus for ${otherTask.title}` }),
-    );
+    // Start a run against the other task via Actions' Start Focus verb.
+    await screen.findByRole("button", { name: `Actions for ${otherTask.title}` });
+    fireEvent.click(screen.getByRole("button", { name: `Actions for ${otherTask.title}` }));
+    const actions = await screen.findByRole("dialog", { name: `Actions for ${otherTask.title}` });
+    fireEvent.click(within(actions).getByRole("option", { name: "Start Focus" }));
     await screen.findByRole("heading", { name: "Focus" });
     tick(60_000);
 
@@ -221,9 +224,10 @@ describe("Pomo quick-start menu", () => {
     const api = installFakeApi({ tasks: [task, otherTask] });
     render(<App />);
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: `Start Focus for ${otherTask.title}` }),
-    );
+    await screen.findByRole("button", { name: `Actions for ${otherTask.title}` });
+    fireEvent.click(screen.getByRole("button", { name: `Actions for ${otherTask.title}` }));
+    const actions = await screen.findByRole("dialog", { name: `Actions for ${otherTask.title}` });
+    fireEvent.click(within(actions).getByRole("option", { name: "Start Focus" }));
     await screen.findByRole("heading", { name: "Focus" });
 
     const listsNav = await screen.findByRole("navigation", { name: "Lists" });
@@ -246,89 +250,21 @@ describe("Pomo quick-start menu", () => {
     );
   });
 
-  it("kebab button opens the menu just like right-click", async () => {
-    const task = fakeTask("Write report");
-    installFakeApi({
-      tasks: [task],
-      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
-    });
-    render(<App />);
-    await screen.findByRole("button", { name: "Open details for Write report" });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
-    );
-
-    const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
-    expect(within(menu).getByRole("menuitem", { name: "Deep Work 50" })).toBeInTheDocument();
-    expect(within(menu).getByRole("menuitem", { name: "Custom…" })).toBeInTheDocument();
-  });
-
-  it("kebab button starts a Pomo session with the same behavior as right-click", async () => {
-    const task = fakeTask("Write report");
-    installFakeApi({
-      tasks: [task],
-      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
-    });
-    render(<App />);
-    await screen.findByRole("button", { name: "Open details for Write report" });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
-    );
-
-    const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Deep Work 50" }));
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Focus timer running, 50:00 left" }),
-      ).toBeInTheDocument(),
-    );
-    // Still on the List view: no navigation happened.
-    expect(
-      screen.getByRole("button", { name: "Open details for Write report" }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 50:00 left" }));
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue(`task:${task.id}`);
-  });
-
-  it("kebab button closes the menu on Escape", async () => {
+  it("the row no longer offers hover buttons for Focus or Pomo — both live behind Actions or right-click", async () => {
     const task = fakeTask("Write report");
     installFakeApi({ tasks: [task] });
     render(<App />);
     await screen.findByRole("button", { name: "Open details for Write report" });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
-    );
-
-    await screen.findByRole("menu", { name: "Start Focus for Write report" });
-
-    fireEvent.keyDown(document, { key: "Escape" });
-
     expect(
-      screen.queryByRole("menu", { name: "Start Focus for Write report" }),
+      screen.queryByRole("button", { name: "Start Focus for Write report" }),
     ).not.toBeInTheDocument();
-  });
-
-  it("kebab button closes the menu on outside click", async () => {
-    const task = fakeTask("Write report");
-    installFakeApi({ tasks: [task] });
-    render(<App />);
-    await screen.findByRole("button", { name: "Open details for Write report" });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
-    );
-
-    await screen.findByRole("menu", { name: "Start Focus for Write report" });
-
-    fireEvent.mouseDown(document.body);
-
     expect(
-      screen.queryByRole("menu", { name: "Start Focus for Write report" }),
+      screen.queryByRole("button", { name: `Pomo quick-start menu for ${task.title}` }),
     ).not.toBeInTheDocument();
+    // The Pomo choices stay reachable: right-click still opens the menu.
+    const row = screen.getByRole("button", { name: "Open details for Write report" });
+    fireEvent.contextMenu(row.closest("li") as HTMLElement);
+    await screen.findByRole("menu", { name: "Start Focus for Write report" });
   });
 });

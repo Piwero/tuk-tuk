@@ -164,6 +164,54 @@ describe("All view: filter and sort controls", () => {
     expect(screen.getByRole("heading", { name: "Low" })).toBeInTheDocument();
   });
 
+  it("shows no List chip for Inbox Tasks in All, but keeps chips for named Lists", async () => {
+    const errands = fakeList("Errands");
+    installFakeApi({
+      lists: [INBOX, errands],
+      tasks: [fakeTask("Inbox task"), fakeTask("Errand", { list_id: errands.id })],
+    });
+    render(<App />);
+
+    await openAll();
+    await screen.findByRole("button", { name: "Open details for Inbox task" });
+
+    const inboxRow = screen
+      .getByRole("button", { name: "Open details for Inbox task" })
+      .closest("li")!;
+    expect(within(inboxRow).queryByText("Inbox")).not.toBeInTheDocument();
+
+    const errandRow = screen
+      .getByRole("button", { name: "Open details for Errand" })
+      .closest("li")!;
+    expect(within(errandRow).getByText("Errands")).toBeInTheDocument();
+  });
+
+  it("suppresses the chip by the Inbox flag, never by name", async () => {
+    const renamed = { ...INBOX, name: "Not Actually Inbox" };
+    const lookalike = fakeList("Inbox");
+    installFakeApi({
+      lists: [renamed, lookalike],
+      tasks: [
+        fakeTask("Filed nowhere", { list_id: renamed.id }),
+        fakeTask("Named inbox", { list_id: lookalike.id }),
+      ],
+    });
+    render(<App />);
+
+    await openAll();
+    await screen.findByRole("button", { name: "Open details for Filed nowhere" });
+
+    const flagged = screen
+      .getByRole("button", { name: "Open details for Filed nowhere" })
+      .closest("li")!;
+    expect(within(flagged).queryByText("Not Actually Inbox")).not.toBeInTheDocument();
+
+    const named = screen
+      .getByRole("button", { name: "Open details for Named inbox" })
+      .closest("li")!;
+    expect(within(named).getByText("Inbox")).toBeInTheDocument();
+  });
+
   it("grouping by List shows a heading per List, in sidebar order", async () => {
     const errands = fakeList("Errands");
     installFakeApi({
