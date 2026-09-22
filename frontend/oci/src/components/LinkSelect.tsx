@@ -4,10 +4,11 @@ import { type FocusLink } from "../focusLink";
 export interface LinkSelectProps {
   /** The select's accessible name (the timer and the forms differ). */
   label: string;
+  /** Lets a caller place the field in its own layout (e.g. Focus setup). */
+  className?: string;
   tasks: Task[];
   habits: Habit[];
   value: FocusLink;
-  disabled?: boolean;
   onChange: (link: FocusLink) => void;
 }
 
@@ -15,19 +16,18 @@ export interface LinkSelectProps {
  * one Habit. */
 export function LinkSelect({
   label,
+  className,
   tasks,
   habits,
   value,
-  disabled = false,
   onChange,
 }: LinkSelectProps): JSX.Element {
   return (
-    <label>
+    <label className={className}>
       {label}
       <select
         aria-label={label}
         value={value}
-        disabled={disabled}
         onChange={(event) => onChange(event.target.value as FocusLink)}
       >
         <option value="">No link</option>

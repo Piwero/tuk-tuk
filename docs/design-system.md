@@ -56,9 +56,28 @@ add a token first.
     deep work feels like a different room. Its screen is literally staged: the
     clock (inside a static progress dial), the linked Task and the
     pause/finish/cancel decisions sit together in one bordered `.focus-stage`
-    card; presets and statistics sit beside it, and step aside while a session
-    runs. Cancel stays visually secondary to Finish (outline, not filled) and
-    says it records nothing.
+    card, centred in a single column; presets and statistics sit in a quiet
+    `--surface-sunken` card *below* it, and step aside while a session runs.
+    The stage is one column, not a stage plus a side rail: a rail pulled the
+    clock off the screen's optical centre and squeezed the stage's own
+    controls into a narrower column than they needed.
+    The dial's box is reserved even while idle, so pressing Start changes
+    what the ring *says*, never where anything sits — the idle ring is
+    `--border-subtle` (a frame), a running one is plum, and a paused one
+    drops to `--text-tertiary` along with the clock.
+    A `.focus-phase` caps label above the clock names which of the five
+    states the stage is in (Pomo / Stopwatch / Focusing / Paused / On a
+    break / Break up next): the dial alone cannot say "paused", and without
+    it idle and running read as the same screen.
+    In the action row, *filled plum is reserved for the one action that
+    commits* — Start, Finish, Start break; Pause/Resume/Skip are outlines,
+    so the row never shows two equal plum buttons meaning different things.
+    Cancel is quieter still: borderless, on its own line below the row, with
+    "Records nothing" beside it as an `aria-describedby` sibling — the
+    button's accessible name stays exactly "Cancel".
+    A running session states its link as text ("Focusing on X"), never as a
+    disabled Link select; an inert control that cannot be used is noise on a
+    screen whose whole job is removing it.
   - User-chosen List/Tag colors come from the 8 curated `--swatch-*` values.
 - **Semantic aliases** (`--surface-*`, `--text-*`, `--border-*`, `--accent`,
   `--danger`, …) are what component CSS should reference; the raw ramps are

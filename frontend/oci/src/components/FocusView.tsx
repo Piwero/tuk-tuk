@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import {
   createTimer,
@@ -87,6 +87,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
   const [timerEditor, setTimerEditor] = useState<
     { mode: "add" } | { mode: "edit"; id: number } | null
   >(null);
+  const cancelNoteId = useId();
 
   const loadTimers = useCallback(async (): Promise<void> => {
     setTimers((await fetchTimers()).items);
@@ -179,26 +180,50 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
       : 0;
   const showDial = running !== null && running.mode === "pomo";
   const stageTask = running !== null ? linkLabel(running.link, tasks, habits) : null;
+  const paused = running !== null && running.pauseStartedAtMs !== null;
+
+  // One line above the clock saying which of the five states the stage is
+  // in. The dial alone can't say "paused" or "break" — and without it the
+  // idle screen and a running one look like the same screen (#162).
+  const phaseLabel =
+    pendingBreak !== null
+      ? "Break up next"
+      : running === null
+        ? mode === "pomo"
+          ? "Pomo"
+          : "Stopwatch"
+        : paused
+          ? "Paused"
+          : running.phase === "break"
+            ? "On a break"
+            : running.mode === "pomo"
+              ? "Focusing"
+              : "Stopwatch";
 
   return (
     <div className="focus-view">
       {/* The stage: clock, the Task being focused on, and the pause/finish/
           cancel decisions as one group. The dial shows progress statically —
-          Focus does not animate (design-system "Interaction"). */}
-      <div className="focus-stage">
-        <div className={showDial ? "focus-dial has-ring" : "focus-dial"}>
-          {showDial && (
+          Focus does not animate (design-system "Interaction"). The dial's
+          box is always reserved, idle included, so pressing Start changes
+          what the ring says rather than where everything sits. */}
+      <div className="focus-stage" data-phase={paused ? "paused" : (running?.phase ?? "idle")}>
+        <p className="focus-phase">{phaseLabel}</p>
+        <div className={showDial || running === null ? "focus-dial has-ring" : "focus-dial"}>
+          {(showDial || running === null) && (
             <svg className="focus-dial-ring" viewBox="0 0 120 120" aria-hidden="true">
               <circle className="focus-dial-track" cx="60" cy="60" r="54" pathLength={1} />
-              <circle
-                className="focus-dial-progress"
-                cx="60"
-                cy="60"
-                r="54"
-                pathLength={1}
-                strokeDasharray={1}
-                strokeDashoffset={1 - progress}
-              />
+              {showDial && (
+                <circle
+                  className="focus-dial-progress"
+                  cx="60"
+                  cy="60"
+                  r="54"
+                  pathLength={1}
+                  strokeDasharray={1}
+                  strokeDashoffset={1 - progress}
+                />
+              )}
             </svg>
           )}
           <p className="focus-clock">{formatClock(clockMs)}</p>
@@ -214,116 +239,140 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
               <p>
                 {`Nice work. Time for ${pendingBreak.long ? "a long break" : "a break"} (${formatClock(clockMs)}).`}
               </p>
-              <button type="button" onClick={startBreak}>
-                {`Start ${pendingBreak.long ? "long break" : "break"}`}
-              </button>
-              <button type="button" onClick={skipBreak}>
-                Skip
-              </button>
+              <div className="focus-actions">
+                <button type="button" onClick={startBreak}>
+                  {`Start ${pendingBreak.long ? "long break" : "break"}`}
+                </button>
+                <button type="button" className="focus-secondary" onClick={skipBreak}>
+                  Skip
+                </button>
+              </div>
             </div>
           ) : running === null ? (
             <>
-              <Hint hintKey="focus-mode">
-                <label>
-                  Mode
-                  <select
-                    aria-label="Mode"
-                    value={mode}
-                    onChange={(event) => setMode(event.target.value as FocusMode)}
-                  >
-                    <option value="pomo">Pomo</option>
-                    <option value="stopwatch">Stopwatch</option>
-                  </select>
-                </label>
-              </Hint>
-              {mode === "pomo" && (
-                <>
-                  <Hint hintKey="pomo">
-                    <label>
-                      Pomo minutes
-                      <input
-                        type="number"
-                        min={1}
-                        aria-label="Pomo minutes"
-                        value={pomoMinutes}
-                        onChange={(event) => setPomoMinutes(event.target.value)}
-                      />
-                    </label>
-                  </Hint>
-                  <Hint hintKey="break-minutes">
-                    <label>
-                      Break minutes
-                      <input
-                        type="number"
-                        min={1}
-                        aria-label="Break minutes"
-                        value={breakMinutes}
-                        onChange={(event) => setBreakMinutes(event.target.value)}
-                      />
-                    </label>
-                  </Hint>
-                  <Hint hintKey="long-break-minutes">
-                    <label>
-                      Long break minutes
-                      <input
-                        type="number"
-                        min={1}
-                        aria-label="Long break minutes"
-                        value={longBreakMinutes}
-                        onChange={(event) => setLongBreakMinutes(event.target.value)}
-                      />
-                    </label>
-                  </Hint>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={start}
-                disabled={mode === "pomo" && Number(pomoMinutes) < 1}
-              >
-                Start
-              </button>
+              {/* Setup reads top-down as one short form — what kind of
+                  session, how long, what it is for — instead of a wrapping
+                  row of controls orbiting the clock. */}
+              <div className="focus-setup">
+                <Hint hintKey="focus-mode">
+                  <label className="focus-field">
+                    Mode
+                    <select
+                      aria-label="Mode"
+                      value={mode}
+                      onChange={(event) => setMode(event.target.value as FocusMode)}
+                    >
+                      <option value="pomo">Pomo</option>
+                      <option value="stopwatch">Stopwatch</option>
+                    </select>
+                  </label>
+                </Hint>
+                {mode === "pomo" && (
+                  <div className="focus-lengths">
+                    <Hint hintKey="pomo">
+                      <label className="focus-field">
+                        Pomo
+                        <input
+                          type="number"
+                          min={1}
+                          aria-label="Pomo minutes"
+                          value={pomoMinutes}
+                          onChange={(event) => setPomoMinutes(event.target.value)}
+                        />
+                      </label>
+                    </Hint>
+                    <Hint hintKey="break-minutes">
+                      <label className="focus-field">
+                        Break
+                        <input
+                          type="number"
+                          min={1}
+                          aria-label="Break minutes"
+                          value={breakMinutes}
+                          onChange={(event) => setBreakMinutes(event.target.value)}
+                        />
+                      </label>
+                    </Hint>
+                    <Hint hintKey="long-break-minutes">
+                      <label className="focus-field">
+                        Long break
+                        <input
+                          type="number"
+                          min={1}
+                          aria-label="Long break minutes"
+                          value={longBreakMinutes}
+                          onChange={(event) => setLongBreakMinutes(event.target.value)}
+                        />
+                      </label>
+                    </Hint>
+                    <p className="focus-lengths-unit">Minutes</p>
+                  </div>
+                )}
+                <Hint hintKey="focus-link">
+                  <LinkSelect
+                    label="Link"
+                    className="focus-field"
+                    tasks={tasks}
+                    habits={habits}
+                    value={link}
+                    onChange={setLink}
+                  />
+                </Hint>
+              </div>
+              <div className="focus-actions">
+                <button
+                  type="button"
+                  className="focus-primary"
+                  onClick={start}
+                  disabled={mode === "pomo" && Number(pomoMinutes) < 1}
+                >
+                  Start
+                </button>
+              </div>
             </>
           ) : (
             <>
-              {running.phase === "break" && <p className="focus-break-label">On a break</p>}
-              {running.pauseStartedAtMs === null ? (
-                <button type="button" onClick={pause}>
-                  Pause
-                </button>
-              ) : (
-                <button type="button" onClick={resume}>
-                  Resume
-                </button>
-              )}
-              {running.phase === "break" ? (
-                <button type="button" onClick={cancel}>
-                  Skip break
-                </button>
-              ) : (
-                <>
-                  <button type="button" onClick={() => void finish()}>
+              <div className="focus-actions">
+                {running.pauseStartedAtMs === null ? (
+                  <button type="button" className="focus-secondary" onClick={pause}>
+                    Pause
+                  </button>
+                ) : (
+                  <button type="button" className="focus-secondary" onClick={resume}>
+                    Resume
+                  </button>
+                )}
+                {running.phase === "break" ? (
+                  <button type="button" className="focus-secondary" onClick={cancel}>
+                    Skip break
+                  </button>
+                ) : (
+                  <button type="button" className="focus-primary" onClick={() => void finish()}>
                     Finish
                   </button>
-                  <button type="button" className="focus-cancel" onClick={cancel}>
+                )}
+              </div>
+              {/* Cancel is the quiet way out, kept off the main action row so
+                  it can never be mistaken for Finish. Its consequence is a
+                  described-by sibling, not part of the label: the button's
+                  accessible name stays exactly "Cancel", and the warning
+                  still reaches assistive tech. */}
+              {running.phase !== "break" && (
+                <p className="focus-cancel-row">
+                  <button
+                    type="button"
+                    className="focus-cancel"
+                    aria-describedby={cancelNoteId}
+                    onClick={cancel}
+                  >
                     Cancel
                   </button>
-                  <span className="focus-cancel-note">Records nothing</span>
-                </>
+                  <span className="focus-cancel-note" id={cancelNoteId}>
+                    Records nothing
+                  </span>
+                </p>
               )}
             </>
-          )}
-          {pendingBreak === null && running?.phase !== "break" && (
-            <Hint hintKey="focus-link">
-              <LinkSelect
-                label="Link"
-                tasks={tasks}
-                habits={habits}
-                value={link}
-                disabled={running !== null}
-                onChange={setLink}
-              />
-            </Hint>
           )}
         </div>
       </div>
@@ -335,6 +384,11 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             <Hint hintKey="timers-panel">
               <h2 tabIndex={0}>Timers</h2>
             </Hint>
+            {timers.length === 0 && timerEditor === null && (
+              <p className="focus-timers-empty">
+                No saved Timers yet. Add one to start a session in a tap.
+              </p>
+            )}
             <ul aria-label="Timers">
               {timers.map((timer) =>
                 timerEditor?.mode === "edit" && timerEditor.id === timer.id ? (
@@ -383,33 +437,38 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                 onCancel={() => setTimerEditor(null)}
               />
             ) : (
-              <Hint hintKey="add-timer">
-                <button type="button" onClick={() => setTimerEditor({ mode: "add" })}>
-                  Add Timer
-                </button>
-              </Hint>
+              /* Add and Statistics share the card's foot: both are things you
+                 do *around* a session, not part of starting one. */
+              <div className="focus-timers-footer">
+                <Hint hintKey="add-timer">
+                  <button type="button" onClick={() => setTimerEditor({ mode: "add" })}>
+                    <Icon name="plus" size={16} />
+                    Add Timer
+                  </button>
+                </Hint>
+                <a
+                  href="/focus/stats"
+                  className="focus-stats-link"
+                  onClick={(event) => {
+                    if (
+                      event.defaultPrevented ||
+                      event.button !== 0 ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    onOpenStats();
+                  }}
+                >
+                  <Icon name="chart-column" size={16} />
+                  Statistics
+                </a>
+              </div>
             )}
           </section>
-          <a
-            href="/focus/stats"
-            className="focus-stats-link"
-            onClick={(event) => {
-              if (
-                event.defaultPrevented ||
-                event.button !== 0 ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey
-              ) {
-                return;
-              }
-              event.preventDefault();
-              onOpenStats();
-            }}
-          >
-            <Icon name="chart-column" size={16} />
-            Statistics
-          </a>
         </aside>
       )}
     </div>
