@@ -21,6 +21,12 @@ async function openAll(): Promise<void> {
   await screen.findByRole("heading", { name: "All" });
 }
 
+/** Opens the collapsed filter popover so its List/Tag/Priority controls are
+ * reachable — All hides them behind one button at rest (#281). */
+async function openFilters(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: /^Filters/ }));
+}
+
 function taskNames(): string[] {
   return screen
     .getAllByRole("button", { name: /^Open details for / })
@@ -28,23 +34,29 @@ function taskNames(): string[] {
 }
 
 describe("All view: filter and sort controls", () => {
-  it("offers List, Tag, Priority, Group by and Sort by controls only in All", async () => {
+  it("offers a Filters button, Group by and Sort by only in All; no bare filter combobox", async () => {
     installFakeApi();
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
 
-    // Inbox (a plain List view) has Group by / Sort by but no List/Tag/Priority filters.
+    // Inbox (a plain List view) has Group by / Sort by but no filters at all.
     await screen.findByRole("combobox", { name: "Add a task" });
     expect(screen.getByRole("combobox", { name: "Group by" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Sort by" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "List" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Filters/ })).not.toBeInTheDocument();
 
     await openAll();
+    expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "List" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Tag" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Priority" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Group by" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Sort by" })).toBeInTheDocument();
+
+    await openFilters();
     expect(screen.getByRole("combobox", { name: "List" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Tag" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Priority" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Group by" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Sort by" })).toBeInTheDocument();
   });
 
   it("Today and Next 7 Days show none of the filter or group/sort controls", async () => {
@@ -55,7 +67,7 @@ describe("All view: filter and sort controls", () => {
     fireEvent.click(await within(nav).findByRole("button", { name: "Today" }));
     await screen.findByRole("heading", { name: "Today" });
 
-    expect(screen.queryByRole("combobox", { name: "List" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Filters/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Group by" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Sort by" })).not.toBeInTheDocument();
   });
@@ -74,6 +86,7 @@ describe("All view: filter and sort controls", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open details for Errand" })).toBeInTheDocument();
 
+    await openFilters();
     fireEvent.change(screen.getByRole("combobox", { name: "List" }), {
       target: { value: String(errands.id) },
     });
@@ -106,6 +119,7 @@ describe("All view: filter and sort controls", () => {
     render(<App />);
 
     await openAll();
+    await openFilters();
     fireEvent.change(screen.getByRole("combobox", { name: "Tag" }), {
       target: { value: String(work.id) },
     });
