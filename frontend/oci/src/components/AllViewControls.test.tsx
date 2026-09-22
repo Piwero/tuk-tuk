@@ -62,15 +62,31 @@ describe("AllViewControls", () => {
     localStorage.clear();
   });
 
-  it("renders List, Tag, Priority, Group by and Sort by", () => {
+  it("shows a Filters button and Group by / Sort by at rest, with no bare filter combobox", () => {
     renderControls();
-    for (const name of ["List", "Tag", "Priority", "Group by", "Sort by"]) {
-      expect(screen.getByRole("combobox", { name })).toBeInTheDocument();
-    }
+    expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Group by" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Sort by" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "List" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Tag" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Priority" })).not.toBeInTheDocument();
   });
 
-  it("offers the caller's Lists and Tags alongside 'Any'", () => {
+  it("opens the popover to reveal List, Tag and Priority together", async () => {
+    const user = userEvent.setup();
     renderControls();
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+
+    expect(screen.getByRole("combobox", { name: "List" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Tag" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Priority" })).toBeInTheDocument();
+  });
+
+  it("offers the caller's Lists and Tags alongside 'Any'", async () => {
+    const user = userEvent.setup();
+    renderControls();
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+
     expect(screen.getByRole("option", { name: "Errands" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "urgent" })).toBeInTheDocument();
     expect(screen.getAllByRole("option", { name: "Any" })).toHaveLength(3);
@@ -79,6 +95,7 @@ describe("AllViewControls", () => {
   it("changes only the field its control owns, leaving the rest alone", async () => {
     const user = userEvent.setup();
     const seen = renderUnderState({ listId: null, tagId: 7, priority: "high" });
+    await user.click(screen.getByRole("button", { name: /Filters/ }));
     await user.selectOptions(screen.getByRole("combobox", { name: "List" }), "1");
 
     expect(seen.current).toEqual({ listId: 1, tagId: 7, priority: "high" });
@@ -87,9 +104,61 @@ describe("AllViewControls", () => {
   it("reads 'Any' back as no filter rather than as an id", async () => {
     const user = userEvent.setup();
     const seen = renderUnderState({ ...BLANK, listId: 1 });
+    await user.click(screen.getByRole("button", { name: /Filters/ }));
     await user.selectOptions(screen.getByRole("combobox", { name: "List" }), "");
 
     expect(seen.current).toEqual({ ...BLANK, listId: null });
+  });
+
+  it("reports the applied count in the button's accessible name", async () => {
+    const user = userEvent.setup();
+    renderUnderState({ listId: 1, tagId: 7, priority: null });
+    expect(screen.getByRole("button", { name: "Filters (2 applied)" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Filters (2 applied)" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Priority" }), "high");
+    expect(screen.getByRole("button", { name: "Filters (3 applied)" })).toBeInTheDocument();
+  });
+
+  it("renders a named, removable chip per applied filter", () => {
+    renderUnderState({ listId: 1, tagId: null, priority: "high" });
+    expect(screen.getByText("List: Errands")).toBeInTheDocument();
+    expect(screen.getByText("Priority: High")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove filter: List: Errands" }),
+    ).toBeInTheDocument();
+  });
+
+  it("removing a chip restores that dimension to unfiltered, leaving the rest alone", async () => {
+    const user = userEvent.setup();
+    const seen = renderUnderState({ listId: 1, tagId: 7, priority: "high" });
+    await user.click(screen.getByRole("button", { name: "Remove filter: List: Errands" }));
+
+    expect(seen.current).toEqual({ listId: null, tagId: 7, priority: "high" });
+  });
+
+  it("offers no clear-all with a single filter applied", () => {
+    renderControls({ filters: { listId: 1, tagId: null, priority: null } });
+    expect(screen.queryByRole("button", { name: "Clear all" })).not.toBeInTheDocument();
+  });
+
+  it("clear-all restores the full, unfiltered state once two or more filters are applied", async () => {
+    const user = userEvent.setup();
+    const seen = renderUnderState({ listId: 1, tagId: 7, priority: null });
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(seen.current).toEqual(BLANK);
+  });
+
+  it("closes the popover on Escape and returns focus to the button", async () => {
+    const user = userEvent.setup();
+    renderControls();
+    const button = screen.getByRole("button", { name: "Filters" });
+    await user.click(button);
+    expect(screen.getByRole("combobox", { name: "List" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("combobox", { name: "List" })).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
   });
 
   it("offers grouping by None, Date, Priority and List", () => {

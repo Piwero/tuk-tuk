@@ -1001,6 +1001,14 @@ main > form input {
   margin-top: var(--space-3);
 }
 
+/* All's single control row (#281): Group by / Sort by never wrap to a
+ * second row — only the filter chips wrap, inside the space the shrinkable
+ * trigger row is given. */
+.view-controls:has(.filter-menu) {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
 .view-controls + .view-controls {
   margin-top: var(--space-2);
 }
@@ -1012,11 +1020,87 @@ main > form input {
   font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .view-controls select {
   height: 28px;
   font-size: var(--text-sm);
+}
+
+/* The All view's collapsed filter control (#281): one row that never wraps
+ * on narrow screens (button + chips shrink to wrap internally instead),
+ * with the popover positioned off the trigger like CreateMenu's. */
+.filter-menu {
+  display: contents;
+}
+
+.filter-menu-trigger-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.filter-menu-button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 28px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.filter-menu-popover {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  min-width: 260px;
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.filter-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.filter-chip button {
+  display: flex;
+  align-items: center;
+  color: inherit;
+}
+
+.filter-menu-clear-all {
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-decoration: underline;
+  white-space: nowrap;
 }
 
 /* ── Task groups & rows ──────────────────────────────────────────── */
