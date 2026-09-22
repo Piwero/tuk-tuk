@@ -129,6 +129,30 @@ describe("Task dates in list views", () => {
     expect(card).toHaveAttribute("data-overdue", "true");
   });
 
+  it("never settles a card on the kanban board (#280 — Kanban is unchanged)", async () => {
+    const board = fakeList("Board", { view_mode: "kanban" });
+    installFakeApi({
+      lists: [INBOX, board],
+      tasks: [
+        fakeTask("Ancient card", {
+          list_id: board.id,
+          due_date: "2026-06-20T00:00:00Z",
+          is_all_day: true,
+        }),
+      ],
+    });
+    render(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Lists" });
+    fireEvent.click(await within(nav).findByRole("button", { name: "Board" }));
+    await screen.findByRole("button", { name: "Open details for Ancient card" });
+
+    // Same Task settles in the List view (see the test above), but the
+    // Kanban card keeps the warning glyph regardless of age.
+    const chip = screen.getByLabelText("Overdue: Jun 20");
+    expect(chip.querySelector("svg")).not.toBeNull();
+  });
+
   it("sorts by date with undated tasks last", async () => {
     installFakeApi({
       tasks: [
@@ -186,5 +210,36 @@ describe("Task dates in list views", () => {
         within(group).getByRole("button", { name: `Open details for ${title}` }),
       ).toBeInTheDocument();
     }
+  });
+
+  it("groups and sorts a settled (>7-day overdue) task as Overdue, not a bucket of its own (#280)", async () => {
+    installFakeApi({
+      tasks: [
+        fakeTask("Ancient", { due_date: "2026-06-20T00:00:00Z", is_all_day: true, sort_order: 1 }),
+        fakeTask("Recent", { due_date: "2026-07-01T00:00:00Z", is_all_day: true, sort_order: 2 }),
+      ],
+    });
+    render(<App />);
+    await screen.findByRole("button", { name: "Open details for Ancient" });
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
+      target: { value: "date" },
+    });
+    const overdueGroup = screen.getByRole("list", { name: "Tasks in Overdue" });
+    expect(
+      within(overdueGroup).getByRole("button", { name: "Open details for Ancient" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Tasks in Settled" })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
+      target: { value: "none" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort by" }), {
+      target: { value: "date" },
+    });
+    const titles = screen
+      .getAllByRole("button", { name: /^Open details for / })
+      .map((button) => button.getAttribute("aria-label"));
+    expect(titles).toEqual(["Open details for Ancient", "Open details for Recent"]);
   });
 });

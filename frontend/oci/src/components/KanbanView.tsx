@@ -110,6 +110,7 @@ export function KanbanView({
                   task={task}
                   completed={task.completed || completion.isPending(task.id)}
                   className="kanban-card"
+                  settlesOverdue={false}
                   showDate
                   showTags
                   showCheckProgress

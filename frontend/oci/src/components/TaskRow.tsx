@@ -56,6 +56,12 @@ export interface TaskRowProps {
   showDate: boolean;
   showTags: boolean;
   showCheckProgress: boolean;
+  /** Whether a long-overdue date settles into ordinary text (#280).
+   * Defaults on; the Kanban card opts out, since its card stays alarmed
+   * regardless of age — an overdue card there means "still in this
+   * column", not "still due soon", so the alarm doesn't go stale the way
+   * a list row's does. */
+  settlesOverdue?: boolean;
   /** The substring (typically a search query) to mark within the title —
    * absent everywhere but Search results (issue #167). Matches
    * case-insensitively; only the first occurrence is marked. */
@@ -63,8 +69,6 @@ export interface TaskRowProps {
   onToggle: (task: Task) => void;
   onSelect: (taskId: number) => void;
   /** Row actions — each optional; a view wires only what it offers. */
-  onStartFocus?: (task: Task) => void;
-  onKebabClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onDelete?: (task: Task) => void;
   /** Opens the command palette scoped to this Task (issue #205) — the full
    * verb set the hover actions only sample. Keyboard-reachable like every
@@ -108,11 +112,10 @@ export function TaskRow({
   showDate,
   showTags,
   showCheckProgress,
+  settlesOverdue = true,
   highlight,
   onToggle,
   onSelect,
-  onStartFocus,
-  onKebabClick,
   onDelete,
   onOpenActions,
   draggable,
@@ -127,14 +130,13 @@ export function TaskRow({
   onSelectionClear,
 }: TaskRowProps): JSX.Element {
   const overdue = isOverdue(task);
-  const settled = isSettled(task);
+  const settled = settlesOverdue && isSettled(task);
   const dueToday = !completed && isDueToday(task);
   const hasDescription = task.description.trim() !== "";
   const repeats = task.recurrence !== null;
   const checkItemsDone = task.check_items.filter((item) => item.done).length;
   const schedule = formatSchedule(task);
-  const hasActions =
-    onStartFocus !== undefined || onDelete !== undefined || onOpenActions !== undefined;
+  const hasActions = onDelete !== undefined || onOpenActions !== undefined;
 
   // Today's date reads in the accent, everything else in the secondary ink —
   // the accent used to be on every dated row, which made it mean nothing.
@@ -316,20 +318,6 @@ export function TaskRow({
                 icon="list-checks"
                 label={`Actions for ${task.title}`}
                 onClick={() => onOpenActions(task)}
-              />
-            )}
-            {onStartFocus !== undefined && onKebabClick !== undefined && (
-              <IconButton
-                icon="more-vertical"
-                label={`Pomo quick-start menu for ${task.title}`}
-                onClick={onKebabClick}
-              />
-            )}
-            {onStartFocus !== undefined && (
-              <IconButton
-                icon="timer"
-                label={`Start Focus for ${task.title}`}
-                onClick={() => onStartFocus(task)}
               />
             )}
             {onDelete !== undefined && (
