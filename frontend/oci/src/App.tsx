@@ -60,7 +60,6 @@ import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { AssistantView } from "./components/AssistantView";
 import { AllViewControls } from "./components/AllViewControls";
-import { CustomSortHint, customSortOptionLabel } from "./components/CustomSortHint";
 import { CalendarView } from "./components/CalendarView";
 import { CommandPalette, type TaskActionHandlers } from "./components/CommandPalette";
 import { CompletedView } from "./components/CompletedView";
@@ -81,6 +80,7 @@ import { SearchView, type SearchState } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutHints, ShortcutsProvider } from "./components/ShortcutLayer";
 import { Sidebar } from "./components/Sidebar";
+import { SortBySelect } from "./components/SortBySelect";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
@@ -1233,29 +1233,14 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                       </select>
                     </label>
                   </Hint>
-                  <Hint hintKey="sort-by">
-                    <label>
-                      Sort by
-                      <select
-                        value={sortBy}
-                        onChange={(event) => setSortBy(event.target.value as SortBy)}
-                        aria-describedby="sort-custom-hint"
-                      >
-                        <option value="custom">{customSortOptionLabel()}</option>
-                        <option value="date">Date</option>
-                        <option value="priority">Priority</option>
-                        <option value="title">Title</option>
-                      </select>
-                    </label>
-                  </Hint>
-                  {sortBy === "custom" && <CustomSortHint id="sort-custom-hint" />}
+                  <SortBySelect value={sortBy} onChange={setSortBy} />
                 </div>
               </>
             )}
             {smartView === "all" && !completedMode && (
               <AllViewControls
                 filters={allFilters}
-                onFiltersChange={setAllFilters}
+                onFiltersUpdate={setAllFilters}
                 groupBy={groupBy}
                 onGroupByChange={setGroupBy}
                 sortBy={sortBy}
