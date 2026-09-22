@@ -107,6 +107,15 @@ function runValuelessVerb(id: TaskVerbId, task: Task, actions: TaskActionHandler
   }
 }
 
+/** The three data sources a picker's options are built from — travelling
+ * together often enough (every branch below reads exactly one) that they're
+ * one param rather than three. */
+interface PickerData {
+  lists: TaskList[];
+  tags: Tag[];
+  pomoTimers: Timer[];
+}
+
 /** The choices a value-taking verb's picker offers, each wired to apply
  * itself and then close. The single place a `TaskVerbId` fans out to its
  * options. */
@@ -114,11 +123,10 @@ function pickerChoices(
   picker: TaskVerbId,
   task: Task,
   actions: TaskActionHandlers,
-  lists: TaskList[],
-  tags: Tag[],
-  pomoTimers: Timer[],
+  data: PickerData,
   close: () => void,
 ): Row[] {
+  const { lists, tags, pomoTimers } = data;
   switch (picker) {
     case "pomo": {
       const timerRows = pomoTimers.map((timer) => ({
@@ -328,7 +336,7 @@ export function CommandPalette({
               }
             },
           }))
-        : pickerChoices(picker, task, actions, lists, tags, pomoTimers, onClose);
+        : pickerChoices(picker, task, actions, { lists, tags, pomoTimers }, onClose);
     return rows.filter((row) => matchesQuery(row.label, query));
   }, [task, actions, picker, query, lists, tags, pomoTimers, onClose]);
 

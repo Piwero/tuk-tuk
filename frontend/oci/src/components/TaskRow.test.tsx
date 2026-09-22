@@ -199,29 +199,27 @@ describe("TaskRow", () => {
     expect(screen.getByText("1/2")).toBeInTheDocument();
   });
 
-  it("renders Focus and Delete only when their handlers are supplied", () => {
+  it("renders Actions and Delete only when their handlers are supplied (#280 — two hover actions, not four)", () => {
     const task = fakeTask("Buy milk");
     renderRow({ task });
-    expect(
-      screen.queryByRole("button", { name: "Start Focus for Buy milk" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Actions for Buy milk" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete Buy milk" })).not.toBeInTheDocument();
 
-    renderRow({ task, onStartFocus: vi.fn(), onDelete: vi.fn() });
-    expect(screen.getByRole("button", { name: "Start Focus for Buy milk" })).toBeInTheDocument();
+    renderRow({ task, onOpenActions: vi.fn(), onDelete: vi.fn() });
+    expect(screen.getByRole("button", { name: "Actions for Buy milk" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Buy milk" })).toBeInTheDocument();
   });
 
-  it("calls onStartFocus and onDelete with the task", () => {
-    const onStartFocus = vi.fn();
+  it("calls onOpenActions and onDelete with the task", () => {
+    const onOpenActions = vi.fn();
     const onDelete = vi.fn();
     const task = fakeTask("Buy milk");
-    renderRow({ task, onStartFocus, onDelete });
+    renderRow({ task, onOpenActions, onDelete });
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Focus for Buy milk" }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Buy milk" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete Buy milk" }));
 
-    expect(onStartFocus).toHaveBeenCalledWith(task);
+    expect(onOpenActions).toHaveBeenCalledWith(task);
     expect(onDelete).toHaveBeenCalledWith(task);
   });
 
@@ -271,12 +269,12 @@ describe("TaskRow touch: Focus/Delete stay behind a long-press (#168)", () => {
   }
 
   it("is closed at rest, even with Focus/Delete wired up", () => {
-    renderRow({ onStartFocus: vi.fn(), onDelete: vi.fn() });
+    renderRow({ onOpenActions: vi.fn(), onDelete: vi.fn() });
     expect(row()).not.toHaveAttribute("data-actions-open");
   });
 
   it("opens after holding a touch for the long-press window", () => {
-    renderRow({ onStartFocus: vi.fn(), onDelete: vi.fn() });
+    renderRow({ onOpenActions: vi.fn(), onDelete: vi.fn() });
 
     fireEvent.touchStart(row());
     act(() => {
@@ -287,7 +285,7 @@ describe("TaskRow touch: Focus/Delete stay behind a long-press (#168)", () => {
   });
 
   it("does not open on a plain, short tap", () => {
-    renderRow({ onStartFocus: vi.fn(), onDelete: vi.fn() });
+    renderRow({ onOpenActions: vi.fn(), onDelete: vi.fn() });
 
     fireEvent.touchStart(row());
     act(() => {
@@ -302,7 +300,7 @@ describe("TaskRow touch: Focus/Delete stay behind a long-press (#168)", () => {
   });
 
   it("cancels the long-press on a touch move (a scroll or drag)", () => {
-    renderRow({ onStartFocus: vi.fn(), onDelete: vi.fn() });
+    renderRow({ onOpenActions: vi.fn(), onDelete: vi.fn() });
 
     fireEvent.touchStart(row());
     act(() => {
@@ -318,7 +316,7 @@ describe("TaskRow touch: Focus/Delete stay behind a long-press (#168)", () => {
 
   it("closes again once something in the row is tapped", () => {
     const onDelete = vi.fn();
-    renderRow({ onStartFocus: vi.fn(), onDelete });
+    renderRow({ onOpenActions: vi.fn(), onDelete });
 
     fireEvent.touchStart(row());
     act(() => {
