@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.6](https://github.com/Piwero/tuk-tuk/compare/v2.10.5...v2.10.6) - 2026-09-22
+
+### Features
+
+- **tasks:** Quiet the Task row — settle old overdue dates, drop the repeated Inbox chip, plain Custom sort, two hover actions ([0076bd0](https://github.com/Piwero/tuk-tuk/commit/0076bd08c53ef5c7034502f5b643c15995e002a2))
+- **tasks:** Collapse the All view's three filters behind one control ([a33dc62](https://github.com/Piwero/tuk-tuk/commit/a33dc6293d776e2c3c4f1e696d306b29c322f6d6))
+- **tasks:** Keep Kanban cards permanently alarmed, drop stale hover actions ([3a11249](https://github.com/Piwero/tuk-tuk/commit/3a1124902ea9cb6ec71a7de945dfede7395a6c59))
+
 ## [2.10.5](https://github.com/Piwero/tuk-tuk/compare/v2.10.4...v2.10.5) - 2026-09-22
 
 ### Features
