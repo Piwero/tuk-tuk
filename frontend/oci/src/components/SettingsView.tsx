@@ -73,18 +73,20 @@ function AppearanceSettings({
   return (
     <fieldset className="settings-appearance">
       <legend>Theme</legend>
-      {THEME_OPTIONS.map((option) => (
-        <label key={option.value}>
-          <input
-            type="radio"
-            name="appearance-theme"
-            value={option.value}
-            checked={themePreference === option.value}
-            onChange={() => onThemeChange(option.value)}
-          />
-          {option.label}
-        </label>
-      ))}
+      <div className="settings-appearance-options">
+        {THEME_OPTIONS.map((option) => (
+          <label key={option.value}>
+            <input
+              type="radio"
+              name="appearance-theme"
+              value={option.value}
+              checked={themePreference === option.value}
+              onChange={() => onThemeChange(option.value)}
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
     </fieldset>
   );
 }
@@ -1086,165 +1088,289 @@ export function SettingsView({
     setAccounts(await fetchGoogleAccounts());
   }
 
+  const assistConfigured =
+    assistConfig !== null && (assistConfig.ollama_base_url !== null || assistConfig.model !== null);
+  const assistantConfigured =
+    assistantConfig !== null &&
+    (assistantConfig.base_url !== null ||
+      assistantConfig.model !== null ||
+      assistantConfig.api_key_set);
+  const googleNeedsReconnect = accounts.some(
+    (account) => account.connection_state === "needs_reconnect",
+  );
+  const showAiGroup = assistConfig !== null || assistantConfig !== null;
+  const showConnectionsGroup = googleStatus !== null;
+
   return (
     <div className="settings-view">
-      <section aria-label="Security" className="settings-section">
-        <h2>Security</h2>
-        <ChangePasswordForm />
-      </section>
-      <section aria-label="Appearance" className="settings-section">
-        <h2>Appearance</h2>
-        <AppearanceSettings themePreference={themePreference} onThemeChange={onThemeChange} />
-      </section>
-      <section aria-label="Features" className="settings-section">
-        <h2>Features</h2>
-        <div className="settings-feature-toggles">
-          <label>
-            <Hint hintKey="settings-feature-toggle">
-              <input
-                type="checkbox"
-                checked={sectionSettings.calendar}
-                onChange={() => void handleSectionToggle("calendar")}
-              />
-            </Hint>
-            Calendar
-          </label>
-          <label>
-            <Hint hintKey="settings-feature-toggle">
-              <input
-                type="checkbox"
-                checked={sectionSettings.goals}
-                onChange={() => void handleSectionToggle("goals")}
-              />
-            </Hint>
-            Goals
-          </label>
-          <label>
-            <Hint hintKey="settings-feature-toggle">
-              <input
-                type="checkbox"
-                checked={sectionSettings.habits}
-                onChange={() => void handleSectionToggle("habits")}
-              />
-            </Hint>
-            Habits
-          </label>
-          <label>
-            <Hint hintKey="settings-feature-toggle">
-              <input
-                type="checkbox"
-                checked={sectionSettings.focus}
-                onChange={() => void handleSectionToggle("focus")}
-              />
-            </Hint>
-            Focus
-          </label>
-          <label>
-            <Hint hintKey="settings-feature-toggle">
-              <input
-                type="checkbox"
-                checked={sectionSettings.assistant}
-                onChange={() => void handleSectionToggle("assistant")}
-              />
-            </Hint>
-            Assistant
-          </label>
-          <label>
-            <Hint hintKey="settings-feature-toggle">
-              <input
-                type="checkbox"
-                checked={standupEnabled}
-                onChange={() => void handleStandupToggle()}
-              />
-            </Hint>
-            Stand-up
-          </label>
-        </div>
-      </section>
-      <section aria-label="Active hours" className="settings-section">
-        <h2>Active hours</h2>
-        <ActiveHoursSettingsForm />
-      </section>
-      <section aria-label="Database" className="settings-section">
-        <h2>Database</h2>
-        <DatabaseSettingsForm />
-      </section>
-      <section aria-label="About" className="settings-section">
-        <h2>About</h2>
-        <p className="settings-hint">
-          tuk-tuk version <span className="app-version">{APP_VERSION}</span>
-        </p>
-      </section>
-      {assistConfig !== null && (
-        <section aria-label="Assist" className="settings-section">
-          <h2>Assist</h2>
-          <p className="settings-hint">
-            Local — runs entirely on your own machine via Ollama. No data leaves this device.
-            Unconfigured (or removed) means Assist stays off everywhere.
-          </p>
-          <AssistConfigForm config={assistConfig} onSaved={setAssistConfig} />
-        </section>
-      )}
-      {assistantConfig !== null && (
-        <section aria-label="Assistant" className="settings-section">
-          <h2>Assistant</h2>
-          <p className="settings-hint">
-            Cloud — every turn sends the current week's tasks, today's Events, your List and Tag
-            names, habits, and your planning preferences to the configured provider. Task
-            descriptions and Check Item text are never sent. Unconfigured (or removed) means the
-            Assistant stays off everywhere.
-          </p>
-          <AssistantConfigForm config={assistantConfig} onSaved={setAssistantConfig} />
-        </section>
-      )}
-      {googleStatus !== null && (
-        <section aria-label="Google Calendar" className="settings-section">
-          <h2>Google Calendar</h2>
-          <div className="settings-subsection">
-            <h3>Google API credentials</h3>
-            <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
+      <nav aria-label="Settings sections" className="settings-toc">
+        <a href="#settings-appearance">Appearance</a>
+        <a href="#settings-features">Features</a>
+        <a href="#settings-active-hours">Active hours</a>
+        <a href="#settings-assist">
+          Assist
+          {assistConfig !== null && (
+            <span
+              className="settings-toc-dot"
+              data-state={assistConfigured ? "on" : "off"}
+              aria-hidden="true"
+            />
+          )}
+        </a>
+        <a href="#settings-assistant">
+          Assistant
+          {assistantConfig !== null && (
+            <span
+              className="settings-toc-dot"
+              data-state={assistantConfigured ? "on" : "off"}
+              aria-hidden="true"
+            />
+          )}
+        </a>
+        <a href="#settings-google">
+          Google Calendar
+          {googleStatus !== null && (
+            <span
+              className="settings-toc-dot"
+              data-state={googleNeedsReconnect ? "warn" : googleStatus.configured ? "on" : "off"}
+              aria-hidden="true"
+            />
+          )}
+        </a>
+        <a href="#settings-security">Security</a>
+        <a href="#settings-database">Database</a>
+        <a href="#settings-about">About</a>
+      </nav>
+      <section aria-label="Personalize" className="settings-group">
+        <h2 className="settings-group-title">Personalize</h2>
+        <section aria-label="Appearance" id="settings-appearance" className="settings-section">
+          <div className="settings-section-head">
+            <h2>Appearance</h2>
           </div>
-          {googleStatus.configured && (
-            <div className="settings-subsection">
-              {googleOAuthError && (
-                <p role="alert">Connecting to Google didn't complete. Please try again.</p>
-              )}
-              {accounts.length === 0 ? (
-                <p className="settings-hint">No accounts connected.</p>
-              ) : (
-                <ul className="google-accounts">
-                  {accounts.map((account) => (
-                    <li key={account.id} className="google-account">
-                      <GoogleAccountCalendars
-                        account={account}
-                        onReconnectRequired={() => void refreshAccounts()}
-                      />
-                      {account.connection_state === "needs_reconnect" && (
-                        <p role="alert">
-                          This account needs to be reconnected — its Events and calendars can't be
-                          read until then.{" "}
-                          <a href={googleConnectUrl()} className="button">
-                            Reconnect
-                          </a>
-                        </p>
-                      )}
-                      <button type="button" onClick={() => void handleDisconnect(account.id)}>
-                        Disconnect
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {/* A full-page navigation, not a fetch: the consent flow is a
-               * browser round trip through Google that only the backend can
-               * broker. */}
-              <a href={googleConnectUrl()} className="button">
-                Connect
-              </a>
-            </div>
+          <p className="settings-lead">Theme for this browser only.</p>
+          <AppearanceSettings themePreference={themePreference} onThemeChange={onThemeChange} />
+        </section>
+        <section aria-label="Features" id="settings-features" className="settings-section">
+          <div className="settings-section-head">
+            <h2>Features</h2>
+          </div>
+          <p className="settings-lead">Toggling a feature hides it from navigation. Data stays.</p>
+          <div className="settings-feature-toggles">
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={sectionSettings.calendar}
+                  onChange={() => void handleSectionToggle("calendar")}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Calendar</span>
+                <span className="settings-feature-desc">Events and scheduling.</span>
+              </span>
+            </label>
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={sectionSettings.goals}
+                  onChange={() => void handleSectionToggle("goals")}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Goals</span>
+                <span className="settings-feature-desc">Targets and key results.</span>
+              </span>
+            </label>
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={sectionSettings.habits}
+                  onChange={() => void handleSectionToggle("habits")}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Habits</span>
+                <span className="settings-feature-desc">Recurring check-ins.</span>
+              </span>
+            </label>
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={sectionSettings.focus}
+                  onChange={() => void handleSectionToggle("focus")}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Focus</span>
+                <span className="settings-feature-desc">Timers and deep work.</span>
+              </span>
+            </label>
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={sectionSettings.assistant}
+                  onChange={() => void handleSectionToggle("assistant")}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Assistant</span>
+                <span className="settings-feature-desc">Cloud planning help.</span>
+              </span>
+            </label>
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={standupEnabled}
+                  onChange={() => void handleStandupToggle()}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Stand-up</span>
+                <span className="settings-feature-desc">Daily review.</span>
+              </span>
+            </label>
+          </div>
+        </section>
+        <section aria-label="Active hours" id="settings-active-hours" className="settings-section">
+          <div className="settings-section-head">
+            <h2>Active hours</h2>
+          </div>
+          <ActiveHoursSettingsForm />
+        </section>
+      </section>
+      {showAiGroup && (
+        <section aria-label="AI helpers" className="settings-group">
+          <h2 className="settings-group-title">AI helpers</h2>
+          {assistConfig !== null && (
+            <section aria-label="Assist" id="settings-assist" className="settings-section">
+              <div className="settings-section-head">
+                <h2>Assist</h2>
+                <span className="settings-status" data-state={assistConfigured ? "on" : "off"}>
+                  {assistConfigured ? "Connected" : "Not set up"}
+                </span>
+              </div>
+              <p className="settings-lead">
+                Local — runs entirely on your own machine via Ollama. No data leaves this device.
+                Unconfigured (or removed) means Assist stays off everywhere.
+              </p>
+              <AssistConfigForm config={assistConfig} onSaved={setAssistConfig} />
+            </section>
+          )}
+          {assistantConfig !== null && (
+            <section aria-label="Assistant" id="settings-assistant" className="settings-section">
+              <div className="settings-section-head">
+                <h2>Assistant</h2>
+                <span className="settings-status" data-state={assistantConfigured ? "on" : "off"}>
+                  {assistantConfigured ? "Connected" : "Not set up"}
+                </span>
+              </div>
+              <p className="settings-lead">
+                Cloud — every turn sends the current week&apos;s tasks, today&apos;s Events, your
+                List and Tag names, habits, and your planning preferences to the configured
+                provider. Task descriptions and Check Item text are never sent. Unconfigured (or
+                removed) means the Assistant stays off everywhere.
+              </p>
+              <AssistantConfigForm config={assistantConfig} onSaved={setAssistantConfig} />
+            </section>
           )}
         </section>
       )}
+      {showConnectionsGroup && (
+        <section aria-label="Connections" className="settings-group">
+          <h2 className="settings-group-title">Connections</h2>
+          {googleStatus !== null && (
+            <section aria-label="Google Calendar" id="settings-google" className="settings-section">
+              <div className="settings-section-head">
+                <h2>Google Calendar</h2>
+                <span
+                  className="settings-status"
+                  data-state={
+                    googleNeedsReconnect ? "warn" : googleStatus.configured ? "on" : "off"
+                  }
+                >
+                  {googleNeedsReconnect
+                    ? "Needs reconnect"
+                    : googleStatus.configured
+                      ? "Connected"
+                      : "Not set up"}
+                </span>
+              </div>
+              <div className="settings-subsection">
+                <h3>Google API credentials</h3>
+                <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
+              </div>
+              {googleStatus.configured && (
+                <div className="settings-subsection">
+                  {googleOAuthError && (
+                    <p role="alert">Connecting to Google didn&apos;t complete. Please try again.</p>
+                  )}
+                  {accounts.length === 0 ? (
+                    <p className="settings-hint">No accounts connected.</p>
+                  ) : (
+                    <ul className="google-accounts">
+                      {accounts.map((account) => (
+                        <li key={account.id} className="google-account">
+                          <GoogleAccountCalendars
+                            account={account}
+                            onReconnectRequired={() => void refreshAccounts()}
+                          />
+                          {account.connection_state === "needs_reconnect" && (
+                            <p role="alert">
+                              This account needs to be reconnected — its Events and calendars
+                              can&apos;t be read until then.{" "}
+                              <a href={googleConnectUrl()} className="button">
+                                Reconnect
+                              </a>
+                            </p>
+                          )}
+                          <button type="button" onClick={() => void handleDisconnect(account.id)}>
+                            Disconnect
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {/* A full-page navigation, not a fetch: the consent flow is a
+                   * browser round trip through Google that only the backend can
+                   * broker. */}
+                  <a href={googleConnectUrl()} className="button">
+                    Connect
+                  </a>
+                </div>
+              )}
+            </section>
+          )}
+        </section>
+      )}
+      <section aria-label="Account and system" className="settings-group">
+        <h2 className="settings-group-title">Account and system</h2>
+        <section aria-label="Security" id="settings-security" className="settings-section">
+          <div className="settings-section-head">
+            <h2>Security</h2>
+          </div>
+          <p className="settings-lead">Changing your password logs out other devices.</p>
+          <ChangePasswordForm />
+        </section>
+        <section aria-label="Database" id="settings-database" className="settings-section">
+          <div className="settings-section-head">
+            <h2>Database</h2>
+          </div>
+          <DatabaseSettingsForm />
+        </section>
+        <section aria-label="About" id="settings-about" className="settings-section">
+          <div className="settings-section-head">
+            <h2>About</h2>
+          </div>
+          <p className="settings-hint">
+            tuk-tuk version <span className="app-version">{APP_VERSION}</span>
+          </p>
+        </section>
+      </section>
     </div>
   );
 }
