@@ -55,9 +55,19 @@ describe("Stand-up", () => {
       ).toBe(true);
     });
     // No entry yet on a fresh date: every section starts empty.
-    expect(screen.getByRole("list", { name: "Yesterday bullets" })).toBeEmptyDOMElement();
-    expect(screen.getByRole("list", { name: "Today bullets" })).toBeEmptyDOMElement();
-    expect(screen.getByRole("list", { name: "Blockers bullets" })).toBeEmptyDOMElement();
+    expect(
+      within(screen.getByRole("list", { name: "Yesterday bullets" })).getByText(
+        "No yesterday bullets yet",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: "Today bullets" })).getByText("No today bullets yet"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: "Blockers bullets" })).getByText(
+        "No blockers bullets yet",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Yesterday" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Today" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Blockers" })).toBeInTheDocument();
@@ -77,7 +87,8 @@ describe("Stand-up", () => {
     expect(api.standupEntries).toHaveLength(1);
     expect(api.standupEntries[0]?.bullets).toHaveLength(1);
 
-    const history = await screen.findByRole("list", { name: "Past stand-ups" });
+    fireEvent.click(screen.getByRole("button", { name: "Open stand-up history" }));
+    const history = await screen.findByRole("listbox", { name: "Past stand-ups" });
     expect(within(history).getByText("Friday: 03/07/26")).toBeInTheDocument();
   });
 
@@ -111,9 +122,7 @@ describe("Stand-up", () => {
     await openStandup();
     await addBullet("Blockers", "Waiting on design");
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Edit Blockers bullet Waiting on design" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Blockers bullet" }));
     const editField = screen.getByRole("textbox", { name: "Edit Blockers bullet" });
     fireEvent.change(editField, { target: { value: "Waiting on design review" } });
     fireEvent.blur(editField);
@@ -134,7 +143,7 @@ describe("Stand-up", () => {
     await openStandup();
     await addBullet("Today", "Oops");
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete Today bullet Oops" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Today bullet" }));
 
     await waitFor(() => expect(screen.queryByText("Oops")).not.toBeInTheDocument());
     expect(api.standupEntries[0]?.bullets).toHaveLength(0);
@@ -168,7 +177,9 @@ describe("Stand-up", () => {
     await waitFor(() => {
       expect(screen.queryByText("Old work")).not.toBeInTheDocument();
     });
-    expect(screen.getByRole("list", { name: "Today bullets" })).toBeEmptyDOMElement();
+    expect(
+      within(screen.getByRole("list", { name: "Today bullets" })).getByText("No today bullets yet"),
+    ).toBeInTheDocument();
   });
 
   it("selecting a date from the history list loads its detail", async () => {
@@ -182,6 +193,7 @@ describe("Stand-up", () => {
     render(<App />);
     await openStandup();
 
+    fireEvent.click(await screen.findByRole("button", { name: "Open stand-up history" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Stand-up entry, Wednesday: 01/07/26" }),
     );
@@ -204,6 +216,7 @@ describe("Stand-up", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App />);
     await openStandup();
+    fireEvent.click(await screen.findByRole("button", { name: "Open stand-up history" }));
     await screen.findByRole("button", { name: "Stand-up entry, Wednesday: 01/07/26" });
 
     fireEvent.click(screen.getByRole("button", { name: "Delete stand-up Jul 1" }));
@@ -227,6 +240,7 @@ describe("Stand-up", () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<App />);
     await openStandup();
+    fireEvent.click(await screen.findByRole("button", { name: "Open stand-up history" }));
     await screen.findByRole("button", { name: "Stand-up entry, Wednesday: 01/07/26" });
 
     fireEvent.click(screen.getByRole("button", { name: "Delete stand-up Jul 1" }));
@@ -273,7 +287,7 @@ describe("Stand-up", () => {
     render(<App />);
     await openStandup();
 
-    expect(await screen.findByText("No Goal is focused right now.")).toBeInTheDocument();
+    expect(await screen.findByText("No Goal is focused right now")).toBeInTheDocument();
   });
 
   it("shows the focused Goal and its Key Result progress, not every active Goal", async () => {
@@ -288,7 +302,8 @@ describe("Stand-up", () => {
     const panel = await screen.findByLabelText("Focused goal");
     expect(within(panel).getByText("Ship v2")).toBeInTheDocument();
     expect(within(panel).queryByText("Not focused")).not.toBeInTheDocument();
-    expect(within(panel).getByText(/Lines shipped: 40%/)).toBeInTheDocument();
+    const kr = within(panel).getByText("Lines shipped").closest("li") as HTMLElement;
+    expect(within(kr).getByText("40%")).toBeInTheDocument();
   });
 
   it("switching Stand-up dates does not change the focused Goal shown", async () => {
@@ -305,6 +320,7 @@ describe("Stand-up", () => {
     await openStandup();
     await screen.findByText("Ship v2");
 
+    fireEvent.click(await screen.findByRole("button", { name: "Open stand-up history" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Stand-up entry, Wednesday: 01/07/26" }),
     );
@@ -326,7 +342,7 @@ describe("Stand-up", () => {
     render(<App />);
     await openStandup();
 
-    const suggestions = await screen.findByRole("list", { name: "Yesterday suggestions" });
+    const suggestions = await screen.findByLabelText("Yesterday suggestions");
     expect(within(suggestions).getByText("Ship the release notes")).toBeInTheDocument();
     expect(within(suggestions).getByText("Fix flaky test")).toBeInTheDocument();
   });
@@ -337,7 +353,7 @@ describe("Stand-up", () => {
     await openStandup();
 
     await screen.findByRole("region", { name: "Yesterday" });
-    expect(screen.queryByRole("list", { name: "Yesterday suggestions" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Yesterday suggestions")).not.toBeInTheDocument();
   });
 
   it("clicking a suggestion chip appends a bullet to Yesterday without touching other sections", async () => {
@@ -389,7 +405,7 @@ describe("Stand-up", () => {
     render(<App />);
     await openStandup();
 
-    const suggestions = await screen.findByRole("list", { name: "Today suggestions" });
+    const suggestions = await screen.findByLabelText("Today suggestions");
     expect(
       within(suggestions).getByRole("button", { name: "Ship the release" }),
     ).toBeInTheDocument();
@@ -407,7 +423,7 @@ describe("Stand-up", () => {
     await addBullet("Yesterday", "Reviewed PRs");
     await addBullet("Blockers", "Waiting on design");
 
-    const suggestions = await screen.findByRole("list", { name: "Today suggestions" });
+    const suggestions = await screen.findByLabelText("Today suggestions");
     fireEvent.click(within(suggestions).getByRole("button", { name: "Ship the release" }));
 
     await waitFor(() => {
@@ -436,10 +452,10 @@ describe("Stand-up", () => {
     });
     render(<App />);
     await openStandup();
-    await screen.findByRole("list", { name: "Today suggestions" });
+    await screen.findByLabelText("Today suggestions");
 
     const blockers = screen.getByRole("region", { name: "Blockers" });
-    expect(within(blockers).queryByRole("list", { name: /suggestions/i })).not.toBeInTheDocument();
+    expect(within(blockers).queryByLabelText(/suggestions/i)).not.toBeInTheDocument();
   });
 });
 

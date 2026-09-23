@@ -4,6 +4,7 @@ import {
   ApiError,
   createStandupBullet,
   deleteStandupBullet,
+  deleteStandupEntry,
   fetchFocusedGoal,
   fetchStandupEntries,
   fetchStandupEntry,
@@ -176,6 +177,17 @@ export function StandupView(): JSX.Element {
       latest = await updateStandupBullet(selectedDate, row.id, { sort_order });
     }
     setEntry(latest);
+  }
+
+  async function removeEntry(date: string): Promise<void> {
+    if (!window.confirm(`Delete the stand-up entry for ${shortDayLabel(date)}?`)) {
+      return;
+    }
+    await deleteStandupEntry(date);
+    setHistory((current) => current.filter((item) => item.date !== date));
+    if (date === selectedDateRef.current) {
+      setEntry(null);
+    }
   }
 
   async function moveBulletToEnd(bulletId: number, section: StandupSection): Promise<void> {
@@ -374,37 +386,45 @@ export function StandupView(): JSX.Element {
                 setHistoryOpen(false);
               }}
             />
-            <button
-              type="button"
+            <IconButton
+              icon="calendar-days"
+              label="Open stand-up history"
               className="standup-history-trigger"
               onClick={() => setHistoryOpen(!historyOpen)}
-              aria-label="Open stand-up history"
               aria-expanded={historyOpen}
-            >
-              <Icon name="calendar-days" size={16} />
-            </button>
+            />
             {historyOpen && history.length > 0 && (
               <div className="standup-history-dropdown" role="listbox" aria-label="Past stand-ups">
                 {history.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
                     role="option"
                     aria-selected={item.date === selectedDate}
                     className={`standup-history-item ${item.date === selectedDate ? "selected" : ""}`}
-                    onClick={() => {
-                      setSelectedDate(item.date);
-                      setHistoryOpen(false);
-                    }}
                   >
-                    <span className="standup-history-date">{weekdayRecordLabel(item.date)}</span>
-                    <span className="standup-history-short">{shortDayLabel(item.date)}</span>
-                    {item.date === selectedDate && (
-                      <span className="standup-history-current" aria-hidden="true">
-                        Current
-                      </span>
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      className="standup-history-item-button"
+                      aria-label={`Stand-up entry, ${weekdayRecordLabel(item.date)}`}
+                      onClick={() => {
+                        setSelectedDate(item.date);
+                        setHistoryOpen(false);
+                      }}
+                    >
+                      <span className="standup-history-date">{weekdayRecordLabel(item.date)}</span>
+                      <span className="standup-history-short">{shortDayLabel(item.date)}</span>
+                      {item.date === selectedDate && (
+                        <span className="standup-history-current" aria-hidden="true">
+                          Current
+                        </span>
+                      )}
+                    </button>
+                    <IconButton
+                      icon="x"
+                      label={`Delete stand-up ${shortDayLabel(item.date)}`}
+                      onClick={() => void removeEntry(item.date)}
+                    />
+                  </div>
                 ))}
                 <button
                   type="button"
