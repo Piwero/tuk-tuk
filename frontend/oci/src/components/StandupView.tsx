@@ -4,7 +4,6 @@ import {
   ApiError,
   createStandupBullet,
   deleteStandupBullet,
-  deleteStandupEntry,
   fetchFocusedGoal,
   fetchStandupEntries,
   fetchStandupEntry,
@@ -23,11 +22,12 @@ import { localDayOf, shortDayLabel, weekdayRecordLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { IconButton } from "./IconButton";
+import { Icon, type IconName } from "./Icon";
 
-const SECTIONS: { key: StandupSection; label: string }[] = [
-  { key: "yesterday", label: "Yesterday" },
-  { key: "today", label: "Today" },
-  { key: "blockers", label: "Blockers" },
+const SECTIONS: { key: StandupSection; label: string; icon: IconName }[] = [
+  { key: "yesterday", label: "Yesterday", icon: "chevron-left" },
+  { key: "today", label: "Today", icon: "sun" },
+  { key: "blockers", label: "Blockers", icon: "alert-triangle" },
 ];
 
 type Drafts = Record<StandupSection, string>;
@@ -38,36 +38,19 @@ const emptyDrafts = (): Drafts => ({ yesterday: "", today: "", blockers: "" });
  * Calendar and Habits views. A date with no persisted Entry (any date not
  * in the history list, including today by default) renders an empty,
  * immediately-editable form — the Entry exists only once its first Bullet
- * is saved.
- */
+ * is saved. */
 export function StandupView(): JSX.Element {
   const [history, setHistory] = useState<StandupEntrySummary[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => localDayOf(new Date()));
-  // Per-date loads race: clicking through dates quickly can let an older
-  // request's response land after a newer one's. This ref lets each loader
-  // drop its result if `selectedDate` has since moved on, so a stale
-  // response can never overwrite what's currently selected.
   const selectedDateRef = useRef(selectedDate);
   selectedDateRef.current = selectedDate;
   const [entry, setEntry] = useState<StandupEntry | null>(null);
-  const [drafts, setDrafts] = useState<Drafts>(emptyDrafts);
-  // Yesterday-section suggestion chips (issue #141, extended #147): opt-in,
-  // always available, no dependency on Assist — a plain re-run of a
-  // deterministic query against completed Tasks/Completed Occurrences and
-  // the prior day's own Stand-up Today bullets for the selected date's
-  // prior day. No dismissal/seen-state: reloads every time the selected
-  // date changes.
+  const [drafts, setDrafts] = useState<Drafts>(emptyDrafts());
   const [suggestions, setSuggestions] = useState<StandupYesterdaySuggestion[]>([]);
   const [bulletEditor, setBulletEditor] = useState<{ id: number; text: string } | null>(null);
-  // Opt-in Today chips, built from the Today Smart List — pure read, no
-  // dismissal/seen-state. Blockers has no structured "blocked" concept to
-  // suggest from, so only Today gets this treatment.
   const [todaySuggestions, setTodaySuggestions] = useState<StandupSuggestion[]>([]);
-  // The Focused Goal (ADR 0012, issue #238), superseding the Sprint Goal
-  // input: read-only here, shown with its Key Result progress. Not tied to
-  // the selected date — it's the live focused Goal regardless of which
-  // Stand-up day is open, so switching dates never touches it.
   const [focusedGoal, setFocusedGoal] = useState<Goal | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const loadHistory = useCallback(async (): Promise<void> => {
     setHistory((await fetchStandupEntries()).items);
@@ -130,9 +113,6 @@ export function StandupView(): JSX.Element {
     return entry?.bullets.filter((bullet) => bullet.section === section) ?? [];
   }
 
-  /** Appends a new bullet with `text` to `section`, additively — nothing
-   * else in the entry changes. Shared by the manual add-bullet form and
-   * suggestion-chip clicks, which just supply different `text`. */
   async function appendBullet(section: StandupSection, text: string): Promise<void> {
     const trimmed = text.trim();
     if (trimmed === "") {
@@ -147,17 +127,11 @@ export function StandupView(): JSX.Element {
     setDrafts((current) => ({ ...current, [section]: "" }));
   }
 
-  /** A Today chip's click — appends its title as a new bullet, the same
-   * additive mechanism as typing it into the Add form, then drops the chip
-   * so it can't be added again. */
   async function addTodaySuggestion(suggestion: StandupSuggestion): Promise<void> {
     await appendBullet("today", suggestion.title);
     setTodaySuggestions((current) => current.filter((s) => s.task_id !== suggestion.task_id));
   }
 
-  /** A Yesterday chip click: adds its title as a new bullet, then drops the
-   * chip so it can't be added again. No link to the source Task/Completed
-   * Occurrence is kept afterward. */
   async function addYesterdaySuggestion(title: string): Promise<void> {
     await appendBullet("yesterday", title);
     setSuggestions((current) => current.filter((s) => s.title !== title));
@@ -197,7 +171,6 @@ export function StandupView(): JSX.Element {
       setEntry(await updateStandupBullet(selectedDate, bulletId, { sort_order: plan.sort_order }));
       return;
     }
-    // Gap exhausted: renumber the section; the last response carries the final order.
     let latest = entry;
     for (const { row, sort_order } of plan.rows) {
       latest = await updateStandupBullet(selectedDate, row.id, { sort_order });
@@ -205,7 +178,6 @@ export function StandupView(): JSX.Element {
     setEntry(latest);
   }
 
-  /** Dropping on a section's list itself (below the rows) moves the bullet to its end. */
   async function moveBulletToEnd(bulletId: number, section: StandupSection): Promise<void> {
     if (entry === null) {
       return;
@@ -220,38 +192,68 @@ export function StandupView(): JSX.Element {
     );
   }
 
-  async function removeEntry(date: string): Promise<void> {
-    if (!window.confirm(`Delete the stand-up entry for ${shortDayLabel(date)}?`)) {
-      return;
-    }
-    await deleteStandupEntry(date);
-    setHistory((current) => current.filter((item) => item.date !== date));
-    if (date === selectedDate) {
-      setEntry(null);
-    }
-  }
-
-  function renderSection(section: StandupSection, label: string): JSX.Element {
+  function renderSection(section: StandupSection, label: string, icon: IconName): JSX.Element {
     const bullets = bulletsOf(section);
+    const isToday = section === "today";
+    const isYesterday = section === "yesterday";
+    const sectionSuggestions = isYesterday ? suggestions : isToday ? todaySuggestions : [];
+    const hasSuggestions = sectionSuggestions.length > 0;
+
     return (
       <section className="standup-section" key={section} aria-label={label}>
-        <h3>{label}</h3>
-        {section === "yesterday" && suggestions.length > 0 && (
-          <ul className="standup-suggestions" aria-label="Yesterday suggestions">
-            {suggestions.map((suggestion, index) => (
-              <li key={`${suggestion.title}-${index}`}>
+        <header className="standup-section-header">
+          <div className="standup-section-title">
+            <span className="standup-section-icon" aria-hidden="true">
+              <Icon name={icon} size={16} />
+            </span>
+            <h3>{label}</h3>
+          </div>
+          {bullets.length > 0 && (
+            <span className="standup-section-count" aria-label={`${bullets.length} bullets`}>
+              {bullets.length}
+            </span>
+          )}
+        </header>
+
+        {hasSuggestions && (
+          <div className="standup-suggestions" aria-label={`${label} suggestions`}>
+            {sectionSuggestions.map((suggestion, index) => {
+              if (isYesterday) {
+                const ys = suggestion as StandupYesterdaySuggestion;
+                return (
+                  <button
+                    key={`${ys.title}-${index}`}
+                    type="button"
+                    className="standup-suggestion-chip"
+                    onClick={() => void addYesterdaySuggestion(ys.title)}
+                  >
+                    <span className="standup-suggestion-text">{ys.title}</span>
+                    <span className="standup-suggestion-action" aria-hidden="true">
+                      <Icon name="plus" size={12} />
+                    </span>
+                  </button>
+                );
+              }
+              const ts = suggestion as StandupSuggestion;
+              return (
                 <button
+                  key={`${ts.task_id}-${index}`}
                   type="button"
                   className="standup-suggestion-chip"
-                  onClick={() => void addYesterdaySuggestion(suggestion.title)}
+                  onClick={() => void addTodaySuggestion(ts)}
                 >
-                  {suggestion.title}
+                  <span className="standup-suggestion-text">{ts.title}</span>
+                  <span className="standup-suggestion-action" aria-hidden="true">
+                    <Icon name="plus" size={12} />
+                  </span>
                 </button>
-              </li>
-            ))}
-          </ul>
+              );
+            })}
+          </div>
         )}
+
         <ul
+          className="standup-bullets"
           aria-label={`${label} bullets`}
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
@@ -262,77 +264,82 @@ export function StandupView(): JSX.Element {
             }
           }}
         >
-          {bullets.map((bullet) =>
-            bulletEditor?.id === bullet.id ? (
-              <li key={bullet.id}>
-                <form
-                  onSubmit={(event) => {
+          {bullets.length === 0 ? (
+            <li className="standup-empty-state">
+              <p className="standup-empty-text">No {label.toLowerCase()} bullets yet</p>
+              <p className="standup-empty-hint">
+                {isYesterday
+                  ? "Add what you completed yesterday"
+                  : isToday
+                    ? "Add what you'll tackle today"
+                    : "Add anything blocking progress"}
+              </p>
+            </li>
+          ) : (
+            bullets.map((bullet) =>
+              bulletEditor?.id === bullet.id ? (
+                <li key={bullet.id} className="standup-bullet editing">
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void renameBullet();
+                    }}
+                    className="standup-bullet-edit-form"
+                  >
+                    <input
+                      aria-label={`Edit ${label} bullet`}
+                      value={bulletEditor.text}
+                      onChange={(event) =>
+                        setBulletEditor({ id: bullet.id, text: event.target.value })
+                      }
+                      onBlur={() => void renameBullet()}
+                      autoFocus
+                    />
+                  </form>
+                </li>
+              ) : (
+                <li
+                  key={bullet.id}
+                  className="standup-bullet"
+                  draggable
+                  onDragStart={(event) =>
+                    startDrag(event, { kind: "standup-bullet", id: bullet.id })
+                  }
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
                     event.preventDefault();
-                    void renameBullet();
+                    event.stopPropagation();
+                    const payload = readDragPayload(event);
+                    if (payload?.kind === "standup-bullet") {
+                      void moveBulletBefore(payload.id, bullet);
+                    }
                   }}
                 >
-                  <input
-                    aria-label={`Edit ${label} bullet`}
-                    value={bulletEditor.text}
-                    onChange={(event) =>
-                      setBulletEditor({ id: bullet.id, text: event.target.value })
-                    }
-                    onBlur={() => void renameBullet()}
-                  />
-                </form>
-              </li>
-            ) : (
-              <li
-                key={bullet.id}
-                draggable
-                onDragStart={(event) => startDrag(event, { kind: "standup-bullet", id: bullet.id })}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const payload = readDragPayload(event);
-                  if (payload?.kind === "standup-bullet") {
-                    void moveBulletBefore(payload.id, bullet);
-                  }
-                }}
-              >
-                <span>{bullet.text}</span>
-                <span className="row-actions">
-                  <IconButton
-                    icon="pencil"
-                    label={`Edit ${label} bullet ${bullet.text}`}
-                    onClick={() => setBulletEditor({ id: bullet.id, text: bullet.text })}
-                  />
-                  <IconButton
-                    icon="x"
-                    label={`Delete ${label} bullet ${bullet.text}`}
-                    onClick={() => void removeBullet(bullet)}
-                  />
-                </span>
-              </li>
-            ),
+                  <span className="standup-bullet-text">{bullet.text}</span>
+                  <div className="standup-bullet-actions">
+                    <IconButton
+                      icon="pencil"
+                      label={`Edit ${label} bullet`}
+                      onClick={() => setBulletEditor({ id: bullet.id, text: bullet.text })}
+                    />
+                    <IconButton
+                      icon="x"
+                      label={`Delete ${label} bullet`}
+                      onClick={() => void removeBullet(bullet)}
+                    />
+                  </div>
+                </li>
+              ),
+            )
           )}
         </ul>
-        {section === "today" && todaySuggestions.length > 0 && (
-          <ul aria-label="Today suggestions" className="standup-suggestions">
-            {todaySuggestions.map((suggestion) => (
-              <li key={suggestion.task_id}>
-                <button
-                  type="button"
-                  className="standup-suggestion-chip"
-                  onClick={() => void addTodaySuggestion(suggestion)}
-                >
-                  {suggestion.title}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+
         <form
           onSubmit={(event) => {
             event.preventDefault();
             void addBullet(section);
           }}
+          className="standup-add-form"
         >
           <input
             aria-label={`Add a ${label} bullet`}
@@ -349,75 +356,122 @@ export function StandupView(): JSX.Element {
 
   return (
     <div className="standup-view">
-      <aside className="standup-history" aria-label="Stand-up history">
-        <label>
-          Date
-          <input
-            type="date"
-            aria-label="Stand-up date"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-          />
-        </label>
-        <h3>Past stand-ups</h3>
-        <ul aria-label="Past stand-ups">
-          {history.map((item) => (
-            <li key={item.id} className="standup-history-row">
-              <button
-                type="button"
-                className={
-                  item.date === selectedDate
-                    ? "standup-history-button selected"
-                    : "standup-history-button"
-                }
-                aria-current={item.date === selectedDate ? "true" : undefined}
-                aria-label={`Stand-up entry, ${weekdayRecordLabel(item.date)}`}
-                onClick={() => setSelectedDate(item.date)}
-              >
-                {weekdayRecordLabel(item.date)}
-              </button>
-              <span className="row-actions">
-                <IconButton
-                  icon="x"
-                  label={`Delete stand-up ${shortDayLabel(item.date)}`}
-                  onClick={() => void removeEntry(item.date)}
-                />
-              </span>
-            </li>
-          ))}
-        </ul>
-      </aside>
-      <div className="standup-detail">
-        <div className="standup-goal" aria-label="Focused goal">
-          <p className="standup-goal-label">Focused goal</p>
-          {focusedGoal === null ? (
-            <>
-              <p className="standup-goal-empty">No Goal is focused right now.</p>
-              <p className="standup-goal-empty-hint">
-                Focus a Goal from its card on the Goals page to see it here.
-              </p>
-            </>
-          ) : (
-            <>
-              <h3>{focusedGoal.title}</h3>
+      <header className="standup-header">
+        <div className="standup-header-left">
+          {/* Page title is rendered by App.tsx main-header */}
+        </div>
+        <div className="standup-header-right">
+          <div className="standup-date-picker">
+            <label htmlFor="standup-date" className="visually-hidden">
+              Stand-up date
+            </label>
+            <input
+              id="standup-date"
+              type="date"
+              value={selectedDate}
+              onChange={(event) => {
+                setSelectedDate(event.target.value);
+                setHistoryOpen(false);
+              }}
+            />
+            <button
+              type="button"
+              className="standup-history-trigger"
+              onClick={() => setHistoryOpen(!historyOpen)}
+              aria-label="Open stand-up history"
+              aria-expanded={historyOpen}
+            >
+              <Icon name="calendar-days" size={16} />
+            </button>
+            {historyOpen && history.length > 0 && (
+              <div className="standup-history-dropdown" role="listbox" aria-label="Past stand-ups">
+                {history.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={item.date === selectedDate}
+                    className={`standup-history-item ${item.date === selectedDate ? "selected" : ""}`}
+                    onClick={() => {
+                      setSelectedDate(item.date);
+                      setHistoryOpen(false);
+                    }}
+                  >
+                    <span className="standup-history-date">{weekdayRecordLabel(item.date)}</span>
+                    <span className="standup-history-short">{shortDayLabel(item.date)}</span>
+                    {item.date === selectedDate && (
+                      <span className="standup-history-current" aria-hidden="true">
+                        Current
+                      </span>
+                    )}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="standup-history-manage"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setHistoryOpen(false);
+                  }}
+                >
+                  <Icon name="layers" size={14} /> Manage all stand-ups
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {focusedGoal && (
+        <div className="standup-goal-card" aria-label="Focused goal">
+          <div className="standup-goal-header">
+            <div className="standup-goal-icon" aria-hidden="true">
+              <Icon name="target" size={18} />
+            </div>
+            <div className="standup-goal-content">
+              <p className="standup-goal-label">Focused goal</p>
+              <h2 className="standup-goal-title">{focusedGoal.title}</h2>
+            </div>
+          </div>
+          {(focusedGoal.score !== null || focusedGoal.key_results.length > 0) && (
+            <div className="standup-goal-progress">
               {focusedGoal.score !== null && (
-                <p className="standup-goal-score">Score: {Math.round(focusedGoal.score * 100)}%</p>
+                <div className="standup-goal-score">
+                  <span className="standup-goal-score-value">
+                    {Math.round(focusedGoal.score * 100)}%
+                  </span>
+                  <span className="standup-goal-score-label">Progress</span>
+                </div>
               )}
               {focusedGoal.key_results.length > 0 && (
-                <ul aria-label={`${focusedGoal.title} key results`}>
+                <ul className="standup-goal-krs" aria-label={`${focusedGoal.title} key results`}>
                   {focusedGoal.key_results.map((kr) => (
-                    <li key={kr.id}>
-                      {kr.name}: {Math.round(kr.ratio * 100)}%
+                    <li key={kr.id} className="standup-goal-kr">
+                      <span className="standup-goal-kr-name">{kr.name}</span>
+                      <span className="standup-goal-kr-value">{Math.round(kr.ratio * 100)}%</span>
                     </li>
                   ))}
                 </ul>
               )}
-            </>
+            </div>
           )}
         </div>
-        <div className="standup-sections">
-          {SECTIONS.map(({ key, label }) => renderSection(key, label))}
+      )}
+
+      {!focusedGoal && (
+        <div className="standup-goal-empty" aria-label="No focused goal">
+          <div className="standup-goal-empty-icon" aria-hidden="true">
+            <Icon name="target" size={24} />
+          </div>
+          <p className="standup-goal-empty-text">No Goal is focused right now</p>
+          <p className="standup-goal-empty-hint">
+            Focus a Goal from its card on the Goals page to see it here.
+          </p>
         </div>
+      )}
+
+      <div className="standup-sections">
+        {SECTIONS.map(({ key, label, icon }) => renderSection(key, label, icon))}
       </div>
     </div>
   );
