@@ -432,9 +432,36 @@ describe("Stand-up", () => {
     const suggestions = await screen.findByLabelText("Today suggestions");
     expect(within(suggestions).getByRole("button", { name: "Open today" })).toBeInTheDocument();
     expect(
-      within(suggestions).getByRole("button", { name: "Finished report" }),
+      within(suggestions).getByRole("button", { name: "Finished report (completed)" }),
     ).toBeInTheDocument();
     expect(within(suggestions).queryByRole("button", { name: "Old work" })).not.toBeInTheDocument();
+  });
+
+  it("renders done Today chips distinguishably from planned ones", async () => {
+    installFakeApi({
+      tasks: [
+        fakeTask("Open today", { due_date: "2026-07-03T00:00:00Z", is_all_day: true }),
+        fakeTask("Finished report", {
+          completed: true,
+          completed_at: "2026-07-03T10:00:00Z",
+        }),
+      ],
+      standupYesterdaySuggestions: [{ title: "Yesterday work" }],
+    });
+    render(<App />);
+    await openStandup();
+
+    const suggestions = await screen.findByLabelText("Today suggestions");
+    expect(within(suggestions).getByRole("button", { name: "Open today" })).toBeInTheDocument();
+    expect(
+      within(suggestions).getByRole("button", { name: "Finished report (completed)" }),
+    ).toBeInTheDocument();
+    // Yesterday chips carry no such marker.
+    const yesterday = await screen.findByLabelText("Yesterday suggestions");
+    expect(within(yesterday).getByRole("button", { name: "Yesterday work" })).toBeInTheDocument();
+    expect(
+      within(yesterday).queryByRole("button", { name: "Yesterday work (completed)" }),
+    ).not.toBeInTheDocument();
   });
 
   it("suggests a recurring Task's occurrence completed today exactly once", async () => {

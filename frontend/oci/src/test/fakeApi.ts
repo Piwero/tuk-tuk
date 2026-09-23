@@ -2298,30 +2298,36 @@ export function installFakeApi({
       }
       // Mirrors the backend: the Today Smart List's own query (open Tasks
       // whose scheduled window has started by `today`) plus Tasks completed
-      // on `today` itself (deduped by task, orphan occurrences dropped like
-      // the backend's inner join), reduced to a read-only chip shape.
+      // on `today` itself (deduped by task, open wins, orphan occurrences
+      // dropped like the backend's inner join), reduced to a read-only chip
+      // shape.
       const open = state.tasks.filter(
         (task) => !task.completed && inSmartView(task, "today", today),
       );
+      const items = open.map((task) => ({ task_id: task.id, title: task.title, completed: false }));
       const seen = new Set(open.map((task) => task.id));
-      const items = open.map((task) => ({ task_id: task.id, title: task.title }));
+      const addDone = (task_id: number, title: string): void => {
+        if (seen.has(task_id)) {
+          return;
+        }
+        seen.add(task_id);
+        items.push({ task_id, title, completed: true });
+      };
       for (const task of state.tasks) {
-        if (task.completed && task.completed_at?.slice(0, 10) === today && !seen.has(task.id)) {
-          seen.add(task.id);
-          items.push({ task_id: task.id, title: task.title });
+        if (task.completed && task.completed_at?.slice(0, 10) === today) {
+          addDone(task.id, task.title);
         }
       }
       const titles = new Map(state.tasks.map((task) => [task.id, task.title]));
       for (const occurrence of state.completedOccurrences) {
-        if (occurrence.completed_at.slice(0, 10) !== today || seen.has(occurrence.task_id)) {
+        if (occurrence.completed_at.slice(0, 10) !== today) {
           continue;
         }
         const title = titles.get(occurrence.task_id);
         if (title === undefined) {
           continue;
         }
-        seen.add(occurrence.task_id);
-        items.push({ task_id: occurrence.task_id, title });
+        addDone(occurrence.task_id, title);
       }
       return json(items);
     }

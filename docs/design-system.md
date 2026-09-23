@@ -52,6 +52,9 @@ add a token first.
     the outlined pill stays everywhere else. A row's **List** is a 10px dot
     (or the List's emoji) and its name in secondary ink, not a badge.
   - **Habit success** is green (`--success`, heatmap ramp `--heat-0…4`).
+  - **Done stand-up chips** reuse the success tokens (green wash, `--text-success`)
+    plus a `check` glyph and a "(completed)" accessible-name suffix — shape and
+    name, never colour alone. Planned chips keep the neutral chip treatment.
   - **Focus** has its own identity — plum `--focus-accent` `#7a48ec` — so
     deep work feels like a different room. Its screen is literally staged: the
     clock (inside a static progress dial), the linked Task and the

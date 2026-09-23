@@ -102,7 +102,7 @@ async def tasks_completed_on(day: date, session: SessionDep) -> list[StandupSugg
         )
     )
     return [
-        StandupSuggestionRead(task_id=row[0], title=row[1])
+        StandupSuggestionRead(task_id=row[0], title=row[1], completed=True)
         for row in [*completed_tasks.all(), *completed_occurrences.all()]
     ]
 
@@ -117,7 +117,7 @@ async def read_today_suggestions(
     on `day` itself — one-off completions and Completed Occurrences — so the
     work actually finished today is reportable the same day. A recurring Task
     open in the Smart List with an occurrence completed today appears once
-    (deduped by Task). Pure read — no dismissal/seen-state tracking.
+    (deduped by Task, open wins). Pure read — no dismissal/seen-state tracking.
     """
     rows = await session.scalars(select(Task).where(Task.completed.is_(False)))
     matches = [task for task in rows if in_smart_view(task, "today", day)]

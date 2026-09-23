@@ -4380,6 +4380,25 @@ select.task-detail-breadcrumb:focus-visible {
   background: var(--accent-soft);
 }
 
+.standup-suggestion-chip[data-completed] {
+  border-color: var(--success);
+  background: var(--success-soft);
+  color: var(--text-success);
+}
+
+.standup-suggestion-chip[data-completed]:hover {
+  border-color: var(--success);
+  color: var(--text-success);
+  background: var(--surface-hover);
+}
+
+.standup-suggestion-done-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--success);
+}
+
 .standup-suggestion-text {
   overflow: hidden;
   text-overflow: ellipsis;

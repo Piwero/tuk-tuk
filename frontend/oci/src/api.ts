@@ -1411,10 +1411,12 @@ export function deleteStandupBullet(date: string, bulletId: number): Promise<voi
 
 /** A read-only Today chip suggestion sourced from the Today Smart List
  * (open Tasks) or completed on the selected date — not persisted, no
- * dismissal/seen-state. */
+ * dismissal/seen-state. `completed` marks chips sourced from finished work
+ * so done reads apart from planned (#284). */
 export interface StandupSuggestion {
   task_id: number;
   title: string;
+  completed?: boolean;
 }
 
 /** Opt-in suggestion chips for the Today section, judged against `date`

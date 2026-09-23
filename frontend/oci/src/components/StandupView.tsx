@@ -246,15 +246,24 @@ export function StandupView(): JSX.Element {
                   </button>
                 );
               }
-              const ts = suggestion as StandupSuggestion;
+              const todaySuggestion = suggestion as StandupSuggestion;
               return (
                 <button
-                  key={`${ts.task_id}-${index}`}
+                  key={`${todaySuggestion.task_id}-${index}`}
                   type="button"
                   className="standup-suggestion-chip"
-                  onClick={() => void addTodaySuggestion(ts)}
+                  data-completed={todaySuggestion.completed === true ? "true" : undefined}
+                  {...(todaySuggestion.completed === true && {
+                    "aria-label": `${todaySuggestion.title} (completed)`,
+                  })}
+                  onClick={() => void addTodaySuggestion(todaySuggestion)}
                 >
-                  <span className="standup-suggestion-text">{ts.title}</span>
+                  {todaySuggestion.completed === true && (
+                    <span className="standup-suggestion-done-icon" aria-hidden="true">
+                      <Icon name="check" size={12} />
+                    </span>
+                  )}
+                  <span className="standup-suggestion-text">{todaySuggestion.title}</span>
                   <span className="standup-suggestion-action" aria-hidden="true">
                     <Icon name="plus" size={12} />
                   </span>
