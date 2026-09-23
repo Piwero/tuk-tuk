@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.8](https://github.com/Piwero/tuk-tuk/compare/v2.10.7...v2.10.8) - 2026-09-23
+
+### Features
+
+- **standup:** Redesign view with cards, dropdown history, goal card ([884b4bc](https://github.com/Piwero/tuk-tuk/commit/884b4bcebb4aef24bdfacec453d307c4ecff4144))
+
 ## [2.10.7](https://github.com/Piwero/tuk-tuk/compare/v2.10.6...v2.10.7) - 2026-09-22
 
 ### Features
