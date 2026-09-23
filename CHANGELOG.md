@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.9](https://github.com/Piwero/tuk-tuk/compare/v2.10.8...v2.10.9) - 2026-09-23
+
+### Features
+
+- **settings:** Group sections with jump nav and status pills ([5127525](https://github.com/Piwero/tuk-tuk/commit/5127525262cf0ba57ca6b1b442e60ec215e26f7b))
+
+### Bug Fixes
+
+- **standup:** Restore entry deletion and icon-button guard, update stale tests ([86d9530](https://github.com/Piwero/tuk-tuk/commit/86d95302b756722a406c92a2c90937aeb5a825f8))
+
 ## [2.10.8](https://github.com/Piwero/tuk-tuk/compare/v2.10.7...v2.10.8) - 2026-09-23
 
 ### Features
