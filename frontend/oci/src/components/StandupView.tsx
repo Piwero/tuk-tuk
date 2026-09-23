@@ -19,7 +19,7 @@ import {
   type StandupSuggestion,
   type StandupYesterdaySuggestion,
 } from "../api";
-import { localDayOf, shortDayLabel, weekdayRecordLabel } from "../dates";
+import { localDayOf, browserTimeZone, shortDayLabel, weekdayRecordLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { IconButton } from "./IconButton";
@@ -62,14 +62,14 @@ export function StandupView(): JSX.Element {
   }, []);
 
   const loadTodaySuggestions = useCallback(async (date: string): Promise<void> => {
-    const result = await fetchTodaySuggestions(date);
+    const result = await fetchTodaySuggestions(date, browserTimeZone());
     if (selectedDateRef.current === date) {
       setTodaySuggestions(result);
     }
   }, []);
 
   const loadYesterdaySuggestions = useCallback(async (date: string): Promise<void> => {
-    const result = await fetchYesterdaySuggestions(date);
+    const result = await fetchYesterdaySuggestions(date, browserTimeZone());
     if (selectedDateRef.current === date) {
       setSuggestions(result);
     }

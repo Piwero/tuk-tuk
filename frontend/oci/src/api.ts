@@ -1421,9 +1421,10 @@ export interface StandupSuggestion {
 
 /** Opt-in suggestion chips for the Today section, judged against `date`
  * (the caller's local day): the Today Smart List plus Tasks completed on
- * `date` itself. */
-export function fetchTodaySuggestions(date: string): Promise<StandupSuggestion[]> {
-  return request(`/api/v1/stand-up/suggestions/today?date=${date}`);
+ * `date` itself, bucketed in `tz` (the browser timezone) so the day boundary
+ * is the user's own, not UTC. */
+export function fetchTodaySuggestions(date: string, tz: string): Promise<StandupSuggestion[]> {
+  return request(`/api/v1/stand-up/suggestions/today?date=${date}&tz=${encodeURIComponent(tz)}`);
 }
 
 /** A suggestion chip for the Yesterday section: the title of a Task
@@ -1434,8 +1435,13 @@ export interface StandupYesterdaySuggestion {
   title: string;
 }
 
-export function fetchYesterdaySuggestions(date: string): Promise<StandupYesterdaySuggestion[]> {
-  return request(`/api/v1/stand-up/suggestions/yesterday?date=${date}`);
+export function fetchYesterdaySuggestions(
+  date: string,
+  tz: string,
+): Promise<StandupYesterdaySuggestion[]> {
+  return request(
+    `/api/v1/stand-up/suggestions/yesterday?date=${date}&tz=${encodeURIComponent(tz)}`,
+  );
 }
 
 /** Whether the Stand-up nav item/route is visible at all (issue #140). A
