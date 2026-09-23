@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.10](https://github.com/Piwero/tuk-tuk/compare/v2.10.9...v2.10.10) - 2026-09-23
+
+### Features
+
+- **stand-up:** Suggest Tasks completed today as Today chips ([e4656db](https://github.com/Piwero/tuk-tuk/commit/e4656db83ac75bd0d0b8802455d312f96956a739))
+- **stand-up:** Distinguish done from planned in the Today chips ([0127408](https://github.com/Piwero/tuk-tuk/commit/01274085a3f9ccde669db89971188c16871cff49))
+
+### Bug Fixes
+
+- **deploy:** Disable db-onepassworditem until vault item exists ([4407e3d](https://github.com/Piwero/tuk-tuk/commit/4407e3d6f10cec449d61311d0da230f3178537fd))
+- **stand-up:** Scope completion suggestions to the user's calendar day, not UTC ([2cc906b](https://github.com/Piwero/tuk-tuk/commit/2cc906b4d23ebe2dae51b5c63e0a2eebc37d8ca7))
+
 ## [2.10.9](https://github.com/Piwero/tuk-tuk/compare/v2.10.8...v2.10.9) - 2026-09-23
 
 ### Features
