@@ -6,14 +6,15 @@ mutations return the full parent Entry, like Check Items return their
 parent Task.
 """
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from app.db import SessionDep
-from app.errors import NotFoundError
+from app.errors import APIError, NotFoundError
 from app.goal_read import build_goal_read
 from app.models import (
     DEFAULT_OWNER,
@@ -33,6 +34,7 @@ from app.schemas import (
     StandupEntrySummary,
     StandupSuggestionRead,
     StandupYesterdaySuggestion,
+    as_utc,
 )
 from app.sparse_order import append_order
 
@@ -80,50 +82,91 @@ def get_bullet_or_404(entry: StandupEntry, bullet_id: int) -> StandupBullet:
     raise NotFoundError(f"Bullet {bullet_id} not found on stand-up entry {entry.id}")
 
 
-async def tasks_completed_on(day: date, session: SessionDep) -> list[StandupSuggestionRead]:
-    """Suggestions completed on calendar day `day`: one-off Tasks plus
-    Completed Occurrences (titles follow the owning Task, like the completed
-    view). Shared by both suggestion endpoints."""
-    day_start = datetime(day.year, day.month, day.day, tzinfo=UTC)
-    day_end = day_start + timedelta(days=1)
-    completed_tasks = await session.execute(
-        select(Task.id, Task.title).where(
-            Task.completed.is_(True),
-            Task.completed_at >= day_start,
-            Task.completed_at < day_end,
+def resolve_zone(tz: str | None) -> tzinfo:
+    """The caller's IANA timezone (UTC when absent) — mirrors focus-stats."""
+    if tz is None:
+        return UTC
+    try:
+        return ZoneInfo(tz)
+    except (KeyError, ValueError):
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message=f"Unknown IANA timezone {tz!r}",
+        ) from None
+
+
+def completed_on_day(completed_at: datetime, day: date, zone: tzinfo) -> bool:
+    return as_utc(completed_at).astimezone(zone).date() == day
+
+
+async def tasks_completed_on(
+    day: date, session: SessionDep, zone: tzinfo
+) -> list[StandupSuggestionRead]:
+    """Suggestions completed on calendar day `day`, read in the caller's
+    timezone: one-off Tasks plus Completed Occurrences (titles follow the
+    owning Task, like the completed view). Shared by both suggestion
+    endpoints so Yesterday and Today agree on the day boundary. Portable
+    SQL can't bucket by an IANA zone, so a UTC window pre-filters (a zoned
+    day sits at most ±14h off its UTC namesake — Kiritimati +14 — hence
+    the 15h margin) and Python keeps exactly the instants in `day`."""
+    day_start_utc = datetime(day.year, day.month, day.day, tzinfo=UTC)
+    window_start = day_start_utc - timedelta(hours=15)
+    window_end = day_start_utc + timedelta(days=1, hours=15)
+    completed_tasks = (
+        await session.scalars(
+            select(Task).where(
+                Task.completed.is_(True),
+                Task.completed_at.is_not(None),
+                Task.completed_at >= window_start,
+                Task.completed_at < window_end,
+            )
         )
-    )
-    completed_occurrences = await session.execute(
-        select(CompletedOccurrence.task_id, Task.title)
-        .join(CompletedOccurrence, CompletedOccurrence.task_id == Task.id)
-        .where(
-            CompletedOccurrence.completed_at >= day_start,
-            CompletedOccurrence.completed_at < day_end,
+    ).all()
+    completed_occurrences = (
+        await session.execute(
+            select(CompletedOccurrence, Task.title)
+            .join(Task, CompletedOccurrence.task_id == Task.id)
+            .where(
+                CompletedOccurrence.completed_at >= window_start,
+                CompletedOccurrence.completed_at < window_end,
+            )
         )
-    )
-    return [
-        StandupSuggestionRead(task_id=row[0], title=row[1], completed=True)
-        for row in [*completed_tasks.all(), *completed_occurrences.all()]
+    ).all()
+    suggestions = [
+        StandupSuggestionRead(task_id=task.id, title=task.title, completed=True)
+        for task in completed_tasks
+        if task.completed_at is not None and completed_on_day(task.completed_at, day, zone)
     ]
+    suggestions.extend(
+        StandupSuggestionRead(task_id=occurrence.task_id, title=title, completed=True)
+        for occurrence, title in completed_occurrences
+        if completed_on_day(occurrence.completed_at, day, zone)
+    )
+    return suggestions
 
 
 @router.get("/suggestions/today")
 async def read_today_suggestions(
     day: Annotated[date, Query(alias="date")],
     session: SessionDep,
+    tz: str | None = None,
 ) -> list[StandupSuggestionRead]:
     """Opt-in chip suggestions for the Today section: open Tasks from the
     Today Smart List (scheduled window started by `day`), plus Tasks completed
     on `day` itself — one-off completions and Completed Occurrences — so the
-    work actually finished today is reportable the same day. A recurring Task
+    work actually finished today is reportable the same day. `day` is the
+    caller's local day and `tz` their IANA timezone (UTC when absent), so
+    completions bucket by the user's calendar day, not UTC. A recurring Task
     open in the Smart List with an occurrence completed today appears once
     (deduped by Task, open wins). Pure read — no dismissal/seen-state tracking.
     """
+    zone = resolve_zone(tz)
     rows = await session.scalars(select(Task).where(Task.completed.is_(False)))
     matches = [task for task in rows if in_smart_view(task, "today", day)]
     seen_ids = {task.id for task in matches}
     suggestions = [StandupSuggestionRead(task_id=task.id, title=task.title) for task in matches]
-    for completed in await tasks_completed_on(day, session):
+    for completed in await tasks_completed_on(day, session, zone):
         if completed.task_id not in seen_ids:
             seen_ids.add(completed.task_id)
             suggestions.append(completed)
@@ -132,7 +175,9 @@ async def read_today_suggestions(
 
 @router.get("/suggestions/yesterday")
 async def read_yesterday_suggestions(
-    day: Annotated[date, Query(alias="date")], session: SessionDep
+    day: Annotated[date, Query(alias="date")],
+    session: SessionDep,
+    tz: str | None = None,
 ) -> list[StandupYesterdaySuggestion]:
     """Suggestion chips for the Yesterday section (issue #141): titles of
     one-off Tasks completed, and Completed Occurrences logged, on the prior
@@ -143,7 +188,7 @@ async def read_yesterday_suggestions(
     section is viewed. Deduped by title, preserving first-seen order.
     """
     prior_day = day - timedelta(days=1)
-    completed = await tasks_completed_on(prior_day, session)
+    completed = await tasks_completed_on(prior_day, session, resolve_zone(tz))
     prior_entry = await get_entry_by_date(prior_day, session)
     prior_today_bullets = (
         [b.text for b in prior_entry.bullets if b.section == "today"]

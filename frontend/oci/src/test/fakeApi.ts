@@ -12,10 +12,21 @@ import {
   type ViewMode,
 } from "../api";
 import { entryDayWindow } from "../calendar";
-import { addDays } from "../dates";
+import { addDays, zonedDay } from "../dates";
 import { habitDueOn } from "../habitFrequency";
 import { byName, SORT_GAP } from "../ordering";
 import { decrementCount, nextOccurrenceISO } from "./fakeRecurrence";
+
+/** The fake's stand-in for the backend's IANA validation: unknown zone
+ * names throw out of Intl.DateTimeFormat, which the route maps to 422. */
+function isKnownZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface FakeList {
   id: number;
@@ -2296,11 +2307,19 @@ export function installFakeApi({
       if (today === null) {
         return json({ error: { code: "validation_error", message: "date is required" } }, 422);
       }
+      const tz = url.searchParams.get("tz");
+      if (tz !== null && !isKnownZone(tz)) {
+        return json(
+          { error: { code: "validation_error", message: `Unknown IANA timezone ${tz}` } },
+          422,
+        );
+      }
       // Mirrors the backend: the Today Smart List's own query (open Tasks
       // whose scheduled window has started by `today`) plus Tasks completed
-      // on `today` itself (deduped by task, open wins, orphan occurrences
-      // dropped like the backend's inner join), reduced to a read-only chip
-      // shape.
+      // on `today` itself — bucketed in the caller's timezone, not UTC —
+      // (deduped by task, open wins, orphan occurrences dropped like the
+      // backend's inner join), reduced to a read-only chip shape.
+      const zone = tz ?? "UTC";
       const open = state.tasks.filter(
         (task) => !task.completed && inSmartView(task, "today", today),
       );
@@ -2314,13 +2333,17 @@ export function installFakeApi({
         items.push({ task_id, title, completed: true });
       };
       for (const task of state.tasks) {
-        if (task.completed && task.completed_at?.slice(0, 10) === today) {
+        if (
+          task.completed &&
+          task.completed_at !== null &&
+          zonedDay(task.completed_at, zone) === today
+        ) {
           addDone(task.id, task.title);
         }
       }
       const titles = new Map(state.tasks.map((task) => [task.id, task.title]));
       for (const occurrence of state.completedOccurrences) {
-        if (occurrence.completed_at.slice(0, 10) !== today) {
+        if (zonedDay(occurrence.completed_at, zone) !== today) {
           continue;
         }
         const title = titles.get(occurrence.task_id);
@@ -2336,6 +2359,13 @@ export function installFakeApi({
       return json(focused ? serializeGoal(focused, state) : null);
     }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/suggestions/yesterday") {
+      const tz = url.searchParams.get("tz");
+      if (tz !== null && !isKnownZone(tz)) {
+        return json(
+          { error: { code: "validation_error", message: `Unknown IANA timezone ${tz}` } },
+          422,
+        );
+      }
       return json(state.standupYesterdaySuggestions);
     }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/entries") {
