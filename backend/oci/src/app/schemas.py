@@ -547,11 +547,14 @@ class StandupEntryRead(StandupEntrySummary):
 class StandupSuggestionRead(BaseModel):
     """A read-only chip suggestion sourced from another part of the app
     (e.g. an open Task due today, or a Task completed today) — not
-    persisted, no dismissal/seen-state.
+    persisted, no dismissal/seen-state. `completed` marks chips sourced
+    from work finished on the selected date, so the frontend can tell
+    done apart from planned (#284).
     """
 
     task_id: int
     title: str
+    completed: bool = False
 
 
 class StandupYesterdaySuggestion(BaseModel):
