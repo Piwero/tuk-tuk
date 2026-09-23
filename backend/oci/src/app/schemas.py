@@ -546,7 +546,8 @@ class StandupEntryRead(StandupEntrySummary):
 
 class StandupSuggestionRead(BaseModel):
     """A read-only chip suggestion sourced from another part of the app
-    (e.g. a Task due today) — not persisted, no dismissal/seen-state.
+    (e.g. an open Task due today, or a Task completed today) — not
+    persisted, no dismissal/seen-state.
     """
 
     task_id: int

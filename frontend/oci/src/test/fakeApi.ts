@@ -2297,11 +2297,32 @@ export function installFakeApi({
         return json({ error: { code: "validation_error", message: "date is required" } }, 422);
       }
       // Mirrors the backend: the Today Smart List's own query (open Tasks
-      // whose scheduled window has started by `today`), reduced to a
-      // read-only chip shape.
-      const items = state.tasks
-        .filter((task) => !task.completed && inSmartView(task, "today", today))
-        .map((task) => ({ task_id: task.id, title: task.title }));
+      // whose scheduled window has started by `today`) plus Tasks completed
+      // on `today` itself (deduped by task, orphan occurrences dropped like
+      // the backend's inner join), reduced to a read-only chip shape.
+      const open = state.tasks.filter(
+        (task) => !task.completed && inSmartView(task, "today", today),
+      );
+      const seen = new Set(open.map((task) => task.id));
+      const items = open.map((task) => ({ task_id: task.id, title: task.title }));
+      for (const task of state.tasks) {
+        if (task.completed && task.completed_at?.slice(0, 10) === today && !seen.has(task.id)) {
+          seen.add(task.id);
+          items.push({ task_id: task.id, title: task.title });
+        }
+      }
+      const titles = new Map(state.tasks.map((task) => [task.id, task.title]));
+      for (const occurrence of state.completedOccurrences) {
+        if (occurrence.completed_at.slice(0, 10) !== today || seen.has(occurrence.task_id)) {
+          continue;
+        }
+        const title = titles.get(occurrence.task_id);
+        if (title === undefined) {
+          continue;
+        }
+        seen.add(occurrence.task_id);
+        items.push({ task_id: occurrence.task_id, title });
+      }
       return json(items);
     }
     if (method === "GET" && url.pathname === "/api/v1/stand-up/focused-goal") {

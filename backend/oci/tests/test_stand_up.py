@@ -1,10 +1,38 @@
 """Stand-up: one Entry per calendar date, lazily persisted by its first Bullet."""
 
+import asyncio
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
+from app.models import CompletedOccurrence, Task
 from tests.conftest import make_task
+from tests.test_stand_up_suggestions import (
+    seed_completed_occurrence,
+    seed_completed_task,
+)
 
 DAY = "2026-08-10"
+DAY_NOON = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
+OTHER_DAY_NOON = datetime(2026, 8, 8, 12, 0, tzinfo=UTC)
+
+
+def seed_occurrence_for_task(client: TestClient, task_id: int, completed_at: datetime) -> None:
+    """Logs a Completed Occurrence against an existing (still-open) Task."""
+
+    async def _seed() -> None:
+        session_factory = client.app.state.session_factory  # type: ignore[attr-defined]
+        async with session_factory() as session:
+            task = await session.get(Task, task_id)
+            assert task is not None
+            session.add(
+                CompletedOccurrence(
+                    task_id=task_id, completed_at=completed_at, due_date=completed_at
+                )
+            )
+            await session.commit()
+
+    asyncio.run(_seed())
 
 
 def add_bullet(client: TestClient, day: str, section: str, text: str) -> dict:
@@ -159,6 +187,50 @@ class TestTodaySuggestions:
 
         assert response.status_code == 200
         assert response.json() == [{"task_id": 1, "title": "Ship the release"}]
+
+    def test_a_task_completed_on_the_selected_date_is_suggested(self, client: TestClient) -> None:
+        seed_completed_task(client, "Finished report", DAY_NOON)
+
+        response = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert response.status_code == 200
+        assert [item["title"] for item in response.json()] == ["Finished report"]
+
+    def test_a_completed_occurrence_on_the_selected_date_is_suggested(
+        self, client: TestClient
+    ) -> None:
+        seed_completed_occurrence(client, "Water the plants", DAY_NOON)
+
+        response = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert response.status_code == 200
+        assert [item["title"] for item in response.json()] == ["Water the plants"]
+
+    def test_tasks_completed_on_other_dates_are_not_suggested(self, client: TestClient) -> None:
+        seed_completed_task(client, "Old work", OTHER_DAY_NOON)
+        seed_completed_occurrence(client, "Old occurrence", OTHER_DAY_NOON)
+
+        response = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_a_recurring_task_open_today_with_an_occurrence_completed_today_appears_once(
+        self, client: TestClient
+    ) -> None:
+        task = make_task(
+            client,
+            "Morning run",
+            due_date="2026-08-10T00:00:00Z",
+            is_all_day=True,
+            recurrence="FREQ=DAILY",
+        )
+        seed_occurrence_for_task(client, task["id"], DAY_NOON)
+
+        response = client.get("/api/v1/stand-up/suggestions/today", params={"date": DAY})
+
+        assert response.status_code == 200
+        assert response.json() == [{"task_id": task["id"], "title": "Morning run"}]
 
     def test_a_task_due_on_another_day_is_not_suggested(self, client: TestClient) -> None:
         make_task(client, "Due tomorrow", due_date="2026-08-11T00:00:00Z", is_all_day=True)

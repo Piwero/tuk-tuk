@@ -7,6 +7,7 @@ import {
   fakeKeyResult,
   fakeStandupEntry,
   fakeTask,
+  INBOX,
   installFakeApi,
 } from "./test/fakeApi";
 
@@ -412,6 +413,64 @@ describe("Stand-up", () => {
     expect(
       within(suggestions).queryByRole("button", { name: "Due tomorrow" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("suggests Tasks completed today alongside open ones, excluding other days", async () => {
+    installFakeApi({
+      tasks: [
+        fakeTask("Open today", { due_date: "2026-07-03T00:00:00Z", is_all_day: true }),
+        fakeTask("Finished report", {
+          completed: true,
+          completed_at: "2026-07-03T10:00:00Z",
+        }),
+        fakeTask("Old work", { completed: true, completed_at: "2026-07-01T10:00:00Z" }),
+      ],
+    });
+    render(<App />);
+    await openStandup();
+
+    const suggestions = await screen.findByLabelText("Today suggestions");
+    expect(within(suggestions).getByRole("button", { name: "Open today" })).toBeInTheDocument();
+    expect(
+      within(suggestions).getByRole("button", { name: "Finished report" }),
+    ).toBeInTheDocument();
+    expect(within(suggestions).queryByRole("button", { name: "Old work" })).not.toBeInTheDocument();
+  });
+
+  it("suggests a recurring Task's occurrence completed today exactly once", async () => {
+    const run = fakeTask("Morning run", {
+      due_date: "2026-07-03T00:00:00Z",
+      is_all_day: true,
+      recurrence: "FREQ=DAILY",
+    });
+    installFakeApi({
+      tasks: [run],
+      completedOccurrences: [
+        {
+          id: 1,
+          task_id: run.id,
+          title: "Morning run",
+          list_id: INBOX.id,
+          completed_at: "2026-07-03T10:00:00Z",
+          due_date: "2026-07-03T00:00:00Z",
+          is_all_day: true,
+        },
+      ],
+    });
+    render(<App />);
+    await openStandup();
+
+    const suggestions = await screen.findByLabelText("Today suggestions");
+    expect(within(suggestions).getAllByRole("button", { name: "Morning run" })).toHaveLength(1);
+
+    fireEvent.click(within(suggestions).getByRole("button", { name: "Morning run" }));
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("list", { name: "Today bullets" })).getByText("Morning run"),
+      ).toBeInTheDocument();
+    });
+    // The chip is gone and, as the last chip, the suggestions row with it.
+    expect(screen.queryByRole("button", { name: "Morning run" })).not.toBeInTheDocument();
   });
 
   it("clicking a Today suggestion chip appends a bullet without altering other sections", async () => {
