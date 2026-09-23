@@ -80,18 +80,54 @@ def get_bullet_or_404(entry: StandupEntry, bullet_id: int) -> StandupBullet:
     raise NotFoundError(f"Bullet {bullet_id} not found on stand-up entry {entry.id}")
 
 
+async def tasks_completed_on(day: date, session: SessionDep) -> list[StandupSuggestionRead]:
+    """Suggestions completed on calendar day `day`: one-off Tasks plus
+    Completed Occurrences (titles follow the owning Task, like the completed
+    view). Shared by both suggestion endpoints."""
+    day_start = datetime(day.year, day.month, day.day, tzinfo=UTC)
+    day_end = day_start + timedelta(days=1)
+    completed_tasks = await session.execute(
+        select(Task.id, Task.title).where(
+            Task.completed.is_(True),
+            Task.completed_at >= day_start,
+            Task.completed_at < day_end,
+        )
+    )
+    completed_occurrences = await session.execute(
+        select(CompletedOccurrence.task_id, Task.title)
+        .join(CompletedOccurrence, CompletedOccurrence.task_id == Task.id)
+        .where(
+            CompletedOccurrence.completed_at >= day_start,
+            CompletedOccurrence.completed_at < day_end,
+        )
+    )
+    return [
+        StandupSuggestionRead(task_id=row[0], title=row[1])
+        for row in [*completed_tasks.all(), *completed_occurrences.all()]
+    ]
+
+
 @router.get("/suggestions/today")
 async def read_today_suggestions(
     day: Annotated[date, Query(alias="date")],
     session: SessionDep,
 ) -> list[StandupSuggestionRead]:
-    """Opt-in chip suggestions for the Today section, sourced from the Today
-    Smart List (open Tasks whose scheduled window has started by `day`). Pure
-    read — no dismissal/seen-state tracking.
+    """Opt-in chip suggestions for the Today section: open Tasks from the
+    Today Smart List (scheduled window started by `day`), plus Tasks completed
+    on `day` itself — one-off completions and Completed Occurrences — so the
+    work actually finished today is reportable the same day. A recurring Task
+    open in the Smart List with an occurrence completed today appears once
+    (deduped by Task). Pure read — no dismissal/seen-state tracking.
     """
     rows = await session.scalars(select(Task).where(Task.completed.is_(False)))
     matches = [task for task in rows if in_smart_view(task, "today", day)]
-    return [StandupSuggestionRead(task_id=task.id, title=task.title) for task in matches]
+    seen_ids = {task.id for task in matches}
+    suggestions = [StandupSuggestionRead(task_id=task.id, title=task.title) for task in matches]
+    for completed in await tasks_completed_on(day, session):
+        if completed.task_id not in seen_ids:
+            seen_ids.add(completed.task_id)
+            suggestions.append(completed)
+    return suggestions
 
 
 @router.get("/suggestions/yesterday")
@@ -107,31 +143,14 @@ async def read_yesterday_suggestions(
     section is viewed. Deduped by title, preserving first-seen order.
     """
     prior_day = day - timedelta(days=1)
-    day_start = datetime(day.year, day.month, day.day, tzinfo=UTC) - timedelta(days=1)
-    day_end = day_start + timedelta(days=1)
-
-    completed_tasks = await session.scalars(
-        select(Task.title).where(
-            Task.completed.is_(True),
-            Task.completed_at >= day_start,
-            Task.completed_at < day_end,
-        )
-    )
-    completed_occurrences = await session.scalars(
-        select(Task.title)
-        .join(CompletedOccurrence, CompletedOccurrence.task_id == Task.id)
-        .where(
-            CompletedOccurrence.completed_at >= day_start,
-            CompletedOccurrence.completed_at < day_end,
-        )
-    )
+    completed = await tasks_completed_on(prior_day, session)
     prior_entry = await get_entry_by_date(prior_day, session)
     prior_today_bullets = (
         [b.text for b in prior_entry.bullets if b.section == "today"]
         if prior_entry is not None
         else []
     )
-    titles = [*completed_tasks.all(), *completed_occurrences.all(), *prior_today_bullets]
+    titles = [item.title for item in completed] + prior_today_bullets
     seen: set[str] = set()
     deduped: list[str] = []
     for title in titles:
