@@ -5711,21 +5711,158 @@ select.task-detail-breadcrumb:focus-visible {
   color: var(--text-secondary);
 }
 
-/* Section visibility toggles (Features): a checkbox grid rather than an
-   inline run — cramped inline labels/checkboxes read as unpolished at any
-   count past two or three. */
-.settings-feature-toggles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+/* Settings groups: the flat card stack reads as nine equal boxes, so
+   cards gather under four quiet eyebrow groups (Personalize, AI helpers,
+   Connections, Account and system). The eyebrow stays tertiary so the
+   card titles keep the visual weight. */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings-group-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* Jump links across the top of the long page — plain anchor chips. */
+.settings-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-toc a {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.settings-toc a:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.settings-toc-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: var(--radius-full);
+  background: var(--ink-300);
+}
+
+.settings-toc-dot[data-state="on"] {
+  background: var(--success);
+}
+
+.settings-toc-dot[data-state="warn"] {
+  background: var(--warning);
+}
+
+/* Card header: title left, connection state right. The pill answers
+   "is this set up?" before any form is read. */
+.settings-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.settings-section-head h2 {
+  margin: 0;
+}
+
+.settings-section {
+  scroll-margin-top: var(--space-4);
+}
+
+.settings-status {
+  flex: none;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.settings-status[data-state="on"] {
+  background: var(--success-soft);
+  color: var(--text-success);
+}
+
+.settings-status[data-state="off"] {
+  background: var(--surface-sunken);
+  color: var(--text-tertiary);
+}
+
+.settings-status[data-state="warn"] {
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+  color: var(--text-primary);
+}
+
+/* One-line card summary under the title — what the card is for. */
+.settings-lead {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* Feature toggles: one row per feature — name plus what it does —
+   instead of a bare checkbox grid that reads as unpolished past two
+   or three items. */
+.settings-feature-toggles {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .settings-feature-toggles label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
   font-size: var(--text-md);
   color: var(--text-primary);
+  cursor: pointer;
+}
+
+.settings-feature-toggles label + label {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings-feature-toggles label:hover {
+  background: var(--surface-hover);
+}
+
+.settings-feature-toggles .hint-wrap {
+  margin-top: 2px;
+}
+
+.settings-feature-name {
+  display: block;
+  font-weight: var(--weight-medium);
+}
+
+.settings-feature-desc {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .settings-subsection + .settings-subsection {
@@ -5748,8 +5885,8 @@ select.task-detail-breadcrumb:focus-visible {
   max-width: 340px;
 }
 
-/* Appearance (issue #193): the Light / Dark / System radio group. Border
-   drawn by an alias so it re-points with the theme like everything else. */
+/* Appearance (issue #193): the Light / Dark / System choice as one
+   segmented control — a single decision, not three loose radios. */
 .settings-appearance {
   margin: 0;
   padding: 0;
@@ -5763,13 +5900,43 @@ select.task-detail-breadcrumb:focus-visible {
   color: var(--text-secondary);
 }
 
+.settings-appearance-options {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+}
+
 .settings-appearance label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  margin-right: var(--space-4);
-  font-size: var(--text-md);
+  margin: 0;
+  padding: 4px var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.settings-appearance label:has(input:checked) {
+  background: var(--surface-card);
+  border-color: var(--border-default);
   color: var(--text-primary);
+}
+
+.settings-appearance label:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.settings-appearance input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
 .settings-field {
