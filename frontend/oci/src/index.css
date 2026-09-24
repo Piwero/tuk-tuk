@@ -5302,6 +5302,12 @@ select.task-detail-breadcrumb:focus-visible {
   display: none;
 }
 
+/* Mobile-only Quick-Add trigger (issue #287): hidden on desktop, where the
+   sidebar's own trigger is the only entry point. */
+.mobile-quick-add {
+  display: none;
+}
+
 @media (max-width: 720px) {
   .app,
   .app.with-detail,
@@ -5518,11 +5524,47 @@ select.task-detail-breadcrumb:focus-visible {
   }
 
   /* Bottom padding leaves room at the foot of the scroll region so the last
-     row of a scrolled list is never hidden behind the fixed tab bar
-     (issue #170). */
+     row of a scrolled list is never hidden behind the fixed tab bar and the
+     Quick-Add button docked above it (issue #170, #287). */
   main {
     padding: var(--space-4);
-    padding-bottom: calc(var(--mobile-tab-bar-height) + var(--space-4));
+    padding-bottom: calc(
+      var(--mobile-tab-bar-height) + var(--mobile-quick-add-size) + var(--space-4) * 2
+    );
+  }
+
+  /* ── Mobile Quick-Add button (issue #287) ───────────────────────────
+   * Docked above the tab bar, within thumb reach — the drawer's Quick-Add
+   * trigger is otherwise the only path to Task creation on a phone, and
+   * it's hidden off-canvas until the drawer opens. Stacking sits between
+   * the tab bar (z-modal - 4) and the drawer scrim (z-modal - 2), so it
+   * never competes with either. */
+  .mobile-quick-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: var(--space-4);
+    bottom: calc(var(--mobile-tab-bar-height) + env(safe-area-inset-bottom, 0px) + var(--space-3));
+    z-index: calc(var(--z-modal) - 3);
+    width: var(--mobile-quick-add-size);
+    height: var(--mobile-quick-add-size);
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--accent-strong);
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-md);
+    transition: transform var(--duration-fast) var(--ease-out);
+  }
+
+  .mobile-quick-add:active {
+    transform: scale(0.92);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-quick-add {
+      transition: none;
+    }
   }
 
   /* The detail panel has no third column to sit in: it becomes a
