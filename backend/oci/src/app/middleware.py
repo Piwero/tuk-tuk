@@ -5,6 +5,10 @@ so a router added without the decorator is silently published
 unauthenticated. Middleware sits in front of routing entirely, so it also
 covers the interactive docs and the OpenAPI schema, which aren't routers at
 all and which a per-router approach couldn't reach.
+
+The AUTH_DISABLED local-dev escape hatch below is the one exception: when
+set, the gate is skipped entirely and the app logs a warning at startup
+(app.main.create_app). Never set in a real deployment.
 """
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -35,6 +39,12 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         self._clock = clock
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # Local-dev escape hatch (AUTH_DISABLED): skip the gate entirely, so
+        # a dev database never needs a password or a cookie. Never set in a
+        # real deployment — every route serves unauthenticated.
+        if self._settings.auth_disabled:
+            return await call_next(request)
+
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 

@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     # deployment leaves it unset and sets a password through `/setup`
     # instead.
     auth_password_hash: str | None = None
+    # Local-dev escape hatch: when true SessionAuthMiddleware skips the
+    # whole gate (no password, no cookie). Off by default, so a missing or
+    # ambiguous value keeps the fail-closed posture (ADR 0005). Never set
+    # in a real deployment — backend/chart/configmap.yaml deliberately
+    # omits it, and the app logs a warning at startup whenever it is on.
+    auth_disabled: bool = False
     auth_cookie_secure: bool = True
     auth_login_delay_seconds: float = 1.0
     auth_session_lifetime_days: int = 30

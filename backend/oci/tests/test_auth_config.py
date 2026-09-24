@@ -57,6 +57,42 @@ def test_app_starts_with_no_password_hash_configured() -> None:
     create_app(settings)
 
 
+def test_settings_default_auth_disabled_to_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AUTH_DISABLED", raising=False)
+
+    settings = Settings(auth_password_hash=None)
+
+    assert settings.auth_disabled is False
+
+
+def test_settings_read_auth_disabled_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AUTH_DISABLED", "true")
+
+    settings = Settings()
+
+    assert settings.auth_disabled is True
+
+
+def test_app_logs_a_warning_when_auth_is_disabled(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    settings = Settings(app_master_key="a-master-key", auth_disabled=True)
+
+    with caplog.at_level("WARNING", logger="app.main"):
+        create_app(settings)
+
+    assert "AUTH_DISABLED" in caplog.text
+
+
+def test_app_stays_silent_when_auth_is_enabled(caplog: pytest.LogCaptureFixture) -> None:
+    settings = Settings(app_master_key="a-master-key", auth_disabled=False)
+
+    with caplog.at_level("WARNING", logger="app.main"):
+        create_app(settings)
+
+    assert "AUTH_DISABLED" not in caplog.text
+
+
 def test_app_starts_with_google_configured() -> None:
     settings = Settings(
         app_master_key="a-master-key",

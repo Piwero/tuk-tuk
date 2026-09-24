@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
+from app.config import Settings
+from app.main import create_app
 from app.session import issue_session_token, verify_session_token
 from tests.conftest import TEST_PASSWORD, FakeClock, app_settings_row
 
@@ -369,5 +371,64 @@ class TestChangePassword:
             "/api/v1/auth/password",
             json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
         )
+
+        assert response.status_code == 401
+
+
+class TestAuthDisabled:
+    def disabled_client(
+        self, database_url: str, fake_clock: FakeClock, password_hash: str | None = None
+    ) -> TestClient:
+        app = create_app(
+            Settings(
+                database_url=database_url, auth_password_hash=password_hash, auth_disabled=True
+            ),
+            clock=fake_clock,
+        )
+        return TestClient(app)
+
+    def test_data_endpoint_accepts_request_without_session(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with self.disabled_client(database_url, fake_clock) as client:
+            response = client.get("/api/v1/tasks")
+
+        assert response.status_code == 200
+
+    def test_session_probe_accepts_request_without_session(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with self.disabled_client(database_url, fake_clock) as client:
+            response = client.get("/api/v1/auth/session")
+
+        assert response.status_code == 204
+
+    def test_docs_accept_request_without_session(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with self.disabled_client(database_url, fake_clock) as client:
+            response = client.get("/docs")
+
+        assert response.status_code == 200
+
+    def test_no_password_set_yet_does_not_gate(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with self.disabled_client(database_url, fake_clock, password_hash=None) as client:
+            response = client.get("/api/v1/tasks")
+
+        assert response.status_code == 200
+
+    def test_flag_off_still_enforces_auth(self, database_url: str, fake_clock: FakeClock) -> None:
+        app = create_app(
+            Settings(
+                database_url=database_url,
+                auth_password_hash="an-imported-hash",
+                auth_disabled=False,
+            ),
+            clock=fake_clock,
+        )
+        with TestClient(app) as client:
+            response = client.get("/api/v1/tasks")
 
         assert response.status_code == 401
