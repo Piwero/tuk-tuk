@@ -48,7 +48,7 @@ spec:
                       - amd64
       containers:
         - name: backend
-          image: ghcr.io/piwero/tuk-tuk/backend:2.10.10 # {"$imagepolicy": "tuk-tuk:backend"}
+          image: ghcr.io/piwero/tuk-tuk/backend:2.10.11 # {"$imagepolicy": "tuk-tuk:backend"}
           imagePullPolicy: Always
           ports:
             - containerPort: 8900
