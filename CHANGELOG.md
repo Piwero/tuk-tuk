@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.11](https://github.com/Piwero/tuk-tuk/compare/v2.10.10...v2.10.11) - 2026-09-24
+
+### Features
+
+- **auth:** Add AUTH_DISABLED local-dev bypass ([4169ed9](https://github.com/Piwero/tuk-tuk/commit/4169ed9f5f36aa768c664b15a59cd4ccb5454669))
+
 ## [2.10.10](https://github.com/Piwero/tuk-tuk/compare/v2.10.9...v2.10.10) - 2026-09-23
 
 ### Features
