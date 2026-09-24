@@ -197,6 +197,7 @@
   --task-col-date: 156px;
   --task-col-actions: 68px; /* reserved, so hover never reflows the row */
   --mobile-tab-bar-height: 56px; /* the mobile bottom tab bar (issue #170) */
+  --mobile-quick-add-size: 56px; /* the mobile Quick-Add button (issue #287) */
   --control-height: 34px; /* inputs, buttons */
   --tap-target: 44px; /* minimum touch hit area (issue #168), pointer: coarse only */
 

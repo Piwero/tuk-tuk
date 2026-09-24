@@ -72,6 +72,7 @@ import { HabitsView } from "./components/HabitsView";
 import { Hint } from "./components/Hint";
 import { IconButton } from "./components/IconButton";
 import { KanbanView } from "./components/KanbanView";
+import { MobileQuickAddButton } from "./components/MobileQuickAddButton";
 import { MobileTabBar } from "./components/MobileTabBar";
 import { Modal } from "./components/Modal";
 import { QuickAdd } from "./components/QuickAdd";
@@ -1401,6 +1402,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             onSelectHabits={() => switchView({ kind: "habits" })}
             onSelectFocus={() => switchView({ kind: "focus" })}
           />
+          <MobileQuickAddButton onClick={() => setQuickAddOpen(true)} />
           {selectedTask !== null && (
             <div className="task-detail-backdrop" aria-hidden="true" onClick={closeTaskDetail} />
           )}
