@@ -156,6 +156,27 @@ describe("Collapsing the sidebar", () => {
     );
   });
 
+  // Issue #290: a drag starting over the scrim used to scroll the list
+  // underneath, because nothing locked `main`'s own scroll region while
+  // the drawer sat on top of it. `.app` itself never scrolls (`overflow:
+  // hidden` in index.css) — `main` is the real scroll region — so it's
+  // `main`'s overflow that must lock, not `document.body`'s.
+  it("locks main's scroll region while the drawer is open, and restores it on close", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("heading", { name: "All" });
+
+    const main = screen.getByRole("main");
+    expect(main.style.overflow).toBe("");
+
+    await user.click(screen.getByRole("button", { name: "Show navigation" }));
+    expect(main.style.overflow).toBe("hidden");
+
+    await user.click(screen.getByRole("button", { name: "Close navigation" }));
+    expect(main.style.overflow).toBe("");
+  });
+
   it("remembers the choice across a reload", async () => {
     installFakeApi();
     const user = userEvent.setup();
