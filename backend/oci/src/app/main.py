@@ -1,6 +1,7 @@
 """FastAPI entrypoint."""
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -65,6 +66,12 @@ def create_app(
             "APP_MASTER_KEY is not configured. The app refuses to start without it: "
             "generate one with 'openssl rand -base64 32' and set it as APP_MASTER_KEY "
             "in your .env or 1Password item."
+        )
+
+    if app_settings.auth_disabled:
+        logging.getLogger(__name__).warning(
+            "AUTH_DISABLED is on: every route serves unauthenticated. "
+            "Local development only — never enable in a real deployment."
         )
 
     @asynccontextmanager
