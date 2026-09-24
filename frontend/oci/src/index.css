@@ -5440,8 +5440,8 @@ select.task-detail-breadcrumb:focus-visible {
     flex: none;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: var(--tap-target);
+    height: var(--tap-target);
     padding: 0;
     border: none;
     border-radius: var(--radius-sm);
@@ -5489,6 +5489,20 @@ select.task-detail-breadcrumb:focus-visible {
   .main-header > .icon-button-wrap:has(> .drawer-toggle) {
     display: inline-flex;
     flex: none;
+  }
+
+  /* Sticky header (#290): `main` is the scroll region (see the base
+     `main` rule), and the header used to scroll away with it after one
+     swipe on a full list. Pinning it keeps the title and filter controls
+     on screen. `z-index: 1` is enough to sit above the list content that
+     scrolls beneath it, and stays well under the drawer/scrim (`calc(var
+     (--z-modal) - 1)` / `- 2`) and the tab bar (`calc(var(--z-modal) -
+     4)`), so none of those get covered. */
+  .main-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-page);
   }
 
   /* ── Bottom tab bar ──────────────────────────────────────────────── */

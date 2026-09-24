@@ -238,6 +238,19 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // Mobile only: below the breakpoint the sidebar is off-canvas and this
   // slides it over the content. Ignored by the desktop layout.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // `<main>` is the app's real scroll region (`.app` itself is
+  // `overflow: hidden` — see index.css), so locking `document.body` would
+  // touch an element that was never scrolling in the first place. Locking
+  // `main`'s own overflow instead stops a drag over the drawer scrim from
+  // moving the list underneath, and — unlike a `position: fixed` body
+  // trick — needs no manual scroll-position restore on close, since
+  // `overflow: hidden` alone preserves `scrollTop`.
+  const mainRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const main = mainRef.current;
+    if (main === null) return;
+    main.style.overflow = drawerOpen ? "hidden" : "";
+  }, [drawerOpen]);
   // Whether the Stand-up nav item/route is shown (issue #140) — fetched once
   // at load, defaulting to true so the nav item doesn't flash away on a slow
   // network before the real value arrives.
@@ -1117,7 +1130,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
           {drawerOpen && (
             <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
           )}
-          <main>
+          <main ref={mainRef}>
             <div className="main-header">
               <IconButton
                 icon="menu"
