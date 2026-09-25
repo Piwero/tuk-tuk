@@ -47,10 +47,12 @@ describe("content column (issue #196)", () => {
   });
 
   it("keeps the task list's own chrome aligned with the list", () => {
-    // The title bar, QuickAdd bar and view controls fill with the list.
+    // The chrome wrapper — holding the title bar, QuickAdd bar and view
+    // controls — fills with the list.
+    expect(selectors).not.toContain(".main-chrome");
     expect(selectors).not.toContain(".main-header");
     expect(selectors).not.toContain(".view-controls");
-    expect(selectors).not.toContain("main > form");
+    expect(selectors).not.toContain(".main-chrome > form");
   });
 
   it("never caps `.tasks`, so the aligned-row container query keys off the real width", () => {

@@ -233,8 +233,9 @@ main {
    badly at full width. Habits and Focus stay on the measure too. Calendar
    and Kanban were already full width.
 
-   The task list's own chrome — the `.main-header` title bar, the QuickAdd
-   bar (`main > form`) and the `.view-controls` — fills with it, so the
+   The task list's own chrome — the `.main-chrome` wrapper holding the
+   `.main-header` title bar, the QuickAdd bar and the `.view-controls` —
+   fills with it, so the
    list and everything above it share one left-to-right extent. */
 .habits-view,
 .focus-view,
@@ -987,7 +988,7 @@ button.create-menu-trigger {
 
 /* ── Quick-Add ───────────────────────────────────────────────────── */
 
-main > form input {
+.main-chrome > form input {
   width: 100%;
   height: 42px;
   padding: 0 14px;
@@ -5644,14 +5645,16 @@ select.task-detail-breadcrumb:focus-visible {
     flex: none;
   }
 
-  /* Sticky header (#290): `main` is the scroll region (see the base
-     `main` rule), and the header used to scroll away with it after one
-     swipe on a full list. Pinning it keeps the title and filter controls
-     on screen. `z-index: 1` is enough to sit above the list content that
+  /* Sticky chrome (#290): `main` is the scroll region (see the base
+     `main` rule), and the chrome used to scroll away with it after one
+     swipe on a full list. Pinning the one wrapper keeps the title, the
+     Quick-Add bar and the filter controls on screen together — one sticky
+     element rather than three stacked siblings, so no offsets to keep in
+     lockstep. `z-index: 1` is enough to sit above the list content that
      scrolls beneath it, and stays well under the drawer/scrim (`calc(var
      (--z-modal) - 1)` / `- 2`) and the tab bar (`calc(var(--z-modal) -
      4)`), so none of those get covered. */
-  .main-header {
+  .main-chrome {
     position: sticky;
     top: 0;
     z-index: 1;
