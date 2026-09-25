@@ -5109,6 +5109,70 @@ select.task-detail-breadcrumb:focus-visible {
   }
 }
 
+/* ── Header, filter row and Task title touch sizing (issue #289) ─────
+ * The main header, the filter row and the Task title never got the #168
+ * touch treatment: the Completed toggle, the Filters button and the
+ * Group-by/Sort-by selects sit at 28px, and the Task title — the primary
+ * action on every row — is ~17px tall inside a 67px row. Gated on the
+ * mobile breakpoint, not `pointer: coarse`: coarse-only gating is why
+ * these were missed, since a touch-capable device reporting `pointer:
+ * fine` gets none of it. Only heights change — no font-size, no icon
+ * size — so glyphs and type read exactly as on desktop. */
+@media (max-width: 720px) {
+  .view-toggle,
+  .completed-toggle,
+  .view-controls select,
+  .filter-menu-button,
+  .filter-menu-clear-all {
+    min-height: var(--tap-target);
+  }
+
+  /* Text buttons centre their label in the taller box rather than leaving
+   * it riding at the top. */
+  .filter-menu-clear-all,
+  .breadcrumb-folder {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .breadcrumb-folder,
+  .filter-chip {
+    min-height: var(--tap-target);
+  }
+
+  /* The chip grows with its remove control: a 44px button inside the base
+   * 28px chip would overflow it. Square hit area like `.modal-close` —
+   * the 12px glyph is untouched. */
+  .filter-chip button {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+  }
+
+  /* The Kanban card is auto-height, so its checkbox label takes the same
+   * padding outright — there is no fixed row to bleed out of. */
+  .kanban-card label {
+    padding: 13px;
+  }
+
+  /* The title claims the row height that already exists — but only where
+   * the row wraps. Below the 620px container floor the head line is
+   * already 44px tall (the padded checkbox label), so a 44px title moves
+   * neither the text nor the row. Where the row is still the fixed 36px
+   * grid, a 44px title would bleed into the rows above and below instead
+   * of claiming anything, so that band keeps its desktop sizing. Scoped
+   * with the exact complement of the grid's own query, so the two can
+   * never disagree about which layout is live. */
+  @container tasklist (not (min-width: 620px)) {
+    .tasks label {
+      padding: 13px;
+    }
+
+    .task-title {
+      min-height: var(--tap-target);
+    }
+  }
+}
+
 /* ── Collapsed sidebar (icon rail) ───────────────────────────────── */
 
 .sidebar-top {
