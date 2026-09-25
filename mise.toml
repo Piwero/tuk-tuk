@@ -78,6 +78,7 @@ depends = ["backend:install"]
 run = '''
 backend/oci/.venv/bin/pre-commit install --install-hooks
 backend/oci/.venv/bin/pre-commit install --hook-type commit-msg
+backend/oci/.venv/bin/pre-commit install --hook-type pre-push
 '''
 
 [tasks.install]

@@ -88,3 +88,20 @@ repos:
     rev: v8.21.2
     hooks:
       - id: gitleaks
+
+  # ---- Pre-push: mirror CI's Test steps locally, so a red suite never
+  # reaches `main` only to be caught by CI five minutes later. ----
+  - repo: local
+    hooks:
+      - id: backend-pytest
+        name: backend pytest
+        entry: bash -c 'cd backend/oci && uv run pytest'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: frontend-vitest
+        name: frontend vitest
+        entry: bash -c 'cd frontend/oci && npm test'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
