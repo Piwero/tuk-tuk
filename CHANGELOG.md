@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.12](https://github.com/Piwero/tuk-tuk/compare/v2.10.11...v2.10.12) - 2026-09-25
+
+### Features
+
+- **mobile:** Add quick-add control reachable without drawer (#287) ([718cdaf](https://github.com/Piwero/tuk-tuk/commit/718cdaf39de3b8200b658ad79577c1860991a866))
+- **mobile:** Make the Quick-Add dialog operable on touch (#288) ([c146813](https://github.com/Piwero/tuk-tuk/commit/c146813b605ff98ec7f85a5ef7ee01c005bd2cdf))
+- **mobile:** Size header, filter and Task title controls for touch (#289) ([5a664bd](https://github.com/Piwero/tuk-tuk/commit/5a664bd663b2f0d82ebb9f1173d03e114a7d2152))
+
+### Bug Fixes
+
+- **mobile:** Pin header, lock scroll behind drawer, fix close-control size (#290) ([22ce17a](https://github.com/Piwero/tuk-tuk/commit/22ce17a51d669ebc93bdd7fb8fdabf9a6c193775))
+- **mobile:** Route Quick-Add button through IconButton (#287) ([4be43c8](https://github.com/Piwero/tuk-tuk/commit/4be43c81bf1d02db5ab7325e3dfe434af906757d))
+- **events:** Narrow converted-events tuple types for mypy ([4fa0683](https://github.com/Piwero/tuk-tuk/commit/4fa0683c00c65a1a531eff8a66fad731a1eb6d2d))
+
 ## [2.10.11](https://github.com/Piwero/tuk-tuk/compare/v2.10.10...v2.10.11) - 2026-09-24
 
 ### Features
