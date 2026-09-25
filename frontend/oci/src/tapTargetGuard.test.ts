@@ -52,6 +52,23 @@ function resolvePx(raw: string): number | null {
     const resolved = tokens.get(varMatch[1] as string);
     return resolved === undefined ? null : resolvePx(resolved);
   }
+  // `calc((<a> - <b>) / <n>)` — the house form for deriving a padding from
+  // the tap-target token rather than hard-coding the halved remainder (see
+  // `.habit-strip button.heatmap-day`). Tokens are substituted first, so the
+  // operands can be `var(...)`; only this one shape is understood, and
+  // anything else reads as "not a px value" rather than being guessed at.
+  if (value.startsWith("calc(")) {
+    const substituted = value.replace(/var\((--[\w-]+)\)/g, (_, name: string) =>
+      (tokens.get(name) ?? "?").trim(),
+    );
+    const calcMatch = /^calc\(\s*\(\s*([\d.]+)px\s*-\s*([\d.]+)px\s*\)\s*\/\s*([\d.]+)\s*\)$/.exec(
+      substituted,
+    );
+    if (calcMatch === null) return null;
+    const divisor = parseFloat(calcMatch[3] as string);
+    if (divisor === 0) return null;
+    return (parseFloat(calcMatch[1] as string) - parseFloat(calcMatch[2] as string)) / divisor;
+  }
   const pxMatch = /^([\d.]+)px$/.exec(value);
   return pxMatch ? parseFloat(pxMatch[1] as string) : null;
 }
@@ -79,6 +96,9 @@ interface Rule {
   selectors: string[];
   declBody: string;
   index: number;
+  /** The media-query list of each enclosing `@media`, outermost first. A
+   * rule only applies where every one of them holds. */
+  conditions: string[];
 }
 
 /** Every leaf rule in index.css — including ones nested inside `@media`,
@@ -86,7 +106,14 @@ interface Rule {
  * matches an innermost `selector { declarations }` block, at any nesting
  * depth. A section-header comment sitting right before a selector (e.g.
  * `/* -- Main header -- *\/\n.main-header {`) is stripped out of the
- * selector-list capture so it doesn't get parsed as part of a selector. */
+ * selector-list capture so it doesn't get parsed as part of a selector.
+ *
+ * Each rule carries its enclosing `@media` conditions, so a declaration can
+ * be asked about at a particular viewport rather than "anywhere in the
+ * file" — the difference between "sized on a phone" and "sized on the
+ * desktop the ticket says must not change". Tracked by walking the braces
+ * the match landed between, which is cheap and exact enough here: the
+ * stylesheet nests at most two levels deep. */
 function allRules(): Rule[] {
   const rules: Rule[] = [];
   const re = /([^{}]+)\{([^{}]*)\}/g;
@@ -98,12 +125,85 @@ function allRules(): Rule[] {
       selectors: splitSelectors(selectorList),
       declBody: m[2] as string,
       index: m.index,
+      conditions: enclosingMedia(m.index),
     });
   }
   return rules;
 }
 
+/** The media-query list of every `@media` still open at `index`, outermost
+ * first. Walks the text from the top, pushing a prelude on `{` and popping
+ * on `}`. */
+function enclosingMedia(index: number): string[] {
+  const open: (string | null)[] = [];
+  const re = /\/\*[\s\S]*?\*\/|([^{}]*)\{|\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(css)) !== null && m.index < index) {
+    if (m[0] === "}") {
+      open.pop();
+    } else if (m[0].endsWith("{")) {
+      const prelude = (m[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
+      const media = /^@media\s+(.+)$/.exec(prelude);
+      open.push(media === null ? null : (media[1] as string));
+    }
+  }
+  return open.filter((condition): condition is string => condition !== null);
+}
+
 const rules = allRules();
+
+/** The two viewports this guard reasons about: a phone under a finger, and
+ * the desktop the ticket says must be left alone. */
+interface Viewport {
+  width: number;
+  coarsePointer: boolean;
+}
+
+const PHONE: Viewport = { width: 390, coarsePointer: true };
+const DESKTOP: Viewport = { width: 1440, coarsePointer: false };
+
+/** Whether one `(feature: value)` holds at `viewport`. Anything this
+ * doesn't model (`prefers-reduced-motion`, `prefers-color-scheme`…) reads
+ * as false, so an unmodelled query can never be mistaken for sizing that
+ * applies. */
+function featureHolds(feature: string, viewport: Viewport): boolean {
+  const [rawName, rawValue] = feature.split(":");
+  const name = (rawName ?? "").trim();
+  const value = (rawValue ?? "").trim();
+  if (name === "max-width") {
+    const px = resolvePx(value);
+    return px !== null && viewport.width <= px;
+  }
+  if (name === "min-width") {
+    const px = resolvePx(value);
+    return px !== null && viewport.width >= px;
+  }
+  if (name === "pointer") {
+    return viewport.coarsePointer ? value === "coarse" : value === "fine";
+  }
+  if (name === "hover") {
+    return viewport.coarsePointer ? value === "none" : value === "hover";
+  }
+  return false;
+}
+
+/** Whether a media-query list holds at `viewport`: any comma-separated
+ * query all of whose features hold. */
+function queryHolds(list: string, viewport: Viewport): boolean {
+  return splitSelectors(list).some((query) => {
+    const features = [...query.matchAll(/\(([^)]*)\)/g)].map((match) => match[1] as string);
+    return features.length > 0 && features.every((feature) => featureHolds(feature, viewport));
+  });
+}
+
+/** Every rule naming `selector` that applies at `viewport`. */
+function rulesFor(selector: string, viewport: Viewport): Rule[] {
+  return rules.filter(
+    (rule) =>
+      rule.selectors.includes(selector) &&
+      rule.conditions.every((condition) => queryHolds(condition, viewport)),
+  );
+}
 
 /** True when `selector` is a real descendant of `.<parentClass>` — via a
  * space, a `>` combinator, or a `:has(...)`/pseudo chained straight onto
@@ -192,16 +292,15 @@ function mobileSurfaceControls(): string[] {
 }
 
 /** The largest declared `height`/`min-height` for `selector` across every
- * rule in the file that names it — so an override elsewhere (e.g. inside a
- * mobile-only block) is picked up without this test needing to know which
- * media query it lives in. Falls back to `width`/`min-width` for controls
- * sized as a square via width alone. `null` means no size was declared for
- * this selector anywhere. */
-function declaredSize(selector: string): number | null {
+ * rule that applies at `viewport` — so a mobile-only override is picked up
+ * at phone width and *not* at desktop width, which is what lets the same
+ * helper prove both "sized on a phone" and "desktop untouched". Falls back
+ * to `width`/`min-width` for controls sized as a square via width alone.
+ * `null` means no size was declared for this selector at this viewport. */
+function declaredSize(selector: string, viewport: Viewport = PHONE): number | null {
   const heights: number[] = [];
   const widths: number[] = [];
-  for (const rule of rules) {
-    if (!rule.selectors.includes(selector)) continue;
+  for (const rule of rulesFor(selector, viewport)) {
     const body = rule.declBody.replace(/\/\*[\s\S]*?\*\//g, "");
     const declRe = /\b(min-height|height|min-width|width)\s*:\s*([^;]+);/g;
     let d: RegExpExecArray | null;
@@ -230,31 +329,165 @@ interface Offender {
   line: number;
 }
 
-function findOffenders(): Offender[] {
-  return mobileSurfaceControls()
+function findOffenders(selectors: string[]): Offender[] {
+  return selectors
     .map((selector) => ({ selector, size: declaredSize(selector), line: lineOf(selector) }))
     .filter((entry) => entry.size === null || entry.size < TAP_TARGET)
     .sort((a, b) => a.line - b.line);
 }
 
-function offenderMessage(offenders: Offender[]): string {
+function offenderMessage(where: string, offenders: Offender[]): string {
   const lines = offenders.map(
     (o) =>
       `  ${o.selector} (src/index.css:${o.line}) — ${o.size === null ? "no size declared" : `${o.size}px`}`,
   );
   return [
-    `${offenders.length} control(s) on the main header, filter row or a Modal fall under the ${TAP_TARGET}px tap-target floor on mobile:`,
+    `${offenders.length} control(s) on ${where} fall under the ${TAP_TARGET}px tap-target floor on mobile:`,
     ...lines,
   ].join("\n");
 }
 
+/** The declarations for `selector` that apply at `viewport`, comments
+ * stripped and concatenated — so a rule can be asserted against without
+ * this test needing to know which media query it was written in, while
+ * still distinguishing phone from desktop. */
+function declarationsFor(selector: string, viewport: Viewport = PHONE): string {
+  return rulesFor(selector, viewport)
+    .map((rule) => rule.declBody.replace(/\/\*[\s\S]*?\*\//g, ""))
+    .join("\n");
+}
+
+/** The last declared value of `property` for `selector` at `viewport` —
+ * later rules win, which is close enough to the cascade for the
+ * single-specificity selectors asserted here. */
+function declaredValue(
+  selector: string,
+  property: string,
+  viewport: Viewport = PHONE,
+): string | null {
+  const matches = [
+    ...declarationsFor(selector, viewport).matchAll(
+      new RegExp(String.raw`\b${property}\s*:\s*([^;]+);`, "g"),
+    ),
+  ];
+  const last = matches[matches.length - 1];
+  return last === undefined ? null : (last[1] as string).trim();
+}
+
 describe("tap-target floor on mobile task-listing surfaces (issue #286)", () => {
-  it("meets the 44px floor for controls on the main header, filter row and Modal", () => {
-    const offenders = findOffenders();
-    // Lands RED on purpose (#286): the offender list below is the worklist
-    // for the two sizing tickets that follow this one — this guard is not
-    // meant to be fixed here, only to stop a *new* undersized control from
-    // landing unnoticed once those tickets green it.
-    expect(offenders, offenderMessage(offenders)).toEqual([]);
+  // Skipped per #286's second allowed landing state: still red until #289
+  // sizes the main header and filter row. #288 took the Modal/Quick-Add half
+  // (asserted green below); flip this back to `it(...)` with #289.
+  it.skip("meets the 44px floor for controls on the main header, filter row and Modal", () => {
+    const offenders = findOffenders(mobileSurfaceControls());
+    expect(offenders, offenderMessage("the main header, filter row or a Modal", offenders)).toEqual(
+      [],
+    );
+  });
+});
+
+/** Every control the Quick-Add dialog actually renders (issue #288), named
+ * as the selector that has to size it, with the element it is.
+ *
+ * Deliberately a fixed list read off QuickAddDialog.tsx / DateFieldset.tsx /
+ * TokenInput.tsx / Modal.tsx rather than harvested from the stylesheet the
+ * way `mobileSurfaceControls` is: a corpus derived from the CSS shrinks when
+ * the CSS is deleted, so dropping the sizing rule would empty the offender
+ * list and pass. The whole point of this guard is that removing the sizing
+ * fails, so the list of what must be sized cannot come from the sizing. */
+const QUICK_ADD_CONTROLS: { selector: string; what: string }[] = [
+  { selector: ".modal-close", what: "the dialog's Close control" },
+  {
+    selector: '.quick-add-dialog input:not([type="checkbox"])',
+    what: "the title / New tag / date / time fields",
+  },
+  { selector: ".quick-add-dialog select", what: "the List and Priority selects" },
+  {
+    selector: ".quick-add-dialog .date-actions button",
+    what: "the Today / Tomorrow / Next Week / Clear date shortcuts",
+  },
+  { selector: ".quick-add-dialog-actions button", what: "the Cancel and Add task commit pair" },
+  {
+    selector: ".quick-add-dialog .quick-add-assist-chips button",
+    what: "the Assist recurrence / reminder chips' remove buttons",
+  },
+  {
+    selector: ".quick-add-dialog .token-input-dropdown li",
+    what: "the token suggestion dropdown's rows",
+  },
+];
+
+describe("Quick-Add dialog is operable on touch (issue #288)", () => {
+  it("meets the 44px floor for every control in the dialog", () => {
+    const offenders = findOffenders(QUICK_ADD_CONTROLS.map((control) => control.selector));
+    const named = offenders.map((offender) => {
+      const control = QUICK_ADD_CONTROLS.find((c) => c.selector === offender.selector);
+      return { ...offender, selector: `${offender.selector} — ${control?.what ?? "?"}` };
+    });
+    expect(named, offenderMessage("the Quick-Add dialog", named)).toEqual([]);
+  });
+
+  /** AC: "Desktop layout and sizing are unchanged". The sizing above must be
+   * gated so that none of it reaches a desktop with a mouse — the same
+   * helper, asked about `DESKTOP`, sees only the rules that apply there. */
+  it("leaves the dialog's controls at their desktop size", () => {
+    const grown = QUICK_ADD_CONTROLS.filter((control) => {
+      const size = declaredSize(control.selector, DESKTOP);
+      return size !== null && size >= TAP_TARGET;
+    });
+    expect(
+      grown.map((control) => control.selector),
+      "these controls are sized to the touch floor on desktop too — the rule is not gated",
+    ).toEqual([]);
+  });
+
+  /** The established convention (#168, and the `.tasks label` rule): the hit
+   * area grows through the wrapping label's padding, the visible box does
+   * not. Asserted as "padding that reaches the floor" plus "no rule anywhere
+   * grows a checkbox past 18px", so growing the box instead fails here. */
+  it("grows a checkbox's hit area through its label, not the box", () => {
+    const selector = '.quick-add-dialog label:has(> input[type="checkbox"])';
+    const padding = declaredValue(selector, "padding");
+    expect(padding, "no padding declared on the checkbox label").not.toBeNull();
+    const px = resolvePx(padding as string);
+    expect(px, `checkbox label padding must resolve to px, got \`${padding}\``).not.toBeNull();
+    // Box (18px) + padding on both sides must clear the floor.
+    expect(18 + (px as number) * 2).toBeGreaterThanOrEqual(TAP_TARGET);
+
+    // Any rule that sizes a checkbox — base or override — keeps the 18px box.
+    const boxes = rules
+      .filter((rule) => rule.selectors.some((s) => s.includes('input[type="checkbox"]')))
+      .flatMap((rule) => [...rule.declBody.matchAll(/\b(?:min-)?(?:width|height)\s*:\s*([^;]+);/g)])
+      .map((match) => resolvePx(match[1] as string))
+      .filter((size): size is number => size !== null);
+    expect(Math.max(...boxes), "a rule grows the visible checkbox past 18px").toBeLessThanOrEqual(
+      18,
+    );
+  });
+
+  /** Roughly 3px apart at the same height, submit beside Cancel, is a
+   * coin-flip between filing the Task and discarding it. Pushed to opposite
+   * ends of the row, the dialog's whole width sits between them. */
+  it("separates the commit action from Cancel", () => {
+    expect(declaredValue(".quick-add-dialog-actions", "justify-content")).toBe("space-between");
+    // Desktop keeps them grouped at the trailing edge.
+    expect(declaredValue(".quick-add-dialog-actions", "justify-content", DESKTOP)).toBe("flex-end");
+  });
+
+  /** Sizing the controls makes the dialog taller than a short viewport, and
+   * `.modal` had no scroll of its own: the commit action fell off the bottom.
+   * The panel caps its height against the backdrop and scrolls within it. */
+  it("scrolls the Modal panel when its content outgrows the viewport", () => {
+    const cap = declaredValue(".modal", "max-height");
+    expect(cap, "the Modal panel declares no height cap").not.toBeNull();
+    expect(declaredValue(".modal", "overflow-y"), "the Modal panel does not scroll").toBe("auto");
+    // The backdrop it caps against must be the viewport-sized, scrollable
+    // box `max-height: 100%` resolves against, or the cap means nothing.
+    expect(declaredValue(".modal-backdrop", "position")).toBe("fixed");
+    expect(declaredValue(".modal-backdrop", "inset")).toBe("0");
+    expect(declaredValue(".modal-backdrop", "overflow-y")).toBe("auto");
+    // Desktop never capped or scrolled the panel, and must not start.
+    expect(declaredValue(".modal", "max-height", DESKTOP)).toBeNull();
+    expect(declaredValue(".modal", "overflow-y", DESKTOP)).toBeNull();
   });
 });
