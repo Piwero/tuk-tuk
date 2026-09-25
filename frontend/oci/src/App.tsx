@@ -1131,86 +1131,166 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
           )}
           <main ref={mainRef}>
-            <div className="main-header">
-              <IconButton
-                icon="menu"
-                size={20}
-                label="Show navigation"
-                className="drawer-toggle"
-                aria-expanded={drawerOpen}
-                onClick={() => setDrawerOpen((current) => !current)}
-              />
-              <h1>
-                {selectedList !== null ? (
-                  // A List filed in a Folder shows "Folder / List" (#126): the
-                  // Folder segment is clickable through to the Folder view,
-                  // same destination as clicking the Folder's name in the
-                  // sidebar.
-                  parentFolder !== null ? (
-                    <>
-                      <button
-                        type="button"
-                        className="breadcrumb-folder"
-                        onClick={() => switchView({ kind: "folder", id: parentFolder.id })}
-                      >
-                        {parentFolder.name}
-                      </button>
-                      <span aria-hidden="true"> / </span>
-                      {selectedList.name}
-                    </>
+            <div className="main-chrome">
+              <div className="main-header">
+                <IconButton
+                  icon="menu"
+                  size={20}
+                  label="Show navigation"
+                  className="drawer-toggle"
+                  aria-expanded={drawerOpen}
+                  onClick={() => setDrawerOpen((current) => !current)}
+                />
+                <h1>
+                  {selectedList !== null ? (
+                    // A List filed in a Folder shows "Folder / List" (#126): the
+                    // Folder segment is clickable through to the Folder view,
+                    // same destination as clicking the Folder's name in the
+                    // sidebar.
+                    parentFolder !== null ? (
+                      <>
+                        <button
+                          type="button"
+                          className="breadcrumb-folder"
+                          onClick={() => switchView({ kind: "folder", id: parentFolder.id })}
+                        >
+                          {parentFolder.name}
+                        </button>
+                        <span aria-hidden="true"> / </span>
+                        {selectedList.name}
+                      </>
+                    ) : (
+                      selectedList.name
+                    )
+                  ) : selectedFolder !== null ? (
+                    selectedFolder.name
+                  ) : selectedTag !== null ? (
+                    `#${selectedTag.name}`
+                  ) : smartView !== null ? (
+                    SMART_LABELS[smartView]
+                  ) : view?.kind === "calendar" ? (
+                    "Calendar"
+                  ) : view?.kind === "goals" ? (
+                    "Goals"
+                  ) : view?.kind === "habits" ? (
+                    "Habits"
+                  ) : view?.kind === "standup" ? (
+                    "Stand-up"
+                  ) : view?.kind === "assistant" ? (
+                    "Assistant"
+                  ) : view?.kind === "focus" ? (
+                    "Focus"
+                  ) : view?.kind === "focus-stats" ? (
+                    "Focus statistics"
+                  ) : view?.kind === "search" ? (
+                    "Search"
+                  ) : view?.kind === "settings" ? (
+                    "Settings"
                   ) : (
-                    selectedList.name
-                  )
-                ) : selectedFolder !== null ? (
-                  selectedFolder.name
-                ) : selectedTag !== null ? (
-                  `#${selectedTag.name}`
-                ) : smartView !== null ? (
-                  SMART_LABELS[smartView]
-                ) : view?.kind === "calendar" ? (
-                  "Calendar"
-                ) : view?.kind === "goals" ? (
-                  "Goals"
-                ) : view?.kind === "habits" ? (
-                  "Habits"
-                ) : view?.kind === "standup" ? (
-                  "Stand-up"
-                ) : view?.kind === "assistant" ? (
-                  "Assistant"
-                ) : view?.kind === "focus" ? (
-                  "Focus"
-                ) : view?.kind === "focus-stats" ? (
-                  "Focus statistics"
-                ) : view?.kind === "search" ? (
-                  "Search"
-                ) : view?.kind === "settings" ? (
-                  "Settings"
-                ) : (
-                  "tuk-tuk"
+                    "tuk-tuk"
+                  )}
+                </h1>
+                {selectedList !== null && !completedMode && (
+                  <button
+                    type="button"
+                    className="view-toggle"
+                    aria-label={
+                      selectedList.view_mode === "kanban"
+                        ? "Switch to list view"
+                        : "Switch to kanban view"
+                    }
+                    onClick={() => void toggleViewMode(selectedList)}
+                  >
+                    {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
+                  </button>
                 )}
-              </h1>
-              {selectedList !== null && !completedMode && (
-                <button
-                  type="button"
-                  className="view-toggle"
-                  aria-label={
-                    selectedList.view_mode === "kanban"
-                      ? "Switch to list view"
-                      : "Switch to kanban view"
-                  }
-                  onClick={() => void toggleViewMode(selectedList)}
-                >
-                  {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
-                </button>
+                {hasCompletedView && (
+                  <button
+                    type="button"
+                    className="completed-toggle"
+                    onClick={() => setCompletedMode((current) => !current)}
+                  >
+                    {completedMode ? "Open tasks" : "Completed"}
+                  </button>
+                )}
+              </div>
+              {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
+                <>
+                  <QuickAdd
+                    listId={selectedList.id}
+                    lists={lists}
+                    tags={tags}
+                    onTagCreated={(tag) => setTags((current) => [...current, tag])}
+                    onListCreated={(list) => setLists((current) => [...current, list])}
+                    // A ~list token may have filed the task elsewhere; the shared
+                    // handler already accounts for that, and confirms either way.
+                    onCreated={addCreatedTask}
+                  />
+                  <div className="view-controls">
+                    <Hint hintKey="group-by">
+                      <label>
+                        Group by
+                        <select
+                          value={groupBy}
+                          onChange={(event) => setGroupBy(event.target.value as GroupBy)}
+                        >
+                          <option value="section">Section</option>
+                          <option value="date">Date</option>
+                          <option value="priority">Priority</option>
+                        </select>
+                      </label>
+                    </Hint>
+                    <SortBySelect value={sortBy} onChange={setSortBy} />
+                  </div>
+                </>
               )}
-              {hasCompletedView && (
-                <button
-                  type="button"
-                  className="completed-toggle"
-                  onClick={() => setCompletedMode((current) => !current)}
-                >
-                  {completedMode ? "Open tasks" : "Completed"}
-                </button>
+              {smartView === "all" && !completedMode && (
+                <AllViewControls
+                  filters={allFilters}
+                  onFiltersUpdate={setAllFilters}
+                  groupBy={groupBy}
+                  onGroupByChange={setGroupBy}
+                  sortBy={sortBy}
+                  onSortByChange={setSortBy}
+                  lists={lists}
+                  tags={tags}
+                />
+              )}
+              {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
+                <>
+                  {/* Quick-Add has no notion of "this Folder" — it always files
+                  by List, so it targets the Folder's first List and names
+                  it in the placeholder (#126) since that target isn't the
+                  one on screen. */}
+                  <QuickAdd
+                    listId={folderMembers[0]?.id ?? 0}
+                    lists={lists}
+                    tags={tags}
+                    placeholder={`Add a task to ${folderMembers[0]?.name}…`}
+                    onTagCreated={(tag) => setTags((current) => [...current, tag])}
+                    onListCreated={(list) => setLists((current) => [...current, list])}
+                    onCreated={(task) => {
+                      reconcileOpenTask(task);
+                      // A ~list token may have filed the task elsewhere in the Folder.
+                      if (folderMembers.some((list) => list.id === task.list_id)) {
+                        setTasks((current) => [...current, task]);
+                      }
+                    }}
+                  />
+                  <div className="view-controls">
+                    <label>
+                      Sort by
+                      <select
+                        value={folderSortBy}
+                        onChange={(event) => setFolderSortBy(event.target.value as FolderSortBy)}
+                      >
+                        <option value="date">Date</option>
+                        <option value="priority">Priority</option>
+                        <option value="title">Title</option>
+                      </select>
+                    </label>
+                  </div>
+                </>
               )}
             </div>
             {quickAddOpen && (
@@ -1225,84 +1305,6 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                   onClose={() => setQuickAddOpen(false)}
                 />
               </Modal>
-            )}
-            {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
-              <>
-                <QuickAdd
-                  listId={selectedList.id}
-                  lists={lists}
-                  tags={tags}
-                  onTagCreated={(tag) => setTags((current) => [...current, tag])}
-                  onListCreated={(list) => setLists((current) => [...current, list])}
-                  // A ~list token may have filed the task elsewhere; the shared
-                  // handler already accounts for that, and confirms either way.
-                  onCreated={addCreatedTask}
-                />
-                <div className="view-controls">
-                  <Hint hintKey="group-by">
-                    <label>
-                      Group by
-                      <select
-                        value={groupBy}
-                        onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-                      >
-                        <option value="section">Section</option>
-                        <option value="date">Date</option>
-                        <option value="priority">Priority</option>
-                      </select>
-                    </label>
-                  </Hint>
-                  <SortBySelect value={sortBy} onChange={setSortBy} />
-                </div>
-              </>
-            )}
-            {smartView === "all" && !completedMode && (
-              <AllViewControls
-                filters={allFilters}
-                onFiltersUpdate={setAllFilters}
-                groupBy={groupBy}
-                onGroupByChange={setGroupBy}
-                sortBy={sortBy}
-                onSortByChange={setSortBy}
-                lists={lists}
-                tags={tags}
-              />
-            )}
-            {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
-              <>
-                {/* Quick-Add has no notion of "this Folder" — it always files
-                  by List, so it targets the Folder's first List and names
-                  it in the placeholder (#126) since that target isn't the
-                  one on screen. */}
-                <QuickAdd
-                  listId={folderMembers[0]?.id ?? 0}
-                  lists={lists}
-                  tags={tags}
-                  placeholder={`Add a task to ${folderMembers[0]?.name}…`}
-                  onTagCreated={(tag) => setTags((current) => [...current, tag])}
-                  onListCreated={(list) => setLists((current) => [...current, list])}
-                  onCreated={(task) => {
-                    reconcileOpenTask(task);
-                    // A ~list token may have filed the task elsewhere in the Folder.
-                    if (folderMembers.some((list) => list.id === task.list_id)) {
-                      setTasks((current) => [...current, task]);
-                    }
-                  }}
-                />
-                <div className="view-controls">
-                  <label>
-                    Sort by
-                    <select
-                      value={folderSortBy}
-                      onChange={(event) => setFolderSortBy(event.target.value as FolderSortBy)}
-                    >
-                      <option value="date">Date</option>
-                      <option value="priority">Priority</option>
-                      <option value="title">Title</option>
-                    </select>
-                  </label>
-                </div>
-              </>
             )}
             {view?.kind === "settings" ? (
               <SettingsView
