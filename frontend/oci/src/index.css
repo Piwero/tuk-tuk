@@ -5020,6 +5020,95 @@ select.task-detail-breadcrumb:focus-visible {
   background: var(--accent-hover);
 }
 
+/* ── Modal & Quick-Add dialog on touch (issue #288) ───────────────────
+ * Every control in the Quick-Add dialog sat under the 44px floor — the
+ * title field, both selects, the date shortcuts, the checkboxes, the Assist
+ * chips' remove buttons, the suggestion dropdown's rows and the commit pair
+ * — and the `@media (hover: none), (pointer: coarse)` block never reached
+ * any Modal (that's the premise of #286).
+ *
+ * Gated on the mobile breakpoint *or* a coarse pointer, deliberately both:
+ * breakpoint-only would leave a tablet at 820pt uncovered, and coarse-only
+ * is exactly why these were missed in the first place (a touch-capable
+ * laptop reports `pointer: fine`, and a desktop browser at phone width
+ * gives a false pass by hand). Desktop with a mouse keeps
+ * `--control-height`.
+ *
+ * Sizing alone makes the dialog taller than a short viewport, so the panel
+ * becomes its own scroll region here too — the two have to land together or
+ * the commit action goes off the bottom. */
+@media (max-width: 720px), (hover: none), (pointer: coarse) {
+  /* `.modal-backdrop` is a fixed, full-viewport flex container, so `100%`
+     is already the viewport minus its own padding — no need to restate that
+     padding here and keep the two in lockstep. Scrolling within the panel
+     keeps the commit action reachable at any content height rather than
+     clipped. Applies to every Modal, not just Quick-Add: the bulk-action
+     dialogs, the icon picker and the calendar event modal all gain the same
+     scroll, which is wanted — none of them could be scrolled before. The
+     title's suggestion dropdown is absolutely positioned inside this box,
+     so it now scrolls with the panel instead of overflowing it. */
+  .modal {
+    max-height: 100%;
+    overflow-y: auto;
+  }
+
+  .modal-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* 44x44 hit area, same glyph — the box grows, the icon doesn't (#168). */
+    width: var(--tap-target);
+    height: var(--tap-target);
+    padding: 0;
+  }
+
+  /* `min-height`, not `height`, so a control that already needs more room
+     (a wrapped token input) keeps it. Beats `.token-input input`'s fixed
+     `calc(--control-height - 4px)` for the title field the same way. */
+  .quick-add-dialog input:not([type="checkbox"]),
+  .quick-add-dialog select,
+  .quick-add-dialog .date-actions button,
+  .quick-add-dialog-actions button {
+    min-height: var(--tap-target);
+  }
+
+  /* The Assist recurrence / reminder chips' remove buttons (ADR 0005) are
+     `.token-chip button`s — 12px glyph, zero padding. Square hit area like
+     `.modal-close`, glyph untouched: removing the wrong one silently drops
+     a reminder from the Task being filed. */
+  .quick-add-dialog .quick-add-assist-chips button {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+  }
+
+  /* The suggestion dropdown's rows are the only touch path to a `#tag` /
+     `~list` / `!priority` / `@date` pick — a 27px row in a list of them is
+     a mis-pick waiting to happen. */
+  .quick-add-dialog .token-input-dropdown li {
+    display: flex;
+    align-items: center;
+    min-height: var(--tap-target);
+  }
+
+  /* Checkbox hit areas grow through the wrapping label's padding — the
+     visible 18px box is untouched, per the convention `.tasks label` set
+     (#168). Matched by what the label *wraps*, not by where it sits, so the
+     tag checkboxes and the Date fieldset's All-day are both covered while
+     the "New tag" text label — already sized through its input above —
+     isn't padded for nothing. */
+  .quick-add-dialog label:has(> input[type="checkbox"]) {
+    padding: calc((var(--tap-target) - 18px) / 2);
+  }
+
+  /* Submit sat ~3px from Cancel at the same height: a thumb aimed at one
+     could file or discard the Task at random. Pushing them to opposite ends
+     of the row puts the whole dialog's width between them, so a touch
+     centred on either cannot reach the other. */
+  .quick-add-dialog-actions {
+    justify-content: space-between;
+  }
+}
+
 /* ── Collapsed sidebar (icon rail) ───────────────────────────────── */
 
 .sidebar-top {

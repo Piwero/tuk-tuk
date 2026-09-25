@@ -199,7 +199,10 @@
   --mobile-tab-bar-height: 56px; /* the mobile bottom tab bar (issue #170) */
   --mobile-quick-add-size: 56px; /* the mobile Quick-Add button (issue #287) */
   --control-height: 34px; /* inputs, buttons */
-  --tap-target: 44px; /* minimum touch hit area (issue #168), pointer: coarse only */
+  /* Minimum touch hit area (#168). Applied under a coarse pointer and, since
+     #286, at the mobile breakpoint too — a touch-capable device reporting
+     `pointer: fine` needs the same floor. */
+  --tap-target: 44px;
 
   /* Elevation & motion --------------------------------------------- */
   --shadow-xs: 0 1px 2px rgba(26, 29, 35, 0.05);
