@@ -120,7 +120,11 @@ async def _converted_events(session: SessionDep) -> set[tuple[int, str]]:
             Task.source_google_calendar_id.is_not(None)
         )
     )
-    return {(calendar_id, event_id) for calendar_id, event_id in rows if event_id is not None}
+    return {
+        (calendar_id, event_id)
+        for calendar_id, event_id in rows
+        if calendar_id is not None and event_id is not None
+    }
 
 
 def _attendee_read(attendee: CalendarEventAttendee) -> EventAttendeeRead:
