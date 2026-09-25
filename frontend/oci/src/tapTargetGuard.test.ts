@@ -99,6 +99,10 @@ interface Rule {
   /** The media-query list of each enclosing `@media`, outermost first. A
    * rule only applies where every one of them holds. */
   conditions: string[];
+  /** The query of each enclosing `@container`, outermost first — the #289
+   * title sizing lives inside one, so the grid band it excludes has to be
+   * modelled rather than ignored. */
+  containers: string[];
 }
 
 /** Every leaf rule in index.css — including ones nested inside `@media`,
@@ -121,21 +125,23 @@ function allRules(): Rule[] {
   while ((m = re.exec(css)) !== null) {
     const selectorList = (m[1] as string).replace(/\/\*[\s\S]*?\*\//g, "").trim();
     if (selectorList.length === 0) continue;
+    const queries = enclosingQueries(m.index);
     rules.push({
       selectors: splitSelectors(selectorList),
       declBody: m[2] as string,
       index: m.index,
-      conditions: enclosingMedia(m.index),
+      conditions: queries.media,
+      containers: queries.containers,
     });
   }
   return rules;
 }
 
-/** The media-query list of every `@media` still open at `index`, outermost
- * first. Walks the text from the top, pushing a prelude on `{` and popping
- * on `}`. */
-function enclosingMedia(index: number): string[] {
-  const open: (string | null)[] = [];
+/** The media-query list of every `@media`, and the query of every
+ * `@container`, still open at `index` — outermost first. Walks the text
+ * from the top, pushing a prelude on `{` and popping on `}`. */
+function enclosingQueries(index: number): { media: string[]; containers: string[] } {
+  const open: ({ media: string } | { container: string } | null)[] = [];
   const re = /\/\*[\s\S]*?\*\/|([^{}]*)\{|\}/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(css)) !== null && m.index < index) {
@@ -144,23 +150,48 @@ function enclosingMedia(index: number): string[] {
     } else if (m[0].endsWith("{")) {
       const prelude = (m[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "").trim();
       const media = /^@media\s+(.+)$/.exec(prelude);
-      open.push(media === null ? null : (media[1] as string));
+      if (media !== null) {
+        open.push({ media: media[1] as string });
+        continue;
+      }
+      const container = /^@container\s+(.+)$/.exec(prelude);
+      open.push(container === null ? null : { container: container[1] as string });
     }
   }
-  return open.filter((condition): condition is string => condition !== null);
+  return {
+    media: open.flatMap((entry) => (entry !== null && "media" in entry ? [entry.media] : [])),
+    containers: open.flatMap((entry) =>
+      entry !== null && "container" in entry ? [entry.container] : [],
+    ),
+  };
 }
 
 const rules = allRules();
 
 /** The two viewports this guard reasons about: a phone under a finger, and
- * the desktop the ticket says must be left alone. */
+ * the desktop the ticket says must be left alone. `listWidth` is the width
+ * of the `.tasks` list, the `tasklist` query container: at phone width the
+ * mobile block pads `main` with `var(--space-4)` (16px) a side, so
+ * 390 − 2×16 = 358, under the 620px grid floor; on desktop only which side
+ * of that floor the list falls on matters, not its exact width. */
 interface Viewport {
   width: number;
   coarsePointer: boolean;
+  listWidth: number;
 }
 
-const PHONE: Viewport = { width: 390, coarsePointer: true };
-const DESKTOP: Viewport = { width: 1440, coarsePointer: false };
+const PHONE: Viewport = { width: 390, coarsePointer: true, listWidth: 358 };
+const DESKTOP: Viewport = { width: 1440, coarsePointer: false, listWidth: 1000 };
+/** A phone-width viewport on a device reporting `pointer: fine` — the case
+ * coarse-only gating misses (issue #289): a touch-capable laptop or tablet
+ * gets the same floor through the mobile breakpoint alone. */
+const PHONE_FINE_POINTER: Viewport = { width: 390, coarsePointer: false, listWidth: 358 };
+/** The 620–720px band where the row is still the fixed 36px grid: a 44px
+ * title would bleed into the rows above and below instead of claiming
+ * existing space (code review on #289), so the title sizing stops at the
+ * grid's own query and this viewport must see none of it — while the
+ * header controls keep their floor. */
+const GRID_BAND: Viewport = { width: 700, coarsePointer: false, listWidth: 660 };
 
 /** Whether one `(feature: value)` holds at `viewport`. Anything this
  * doesn't model (`prefers-reduced-motion`, `prefers-color-scheme`…) reads
@@ -196,12 +227,28 @@ function queryHolds(list: string, viewport: Viewport): boolean {
   });
 }
 
+/** Whether a `@container` query holds at `viewport`. This guard only needs
+ * the `tasklist` container's single shape — `(min-width: 620px)`, possibly
+ * wrapped in `not (...)` for the complement the #289 title sizing is
+ * scoped to. Anything else reads as false, so an unmodelled query can
+ * never be mistaken for sizing that applies. */
+function containerHolds(query: string, viewport: Viewport): boolean {
+  const minWidth = /\(\s*min-width\s*:\s*([\d.]+)px\s*\)/.exec(query);
+  if (minWidth === null) return false;
+  const holds = viewport.listWidth >= parseFloat(minWidth[1] as string);
+  // The negation sits after the container name — `tasklist (not
+  // (min-width: 620px))` — not at the query's start, so anchor on the
+  // `not (` rather than the string's head.
+  return /\bnot\s*\(/.test(query) ? !holds : holds;
+}
+
 /** Every rule naming `selector` that applies at `viewport`. */
 function rulesFor(selector: string, viewport: Viewport): Rule[] {
   return rules.filter(
     (rule) =>
       rule.selectors.includes(selector) &&
-      rule.conditions.every((condition) => queryHolds(condition, viewport)),
+      rule.conditions.every((condition) => queryHolds(condition, viewport)) &&
+      rule.containers.every((container) => containerHolds(container, viewport)),
   );
 }
 
@@ -375,14 +422,139 @@ function declaredValue(
 }
 
 describe("tap-target floor on mobile task-listing surfaces (issue #286)", () => {
-  // Skipped per #286's second allowed landing state: still red until #289
-  // sizes the main header and filter row. #288 took the Modal/Quick-Add half
-  // (asserted green below); flip this back to `it(...)` with #289.
-  it.skip("meets the 44px floor for controls on the main header, filter row and Modal", () => {
+  // Unskipped by #289, which sizes the main header and filter row at the
+  // mobile breakpoint; #288 took the Modal/Quick-Add half (asserted green below).
+  it("meets the 44px floor for controls on the main header, filter row and Modal", () => {
     const offenders = findOffenders(mobileSurfaceControls());
     expect(offenders, offenderMessage("the main header, filter row or a Modal", offenders)).toEqual(
       [],
     );
+  });
+
+  /** The Task title is the primary action on every row but lives outside
+   * `mobileSurfaceControls` — it is a `.tasks` descendant, not a header /
+   * filter-row / Modal control (issue #289). Named fixed, like the
+   * Quick-Add list below: deriving the corpus from the CSS would let
+   * deleting the sizing empty the offender list and pass. */
+  it("meets the 44px floor for the Task title on a phone", () => {
+    const offenders = findOffenders([".task-title"]);
+    expect(offenders, offenderMessage("the task row", offenders)).toEqual([]);
+  });
+
+  /** Everything #289 sizes: the harvested header/filter/Modal corpus plus
+   * the fixed title. One list so the fine-pointer, desktop and type-size
+   * tests below can't drift apart about what "these controls" means. */
+  function sizedCorpus(): string[] {
+    return [...mobileSurfaceControls(), ".task-title"];
+  }
+
+  /** AC: "Rules key off the mobile breakpoint, so touch-capable devices
+   * reporting `pointer: fine` are covered". The same corpus, asked about a
+   * phone-width viewport with a fine pointer — anything sized only under a
+   * coarse query fails here. */
+  it("holds at phone width even when the pointer reports fine", () => {
+    const offenders = sizedCorpus()
+      .map((selector) => ({
+        selector,
+        size: declaredSize(selector, PHONE_FINE_POINTER),
+        line: lineOf(selector),
+      }))
+      .filter((entry) => entry.size === null || entry.size < TAP_TARGET)
+      .sort((a, b) => a.line - b.line);
+    expect(offenders, offenderMessage("a fine-pointer phone-width viewport", offenders)).toEqual(
+      [],
+    );
+  });
+
+  /** AC: "Desktop layout and sizing are unchanged" and "Row density stays
+   * usable". None of the #289 sizing may reach a desktop viewport, and the
+   * rows the title claims must keep their desktop heights. */
+  it("leaves the header, filter row and task rows at their desktop size", () => {
+    const sized = sizedCorpus().filter((selector) => {
+      const size = declaredSize(selector, DESKTOP);
+      return size !== null && size >= TAP_TARGET;
+    });
+    expect(
+      sized,
+      "these controls are sized to the touch floor on desktop too — the rule is not gated",
+    ).toEqual([]);
+    expect(declaredValue(".tasks li.task-row", "height", DESKTOP)).toBe("var(--task-row-height)");
+    expect(declaredValue(".tasks li.task-row", "min-height", DESKTOP)).toBe(
+      "var(--task-row-height)",
+    );
+    expect(declaredValue(".tasks li", "min-height", DESKTOP)).toBe("var(--row-height)");
+  });
+
+  /** AC: "Hit areas grow; glyph and type sizes are unchanged". The #289
+   * rules may set heights and padding, never a type size — checked as
+   * `font-size` only, since no icon size is declared in these rules at
+   * all (every glyph here inherits its size from the base rule). */
+  it("grows hit areas without touching type sizes", () => {
+    const sized = new Set(sizedCorpus());
+    const phoneRules = rules.filter(
+      (rule) =>
+        // The rule has to reach a phone at all — through the mobile
+        // breakpoint, a coarse query, or the tasklist-container
+        // complement the title sizing is scoped to.
+        (rule.conditions.length > 0 || rule.containers.length > 0) &&
+        rule.conditions.every((condition) => queryHolds(condition, PHONE_FINE_POINTER)) &&
+        rule.containers.every((container) => containerHolds(container, PHONE_FINE_POINTER)) &&
+        rule.selectors.some((selector) => sized.has(selector)),
+    );
+    const violations = phoneRules.flatMap((rule) =>
+      [...rule.declBody.matchAll(/\b(font-size)\s*:\s*([^;]+);/g)].map(
+        (match) => `${rule.selectors.join(", ")} sets ${match[1]}: ${match[2]?.trim()}`,
+      ),
+    );
+    expect(violations, "the touch sizing changes type size — hit area only").toEqual([]);
+  });
+
+  /** AC: "No horizontal overflow introduced at any supported mobile
+   * width". The #289 rules must not widen anything sideways: every width
+   * they declare has to already exist at desktop, and the rules themselves
+   * must shrink-wrap or truncate rather than push the row wider. */
+  it("introduces no new widths at mobile widths", () => {
+    const sized = new Set(sizedCorpus());
+    const phoneRules = rules.filter(
+      (rule) =>
+        rule.conditions.some((condition) => queryHolds(condition, PHONE_FINE_POINTER)) &&
+        rule.selectors.some((selector) => sized.has(selector)),
+    );
+    const newWidths = phoneRules.flatMap((rule) =>
+      [...rule.declBody.matchAll(/\b(min-width|width|max-width)\s*:\s*([^;]+);/g)]
+        .map((match) => ({ property: match[1] as string, value: (match[2] as string).trim() }))
+        .filter(
+          ({ value }) =>
+            !/^(0|auto|min-content|max-content|fit-content|100%|none)$/.test(value) &&
+            // Padding-box growth a chip already absorbs through its own
+            // `min-height` pairing, or a scroll cap — neither pushes
+            // content sideways.
+            value !== "var(--tap-target)" &&
+            value !== "100%",
+        )
+        .map(({ property, value }) => `${rule.selectors.join(", ")} sets ${property}: ${value}`),
+    );
+    expect(newWidths, "a touch-sizing rule declares a new width — overflow risk").toEqual([]);
+  });
+
+  /** The grid band keeps its desktop sizing: the title and its label
+   * padding stop at the row-grid's own query, so a 44px title never bleeds
+   * into neighbouring rows — while the header/filter controls above the
+   * list keep the floor (the ticked ACs still hold there). */
+  it("leaves the fixed grid band's rows alone", () => {
+    expect(declaredSize(".task-title", GRID_BAND)).toBeNull();
+    expect(declaredValue(".tasks label", "padding", GRID_BAND)).toBeNull();
+    for (const selector of [
+      ".view-toggle",
+      ".completed-toggle",
+      ".view-controls select",
+      ".filter-menu-button",
+    ]) {
+      const size = declaredSize(selector, GRID_BAND);
+      expect(size, `${selector} loses the floor in the grid band`).toBeGreaterThanOrEqual(
+        TAP_TARGET,
+      );
+    }
   });
 });
 
