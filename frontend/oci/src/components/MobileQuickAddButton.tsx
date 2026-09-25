@@ -1,4 +1,4 @@
-import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 
 interface MobileQuickAddButtonProps {
   onClick: () => void;
@@ -9,6 +9,10 @@ interface MobileQuickAddButtonProps {
  * off-canvas drawer to reach the sidebar's trigger. Hidden entirely on
  * desktop by CSS — same convention as MobileTabBar.
  *
+ * Its whole content is a glyph, so it goes through `IconButton` (#270)
+ * rather than a hand-rolled button — `label` doubles as both the
+ * accessible name and the visible hover/focus hint.
+ *
  * Named "Quick add task" rather than "Quick add" because the sidebar's
  * trigger (`.quick-add-trigger`, `aria-label="Quick add"`) renders at every
  * width, not conditionally removed on mobile — the same collision
@@ -17,14 +21,12 @@ interface MobileQuickAddButtonProps {
  * exist in the DOM simultaneously, including while the drawer is open. */
 export function MobileQuickAddButton({ onClick }: MobileQuickAddButtonProps): JSX.Element {
   return (
-    <button
-      type="button"
+    <IconButton
+      icon="plus"
+      size={24}
+      label="Quick add task"
       className="mobile-quick-add"
-      aria-label="Quick add task"
-      title="Quick add task"
       onClick={onClick}
-    >
-      <Icon name="plus" size={24} />
-    </button>
+    />
   );
 }
