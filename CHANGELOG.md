@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.10.13](https://github.com/Piwero/tuk-tuk/compare/v2.10.12...v2.10.13) - 2026-09-25
+
+### Bug Fixes
+
+- **mobile:** Pin title, QuickAdd and filters in one sticky chrome (#290) ([27469b2](https://github.com/Piwero/tuk-tuk/commit/27469b237c051b83469930755c218701119f818a))
+
 ## [2.10.12](https://github.com/Piwero/tuk-tuk/compare/v2.10.11...v2.10.12) - 2026-09-25
 
 ### Features
