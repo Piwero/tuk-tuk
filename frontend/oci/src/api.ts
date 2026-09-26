@@ -654,6 +654,13 @@ export function fetchCompletedTasks(listId: number | null): Promise<Page<Task>> 
   return request(`/api/v1/tasks?completed=true${scope}`);
 }
 
+/** "Clear completed" (the Completed view's bulk action): permanently
+ * deletes every completed Task, per List or across all Lists. */
+export function deleteCompletedTasks(listId: number | null): Promise<void> {
+  const scope = listId === null ? "" : `&list_id=${listId}`;
+  return request(`/api/v1/tasks?completed=true${scope}`, { method: "DELETE" });
+}
+
 /** A Completed Occurrence — the history record one completion of a recurring
  * Task writes. The title and List are the owning task's current ones. */
 export interface CompletedOccurrence {

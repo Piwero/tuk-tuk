@@ -24,6 +24,28 @@ export function saveSidebarCollapsed(collapsed: boolean): void {
   }
 }
 
+// Whether List/Tag/Folder views hide completed Tasks inline instead of
+// showing them struck-through (this feature) — a browser-local display
+// preference, like the collapsed state above, not List/Task data.
+const HIDE_COMPLETED_KEY = "tuktuk.tasks.hideCompleted";
+
+export function loadHideCompleted(): boolean {
+  try {
+    return localStorage.getItem(HIDE_COMPLETED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function saveHideCompleted(hide: boolean): void {
+  try {
+    localStorage.setItem(HIDE_COMPLETED_KEY, String(hide));
+  } catch {
+    // Storage full or unavailable: hiding still applies this session, the
+    // choice just won't survive a reload.
+  }
+}
+
 // Appearance (issue #193): Light / Dark / System. Like the collapsed state
 // above, the choice belongs to this browser, not the account — it never
 // touches the API. "system" (the default, and the fallback whenever storage

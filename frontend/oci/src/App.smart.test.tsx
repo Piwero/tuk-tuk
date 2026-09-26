@@ -218,4 +218,98 @@ describe("Completed view", () => {
     await screen.findByRole("heading", { name: "Today" });
     expect(screen.queryByRole("button", { name: "Completed" })).not.toBeInTheDocument();
   });
+
+  it("Clear completed permanently deletes every completed task in the scoped List, after confirming", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const api = installFakeApi({
+      tasks: [
+        fakeTask("Open task"),
+        fakeTask("Done early", { completed: true, completed_at: "2026-07-01T10:00:00Z" }),
+        fakeTask("Done late", { completed: true, completed_at: "2026-07-02T10:00:00Z" }),
+      ],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Completed" }));
+    await screen.findByRole("button", { name: "Open details for Done late" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear completed" }));
+
+    expect(window.confirm).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /^Open details for Done/ }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      api.requests.some(
+        (r) =>
+          r.method === "DELETE" && r.url === `/api/v1/tasks?completed=true&list_id=${INBOX.id}`,
+      ),
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open tasks" }));
+    expect(
+      await screen.findByRole("button", { name: "Open details for Open task" }),
+    ).toBeInTheDocument();
+  });
+
+  it("Clear completed in the All view's completed screen deletes across every List", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const errands = fakeList("Errands");
+    const api = installFakeApi({
+      lists: [INBOX, errands],
+      tasks: [
+        fakeTask("Inbox done", { completed: true, completed_at: "2026-07-01T10:00:00Z" }),
+        fakeTask("Errand done", {
+          list_id: errands.id,
+          completed: true,
+          completed_at: "2026-07-02T10:00:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+
+    await openSmart("All");
+    fireEvent.click(await screen.findByRole("button", { name: "Completed" }));
+    await screen.findByRole("button", { name: "Open details for Errand done" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear completed" }));
+
+    expect(window.confirm).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /^Open details for/ })).not.toBeInTheDocument(),
+    );
+    expect(
+      api.requests.some((r) => r.method === "DELETE" && r.url === "/api/v1/tasks?completed=true"),
+    ).toBe(true);
+  });
+
+  it("Clear completed does nothing if the confirmation is declined", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const api = installFakeApi({
+      tasks: [fakeTask("Done", { completed: true, completed_at: "2026-07-02T10:00:00Z" })],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Completed" }));
+    await screen.findByRole("button", { name: "Open details for Done" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear completed" }));
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Open details for Done" })).toBeInTheDocument();
+    expect(api.requests.some((r) => r.method === "DELETE")).toBe(false);
+  });
+
+  it("Clear completed has no button when the Completed view is empty", async () => {
+    installFakeApi();
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Completed" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("list", { name: "Completed" })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: "Clear completed" })).not.toBeInTheDocument();
+  });
 });

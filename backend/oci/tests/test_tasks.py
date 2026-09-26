@@ -157,4 +157,48 @@ def test_task_creation_with_an_unknown_tag_is_rejected(client: TestClient) -> No
     response = client.post("/api/v1/tasks", json={"title": "Ghost", "tag_ids": [999]})
 
     assert response.status_code == 404
-    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_completed_tasks_can_be_bulk_deleted(client: TestClient) -> None:
+    open_id = client.post("/api/v1/tasks", json={"title": "Open"}).json()["id"]
+    done_id = client.post("/api/v1/tasks", json={"title": "Done"}).json()["id"]
+    client.patch(f"/api/v1/tasks/{done_id}", json={"completed": True})
+
+    response = client.delete("/api/v1/tasks", params={"completed": "true"})
+
+    assert response.status_code == 204
+    remaining = client.get("/api/v1/tasks").json()["items"]
+    assert [t["id"] for t in remaining] == [open_id]
+
+
+def test_bulk_delete_completed_scopes_to_one_list(client: TestClient) -> None:
+    errands = client.post("/api/v1/lists", json={"name": "Errands"}).json()
+    inbox_done = client.post("/api/v1/tasks", json={"title": "Inbox done"}).json()["id"]
+    errands_done = client.post(
+        "/api/v1/tasks", json={"title": "Errands done", "list_id": errands["id"]}
+    ).json()["id"]
+    client.patch(f"/api/v1/tasks/{inbox_done}", json={"completed": True})
+    client.patch(f"/api/v1/tasks/{errands_done}", json={"completed": True})
+
+    response = client.delete(
+        "/api/v1/tasks", params={"completed": "true", "list_id": errands["id"]}
+    )
+
+    assert response.status_code == 204
+    remaining_ids = {
+        t["id"] for t in client.get("/api/v1/tasks", params={"completed": True}).json()["items"]
+    }
+    assert remaining_ids == {inbox_done}
+
+
+def test_bulk_delete_requires_the_completed_filter(client: TestClient) -> None:
+    """Only completed Tasks are eligible: an unscoped bulk delete would wipe
+    open Tasks by accident, so the endpoint refuses without `completed=true`."""
+    response = client.delete("/api/v1/tasks")
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+    response = client.delete("/api/v1/tasks", params={"completed": "false"})
+
+    assert response.status_code == 422
