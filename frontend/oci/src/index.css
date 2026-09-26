@@ -163,14 +163,20 @@ fieldset button:active,
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 18px;
-  height: 18px;
+  /* Sized through a local property, not a literal, so the Calendar's dense
+     variant (.entry-check) only has to rebind --checkbox-size — it never
+     restates the border, radius or glyph, and this stays the one rule that
+     draws a checkbox. */
+  --checkbox-size: var(--checkbox-standard);
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
   margin: 0;
   padding: 0;
   flex: none;
   border: 2px solid var(--border-strong);
   border-radius: 5px;
-  background: transparent no-repeat center / 10px;
+  /* The tick glyph scales with the box rather than being a second literal. */
+  background: transparent no-repeat center / calc(var(--checkbox-size) - 8px);
   cursor: pointer;
   transition:
     background-color var(--duration-fast) var(--ease-out),
@@ -2289,6 +2295,47 @@ li[data-overdue] .date-chip {
   text-overflow: ellipsis;
 }
 
+/* The completion checkbox on a calendar entry. The Calendar is the app's
+ * densest surface — a Month cell fits a handful of one-line rows — so the
+ * box shrinks to --checkbox-dense rather than being allowed to set each
+ * row's height. The title, not the control, is what has to stay legible;
+ * the box only has to be hittable and recognisable. */
+.entry-check {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  /* Never the thing that decides a row's height. */
+  line-height: 0;
+  vertical-align: middle;
+  margin-right: var(--space-1);
+}
+
+/* Rebinding the size is the whole override — border, radius and tick glyph
+ * all derive from it in the base rule. */
+.entry-check input[type="checkbox"] {
+  --checkbox-size: var(--checkbox-dense);
+}
+
+/* On touch --checkbox-dense is far under --tap-target, and a near miss opens
+ * the Task detail panel instead of completing. Dropping the rebind is all it
+ * takes to return to --checkbox-standard, and the label grows its hit area by
+ * padding — the same "hit area via padding, glyph unchanged" rule as the
+ * touch block further down this file.
+ * ponytail: --space-2 of padding, not the full --tap-target — a Month cell
+ * is 88px tall and holds several entries, so a 44px row would fit one.
+ * Revisit if the Month grid ever gets its own touch layout (it currently
+ * defaults away to Day below 720px, where the pressure is worst). */
+@media (hover: none), (pointer: coarse) {
+  .entry-check {
+    padding: var(--space-2);
+    margin: calc(-1 * var(--space-2)) 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-1));
+  }
+
+  .entry-check input[type="checkbox"] {
+    --checkbox-size: var(--checkbox-standard);
+  }
+}
+
 .calendar-timed-entry .entry-time {
   font-family: var(--font-mono);
   color: var(--text-accent);
@@ -2531,6 +2578,16 @@ li[data-overdue] .date-chip {
  * under 4px of clipped glyph tops. Refusing to shrink keeps the title at
  * its full line and pushes the time past `overflow: hidden` instead,
  * which is the intended sacrifice. */
+/* Checkbox and title share the block's first line, so the checkbox costs no
+ * vertical room — a 30-minute block is already tight (see the flex-shrink
+ * note above) and could not afford a row of its own. */
+.time-block .block-head {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
 .time-block .block-title {
   flex: 0 0 auto;
   white-space: nowrap;
@@ -6620,6 +6677,8 @@ a.button:hover {
 }
 
 .unscheduled-card {
+  display: flex;
+  align-items: center;
   padding: var(--space-2);
   margin-bottom: var(--space-1);
   border: 1px solid var(--border-subtle);
@@ -6627,6 +6686,10 @@ a.button:hover {
   background: var(--surface-page);
   font-size: var(--text-sm);
   cursor: grab;
+}
+
+.unscheduled-card .entry-title {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

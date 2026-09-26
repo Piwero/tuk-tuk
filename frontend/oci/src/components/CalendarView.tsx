@@ -59,7 +59,9 @@ import { IconButton } from "./IconButton";
 import { readDragPayload, startDrag } from "../dnd";
 import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
+import { useTaskCompletion } from "../taskCompletion";
 import { TokenInput, type TokenChannel } from "./TokenInput";
+import { type UndoQueue } from "../undoQueue";
 
 const MODES: CalendarMode[] = ["month", "week", "day"];
 const MODE_LABELS: Record<CalendarMode, string> = { month: "Month", week: "Week", day: "Day" };
@@ -237,6 +239,12 @@ interface CalendarViewProps {
   /** Notified whenever the mode changes (picker click, or the narrow-width
    * auto-switch away from Month) so the caller can keep the URL in sync. */
   onModeChange?: (mode: CalendarMode) => void;
+  /** The app-wide undo queue, so completing a Task from a calendar entry
+   * defers its PATCH behind the same toast as the List and Kanban
+   * checkboxes. Required, not optional: a checkbox that silently committed
+   * on one surface and not another is exactly the drift `taskCompletion`
+   * exists to prevent. */
+  undoQueue: UndoQueue;
 }
 
 export function CalendarView({
@@ -249,7 +257,8 @@ export function CalendarView({
   onListCreated,
   initialMode = "day",
   onModeChange,
-}: CalendarViewProps = {}): JSX.Element {
+  undoQueue,
+}: CalendarViewProps): JSX.Element {
   const [mode, setMode] = useState<CalendarMode>(initialMode);
   useEffect(() => {
     onModeChange?.(mode);
@@ -285,6 +294,33 @@ export function CalendarView({
   // sidebar drawer rather than inventing a second pattern for "panel that
   // moves out of the flow on a phone".
   const [unscheduledOpen, setUnscheduledOpen] = useState(false);
+
+  /** Fold a completed (or reopened) Task back into whichever of the two Task
+   * collections holds it, then drop it if it came back completed: both the
+   * grid and the Unscheduled rail are fetched `completed=false` — the
+   * Calendar shows plans, not history — so a committed completion leaves
+   * rather than lingering as a struck-through block. A recurring Task comes
+   * back still open with its dates advanced (ADR 0003), so it survives the
+   * filter and moves to its next occurrence's day.
+   *
+   * `useTaskCompletion` hands us an updater rather than a Task, and this runs
+   * it against both collections. That is only sound because the updater is a
+   * same-length `map`: running it twice replaces the one Task by id and
+   * leaves every other element alone. An updater that grew or shrank the list
+   * would be applied twice, once per collection — so keep this narrow. It
+   * exists for completion, not as a general "change the Calendar's Tasks". */
+  const applyCompletionChange = useCallback((update: (current: Task[]) => Task[]): void => {
+    const stillOpen = (current: Task[]): Task[] =>
+      update(current).filter((task) => !task.completed);
+    setTasks(stillOpen);
+    setUnscheduled(stillOpen);
+  }, []);
+
+  // The same undoable completion the List view and Kanban board use (#155),
+  // not a second implementation: ticking a calendar entry defers its PATCH
+  // behind the app's one toast, and a recurring Task still branches
+  // server-side. This is why the Calendar takes the queue as a prop.
+  const completion = useTaskCompletion(applyCompletionChange, undoQueue);
 
   // The viewport crossing into narrow while Month is showing: switch to Day
   // rather than leave a now-tiny grid up. Never fights a Week/Day choice the
@@ -694,6 +730,75 @@ export function CalendarView({
       : { style: { ["--entry-color"]: color } as React.CSSProperties, "data-list-color": true };
   }
 
+  /** The completion checkbox a Task-backed entry carries (every rendering
+   * site: Month banner and timed row, the all-day lane, a Week/Day block,
+   * an Unscheduled card) — the one affordance for finishing a Task without
+   * leaving the Calendar. An Event gets nothing: it is read-only Google
+   * context with no completion to offer (ADR 0006), the same branch that
+   * already withholds drag and resize.
+   *
+   * Click and dragstart are both stopped here. Click, because the entry
+   * itself opens the Task detail panel and a Month cell's own click opens
+   * that day's draft — ticking the box must do neither. Dragstart, because
+   * every Task-backed entry is a `draggable` parent, so a press that lands on
+   * the checkbox would otherwise pick the whole entry up and reschedule it on
+   * release; the resize handles refuse a drag the same way for the same
+   * reason. Mousedown needs no guard: the hour cells that start a drag-create
+   * are siblings of a block, not ancestors of it, so a press on a block never
+   * reaches one. */
+  function entryCheckbox(entry: Entry): JSX.Element | null {
+    if (entry.kind !== "task") {
+      return null;
+    }
+    const task = entry.task;
+    return (
+      <label
+        className="entry-check"
+        onClick={(event) => event.stopPropagation()}
+        onDragStart={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+      >
+        <input
+          type="checkbox"
+          // Never `task.completed`: both the grid and the rail read open
+          // Tasks only, so a Task on screen here is always open. Pending is
+          // the only state that ticks this box.
+          checked={completion.isPending(task.id)}
+          aria-label={`Complete ${task.title}`}
+          onChange={() => completion.toggle(task)}
+        />
+      </label>
+    );
+  }
+
+  /** An entry's title, struck through while its completion sits in the undo
+   * window — without `completed` having been set (a recurring Task never sets
+   * it). Reuses the app's one `.completed` class rather than a
+   * calendar-specific copy of the same strike-through, so the Calendar and a
+   * List row can't drift on what "done" looks like. */
+  function entryTitleNode(entry: Entry): JSX.Element {
+    return <span className={entryTitleClass(entry, "entry-title")}>{entryTitle(entry)}</span>;
+  }
+
+  /** `base`, plus `completed` while this entry's completion is pending. The
+   * one place that decision is made, shared by the four title-bearing
+   * surfaces and the time block (whose title carries its own base class). */
+  function entryTitleClass(entry: Entry, base: string): string {
+    return entry.kind === "task" && completion.isPending(entry.task.id)
+      ? `${base} completed`
+      : base;
+  }
+
+  /** Marks the whole entry as mid-completion, for tests and any future
+   * whole-entry treatment. */
+  function completingProps(entry: Entry): { "data-completing"?: true } {
+    return entry.kind === "task" && completion.isPending(entry.task.id)
+      ? { "data-completing": true }
+      : {};
+  }
+
   function renderMonth(): JSX.Element {
     const days = monthGridDays(anchor);
     const anchorMonth = anchor.slice(0, 7);
@@ -751,6 +856,7 @@ export function CalendarView({
                       key={entryKey(entry)}
                       className="calendar-banner"
                       data-kind={entry.kind}
+                      {...completingProps(entry)}
                       {...listColorProps(entry)}
                       {...entryDragProps(entry)}
                       onClick={(event) => {
@@ -764,13 +870,15 @@ export function CalendarView({
                         );
                       }}
                     >
-                      {entryTitle(entry)}
+                      {entryCheckbox(entry)}
+                      {entryTitleNode(entry)}
                     </div>
                   ) : (
                     <div
                       key={entryKey(entry)}
                       className="calendar-timed-entry"
                       data-kind={entry.kind}
+                      {...completingProps(entry)}
                       {...listColorProps(entry)}
                       {...entryDragProps(entry)}
                       onClick={(event) => {
@@ -784,8 +892,9 @@ export function CalendarView({
                         );
                       }}
                     >
+                      {entryCheckbox(entry)}
                       <span className="entry-time">{entryTime(entryTimeShape(entry))}</span>{" "}
-                      {entryTitle(entry)}
+                      {entryTitleNode(entry)}
                     </div>
                   ),
                 )}
@@ -835,6 +944,7 @@ export function CalendarView({
         data-continues-before={continuesBefore || undefined}
         data-continues-after={continuesAfter || undefined}
         data-resizing={pending !== null || undefined}
+        {...completingProps(entry)}
         data-list-color={listColor["data-list-color"]}
         style={{
           top: axis.minuteToY(startMin),
@@ -865,7 +975,10 @@ export function CalendarView({
             }}
           />
         )}
-        <span className="block-title">{title}</span>
+        <span className="block-head">
+          {entryCheckbox(entry)}
+          <span className={entryTitleClass(entry, "block-title")}>{title}</span>
+        </span>
         <span className="block-time">
           {start}–{end}
         </span>
@@ -928,6 +1041,7 @@ export function CalendarView({
                   key={entryKey(entry)}
                   className="calendar-banner"
                   data-kind={entry.kind}
+                  {...completingProps(entry)}
                   {...listColorProps(entry)}
                   {...entryDragProps(entry)}
                   onClick={(event) => {
@@ -941,7 +1055,8 @@ export function CalendarView({
                     );
                   }}
                 >
-                  {entryTitle(entry)}
+                  {entryCheckbox(entry)}
+                  {entryTitleNode(entry)}
                 </div>
               ))}
             </div>
@@ -1228,8 +1343,14 @@ export function CalendarView({
             <Hint hintKey="unscheduled-chips">
               <ul tabIndex={0}>
                 {unscheduled.map((task) => (
-                  <li key={task.id} className="unscheduled-card" {...taskDragProps(task)}>
-                    {task.title}
+                  <li
+                    key={task.id}
+                    className="unscheduled-card"
+                    {...completingProps(taskEntry(task))}
+                    {...taskDragProps(task)}
+                  >
+                    {entryCheckbox(taskEntry(task))}
+                    {entryTitleNode(taskEntry(task))}
                   </li>
                 ))}
               </ul>
