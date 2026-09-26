@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.11.0](https://github.com/Piwero/tuk-tuk/compare/v2.10.13...v2.11.0) - 2026-09-26
+
+### Features
+
+- **tasks:** Remove completed tasks from task views ([acef926](https://github.com/Piwero/tuk-tuk/commit/acef9269c9f1150e23c12d5e6d96a1b1ebe947c0))
+
 ## [2.10.13](https://github.com/Piwero/tuk-tuk/compare/v2.10.12...v2.10.13) - 2026-09-25
 
 ### Bug Fixes
