@@ -199,6 +199,14 @@
   --mobile-tab-bar-height: 56px; /* the mobile bottom tab bar (issue #170) */
   --mobile-quick-add-size: 56px; /* the mobile Quick-Add button (issue #287) */
   --control-height: 34px; /* inputs, buttons */
+  /* Checkbox sizes. Every checkbox is --checkbox-standard; the Calendar's
+     entries are the one exception, and take --checkbox-dense. A Month cell
+     holds several one-line entries, so a standard box there would set each
+     row's height instead of sitting inside it. Under a coarse pointer the
+     dense variant goes back to standard with a padded hit area, since a 12px
+     target can't be hit by a thumb. */
+  --checkbox-standard: 18px;
+  --checkbox-dense: 12px;
   /* Minimum touch hit area (#168). Applied under a coarse pointer and, since
      #286, at the mobile breakpoint too — a touch-capable device reporting
      `pointer: fine` needs the same floor. */

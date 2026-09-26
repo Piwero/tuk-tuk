@@ -1360,6 +1360,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                 onListCreated={(list) => setLists((current) => [...current, list])}
                 initialMode={view.mode}
                 onModeChange={handleCalendarModeChange}
+                undoQueue={toasts}
               />
             ) : view?.kind === "goals" ? (
               <GoalsView />
