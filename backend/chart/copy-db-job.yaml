@@ -52,7 +52,7 @@ spec:
                       - amd64
       containers:
         - name: copy-db
-          image: ghcr.io/piwero/tuk-tuk/backend:2.10.13 # {"$imagepolicy": "tuk-tuk:backend"}
+          image: ghcr.io/piwero/tuk-tuk/backend:2.11.1 # {"$imagepolicy": "tuk-tuk:backend"}
           imagePullPolicy: Always
           # The source is the SQLite file on the PVC, spelled with the sync
           # driver the tool wants. It is read-only here: the copy tool only
