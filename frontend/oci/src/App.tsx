@@ -36,9 +36,11 @@ import { FocusRunProvider, useStartPomo } from "./focusRunContext";
 import { type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
+  loadHideCompleted,
   loadSidebarCollapsed,
   loadThemePreference,
   resolveThemePreference,
+  saveHideCompleted,
   saveSidebarCollapsed,
   saveThemePreference,
   type ThemePreference,
@@ -203,6 +205,11 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   });
   // The completed view of the current List (or of All): computed, newest first.
   const [completedMode, setCompletedMode] = useState(false);
+  // Hides completed Tasks from List/Tag/Folder views instead of showing them
+  // struck-through inline — a display preference (see layoutPrefs), not a
+  // fetch filter: the completed Tasks stay loaded, just off-screen, so
+  // toggling it back needs no refetch.
+  const [hideCompleted, setHideCompleted] = useState(loadHideCompleted);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   // The Calendar view keeps its own task list (App's `tasks` isn't populated
   // for it), so a task selected there is stashed here to resolve selectedTask.
@@ -576,6 +583,17 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   selectedTaskRef.current = selectedTask;
   // Computed views can't be patched locally: membership depends on the query.
   const isComputedView = smartView !== null || completedMode || view?.kind === "search";
+  // "Hide completed" (this feature) only touches List/Tag/Folder views —
+  // Search keeps its own Status filter, and the Completed view IS the
+  // completed tasks, so filtering either of those out would be self-defeating.
+  const visibleTasks = hideCompleted ? tasks.filter((task) => !task.completed) : tasks;
+  // The toggle only earns its place where completed Tasks can actually show
+  // inline: List/Tag/Folder views. Smart Lists are open-only already
+  // (server-side), the Completed view is nothing but completed Tasks, and
+  // Search has its own Status filter — hiding would be a no-op or self-
+  // defeating in each of those.
+  const showHideCompletedToggle =
+    !completedMode && (selectedList !== null || selectedTag !== null || selectedFolder !== null);
   // The completed view exists per List and for All (not Today / Next 7 Days).
   const hasCompletedView = selectedList !== null || smartView === "all";
 
@@ -1204,6 +1222,22 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                     {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
                   </button>
                 )}
+                {showHideCompletedToggle && (
+                  <button
+                    type="button"
+                    className="hide-completed-toggle"
+                    aria-pressed={hideCompleted}
+                    onClick={() =>
+                      setHideCompleted((current) => {
+                        const next = !current;
+                        saveHideCompleted(next);
+                        return next;
+                      })
+                    }
+                  >
+                    {hideCompleted ? "Show completed" : "Hide completed"}
+                  </button>
+                )}
                 {hasCompletedView && (
                   <button
                     type="button"
@@ -1357,7 +1391,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               <FolderView
                 folder={selectedFolder}
                 lists={folderMembers}
-                tasks={tasks}
+                tasks={visibleTasks}
                 sortBy={folderSortBy}
                 onChanged={changeTasks}
                 onSelect={setSelectedTaskId}
@@ -1368,12 +1402,13 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               <CompletedView
                 tasks={tasks}
                 occurrences={occurrences}
+                listId={selectedList?.id ?? null}
                 onChanged={changeTasksAndRecompute}
                 onSelect={setSelectedTaskId}
               />
             ) : selectedList !== null && selectedList.view_mode === "kanban" ? (
               <KanbanView
-                tasks={tasks}
+                tasks={visibleTasks}
                 sections={sections}
                 listId={selectedList.id}
                 onChanged={changeTasks}
@@ -1384,7 +1419,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
               />
             ) : (
               <TaskListView
-                tasks={tasks}
+                tasks={visibleTasks}
                 sections={sections}
                 listId={smartView !== null ? null : (selectedList?.id ?? null)}
                 lists={lists}

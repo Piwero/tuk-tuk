@@ -962,7 +962,8 @@ button.create-menu-trigger {
 }
 
 .view-toggle,
-.completed-toggle {
+.completed-toggle,
+.hide-completed-toggle {
   display: inline-flex;
   align-items: center;
   height: 28px;
@@ -978,8 +979,14 @@ button.create-menu-trigger {
 }
 
 .view-toggle:hover,
-.completed-toggle:hover {
+.completed-toggle:hover,
+.hide-completed-toggle:hover {
   background: var(--ink-50);
+}
+
+.hide-completed-toggle[aria-pressed="true"] {
+  background: var(--ink-50);
+  color: var(--text-primary);
 }
 
 .completed-toggle {
@@ -1172,6 +1179,23 @@ button.create-menu-trigger {
 
 .add-section:hover {
   background: var(--surface-hover);
+}
+
+.clear-completed {
+  margin-bottom: var(--space-3);
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-danger);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.clear-completed:hover {
+  background: var(--danger-soft);
 }
 
 .tasks {
@@ -5122,6 +5146,7 @@ select.task-detail-breadcrumb:focus-visible {
 @media (max-width: 720px) {
   .view-toggle,
   .completed-toggle,
+  .hide-completed-toggle,
   .view-controls select,
   .filter-menu-button,
   .filter-menu-clear-all {

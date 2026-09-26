@@ -1361,6 +1361,39 @@ export function installFakeApi({
         return new Response(null, { status: 204 });
       }
     }
+    if (method === "DELETE" && url.pathname === "/api/v1/tasks") {
+      const listId = url.searchParams.get("list_id");
+      const completed = url.searchParams.get("completed");
+      if (completed !== "true") {
+        return json(
+          {
+            error: {
+              code: "validation_error",
+              message: "Bulk delete requires completed=true",
+            },
+          },
+          422,
+        );
+      }
+      const ids = state.tasks
+        .filter((task) => task.completed && (listId === null || task.list_id === Number(listId)))
+        .map((task) => task.id);
+      state.tasks = state.tasks.filter((task) => !ids.includes(task.id));
+      state.completedOccurrences = state.completedOccurrences.filter(
+        (occurrence) => !ids.includes(occurrence.task_id),
+      );
+      for (const focusSession of state.focusSessions) {
+        if (focusSession.task_id !== null && ids.includes(focusSession.task_id)) {
+          focusSession.task_id = null;
+        }
+      }
+      for (const timer of state.timers) {
+        if (timer.task_id !== null && ids.includes(timer.task_id)) {
+          timer.task_id = null;
+        }
+      }
+      return new Response(null, { status: 204 });
+    }
     if (method === "GET" && url.pathname === "/api/v1/tasks") {
       const listId = url.searchParams.get("list_id");
       const tagId = url.searchParams.get("tag_id");

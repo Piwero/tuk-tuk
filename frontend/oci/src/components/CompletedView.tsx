@@ -1,10 +1,19 @@
-import { deleteTask, updateTask, type CompletedOccurrence, type Task } from "../api";
+import {
+  deleteCompletedTasks,
+  deleteTask,
+  updateTask,
+  type CompletedOccurrence,
+  type Task,
+} from "../api";
 import { localDayOf } from "../dates";
 import { Icon } from "./Icon";
 
 interface CompletedViewProps {
   tasks: Task[];
   occurrences: CompletedOccurrence[];
+  /** The List this view is scoped to, or null for the "All" completed view —
+   * what "Clear completed" bulk-deletes within. */
+  listId: number | null;
   onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
 }
@@ -21,6 +30,7 @@ type HistoryRow =
 export function CompletedView({
   tasks,
   occurrences,
+  listId,
   onChanged,
   onSelect,
 }: CompletedViewProps): JSX.Element {
@@ -47,8 +57,25 @@ export function CompletedView({
     onChanged((current) => current.filter((t) => t.id !== task.id));
   }
 
+  async function clearCompleted(): Promise<void> {
+    if (
+      tasks.length === 0 ||
+      !window.confirm(`Permanently delete ${tasks.length} completed task(s)? This can't be undone.`)
+    ) {
+      return;
+    }
+    await deleteCompletedTasks(listId);
+    const clearedIds = new Set(tasks.map((task) => task.id));
+    onChanged((current) => current.filter((task) => !clearedIds.has(task.id)));
+  }
+
   return (
     <div className="task-groups">
+      {tasks.length > 0 && (
+        <button type="button" className="clear-completed" onClick={() => void clearCompleted()}>
+          Clear completed
+        </button>
+      )}
       <ul className="tasks completed-history" aria-label="Completed">
         {rows.map((row) =>
           row.kind === "task" ? (

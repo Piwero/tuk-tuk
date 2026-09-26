@@ -389,16 +389,56 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
     return TaskRead.model_validate(task)
 
 
+async def detach_task_history(task_ids: list[int], session: SessionDep) -> None:
+    """The cleanup a Task's deletion carries with it, shared by the single
+    and bulk delete routes: its own history goes (SQLite leaves ON DELETE
+    CASCADE unenforced), while Focus Sessions/Timer presets outlive it —
+    only their link does."""
+    if not task_ids:
+        return
+    await session.execute(
+        delete(CompletedOccurrence).where(CompletedOccurrence.task_id.in_(task_ids))
+    )
+    await session.execute(
+        update(FocusSession).where(FocusSession.task_id.in_(task_ids)).values(task_id=None)
+    )
+    await session.execute(update(Timer).where(Timer.task_id.in_(task_ids)).values(task_id=None))
+
+
 @router.delete("/{task_id}", status_code=204)
 async def delete_task(task_id: int, session: SessionDep) -> None:
     task = await get_task_or_404(task_id, session)
-    # History travels with its Task (SQLite leaves ON DELETE CASCADE unenforced).
-    await session.execute(delete(CompletedOccurrence).where(CompletedOccurrence.task_id == task.id))
-    # Focus Sessions are history too, but their own: they outlive the Task,
-    # only the link goes. Timer presets keep working the same way.
-    await session.execute(
-        update(FocusSession).where(FocusSession.task_id == task.id).values(task_id=None)
-    )
-    await session.execute(update(Timer).where(Timer.task_id == task.id).values(task_id=None))
+    await detach_task_history([task.id], session)
     await session.delete(task)
+    await session.commit()
+
+
+@router.delete("", status_code=204)
+async def delete_completed_tasks(
+    session: SessionDep,
+    completed: bool | None = None,
+    list_id: int | None = None,
+) -> None:
+    """Bulk-deletes every completed Task, optionally scoped to one List —
+    the Completed view's "Clear completed". `completed=true` is required:
+    without it, a bare `DELETE /api/v1/tasks` would read as "delete
+    everything", which this endpoint refuses to do.
+    """
+    if completed is not True:
+        raise APIError(
+            status_code=422,
+            code="validation_error",
+            message="Bulk delete requires completed=true — open Tasks can't be bulk-deleted",
+        )
+    ids = list(
+        await session.scalars(
+            select(Task.id).where(
+                Task.completed.is_(True),
+                *([Task.list_id == list_id] if list_id is not None else []),
+            )
+        )
+    )
+    await detach_task_history(ids, session)
+    if ids:
+        await session.execute(delete(Task).where(Task.id.in_(ids)))
     await session.commit()
