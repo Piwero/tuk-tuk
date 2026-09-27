@@ -55,6 +55,16 @@ describe("content column (issue #196)", () => {
     expect(selectors).not.toContain(".main-chrome > form");
   });
 
+  it("lets the shortcut hint strip span the list it underlines", () => {
+    // The strip draws a `border-top` across the foot of the task list, so a
+    // narrower cap than the list leaves a rule that stops short of the rows
+    // above it — the list's bottom edge reads as broken. It belongs to the
+    // list, so it fills with the list.
+    const strip = /\.shortcut-hints\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
+    expect(strip, "`.shortcut-hints` rule not found").not.toBe("");
+    expect(strip).not.toMatch(/max-width:\s*var\(--content-max\)/);
+  });
+
   it("never caps `.tasks`, so the aligned-row container query keys off the real width", () => {
     // The aligned single-line row is a container query on `.tasks` with a
     // 620px floor; the wrapped fallback still stands below that. Widening
