@@ -253,12 +253,16 @@ main {
 /* The keyboard-shortcut hint strip along the foot of the task list (issue
    #192). It advertises whatever the shortcut layer currently has registered,
    so it grows as later slices register more. Hidden under a coarse pointer,
-   where there is no keyboard to advertise. */
+   where there is no keyboard to advertise.
+
+   No `max-width`: its `border-top` rules off the foot of the task list, and
+   the list fills the content area (issue #196). Capped at the old reading
+   measure the rule stopped short of the rows above it and the list's bottom
+   edge read as broken. */
 .shortcut-hints {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-4);
-  max-width: var(--content-max);
   margin-top: var(--space-6);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
@@ -5544,6 +5548,18 @@ select.task-detail-breadcrumb:focus-visible {
   display: none;
 }
 
+/* IconButton wraps the trigger in a span (#270), and the button's own
+   `display: none` can't hide its wrapper — so the wrapper hides too, the
+   same way `.drawer-toggle` and `.drawer-close` already do above.
+   `.app` is a grid, and this wrapper is one of its direct children: left
+   visible it claimed the third track, which is the Task detail panel's, and
+   pushed the panel onto a second implicit row underneath the sidebar. The
+   panel was mounted and `.with-detail` was set, but clicking a Task showed
+   nothing — and `main` lost half its height with it. */
+.icon-button-wrap:has(> .mobile-quick-add) {
+  display: none;
+}
+
 @media (max-width: 720px) {
   .app,
   .app.with-detail,
@@ -5791,6 +5807,13 @@ select.task-detail-breadcrumb:focus-visible {
    * it's hidden off-canvas until the drawer opens. Stacking sits between
    * the tab bar (z-modal - 4) and the drawer scrim (z-modal - 2), so it
    * never competes with either. */
+  /* The wrapper shows again with the button it wraps (see the desktop rule
+     that hides both). `display: contents` keeps the fixed-position button
+     the thing that's laid out, not the span around it. */
+  .icon-button-wrap:has(> .mobile-quick-add) {
+    display: contents;
+  }
+
   .mobile-quick-add {
     display: flex;
     align-items: center;
