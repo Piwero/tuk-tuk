@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.11.2](https://github.com/Piwero/tuk-tuk/compare/v2.11.1...v2.11.2) - 2026-09-27
+
+### Bug Fixes
+
+- **shell:** Keep mobile-only controls out of the desktop grid ([274ca42](https://github.com/Piwero/tuk-tuk/commit/274ca42b7513e37a0d650617e3b8ecb0b8e41fbe))
+
 ## [2.11.1](https://github.com/Piwero/tuk-tuk/compare/v2.11.0...v2.11.1) - 2026-09-26
 
 ### Features
