@@ -289,8 +289,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // and restricted to date/priority/title: there's no manual cross-List
   // order to preserve, so "custom" isn't offered here.
   const [folderSortBy, setFolderSortBy] = useState<FolderSortBy>("date");
-  // "All" Smart List's own List/Tag/Priority narrowing (this feature) — kept
-  // separate from Search's filters so the two never disturb each other.
+  // The Smart Lists' List/Tag/Priority narrowing — one set shared by Today,
+  // Next 7 Days and All, like `groupBy`/`sortBy` above, and kept separate
+  // from Search's filters so the two never disturb each other.
   const [allFilters, setAllFilters] = useState<AllFilters>(BLANK_ALL_FILTERS);
 
   // Lands here after the Google OAuth round trip (app.routers.v1.google
@@ -524,8 +525,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       setTasks(completedPage.items);
       setOccurrences(occurrencePage.items);
     } else if (view.kind === "smart") {
-      const filters = view.view === "all" ? allFilters : BLANK_ALL_FILTERS;
-      setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()), filters)).items);
+      setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()), allFilters)).items);
     } else if (view.kind === "search") {
       // An empty query shows nothing — without even asking the API.
       setTasks(
@@ -1278,7 +1278,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                   </div>
                 </>
               )}
-              {smartView === "all" && !completedMode && (
+              {smartView !== null && !completedMode && (
                 <AllViewControls
                   filters={allFilters}
                   onFiltersUpdate={setAllFilters}

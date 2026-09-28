@@ -34,7 +34,7 @@ function taskNames(): string[] {
 }
 
 describe("All view: filter and sort controls", () => {
-  it("offers a Filters button, Group by and Sort by only in All; no bare filter combobox", async () => {
+  it("offers a Filters button, Group by and Sort by in All; no bare filter combobox", async () => {
     installFakeApi();
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
@@ -59,17 +59,61 @@ describe("All view: filter and sort controls", () => {
     expect(screen.getByRole("combobox", { name: "Priority" })).toBeInTheDocument();
   });
 
-  it("Today and Next 7 Days show none of the filter or group/sort controls", async () => {
+  it("Today and Next 7 Days offer the same Filters, Group by and Sort by as All", async () => {
     installFakeApi();
     render(<App />);
 
     const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
-    fireEvent.click(await within(nav).findByRole("button", { name: "Today" }));
-    await screen.findByRole("heading", { name: "Today" });
+    for (const name of ["Today", "Next 7 Days"]) {
+      fireEvent.click(await within(nav).findByRole("button", { name }));
+      await screen.findByRole("heading", { name });
 
-    expect(screen.queryByRole("button", { name: /^Filters/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Group by" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Sort by" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
+      expect(screen.getByRole("combobox", { name: "Group by" })).toBeInTheDocument();
+      expect(screen.getByRole("combobox", { name: "Sort by" })).toBeInTheDocument();
+    }
+  });
+
+  it("filtering Today by Priority narrows its tasks and sends priority with view=today", async () => {
+    const api = installFakeApi({
+      tasks: [
+        fakeTask("Due high", {
+          priority: "high",
+          due_date: "2026-07-03T00:00:00Z",
+          is_all_day: true,
+        }),
+        fakeTask("Due low", {
+          priority: "low",
+          due_date: "2026-07-03T00:00:00Z",
+          is_all_day: true,
+        }),
+      ],
+    });
+    render(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+    fireEvent.click(await within(nav).findByRole("button", { name: "Today" }));
+    expect(
+      await screen.findByRole("button", { name: "Open details for Due low" }),
+    ).toBeInTheDocument();
+
+    await openFilters();
+    fireEvent.change(screen.getByRole("combobox", { name: "Priority" }), {
+      target: { value: "high" },
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Open details for Due low" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Open details for Due high" })).toBeInTheDocument();
+    expect(
+      api.requests.some(
+        (r) =>
+          r.method === "GET" && r.url === "/api/v1/tasks?view=today&today=2026-07-03&priority=high",
+      ),
+    ).toBe(true);
   });
 
   it("filtering by List narrows to that List's tasks and sends list_id with view=all", async () => {
