@@ -5260,6 +5260,45 @@ select.task-detail-breadcrumb:focus-visible {
   }
 }
 
+/* ── View controls on a phone ────────────────────────────────────────
+ * The desktop row (Filters, Group by, Sort by, the Custom hint) can't fit
+ * a phone's width: All's `nowrap` squeezed the Filters trigger row to zero
+ * so "Group by" drew over the button, and the Custom hint was crushed into
+ * a one-word-per-line column. Here the controls become a two-column grid:
+ * Filters (and its chips) get a full-width row, each select sits under its
+ * own label and fills its column, and the hint reads as one line beneath. */
+@media (max-width: 720px) {
+  .view-controls,
+  .view-controls:has(.filter-menu) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    align-items: end;
+  }
+
+  .view-controls .filter-menu-trigger-row,
+  .view-controls > .hint {
+    grid-column: 1 / -1;
+  }
+
+  .view-controls .hint-wrap {
+    display: flex;
+    min-width: 0;
+  }
+
+  .view-controls label {
+    flex: 1;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .view-controls select {
+    width: 100%;
+  }
+}
+
 /* ── Collapsed sidebar (icon rail) ───────────────────────────────── */
 
 .sidebar-top {
