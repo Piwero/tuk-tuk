@@ -222,8 +222,8 @@ export function AllViewControls({
             value={groupBy}
             onChange={(event) => onGroupByChange(event.target.value as GroupBy)}
           >
-            {/* "section" reruns as "None" here — All has no Sections
-              of its own, so grouping by one is really no grouping. */}
+            {/* "section" reruns as "None" here — Smart Lists have no Sections
+              of their own, so grouping by one is really no grouping. */}
             <option value="section">None</option>
             <option value="date">Date</option>
             <option value="priority">Priority</option>

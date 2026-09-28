@@ -631,13 +631,12 @@ function appendListTagPriorityParams(
   }
 }
 
-/** The filters "All" narrows by. No status field: `view` already forces open
+/** The filters every Smart List narrows by. No status field: `view` already forces open
  * tasks only, and Completed has its own toggle. */
 export type AllFilters = ListTagPriorityFilters;
 
 /** `today` is the caller's local day (YYYY-MM-DD); Smart Lists are open tasks
- * only. `filters` narrows further — only "All" offers the controls for it,
- * so Today/Next 7 Days always pass none. */
+ * only. `filters` narrows further, the same way in every Smart List. */
 export function fetchSmartTasks(
   view: SmartView,
   today: string,
