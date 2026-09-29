@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.11.4](https://github.com/Piwero/tuk-tuk/compare/v2.11.3...v2.11.4) - 2026-09-29
+
+### Features
+
+- **frontend:** Add filters, group by and sort to Today and Next 7 Days ([4cae3bf](https://github.com/Piwero/tuk-tuk/commit/4cae3bffa710575506bc30da3d5bf8cf78d9cf56))
+
 ## [2.11.3](https://github.com/Piwero/tuk-tuk/compare/v2.11.2...v2.11.3) - 2026-09-28
 
 ### Bug Fixes
