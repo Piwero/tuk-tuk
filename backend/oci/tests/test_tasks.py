@@ -202,3 +202,27 @@ def test_bulk_delete_requires_the_completed_filter(client: TestClient) -> None:
     response = client.delete("/api/v1/tasks", params={"completed": "false"})
 
     assert response.status_code == 422
+
+
+def test_a_single_task_is_readable_with_check_items_and_tags(client: TestClient) -> None:
+    tag = client.post("/api/v1/tags", json={"name": "errand"}).json()
+    created = client.post(
+        "/api/v1/tasks", json={"title": "Pack bag", "tag_ids": [tag["id"]]}
+    ).json()
+    client.post(f"/api/v1/tasks/{created['id']}/check-items", json={"title": "Socks"})
+
+    response = client.get(f"/api/v1/tasks/{created['id']}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == client.get("/api/v1/tasks").json()["items"][0]
+    assert body["title"] == "Pack bag"
+    assert [item["title"] for item in body["check_items"]] == ["Socks"]
+    assert [t["name"] for t in body["tags"]] == ["errand"]
+
+
+def test_unknown_task_is_404(client: TestClient) -> None:
+    response = client.get("/api/v1/tasks/999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

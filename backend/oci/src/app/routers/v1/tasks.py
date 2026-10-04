@@ -333,6 +333,12 @@ async def get_task_or_404(task_id: int, session: SessionDep) -> Task:
     return task
 
 
+@router.get("/{task_id}")
+async def read_task(task_id: int, session: SessionDep) -> TaskRead:
+    task = await get_task_or_404(task_id, session)
+    return TaskRead.model_validate(task)
+
+
 @router.patch("/{task_id}")
 async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) -> TaskRead:
     task = await get_task_or_404(task_id, session)
