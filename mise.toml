@@ -9,6 +9,11 @@ description = "Install backend dependencies (uv)"
 run = "uv sync"
 dir = "backend/oci"
 
+[tasks."cli:install"]
+description = "Install CLI dependencies (uv)"
+run = "uv sync"
+dir = "cli/oci"
+
 [tasks."backend:dev"]
 description = "Start backend with hot-reload (docker compose)"
 run = "docker compose up --build backend"
@@ -17,6 +22,11 @@ run = "docker compose up --build backend"
 description = "Run backend tests"
 run = "uv run pytest"
 dir = "backend/oci"
+
+[tasks."cli:test"]
+description = "Run CLI tests"
+run = "uv run pytest"
+dir = "cli/oci"
 
 [tasks."backend:lint"]
 description = "Lint, format-check, and type-check backend code"
@@ -27,6 +37,16 @@ dir = "backend/oci"
 description = "Auto-fix backend lint issues and format code"
 run = "uv run ruff check --fix . && uv run ruff format ."
 dir = "backend/oci"
+
+[tasks."cli:lint"]
+description = "Lint, format-check, and type-check CLI code"
+run = "uv run ruff check . && uv run ruff format --check . && uv run mypy src"
+dir = "cli/oci"
+
+[tasks."cli:lint:fix"]
+description = "Auto-fix CLI lint issues and format code"
+run = "uv run ruff check --fix . && uv run ruff format ."
+dir = "cli/oci"
 
 [tasks."backend:hash-password"]
 description = "Generate an Argon2id password hash for AUTH_PASSWORD_HASH (prompts on stdin)"
@@ -83,7 +103,7 @@ backend/oci/.venv/bin/pre-commit install --hook-type pre-push
 
 [tasks.install]
 description = "Install all dependencies"
-depends = ["backend:install", "frontend:install"]
+depends = ["backend:install", "frontend:install", "cli:install"]
 
 [tasks.setup]
 description = "Install dependencies and configure git hooks"
@@ -99,11 +119,11 @@ run = "docker compose down"
 
 [tasks.lint]
 description = "Lint both stacks"
-depends = ["backend:lint", "frontend:lint"]
+depends = ["backend:lint", "frontend:lint", "cli:lint"]
 
 [tasks.test]
 description = "Run all tests"
-depends = ["backend:test", "frontend:test"]
+depends = ["backend:test", "frontend:test", "cli:test"]
 
 [tasks."release:tag"]
 description = "Bump version and push a release tag (major|minor|patch), triggering the Release workflow"

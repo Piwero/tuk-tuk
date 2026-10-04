@@ -27,9 +27,9 @@ repos:
     hooks:
       - id: ruff
         args: ["--fix"]
-        files: ^backend/oci/
+        files: ^(backend|cli)/oci/
       - id: ruff-format
-        files: ^backend/oci/
+        files: ^(backend|cli)/oci/
 
   # ---- Python: mypy ----
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -50,6 +50,12 @@ repos:
           - itsdangerous>=2.2.0
           - httpx>=0.27.0
           - cryptography>=43.0.0
+      - id: mypy
+        alias: mypy-cli
+        files: ^cli/oci/src/
+        args: ["--config-file=cli/oci/pyproject.toml"]
+        additional_dependencies:
+          - httpx>=0.27.0
 
   # ---- Frontend: prettier ----
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -96,6 +102,12 @@ repos:
       - id: backend-pytest
         name: backend pytest
         entry: bash -c 'cd backend/oci && uv run pytest'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: cli-pytest
+        name: cli pytest
+        entry: bash -c 'cd cli/oci && uv run pytest'
         language: system
         pass_filenames: false
         stages: [pre-push]
