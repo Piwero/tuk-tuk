@@ -104,3 +104,36 @@ def test_re_ticking_an_already_done_item_does_not_recomplete_a_reopened_task(
     response = client.patch(f"/api/v1/tasks/{task_id}/check-items/{item_id}", json={"done": True})
 
     assert response.json()["completed"] is False  # nothing open was ticked; stay as set
+
+
+def test_a_single_check_item_is_readable(client: TestClient) -> None:
+    task_id = make_task(client)
+    created = client.post(f"/api/v1/tasks/{task_id}/check-items", json={"title": "Socks"}).json()
+    item_id = created["check_items"][0]["id"]
+
+    response = client.get(f"/api/v1/tasks/{task_id}/check-items/{item_id}")
+
+    assert response.status_code == 200
+    assert response.json() == created["check_items"][0]
+
+
+def test_unknown_check_item_is_404(client: TestClient) -> None:
+    task_id = make_task(client)
+
+    for url in (f"/api/v1/tasks/{task_id}/check-items/999", "/api/v1/tasks/999/check-items/1"):
+        response = client.get(url)
+
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+
+
+def test_a_foreign_parents_check_item_is_404(client: TestClient) -> None:
+    first = make_task(client, "First")
+    second = make_task(client, "Second")
+    created = client.post(f"/api/v1/tasks/{first}/check-items", json={"title": "Socks"}).json()
+    item_id = created["check_items"][0]["id"]
+
+    response = client.get(f"/api/v1/tasks/{second}/check-items/{item_id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

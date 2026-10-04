@@ -88,3 +88,19 @@ def test_deleting_a_tag_detaches_it_without_touching_tasks(client: TestClient) -
     read_back = client.get("/api/v1/tasks").json()["items"][0]
     assert read_back["title"] == "Survivor"
     assert read_back["tags"] == []
+
+
+def test_a_single_tag_is_readable(client: TestClient) -> None:
+    created = client.post("/api/v1/tags", json={"name": "work"}).json()
+
+    response = client.get(f"/api/v1/tags/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created
+
+
+def test_unknown_tag_is_404(client: TestClient) -> None:
+    response = client.get("/api/v1/tags/999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

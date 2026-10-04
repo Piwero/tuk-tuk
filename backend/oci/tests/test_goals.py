@@ -661,3 +661,43 @@ class TestGoalInputValidation:
         )
 
         assert response.status_code == 422
+
+
+def test_a_single_key_result_is_readable(client: TestClient) -> None:
+    goal = make_goal(client, "Ship v2")
+    body = make_key_result(
+        client, goal["id"], "Lines shipped", start_value=0, target_value=100, current_value=25
+    )
+    kr = body["key_results"][0]
+
+    response = client.get(f"/api/v1/goals/{goal['id']}/key-results/{kr['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == kr
+
+
+def test_unknown_key_result_is_404(client: TestClient) -> None:
+    goal = make_goal(client, "Ship v2")
+
+    for url in (
+        f"/api/v1/goals/{goal['id']}/key-results/999",
+        "/api/v1/goals/999/key-results/1",
+    ):
+        response = client.get(url)
+
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+
+
+def test_a_foreign_goals_key_result_is_404(client: TestClient) -> None:
+    first = make_goal(client, "First")
+    second = make_goal(client, "Second")
+    body = make_key_result(
+        client, first["id"], "Lines shipped", start_value=0, target_value=100, current_value=25
+    )
+    kr_id = body["key_results"][0]["id"]
+
+    response = client.get(f"/api/v1/goals/{second['id']}/key-results/{kr_id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

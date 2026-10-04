@@ -316,3 +316,19 @@ def test_the_inbox_view_mode_is_still_a_preference(client: TestClient) -> None:
     )
     assert still_blocked.status_code == 403
     assert still_blocked.json()["error"]["code"] == "inbox_immutable"
+
+
+def test_a_single_list_is_readable(client: TestClient) -> None:
+    created = client.post("/api/v1/lists", json={"name": "Groceries"}).json()
+
+    response = client.get(f"/api/v1/lists/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created
+
+
+def test_unknown_list_is_404(client: TestClient) -> None:
+    response = client.get("/api/v1/lists/999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

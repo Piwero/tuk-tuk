@@ -43,11 +43,22 @@ async def read_tags(
     return Page(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.patch("/{tag_id}")
-async def update_tag(tag_id: int, payload: TagUpdate, session: SessionDep) -> TagRead:
+async def get_tag_or_404(tag_id: int, session: SessionDep) -> Tag:
     tag = await session.get(Tag, tag_id)
     if tag is None:
         raise NotFoundError(f"Tag {tag_id} not found")
+    return tag
+
+
+@router.get("/{tag_id}")
+async def read_tag(tag_id: int, session: SessionDep) -> TagRead:
+    tag = await get_tag_or_404(tag_id, session)
+    return TagRead.model_validate(tag)
+
+
+@router.patch("/{tag_id}")
+async def update_tag(tag_id: int, payload: TagUpdate, session: SessionDep) -> TagRead:
+    tag = await get_tag_or_404(tag_id, session)
     changes = payload.model_dump(exclude_unset=True)
     if "name" in changes:
         await ensure_name_free(session, changes["name"], tag_id=tag_id)
@@ -60,9 +71,7 @@ async def update_tag(tag_id: int, payload: TagUpdate, session: SessionDep) -> Ta
 @router.delete("/{tag_id}", status_code=204)
 async def delete_tag(tag_id: int, session: SessionDep) -> None:
     """Delete the Tag and detach it from every task; the tasks are unaffected."""
-    tag = await session.get(Tag, tag_id)
-    if tag is None:
-        raise NotFoundError(f"Tag {tag_id} not found")
+    tag = await get_tag_or_404(tag_id, session)
     await session.execute(delete(task_tags).where(task_tags.c.tag_id == tag_id))
     await session.delete(tag)
     await session.commit()

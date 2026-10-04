@@ -105,6 +105,12 @@ async def get_habit_or_404(habit_id: int, session: SessionDep) -> Habit:
     return habit
 
 
+@router.get("/{habit_id}")
+async def read_habit(habit_id: int, session: SessionDep) -> HabitRead:
+    habit = await get_habit_or_404(habit_id, session)
+    return HabitRead.model_validate(habit)
+
+
 @router.patch("/{habit_id}")
 async def update_habit(habit_id: int, payload: HabitUpdate, session: SessionDep) -> HabitRead:
     habit = await get_habit_or_404(habit_id, session)

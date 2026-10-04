@@ -51,3 +51,19 @@ def test_folder_order_follows_sort_order(client: TestClient) -> None:
     assert response.status_code == 200
     items = client.get("/api/v1/folders").json()["items"]
     assert [item["name"] for item in items] == ["Home", "Work"]
+
+
+def test_a_single_folder_is_readable(client: TestClient) -> None:
+    created = client.post("/api/v1/folders", json={"name": "Work"}).json()
+
+    response = client.get(f"/api/v1/folders/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created
+
+
+def test_unknown_folder_is_404(client: TestClient) -> None:
+    response = client.get("/api/v1/folders/999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

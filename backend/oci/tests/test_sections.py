@@ -119,3 +119,20 @@ def test_task_can_be_created_directly_in_a_section(client: TestClient) -> None:
         "/api/v1/tasks", json={"title": "Lost", "list_id": project, "section_id": 424242}
     )
     assert unknown.status_code == 404
+
+
+def test_a_single_section_is_readable(client: TestClient) -> None:
+    project = make_list(client)
+    created = client.post("/api/v1/sections", json={"list_id": project, "name": "Backlog"}).json()
+
+    response = client.get(f"/api/v1/sections/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created
+
+
+def test_unknown_section_is_404(client: TestClient) -> None:
+    response = client.get("/api/v1/sections/999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
