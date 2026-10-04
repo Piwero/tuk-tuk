@@ -18,9 +18,12 @@ jobs:
   test-frontend:
     uses: ./.github/workflows/frontend-ci.yml
 
+  test-cli:
+    uses: ./.github/workflows/cli-ci.yml
+
   # --- Build + push both images in parallel ---
   build-push:
-    needs: [test-backend, test-frontend]
+    needs: [test-backend, test-frontend, test-cli]
     runs-on: ubuntu-latest
     permissions:
       contents: read
