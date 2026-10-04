@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from tuk.client import Client, ClientError
+from tuk.dates import BadDateError, parse_date
+from tuk.names import UnknownNameError, resolve_name
 from tuk.store import read_session_cookie, resolve_base_url, write_config, write_session_cookie
 from tuk.tz import TzError, local_today
 
@@ -33,6 +35,19 @@ def build_parser() -> argparse.ArgumentParser:
     span.add_argument("--all", action="store_true", help="Every open task instead of today")
     ls.add_argument("--limit", type=int, default=50)
     ls.add_argument("--offset", type=int, default=0)
+    add = sub.add_parser("add")
+    add.add_argument("--base-url", default=None)
+    add.add_argument("--json", dest="as_json", action="store_true")
+    add.add_argument("title")
+    add.add_argument("--list", dest="list_name", default=None)
+    add.add_argument("--tag", dest="tags", action="append", default=[])
+    add.add_argument("--priority", default=None)
+    add.add_argument("--description", default=None)
+    add.add_argument("--due", default=None)
+    add.add_argument("--start", default=None)
+    add.add_argument("--all-day", dest="all_day", action="store_true")
+    add.add_argument("--recurrence", default=None)
+    add.add_argument("--reminder", dest="reminders", action="append", default=[])
     return parser
 
 
@@ -171,6 +186,106 @@ def cmd_ls(client: Client, view: str, as_json: bool, limit: int, offset: int) ->
     return 0
 
 
+def report_client_error(exc: ClientError, action: str) -> None:
+    """Any API failure in plain language — session, setup, validation alike.
+    The message is always the API's own; never a raw HTTP dump."""
+    if exc.code == "unauthorized":
+        print("Session expired — run `tuk login` again.", file=sys.stderr)
+    elif exc.code == "setup_required":
+        print(SETUP_MESSAGE, file=sys.stderr)
+    else:
+        print(f"{action}: {exc.message}", file=sys.stderr)
+
+
+def cmd_add(client: Client, args: argparse.Namespace) -> int:
+    cookie = read_session_cookie()
+    if cookie is None:
+        print("Not logged in — run `tuk login` first.", file=sys.stderr)
+        return 1
+    dated = args.due is not None or args.start is not None
+    body: dict[str, object] = {"title": args.title}
+    if args.priority is not None:
+        # Forwarded untouched: unknown values are the API's 422 to report.
+        body["priority"] = args.priority
+    if args.description is not None:
+        body["description"] = args.description
+    if args.recurrence is not None:
+        body["recurrence"] = args.recurrence
+    if args.reminders:
+        body["reminders"] = list(args.reminders)
+    zone_key = ""
+    if dated:
+        # Parsing a date word needs the caller's day and zone; the zone
+        # travels with the task so the API judges the right local day.
+        try:
+            today, zone, zone_key = local_today()
+        except TzError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        try:
+            if args.due is not None:
+                body["due_date"] = parse_date(args.due, today, zone).isoformat()
+            if args.start is not None:
+                body["start_date"] = parse_date(args.start, today, zone).isoformat()
+        except BadDateError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        body["time_zone"] = zone_key
+    if args.all_day:
+        body["is_all_day"] = True
+    try:
+        resolved = resolve_ids(client, cookie, args, body)
+        if resolved is None:
+            return 1
+        created, refreshed = client.create_task(resolved, body)
+    except ClientError as exc:
+        # Scheduling, recurrence, reminder and priority rules are the API's —
+        # forward its message in plain language, never a raw HTTP dump.
+        report_client_error(exc, "Could not add task")
+        return 1
+    if args.as_json:
+        print(json.dumps(created))
+    else:
+        print(f"Added task #{created.get('id')}.")
+    if refreshed:
+        write_session_cookie(refreshed)
+    return 0
+
+
+def resolve_ids(
+    client: Client, cookie: str, args: argparse.Namespace, body: dict[str, object]
+) -> str | None:
+    """Fill body with the resolved list_id / tag_ids. Returns the current
+    cookie, or None when a name missed (already reported) — nothing created."""
+    if args.list_name is None and not args.tags:
+        return cookie
+    current = cookie
+    if args.list_name is not None:
+        lists, refreshed = client.read_lists(current)
+        if refreshed:
+            current = refreshed
+            write_session_cookie(current)
+        try:
+            body["list_id"] = resolve_name(args.list_name, lists, "list")
+        except UnknownNameError as exc:
+            print(str(exc), file=sys.stderr)
+            return None
+    if args.tags:
+        tags, refreshed = client.read_tags(current)
+        if refreshed:
+            current = refreshed
+            write_session_cookie(current)
+        ids = []
+        for name in args.tags:
+            try:
+                ids.append(resolve_name(name, tags, "tag"))
+            except UnknownNameError as exc:
+                print(str(exc), file=sys.stderr)
+                return None
+        body["tag_ids"] = ids
+    return current
+
+
 def cmd_show(client: Client, task_id: int, as_json: bool) -> int:
     cookie = read_session_cookie()
     if cookie is None:
@@ -197,8 +312,28 @@ def cmd_show(client: Client, task_id: int, as_json: bool) -> int:
     return 0
 
 
+def glue_reminder_dash_arg(argv: list[str]) -> list[str]:
+    """Glue `--reminder -PT30M` into `--reminder=-PT30M`: durations start with
+    a dash, which argparse otherwise reads as another flag. The `=` form is
+    argparse-native; this just lets humans use the space form too."""
+    glued = []
+    index = 0
+    while index < len(argv):
+        if (
+            argv[index] == "--reminder"
+            and index + 1 < len(argv)
+            and argv[index + 1].startswith("-")
+        ):
+            glued.append(f"--reminder={argv[index + 1]}")
+            index += 2
+        else:
+            glued.append(argv[index])
+            index += 1
+    return glued
+
+
 def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    args = build_parser().parse_args(argv if argv is None else glue_reminder_dash_arg(argv))
     resolved = resolve_base_url(args.base_url)
     client = Client(resolved, transport=transport)
     try:
@@ -206,6 +341,8 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             return cmd_login(client, resolved)
         if args.command == "show":
             return cmd_show(client, args.task_id, args.as_json)
+        if args.command == "add":
+            return cmd_add(client, args)
         view = "today"
         if args.week:
             view = "next7"

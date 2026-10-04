@@ -78,6 +78,60 @@ class Client:
             return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
         raise self._error(response, "Could not list tasks")
 
+    def _fetch_all(
+        self, session_cookie: str, path: str, fallback: str
+    ) -> tuple[list[dict[str, object]], str | None]:
+        """Every row of a small collection, following the page. Lists and Tags
+        only exist to resolve a typed name, so the client reads the whole set;
+        the 200-row page keeps this to one request in practice."""
+        items: list[dict[str, object]] = []
+        refreshed: str | None = None
+        offset = 0
+        while True:
+            response = self._http.get(
+                path,
+                params={"limit": 200, "offset": offset},
+                headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            )
+            if response.status_code != 200:
+                raise self._error(response, fallback)
+            body = response.json()
+            if not isinstance(body, dict) or not isinstance(body.get("items"), list):
+                raise ClientError("bad_response", "Server returned a malformed collection")
+            page = [row for row in body["items"] if isinstance(row, dict)]
+            items += page
+            total = body.get("total")
+            refreshed = response.cookies.get(SESSION_COOKIE_NAME) or refreshed
+            if not isinstance(total, int) or offset + len(page) >= total:
+                return items, refreshed
+            offset += len(page)
+
+    def read_lists(self, session_cookie: str) -> tuple[list[dict[str, object]], str | None]:
+        """Every List, for resolving a typed name — never creating one."""
+        return self._fetch_all(session_cookie, "/api/v1/lists", "Could not list lists")
+
+    def read_tags(self, session_cookie: str) -> tuple[list[dict[str, object]], str | None]:
+        """Every Tag, for resolving typed names — never creating one."""
+        return self._fetch_all(session_cookie, "/api/v1/tags", "Could not list tags")
+
+    def create_task(
+        self, session_cookie: str, body: dict[str, object]
+    ) -> tuple[dict[str, object], str | None]:
+        """Create a Task. A missing list_id lands it in the Inbox — the API's
+        doing, not the client's. Returns the created body plus a refreshed
+        session cookie when the server reissued one."""
+        response = self._http.post(
+            "/api/v1/tasks",
+            json=body,
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 201:
+            created = response.json()
+            if not isinstance(created, dict):
+                raise ClientError("bad_response", "Server returned a malformed task")
+            return dict(created), response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not add task")
+
     def _error(self, response: httpx.Response, fallback: str) -> ClientError:
         try:
             error = response.json().get("error", {})

@@ -103,3 +103,64 @@ def test_ls_against_real_app(
     assert "Due today" in out
     assert str(created.json()["id"]) in out
     assert "UTC" in out
+
+
+def test_add_against_real_app(
+    live_client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    login = live_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+    assert login.status_code == 204, login.text
+    listed = live_client.post("/api/v1/lists", json={"name": "Groceries"})
+    assert listed.status_code == 201, listed.text
+    tagged = live_client.post("/api/v1/tags", json={"name": "home"})
+    assert tagged.status_code == 201, tagged.text
+
+    config_dir = tmp_path / "config"
+    monkeypatch.setenv("TUK_CONFIG_DIR", str(config_dir))
+    monkeypatch.setenv("TUK_TIMEZONE", "UTC")
+    monkeypatch.setattr("getpass.getpass", lambda _prompt: TEST_PASSWORD)
+
+    assert main(["login"], transport=app_transport(live_client)) == 0
+    assert (
+        main(
+            ["add", "Buy milk", "--list", "groceries", "--tag", "HOME", "--due", "tomorrow"],
+            transport=app_transport(live_client),
+        )
+        == 0
+    )
+
+    out = capsys.readouterr().out
+    created_id = out.strip().rsplit("#", 1)[1].rstrip(".")
+    fetched = live_client.get(f"/api/v1/tasks/{created_id}")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["list_id"] == listed.json()["id"]
+    assert [tag["id"] for tag in fetched.json()["tags"]] == [tagged.json()["id"]]
+
+
+def test_add_without_list_lands_in_inbox(
+    live_client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    login = live_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+    assert login.status_code == 204, login.text
+    inbox = next(
+        item for item in live_client.get("/api/v1/lists").json()["items"] if item["is_inbox"]
+    )
+
+    config_dir = tmp_path / "config"
+    monkeypatch.setenv("TUK_CONFIG_DIR", str(config_dir))
+    monkeypatch.setenv("TUK_TIMEZONE", "UTC")
+    monkeypatch.setattr("getpass.getpass", lambda _prompt: TEST_PASSWORD)
+
+    assert main(["login"], transport=app_transport(live_client)) == 0
+    assert main(["add", "Unfiled thought"], transport=app_transport(live_client)) == 0
+
+    created_id = capsys.readouterr().out.strip().rsplit("#", 1)[1].rstrip(".")
+    fetched = live_client.get(f"/api/v1/tasks/{created_id}")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["list_id"] == inbox["id"]
