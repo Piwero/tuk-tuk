@@ -8,6 +8,7 @@ between the two entrypoint invocations.
 
 import os
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -73,3 +74,32 @@ def test_login_then_show_against_real_app(
     assert main(["show", str(task_id)], transport=app_transport(live_client)) == 0
 
     assert TEST_PASSWORD not in (config_dir / "tuk" / "session.json").read_text()
+
+
+def test_ls_against_real_app(
+    live_client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    login = live_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+    assert login.status_code == 204, login.text
+    due = date.today().isoformat()
+    created = live_client.post(
+        "/api/v1/tasks",
+        json={"title": "Due today", "due_date": f"{due}T00:00:00Z", "is_all_day": True},
+    )
+    assert created.status_code == 201, created.text
+
+    config_dir = tmp_path / "config"
+    monkeypatch.setenv("TUK_CONFIG_DIR", str(config_dir))
+    monkeypatch.setenv("TUK_TIMEZONE", "UTC")
+    monkeypatch.setattr("getpass.getpass", lambda _prompt: TEST_PASSWORD)
+
+    assert main(["login"], transport=app_transport(live_client)) == 0
+    assert main(["ls"], transport=app_transport(live_client)) == 0
+
+    out = capsys.readouterr().out
+    assert "Due today" in out
+    assert str(created.json()["id"]) in out
+    assert "UTC" in out
