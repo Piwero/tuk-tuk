@@ -53,6 +53,31 @@ class Client:
             return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
         raise self._error(response, "Could not fetch task")
 
+    def list_tasks(
+        self,
+        session_cookie: str,
+        view: str,
+        today: str | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[dict[str, object], str | None]:
+        """One page of a Smart List view. Returns the API's page body plus a
+        refreshed session cookie when the server reissued one."""
+        params: dict[str, str | int] = {"view": view, "limit": limit, "offset": offset}
+        if today is not None:
+            params["today"] = today
+        response = self._http.get(
+            "/api/v1/tasks",
+            params=params,
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 200:
+            body = response.json()
+            if not isinstance(body, dict):
+                raise ClientError("bad_response", "Server returned a malformed task list")
+            return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not list tasks")
+
     def _error(self, response: httpx.Response, fallback: str) -> ClientError:
         try:
             error = response.json().get("error", {})

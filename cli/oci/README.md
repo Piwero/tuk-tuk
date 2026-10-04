@@ -17,7 +17,15 @@ Nothing is published to a package index — install from this repository.
 tuk login --base-url http://localhost:8900
 tuk show 12
 tuk show --json 12
+tuk ls
+tuk ls --week
+tuk ls --all
+tuk ls --json --limit 10 --offset 20
 ```
+
+Smart List views are judged against your local day: the client resolves the
+operating system's timezone (overridable with `TUK_TIMEZONE`) and passes it to
+the API. List output states the resolved zone.
 
 Config (`config.json`) and session (`session.json`, owner-only) live under
 the XDG config directory (`~/.config/tuk/`); `TUK_CONFIG_DIR` overrides it.
