@@ -157,3 +157,19 @@ class TestListEditDeleteTimer:
         by_id = {item["id"]: item for item in page["items"]}
         assert by_id[with_task["id"]]["task_id"] is None
         assert by_id[with_habit["id"]]["habit_id"] is None
+
+
+def test_a_single_timer_is_readable(client: TestClient) -> None:
+    created = make_timer(client, "Reading 30m")
+
+    response = client.get(f"/api/v1/timers/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created
+
+
+def test_unknown_timer_is_404(client: TestClient) -> None:
+    response = client.get("/api/v1/timers/999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

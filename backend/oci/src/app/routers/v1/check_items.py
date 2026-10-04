@@ -11,7 +11,7 @@ from app.errors import NotFoundError
 from app.models import CheckItem, Task, utcnow
 from app.recurrence import advance_in_place
 from app.routers.v1.tasks import get_task_or_404
-from app.schemas import CheckItemCreate, CheckItemUpdate, TaskRead
+from app.schemas import CheckItemCreate, CheckItemRead, CheckItemUpdate, TaskRead
 from app.sparse_order import append_order
 
 router = APIRouter(prefix="/api/v1/tasks/{task_id}/check-items", tags=["check-items"])
@@ -35,6 +35,13 @@ async def create_check_item(
     task.check_items.append(CheckItem(title=payload.title, sort_order=sort_order))
     await session.commit()
     return TaskRead.model_validate(task)
+
+
+@router.get("/{check_item_id}")
+async def read_check_item(task_id: int, check_item_id: int, session: SessionDep) -> CheckItemRead:
+    task = await get_task_or_404(task_id, session)
+    item = get_check_item_or_404(task, check_item_id)
+    return CheckItemRead.model_validate(item)
 
 
 @router.patch("/{check_item_id}")

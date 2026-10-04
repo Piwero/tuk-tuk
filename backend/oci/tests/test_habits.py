@@ -322,3 +322,19 @@ class TestArchive:
 
         due = client.get("/api/v1/habits", params={"due": "2026-07-03"}).json()
         assert [h["name"] for h in due["items"]] == ["Meditate"]
+
+
+def test_a_single_habit_is_readable(client: TestClient) -> None:
+    created = make_habit(client, "Meditate")
+
+    response = client.get(f"/api/v1/habits/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created
+
+
+def test_unknown_habit_is_404(client: TestClient) -> None:
+    response = client.get("/api/v1/habits/999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

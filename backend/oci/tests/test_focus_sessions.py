@@ -227,3 +227,19 @@ class TestLinkedRowDeletion:
         page = client.get("/api/v1/focus-sessions").json()
         assert page["total"] == 1
         assert page["items"][0]["habit_id"] is None
+
+
+def test_a_single_focus_session_is_readable(client: TestClient) -> None:
+    created = make_session(client)
+
+    response = client.get(f"/api/v1/focus-sessions/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json() == created
+
+
+def test_unknown_focus_session_is_404(client: TestClient) -> None:
+    response = client.get("/api/v1/focus-sessions/999")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"

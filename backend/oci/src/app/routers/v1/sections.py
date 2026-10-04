@@ -46,13 +46,24 @@ async def read_sections(
     return Page(items=items, total=total, limit=limit, offset=offset)
 
 
+async def get_section_or_404(section_id: int, session: SessionDep) -> Section:
+    section = await session.get(Section, section_id)
+    if section is None:
+        raise NotFoundError(f"Section {section_id} not found")
+    return section
+
+
+@router.get("/{section_id}")
+async def read_section(section_id: int, session: SessionDep) -> SectionRead:
+    section = await get_section_or_404(section_id, session)
+    return SectionRead.model_validate(section)
+
+
 @router.patch("/{section_id}")
 async def update_section(
     section_id: int, payload: SectionUpdate, session: SessionDep
 ) -> SectionRead:
-    section = await session.get(Section, section_id)
-    if section is None:
-        raise NotFoundError(f"Section {section_id} not found")
+    section = await get_section_or_404(section_id, session)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(section, field, value)
     await session.commit()
@@ -62,9 +73,7 @@ async def update_section(
 @router.delete("/{section_id}", status_code=204)
 async def delete_section(section_id: int, session: SessionDep) -> None:
     """Delete the Section; its tasks stay in the List, ungrouped."""
-    section = await session.get(Section, section_id)
-    if section is None:
-        raise NotFoundError(f"Section {section_id} not found")
+    section = await get_section_or_404(section_id, session)
     await session.execute(update(Task).where(Task.section_id == section_id).values(section_id=None))
     await session.delete(section)
     await session.commit()

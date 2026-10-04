@@ -101,6 +101,12 @@ async def get_focus_session_or_404(session_id: int, session: SessionDep) -> Focu
     return focus_session
 
 
+@router.get("/{session_id}")
+async def read_focus_session(session_id: int, session: SessionDep) -> FocusSessionRead:
+    focus_session = await get_focus_session_or_404(session_id, session)
+    return FocusSessionRead.model_validate(focus_session)
+
+
 @router.patch("/{session_id}")
 async def update_focus_session(
     session_id: int, payload: FocusSessionUpdate, session: SessionDep

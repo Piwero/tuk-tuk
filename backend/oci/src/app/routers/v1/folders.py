@@ -34,11 +34,22 @@ async def read_folders(
     return Page(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.patch("/{folder_id}")
-async def update_folder(folder_id: int, payload: FolderUpdate, session: SessionDep) -> FolderRead:
+async def get_folder_or_404(folder_id: int, session: SessionDep) -> Folder:
     folder = await session.get(Folder, folder_id)
     if folder is None:
         raise NotFoundError(f"Folder {folder_id} not found")
+    return folder
+
+
+@router.get("/{folder_id}")
+async def read_folder(folder_id: int, session: SessionDep) -> FolderRead:
+    folder = await get_folder_or_404(folder_id, session)
+    return FolderRead.model_validate(folder)
+
+
+@router.patch("/{folder_id}")
+async def update_folder(folder_id: int, payload: FolderUpdate, session: SessionDep) -> FolderRead:
+    folder = await get_folder_or_404(folder_id, session)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(folder, field, value)
     await session.commit()
@@ -48,9 +59,7 @@ async def update_folder(folder_id: int, payload: FolderUpdate, session: SessionD
 @router.delete("/{folder_id}", status_code=204)
 async def delete_folder(folder_id: int, session: SessionDep) -> None:
     """Delete the Folder; its Lists survive, moved back to the top level."""
-    folder = await session.get(Folder, folder_id)
-    if folder is None:
-        raise NotFoundError(f"Folder {folder_id} not found")
+    folder = await get_folder_or_404(folder_id, session)
     await session.execute(
         update(TaskList).where(TaskList.folder_id == folder_id).values(folder_id=None)
     )

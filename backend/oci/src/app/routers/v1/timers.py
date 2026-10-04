@@ -73,6 +73,12 @@ async def get_timer_or_404(timer_id: int, session: SessionDep) -> Timer:
     return timer
 
 
+@router.get("/{timer_id}")
+async def read_timer(timer_id: int, session: SessionDep) -> TimerRead:
+    timer = await get_timer_or_404(timer_id, session)
+    return TimerRead.model_validate(timer)
+
+
 @router.patch("/{timer_id}")
 async def update_timer(timer_id: int, payload: TimerUpdate, session: SessionDep) -> TimerRead:
     timer = await get_timer_or_404(timer_id, session)

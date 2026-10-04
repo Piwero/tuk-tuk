@@ -11,7 +11,7 @@ from app.errors import APIError, NotFoundError
 from app.goal_read import build_goal_read
 from app.models import Goal, KeyResult
 from app.routers.v1.goals import detach_tasks, get_goal_or_404
-from app.schemas import GoalRead, KeyResultCreate, KeyResultUpdate
+from app.schemas import GoalRead, KeyResultCreate, KeyResultRead, KeyResultUpdate
 from app.sparse_order import append_order
 
 router = APIRouter(prefix="/api/v1/goals/{goal_id}/key-results", tags=["key-results"])
@@ -45,6 +45,17 @@ async def create_key_result(
     )
     await session.commit()
     return await build_goal_read(goal, session)
+
+
+@router.get("/{key_result_id}")
+async def read_key_result(goal_id: int, key_result_id: int, session: SessionDep) -> KeyResultRead:
+    goal = await get_goal_or_404(goal_id, session)
+    get_key_result_or_404(goal, key_result_id)
+    read = await build_goal_read(goal, session)
+    kr = next((kr for kr in read.key_results if kr.id == key_result_id), None)
+    if kr is None:
+        raise NotFoundError(f"Key result {key_result_id} not found on goal {goal.id}")
+    return kr
 
 
 @router.patch("/{key_result_id}")

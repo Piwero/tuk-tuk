@@ -51,11 +51,22 @@ async def read_lists(
     return Page(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.patch("/{list_id}")
-async def update_list(list_id: int, payload: ListUpdate, session: SessionDep) -> ListRead:
+async def get_list_or_404(list_id: int, session: SessionDep) -> TaskList:
     task_list = await session.get(TaskList, list_id)
     if task_list is None:
         raise NotFoundError(f"List {list_id} not found")
+    return task_list
+
+
+@router.get("/{list_id}")
+async def read_list(list_id: int, session: SessionDep) -> ListRead:
+    task_list = await get_list_or_404(list_id, session)
+    return ListRead.model_validate(task_list)
+
+
+@router.patch("/{list_id}")
+async def update_list(list_id: int, payload: ListUpdate, session: SessionDep) -> ListRead:
+    task_list = await get_list_or_404(list_id, session)
     changes = payload.model_dump(exclude_unset=True)
     # view_mode is a display preference, not part of the Inbox's protected
     # identity — it is the one field the Inbox accepts.
@@ -75,9 +86,7 @@ async def update_list(list_id: int, payload: ListUpdate, session: SessionDep) ->
 
 @router.delete("/{list_id}", status_code=204)
 async def delete_list(list_id: int, session: SessionDep) -> None:
-    task_list = await session.get(TaskList, list_id)
-    if task_list is None:
-        raise NotFoundError(f"List {list_id} not found")
+    task_list = await get_list_or_404(list_id, session)
     if task_list.is_inbox:
         raise APIError(
             status_code=403, code="inbox_undeletable", message="The Inbox cannot be deleted"
