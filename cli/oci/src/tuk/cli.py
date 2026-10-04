@@ -1,10 +1,11 @@
 """`tuk` entrypoint. Errors to stderr, non-zero exit; success exits zero."""
 
 import argparse
+import concurrent.futures
 import getpass
 import json
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -48,6 +49,20 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--all-day", dest="all_day", action="store_true")
     add.add_argument("--recurrence", default=None)
     add.add_argument("--reminder", dest="reminders", action="append", default=[])
+    agenda = sub.add_parser("agenda")
+    agenda.add_argument("--base-url", default=None)
+    agenda.add_argument("--json", dest="as_json", action="store_true")
+    habits = sub.add_parser("habits")
+    habits.add_argument("--base-url", default=None)
+    habits.add_argument("--json", dest="as_json", action="store_true")
+    habits_sub = habits.add_subparsers(dest="habits_command")
+    check = habits_sub.add_parser("check")
+    check.add_argument("habit_id", type=int)
+    check.add_argument("--day", default=None)
+    check.add_argument("--value", type=float, default=1.0)
+    undo = habits_sub.add_parser("undo")
+    undo.add_argument("habit_id", type=int)
+    undo.add_argument("--day", default=None)
     return parser
 
 
@@ -286,6 +301,183 @@ def resolve_ids(
     return current
 
 
+def require_session() -> str | None:
+    """The cached session cookie, or None after reporting the login
+    instruction — the one guard every authenticated command repeats."""
+    cookie = read_session_cookie()
+    if cookie is None:
+        print("Not logged in — run `tuk login` first.", file=sys.stderr)
+    return cookie
+
+
+def require_today() -> tuple[date, ZoneInfo, str] | None:
+    """The caller's local day and zone, or None after reporting a bad
+    TUK_TIMEZONE — the one guard every day-aware command repeats."""
+    try:
+        return local_today()
+    except TzError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+
+
+def format_habits(habits: list[dict[str, object]]) -> str:
+    rows = [(str(habit.get("id")), str(habit.get("name"))) for habit in habits]
+    widths = [len(cell) for cell in ("ID", "HABIT")]
+    for row in rows:
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(cell))
+
+    def aligned(cells: tuple[str, str]) -> str:
+        return "  ".join(cell.ljust(widths[index]) for index, cell in enumerate(cells)).rstrip()
+
+    return "\n".join([aligned(("ID", "HABIT"))] + [aligned(row) for row in rows])
+
+
+def cmd_habits_list(client: Client, as_json: bool) -> int:
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    resolved = require_today()
+    if resolved is None:
+        return 1
+    today, _, zone_key = resolved
+    try:
+        habits, refreshed = client.read_habits(cookie, today.isoformat())
+    except ClientError as exc:
+        report_client_error(exc, "Could not list habits")
+        return 1
+    if as_json:
+        print(json.dumps({"items": habits, "total": len(habits), "limit": 200, "offset": 0}))
+    else:
+        print(format_habits(habits))
+        print(f"Habits due. Dates in {zone_key}.")
+    if refreshed:
+        write_session_cookie(refreshed)
+    return 0
+
+
+def _check_in_day(raw: str | None, today: date) -> date | None:
+    if raw is None:
+        return today
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _report_bad_day(raw_day: str) -> None:
+    print(
+        f"Could not understand day {raw_day!r} — use an ISO date (YYYY-MM-DD).",
+        file=sys.stderr,
+    )
+
+
+def cmd_habits_check(client: Client, habit_id: int, raw_day: str | None, value: float) -> int:
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    resolved = require_today()
+    if resolved is None:
+        return 1
+    today, _, _ = resolved
+    day = _check_in_day(raw_day, today)
+    if day is None:
+        assert raw_day is not None  # None only when _check_in_day defaults to today
+        _report_bad_day(raw_day)
+        return 1
+    try:
+        _, refreshed = client.put_check_in(cookie, habit_id, day.isoformat(), value)
+    except ClientError as exc:
+        report_client_error(exc, "Could not record check-in")
+        return 1
+    print(f"Checked in habit #{habit_id} for {day.isoformat()}.")
+    if refreshed:
+        write_session_cookie(refreshed)
+    return 0
+
+
+def cmd_habits_undo(client: Client, habit_id: int, raw_day: str | None) -> int:
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    resolved = require_today()
+    if resolved is None:
+        return 1
+    today, _, _ = resolved
+    day = _check_in_day(raw_day, today)
+    if day is None:
+        assert raw_day is not None  # None only when _check_in_day defaults to today
+        _report_bad_day(raw_day)
+        return 1
+    try:
+        refreshed = client.delete_check_in(cookie, habit_id, day.isoformat())
+    except ClientError as exc:
+        report_client_error(exc, "Could not undo check-in")
+        return 1
+    print(f"Undid check-in for habit #{habit_id} on {day.isoformat()}.")
+    if refreshed:
+        write_session_cookie(refreshed)
+    return 0
+
+
+def _read_events_isolated(client: Client, cookie: str, day: str) -> list[dict[str, object]]:
+    """The day's events, or nothing: calendar trouble never fails the view."""
+    try:
+        events, _ = client.read_events(cookie, day)
+    except Exception:
+        return []
+    return events
+
+
+def cmd_agenda(client: Client, as_json: bool) -> int:
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    resolved = require_today()
+    if resolved is None:
+        return 1
+    today, zone, zone_key = resolved
+    day = today.isoformat()
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            tasks_future = pool.submit(client.list_tasks, cookie, "today", day, 50, 0)
+            habits_future = pool.submit(client.read_habits, cookie, day)
+            events_future = pool.submit(_read_events_isolated, client, cookie, day)
+            page, _ = tasks_future.result()
+            habits, _ = habits_future.result()
+            events = events_future.result()
+    except ClientError as exc:
+        report_client_error(exc, "Could not build agenda")
+        return 1
+    items = page.get("items")
+    tasks = [t for t in items if isinstance(t, dict)] if isinstance(items, list) else []
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "date": day,
+                    "time_zone": zone_key,
+                    "tasks": tasks,
+                    "habits": habits,
+                    "events": events,
+                }
+            )
+        )
+    else:
+        print("Tasks")
+        print(format_ls(tasks, zone, zone_key))
+        print("")
+        print("Habits due")
+        print(format_habits(habits))
+        if events:
+            print("")
+            print("Events")
+            for event in events:
+                print(f"- {event.get('title')}")
+        print(f"Agenda for {day}. Dates in {zone_key}.")
+    return 0
+
+
 def cmd_show(client: Client, task_id: int, as_json: bool) -> int:
     cookie = read_session_cookie()
     if cookie is None:
@@ -343,6 +535,14 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             return cmd_show(client, args.task_id, args.as_json)
         if args.command == "add":
             return cmd_add(client, args)
+        if args.command == "agenda":
+            return cmd_agenda(client, args.as_json)
+        if args.command == "habits":
+            if args.habits_command == "check":
+                return cmd_habits_check(client, args.habit_id, args.day, args.value)
+            if args.habits_command == "undo":
+                return cmd_habits_undo(client, args.habit_id, args.day)
+            return cmd_habits_list(client, args.as_json)
         view = "today"
         if args.week:
             view = "next7"

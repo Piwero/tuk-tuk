@@ -79,7 +79,11 @@ class Client:
         raise self._error(response, "Could not list tasks")
 
     def _fetch_all(
-        self, session_cookie: str, path: str, fallback: str
+        self,
+        session_cookie: str,
+        path: str,
+        fallback: str,
+        extra: dict[str, str | int] | None = None,
     ) -> tuple[list[dict[str, object]], str | None]:
         """Every row of a small collection, following the page. Lists and Tags
         only exist to resolve a typed name, so the client reads the whole set;
@@ -88,9 +92,12 @@ class Client:
         refreshed: str | None = None
         offset = 0
         while True:
+            params: dict[str, str | int] = {"limit": 200, "offset": offset}
+            if extra:
+                params.update(extra)
             response = self._http.get(
                 path,
-                params={"limit": 200, "offset": offset},
+                params=params,
                 headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
             )
             if response.status_code != 200:
@@ -110,9 +117,65 @@ class Client:
         """Every List, for resolving a typed name — never creating one."""
         return self._fetch_all(session_cookie, "/api/v1/lists", "Could not list lists")
 
+    def read_habits(
+        self, session_cookie: str, due: str
+    ) -> tuple[list[dict[str, object]], str | None]:
+        """Habits due on the caller's local day — the paged collection walked
+        whole, like Lists and Tags, since a day's due set is small."""
+        return self._fetch_all(
+            session_cookie, "/api/v1/habits", "Could not list habits", {"due": due}
+        )
+
     def read_tags(self, session_cookie: str) -> tuple[list[dict[str, object]], str | None]:
         """Every Tag, for resolving typed names — never creating one."""
         return self._fetch_all(session_cookie, "/api/v1/tags", "Could not list tags")
+
+    def put_check_in(
+        self, session_cookie: str, habit_id: int, day: str, value: float
+    ) -> tuple[dict[str, object], str | None]:
+        """Upsert the day's check-in: one row per (habit, date), so repeating
+        it is harmless. Returns the check-in body plus a refreshed cookie."""
+        response = self._http.put(
+            f"/api/v1/habits/{habit_id}/check-ins/{day}",
+            json={"value": value},
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 200:
+            body = response.json()
+            if not isinstance(body, dict):
+                raise ClientError("bad_response", "Server returned a malformed check-in")
+            return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not record check-in")
+
+    def delete_check_in(self, session_cookie: str, habit_id: int, day: str) -> str | None:
+        """Undo the day's check-in. Returns a refreshed cookie when reissued."""
+        response = self._http.delete(
+            f"/api/v1/habits/{habit_id}/check-ins/{day}",
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 204:
+            return response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not undo check-in")
+
+    def read_events(
+        self, session_cookie: str, day: str
+    ) -> tuple[list[dict[str, object]], str | None]:
+        """The day's events across every enabled calendar. The endpoint
+        answers empty (not 404) when Google is unconfigured, and isolates
+        per-account failures into `failures` — both surface here as a plain
+        event list, never an error for calendar trouble."""
+        response = self._http.get(
+            "/api/v1/events",
+            params={"range_start": day, "range_end": day},
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 200:
+            body = response.json()
+            if not isinstance(body, dict) or not isinstance(body.get("events"), list):
+                raise ClientError("bad_response", "Server returned malformed events")
+            events = [row for row in body["events"] if isinstance(row, dict)]
+            return events, response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not read events")
 
     def create_task(
         self, session_cookie: str, body: dict[str, object]

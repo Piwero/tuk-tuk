@@ -21,7 +21,29 @@ tuk ls
 tuk ls --week
 tuk ls --all
 tuk ls --json --limit 10 --offset 20
+tuk agenda
+tuk agenda --json
+tuk habits
+tuk habits check 3
+tuk habits check 3 --day 2026-10-01 --value 5
+tuk habits undo 3
 ```
+
+`agenda` composes three existing reads in parallel — the Today Smart List,
+Habits due on the local day, and the day's Events — into one view, with no
+new backend endpoint. `--json` emits `{"date", "time_zone", "tasks",
+"habits", "events"}`. When the Google integration is unconfigured, a Google
+account's grant is revoked, or an Event read otherwise fails, the Agenda
+renders with no Events section and still exits zero — Tasks and Habits are
+never collateral damage of a Google problem.
+
+`habits --json` emits the Habits collection page unmodified:
+`{"items", "total", "limit", "offset"}`, each item a `HabitRead`.
+
+`habits check` records today's check-in by default, or an explicit day with
+`--day`; `--value` sets a Numeric habit's accumulated amount (default `1`,
+the Boolean tap). Repeating a check-in for the same day is harmless. `habits
+undo` removes a day's check-in.
 
 Smart List views are judged against your local day: the client resolves the
 operating system's timezone (overridable with `TUK_TIMEZONE`) and passes it to
