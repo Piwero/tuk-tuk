@@ -175,6 +175,14 @@ every boot of every replica with no advisory lock, and the Inbox seed is an
 unguarded read-then-insert. See
 [ADR 0013](docs/adr/0013-optional-external-postgres.md).
 
+## Command-line client
+
+`tuk` works your tasks from a terminal: install once from this repo, log
+in once with your app password, then read and capture without opening a
+browser. See [`cli/oci/README.md`](cli/oci/README.md) for install and
+login; non-browser client decisions live in
+[ADR 0014](docs/adr/0014-non-browser-clients-credential-write-boundary.md).
+
 ## Development
 
 Dev servers run in Docker (source bind-mounted, hot reload on both sides).
