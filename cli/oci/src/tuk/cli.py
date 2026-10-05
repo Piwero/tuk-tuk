@@ -6,6 +6,7 @@ import getpass
 import json
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -268,12 +269,19 @@ def format_due(task: dict[str, object], zone: ZoneInfo) -> str:
 
 def occurrence_suffix(task: dict[str, object], zone: ZoneInfo, zone_key: str) -> str:
     """The occurrence a recurring Task advanced to, or nothing when the
-    response carries no date. Rendered through the same zone conversion as a
-    listing and with the zone named: a raw UTC instant printed here would be
-    the one date in the client's output the owner has to convert themselves."""
+    response carries no date.
+
+    Rendered by `format_due`, the same way a listing renders a date: a raw UTC
+    instant printed here would be the one date in the client's output the
+    owner has to convert themselves. The zone is only named when the value
+    actually went through it — `format_due` passes a date it cannot parse
+    straight back, and labelling that with a zone would be a lie.
+    """
     if not isinstance(task.get("due_date"), str):
         return ""
-    return f" to its next occurrence {format_due(task, zone)} ({zone_key})"
+    rendered = format_due(task, zone)
+    converted = rendered != task.get("due_date")
+    return f" to its next occurrence {rendered}{f' ({zone_key})' if converted else ''}"
 
 
 def ls_conflict(args: argparse.Namespace) -> tuple[str, str] | None:
@@ -335,12 +343,12 @@ def cmd_ls(client: Client, args: argparse.Namespace) -> int:
             found = resolve_named(client, current, args.list_name, kind="list")
             if found is None:
                 return 1
-            (list_id,), current = found
+            list_id, current = found.only, found.cookie
         if args.tag_name is not None:
             found = resolve_named(client, current, args.tag_name, kind="tag")
             if found is None:
                 return 1
-            (tag_id,), current = found
+            tag_id, current = found.only, found.cookie
         page, refreshed = client.list_tasks(
             current,
             view,
@@ -445,9 +453,8 @@ def apply_dates(args: argparse.Namespace, body: dict[str, object]) -> bool:
 
 
 def cmd_add(client: Client, args: argparse.Namespace) -> int:
-    cookie = read_session_cookie()
+    cookie = require_session()
     if cookie is None:
-        print("Not logged in — run `tuk login` first.", file=sys.stderr)
         return 1
     body: dict[str, object] = {"title": args.title}
     if args.priority is not None:
@@ -482,10 +489,26 @@ def cmd_add(client: Client, args: argparse.Namespace) -> int:
     return 0
 
 
-def resolve_named(
-    client: Client, cookie: str, *names: str, kind: Kind
-) -> tuple[list[int], str] | None:
-    """The ids of the named Lists or Tags, and the current cookie.
+@dataclass(frozen=True)
+class Resolved:
+    """The ids a resolution found, and the session cookie to carry forward.
+
+    The cookie travels with the ids because a collection read may have
+    reissued it, and the caller's next request must present the current one.
+    """
+
+    ids: list[int]
+    cookie: str
+
+    @property
+    def only(self) -> int:
+        """The single id, for a flag that takes one name."""
+        (found,) = self.ids
+        return found
+
+
+def resolve_named(client: Client, cookie: str, *names: str, kind: Kind) -> Resolved | None:
+    """The ids of the named Lists or Tags, and the cookie to carry forward.
 
     None when a name missed — the error already names every candidate that
     does exist, and nothing has been created. One collection read serves every
@@ -503,7 +526,7 @@ def resolve_named(
         except UnknownNameError as exc:
             print(str(exc), file=sys.stderr)
             return None
-    return ids, current
+    return Resolved(ids, current)
 
 
 def resolve_ids(
@@ -516,12 +539,14 @@ def resolve_ids(
         found = resolve_named(client, current, args.list_name, kind="list")
         if found is None:
             return None
-        (body["list_id"],), current = found
+        body["list_id"] = found.only
+        current = found.cookie
     if args.tags:
         found = resolve_named(client, current, *args.tags, kind="tag")
         if found is None:
             return None
-        body["tag_ids"], current = found
+        body["tag_ids"] = found.ids
+        current = found.cookie
     return current
 
 
@@ -960,21 +985,13 @@ def cmd_agenda(client: Client, as_json: bool) -> int:
 
 
 def cmd_show(client: Client, task_id: int, as_json: bool) -> int:
-    cookie = read_session_cookie()
+    cookie = require_session()
     if cookie is None:
-        print("Not logged in — run `tuk login` first.", file=sys.stderr)
         return 1
     try:
         task, refreshed = client.show_task(task_id, cookie)
     except ClientError as exc:
-        if exc.code == "unauthorized":
-            print("Session expired — run `tuk login` again.", file=sys.stderr)
-        elif exc.code == "setup_required":
-            print(SETUP_MESSAGE, file=sys.stderr)
-        elif exc.code == "not_found":
-            print(f"Task {task_id} not found.", file=sys.stderr)
-        else:
-            print(f"Could not fetch task: {exc.message}", file=sys.stderr)
+        report_task_error(exc, task_id, "Could not fetch task")
         return 1
     if as_json:
         print_raw(task)

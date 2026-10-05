@@ -123,6 +123,21 @@ def test_done_advance_of_an_all_day_task_stays_date_only(
     assert "2026-10-05" not in out
 
 
+def test_done_advance_does_not_claim_a_zone_it_could_not_apply(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A date the client cannot parse passes through unconverted, so it is not
+    labelled with a zone — a zone name on an unconverted value would be a lie."""
+    body = {**ADVANCED_BODY, "due_date": "not-a-date"}
+    transport, _ = patch_transport(body)
+
+    assert main(["done", "7"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "not-a-date" in out
+    assert "Europe/London" not in out
+
+
 def test_done_open_task_without_recurrence_is_not_called_advanced(
     logged_in: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
