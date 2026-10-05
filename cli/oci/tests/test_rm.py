@@ -119,6 +119,18 @@ def test_rm_unknown_id_reports_not_found(
     assert "not found" in capsys.readouterr().err.lower()
 
 
+def test_rm_offers_no_json_flag(logged_in: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Deliberately the one command without `--json`. The endpoint answers 204
+    with no body, so there is nothing to pass through; a `--json` emitting
+    `{}` would be the client inventing a schema the API never sent, which is
+    exactly what the raw mode exists not to do."""
+    with pytest.raises(SystemExit) as exc:
+        main(["rm", "--json", "7"])
+
+    assert exc.value.code == 2
+    assert "--json" in capsys.readouterr().err
+
+
 def test_rm_eof_cancels_without_traceback(
     logged_in: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
