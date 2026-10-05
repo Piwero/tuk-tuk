@@ -93,12 +93,17 @@ def test_show_without_login_points_at_login(
 def test_show_missing_task_says_not_found(
     logged_in: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """`not_found` on a gated read means the Task is gone, and must not be
+    reinterpreted as first-run setup — the login path accepts that code for
+    setup only because it is a public path answering for itself."""
     body = {"error": {"code": "not_found", "message": "Task 9 not found"}}
     transport, _ = show_transport(body, 404)
 
     assert main(["show", "9"], transport=transport) == 1
 
-    assert "not found" in capsys.readouterr().err.lower()
+    err = capsys.readouterr().err
+    assert "not found" in err.lower()
+    assert "web app" not in err
 
 
 def test_show_caches_reissued_session_cookie(

@@ -7,7 +7,7 @@ case-insensitivity), the date vocabulary mapping, and the rendered output.
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -37,6 +37,12 @@ TAGS_BODY = {
 }
 
 CREATED_BODY = {"id": 42, "title": "Buy milk"}
+
+ZONE = ZoneInfo("Europe/London")  # pinned by the logged_in fixture's TUK_TIMEZONE
+
+
+def london_today() -> date:
+    return datetime.now(ZONE).date()
 
 
 @pytest.fixture
@@ -134,8 +140,37 @@ def test_add_unknown_list_names_candidates(
 
     err = capsys.readouterr().err
     assert "Nope" in err
+    # Every candidate, not just one — the miss message exists so the typo can
+    # be corrected without opening the app.
     assert "Groceries" in err
+    assert "Inbox" in err
     assert "path" not in seen or seen.get("body") is None
+
+
+def test_add_rejects_a_partial_list_name(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Matching is exact, never containment: `--list grocer` must not land in
+    "Groceries". The backend's lenient phrase resolver is right for a model
+    guessing from prose and wrong for an argument a human typed."""
+    transport, seen = add_transport()
+
+    assert main(["add", "Buy milk", "--list", "grocer"], transport=transport) == 1
+
+    assert "Groceries" in capsys.readouterr().err
+    assert "body" not in seen
+
+
+def test_add_against_an_empty_collection_says_none(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = {"items": [], "total": 0, "limit": 200, "offset": 0}
+    transport, seen = add_transport(tags=empty)
+
+    assert main(["add", "Buy milk", "--tag", "home"], transport=transport) == 1
+
+    assert "(none)" in capsys.readouterr().err
+    assert "body" not in seen
 
 
 def test_add_resolves_tag_names(logged_in: Path) -> None:
@@ -200,48 +235,128 @@ def test_add_maps_full_flag_set(logged_in: Path) -> None:
     assert body["recurrence"] == "RRULE:FREQ=DAILY"
     assert body["reminders"] == ["-PT30M"]
     assert body["time_zone"] == "Europe/London"
-    london_tomorrow = (
-        datetime.now(ZoneInfo("Europe/London")).date() + timedelta(days=1)
-    ).isoformat()
-    assert str(body["due_date"]).startswith(london_tomorrow)
+    assert str(body["due_date"]).startswith((london_today() + timedelta(days=1)).isoformat())
 
 
-def test_add_timed_due_carries_time(logged_in: Path) -> None:
+def due_day(seen: dict[str, object]) -> date:
+    """The calendar day of the `due_date` the client actually emitted."""
+    body = seen["body"]
+    assert isinstance(body, dict)
+    return datetime.fromisoformat(str(body["due_date"])).date()
+
+
+@pytest.mark.parametrize(
+    ("word", "offset"),
+    [("today", 0), ("tomorrow", 1), ("yesterday", -1)],
+)
+def test_add_maps_relative_words_to_days_either_side_of_today(
+    logged_in: Path, word: str, offset: int
+) -> None:
     transport, seen = add_transport()
+
+    assert main(["add", "T", "--due", word], transport=transport) == 0
+
+    assert due_day(seen) == london_today() + timedelta(days=offset)
+
+
+def test_add_maps_an_iso_date_to_itself(logged_in: Path) -> None:
+    """A fixed literal, independent of today — the one case where the expected
+    value owes nothing to the clock."""
+    transport, seen = add_transport()
+
+    assert main(["add", "T", "--due", "2026-12-25"], transport=transport) == 0
+
+    assert due_day(seen) == date(2026, 12, 25)
+
+
+@pytest.mark.parametrize(
+    ("word", "weekday"),
+    [
+        # All seven, so whatever day the suite runs, one case names *today* —
+        # that is the case which pins "a weekday that is today means next
+        # week's", and it would go unexercised under a shorter list.
+        ("monday", 0),
+        ("Tuesday", 1),
+        ("WEDNESDAY", 2),
+        ("thursday", 3),
+        ("Friday", 4),
+        ("saturday", 5),
+        ("SUNDAY", 6),
+    ],
+)
+def test_add_maps_a_weekday_name_to_the_next_such_day(
+    logged_in: Path, word: str, weekday: int
+) -> None:
+    """Asserted by the properties that identify the day uniquely rather than
+    by recomputing the parser's own arithmetic: it falls on the named weekday,
+    it is strictly in the future, and it is the *first* such day — so it lands
+    within the coming week. Those three pin exactly one date. The lower bound
+    is strict because a weekday that is today means next week's, and the
+    casing varies because matching is case-folded.
+    """
+    transport, seen = add_transport()
+
+    assert main(["add", "T", "--due", word], transport=transport) == 0
+
+    landed = due_day(seen)
+    assert landed.weekday() == weekday
+    assert 1 <= (landed - london_today()).days <= 7
+
+
+def test_add_bare_date_word_is_midnight_utc(logged_in: Path) -> None:
+    """A bare word is date-only by the API's convention — midnight UTC, not
+    midnight local, so a negative-offset zone cannot shift the stored day."""
+    transport, seen = add_transport()
+    tomorrow = (london_today() + timedelta(days=1)).isoformat()
+
+    assert main(["add", "T", "--due", "tomorrow"], transport=transport) == 0
+
+    body = seen["body"]
+    assert isinstance(body, dict)
+    assert body["due_date"] == f"{tomorrow}T00:00:00+00:00"
+
+
+def test_add_timed_date_word_carries_the_local_zone(logged_in: Path) -> None:
+    """09:30 means 09:30 where the owner is, so the emitted offset has to be
+    London's for the day in question — not UTC's. Asserting the offset is the
+    whole point: a wall-clock match alone would still pass if the zone were
+    dropped, and the instant would be wrong by an hour each summer."""
+    transport, seen = add_transport()
+    tomorrow = london_today() + timedelta(days=1)
 
     assert main(["add", "Call", "--due", "tomorrow 09:30"], transport=transport) == 0
 
     body = seen["body"]
     assert isinstance(body, dict)
-    assert "T09:30" in str(body["due_date"])
-
-
-def test_add_full_date_vocabulary_at_seam(logged_in: Path) -> None:
-    london_today = datetime.now(ZoneInfo("Europe/London")).date()
-    cases = {
-        "today": london_today,
-        "tomorrow": london_today + timedelta(days=1),
-        "yesterday": london_today - timedelta(days=1),
-        "2026-12-25": datetime(2026, 12, 25).date(),
-    }
-    weekday = london_today + timedelta(days=((0 - london_today.weekday()) % 7 or 7))
-    cases["monday"] = weekday
-    for word, expected in cases.items():
-        transport, seen = add_transport()
-        assert main(["add", "T", "--due", word], transport=transport) == 0
-        body = seen["body"]
-        assert isinstance(body, dict)
-        assert str(body["due_date"]).startswith(expected.isoformat()), word
+    moment = datetime.fromisoformat(str(body["due_date"]))
+    assert (moment.date(), moment.hour, moment.minute) == (tomorrow, 9, 30)
+    assert moment.utcoffset() == datetime.combine(tomorrow, time(9, 30), ZONE).utcoffset()
+    assert body["time_zone"] == "Europe/London"
 
 
 def test_add_unknown_date_word_errors(logged_in: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """The error enumerates the accepted forms, so the vocabulary is
+    discoverable from its own miss message."""
     transport, seen = add_transport()
 
     assert main(["add", "Buy milk", "--due", "someday"], transport=transport) == 1
 
     err = capsys.readouterr().err
     assert "someday" in err
-    assert "today" in err
+    for form in ("today", "tomorrow", "yesterday", "weekday", "ISO"):
+        assert form in err, form
+    assert "body" not in seen
+
+
+@pytest.mark.parametrize("word", ["tomorrow 99:99", "2026-13-40"], ids=["bad-time", "bad-iso"])
+def test_add_malformed_date_errors_without_creating(
+    logged_in: Path, capsys: pytest.CaptureFixture[str], word: str
+) -> None:
+    transport, seen = add_transport()
+
+    assert main(["add", "Buy milk", "--due", word], transport=transport) == 1
+
+    assert word in capsys.readouterr().err
     assert "body" not in seen
 
 

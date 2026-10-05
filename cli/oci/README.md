@@ -37,8 +37,13 @@ account's grant is revoked, or an Event read otherwise fails, the Agenda
 renders with no Events section and still exits zero — Tasks and Habits are
 never collateral damage of a Google problem.
 
-`habits --json` emits the Habits collection page unmodified:
-`{"items", "total", "limit", "offset"}`, each item a `HabitRead`.
+`habits --json` emits the Habits collection page unmodified — the API's own
+`{"items", "total", "limit", "offset"}` envelope, each item a `HabitRead`.
+`agenda --json` is the one composed shape, because it has no single API body
+to pass through.
+
+Every listing reads one page, and says how many results it left behind rather
+than stopping silently at the page boundary.
 
 `habits check` records today's check-in by default, or an explicit day with
 `--day`; `--value` sets a Numeric habit's accumulated amount (default `1`,
@@ -47,7 +52,9 @@ undo` removes a day's check-in.
 
 Smart List views are judged against your local day: the client resolves the
 operating system's timezone (overridable with `TUK_TIMEZONE`) and passes it to
-the API. List output states the resolved zone.
+the API. List output states the resolved zone. The zone is resolved for every
+command and flag combination, including the ones that do not consume it, so a
+bad `TUK_TIMEZONE` fails loudly rather than silently shifting your days.
 
 Config (`config.json`) and session (`session.json`, owner-only) live under
 the XDG config directory (`~/.config/tuk/`); `TUK_CONFIG_DIR` overrides it.

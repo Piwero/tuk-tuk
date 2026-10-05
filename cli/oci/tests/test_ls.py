@@ -170,17 +170,48 @@ def test_ls_all_day_date_ignores_negative_offset(
     assert "2026-10-03" not in out
 
 
-def test_ls_all_json_skips_timezone_resolution(
-    logged_in: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_ls_all_json_emits_page_body_without_a_local_day(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """`--json` passes the API's page body through untouched, so it carries no
+    zone key of its own — and `--all` is not judged against a local day, so no
+    `today` parameter is sent either."""
     transport, seen = ls_transport()
-    monkeypatch.setenv("TUK_TIMEZONE", "Not/AZone")
 
     assert main(["ls", "--all", "--json"], transport=transport) == 0
 
     assert json.loads(capsys.readouterr().out) == PAGE_BODY
     assert seen["param:view"] == "all"
     assert "param:today" not in seen
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["ls"],
+        ["ls", "--week"],
+        ["ls", "--all"],
+        ["ls", "--json"],
+        ["ls", "--all", "--json"],
+    ],
+    ids=["today", "week", "all", "json", "all-json"],
+)
+def test_ls_invalid_timezone_fails_loudly_for_every_combination(
+    logged_in: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    argv: list[str],
+) -> None:
+    """A misconfigured zone is visible rather than silently shifting the day —
+    so no flag combination may quietly skip resolving it."""
+    transport, _ = ls_transport()
+    monkeypatch.setenv("TUK_TIMEZONE", "Not/AZone")
+
+    assert main(argv, transport=transport) == 1
+
+    err = capsys.readouterr().err
+    assert "Not/AZone" in err
+    assert "TUK_TIMEZONE" in err
 
 
 def test_ls_timezone_override_changes_local_day(
@@ -193,19 +224,6 @@ def test_ls_timezone_override_changes_local_day(
 
     expected = datetime.now(ZoneInfo("Pacific/Kiritimati")).date().isoformat()
     assert seen["param:today"] == expected
-
-
-def test_ls_invalid_timezone_fails_loudly(
-    logged_in: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    transport, _ = ls_transport()
-    monkeypatch.setenv("TUK_TIMEZONE", "Not/AZone")
-
-    assert main(["ls"], transport=transport) == 1
-
-    err = capsys.readouterr().err
-    assert "Not/AZone" in err
-    assert "TUK_TIMEZONE" in err
 
 
 def test_ls_expired_session_points_at_login(

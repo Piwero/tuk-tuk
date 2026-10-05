@@ -111,10 +111,16 @@ prose is a boundary somebody widens by accident.
 
 ## Decision: the CLI deletes; the MCP server has no delete tool
 
-`tuk rm` deletes a Task by id behind a confirmation prompt; the MCP
-server has no delete tool of any kind and will not gain one. Without
-this clause the asymmetry reads as an inconsistency somebody should
-tidy up. It is a decision, not an oversight.
+The CLI gets a delete command — `tuk rm`, taking a Task id behind a
+confirmation prompt — and the MCP server has no delete tool of any kind
+and will not gain one. Without this clause the asymmetry reads as an
+inconsistency somebody should tidy up. It is a decision, not an
+oversight.
+
+The CLI half is a decision recorded ahead of its implementation, not a
+description of shipped behaviour: `tuk rm` is its own piece of work and
+the command does not exist yet. What is settled here is that when it
+lands it lands on the CLI alone.
 
 The gate is whether a language model is choosing the operation, not
 whether the endpoint is dangerous. A human typing a delete command with

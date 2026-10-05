@@ -8,7 +8,6 @@ between the two entrypoint invocations.
 
 import os
 from collections.abc import Iterator
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -35,9 +34,14 @@ from tuk.cli import main  # noqa: E402
 
 @pytest.fixture
 def live_client(tmp_path: Path) -> Iterator[TestClient]:
+    """The real application on a throwaway database, already logged in — the
+    password is pre-seeded above, so the fixture's own setup calls are
+    authenticated without each test driving first-run setup."""
     db_path = tmp_path / "test.db"
     app = create_app(Settings(database_url=f"sqlite+aiosqlite:///{db_path}"))
     with TestClient(app) as test_client:
+        login = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+        assert login.status_code == 204, login.text
         yield test_client
 
 
@@ -59,108 +63,22 @@ def app_transport(test_client: TestClient) -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
-def test_login_then_show_against_real_app(
+def test_login_then_read_against_real_app(
     live_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    login = live_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-    assert login.status_code == 204, login.text
     task_id = live_client.post("/api/v1/tasks", json={"title": "Tracer bullet"}).json()["id"]
 
     config_dir = tmp_path / "config"
     monkeypatch.setenv("TUK_CONFIG_DIR", str(config_dir))
     monkeypatch.setattr("getpass.getpass", lambda _prompt: TEST_PASSWORD)
 
+    # Two separate entrypoint invocations, each with its own fresh transport
+    # and its own cookie jar. The session file written by the first is the
+    # only thing carrying the credential into the second — so the read
+    # succeeding is the proof that the cookie the real application signed is
+    # accepted on a later request from a client process that never saw the
+    # password. This is the one thing no mock transport can establish.
     assert main(["login"], transport=app_transport(live_client)) == 0
     assert main(["show", str(task_id)], transport=app_transport(live_client)) == 0
 
     assert TEST_PASSWORD not in (config_dir / "tuk" / "session.json").read_text()
-
-
-def test_ls_against_real_app(
-    live_client: TestClient,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    login = live_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-    assert login.status_code == 204, login.text
-    due = date.today().isoformat()
-    created = live_client.post(
-        "/api/v1/tasks",
-        json={"title": "Due today", "due_date": f"{due}T00:00:00Z", "is_all_day": True},
-    )
-    assert created.status_code == 201, created.text
-
-    config_dir = tmp_path / "config"
-    monkeypatch.setenv("TUK_CONFIG_DIR", str(config_dir))
-    monkeypatch.setenv("TUK_TIMEZONE", "UTC")
-    monkeypatch.setattr("getpass.getpass", lambda _prompt: TEST_PASSWORD)
-
-    assert main(["login"], transport=app_transport(live_client)) == 0
-    assert main(["ls"], transport=app_transport(live_client)) == 0
-
-    out = capsys.readouterr().out
-    assert "Due today" in out
-    assert str(created.json()["id"]) in out
-    assert "UTC" in out
-
-
-def test_add_against_real_app(
-    live_client: TestClient,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    login = live_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-    assert login.status_code == 204, login.text
-    listed = live_client.post("/api/v1/lists", json={"name": "Groceries"})
-    assert listed.status_code == 201, listed.text
-    tagged = live_client.post("/api/v1/tags", json={"name": "home"})
-    assert tagged.status_code == 201, tagged.text
-
-    config_dir = tmp_path / "config"
-    monkeypatch.setenv("TUK_CONFIG_DIR", str(config_dir))
-    monkeypatch.setenv("TUK_TIMEZONE", "UTC")
-    monkeypatch.setattr("getpass.getpass", lambda _prompt: TEST_PASSWORD)
-
-    assert main(["login"], transport=app_transport(live_client)) == 0
-    assert (
-        main(
-            ["add", "Buy milk", "--list", "groceries", "--tag", "HOME", "--due", "tomorrow"],
-            transport=app_transport(live_client),
-        )
-        == 0
-    )
-
-    out = capsys.readouterr().out
-    created_id = out.strip().rsplit("#", 1)[1].rstrip(".")
-    fetched = live_client.get(f"/api/v1/tasks/{created_id}")
-    assert fetched.status_code == 200, fetched.text
-    assert fetched.json()["list_id"] == listed.json()["id"]
-    assert [tag["id"] for tag in fetched.json()["tags"]] == [tagged.json()["id"]]
-
-
-def test_add_without_list_lands_in_inbox(
-    live_client: TestClient,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    login = live_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-    assert login.status_code == 204, login.text
-    inbox = next(
-        item for item in live_client.get("/api/v1/lists").json()["items"] if item["is_inbox"]
-    )
-
-    config_dir = tmp_path / "config"
-    monkeypatch.setenv("TUK_CONFIG_DIR", str(config_dir))
-    monkeypatch.setenv("TUK_TIMEZONE", "UTC")
-    monkeypatch.setattr("getpass.getpass", lambda _prompt: TEST_PASSWORD)
-
-    assert main(["login"], transport=app_transport(live_client)) == 0
-    assert main(["add", "Unfiled thought"], transport=app_transport(live_client)) == 0
-
-    created_id = capsys.readouterr().out.strip().rsplit("#", 1)[1].rstrip(".")
-    fetched = live_client.get(f"/api/v1/tasks/{created_id}")
-    assert fetched.status_code == 200, fetched.text
-    assert fetched.json()["list_id"] == inbox["id"]
