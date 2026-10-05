@@ -141,6 +141,19 @@ def build_parser() -> argparse.ArgumentParser:
     check_untick = check_sub.add_parser("untick")
     check_untick.add_argument("task_id", type=int)
     check_untick.add_argument("check_item_id", type=int)
+    # A flag declared on a parent parser is only accepted *before* the
+    # subcommand, so `check tick 7 1 --json` — where a reader naturally puts
+    # it, and where the README shows it — would be rejected. Declaring it on
+    # both makes either position parse; SUPPRESS is what stops the
+    # subcommand's unset default from overwriting a value the parent took.
+    for leaf in (check_add, check_tick, check_untick):
+        leaf.add_argument(
+            "--json",
+            dest="as_json",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help="Emit the API's response unmodified",
+        )
     return parser
 
 
@@ -674,7 +687,12 @@ def cmd_check_add(client: Client, task_id: int, title: str, as_json: bool) -> in
 
 
 def _check_tick_line(
-    task_id: int, check_item_id: int, task: dict[str, object], ticking: bool
+    task_id: int,
+    check_item_id: int,
+    task: dict[str, object],
+    ticking: bool,
+    zone: ZoneInfo,
+    zone_key: str,
 ) -> str:
     """What ticking did to the parent. The API completes the Task when its
     last open line closes — a recurring one advances instead (ADR 0003) — so
@@ -687,8 +705,7 @@ def _check_tick_line(
     if ticking and task.get("completed") and _all_items_done(task):
         return f"Check item #{check_item_id} ticked — task #{task_id} completed."
     if ticking and _advanced_instead(task, check_item_id):
-        due = task.get("due_date")
-        suffix = f", next occurrence {due}" if isinstance(due, str) else ""
+        suffix = occurrence_suffix(task, zone, zone_key)
         return f"Check item #{check_item_id} ticked — task #{task_id} advanced{suffix}."
     verb = "ticked" if ticking else "unticked"
     return f"Check item #{check_item_id} {verb}."
@@ -728,6 +745,13 @@ def cmd_check_tick(
     cookie = require_session()
     if cookie is None:
         return 1
+    # Resolved before the request: ticking the last open line of a recurring
+    # Task advances it, and the occurrence it moved to is rendered in this
+    # zone — so a bad TUK_TIMEZONE must fail rather than print a wrong hour.
+    resolved = require_today()
+    if resolved is None:
+        return 1
+    _, zone, zone_key = resolved
     try:
         task, refreshed = client.patch_check_item(task_id, check_item_id, cookie, ticking)
     except ClientError as exc:
@@ -745,7 +769,7 @@ def cmd_check_tick(
     if as_json:
         print_raw(task)
     else:
-        print(_check_tick_line(task_id, check_item_id, task, ticking))
+        print(_check_tick_line(task_id, check_item_id, task, ticking, zone, zone_key))
         print(format_check_items(task))
     if refreshed:
         write_session_cookie(refreshed)

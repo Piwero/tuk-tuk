@@ -73,6 +73,7 @@ NOT_FOUND = {"error": {"code": "not_found", "message": "Task 9 not found"}}
 def logged_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     target = tmp_path / "config"
     monkeypatch.setenv("TUK_CONFIG_DIR", str(target))
+    monkeypatch.setenv("TUK_TIMEZONE", "Europe/London")
     target.mkdir(parents=True, exist_ok=True)
     (target / "tuk").mkdir(exist_ok=True)
     (target / "tuk" / "config.json").write_text(json.dumps({"base_url": "http://x"}))
@@ -219,3 +220,55 @@ def test_check_json_emits_body_unmodified(
     assert main(["check", "--json", "tick", "7", "1"], transport=transport) == 0
 
     assert json.loads(capsys.readouterr().out) == TICKED_BODY
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["check", "add", "7", "Socks", "--json"],
+        ["check", "tick", "7", "1", "--json"],
+        ["check", "untick", "7", "1", "--json"],
+    ],
+    ids=["add", "tick", "untick"],
+)
+def test_check_json_accepted_after_the_subcommand(
+    logged_in: Path, capsys: pytest.CaptureFixture[str], argv: list[str]
+) -> None:
+    """`--json` reads naturally at the end of the line, which is also where
+    the README puts it. It used to sit only on the `check` parser, so the
+    documented position was the one argparse rejected."""
+    status = 201 if argv[1] == "add" else 200
+    transport, _ = check_transport(TICKED_BODY, status=status)
+
+    assert main(argv, transport=transport) == 0
+
+    assert json.loads(capsys.readouterr().out) == TICKED_BODY
+
+
+def test_check_tick_advance_renders_the_date_in_the_local_zone(
+    logged_in: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The occurrence an advancing tick moved to is shown in the resolved zone
+    with that zone named, like every other date the client renders."""
+    monkeypatch.setenv("TUK_TIMEZONE", "Asia/Tokyo")
+    transport, _ = check_transport(ADVANCED_BODY, status=200)
+
+    assert main(["check", "tick", "7", "2"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "19:00" in out  # 10:00Z in Tokyo
+    assert "Asia/Tokyo" in out
+    assert "10:00:00Z" not in out
+
+
+def test_check_tick_invalid_timezone_fails_loudly(
+    logged_in: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("TUK_TIMEZONE", "Not/AZone")
+    transport, _ = check_transport(TICKED_BODY, status=200)
+
+    assert main(["check", "tick", "7", "1"], transport=transport) == 1
+
+    err = capsys.readouterr().err
+    assert "Not/AZone" in err
+    assert "TUK_TIMEZONE" in err
