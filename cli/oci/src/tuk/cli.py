@@ -76,6 +76,32 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--all-day", dest="all_day", action="store_true")
     add.add_argument("--recurrence", default=None)
     add.add_argument("--reminder", dest="reminders", action="append", default=[])
+    edit = sub.add_parser("edit")
+    edit.add_argument("--base-url", default=None)
+    edit.add_argument("task_id", type=int)
+    edit.add_argument("--json", dest="as_json", action="store_true")
+    edit.add_argument("--title", default=None)
+    edit.add_argument("--description", default=None)
+    edit.add_argument("--priority", default=None)
+    edit.add_argument("--list", dest="list_name", default=None)
+    edit.add_argument(
+        "--tag",
+        dest="tags",
+        action="append",
+        default=[],
+        help="Replace the task's tags wholesale with these names",
+    )
+    edit.add_argument("--due", default=None)
+    edit.add_argument("--start", default=None)
+    edit.add_argument(
+        "--clear-date",
+        dest="clear_date",
+        action="store_true",
+        help="Clear the schedule (also removes reminders and recurrence)",
+    )
+    day = edit.add_mutually_exclusive_group()
+    day.add_argument("--all-day", dest="all_day", action="store_true", default=None)
+    day.add_argument("--no-all-day", dest="all_day", action="store_false", default=None)
     agenda = sub.add_parser("agenda")
     agenda.add_argument("--base-url", default=None)
     agenda.add_argument("--json", dest="as_json", action="store_true")
@@ -403,6 +429,147 @@ def resolve_ids(
     return current
 
 
+def edit_conflict(args: argparse.Namespace) -> tuple[str, str] | None:
+    """A --clear-date combined with a date it would clear. The request would
+    contradict itself, so the client names the two flags rather than
+    forwarding something it already knows is incoherent."""
+    if args.clear_date:
+        if args.due is not None:
+            return ("--clear-date", "--due")
+        if args.start is not None:
+            return ("--clear-date", "--start")
+        if args.all_day:
+            return ("--clear-date", "--all-day")
+    return None
+
+
+def edit_sweep_note(before: dict[str, object], updated: dict[str, object]) -> str | None:
+    """What clearing the date swept with it, read off the before/after bodies
+    rather than restated from the API's rules — no dateless reminders, no
+    dateless repeats. None when nothing was swept."""
+    swept: list[str] = []
+    before_reminders = before.get("reminders")
+    if isinstance(before_reminders, list) and before_reminders and updated.get("reminders") == []:
+        count = len(before_reminders)
+        swept.append(f"{count} reminder{'s' if count != 1 else ''}")
+    if before.get("recurrence") is not None and updated.get("recurrence") is None:
+        swept.append("the recurrence")
+    if not swept:
+        return None
+    return f"Cleared the date — also removed {' and '.join(swept)}."
+
+
+def edit_section_note(
+    before: dict[str, object], updated: dict[str, object], moved: bool
+) -> str | None:
+    """Whether moving Lists dropped the Task's Section, read off the
+    before/after bodies — a Section belongs to one List, so a move without a
+    same-request reassignment leaves none behind."""
+    if moved and before.get("section_id") is not None and updated.get("section_id") is None:
+        return "Moved lists — dropped its Section (a Section belongs to one List)."
+    return None
+
+
+def cmd_edit(client: Client, args: argparse.Namespace) -> int:
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    conflict = edit_conflict(args)
+    if conflict is not None:
+        first, second = conflict
+        print(f"Cannot combine {first} with {second}.", file=sys.stderr)
+        return 1
+    body: dict[str, object] = {}
+    if args.title is not None:
+        body["title"] = args.title
+    if args.description is not None:
+        body["description"] = args.description
+    if args.priority is not None:
+        # Forwarded untouched: unknown values are the API's 422 to report.
+        body["priority"] = args.priority
+    if args.clear_date:
+        # The whole schedule, not just the due: a start without a due is the
+        # API's 422, an all-day task requires a due, and the zone belongs to
+        # a date it no longer has — so all four go together.
+        body["due_date"] = None
+        body["start_date"] = None
+        body["is_all_day"] = False
+        body["time_zone"] = None
+    elif args.due is not None or args.start is not None:
+        # Parsing a date word needs the caller's day and zone; the zone
+        # travels with the task so the API judges the right local day.
+        try:
+            today, zone, zone_key = local_today()
+        except TzError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        try:
+            if args.due is not None:
+                body["due_date"] = parse_date(args.due, today, zone).isoformat()
+            if args.start is not None:
+                body["start_date"] = parse_date(args.start, today, zone).isoformat()
+        except BadDateError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        body["time_zone"] = zone_key
+    if args.all_day is not None and not args.clear_date:
+        body["is_all_day"] = args.all_day
+    try:
+        current = resolve_ids(client, cookie, args, body)
+        if current is None:
+            return 1
+    except ClientError as exc:
+        # Scheduling, recurrence, reminder and priority rules are the API's —
+        # forward its message in plain language, never a raw HTTP dump.
+        report_client_error(exc, "Could not update task")
+        return 1
+    if not body:
+        print("Nothing to change — pass a field to update.", file=sys.stderr)
+        return 1
+    # The before-state is only read when a note depends on it: a List move
+    # may drop the Section, a date clear may sweep reminders and recurrence.
+    # Plain field edits stay one round trip, not two.
+    before: dict[str, object] | None = None
+    if args.list_name is not None or args.clear_date:
+        try:
+            before, refreshed = client.show_task(args.task_id, current)
+            if refreshed:
+                current = refreshed
+                write_session_cookie(current)
+        except ClientError as exc:
+            if exc.code == "not_found":
+                print(f"Task {args.task_id} not found.", file=sys.stderr)
+            else:
+                report_client_error(exc, "Could not update task")
+            return 1
+    try:
+        updated, refreshed = client.patch_task(args.task_id, current, body)
+    except ClientError as exc:
+        if exc.code == "not_found":
+            print(f"Task {args.task_id} not found.", file=sys.stderr)
+        else:
+            report_client_error(exc, "Could not update task")
+        return 1
+    if args.as_json:
+        print(json.dumps(updated))
+    else:
+        print(f"Updated task #{args.task_id}.")
+        if before is not None:
+            sweep = edit_sweep_note(before, updated) if args.clear_date else None
+            if sweep is not None:
+                print(sweep)
+            section = (
+                edit_section_note(before, updated, "list_id" in body)
+                if args.list_name is not None
+                else None
+            )
+            if section is not None:
+                print(section)
+    if refreshed:
+        write_session_cookie(refreshed)
+    return 0
+
+
 def require_session() -> str | None:
     """The cached session cookie, or None after reporting the login
     instruction — the one guard every authenticated command repeats."""
@@ -683,6 +850,8 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             return cmd_complete(client, args.task_id, False, args.as_json)
         if args.command == "add":
             return cmd_add(client, args)
+        if args.command == "edit":
+            return cmd_edit(client, args)
         if args.command == "agenda":
             return cmd_agenda(client, args.as_json)
         if args.command == "habits":
