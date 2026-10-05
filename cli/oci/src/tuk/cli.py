@@ -45,6 +45,10 @@ def build_parser() -> argparse.ArgumentParser:
     done.add_argument("--base-url", default=None)
     done.add_argument("task_id", type=int)
     done.add_argument("--json", dest="as_json", action="store_true")
+    rm = sub.add_parser("rm")
+    rm.add_argument("--base-url", default=None)
+    rm.add_argument("task_id", type=int)
+    rm.add_argument("--yes", action="store_true", help="Delete without asking")
     reopen = sub.add_parser("reopen")
     reopen.add_argument("--base-url", default=None)
     reopen.add_argument("task_id", type=int)
@@ -779,6 +783,51 @@ def cmd_show(client: Client, task_id: int, as_json: bool) -> int:
     return 0
 
 
+def cmd_rm(client: Client, task_id: int, skip_confirm: bool) -> int:
+    """Delete a Task behind a confirmation prompt naming its title. A declined
+    prompt deletes nothing. `--yes` skips the prompt for scripts; without it a
+    non-terminal stdin fails rather than hanging on a prompt nobody can see."""
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    if not skip_confirm and not sys.stdin.isatty():
+        print("Not a terminal — pass --yes to delete without prompting.", file=sys.stderr)
+        return 1
+    try:
+        task, refreshed = client.show_task(task_id, cookie)
+        current = refreshed or cookie
+    except ClientError as exc:
+        if exc.code == "not_found":
+            print(f"Task {task_id} not found.", file=sys.stderr)
+        else:
+            report_client_error(exc, "Could not delete task")
+        return 1
+    title = str(task.get("title", ""))
+    if not skip_confirm:
+        try:
+            answer = input(f"Delete task #{task_id} {title!r}? [y/N] ").strip().lower()
+        except EOFError:
+            print("Delete cancelled.", file=sys.stderr)
+            return 1
+        if answer not in ("y", "yes"):
+            print("Delete cancelled.", file=sys.stderr)
+            return 1
+    try:
+        refreshed = client.delete_task(task_id, current)
+    except ClientError as exc:
+        if exc.code == "not_found":
+            print(f"Task {task_id} not found.", file=sys.stderr)
+        else:
+            report_client_error(exc, "Could not delete task")
+        return 1
+    print(f"Deleted task #{task_id} {title!r}.")
+    if refreshed:
+        write_session_cookie(refreshed)
+    elif current != cookie:
+        write_session_cookie(current)
+    return 0
+
+
 def _completion_line(task_id: int, task: dict[str, object], complete: bool) -> str:
     # A recurring Task that advanced came back still open with new dates
     # (ADR 0003) — name it, or the owner reasonably concludes `done` broke.
@@ -848,6 +897,8 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             return cmd_complete(client, args.task_id, True, args.as_json)
         if args.command == "reopen":
             return cmd_complete(client, args.task_id, False, args.as_json)
+        if args.command == "rm":
+            return cmd_rm(client, args.task_id, args.yes)
         if args.command == "add":
             return cmd_add(client, args)
         if args.command == "edit":
