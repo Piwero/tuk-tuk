@@ -31,6 +31,9 @@ tuk habits
 tuk habits check 3
 tuk habits check 3 --day 2026-10-01 --value 5
 tuk habits undo 3
+tuk check add 12 "Buy milk"
+tuk check tick 12 4
+tuk check untick 12 4
 ```
 
 `agenda` composes three existing reads in parallel — the Today Smart List,
@@ -53,6 +56,12 @@ than stopping silently at the page boundary.
 `--day`; `--value` sets a Numeric habit's accumulated amount (default `1`,
 the Boolean tap). Repeating a check-in for the same day is harmless. `habits
 undo` removes a day's check-in.
+
+`check add` grows a Task's checklist; `check tick` / `check untick` flip one
+line. Every mutation returns the full parent Task, so output renders the
+checklist from the response already returned. Ticking the last open line
+completes the parent (a recurring Task advances to its next occurrence
+instead), and the command says so. `--json` emits the parent Task unmodified.
 
 Smart List views are judged against your local day: the client resolves the
 operating system's timezone (overridable with `TUK_TIMEZONE`) and passes it to

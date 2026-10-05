@@ -256,6 +256,42 @@ class Client:
             return response.cookies.get(SESSION_COOKIE_NAME)
         raise self._error(response, "Could not delete task")
 
+    def create_check_item(
+        self, task_id: int, session_cookie: str, title: str
+    ) -> tuple[dict[str, object], str | None]:
+        """Add a Check Item to a Task. The API returns the full parent Task —
+        ordering and auto-completion included — so callers render from the one
+        response. Returns the parent body plus a refreshed cookie when reissued."""
+        response = self._http.post(
+            f"/api/v1/tasks/{task_id}/check-items",
+            json={"title": title},
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 201:
+            created = response.json()
+            if not isinstance(created, dict):
+                raise ClientError("bad_response", "Server returned a malformed task")
+            return dict(created), response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not add check item")
+
+    def patch_check_item(
+        self, task_id: int, check_item_id: int, session_cookie: str, done: bool
+    ) -> tuple[dict[str, object], str | None]:
+        """Tick or un-tick a Check Item. Like creation, returns the full parent
+        Task — ticking the last open line completes it (recurring ones advance
+        instead, per ADR 0003), and that aggregate effect is in this response."""
+        response = self._http.patch(
+            f"/api/v1/tasks/{task_id}/check-items/{check_item_id}",
+            json={"done": done},
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 200:
+            updated = response.json()
+            if not isinstance(updated, dict):
+                raise ClientError("bad_response", "Server returned a malformed task")
+            return dict(updated), response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not update check item")
+
     def _error(self, response: httpx.Response, fallback: str) -> ClientError:
         try:
             error = response.json().get("error", {})
