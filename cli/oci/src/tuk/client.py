@@ -117,14 +117,23 @@ class Client:
         """Every List, for resolving a typed name — never creating one."""
         return self._fetch_all(session_cookie, "/api/v1/lists", "Could not list lists")
 
-    def read_habits(
-        self, session_cookie: str, due: str
-    ) -> tuple[list[dict[str, object]], str | None]:
-        """Habits due on the caller's local day — the paged collection walked
-        whole, like Lists and Tags, since a day's due set is small."""
-        return self._fetch_all(
-            session_cookie, "/api/v1/habits", "Could not list habits", {"due": due}
+    def list_habits(
+        self, session_cookie: str, due: str, limit: int = 200, offset: int = 0
+    ) -> tuple[dict[str, object], str | None]:
+        """One page of the Habits due on the caller's local day. Returns the
+        API's page body — not a walked-and-rebuilt list — so `--json` can pass
+        it straight through rather than inventing an envelope around it."""
+        response = self._http.get(
+            "/api/v1/habits",
+            params={"due": due, "limit": limit, "offset": offset},
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
+        if response.status_code == 200:
+            body = response.json()
+            if not isinstance(body, dict):
+                raise ClientError("bad_response", "Server returned a malformed habit list")
+            return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not list habits")
 
     def read_tags(self, session_cookie: str) -> tuple[list[dict[str, object]], str | None]:
         """Every Tag, for resolving typed names — never creating one."""

@@ -69,18 +69,53 @@ def test_login_never_persists_password(config_dir: Path, monkeypatch: pytest.Mon
     assert json.loads((config_dir / "tuk" / "config.json").read_text()) == {"base_url": "http://x"}
 
 
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        # What the login endpoint actually emits today: it is a public path,
+        # so it answers for itself rather than reaching the middleware.
+        (404, "not_found"),
+        # The canonical first-run code every gated route emits. Accepted here
+        # too, so aligning the login endpoint on it is not a client break.
+        (401, "setup_required"),
+    ],
+)
 def test_login_setup_required_points_at_web_app(
-    config_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    config_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    status: int,
+    code: str,
 ) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
-            404, json={"error": {"code": "not_found", "message": "Setup has not been completed"}}
+            status, json={"error": {"code": code, "message": "Setup has not been completed"}}
         )
 
     assert run_login(monkeypatch, httpx.MockTransport(handler)) == 1
 
     err = capsys.readouterr().err
     assert "web app" in err
+
+
+def test_login_wrong_password_does_not_point_at_setup(
+    config_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A set-up instance with a bad password must not be mistaken for an
+    instance that has never had one — the two send the owner to different
+    places, which is the whole reason the codes are distinguished."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            401,
+            json={"error": {"code": "invalid_credentials", "message": "Incorrect password"}},
+        )
+
+    assert run_login(monkeypatch, httpx.MockTransport(handler)) == 1
+
+    err = capsys.readouterr().err
+    assert "Incorrect password" in err
+    assert "web app" not in err
 
 
 def test_config_lives_under_xdg_config_home(

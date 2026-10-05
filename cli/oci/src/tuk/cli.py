@@ -5,6 +5,7 @@ import concurrent.futures
 import getpass
 import json
 import sys
+from collections.abc import Sequence
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -17,6 +18,18 @@ from tuk.store import read_session_cookie, resolve_base_url, write_config, write
 from tuk.tz import TzError, local_today
 
 SETUP_MESSAGE = "No password set yet — finish first-run setup in the web app."
+
+# "Setup has not been completed" reaches a client under two codes. Every gated
+# route answers `setup_required` from the middleware; the login endpoint is a
+# public path, so it never reaches that middleware and answers `not_found` for
+# itself. Both mean the same thing to the owner — go and set a password in the
+# web app, which is the one thing a client deliberately cannot do — so both are
+# accepted here. Keyed off the envelope code, never the bare status: on the
+# login path 404 and 401 both occur, and 401 is also a wrong password.
+#
+# Scoped to the login path deliberately. On a gated read `not_found` means
+# "no such Task" and must keep saying so — see cmd_show.
+LOGIN_SETUP_CODES = frozenset({"setup_required", "not_found"})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -71,7 +84,7 @@ def cmd_login(client: Client, resolved_base_url: str) -> int:
     try:
         cookie = client.login(password)
     except ClientError as exc:
-        if exc.code == "not_found":
+        if exc.code in LOGIN_SETUP_CODES:
             print(SETUP_MESSAGE, file=sys.stderr)
         else:
             print(f"Login failed: {exc.message}", file=sys.stderr)
@@ -101,6 +114,29 @@ def format_task(task: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+def aligned_table(headers: tuple[str, ...], rows: Sequence[tuple[str, ...]]) -> list[str]:
+    """A column-aligned table, header row included. Every listing renders
+    through this, so columns line up the same way whatever is being listed."""
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(cell))
+
+    def aligned(cells: tuple[str, ...]) -> str:
+        return "  ".join(cell.ljust(widths[index]) for index, cell in enumerate(cells)).rstrip()
+
+    return [aligned(headers)] + [aligned(row) for row in rows]
+
+
+def more_line(more: int) -> list[str]:
+    """What a page left behind. Reading one page rather than walking the whole
+    collection is only safe if the remainder is stated — a listing that
+    silently stopped at the page boundary would look complete."""
+    if more <= 0:
+        return []
+    return [f"… {more} more result{'s' if more != 1 else ''} not shown."]
+
+
 def format_ls(tasks: list[dict[str, object]], zone: ZoneInfo, zone_key: str, more: int = 0) -> str:
     rows = [
         (
@@ -111,20 +147,19 @@ def format_ls(tasks: list[dict[str, object]], zone: ZoneInfo, zone_key: str, mor
         )
         for task in tasks
     ]
-    widths = [len(cell) for cell in ("ID", "TITLE", "DUE", "PRIORITY")]
-    for row in rows:
-        for index, cell in enumerate(row):
-            widths[index] = max(widths[index], len(cell))
-
-    def aligned(cells: tuple[str, str, str, str]) -> str:
-        return "  ".join(cell.ljust(widths[index]) for index, cell in enumerate(cells)).rstrip()
-
-    lines = [aligned(("ID", "TITLE", "DUE", "PRIORITY"))]
-    lines += [aligned(row) for row in rows]
+    lines = aligned_table(("ID", "TITLE", "DUE", "PRIORITY"), rows)
     lines.append(f"Dates in {zone_key}.")
-    if more > 0:
-        lines.append(f"… {more} more result{'s' if more != 1 else ''} not shown.")
-    return "\n".join(lines)
+    return "\n".join(lines + more_line(more))
+
+
+def page_items(page: dict[str, object]) -> list[dict[str, object]]:
+    """The rows of an API page body. The body itself is what `--json` prints,
+    so rendering reads the rows out of it rather than the client returning a
+    second, rebuilt shape."""
+    items = page.get("items")
+    if not isinstance(items, list):
+        return []
+    return [row for row in items if isinstance(row, dict)]
 
 
 def remaining_count(page: dict[str, object], shown: int) -> int:
@@ -154,48 +189,30 @@ def format_due(task: dict[str, object], zone: ZoneInfo) -> str:
 
 
 def cmd_ls(client: Client, view: str, as_json: bool, limit: int, offset: int) -> int:
-    cookie = read_session_cookie()
+    cookie = require_session()
     if cookie is None:
-        print("Not logged in — run `tuk login` first.", file=sys.stderr)
         return 1
-    today_param: str | None = None
-    zone: ZoneInfo | None = None
-    zone_key = ""
-    if view in ("today", "next7") or not as_json:
-        # Plain rendering states the resolved zone, and today/next7 pass the
-        # local day to the API — both need the caller's zone. A JSON all-open
-        # dump needs neither, so it never touches timezone resolution.
-        try:
-            today, zone, zone_key = local_today()
-        except TzError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        if view in ("today", "next7"):
-            today_param = today.isoformat()
+    # Resolved for every view and every output format, not only the ones that
+    # consume it: a misconfigured TUK_TIMEZONE must be visible rather than
+    # silently shifting the day boundary, and a combination that skipped
+    # resolution would be the one place it passed unnoticed.
+    resolved = require_today()
+    if resolved is None:
+        return 1
+    today, zone, zone_key = resolved
+    # Only the day-bounded views are judged against a local day; `all` is
+    # every open task regardless of date, so it sends no `today`.
+    today_param = today.isoformat() if view in ("today", "next7") else None
     try:
         page, refreshed = client.list_tasks(cookie, view, today_param, limit, offset)
     except ClientError as exc:
-        if exc.code == "unauthorized":
-            print("Session expired — run `tuk login` again.", file=sys.stderr)
-        elif exc.code == "setup_required":
-            print(SETUP_MESSAGE, file=sys.stderr)
-        else:
-            print(f"Could not list tasks: {exc.message}", file=sys.stderr)
+        report_client_error(exc, "Could not list tasks")
         return 1
     if as_json:
         print(json.dumps(page))
     else:
-        items = page.get("items")
-        rows = list(items) if isinstance(items, list) else []
-        assert zone is not None  # resolved above whenever plain output renders
-        print(
-            format_ls(
-                [t for t in rows if isinstance(t, dict)],
-                zone,
-                zone_key,
-                more=remaining_count(page, len(rows)),
-            )
-        )
+        rows = page_items(page)
+        print(format_ls(rows, zone, zone_key, more=remaining_count(page, len(rows))))
     if refreshed:
         write_session_cookie(refreshed)
     return 0
@@ -320,17 +337,10 @@ def require_today() -> tuple[date, ZoneInfo, str] | None:
         return None
 
 
-def format_habits(habits: list[dict[str, object]]) -> str:
+def format_habits(habits: list[dict[str, object]], more: int = 0) -> str:
     rows = [(str(habit.get("id")), str(habit.get("name"))) for habit in habits]
-    widths = [len(cell) for cell in ("ID", "HABIT")]
-    for row in rows:
-        for index, cell in enumerate(row):
-            widths[index] = max(widths[index], len(cell))
-
-    def aligned(cells: tuple[str, str]) -> str:
-        return "  ".join(cell.ljust(widths[index]) for index, cell in enumerate(cells)).rstrip()
-
-    return "\n".join([aligned(("ID", "HABIT"))] + [aligned(row) for row in rows])
+    lines = aligned_table(("ID", "HABIT"), rows)
+    return "\n".join(lines + more_line(more))
 
 
 def cmd_habits_list(client: Client, as_json: bool) -> int:
@@ -342,14 +352,15 @@ def cmd_habits_list(client: Client, as_json: bool) -> int:
         return 1
     today, _, zone_key = resolved
     try:
-        habits, refreshed = client.read_habits(cookie, today.isoformat())
+        page, refreshed = client.list_habits(cookie, today.isoformat())
     except ClientError as exc:
         report_client_error(exc, "Could not list habits")
         return 1
     if as_json:
-        print(json.dumps({"items": habits, "total": len(habits), "limit": 200, "offset": 0}))
+        print(json.dumps(page))
     else:
-        print(format_habits(habits))
+        rows = page_items(page)
+        print(format_habits(rows, more=remaining_count(page, len(rows))))
         print(f"Habits due. Dates in {zone_key}.")
     if refreshed:
         write_session_cookie(refreshed)
@@ -420,13 +431,17 @@ def cmd_habits_undo(client: Client, habit_id: int, raw_day: str | None) -> int:
     return 0
 
 
-def _read_events_isolated(client: Client, cookie: str, day: str) -> list[dict[str, object]]:
-    """The day's events, or nothing: calendar trouble never fails the view."""
+def _read_events_isolated(
+    client: Client, cookie: str, day: str
+) -> tuple[list[dict[str, object]], str | None]:
+    """The day's events, or nothing: calendar trouble never fails the view.
+    Catches broadly on purpose — an unconfigured integration, a revoked grant
+    and a network failure must all contribute nothing (ADR 0006, ADR 0007),
+    and the Agenda must not become collateral damage of a Google problem."""
     try:
-        events, _ = client.read_events(cookie, day)
-    except Exception:
-        return []
-    return events
+        return client.read_events(cookie, day)
+    except Exception:  # noqa: BLE001 - calendar failure isolation per ADR 0007
+        return [], None
 
 
 def cmd_agenda(client: Client, as_json: bool) -> int:
@@ -441,16 +456,22 @@ def cmd_agenda(client: Client, as_json: bool) -> int:
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
             tasks_future = pool.submit(client.list_tasks, cookie, "today", day, 50, 0)
-            habits_future = pool.submit(client.read_habits, cookie, day)
+            habits_future = pool.submit(client.list_habits, cookie, day)
             events_future = pool.submit(_read_events_isolated, client, cookie, day)
-            page, _ = tasks_future.result()
-            habits, _ = habits_future.result()
-            events = events_future.result()
+            page, task_cookie = tasks_future.result()
+            habits_page, habit_cookie = habits_future.result()
+            events, event_cookie = events_future.result()
     except ClientError as exc:
         report_client_error(exc, "Could not build agenda")
         return 1
-    items = page.get("items")
-    tasks = [t for t in items if isinstance(t, dict)] if isinstance(items, list) else []
+    # All three reads present the same cookie, so the middleware either
+    # reissues for all of them or none, and each reissued value is
+    # independently signed and equally valid. Any one of them keeps the
+    # session alive for the command the owner runs most; which is taken is
+    # arbitrary, so the first one present wins.
+    refreshed = event_cookie or habit_cookie or task_cookie
+    tasks = page_items(page)
+    habits = page_items(habits_page)
     if as_json:
         print(
             json.dumps(
@@ -465,16 +486,18 @@ def cmd_agenda(client: Client, as_json: bool) -> int:
         )
     else:
         print("Tasks")
-        print(format_ls(tasks, zone, zone_key))
+        print(format_ls(tasks, zone, zone_key, more=remaining_count(page, len(tasks))))
         print("")
         print("Habits due")
-        print(format_habits(habits))
+        print(format_habits(habits, more=remaining_count(habits_page, len(habits))))
         if events:
             print("")
             print("Events")
             for event in events:
                 print(f"- {event.get('title')}")
         print(f"Agenda for {day}. Dates in {zone_key}.")
+    if refreshed:
+        write_session_cookie(refreshed)
     return 0
 
 

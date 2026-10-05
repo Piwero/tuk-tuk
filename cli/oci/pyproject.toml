@@ -52,6 +52,11 @@ select = [
     "N",
     "C4",
     "PT",
+    # Beyond the backend's set: the one deliberate catch-all here is the
+    # Agenda's calendar failure isolation, which must stay deliberate. With
+    # BLE unselected its `noqa` would be decoration, and the next broad
+    # `except` would be added in silence.
+    "BLE",
 ]
 ignore = ["E501"]
 

@@ -85,11 +85,29 @@ def test_habits_lists_due_on_local_day(logged_in: Path, capsys: pytest.CaptureFi
 
 
 def test_habits_json_emits_page_body(logged_in: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    transport, _ = habits_transport()
+    """The API's own page body, untouched. The fixture's envelope numbers are
+    deliberately not derivable from its items — a client that rebuilt the
+    envelope from what it walked would have to invent them, and would differ."""
+    page = {"items": HABITS_PAGE["items"], "total": 9, "limit": 50, "offset": 4}
+    transport, _ = habits_transport(habits=page)
 
     assert main(["habits", "--json"], transport=transport) == 0
 
-    assert json.loads(capsys.readouterr().out) == HABITS_PAGE
+    assert json.loads(capsys.readouterr().out) == page
+
+
+def test_habits_says_when_more_are_due_than_one_page_holds(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One page is read, not the whole collection, so the count the API
+    reports has to be surfaced — a day's due set silently losing rows past
+    the page boundary is the failure mode worth a test."""
+    page = {"items": HABITS_PAGE["items"], "total": 5, "limit": 2, "offset": 0}
+    transport, _ = habits_transport(habits=page)
+
+    assert main(["habits"], transport=transport) == 0
+
+    assert "3 more" in capsys.readouterr().out
 
 
 def test_check_records_today_by_default(

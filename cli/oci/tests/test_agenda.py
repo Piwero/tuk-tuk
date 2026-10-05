@@ -228,6 +228,57 @@ def test_agenda_json_reports_no_events_when_calendar_fails(
     assert [task["id"] for task in body["tasks"]] == [7]
 
 
+def test_agenda_says_when_a_page_left_rows_behind(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Both reads are one page, so both have to state their remainder — an
+    Agenda that quietly dropped the day's overflow would read as complete."""
+    transport, _, _ = agenda_transport(
+        tasks={"items": TASKS_PAGE["items"], "total": 4, "limit": 1, "offset": 0},
+        habits={"items": HABITS_PAGE["items"], "total": 3, "limit": 1, "offset": 0},
+    )
+
+    assert main(["agenda"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "3 more" in out
+    assert "2 more" in out
+
+
+def reissuing_agenda_transport(reissue_on: str) -> httpx.MockTransport:
+    """An agenda transport where exactly one of the three reads reissues the
+    cookie, named in the returned value so the test can tell which."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        headers = (
+            {"set-cookie": f"tuktuk_session=rolled-by-{reissue_on}; Path=/; HttpOnly"}
+            if path.endswith(reissue_on)
+            else {}
+        )
+        bodies = {
+            "/api/v1/tasks": TASKS_PAGE,
+            "/api/v1/habits": HABITS_PAGE,
+            "/api/v1/events": EMPTY_EVENTS,
+        }
+        if path not in bodies:
+            raise AssertionError(f"unexpected {request.method} {path}")
+        return httpx.Response(200, json=bodies[path], headers=headers)
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.mark.parametrize("reissue_on", ["tasks", "habits", "events"])
+def test_agenda_persists_a_reissued_session_cookie(logged_in: Path, reissue_on: str) -> None:
+    """The middleware's rolling reissue is what keeps a daily-use session
+    alive, so the daily-use command has to keep the cookie it hands back —
+    whichever of the three parallel reads was the one to carry it."""
+    assert main(["agenda"], transport=reissuing_agenda_transport(reissue_on)) == 0
+
+    session = json.loads((logged_in / "tuk" / "session.json").read_text())
+    assert session == {"session_cookie": f"rolled-by-{reissue_on}"}
+
+
 def test_agenda_expired_session_points_at_login(
     logged_in: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
