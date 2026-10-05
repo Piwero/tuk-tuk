@@ -244,6 +244,18 @@ class Client:
             return dict(updated), response.cookies.get(SESSION_COOKIE_NAME)
         raise self._error(response, "Could not update task")
 
+    def delete_task(self, task_id: int, session_cookie: str) -> str | None:
+        """Delete a Task. Completed occurrences go with it; Focus Sessions and
+        Timer presets outlive it with only their link cleared — the API's
+        doing, never reimplemented here. Returns a refreshed cookie."""
+        response = self._http.delete(
+            f"/api/v1/tasks/{task_id}",
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 204:
+            return response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not delete task")
+
     def _error(self, response: httpx.Response, fallback: str) -> ClientError:
         try:
             error = response.json().get("error", {})
