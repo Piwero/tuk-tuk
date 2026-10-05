@@ -56,16 +56,38 @@ class Client:
     def list_tasks(
         self,
         session_cookie: str,
-        view: str,
+        view: str | None,
         today: str | None,
         limit: int,
         offset: int,
+        *,
+        list_id: int | None = None,
+        tag_id: int | None = None,
+        priority: str | None = None,
+        completed: bool | None = None,
+        scheduled: bool | None = None,
+        search: str | None = None,
     ) -> tuple[dict[str, object], str | None]:
-        """One page of a Smart List view. Returns the API's page body plus a
-        refreshed session cookie when the server reissued one."""
-        params: dict[str, str | int] = {"view": view, "limit": limit, "offset": offset}
+        """One page of a task listing. A view computes a Smart List (open
+        tasks only); without one the narrowing filters stand alone. Returns
+        the API's page body plus a refreshed session cookie when reissued."""
+        params: dict[str, str | int] = {"limit": limit, "offset": offset}
+        if view is not None:
+            params["view"] = view
         if today is not None:
             params["today"] = today
+        if list_id is not None:
+            params["list_id"] = list_id
+        if tag_id is not None:
+            params["tag_id"] = tag_id
+        if priority is not None:
+            params["priority"] = priority
+        if completed is not None:
+            params["completed"] = "true" if completed else "false"
+        if scheduled is not None:
+            params["scheduled"] = "true" if scheduled else "false"
+        if search is not None:
+            params["search"] = search
         response = self._http.get(
             "/api/v1/tasks",
             params=params,
