@@ -13,7 +13,7 @@ import httpx
 
 from tuk.client import Body, Client, ClientError
 from tuk.dates import BadDateError, parse_date
-from tuk.names import UnknownNameError, resolve_name
+from tuk.names import Kind, UnknownNameError, resolve_name
 from tuk.store import read_session_cookie, resolve_base_url, write_config, write_session_cookie
 from tuk.tz import TzError, local_today
 
@@ -248,18 +248,24 @@ def format_due(task: dict[str, object], zone: ZoneInfo) -> str:
 
 
 def ls_conflict(args: argparse.Namespace) -> tuple[str, str] | None:
-    """The first pair of mutually exclusive listing flags, or None. The API
-    refuses these combinations with 422, so the client names the two flags
-    rather than forwarding a request it already knows will be refused."""
-    # Only pairs the API refuses with 422. View additionally overrides a
-    # completed filter server-side, so an explicit view with --completed is
-    # forwarded, not rejected — the API's override semantics are inherited.
+    """The first pair of mutually exclusive listing flags, or None.
+
+    Two kinds of conflict, both caught here. Most of these the API refuses
+    with 422, so naming the two flags locally saves a round trip whose answer
+    is already known. A view with `--completed` is the other kind: the API
+    accepts it and silently overrides the completion filter
+    (`if view is not None: completed = False`), so forwarding it would answer
+    with open tasks under a flag that asked for completed ones. That is worse
+    than a refusal — it looks like an answer — so it is refused too.
+    """
     view_flag = "--week" if args.week else "--all" if args.all else None
     if view_flag is not None:
         if args.unscheduled:
             return (view_flag, "--unscheduled")
         if args.search is not None:
             return (view_flag, "--search")
+        if args.completed:
+            return (view_flag, "--completed")
     if args.unscheduled and args.search is not None:
         return ("--unscheduled", "--search")
     return None
@@ -297,25 +303,15 @@ def cmd_ls(client: Client, args: argparse.Namespace) -> int:
         list_id: int | None = None
         tag_id: int | None = None
         if args.list_name is not None:
-            lists, refreshed = client.read_lists(current)
-            if refreshed:
-                current = refreshed
-                write_session_cookie(current)
-            try:
-                list_id = resolve_name(args.list_name, lists, "list")
-            except UnknownNameError as exc:
-                print(str(exc), file=sys.stderr)
+            found = resolve_named(client, current, args.list_name, kind="list")
+            if found is None:
                 return 1
+            (list_id,), current = found
         if args.tag_name is not None:
-            tags, refreshed = client.read_tags(current)
-            if refreshed:
-                current = refreshed
-                write_session_cookie(current)
-            try:
-                tag_id = resolve_name(args.tag_name, tags, "tag")
-            except UnknownNameError as exc:
-                print(str(exc), file=sys.stderr)
+            found = resolve_named(client, current, args.tag_name, kind="tag")
+            if found is None:
                 return 1
+            (tag_id,), current = found
         page, refreshed = client.list_tasks(
             current,
             view,
@@ -446,37 +442,46 @@ def cmd_add(client: Client, args: argparse.Namespace) -> int:
     return 0
 
 
+def resolve_named(
+    client: Client, cookie: str, *names: str, kind: Kind
+) -> tuple[list[int], str] | None:
+    """The ids of the named Lists or Tags, and the current cookie.
+
+    None when a name missed — the error already names every candidate that
+    does exist, and nothing has been created. One collection read serves every
+    name of the one kind, so `--tag a --tag b` is still a single round trip.
+    """
+    items, refreshed = (client.read_lists if kind == "list" else client.read_tags)(cookie)
+    current = cookie
+    if refreshed:
+        current = refreshed
+        write_session_cookie(current)
+    ids = []
+    for name in names:
+        try:
+            ids.append(resolve_name(name, items, kind))
+        except UnknownNameError as exc:
+            print(str(exc), file=sys.stderr)
+            return None
+    return ids, current
+
+
 def resolve_ids(
     client: Client, cookie: str, args: argparse.Namespace, body: dict[str, object]
 ) -> str | None:
     """Fill body with the resolved list_id / tag_ids. Returns the current
     cookie, or None when a name missed (already reported) — nothing created."""
-    if args.list_name is None and not args.tags:
-        return cookie
     current = cookie
     if args.list_name is not None:
-        lists, refreshed = client.read_lists(current)
-        if refreshed:
-            current = refreshed
-            write_session_cookie(current)
-        try:
-            body["list_id"] = resolve_name(args.list_name, lists, "list")
-        except UnknownNameError as exc:
-            print(str(exc), file=sys.stderr)
+        found = resolve_named(client, current, args.list_name, kind="list")
+        if found is None:
             return None
+        (body["list_id"],), current = found
     if args.tags:
-        tags, refreshed = client.read_tags(current)
-        if refreshed:
-            current = refreshed
-            write_session_cookie(current)
-        ids = []
-        for name in args.tags:
-            try:
-                ids.append(resolve_name(name, tags, "tag"))
-            except UnknownNameError as exc:
-                print(str(exc), file=sys.stderr)
-                return None
-        body["tag_ids"] = ids
+        found = resolve_named(client, current, *args.tags, kind="tag")
+        if found is None:
+            return None
+        body["tag_ids"], current = found
     return current
 
 
