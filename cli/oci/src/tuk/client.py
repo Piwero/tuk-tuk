@@ -226,6 +226,24 @@ class Client:
             return dict(created), response.cookies.get(SESSION_COOKIE_NAME)
         raise self._error(response, "Could not add task")
 
+    def patch_task(
+        self, task_id: int, session_cookie: str, body: dict[str, object]
+    ) -> tuple[dict[str, object], str | None]:
+        """Patch a Task through the ordinary update endpoint, inheriting its
+        validation and invariants — the client never reimplements them.
+        Returns the updated body plus a refreshed session cookie when reissued."""
+        response = self._http.patch(
+            f"/api/v1/tasks/{task_id}",
+            json=body,
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 200:
+            updated = response.json()
+            if not isinstance(updated, dict):
+                raise ClientError("bad_response", "Server returned a malformed task")
+            return dict(updated), response.cookies.get(SESSION_COOKIE_NAME)
+        raise self._error(response, "Could not update task")
+
     def _error(self, response: httpx.Response, fallback: str) -> ClientError:
         try:
             error = response.json().get("error", {})
