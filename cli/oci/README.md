@@ -33,6 +33,8 @@ tuk edit 12 --due tomorrow
 tuk edit 12 --clear-date
 tuk edit 12 --list Groceries --tag home --tag Urgent
 tuk edit 12 --clear-tags
+tuk rm 12
+tuk rm --yes 12
 tuk agenda
 tuk agenda --json
 tuk habits
@@ -62,6 +64,13 @@ restated from the API's rules.
 Tags are replaced **wholesale**, matching what the endpoint does: `--tag`
 names the new set in full, and `--clear-tags` replaces it with none. There is
 no additive flag, because the endpoint has no additive semantics.
+
+`rm` prompts for confirmation, naming the Task's title so you can see what
+you are about to destroy; declining deletes nothing and exits non-zero.
+`--yes` skips the prompt for scripts, and without it a non-terminal stdin
+fails with a message rather than hanging on a prompt nobody can see. It is
+the one command with no `--json`: the endpoint answers 204 with no body, so
+there is nothing to pass through.
 
 A listing that conflicts with itself is refused locally, naming both flags,
 rather than sent: `--week`/`--all` combine with `--list`, `--tag` and
