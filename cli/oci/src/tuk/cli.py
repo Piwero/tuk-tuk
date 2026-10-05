@@ -41,6 +41,14 @@ def build_parser() -> argparse.ArgumentParser:
     show.add_argument("--base-url", default=None)
     show.add_argument("task_id", type=int)
     show.add_argument("--json", dest="as_json", action="store_true")
+    done = sub.add_parser("done")
+    done.add_argument("--base-url", default=None)
+    done.add_argument("task_id", type=int)
+    done.add_argument("--json", dest="as_json", action="store_true")
+    reopen = sub.add_parser("reopen")
+    reopen.add_argument("--base-url", default=None)
+    reopen.add_argument("task_id", type=int)
+    reopen.add_argument("--json", dest="as_json", action="store_true")
     ls = sub.add_parser("ls")
     ls.add_argument("--base-url", default=None)
     ls.add_argument("--json", dest="as_json", action="store_true")
@@ -604,6 +612,42 @@ def cmd_show(client: Client, task_id: int, as_json: bool) -> int:
     return 0
 
 
+def _completion_line(task_id: int, task: dict[str, object], complete: bool) -> str:
+    # A recurring Task that advanced came back still open with new dates
+    # (ADR 0003) — name it, or the owner reasonably concludes `done` broke.
+    # Keyed on intent first: a reopened Task is open by definition, so only
+    # `done` can advance one.
+    if complete and not task.get("completed"):
+        due = task.get("due_date")
+        suffix = f", next occurrence {due}" if isinstance(due, str) else ""
+        return f"Task #{task_id} advanced to its next occurrence{suffix}."
+    if complete:
+        return f"Task #{task_id} completed."
+    return f"Task #{task_id} reopened."
+
+
+def cmd_complete(client: Client, task_id: int, complete: bool, as_json: bool) -> int:
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    action = "Could not complete task" if complete else "Could not reopen task"
+    try:
+        task, refreshed = client.patch_task(task_id, cookie, {"completed": complete})
+    except ClientError as exc:
+        if exc.code == "not_found":
+            print(f"Task {task_id} not found.", file=sys.stderr)
+        else:
+            report_client_error(exc, action)
+        return 1
+    if as_json:
+        print(json.dumps(task))
+    else:
+        print(_completion_line(task_id, task, complete))
+    if refreshed:
+        write_session_cookie(refreshed)
+    return 0
+
+
 def glue_reminder_dash_arg(argv: list[str]) -> list[str]:
     """Glue `--reminder -PT30M` into `--reminder=-PT30M`: durations start with
     a dash, which argparse otherwise reads as another flag. The `=` form is
@@ -633,6 +677,10 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             return cmd_login(client, resolved)
         if args.command == "show":
             return cmd_show(client, args.task_id, args.as_json)
+        if args.command == "done":
+            return cmd_complete(client, args.task_id, True, args.as_json)
+        if args.command == "reopen":
+            return cmd_complete(client, args.task_id, False, args.as_json)
         if args.command == "add":
             return cmd_add(client, args)
         if args.command == "agenda":

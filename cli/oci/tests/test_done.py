@@ -1,0 +1,147 @@
+import json
+from pathlib import Path
+
+import httpx
+import pytest
+
+from tuk.cli import main
+
+DONE_BODY = {
+    "id": 7,
+    "title": "Water plants",
+    "completed": True,
+    "completed_at": "2026-10-05T10:00:00Z",
+    "due_date": "2026-10-05T10:00:00Z",
+    "is_all_day": False,
+    "recurrence": None,
+}
+
+ADVANCED_BODY = {
+    "id": 7,
+    "title": "Water plants",
+    "completed": False,
+    "completed_at": None,
+    "due_date": "2026-10-06T10:00:00Z",
+    "is_all_day": False,
+    "recurrence": "RRULE:FREQ=DAILY",
+}
+
+ENDED_BODY = {
+    **ADVANCED_BODY,
+    "completed": True,
+    "completed_at": "2026-10-05T10:00:00Z",
+}
+
+REOPENED_BODY = {**DONE_BODY, "completed": False, "completed_at": None}
+
+
+@pytest.fixture
+def logged_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    target = tmp_path / "config"
+    monkeypatch.setenv("TUK_CONFIG_DIR", str(target))
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "tuk").mkdir(exist_ok=True)
+    (target / "tuk" / "config.json").write_text(json.dumps({"base_url": "http://x"}))
+    (target / "tuk" / "session.json").write_text(json.dumps({"session_cookie": "sess"}))
+    return target
+
+
+def patch_transport(
+    body: object, status: int = 200, refreshed_cookie: str | None = None
+) -> tuple[httpx.MockTransport, dict[str, str]]:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = request.content.decode()
+        headers = (
+            {"set-cookie": f"tuktuk_session={refreshed_cookie}; Path=/; HttpOnly"}
+            if refreshed_cookie
+            else {}
+        )
+        return httpx.Response(status, headers=headers, json=body)
+
+    return httpx.MockTransport(handler), seen
+
+
+def test_done_completes_plain_task(logged_in: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    transport, seen = patch_transport(DONE_BODY)
+
+    assert main(["done", "7"], transport=transport) == 0
+
+    assert seen["method"] == "PATCH"
+    assert seen["path"] == "/api/v1/tasks/7"
+    assert json.loads(seen["body"]) == {"completed": True}
+    out = capsys.readouterr().out
+    assert "7" in out
+    assert "advanced" not in out.lower()
+
+
+def test_done_recurring_advance_reports_next_occurrence(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport, _ = patch_transport(ADVANCED_BODY)
+
+    assert main(["done", "7"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "advanced" in out.lower()
+    assert "2026-10-06" in out
+
+
+def test_done_ended_recurrence_reports_closed(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport, _ = patch_transport(ENDED_BODY)
+
+    assert main(["done", "7"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "advanced" not in out.lower()
+
+
+def test_reopen_returns_task_to_open(logged_in: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    transport, seen = patch_transport(REOPENED_BODY)
+
+    assert main(["reopen", "7"], transport=transport) == 0
+
+    assert seen["method"] == "PATCH"
+    assert json.loads(seen["body"]) == {"completed": False}
+    out = capsys.readouterr().out
+    assert "7" in out
+
+
+def test_reopen_recurring_task_says_reopened_not_advanced(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport, _ = patch_transport({**REOPENED_BODY, "recurrence": "RRULE:FREQ=DAILY"})
+
+    assert main(["reopen", "7"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "reopened" in out.lower()
+    assert "advanced" not in out.lower()
+
+
+def test_done_unknown_id_reports_not_found(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    body = {"error": {"code": "not_found", "message": "Task 9 not found"}}
+    transport, _ = patch_transport(body, 404)
+
+    assert main(["done", "9"], transport=transport) == 1
+
+    err = capsys.readouterr().err
+    assert "not found" in err.lower()
+    assert "web app" not in err
+
+
+def test_done_json_emits_body_unmodified(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport, _ = patch_transport(ADVANCED_BODY)
+
+    assert main(["done", "--json", "7"], transport=transport) == 0
+
+    assert json.loads(capsys.readouterr().out) == ADVANCED_BODY
