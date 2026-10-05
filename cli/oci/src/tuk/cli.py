@@ -95,6 +95,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Replace the task's tags wholesale with these names",
     )
+    edit.add_argument(
+        "--clear-tags",
+        dest="clear_tags",
+        action="store_true",
+        help="Replace the task's tags with none",
+    )
     edit.add_argument("--due", default=None)
     edit.add_argument("--start", default=None)
     edit.add_argument(
@@ -397,12 +403,39 @@ def print_raw(body: Body) -> None:
     sys.stdout.buffer.flush()
 
 
+def apply_dates(args: argparse.Namespace, body: dict[str, object]) -> bool:
+    """Fill body with the parsed `--due` / `--start`, returning whether it
+    worked — False after reporting a bad zone or an unrecognised date word,
+    whose message enumerates the forms that are accepted.
+
+    Parsing a date word needs the caller's day and zone; the zone travels
+    with the Task so the API judges the right local day. Shared by `add` and
+    `edit`, which otherwise write the same parse twice and drift apart.
+    """
+    if args.due is None and args.start is None:
+        return True
+    try:
+        today, zone, zone_key = local_today()
+    except TzError as exc:
+        print(str(exc), file=sys.stderr)
+        return False
+    try:
+        if args.due is not None:
+            body["due_date"] = parse_date(args.due, today, zone).isoformat()
+        if args.start is not None:
+            body["start_date"] = parse_date(args.start, today, zone).isoformat()
+    except BadDateError as exc:
+        print(str(exc), file=sys.stderr)
+        return False
+    body["time_zone"] = zone_key
+    return True
+
+
 def cmd_add(client: Client, args: argparse.Namespace) -> int:
     cookie = read_session_cookie()
     if cookie is None:
         print("Not logged in — run `tuk login` first.", file=sys.stderr)
         return 1
-    dated = args.due is not None or args.start is not None
     body: dict[str, object] = {"title": args.title}
     if args.priority is not None:
         # Forwarded untouched: unknown values are the API's 422 to report.
@@ -413,24 +446,8 @@ def cmd_add(client: Client, args: argparse.Namespace) -> int:
         body["recurrence"] = args.recurrence
     if args.reminders:
         body["reminders"] = list(args.reminders)
-    zone_key = ""
-    if dated:
-        # Parsing a date word needs the caller's day and zone; the zone
-        # travels with the task so the API judges the right local day.
-        try:
-            today, zone, zone_key = local_today()
-        except TzError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        try:
-            if args.due is not None:
-                body["due_date"] = parse_date(args.due, today, zone).isoformat()
-            if args.start is not None:
-                body["start_date"] = parse_date(args.start, today, zone).isoformat()
-        except BadDateError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        body["time_zone"] = zone_key
+    if not apply_dates(args, body):
+        return 1
     if args.all_day:
         body["is_all_day"] = True
     try:
@@ -496,9 +513,14 @@ def resolve_ids(
 
 
 def edit_conflict(args: argparse.Namespace) -> tuple[str, str] | None:
-    """A --clear-date combined with a date it would clear. The request would
+    """A clear flag combined with a value it would clear. The request would
     contradict itself, so the client names the two flags rather than
-    forwarding something it already knows is incoherent."""
+    forwarding something it already knows is incoherent.
+
+    Not an argparse mutually-exclusive group, because `--due` and `--start`
+    must still combine with each other — only their pairing with
+    `--clear-date` is incoherent.
+    """
     if args.clear_date:
         if args.due is not None:
             return ("--clear-date", "--due")
@@ -506,6 +528,8 @@ def edit_conflict(args: argparse.Namespace) -> tuple[str, str] | None:
             return ("--clear-date", "--start")
         if args.all_day:
             return ("--clear-date", "--all-day")
+    if args.clear_tags and args.tags:
+        return ("--clear-tags", "--tag")
     return None
 
 
@@ -558,25 +582,15 @@ def cmd_edit(client: Client, args: argparse.Namespace) -> int:
         body["start_date"] = None
         body["is_all_day"] = False
         body["time_zone"] = None
-    elif args.due is not None or args.start is not None:
-        # Parsing a date word needs the caller's day and zone; the zone
-        # travels with the task so the API judges the right local day.
-        try:
-            today, zone, zone_key = local_today()
-        except TzError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        try:
-            if args.due is not None:
-                body["due_date"] = parse_date(args.due, today, zone).isoformat()
-            if args.start is not None:
-                body["start_date"] = parse_date(args.start, today, zone).isoformat()
-        except BadDateError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        body["time_zone"] = zone_key
+    elif not apply_dates(args, body):
+        return 1
     if args.all_day is not None and not args.clear_date:
         body["is_all_day"] = args.all_day
+    if args.clear_tags:
+        # The patch endpoint treats the Tag set as a whole-set replacement,
+        # and replacing with nothing is a replacement — unreachable through
+        # `--tag`, which appends.
+        body["tag_ids"] = []
     try:
         current = resolve_ids(client, cookie, args, body)
         if current is None:

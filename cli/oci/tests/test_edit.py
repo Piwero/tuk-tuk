@@ -256,6 +256,31 @@ def test_edit_tags_replace_wholesale(logged_in: Path) -> None:
     assert body["tag_ids"] == [5, 6]
 
 
+def test_edit_clear_tags_sends_an_empty_set(logged_in: Path) -> None:
+    """Replacement has to include replacing with nothing. `--tag` appends, so
+    no number of `--tag` flags can ever express the empty set."""
+    transport, seen = edit_transport()
+
+    assert main(["edit", "7", "--clear-tags"], transport=transport) == 0
+
+    assert seen["body"] == {"tag_ids": []}
+    # Nothing to resolve, so the Tags collection is never read.
+    assert "tags_hit" not in seen
+
+
+def test_edit_clear_tags_with_tag_rejected_locally(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    transport, seen = edit_transport()
+
+    assert main(["edit", "7", "--clear-tags", "--tag", "home"], transport=transport) == 1
+
+    err = capsys.readouterr().err
+    assert "--clear-tags" in err
+    assert "--tag" in err
+    assert "body" not in seen
+
+
 def test_edit_help_says_tags_replace(logged_in: Path, capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["edit", "--help"])
