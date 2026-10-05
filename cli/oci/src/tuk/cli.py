@@ -120,6 +120,19 @@ def build_parser() -> argparse.ArgumentParser:
     undo = habits_sub.add_parser("undo")
     undo.add_argument("habit_id", type=int)
     undo.add_argument("--day", default=None)
+    check = sub.add_parser("check")
+    check.add_argument("--base-url", default=None)
+    check.add_argument("--json", dest="as_json", action="store_true")
+    check_sub = check.add_subparsers(dest="check_command", required=True)
+    check_add = check_sub.add_parser("add")
+    check_add.add_argument("task_id", type=int)
+    check_add.add_argument("title")
+    check_tick = check_sub.add_parser("tick")
+    check_tick.add_argument("task_id", type=int)
+    check_tick.add_argument("check_item_id", type=int)
+    check_untick = check_sub.add_parser("untick")
+    check_untick.add_argument("task_id", type=int)
+    check_untick.add_argument("check_item_id", type=int)
     return parser
 
 
@@ -574,6 +587,117 @@ def cmd_edit(client: Client, args: argparse.Namespace) -> int:
     return 0
 
 
+def format_check_items(task: dict[str, object]) -> str:
+    """The parent Task with its checklist, rendered from the mutation response
+    already returned — a second read would only re-fetch what the API sent."""
+    lines = [f"#{task.get('id')} {task.get('title')}"]
+    items = task.get("check_items")
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict):
+                mark = "x" if item.get("done") else " "
+                lines.append(f"[{mark}] {item.get('id')} {item.get('title')}")
+    return "\n".join(lines)
+
+
+def cmd_check_add(client: Client, task_id: int, title: str, as_json: bool) -> int:
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    try:
+        task, refreshed = client.create_check_item(task_id, cookie, title)
+    except ClientError as exc:
+        if exc.code == "not_found":
+            print(f"Task {task_id} not found.", file=sys.stderr)
+        else:
+            report_client_error(exc, "Could not add check item")
+        return 1
+    if as_json:
+        print(json.dumps(task))
+    else:
+        print(f"Added check item to task #{task_id}.")
+        print(format_check_items(task))
+    if refreshed:
+        write_session_cookie(refreshed)
+    return 0
+
+
+def _check_tick_line(
+    task_id: int, check_item_id: int, task: dict[str, object], ticking: bool
+) -> str:
+    """What ticking did to the parent. The API completes the Task when its
+    last open line closes — a recurring one advances instead (ADR 0003) — so
+    the command names the aggregate effect; without it the Task closing (or
+    its dates jumping) reads as the command misbehaving."""
+    # Completed because of this tick: every line is now closed. A tick on an
+    # already-completed Task (all lines long closed) reports a plain tick —
+    # the response alone cannot say what caused the completion, but an open
+    # line remaining rules this tick out.
+    if ticking and task.get("completed") and _all_items_done(task):
+        return f"Check item #{check_item_id} ticked — task #{task_id} completed."
+    if ticking and _advanced_instead(task, check_item_id):
+        due = task.get("due_date")
+        suffix = f", next occurrence {due}" if isinstance(due, str) else ""
+        return f"Check item #{check_item_id} ticked — task #{task_id} advanced{suffix}."
+    verb = "ticked" if ticking else "unticked"
+    return f"Check item #{check_item_id} {verb}."
+
+
+def _all_items_done(task: dict[str, object]) -> bool:
+    items = task.get("check_items")
+    return (
+        isinstance(items, list)
+        and bool(items)
+        and all(isinstance(item, dict) and item.get("done") for item in items)
+    )
+
+
+def _advanced_instead(task: dict[str, object], check_item_id: int) -> bool:
+    """Whether the tick advanced a recurring Task instead of closing it. The
+    advance resets the checklist (recurrence.py), so the just-ticked line
+    comes back undone on an open recurring Task — a plain tick leaves it
+    done. Read off the one response, no second read."""
+    if task.get("recurrence") is None or task.get("completed"):
+        return False
+    items = task.get("check_items")
+    if not isinstance(items, list):
+        return False
+    for item in items:
+        if isinstance(item, dict) and item.get("id") == check_item_id:
+            return not item.get("done")
+    return False
+
+
+def cmd_check_tick(
+    client: Client, task_id: int, check_item_id: int, ticking: bool, as_json: bool
+) -> int:
+    cookie = require_session()
+    if cookie is None:
+        return 1
+    try:
+        task, refreshed = client.patch_check_item(task_id, check_item_id, cookie, ticking)
+    except ClientError as exc:
+        # A line belonging to another Task answers the same 404 as an unknown
+        # Task — both are "no such line on this Task", reported with both ids.
+        if exc.code == "not_found":
+            print(
+                f"Check item {check_item_id} on task {task_id} not found.",
+                file=sys.stderr,
+            )
+        else:
+            action = "Could not tick check item" if ticking else "Could not untick check item"
+            report_client_error(exc, action)
+        return 1
+    if as_json:
+        print(json.dumps(task))
+    else:
+        print(_check_tick_line(task_id, check_item_id, task, ticking))
+        print(format_check_items(task))
+    if refreshed:
+        write_session_cookie(refreshed)
+    return 0
+
+
 def require_session() -> str | None:
     """The cached session cookie, or None after reporting the login
     instruction — the one guard every authenticated command repeats."""
@@ -911,6 +1035,12 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             if args.habits_command == "undo":
                 return cmd_habits_undo(client, args.habit_id, args.day)
             return cmd_habits_list(client, args.as_json)
+        if args.command == "check":
+            if args.check_command == "add":
+                return cmd_check_add(client, args.task_id, args.title, args.as_json)
+            if args.check_command == "tick":
+                return cmd_check_tick(client, args.task_id, args.check_item_id, True, args.as_json)
+            return cmd_check_tick(client, args.task_id, args.check_item_id, False, args.as_json)
         return cmd_ls(client, args)
     finally:
         client.close()
