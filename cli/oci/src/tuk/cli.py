@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from tuk.client import Client, ClientError
+from tuk.client import Body, Client, ClientError
 from tuk.dates import BadDateError, parse_date
 from tuk.names import UnknownNameError, resolve_name
 from tuk.store import read_session_cookie, resolve_base_url, write_config, write_session_cookie
@@ -113,17 +113,19 @@ def build_parser() -> argparse.ArgumentParser:
     habits.add_argument("--base-url", default=None)
     habits.add_argument("--json", dest="as_json", action="store_true")
     habits_sub = habits.add_subparsers(dest="habits_command")
-    check = habits_sub.add_parser("check")
-    check.add_argument("habit_id", type=int)
-    check.add_argument("--day", default=None)
-    check.add_argument("--value", type=float, default=1.0)
+    # A habit Check-in, not a Check Item: two glossary concepts share the
+    # word `check` on the command line, so they do not share an identifier.
+    habit_check = habits_sub.add_parser("check")
+    habit_check.add_argument("habit_id", type=int)
+    habit_check.add_argument("--day", default=None)
+    habit_check.add_argument("--value", type=float, default=1.0)
     undo = habits_sub.add_parser("undo")
     undo.add_argument("habit_id", type=int)
     undo.add_argument("--day", default=None)
-    check = sub.add_parser("check")
-    check.add_argument("--base-url", default=None)
-    check.add_argument("--json", dest="as_json", action="store_true")
-    check_sub = check.add_subparsers(dest="check_command", required=True)
+    check_item = sub.add_parser("check")
+    check_item.add_argument("--base-url", default=None)
+    check_item.add_argument("--json", dest="as_json", action="store_true")
+    check_sub = check_item.add_subparsers(dest="check_command", required=True)
     check_add = check_sub.add_parser("add")
     check_add.add_argument("task_id", type=int)
     check_add.add_argument("title")
@@ -275,10 +277,7 @@ def cmd_ls(client: Client, args: argparse.Namespace) -> int:
     if resolved is None:
         return 1
     today, zone, zone_key = resolved
-    conflict = ls_conflict(args)
-    if conflict is not None:
-        first, second = conflict
-        print(f"Cannot combine {first} with {second}.", file=sys.stderr)
+    if report_conflict(ls_conflict(args)):
         return 1
     # An explicit view (--week/--all) is judged against the local day; the
     # bare default is the Today view unless a computed listing (--completed,
@@ -337,7 +336,7 @@ def cmd_ls(client: Client, args: argparse.Namespace) -> int:
         report_client_error(exc, "Could not list tasks")
         return 1
     if args.as_json:
-        print(json.dumps(page))
+        print_raw(page)
     else:
         rows = page_items(page)
         print(format_ls(rows, zone, zone_key, more=remaining_count(page, len(rows))))
@@ -355,6 +354,41 @@ def report_client_error(exc: ClientError, action: str) -> None:
         print(SETUP_MESSAGE, file=sys.stderr)
     else:
         print(f"{action}: {exc.message}", file=sys.stderr)
+
+
+def report_task_error(exc: ClientError, task_id: int, action: str) -> None:
+    """A by-id failure. `not_found` names the id the owner typed — on a gated
+    route it means "no such Task", never "finish setup" — and everything else
+    falls through to the API's own message."""
+    if exc.code == "not_found":
+        print(f"Task {task_id} not found.", file=sys.stderr)
+    else:
+        report_client_error(exc, action)
+
+
+def report_conflict(conflict: tuple[str, str] | None) -> bool:
+    """Name a rejected flag pair, returning whether one was reported. A caller
+    that typed two incompatible flags is told which two, locally — never
+    handed a validation error from a round trip it did not need to make."""
+    if conflict is None:
+        return False
+    first, second = conflict
+    print(f"Cannot combine {first} with {second}.", file=sys.stderr)
+    return True
+
+
+def print_raw(body: Body) -> None:
+    """The API's response body, byte for byte. Not `json.dumps` of the parsed
+    object: that escapes non-ASCII, re-formats numbers and normalises
+    whitespace, which would make `--json` a second schema rather than a
+    transparent window onto the API.
+
+    Written to the byte layer, so nothing re-encodes on the way out. The text
+    layer is flushed first because the two buffer independently and a
+    human-readable line printed earlier must not land after this one."""
+    sys.stdout.flush()
+    sys.stdout.buffer.write(body.raw.rstrip(b"\n") + b"\n")
+    sys.stdout.buffer.flush()
 
 
 def cmd_add(client: Client, args: argparse.Namespace) -> int:
@@ -404,7 +438,7 @@ def cmd_add(client: Client, args: argparse.Namespace) -> int:
         report_client_error(exc, "Could not add task")
         return 1
     if args.as_json:
-        print(json.dumps(created))
+        print_raw(created)
     else:
         print(f"Added task #{created.get('id')}.")
     if refreshed:
@@ -491,10 +525,7 @@ def cmd_edit(client: Client, args: argparse.Namespace) -> int:
     cookie = require_session()
     if cookie is None:
         return 1
-    conflict = edit_conflict(args)
-    if conflict is not None:
-        first, second = conflict
-        print(f"Cannot combine {first} with {second}.", file=sys.stderr)
+    if report_conflict(edit_conflict(args)):
         return 1
     body: dict[str, object] = {}
     if args.title is not None:
@@ -554,21 +585,15 @@ def cmd_edit(client: Client, args: argparse.Namespace) -> int:
                 current = refreshed
                 write_session_cookie(current)
         except ClientError as exc:
-            if exc.code == "not_found":
-                print(f"Task {args.task_id} not found.", file=sys.stderr)
-            else:
-                report_client_error(exc, "Could not update task")
+            report_task_error(exc, args.task_id, "Could not update task")
             return 1
     try:
         updated, refreshed = client.patch_task(args.task_id, current, body)
     except ClientError as exc:
-        if exc.code == "not_found":
-            print(f"Task {args.task_id} not found.", file=sys.stderr)
-        else:
-            report_client_error(exc, "Could not update task")
+        report_task_error(exc, args.task_id, "Could not update task")
         return 1
     if args.as_json:
-        print(json.dumps(updated))
+        print_raw(updated)
     else:
         print(f"Updated task #{args.task_id}.")
         if before is not None:
@@ -607,13 +632,10 @@ def cmd_check_add(client: Client, task_id: int, title: str, as_json: bool) -> in
     try:
         task, refreshed = client.create_check_item(task_id, cookie, title)
     except ClientError as exc:
-        if exc.code == "not_found":
-            print(f"Task {task_id} not found.", file=sys.stderr)
-        else:
-            report_client_error(exc, "Could not add check item")
+        report_task_error(exc, task_id, "Could not add check item")
         return 1
     if as_json:
-        print(json.dumps(task))
+        print_raw(task)
     else:
         print(f"Added check item to task #{task_id}.")
         print(format_check_items(task))
@@ -653,10 +675,13 @@ def _all_items_done(task: dict[str, object]) -> bool:
 
 
 def _advanced_instead(task: dict[str, object], check_item_id: int) -> bool:
-    """Whether the tick advanced a recurring Task instead of closing it. The
-    advance resets the checklist (recurrence.py), so the just-ticked line
-    comes back undone on an open recurring Task — a plain tick leaves it
-    done. Read off the one response, no second read."""
+    """Whether the tick advanced a recurring Task instead of closing it.
+
+    Read as an observation of the response this command provoked, not of how
+    the API produced it: the request said `done: true`, and a recurring Task
+    that is still open with that same line reading `done: false` can only
+    have had its checklist reset underneath the tick. A plain tick leaves the
+    line done. One response, no second read."""
     if task.get("recurrence") is None or task.get("completed"):
         return False
     items = task.get("check_items")
@@ -689,7 +714,7 @@ def cmd_check_tick(
             report_client_error(exc, action)
         return 1
     if as_json:
-        print(json.dumps(task))
+        print_raw(task)
     else:
         print(_check_tick_line(task_id, check_item_id, task, ticking))
         print(format_check_items(task))
@@ -737,7 +762,7 @@ def cmd_habits_list(client: Client, as_json: bool) -> int:
         report_client_error(exc, "Could not list habits")
         return 1
     if as_json:
-        print(json.dumps(page))
+        print_raw(page)
     else:
         rows = page_items(page)
         print(format_habits(rows, more=remaining_count(page, len(rows))))
@@ -899,7 +924,7 @@ def cmd_show(client: Client, task_id: int, as_json: bool) -> int:
             print(f"Could not fetch task: {exc.message}", file=sys.stderr)
         return 1
     if as_json:
-        print(json.dumps(task))
+        print_raw(task)
     else:
         print(format_task(task))
     if refreshed:
@@ -921,10 +946,7 @@ def cmd_rm(client: Client, task_id: int, skip_confirm: bool) -> int:
         task, refreshed = client.show_task(task_id, cookie)
         current = refreshed or cookie
     except ClientError as exc:
-        if exc.code == "not_found":
-            print(f"Task {task_id} not found.", file=sys.stderr)
-        else:
-            report_client_error(exc, "Could not delete task")
+        report_task_error(exc, task_id, "Could not delete task")
         return 1
     title = str(task.get("title", ""))
     if not skip_confirm:
@@ -939,10 +961,7 @@ def cmd_rm(client: Client, task_id: int, skip_confirm: bool) -> int:
     try:
         refreshed = client.delete_task(task_id, current)
     except ClientError as exc:
-        if exc.code == "not_found":
-            print(f"Task {task_id} not found.", file=sys.stderr)
-        else:
-            report_client_error(exc, "Could not delete task")
+        report_task_error(exc, task_id, "Could not delete task")
         return 1
     print(f"Deleted task #{task_id} {title!r}.")
     if refreshed:
@@ -974,13 +993,10 @@ def cmd_complete(client: Client, task_id: int, complete: bool, as_json: bool) ->
     try:
         task, refreshed = client.patch_task(task_id, cookie, {"completed": complete})
     except ClientError as exc:
-        if exc.code == "not_found":
-            print(f"Task {task_id} not found.", file=sys.stderr)
-        else:
-            report_client_error(exc, action)
+        report_task_error(exc, task_id, action)
         return 1
     if as_json:
-        print(json.dumps(task))
+        print_raw(task)
     else:
         print(_completion_line(task_id, task, complete))
     if refreshed:
