@@ -416,16 +416,22 @@ def test_ls_empty_search_still_sends_the_query(logged_in: Path) -> None:
     assert tasks_hit(seen)
 
 
-def test_ls_view_with_completed_forwards_both(logged_in: Path) -> None:
-    """An explicit view with --completed is forwarded, not rejected: the API
-    does not 422 the pair, it lets the view override — inherited, not
-    reimplemented."""
+@pytest.mark.parametrize("view", ["--week", "--all"])
+def test_ls_rejects_view_with_completed(
+    logged_in: Path, capsys: pytest.CaptureFixture[str], view: str
+) -> None:
+    """A Smart List view overrides the completion filter server-side
+    (`if view is not None: completed = False`), so forwarding the pair would
+    answer with *open* tasks under a flag that asked for completed ones. A
+    wrong answer is worse than a refusal, so the pair is named locally."""
     transport, seen = filter_transport()
 
-    assert main(["ls", "--week", "--completed"], transport=transport) == 0
+    assert main(["ls", view, "--completed"], transport=transport) == 1
 
-    assert seen["param:view"] == "next7"
-    assert seen["param:completed"] == "true"
+    assert not tasks_hit(seen)
+    err = capsys.readouterr().err
+    assert view in err
+    assert "--completed" in err
 
 
 def test_ls_completed_combines_with_search(logged_in: Path) -> None:
