@@ -20,6 +20,10 @@ tuk show --json 12
 tuk ls
 tuk ls --week
 tuk ls --all
+tuk ls --list Groceries --tag home --priority high
+tuk ls --completed
+tuk ls --unscheduled
+tuk ls --search passport
 tuk ls --json --limit 10 --offset 20
 tuk agenda
 tuk agenda --json

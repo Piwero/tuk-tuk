@@ -47,6 +47,12 @@ def build_parser() -> argparse.ArgumentParser:
     span = ls.add_mutually_exclusive_group()
     span.add_argument("--week", action="store_true", help="Next seven days instead of today")
     span.add_argument("--all", action="store_true", help="Every open task instead of today")
+    ls.add_argument("--list", dest="list_name", default=None, help="Only tasks on this List")
+    ls.add_argument("--tag", dest="tag_name", default=None, help="Only tasks with this Tag")
+    ls.add_argument("--priority", default=None, help="Only tasks with this priority")
+    ls.add_argument("--completed", action="store_true", help="Completed tasks, newest first")
+    ls.add_argument("--unscheduled", action="store_true", help="Only tasks with no date")
+    ls.add_argument("--search", default=None, help="Match titles, descriptions and Check Items")
     ls.add_argument("--limit", type=int, default=50)
     ls.add_argument("--offset", type=int, default=0)
     add = sub.add_parser("add")
@@ -188,7 +194,25 @@ def format_due(task: dict[str, object], zone: ZoneInfo) -> str:
     return moment.astimezone(zone).isoformat()
 
 
-def cmd_ls(client: Client, view: str, as_json: bool, limit: int, offset: int) -> int:
+def ls_conflict(args: argparse.Namespace) -> tuple[str, str] | None:
+    """The first pair of mutually exclusive listing flags, or None. The API
+    refuses these combinations with 422, so the client names the two flags
+    rather than forwarding a request it already knows will be refused."""
+    # Only pairs the API refuses with 422. View additionally overrides a
+    # completed filter server-side, so an explicit view with --completed is
+    # forwarded, not rejected — the API's override semantics are inherited.
+    view_flag = "--week" if args.week else "--all" if args.all else None
+    if view_flag is not None:
+        if args.unscheduled:
+            return (view_flag, "--unscheduled")
+        if args.search is not None:
+            return (view_flag, "--search")
+    if args.unscheduled and args.search is not None:
+        return ("--unscheduled", "--search")
+    return None
+
+
+def cmd_ls(client: Client, args: argparse.Namespace) -> int:
     cookie = require_session()
     if cookie is None:
         return 1
@@ -200,15 +224,68 @@ def cmd_ls(client: Client, view: str, as_json: bool, limit: int, offset: int) ->
     if resolved is None:
         return 1
     today, zone, zone_key = resolved
+    conflict = ls_conflict(args)
+    if conflict is not None:
+        first, second = conflict
+        print(f"Cannot combine {first} with {second}.", file=sys.stderr)
+        return 1
+    # An explicit view (--week/--all) is judged against the local day; the
+    # bare default is the Today view unless a computed listing (--completed,
+    # --unscheduled, --search) replaces it — those are exclusive with views.
+    view: str | None = "today"
+    if args.week:
+        view = "next7"
+    elif args.all:
+        view = "all"
+    elif args.completed or args.unscheduled or args.search is not None:
+        view = None
     # Only the day-bounded views are judged against a local day; `all` is
     # every open task regardless of date, so it sends no `today`.
     today_param = today.isoformat() if view in ("today", "next7") else None
     try:
-        page, refreshed = client.list_tasks(cookie, view, today_param, limit, offset)
+        current = cookie
+        list_id: int | None = None
+        tag_id: int | None = None
+        if args.list_name is not None:
+            lists, refreshed = client.read_lists(current)
+            if refreshed:
+                current = refreshed
+                write_session_cookie(current)
+            try:
+                list_id = resolve_name(args.list_name, lists, "list")
+            except UnknownNameError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+        if args.tag_name is not None:
+            tags, refreshed = client.read_tags(current)
+            if refreshed:
+                current = refreshed
+                write_session_cookie(current)
+            try:
+                tag_id = resolve_name(args.tag_name, tags, "tag")
+            except UnknownNameError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+        page, refreshed = client.list_tasks(
+            current,
+            view,
+            today_param,
+            args.limit,
+            args.offset,
+            list_id=list_id,
+            tag_id=tag_id,
+            # Forwarded untouched: unknown values are the API's 422 to report.
+            priority=args.priority,
+            completed=True if args.completed else None,
+            scheduled=False if args.unscheduled else None,
+            # An empty query matches nothing — the API's behaviour, forwarded
+            # as-is and never worked around.
+            search=args.search,
+        )
     except ClientError as exc:
         report_client_error(exc, "Could not list tasks")
         return 1
-    if as_json:
+    if args.as_json:
         print(json.dumps(page))
     else:
         rows = page_items(page)
@@ -566,12 +643,7 @@ def main(argv: list[str] | None = None, transport: httpx.BaseTransport | None = 
             if args.habits_command == "undo":
                 return cmd_habits_undo(client, args.habit_id, args.day)
             return cmd_habits_list(client, args.as_json)
-        view = "today"
-        if args.week:
-            view = "next7"
-        elif args.all:
-            view = "all"
-        return cmd_ls(client, view, args.as_json, args.limit, args.offset)
+        return cmd_ls(client, args)
     finally:
         client.close()
 
