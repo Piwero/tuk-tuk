@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.12.0](https://github.com/Piwero/tuk-tuk/compare/v2.11.4...v2.12.0) - 2026-10-05
+
+### Features
+
+- **tasks:** Read single Task by id ([f01cbfd](https://github.com/Piwero/tuk-tuk/commit/f01cbfd4ffbb4f23d4761f40c46f17022e9d7b14))
+- **api:** Read every remaining resource by id ([21b42a8](https://github.com/Piwero/tuk-tuk/commit/21b42a8e57cbdb526abbffba32aef8b82483ca7e))
+- **cli:** Tracer bullet client package, tuk login, tuk show, CI ([b32cd46](https://github.com/Piwero/tuk-tuk/commit/b32cd460e2ce9ce696397a3048c2b164f9424041))
+- **cli:** Smart List listings and timezone resolution (tuk ls) ([e555891](https://github.com/Piwero/tuk-tuk/commit/e555891b4058dee16b147b552fa47fd745a8c534))
+- **cli:** Task capture, name resolution and date vocabulary (tuk add) ([051d0bf](https://github.com/Piwero/tuk-tuk/commit/051d0bfc380f338f6b4e0c56beef876c1f5f84ea))
+- **cli:** Agenda composition and habit check-ins (tuk agenda, tuk habits) ([955de13](https://github.com/Piwero/tuk-tuk/commit/955de13dd2861e804ceebd4ba1ab22a37709b839))
+
+### Bug Fixes
+
+- **cli:** Hold the client to its spec on JSON, sessions and test seams ([01ef7f4](https://github.com/Piwero/tuk-tuk/commit/01ef7f42d0db16484be7e6be77dbc53fa901b45b))
+- **cli:** Make the mypy test override a valid module pattern ([413f532](https://github.com/Piwero/tuk-tuk/commit/413f5327ceef63c68add121a1a7009b958fd3098))
+- **frontend:** Keep fakeGoal window in the future ([1c0a36a](https://github.com/Piwero/tuk-tuk/commit/1c0a36ab6e8c0423a4f304d7bc6bc5e678491499))
+
 ## [2.11.4](https://github.com/Piwero/tuk-tuk/compare/v2.11.3...v2.11.4) - 2026-09-29
 
 ### Features
