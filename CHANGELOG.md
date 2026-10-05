@@ -4,6 +4,25 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.13.0](https://github.com/Piwero/tuk-tuk/compare/v2.12.0...v2.13.0) - 2026-10-05
+
+### Features
+
+- **cli:** Listing filters and local exclusivity guards (tuk ls) ([b0442c9](https://github.com/Piwero/tuk-tuk/commit/b0442c917ea593368ecd2fb0ecbed0d1d307fdb2))
+- **cli:** Complete and re-open a Task (tuk done, tuk reopen) ([11d58bb](https://github.com/Piwero/tuk-tuk/commit/11d58bb4b91bf9c61e1135f87cf8e85256265c8e))
+- **cli:** Complete and re-open a Task (tuk done, tuk reopen) ([5eb383d](https://github.com/Piwero/tuk-tuk/commit/5eb383dd4f6f3ea8fd8ea8afc1d1af941c9bbafb))
+- **cli:** Edit a Task (tuk edit) ([19d00a8](https://github.com/Piwero/tuk-tuk/commit/19d00a8bbd24a5522dfa515e2cb3e93ca65c14b8))
+- **cli:** Delete a Task with confirmation (tuk rm) ([0c94c70](https://github.com/Piwero/tuk-tuk/commit/0c94c70a654c5dc9641f316b27542c72e669486c))
+- **cli:** Check items from the terminal (tuk check) ([dc6088b](https://github.com/Piwero/tuk-tuk/commit/dc6088bb96b71069bc57b44272206d61f3cc0866))
+- **cli:** Let edit clear a task's tags ([adc6ae4](https://github.com/Piwero/tuk-tuk/commit/adc6ae448adb3aa73f7b70de9edab844306518bf))
+
+### Bug Fixes
+
+- **cli:** Emit the API's response bytes verbatim for --json ([0215add](https://github.com/Piwero/tuk-tuk/commit/0215addee91375628dbd6cc73e565c0d0c798d4f))
+- **cli:** Reject ls view with --completed instead of answering wrongly ([c0260ad](https://github.com/Piwero/tuk-tuk/commit/c0260adb5a53fcbbffc4ca65a3478d2017b37b54))
+- **cli:** Only call done an advance when the task recurs, and localise its date ([39507bf](https://github.com/Piwero/tuk-tuk/commit/39507bf47ed4d24baade5a4b5fa2e12db21a8d76))
+- **cli:** Accept --json after a check subcommand, and localise the advance date ([c640b4f](https://github.com/Piwero/tuk-tuk/commit/c640b4f5256c024a0f6267e6a6d73559b4058570))
+
 ## [2.12.0](https://github.com/Piwero/tuk-tuk/compare/v2.11.4...v2.12.0) - 2026-10-05
 
 ### Features
