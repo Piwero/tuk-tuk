@@ -28,6 +28,11 @@ tuk ls --search passport
 tuk ls --json --limit 10 --offset 20
 tuk done 12
 tuk reopen 12
+tuk edit 12 --title "Water the plants" --priority high
+tuk edit 12 --due tomorrow
+tuk edit 12 --clear-date
+tuk edit 12 --list Groceries --tag home --tag Urgent
+tuk edit 12 --clear-tags
 tuk agenda
 tuk agenda --json
 tuk habits
@@ -45,6 +50,18 @@ occurrence and records a completed occurrence, so `done` says which
 occurrence it moved to rather than leaving you wondering why the Task is
 still there. A recurring Task whose recurrence has ended closes like any
 other.
+
+`edit` changes one Task: title, description, priority, dates, all-day
+(`--all-day` / `--no-all-day`), List, Tags. Two API behaviours it surfaces
+rather than hides — moving Lists **drops the Task's Section** (a Section
+belongs to one List), and `--clear-date` **sweeps reminders and recurrence**
+with it (there are no dateless reminders and no dateless repeats) — are
+reported when they happen, read off the before/after bodies rather than
+restated from the API's rules.
+
+Tags are replaced **wholesale**, matching what the endpoint does: `--tag`
+names the new set in full, and `--clear-tags` replaces it with none. There is
+no additive flag, because the endpoint has no additive semantics.
 
 A listing that conflicts with itself is refused locally, naming both flags,
 rather than sent: `--week`/`--all` combine with `--list`, `--tag` and
