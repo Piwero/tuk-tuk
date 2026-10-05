@@ -247,6 +247,16 @@ def format_due(task: dict[str, object], zone: ZoneInfo) -> str:
     return moment.astimezone(zone).isoformat()
 
 
+def occurrence_suffix(task: dict[str, object], zone: ZoneInfo, zone_key: str) -> str:
+    """The occurrence a recurring Task advanced to, or nothing when the
+    response carries no date. Rendered through the same zone conversion as a
+    listing and with the zone named: a raw UTC instant printed here would be
+    the one date in the client's output the owner has to convert themselves."""
+    if not isinstance(task.get("due_date"), str):
+        return ""
+    return f" to its next occurrence {format_due(task, zone)} ({zone_key})"
+
+
 def ls_conflict(args: argparse.Namespace) -> tuple[str, str] | None:
     """The first pair of mutually exclusive listing flags, or None.
 
@@ -976,15 +986,16 @@ def cmd_rm(client: Client, task_id: int, skip_confirm: bool) -> int:
     return 0
 
 
-def _completion_line(task_id: int, task: dict[str, object], complete: bool) -> str:
+def _completion_line(
+    task_id: int, task: dict[str, object], complete: bool, zone: ZoneInfo, zone_key: str
+) -> str:
     # A recurring Task that advanced came back still open with new dates
     # (ADR 0003) — name it, or the owner reasonably concludes `done` broke.
     # Keyed on intent first: a reopened Task is open by definition, so only
-    # `done` can advance one.
-    if complete and not task.get("completed"):
-        due = task.get("due_date")
-        suffix = f", next occurrence {due}" if isinstance(due, str) else ""
-        return f"Task #{task_id} advanced to its next occurrence{suffix}."
+    # `done` can advance one; and only a recurring Task can advance at all,
+    # so a response that came back open for any other reason is not one.
+    if complete and not task.get("completed") and task.get("recurrence") is not None:
+        return f"Task #{task_id} advanced{occurrence_suffix(task, zone, zone_key)}."
     if complete:
         return f"Task #{task_id} completed."
     return f"Task #{task_id} reopened."
@@ -994,6 +1005,13 @@ def cmd_complete(client: Client, task_id: int, complete: bool, as_json: bool) ->
     cookie = require_session()
     if cookie is None:
         return 1
+    # Resolved before the request, because the occurrence a recurring Task
+    # advances to is rendered in it — and a bad TUK_TIMEZONE must fail rather
+    # than print an hour the owner is not keeping.
+    resolved = require_today()
+    if resolved is None:
+        return 1
+    _, zone, zone_key = resolved
     action = "Could not complete task" if complete else "Could not reopen task"
     try:
         task, refreshed = client.patch_task(task_id, cookie, {"completed": complete})
@@ -1003,7 +1021,7 @@ def cmd_complete(client: Client, task_id: int, complete: bool, as_json: bool) ->
     if as_json:
         print_raw(task)
     else:
-        print(_completion_line(task_id, task, complete))
+        print(_completion_line(task_id, task, complete, zone, zone_key))
     if refreshed:
         write_session_cookie(refreshed)
     return 0

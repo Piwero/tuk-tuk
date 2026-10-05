@@ -26,6 +26,8 @@ tuk ls --completed
 tuk ls --unscheduled
 tuk ls --search passport
 tuk ls --json --limit 10 --offset 20
+tuk done 12
+tuk reopen 12
 tuk agenda
 tuk agenda --json
 tuk habits
@@ -36,6 +38,19 @@ tuk check add 12 "Buy milk"
 tuk check tick 12 4
 tuk check untick 12 4
 ```
+
+`done` completes a Task; `reopen` returns one to open. Completing a
+**recurring** Task does not close it — it advances in place to its next
+occurrence and records a completed occurrence, so `done` says which
+occurrence it moved to rather than leaving you wondering why the Task is
+still there. A recurring Task whose recurrence has ended closes like any
+other.
+
+A listing that conflicts with itself is refused locally, naming both flags,
+rather than sent: `--week`/`--all` combine with `--list`, `--tag` and
+`--priority`, but not with `--unscheduled`, `--search` or `--completed` (a
+Smart List view is open tasks only, so the API would silently override the
+completion filter and answer with the opposite of what you asked).
 
 `agenda` composes three existing reads in parallel — the Today Smart List,
 Habits due on the local day, and the day's Events — into one view, with no

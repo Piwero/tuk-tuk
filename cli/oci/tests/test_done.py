@@ -39,6 +39,7 @@ REOPENED_BODY = {**DONE_BODY, "completed": False, "completed_at": None}
 def logged_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     target = tmp_path / "config"
     monkeypatch.setenv("TUK_CONFIG_DIR", str(target))
+    monkeypatch.setenv("TUK_TIMEZONE", "Europe/London")
     target.mkdir(parents=True, exist_ok=True)
     (target / "tuk").mkdir(exist_ok=True)
     (target / "tuk" / "config.json").write_text(json.dumps({"base_url": "http://x"}))
@@ -88,6 +89,66 @@ def test_done_recurring_advance_reports_next_occurrence(
     out = capsys.readouterr().out
     assert "advanced" in out.lower()
     assert "2026-10-06" in out
+
+
+def test_done_advance_renders_the_date_in_the_local_zone(
+    logged_in: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A timed occurrence is shown in the resolved zone with that zone named —
+    a raw UTC instant would read as a time the owner is not keeping."""
+    monkeypatch.setenv("TUK_TIMEZONE", "Asia/Tokyo")
+    transport, _ = patch_transport(ADVANCED_BODY)
+
+    assert main(["done", "7"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "19:00" in out  # 10:00Z in Tokyo
+    assert "Asia/Tokyo" in out
+    assert "10:00:00Z" not in out
+
+
+def test_done_advance_of_an_all_day_task_stays_date_only(
+    logged_in: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """All-day values are date-only by API convention, so they are not pushed
+    through a zone — doing so would shift the day for a negative offset."""
+    monkeypatch.setenv("TUK_TIMEZONE", "America/New_York")
+    body = {**ADVANCED_BODY, "due_date": "2026-10-06T00:00:00Z", "is_all_day": True}
+    transport, _ = patch_transport(body)
+
+    assert main(["done", "7"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "2026-10-06" in out
+    assert "2026-10-05" not in out
+
+
+def test_done_open_task_without_recurrence_is_not_called_advanced(
+    logged_in: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only a recurring Task can advance. A response that comes back open for
+    any other reason is not an advance, and must not be announced as one."""
+    body = {**DONE_BODY, "completed": False, "completed_at": None}
+    transport, _ = patch_transport(body)
+
+    assert main(["done", "7"], transport=transport) == 0
+
+    out = capsys.readouterr().out
+    assert "advanced" not in out.lower()
+    assert "7" in out
+
+
+def test_done_invalid_timezone_fails_loudly(
+    logged_in: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("TUK_TIMEZONE", "Not/AZone")
+    transport, _ = patch_transport(ADVANCED_BODY)
+
+    assert main(["done", "7"], transport=transport) == 1
+
+    err = capsys.readouterr().err
+    assert "Not/AZone" in err
+    assert "TUK_TIMEZONE" in err
 
 
 def test_done_ended_recurrence_reports_closed(
