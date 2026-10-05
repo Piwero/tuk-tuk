@@ -14,6 +14,24 @@ class ClientError(Exception):
         self.message = message
 
 
+class Body(dict[str, object]):
+    """A JSON object from the API, remembering the bytes it arrived as.
+
+    `--json` must emit the API's response *unmodified*. Re-serialising a
+    parsed dict does not: it re-orders nothing but escapes non-ASCII,
+    normalises whitespace and re-formats numbers, which makes the raw mode a
+    second schema in all but name. So the bytes travel with the parsed body
+    rather than being reconstructed from it — a `Body` is the body, and also
+    knows exactly what the server sent.
+    """
+
+    raw: bytes
+
+    def __init__(self, data: dict[str, object], raw: bytes) -> None:
+        super().__init__(data)
+        self.raw = raw
+
+
 @dataclass
 class LoginRequest:
     """Thin client-side declaration of the login body — deliberately not
@@ -38,7 +56,7 @@ class Client:
             return cookie
         raise self._error(response, "Login failed")
 
-    def show_task(self, task_id: int, session_cookie: str) -> tuple[dict[str, object], str | None]:
+    def show_task(self, task_id: int, session_cookie: str) -> tuple[Body, str | None]:
         """Fetch one task. Returns the body plus a refreshed session cookie
         when the server reissued one, so an actively-used session stays alive.
         """
@@ -47,10 +65,7 @@ class Client:
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 200:
-            body = response.json()
-            if not isinstance(body, dict):
-                raise ClientError("bad_response", "Server returned a malformed task")
-            return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
+            return self._object(response, "task")
         raise self._error(response, "Could not fetch task")
 
     def list_tasks(
@@ -67,7 +82,7 @@ class Client:
         completed: bool | None = None,
         scheduled: bool | None = None,
         search: str | None = None,
-    ) -> tuple[dict[str, object], str | None]:
+    ) -> tuple[Body, str | None]:
         """One page of a task listing. A view computes a Smart List (open
         tasks only); without one the narrowing filters stand alone. Returns
         the API's page body plus a refreshed session cookie when reissued."""
@@ -94,10 +109,7 @@ class Client:
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 200:
-            body = response.json()
-            if not isinstance(body, dict):
-                raise ClientError("bad_response", "Server returned a malformed task list")
-            return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
+            return self._object(response, "task list")
         raise self._error(response, "Could not list tasks")
 
     def _fetch_all(
@@ -141,7 +153,7 @@ class Client:
 
     def list_habits(
         self, session_cookie: str, due: str, limit: int = 200, offset: int = 0
-    ) -> tuple[dict[str, object], str | None]:
+    ) -> tuple[Body, str | None]:
         """One page of the Habits due on the caller's local day. Returns the
         API's page body — not a walked-and-rebuilt list — so `--json` can pass
         it straight through rather than inventing an envelope around it."""
@@ -151,10 +163,7 @@ class Client:
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 200:
-            body = response.json()
-            if not isinstance(body, dict):
-                raise ClientError("bad_response", "Server returned a malformed habit list")
-            return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
+            return self._object(response, "habit list")
         raise self._error(response, "Could not list habits")
 
     def read_tags(self, session_cookie: str) -> tuple[list[dict[str, object]], str | None]:
@@ -163,7 +172,7 @@ class Client:
 
     def put_check_in(
         self, session_cookie: str, habit_id: int, day: str, value: float
-    ) -> tuple[dict[str, object], str | None]:
+    ) -> tuple[Body, str | None]:
         """Upsert the day's check-in: one row per (habit, date), so repeating
         it is harmless. Returns the check-in body plus a refreshed cookie."""
         response = self._http.put(
@@ -172,10 +181,7 @@ class Client:
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 200:
-            body = response.json()
-            if not isinstance(body, dict):
-                raise ClientError("bad_response", "Server returned a malformed check-in")
-            return dict(body), response.cookies.get(SESSION_COOKIE_NAME)
+            return self._object(response, "check-in")
         raise self._error(response, "Could not record check-in")
 
     def delete_check_in(self, session_cookie: str, habit_id: int, day: str) -> str | None:
@@ -208,9 +214,7 @@ class Client:
             return events, response.cookies.get(SESSION_COOKIE_NAME)
         raise self._error(response, "Could not read events")
 
-    def create_task(
-        self, session_cookie: str, body: dict[str, object]
-    ) -> tuple[dict[str, object], str | None]:
+    def create_task(self, session_cookie: str, body: dict[str, object]) -> tuple[Body, str | None]:
         """Create a Task. A missing list_id lands it in the Inbox — the API's
         doing, not the client's. Returns the created body plus a refreshed
         session cookie when the server reissued one."""
@@ -220,15 +224,12 @@ class Client:
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 201:
-            created = response.json()
-            if not isinstance(created, dict):
-                raise ClientError("bad_response", "Server returned a malformed task")
-            return dict(created), response.cookies.get(SESSION_COOKIE_NAME)
+            return self._object(response, "task")
         raise self._error(response, "Could not add task")
 
     def patch_task(
         self, task_id: int, session_cookie: str, body: dict[str, object]
-    ) -> tuple[dict[str, object], str | None]:
+    ) -> tuple[Body, str | None]:
         """Patch a Task through the ordinary update endpoint, inheriting its
         validation and invariants — the client never reimplements them.
         Returns the updated body plus a refreshed session cookie when reissued."""
@@ -238,10 +239,7 @@ class Client:
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 200:
-            updated = response.json()
-            if not isinstance(updated, dict):
-                raise ClientError("bad_response", "Server returned a malformed task")
-            return dict(updated), response.cookies.get(SESSION_COOKIE_NAME)
+            return self._object(response, "task")
         raise self._error(response, "Could not update task")
 
     def delete_task(self, task_id: int, session_cookie: str) -> str | None:
@@ -258,7 +256,7 @@ class Client:
 
     def create_check_item(
         self, task_id: int, session_cookie: str, title: str
-    ) -> tuple[dict[str, object], str | None]:
+    ) -> tuple[Body, str | None]:
         """Add a Check Item to a Task. The API returns the full parent Task —
         ordering and auto-completion included — so callers render from the one
         response. Returns the parent body plus a refreshed cookie when reissued."""
@@ -268,15 +266,12 @@ class Client:
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 201:
-            created = response.json()
-            if not isinstance(created, dict):
-                raise ClientError("bad_response", "Server returned a malformed task")
-            return dict(created), response.cookies.get(SESSION_COOKIE_NAME)
+            return self._object(response, "task")
         raise self._error(response, "Could not add check item")
 
     def patch_check_item(
         self, task_id: int, check_item_id: int, session_cookie: str, done: bool
-    ) -> tuple[dict[str, object], str | None]:
+    ) -> tuple[Body, str | None]:
         """Tick or un-tick a Check Item. Like creation, returns the full parent
         Task — ticking the last open line completes it (recurring ones advance
         instead, per ADR 0003), and that aggregate effect is in this response."""
@@ -286,11 +281,20 @@ class Client:
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 200:
-            updated = response.json()
-            if not isinstance(updated, dict):
-                raise ClientError("bad_response", "Server returned a malformed task")
-            return dict(updated), response.cookies.get(SESSION_COOKIE_NAME)
+            return self._object(response, "task")
         raise self._error(response, "Could not update check item")
+
+    def _object(self, response: httpx.Response, noun: str) -> tuple[Body, str | None]:
+        """A successful response's JSON object, its original bytes, and a
+        refreshed session cookie when the server reissued one. Every read and
+        every mutation lands here, so "what the API sent" has one definition."""
+        try:
+            body = response.json()
+        except ValueError:
+            raise ClientError("bad_response", f"Server returned a malformed {noun}") from None
+        if not isinstance(body, dict):
+            raise ClientError("bad_response", f"Server returned a malformed {noun}")
+        return Body(body, response.content), response.cookies.get(SESSION_COOKIE_NAME)
 
     def _error(self, response: httpx.Response, fallback: str) -> ClientError:
         try:
