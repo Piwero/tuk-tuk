@@ -39,8 +39,8 @@ spec:
       imagePullSecrets:
         - name: tuk-tuk-ghcr
       # Matches the Deployment. The backend image is amd64, and the
-      # local-path PV carries its own node affinity, so the Job lands on
-      # the node holding the SQLite file.
+      # <YOUR_STORAGE_CLASS> PV carries its own node affinity, so the Job
+      # lands on the node holding the SQLite file.
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:

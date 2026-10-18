@@ -33,7 +33,7 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
   and the app is single-writer; the old pod must release the volume before the
   new one starts. Don't scale this deployment — and note that moving to
   PostgreSQL does *not* lift that restriction (see "Moving to PostgreSQL").
-- **`local-path` storage class, not the cluster default (`synology-nfs`).**
+- **`<YOUR_STORAGE_CLASS>` storage class, not the cluster default (`<YOUR_DEFAULT_STORAGE_CLASS>`).**
   SQLite over NFS risks corruption (unreliable locking; WAL doesn't work over
   NFS), so the database lives on node-local disk. The pod is pinned to the
   volume's node, and deleting the PVC deletes the data — back up the SQLite
@@ -62,7 +62,7 @@ classic PAT with `read:packages`; `github-auth-repos` fine-grained PAT, which
 must also have `contents:write` on `Piwero/tuk-tuk` for image-bump pushes).
 
 `tuk-tuk-auth` is new and namespace-specific — create it manually in the
-`homelab-supernova` vault before applying this chart, with two fields:
+`<YOUR_1PASSWORD_VAULT_NAME>` vault before applying this chart, with two fields:
 
 | Field                | Value                                                                                                     |
 | -------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -136,7 +136,7 @@ upgrade (or starting fresh) never needs this Secret at all; use Settings
 instead.
 
 To carry an existing connection through the upgrade, create a `tuk-tuk-google`
-item in the `homelab-supernova` vault (same vault as `tuk-tuk-auth`) with two
+item in the `<YOUR_1PASSWORD_VAULT_NAME>` vault (same vault as `tuk-tuk-auth`) with two
 fields, **before** the first post-upgrade boot:
 
 | Field                  | Value                                                                                                                                                                                        |
@@ -188,7 +188,7 @@ for explicitly:
 - **`--force` deletes every row in the PostgreSQL target** before copying. It
   exists so a failed attempt can be retried, not to merge two datasets. It
   cannot touch SQLite.
-- **Deleting the PVC deletes the file.** `local-path`'s reclaim policy is
+- **Deleting the PVC deletes the file.** `<YOUR_STORAGE_CLASS>`'s reclaim policy is
   `Delete`, so the fallback only exists as long as the PVC does. Keep it
   until you're confident, and take a copy of the file if it matters.
 
@@ -205,7 +205,7 @@ Revert quickly if you're going to revert at all.
 
 ### One-time setup
 
-Create a `tuk-tuk-db` item in the `homelab-supernova` vault (same vault as
+Create a `tuk-tuk-db` item in the `<YOUR_1PASSWORD_VAULT_NAME>` vault (same vault as
 `tuk-tuk-auth`) with one field:
 
 | Field          | Value                                                     |
