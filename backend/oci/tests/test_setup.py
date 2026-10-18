@@ -95,6 +95,24 @@ class TestSetup:
 
         assert response.status_code == 422
 
+    def test_rejects_a_password_shorter_than_the_minimum(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with fresh_client(database_url, fake_clock) as client:
+            response = client.post("/api/v1/auth/setup", json={"password": "short"})
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_password"
+        assert "12" in response.json()["error"]["message"]
+
+    def test_accepts_a_password_of_exactly_the_minimum_length(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with fresh_client(database_url, fake_clock) as client:
+            response = client.post("/api/v1/auth/setup", json={"password": "123456789012"})
+
+        assert response.status_code == 204
+
 
 class TestUpgradeImport:
     def test_an_existing_auth_password_hash_is_imported_and_setup_is_skipped(

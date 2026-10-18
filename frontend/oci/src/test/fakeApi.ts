@@ -362,6 +362,11 @@ export interface FakeApiState {
 /** The password installFakeApi's fake login route accepts. */
 export const FAKE_PASSWORD = "correct-password";
 
+// Mirrors the backend's MIN_PASSWORD_LENGTH (auth router, issue #338), so
+// the fake behaves like the real backend for the frontend tests exercised
+// against it.
+const MIN_PASSWORD_LENGTH = 12;
+
 export const INBOX: FakeList = {
   id: 1,
   name: "Inbox",
@@ -1255,6 +1260,18 @@ export function installFakeApi({
       if (!state.needsSetup) {
         return notFound("Setup has already been completed");
       }
+      const input = body as { password: string };
+      if (input.password.length < MIN_PASSWORD_LENGTH) {
+        return json(
+          {
+            error: {
+              code: "invalid_password",
+              message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+            },
+          },
+          422,
+        );
+      }
       state.needsSetup = false;
       state.loggedIn = true;
       return new Response(null, { status: 204 });
@@ -1286,6 +1303,17 @@ export function installFakeApi({
         return json(
           { error: { code: "invalid_current_password", message: "Current password is incorrect" } },
           400,
+        );
+      }
+      if (input.new_password.length < MIN_PASSWORD_LENGTH) {
+        return json(
+          {
+            error: {
+              code: "invalid_password",
+              message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+            },
+          },
+          422,
         );
       }
       state.password = input.new_password;
