@@ -5,7 +5,7 @@ metadata:
   name: tuk-tuk-frontend-tailscale
   namespace: tuk-tuk
   annotations:
-    tailscale.com/tags: "tag:k8s-supernova,tag:services"
+    tailscale.com/tags: "tag:<YOUR_TAILNET_TAG>"
     tailscale.com/http-endpoint: "enabled"
     tailscale.com/funnel: "false"
 spec:
