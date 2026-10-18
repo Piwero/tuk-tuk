@@ -63,6 +63,26 @@ class TestLogin:
         )
         assert success.status_code == 204
 
+    def test_a_stored_password_shorter_than_the_minimum_still_logs_in(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        # Mirrors test_setup.py's TestUpgradeImport: an imported hash is
+        # never re-validated against the current minimum, so an existing
+        # deployment's short password keeps working until its next change
+        # (issue #338) — the minimum must never lock an owner out.
+        import argon2
+        from argon2.low_level import Type
+
+        short_hash = argon2.PasswordHasher(
+            time_cost=1, memory_cost=64, parallelism=1, type=Type.ID
+        ).hash("short")
+        settings = Settings(database_url=database_url, auth_password_hash=short_hash)
+
+        with TestClient(create_app(settings, clock=fake_clock)) as client:
+            response = client.post("/api/v1/auth/login", json={"password": "short"})
+
+        assert response.status_code == 204
+
 
 class TestSessionProbe:
     def test_returns_204_with_a_valid_session(self, client: TestClient) -> None:
@@ -371,6 +391,29 @@ class TestChangePassword:
 
         assert response.status_code == 422
         assert app_settings_row(client.app).password_hash == old_hash  # type: ignore[arg-type]
+
+    def test_a_new_password_shorter_than_the_minimum_is_rejected(self, client: TestClient) -> None:
+        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
+
+        response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": "short"},
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_password"
+        assert "12" in response.json()["error"]["message"]
+        assert app_settings_row(client.app).password_hash == old_hash  # type: ignore[arg-type]
+
+    def test_a_new_password_of_exactly_the_minimum_length_is_accepted(
+        self, client: TestClient
+    ) -> None:
+        response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": "123456789012"},
+        )
+
+        assert response.status_code == 204
 
     def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
         response = unauthenticated_client.post(

@@ -223,6 +223,9 @@ function GoogleAccountCalendars({
  * Saving rotates the session signing key server-side, invalidating every
  * other device's cookie while this device gets a fresh one in the response
  * — nothing to do here on success beyond clearing the form and confirming. */
+// Mirrors the backend's MIN_PASSWORD_LENGTH (auth router, issue #338).
+const MIN_PASSWORD_LENGTH = 12;
+
 function ChangePasswordForm(): JSX.Element {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -242,6 +245,10 @@ function ChangePasswordForm(): JSX.Element {
     // with /login), and it isn't something the backend needs to know.
     if (newPassword !== confirmPassword) {
       setError("New password and confirmation don't match.");
+      return;
+    }
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
     setPending(true);
@@ -276,6 +283,7 @@ function ChangePasswordForm(): JSX.Element {
       </div>
       <div className="settings-field">
         <label htmlFor="settings-new-password">New password</label>
+        <p className="settings-hint">Must be at least {MIN_PASSWORD_LENGTH} characters.</p>
         <input
           id="settings-new-password"
           name="new-password"

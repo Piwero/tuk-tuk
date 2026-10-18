@@ -16,6 +16,13 @@ from app.session import delete_session_cookie, set_session_cookie
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
+# Lives here, next to the handlers that enforce it (issue #338), not in
+# Settings: making this operator-configurable would let a deployment set it
+# to 1, which is the state this constant exists to remove. Enforced only at
+# the two write points below — never at login, so a password set before
+# this minimum existed keeps logging in until its owner changes it.
+MIN_PASSWORD_LENGTH = 12
+
 
 class LoginRequest(BaseModel):
     password: str
@@ -48,8 +55,10 @@ async def setup(
     app_settings = await require_app_settings(session)
     if app_settings.password_hash is not None:
         raise APIError(404, "not_found", "Setup has already been completed")
-    if not payload.password:
-        raise APIError(422, "invalid_password", "Password must not be empty")
+    if len(payload.password) < MIN_PASSWORD_LENGTH:
+        raise APIError(
+            422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
 
     app_settings.password_hash = password_hasher.hash(payload.password)
     await session.commit()
@@ -114,8 +123,10 @@ async def change_password(
     # leave a prior bad-guess streak counted against a later, valid attempt.
     throttle.record_success()
 
-    if not payload.new_password:
-        raise APIError(422, "invalid_password", "Password must not be empty")
+    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
+        raise APIError(
+            422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
 
     app_settings.password_hash = password_hasher.hash(payload.new_password)
     app_settings.session_key = secrets.token_urlsafe(32)
