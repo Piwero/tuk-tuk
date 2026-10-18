@@ -287,6 +287,10 @@ export interface FakeApiState {
    * submitted password, exercising the frontend's lockout handling without
    * driving the real threshold through repeated failures. */
   loginLocked: boolean;
+  /** Mirrors the backend's persisted lockout shared with /login (issue
+   * #340): when true, the fake /password route answers 429
+   * too_many_attempts regardless of the submitted passwords. */
+  passwordChangeLocked: boolean;
   /** The stored client ID, echoed back by /status — not sensitive, unlike
    * the secret, which is never returned (only whether one is set). */
   googleClientId: string | null;
@@ -689,6 +693,7 @@ export function installFakeApi({
   loggedIn = true,
   needsSetup = false,
   loginLocked = false,
+  passwordChangeLocked = false,
   googleConfigured = false,
   googleClientId = null,
   googleClientSecretSet = false,
@@ -742,6 +747,10 @@ export function installFakeApi({
    * (issue #339) — the fake login route then answers 429 regardless of
    * the submitted password. */
   loginLocked?: boolean;
+  /** Mutate directly (or seed true) to simulate a persisted lockout
+   * (issue #340) shared with /login — the fake change-password route then
+   * answers 429 regardless of the submitted passwords. */
+  passwordChangeLocked?: boolean;
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
   googleClientId?: string | null;
@@ -830,6 +839,7 @@ export function installFakeApi({
     password: FAKE_PASSWORD,
     needsSetup,
     loginLocked,
+    passwordChangeLocked,
     googleConfigured,
     googleClientId,
     googleClientSecretSet,
@@ -1317,6 +1327,14 @@ export function installFakeApi({
       return new Response(null, { status: 204 });
     }
     if (method === "POST" && url.pathname === "/api/v1/auth/password") {
+      if (state.passwordChangeLocked) {
+        return new Response(
+          JSON.stringify({
+            error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
+        );
+      }
       const input = body as { current_password: string; new_password: string };
       if (input.current_password !== state.password) {
         return json(

@@ -680,6 +680,20 @@ describe("Change password (issue #116)", () => {
       (err: unknown) => err instanceof ApiError && err.code === "invalid_password",
     );
   });
+
+  it("shows the lockout message when changing the password is locked", async () => {
+    installFakeApi({ passwordChangeLocked: true });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
+    await user.type(screen.getByLabelText("New password"), "a-new-password");
+    await user.type(screen.getByLabelText("Confirm new password"), "a-new-password");
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts");
+  });
 });
 
 describe("Per-account failure handling (issue #109)", () => {
