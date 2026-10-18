@@ -1,18 +1,21 @@
 """First-run setup, login, session-probe, and change-password endpoints
-(ADR 0005, issue #83; ADR 0008, issues #115 and #116)."""
+(ADR 0005, issue #83; ADR 0008, issues #115 and #116; lockout, issue #339)."""
 
-import asyncio
 import secrets
+from datetime import UTC, datetime
 
 from argon2.exceptions import VerifyMismatchError
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.app_settings import get_app_settings, require_app_settings
 from app.auth import password_hasher
 from app.db import SessionDep
 from app.errors import APIError
-from app.session import delete_session_cookie, set_session_cookie
+from app.login_throttle import LoginThrottle
+from app.models import AppSettings
+from app.session import Clock, delete_session_cookie, set_session_cookie
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -22,6 +25,54 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 # the two write points below — never at login, so a password set before
 # this minimum existed keeps logging in until its owner changes it.
 MIN_PASSWORD_LENGTH = 12
+
+# Consecutive wrong-password attempts (login or change-password's
+# current-password check, same counter) before login locks — not
+# operator-configurable, same reasoning as the password minimum above.
+LOCKOUT_THRESHOLD = 5
+
+
+def _locked_retry_after(app_settings: AppSettings, now: datetime) -> int | None:
+    """Seconds until `app_settings.login_locked_until`, or None if not
+    currently locked (null, or in the past). SQLite round-trips a
+    timezone-aware DateTime as naive, so it's normalized back to UTC
+    before comparing against `now` (also UTC, from app.session.Clock)."""
+    locked_until = app_settings.login_locked_until
+    if locked_until is None:
+        return None
+    if locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=UTC)
+    if locked_until <= now:
+        return None
+    return max(1, int((locked_until - now).total_seconds()))
+
+
+def _too_many_attempts(retry_after: int) -> APIError:
+    return APIError(
+        429,
+        "too_many_attempts",
+        "Too many attempts. Try again later.",
+        retry_after=retry_after,
+    )
+
+
+async def _record_failure(
+    session: AsyncSession, app_settings: AppSettings, clock: Clock, base_seconds: float
+) -> None:
+    app_settings.login_failed_attempts += 1
+    if app_settings.login_failed_attempts >= LOCKOUT_THRESHOLD:
+        app_settings.login_locked_until = LoginThrottle.lock_until(
+            failure_count=app_settings.login_failed_attempts,
+            now=clock(),
+            base_seconds=base_seconds,
+        )
+    await session.commit()
+
+
+async def _record_success(session: AsyncSession, app_settings: AppSettings) -> None:
+    app_settings.login_failed_attempts = 0
+    app_settings.login_locked_until = None
+    await session.commit()
 
 
 class LoginRequest(BaseModel):
@@ -72,22 +123,30 @@ async def setup(
 async def login(
     payload: LoginRequest, request: Request, response: Response, session: SessionDep
 ) -> None:
+    """Rejects immediately while locked (issue #339) — no password
+    verification and no sleep, so a locked caller never holds a
+    connection open. On mismatch, escalates the persisted lock; on
+    success, clears it.
+    """
     settings = request.app.state.settings
-    throttle = request.app.state.login_throttle
+    clock = request.app.state.clock
 
     app_settings = await get_app_settings(session)
     if app_settings is None or app_settings.password_hash is None:
         raise APIError(404, "not_found", "Setup has not been completed")
 
+    retry_after = _locked_retry_after(app_settings, clock())
+    if retry_after is not None:
+        raise _too_many_attempts(retry_after)
+
     try:
         password_hasher.verify(app_settings.password_hash, payload.password)
     except VerifyMismatchError:
-        delay = throttle.record_failure(base=settings.auth_login_delay_seconds)
-        await asyncio.sleep(delay)
+        await _record_failure(session, app_settings, clock, settings.auth_login_delay_seconds)
         raise APIError(401, "invalid_credentials", "Incorrect password") from None
 
-    throttle.record_success()
-    set_session_cookie(response, app_settings.session_key, settings, request.app.state.clock)
+    await _record_success(session, app_settings)
+    set_session_cookie(response, app_settings.session_key, settings, clock)
 
 
 @router.post("/password", status_code=204)
@@ -103,25 +162,31 @@ async def change_password(
 
     Reached only with a valid session (SessionAuthMiddleware; this path is
     not in PUBLIC_PATHS), so the current password itself is what's being
-    checked here, not whether the caller is logged in.
+    checked here, not whether the caller is logged in. Feeds the same
+    persisted lockout as /login (issue #339's user story 19): a stolen
+    session must not let an attacker brute-force the password through
+    this endpoint instead.
     """
     settings = request.app.state.settings
-    throttle = request.app.state.login_throttle
+    clock = request.app.state.clock
 
     app_settings = await require_app_settings(session)
     assert app_settings.password_hash is not None  # a session exists only once one is set
 
+    retry_after = _locked_retry_after(app_settings, clock())
+    if retry_after is not None:
+        raise _too_many_attempts(retry_after)
+
     try:
         password_hasher.verify(app_settings.password_hash, payload.current_password)
     except VerifyMismatchError:
-        delay = throttle.record_failure(base=settings.auth_login_delay_seconds)
-        await asyncio.sleep(delay)
+        await _record_failure(session, app_settings, clock, settings.auth_login_delay_seconds)
         raise APIError(400, "invalid_current_password", "Current password is incorrect") from None
 
-    # The current password was correct, so this resets the throttle
+    # The current password was correct, so this resets the lockout
     # regardless of what happens next — an empty new password shouldn't
     # leave a prior bad-guess streak counted against a later, valid attempt.
-    throttle.record_success()
+    await _record_success(session, app_settings)
 
     if len(payload.new_password) < MIN_PASSWORD_LENGTH:
         raise APIError(

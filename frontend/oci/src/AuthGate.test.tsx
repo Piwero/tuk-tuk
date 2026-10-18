@@ -102,6 +102,18 @@ describe("AuthGate", () => {
     expect(await screen.findByLabelText("Password")).toBeInTheDocument();
   });
 
+  it("shows the lockout message and keeps the password screen when login is locked", async () => {
+    installFakeApi({ loggedIn: false, loginLocked: true });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    const passwordField = await screen.findByLabelText("Password");
+    await user.type(passwordField, `${FAKE_PASSWORD}{Enter}`);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts");
+    expect(await screen.findByLabelText("Password")).toBeInTheDocument();
+  });
+
   it("renders the app directly when a session already exists", async () => {
     installFakeApi({ loggedIn: true, tasks: [fakeTask("Buy milk")] });
 

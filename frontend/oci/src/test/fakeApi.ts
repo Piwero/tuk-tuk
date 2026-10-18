@@ -282,6 +282,11 @@ export interface FakeApiState {
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
+  /** Mirrors the backend's persisted lockout (issue #339): when true, the
+   * fake /login route answers 429 too_many_attempts regardless of the
+   * submitted password, exercising the frontend's lockout handling without
+   * driving the real threshold through repeated failures. */
+  loginLocked: boolean;
   /** The stored client ID, echoed back by /status — not sensitive, unlike
    * the secret, which is never returned (only whether one is set). */
   googleClientId: string | null;
@@ -683,6 +688,7 @@ export function installFakeApi({
   timers = [],
   loggedIn = true,
   needsSetup = false,
+  loginLocked = false,
   googleConfigured = false,
   googleClientId = null,
   googleClientSecretSet = false,
@@ -732,6 +738,10 @@ export function installFakeApi({
   loggedIn?: boolean;
   /** Start on a fresh deployment with no password set (ADR 0008). */
   needsSetup?: boolean;
+  /** Mutate directly (or seed true) to simulate a persisted lockout
+   * (issue #339) — the fake login route then answers 429 regardless of
+   * the submitted password. */
+  loginLocked?: boolean;
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
   googleClientId?: string | null;
@@ -819,6 +829,7 @@ export function installFakeApi({
     loggedIn,
     password: FAKE_PASSWORD,
     needsSetup,
+    loginLocked,
     googleConfigured,
     googleClientId,
     googleClientSecretSet,
@@ -1279,6 +1290,14 @@ export function installFakeApi({
     if (method === "POST" && url.pathname === "/api/v1/auth/login") {
       if (state.needsSetup) {
         return setupRequired();
+      }
+      if (state.loginLocked) {
+        return new Response(
+          JSON.stringify({
+            error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
+        );
       }
       const input = body as { password: string };
       if (input.password !== state.password) {
