@@ -1,5 +1,5 @@
 /** Habit frequency: the RRULE subset Habits are scheduled by — daily, chosen
- * weekdays, or N times per week (TickTick's TT_TIMES extension). Frequencies
+ * weekdays, or N times per week (a TT_TIMES extension parameter). Frequencies
  * answer "is this Habit due today?", never a date series, so this mirrors the
  * backend's app.habit_frequency module rather than the Task recurrence editor.
  */

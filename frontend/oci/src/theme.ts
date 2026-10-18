@@ -1,6 +1,6 @@
 /** Shared visual defaults. */
 
-/** Default accent for new Lists and Tags (TickTick blue). */
+/** Default accent for new Lists and Tags. */
 export const DEFAULT_ACCENT = "#4772fa";
 
 export interface Swatch {

@@ -293,7 +293,7 @@ class Habit(Base):
     color: Mapped[str | None] = mapped_column(String(32), default=None)
     encouragement: Mapped[str] = mapped_column(String(255), default="")
     # RRULE frequency content: daily, chosen weekdays, or N times per week
-    # (TickTick's TT_TIMES extension). See app.habit_frequency.
+    # (a TT_TIMES extension parameter). See app.habit_frequency.
     frequency: Mapped[str] = mapped_column(String(255), default="FREQ=DAILY")
     # Archived Habits leave the today screen but keep their whole Check-in
     # history; unarchiving restores them.

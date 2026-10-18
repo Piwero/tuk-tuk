@@ -3,7 +3,7 @@
 A Habit's frequency is RRULE content, but never a date series: it answers
 "is this Habit due on this day?", so it needs weekday logic only. Three
 shapes (per the PRD): daily, chosen weekdays, and N times per week —
-the last stored with TickTick's TT_TIMES extension parameter, which is why
+the last stored with a TT_TIMES extension parameter, which is why
 this module parses by hand instead of using dateutil (rrulestr rejects
 extension parts, and habits have no anchor date to expand a series from).
 """

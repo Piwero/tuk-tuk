@@ -1,5 +1,5 @@
 /** Recurrence rules: the RRULE subset the editor speaks — FREQ, INTERVAL,
- * BYDAY, COUNT, UNTIL — mirrored after TickTick's repeat options. The rule is
+ * BYDAY, COUNT, UNTIL. The rule is
  * stored as RRULE content anchored at the task's due date; completing the
  * task advances its dates to the next occurrence (ADR 0003).
  */
