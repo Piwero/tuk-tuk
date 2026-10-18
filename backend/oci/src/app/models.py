@@ -88,6 +88,19 @@ class AppSettings(Base):
     active_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     active_hours_start: Mapped[str] = mapped_column(String(5), default="09:00")
     active_hours_end: Mapped[str] = mapped_column(String(5), default="17:00")
+    # Login lockout (ADR 0005, issue #333/#339): persisted so the lockout
+    # survives a pod restart — Flux image automation restarts the pod on
+    # every release, and an in-memory counter would hand an attacker a free
+    # reset each time. Persisting here makes the lockout correct across
+    # restarts, NOT across replicas: two pods would still race on
+    # read-then-write with no advisory lock. `replicas: 1` stays
+    # load-bearing for this reason, same as it already was for the
+    # in-memory version — these columns are one more reason not to raise it.
+    # `login_locked_until` null means not locked; see app.login_throttle.
+    login_failed_attempts: Mapped[int] = mapped_column(default=0)
+    login_locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
