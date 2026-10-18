@@ -5,7 +5,7 @@ metadata:
   name: tuk-tuk-backend-tailscale
   namespace: tuk-tuk
   annotations:
-    tailscale.com/tags: "tag:<YOUR_TAILNET_TAG>"
+    tailscale.com/tags: "${TUK_TUK_TAILNET_TAGS}"
     tailscale.com/http-endpoint: "enabled"
     tailscale.com/funnel: "false"
 spec:

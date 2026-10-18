@@ -11,7 +11,7 @@ spec:
   # deployment. <YOUR_STORAGE_CLASS>'s reclaim policy is Delete — the data
   # survives pod restarts and image bumps, but deleting the PVC (or the
   # namespace) deletes the database.
-  storageClassName: <YOUR_STORAGE_CLASS>
+  storageClassName: ${TUK_TUK_STORAGE_CLASS}
   # Single writer by design: one replica, Recreate strategy (see deployment).
   accessModes:
     - ReadWriteOnce

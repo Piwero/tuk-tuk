@@ -22,6 +22,30 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
 | `service.yaml`                              | Service                       | ClusterIP on port 8900, referenced by the frontend nginx proxy                        |
 | `tailscale-ingress.yaml`                    | Ingress                       | Exposes the API on the tailnet as `tuk-tuk-backend`                                   |
 
+## Variables
+
+The manifests reference these as `${VAR}` placeholders rather than literal
+values, so this chart stays safe to publish. They aren't substituted by
+`kustomize build` — a plain `kubectl apply -k` leaves the literal `${VAR}`
+strings in place. Flux fills them in at apply time via
+[`postBuild.substituteFrom`](https://fluxcd.io/flux/components/kustomize/kustomizations/#post-build-variable-substitution)
+on the `Kustomization` resource that points at this path, reading a
+ConfigMap (and/or Secret) supplied by your own cluster-config repo — see that
+repo's `tuk-tuk` app for where these are actually set.
+
+| Variable                           | Used for                                                  |
+| ----------------------------------- | ---------------------------------------------------------- |
+| `TUK_TUK_HOSTNAME`                 | The public hostname, in the IngressRoutes and CORS origins |
+| `TUK_TUK_TAILNET_TAGS`              | The Tailscale ingress's `tailscale.com/tags` annotation, full value including the `tag:` prefix(es), e.g. `"tag:foo,tag:bar"` |
+| `TUK_TUK_STORAGE_CLASS`             | The PVC's `storageClassName`                                |
+| `TUK_TUK_1PASSWORD_VAULT_ID`        | The 1Password vault id behind every `OnePasswordItem` here  |
+| `TUK_TUK_1PASSWORD_GHCR_ITEM_ID`    | The item id holding the shared GHCR pull token              |
+
+If you're not using Flux, replace each `${VAR}` with your own value by hand
+before applying (or layer a `kustomize` patch/overlay that does), then follow
+the rest of this README with your own values in mind wherever it says
+"your vault" or "your storage class".
+
 ## Notes
 
 - **No init containers.** The app runs Alembic migrations itself at startup.
@@ -33,7 +57,7 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
   and the app is single-writer; the old pod must release the volume before the
   new one starts. Don't scale this deployment — and note that moving to
   PostgreSQL does *not* lift that restriction (see "Moving to PostgreSQL").
-- **`<YOUR_STORAGE_CLASS>` storage class, not the cluster default (`<YOUR_DEFAULT_STORAGE_CLASS>`).**
+- **`${TUK_TUK_STORAGE_CLASS}` storage class, not the cluster default.**
   SQLite over NFS risks corruption (unreliable locking; WAL doesn't work over
   NFS), so the database lives on node-local disk. The pod is pinned to the
   volume's node, and deleting the PVC deletes the data — back up the SQLite
@@ -62,7 +86,8 @@ classic PAT with `read:packages`; `github-auth-repos` fine-grained PAT, which
 must also have `contents:write` on `Piwero/tuk-tuk` for image-bump pushes).
 
 `tuk-tuk-auth` is new and namespace-specific — create it manually in the
-`<YOUR_1PASSWORD_VAULT_NAME>` vault before applying this chart, with two fields:
+vault you point `TUK_TUK_1PASSWORD_VAULT_ID` at before applying this chart,
+with two fields:
 
 | Field                | Value                                                                                                     |
 | -------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -136,8 +161,8 @@ upgrade (or starting fresh) never needs this Secret at all; use Settings
 instead.
 
 To carry an existing connection through the upgrade, create a `tuk-tuk-google`
-item in the `<YOUR_1PASSWORD_VAULT_NAME>` vault (same vault as `tuk-tuk-auth`) with two
-fields, **before** the first post-upgrade boot:
+item in the same vault as `tuk-tuk-auth` with two fields, **before** the
+first post-upgrade boot:
 
 | Field                  | Value                                                                                                                                                                                        |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -188,7 +213,7 @@ for explicitly:
 - **`--force` deletes every row in the PostgreSQL target** before copying. It
   exists so a failed attempt can be retried, not to merge two datasets. It
   cannot touch SQLite.
-- **Deleting the PVC deletes the file.** `<YOUR_STORAGE_CLASS>`'s reclaim policy is
+- **Deleting the PVC deletes the file.** `${TUK_TUK_STORAGE_CLASS}`'s reclaim policy is
   `Delete`, so the fallback only exists as long as the PVC does. Keep it
   until you're confident, and take a copy of the file if it matters.
 
@@ -205,8 +230,7 @@ Revert quickly if you're going to revert at all.
 
 ### One-time setup
 
-Create a `tuk-tuk-db` item in the `<YOUR_1PASSWORD_VAULT_NAME>` vault (same vault as
-`tuk-tuk-auth`) with one field:
+Create a `tuk-tuk-db` item in the same vault as `tuk-tuk-auth` with one field:
 
 | Field          | Value                                                     |
 | -------------- | --------------------------------------------------------- |

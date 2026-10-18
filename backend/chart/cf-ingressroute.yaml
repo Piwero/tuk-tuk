@@ -9,7 +9,7 @@ spec:
     - websecure
   routes:
     - kind: Rule
-      match: Host(`<YOUR_HOSTNAME>`)
+      match: Host(`${TUK_TUK_HOSTNAME}`)
       services:
         - name: frontend
           kind: Service
