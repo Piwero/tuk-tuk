@@ -4,13 +4,14 @@ metadata:
   name: backend-data
   namespace: tuk-tuk
 spec:
-  # local-path (node-local disk), NOT the cluster default synology-nfs:
-  # SQLite over NFS risks corruption (unreliable NFS locking, and WAL mode
-  # doesn't work across NFS). Node-local pins the pod to the volume's node,
-  # which is fine for a single-replica Recreate deployment. local-path's
-  # reclaim policy is Delete — the data survives pod restarts and image
-  # bumps, but deleting the PVC (or the namespace) deletes the database.
-  storageClassName: local-path
+  # <YOUR_STORAGE_CLASS> (node-local disk), NOT the cluster default
+  # <YOUR_DEFAULT_STORAGE_CLASS>: SQLite over NFS risks corruption (unreliable
+  # NFS locking, and WAL mode doesn't work across NFS). Node-local pins the
+  # pod to the volume's node, which is fine for a single-replica Recreate
+  # deployment. <YOUR_STORAGE_CLASS>'s reclaim policy is Delete — the data
+  # survives pod restarts and image bumps, but deleting the PVC (or the
+  # namespace) deletes the database.
+  storageClassName: <YOUR_STORAGE_CLASS>
   # Single writer by design: one replica, Recreate strategy (see deployment).
   accessModes:
     - ReadWriteOnce

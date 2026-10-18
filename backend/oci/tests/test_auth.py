@@ -181,6 +181,12 @@ class TestLogout:
 
         assert response.status_code == 401
 
+    def test_the_deletion_samesite_matches_the_set_samesite(self, client: TestClient) -> None:
+        response = client.post("/api/v1/auth/logout")
+
+        set_cookie = response.headers["set-cookie"].lower()
+        assert "samesite=lax" in set_cookie
+
 
 class TestRollingReissue:
     def test_a_session_older_than_the_threshold_is_reissued_with_a_fresh_cookie(

@@ -68,6 +68,21 @@ def set_session_cookie(
     )
 
 
+def delete_session_cookie(response: Response, settings: Settings) -> None:
+    """Clear the session cookie with the exact attributes it was set with
+    (see `set_session_cookie`): a browser matches a deletion on name, path,
+    and domain alone, so a mismatched `samesite` here would work by
+    accident while reading as if it mattered.
+    """
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite="lax",
+    )
+
+
 def verify_session_token(
     token: str | None, session_key: str, settings: Settings, clock: Clock
 ) -> datetime | None:
