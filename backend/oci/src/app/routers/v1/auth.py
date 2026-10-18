@@ -12,7 +12,7 @@ from app.app_settings import get_app_settings, require_app_settings
 from app.auth import password_hasher
 from app.db import SessionDep
 from app.errors import APIError
-from app.session import SESSION_COOKIE_NAME, set_session_cookie
+from app.session import delete_session_cookie, set_session_cookie
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -140,10 +140,4 @@ async def logout(request: Request, response: Response) -> None:
     (SessionAuthMiddleware), and deleting it is the whole of "logging out".
     """
     settings = request.app.state.settings
-    response.delete_cookie(
-        SESSION_COOKIE_NAME,
-        path="/",
-        httponly=True,
-        secure=settings.auth_cookie_secure,
-        samesite="strict",
-    )
+    delete_session_cookie(response, settings)
