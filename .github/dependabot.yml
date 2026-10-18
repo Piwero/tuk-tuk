@@ -17,6 +17,21 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
+  - package-ecosystem: "uv"
+    directory: "/cli/oci"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "cli"
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # Major upgrades are deliberate migrations, not routine maintenance.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: "npm"
     directory: "/frontend/oci"
     schedule:
