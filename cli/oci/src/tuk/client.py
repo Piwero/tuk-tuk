@@ -8,10 +8,13 @@ from tuk.store import SESSION_COOKIE_NAME
 
 
 class ClientError(Exception):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(self, code: str, message: str, *, retry_after: int | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        # Seconds until a retry would succeed, carried in the response's
+        # `Retry-After` header rather than the error body (see issue #339).
+        self.retry_after = retry_after
 
 
 class Body(dict[str, object]):
@@ -303,7 +306,10 @@ class Client:
             return ClientError("http_error", f"{fallback} (status {response.status_code})")
         code = error.get("code", "http_error")
         message = error.get("message", fallback)
-        return ClientError(str(code), str(message))
+        retry_after = response.headers.get("Retry-After")
+        return ClientError(
+            str(code), str(message), retry_after=int(retry_after) if retry_after else None
+        )
 
     def close(self) -> None:
         self._http.close()

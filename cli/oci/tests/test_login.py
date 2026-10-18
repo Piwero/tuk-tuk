@@ -118,6 +118,29 @@ def test_login_wrong_password_does_not_point_at_setup(
     assert "web app" not in err
 
 
+def test_login_locked_out_names_wait_time(
+    config_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Distinct from a wrong password: the owner is told to wait, not to
+    retype their password, and for how long — carried in `Retry-After`,
+    never a raw envelope or status dump."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            429,
+            json={"error": {"code": "too_many_attempts", "message": "Too many attempts"}},
+            headers={"Retry-After": "30"},
+        )
+
+    assert run_login(monkeypatch, httpx.MockTransport(handler)) == 1
+
+    err = capsys.readouterr().err
+    assert "Too many attempts. Try again in 30 seconds." in err
+    assert "Incorrect password" not in err
+    assert "429" not in err
+    assert "too_many_attempts" not in err
+
+
 def test_config_lives_under_xdg_config_home(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

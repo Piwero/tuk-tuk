@@ -19,6 +19,15 @@ SETUP_MESSAGE = "No password set yet — finish first-run setup in the web app."
 LOGIN_SETUP_CODES = frozenset({"setup_required", "not_found"})
 
 
+def lockout_message(retry_after: int | None) -> str:
+    """The lockout's own message — distinct from a wrong password, which
+    keeps its API message as-is. Names how long to wait, from `Retry-After`,
+    never the raw envelope or status."""
+    if retry_after is None:
+        return "Too many attempts. Try again later."
+    return f"Too many attempts. Try again in {retry_after} seconds."
+
+
 def report_client_error(exc: ClientError, action: str) -> None:
     """Any API failure in plain language — session, setup, validation alike.
     The message is always the API's own; never a raw HTTP dump."""
