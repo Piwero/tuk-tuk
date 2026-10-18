@@ -6,6 +6,11 @@ import { Logo } from "./components/Logo";
 
 type GateState = "checking" | "setup" | "locked" | "unlocked";
 
+// Mirrors the backend's MIN_PASSWORD_LENGTH (auth router, issue #338) so the
+// setup and change-password forms state and check the rule before a request
+// goes out; the server's rejection is the backstop, not the only check.
+const MIN_PASSWORD_LENGTH = 12;
+
 /** Sits above App: probes the session on mount and shows the first-run
  * setup screen, the password screen, or the app itself, and returns to the
  * password screen if any later request reports the session has lapsed.
@@ -82,6 +87,10 @@ function SetupScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
             setError("Password and confirmation don't match.");
             return;
           }
+          if (password.length < MIN_PASSWORD_LENGTH) {
+            setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+            return;
+          }
           setPending(true);
           setError(null);
           setup(password)
@@ -95,6 +104,7 @@ function SetupScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
         <Logo size={32} />
         <h1>Tuk Tuk</h1>
         <p>Choose a password to finish setting up this deployment.</p>
+        <p>Must be at least {MIN_PASSWORD_LENGTH} characters.</p>
         <label htmlFor="auth-gate-setup-password">Password</label>
         <input
           ref={inputRef}

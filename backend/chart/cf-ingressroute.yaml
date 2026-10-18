@@ -9,7 +9,7 @@ spec:
     - websecure
   routes:
     - kind: Rule
-      match: Host(`tt.piwero.com`)
+      match: Host(`<YOUR_HOSTNAME>`)
       services:
         - name: frontend
           kind: Service

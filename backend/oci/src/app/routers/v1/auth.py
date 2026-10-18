@@ -15,13 +15,20 @@ from app.db import SessionDep
 from app.errors import APIError
 from app.login_throttle import LoginThrottle
 from app.models import AppSettings
-from app.session import SESSION_COOKIE_NAME, Clock, set_session_cookie
+from app.session import Clock, delete_session_cookie, set_session_cookie
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
+# Lives here, next to the handlers that enforce it (issue #338), not in
+# Settings: making this operator-configurable would let a deployment set it
+# to 1, which is the state this constant exists to remove. Enforced only at
+# the two write points below — never at login, so a password set before
+# this minimum existed keeps logging in until its owner changes it.
+MIN_PASSWORD_LENGTH = 12
+
 # Consecutive wrong-password attempts (login or change-password's
 # current-password check, same counter) before login locks — not
-# operator-configurable, same reasoning as auth router's password minimum.
+# operator-configurable, same reasoning as the password minimum above.
 LOCKOUT_THRESHOLD = 5
 
 
@@ -99,8 +106,10 @@ async def setup(
     app_settings = await require_app_settings(session)
     if app_settings.password_hash is not None:
         raise APIError(404, "not_found", "Setup has already been completed")
-    if not payload.password:
-        raise APIError(422, "invalid_password", "Password must not be empty")
+    if len(payload.password) < MIN_PASSWORD_LENGTH:
+        raise APIError(
+            422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
 
     app_settings.password_hash = password_hasher.hash(payload.password)
     await session.commit()
@@ -179,8 +188,10 @@ async def change_password(
     # leave a prior bad-guess streak counted against a later, valid attempt.
     await _record_success(session, app_settings)
 
-    if not payload.new_password:
-        raise APIError(422, "invalid_password", "Password must not be empty")
+    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
+        raise APIError(
+            422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
 
     app_settings.password_hash = password_hasher.hash(payload.new_password)
     app_settings.session_key = secrets.token_urlsafe(32)
@@ -205,10 +216,4 @@ async def logout(request: Request, response: Response) -> None:
     (SessionAuthMiddleware), and deleting it is the whole of "logging out".
     """
     settings = request.app.state.settings
-    response.delete_cookie(
-        SESSION_COOKIE_NAME,
-        path="/",
-        httponly=True,
-        secure=settings.auth_cookie_secure,
-        samesite="strict",
-    )
+    delete_session_cookie(response, settings)
