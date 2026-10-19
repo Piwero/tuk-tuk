@@ -10,6 +10,15 @@ data:
         root /usr/share/nginx/html;
         index index.html;
 
+        # Same-origin default; Google Fonts (styles + fonts) by name; same-origin
+        # API via the proxy below. The Google Calendar OAuth flow is a top-level
+        # navigation to accounts.google.com, not a frame or fetch, so CSP doesn't
+        # need (and can't usefully) name it here.
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
         location /api/ {
             proxy_pass http://backend:8900/api/;
             proxy_set_header Host $host;

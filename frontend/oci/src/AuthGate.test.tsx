@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { AuthGate } from "./AuthGate";
-import { fetchLists } from "./api";
+import { ApiError, fetchLists, setup } from "./api";
 import { FAKE_PASSWORD, fakeTask, installFakeApi } from "./test/fakeApi";
 
 describe("AuthGate", () => {
@@ -41,6 +41,34 @@ describe("AuthGate", () => {
     expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
   });
 
+  it("states the minimum password length before the person types on setup", async () => {
+    installFakeApi({ loggedIn: false, needsSetup: true, tasks: [fakeTask("Buy milk")] });
+
+    render(<AuthGate />);
+
+    expect(await screen.findByText(/12 characters/i)).toBeInTheDocument();
+  });
+
+  it("rejects a too-short setup password client-side without issuing a request", async () => {
+    const state = installFakeApi({ loggedIn: false, needsSetup: true });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await user.type(await screen.findByLabelText("Password"), "short");
+    await user.type(screen.getByLabelText("Confirm password"), "short{Enter}");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("12 characters");
+    expect(state.needsSetup).toBe(true);
+  });
+
+  it("the fake /setup route applies the same minimum the real backend does", async () => {
+    installFakeApi({ loggedIn: false, needsSetup: true });
+
+    await expect(setup("short")).rejects.toSatisfy(
+      (err: unknown) => err instanceof ApiError && err.code === "invalid_password",
+    );
+  });
+
   it("shows the password screen instead of the app without a session", async () => {
     installFakeApi({ loggedIn: false, tasks: [fakeTask("Buy milk")] });
 
@@ -71,6 +99,18 @@ describe("AuthGate", () => {
     await user.type(passwordField, "wrong-password{Enter}");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Incorrect password");
+    expect(await screen.findByLabelText("Password")).toBeInTheDocument();
+  });
+
+  it("shows the lockout message and keeps the password screen when login is locked", async () => {
+    installFakeApi({ loggedIn: false, loginLocked: true });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    const passwordField = await screen.findByLabelText("Password");
+    await user.type(passwordField, `${FAKE_PASSWORD}{Enter}`);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts");
     expect(await screen.findByLabelText("Password")).toBeInTheDocument();
   });
 

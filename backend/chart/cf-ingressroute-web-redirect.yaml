@@ -9,7 +9,7 @@ spec:
     - web
   routes:
     - kind: Rule
-      match: Host(`tt.piwero.com`)
+      match: Host(`${TUK_TUK_HOSTNAME}`)
       middlewares:
         - name: redirect-to-https
       services:

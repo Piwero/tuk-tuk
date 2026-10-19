@@ -21,9 +21,10 @@ os.environ.setdefault(
 )
 os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
 os.environ.setdefault("APP_MASTER_KEY", "test-master-key")
-# The delay is exercised (LoginThrottle still runs) but costs no wall-clock
-# time, so the escalation/reset tests don't sleep for real.
-os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0")
+# A small but non-zero base: the login path no longer sleeps (issue #339),
+# so this costs no wall-clock time, but a zero base would mean the lockout
+# itself never engages (LoginThrottle.lock_until(base_seconds=0) == now).
+os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0.001")
 
 import asyncio  # noqa: E402
 import shutil  # noqa: E402

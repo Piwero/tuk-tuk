@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.login_throttle import LoginThrottle
 from app.main import create_app
 from app.session import issue_session_token, verify_session_token
 from tests.conftest import TEST_PASSWORD, FakeClock, app_settings_row
@@ -48,11 +49,11 @@ class TestLogin:
     def test_consecutive_failures_escalate_and_success_resets(
         self, unauthenticated_client: TestClient
     ) -> None:
-        # The base delay is zeroed in tests (conftest), so this exercises the
-        # throttle's bookkeeping without costing wall-clock time. We can't
-        # observe the delay directly over HTTP, so this just proves the
-        # sequence of outcomes: repeated failures, then a reset via success,
-        # then a fresh failure is once again treated as first-in-sequence
+        # The base delay is zeroed in tests (conftest), so a locked-out
+        # response is immediate; the lockout isn't engaged until the
+        # threshold in TestLockout below. This proves the sequence of
+        # outcomes: repeated failures, then a reset via success, then a
+        # fresh failure is once again treated as first-in-sequence
         # (indirectly, by the login continuing to work at all afterwards).
         for _ in range(3):
             failed = unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
@@ -62,6 +63,123 @@ class TestLogin:
             "/api/v1/auth/login", json={"password": TEST_PASSWORD}
         )
         assert success.status_code == 204
+
+    def test_a_stored_password_shorter_than_the_minimum_still_logs_in(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        # Mirrors test_setup.py's TestUpgradeImport: an imported hash is
+        # never re-validated against the current minimum, so an existing
+        # deployment's short password keeps working until its next change
+        # (issue #338) — the minimum must never lock an owner out.
+        import argon2
+        from argon2.low_level import Type
+
+        short_hash = argon2.PasswordHasher(
+            time_cost=1, memory_cost=64, parallelism=1, type=Type.ID
+        ).hash("short")
+        settings = Settings(database_url=database_url, auth_password_hash=short_hash)
+
+        with TestClient(create_app(settings, clock=fake_clock)) as client:
+            response = client.post("/api/v1/auth/login", json={"password": "short"})
+
+        assert response.status_code == 204
+
+
+LOCKOUT_THRESHOLD = 5  # keep in sync with app.routers.v1.auth.LOCKOUT_THRESHOLD
+
+
+class TestLockout:
+    def test_enough_consecutive_failures_locks_login(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        for _ in range(LOCKOUT_THRESHOLD):
+            unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
+
+        response = unauthenticated_client.post(
+            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
+        )
+
+        assert response.status_code == 429
+        assert response.json()["error"]["code"] == "too_many_attempts"
+        assert "Retry-After" in response.headers
+
+    def test_a_locked_login_does_not_verify_the_password(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        for _ in range(LOCKOUT_THRESHOLD):
+            unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
+
+        # Even the *correct* password is refused while locked — the lock
+        # is answered before verification ever runs.
+        response = unauthenticated_client.post(
+            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
+        )
+
+        assert response.status_code == 429
+        assert "tuktuk_session" not in response.cookies
+
+    def test_advancing_the_clock_past_the_lock_lets_login_work_again(
+        self, unauthenticated_client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        for _ in range(LOCKOUT_THRESHOLD):
+            unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
+        locked = unauthenticated_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+        assert locked.status_code == 429
+
+        fake_clock.advance(timedelta(seconds=LoginThrottle.CAP_SECONDS + 1))
+
+        response = unauthenticated_client.post(
+            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
+        )
+
+        assert response.status_code == 204
+
+    def test_a_successful_login_clears_the_count_and_the_lock(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        for _ in range(LOCKOUT_THRESHOLD - 1):
+            unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
+
+        success = unauthenticated_client.post(
+            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
+        )
+        assert success.status_code == 204
+
+        row = app_settings_row(unauthenticated_client.app)  # type: ignore[arg-type]
+        assert row.login_failed_attempts == 0
+        assert row.login_locked_until is None
+
+    def test_the_lock_survives_a_second_app_built_over_the_same_database(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        first_app = create_app(Settings(database_url=database_url), clock=fake_clock)
+        with TestClient(first_app) as first_client:
+            for _ in range(LOCKOUT_THRESHOLD):
+                first_client.post("/api/v1/auth/login", json={"password": "wrong"})
+
+        second_app = create_app(Settings(database_url=database_url), clock=fake_clock)
+        with TestClient(second_app) as second_client:
+            response = second_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+
+        assert response.status_code == 429
+        assert response.json()["error"]["code"] == "too_many_attempts"
+
+    def test_change_passwords_current_password_check_feeds_the_same_lock(
+        self, client: TestClient
+    ) -> None:
+        for _ in range(LOCKOUT_THRESHOLD):
+            client.post(
+                "/api/v1/auth/password",
+                json={"current_password": "wrong", "new_password": NEW_PASSWORD},
+            )
+
+        response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
+        )
+
+        assert response.status_code == 429
+        assert response.json()["error"]["code"] == "too_many_attempts"
 
 
 class TestSessionProbe:
@@ -160,6 +278,12 @@ class TestLogout:
         response = unauthenticated_client.post("/api/v1/auth/logout")
 
         assert response.status_code == 401
+
+    def test_the_deletion_samesite_matches_the_set_samesite(self, client: TestClient) -> None:
+        response = client.post("/api/v1/auth/logout")
+
+        set_cookie = response.headers["set-cookie"].lower()
+        assert "samesite=lax" in set_cookie
 
 
 class TestRollingReissue:
@@ -365,6 +489,29 @@ class TestChangePassword:
 
         assert response.status_code == 422
         assert app_settings_row(client.app).password_hash == old_hash  # type: ignore[arg-type]
+
+    def test_a_new_password_shorter_than_the_minimum_is_rejected(self, client: TestClient) -> None:
+        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
+
+        response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": "short"},
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_password"
+        assert "12" in response.json()["error"]["message"]
+        assert app_settings_row(client.app).password_hash == old_hash  # type: ignore[arg-type]
+
+    def test_a_new_password_of_exactly_the_minimum_length_is_accepted(
+        self, client: TestClient
+    ) -> None:
+        response = client.post(
+            "/api/v1/auth/password",
+            json={"current_password": TEST_PASSWORD, "new_password": "123456789012"},
+        )
+
+        assert response.status_code == 204
 
     def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
         response = unauthenticated_client.post(

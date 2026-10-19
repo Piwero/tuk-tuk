@@ -282,6 +282,15 @@ export interface FakeApiState {
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
+  /** Mirrors the backend's persisted lockout (issue #339): when true, the
+   * fake /login route answers 429 too_many_attempts regardless of the
+   * submitted password, exercising the frontend's lockout handling without
+   * driving the real threshold through repeated failures. */
+  loginLocked: boolean;
+  /** Mirrors the backend's persisted lockout shared with /login (issue
+   * #340): when true, the fake /password route answers 429
+   * too_many_attempts regardless of the submitted passwords. */
+  passwordChangeLocked: boolean;
   /** The stored client ID, echoed back by /status — not sensitive, unlike
    * the secret, which is never returned (only whether one is set). */
   googleClientId: string | null;
@@ -361,6 +370,11 @@ export interface FakeApiState {
 
 /** The password installFakeApi's fake login route accepts. */
 export const FAKE_PASSWORD = "correct-password";
+
+// Mirrors the backend's MIN_PASSWORD_LENGTH (auth router, issue #338), so
+// the fake behaves like the real backend for the frontend tests exercised
+// against it.
+const MIN_PASSWORD_LENGTH = 12;
 
 export const INBOX: FakeList = {
   id: 1,
@@ -678,6 +692,8 @@ export function installFakeApi({
   timers = [],
   loggedIn = true,
   needsSetup = false,
+  loginLocked = false,
+  passwordChangeLocked = false,
   googleConfigured = false,
   googleClientId = null,
   googleClientSecretSet = false,
@@ -727,6 +743,14 @@ export function installFakeApi({
   loggedIn?: boolean;
   /** Start on a fresh deployment with no password set (ADR 0008). */
   needsSetup?: boolean;
+  /** Mutate directly (or seed true) to simulate a persisted lockout
+   * (issue #339) — the fake login route then answers 429 regardless of
+   * the submitted password. */
+  loginLocked?: boolean;
+  /** Mutate directly (or seed true) to simulate a persisted lockout
+   * (issue #340) shared with /login — the fake change-password route then
+   * answers 429 regardless of the submitted passwords. */
+  passwordChangeLocked?: boolean;
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
   googleClientId?: string | null;
@@ -814,6 +838,8 @@ export function installFakeApi({
     loggedIn,
     password: FAKE_PASSWORD,
     needsSetup,
+    loginLocked,
+    passwordChangeLocked,
     googleConfigured,
     googleClientId,
     googleClientSecretSet,
@@ -1255,6 +1281,18 @@ export function installFakeApi({
       if (!state.needsSetup) {
         return notFound("Setup has already been completed");
       }
+      const input = body as { password: string };
+      if (input.password.length < MIN_PASSWORD_LENGTH) {
+        return json(
+          {
+            error: {
+              code: "invalid_password",
+              message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+            },
+          },
+          422,
+        );
+      }
       state.needsSetup = false;
       state.loggedIn = true;
       return new Response(null, { status: 204 });
@@ -1262,6 +1300,14 @@ export function installFakeApi({
     if (method === "POST" && url.pathname === "/api/v1/auth/login") {
       if (state.needsSetup) {
         return setupRequired();
+      }
+      if (state.loginLocked) {
+        return new Response(
+          JSON.stringify({
+            error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
+        );
       }
       const input = body as { password: string };
       if (input.password !== state.password) {
@@ -1281,11 +1327,30 @@ export function installFakeApi({
       return new Response(null, { status: 204 });
     }
     if (method === "POST" && url.pathname === "/api/v1/auth/password") {
+      if (state.passwordChangeLocked) {
+        return new Response(
+          JSON.stringify({
+            error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
+        );
+      }
       const input = body as { current_password: string; new_password: string };
       if (input.current_password !== state.password) {
         return json(
           { error: { code: "invalid_current_password", message: "Current password is incorrect" } },
           400,
+        );
+      }
+      if (input.new_password.length < MIN_PASSWORD_LENGTH) {
+        return json(
+          {
+            error: {
+              code: "invalid_password",
+              message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+            },
+          },
+          422,
         );
       }
       state.password = input.new_password;
