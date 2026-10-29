@@ -20,7 +20,7 @@ tuk = "tuk.cli:main"
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",
-    "ruff>=0.16.8",
+    "ruff>=0.17.1",
     "mypy>=2.3.1",
     # Test-only: lets the one integration test boot the real application
     # in-process. Never a runtime dependency — installing the CLI must not
