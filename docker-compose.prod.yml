@@ -1,0 +1,45 @@
+# Self-hosting: builds the production images from source and serves the app
+# on http://localhost:8080. See docs/self-hosting/install.md.
+# ponytail: builds locally because the GHCR images are private; swap each
+# `build:` for `image: ghcr.io/piwero/tuk-tuk/<service>:<version>` once public.
+name: tuk-tuk-prod
+
+services:
+  # The prod image runs as non-root `appuser`; a fresh named volume mounts
+  # root-owned, so hand it over once before the backend starts.
+  data-permissions:
+    image: busybox
+    command: chown -R 1000:1000 /data
+    volumes:
+      - data:/data
+
+  backend:
+    build:
+      context: ./backend/oci
+      target: prod
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/tuk_tuk.db
+      APP_MASTER_KEY: ${APP_MASTER_KEY:?Set APP_MASTER_KEY in .env (openssl rand -base64 32)}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      # Every address you open the app at; Google Calendar sign-in only returns to these.
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:8080"]}
+    volumes:
+      - data:/data
+    depends_on:
+      data-permissions:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ./frontend/oci
+      target: runtime
+    restart: unless-stopped
+    ports:
+      - "${TUK_TUK_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  data:

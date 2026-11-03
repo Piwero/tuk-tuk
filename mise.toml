@@ -54,7 +54,7 @@ run = "uv run python -m app.hash_password"
 dir = "backend/oci"
 
 [tasks."backend:copy-db"]
-description = "Copy the tuk-tuk database from a source DATABASE_URL to a target (see README's 'Moving to PostgreSQL' section)"
+description = "Copy the tuk-tuk database from a source DATABASE_URL to a target (see docs/self-hosting/postgres.md)"
 run = "uv run python -m app.copy_database"
 dir = "backend/oci"
 
