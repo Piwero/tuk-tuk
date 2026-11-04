@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.16.1](https://github.com/Piwero/tuk-tuk/compare/v2.16.0...v2.16.1) - 2026-11-04
+
+### Features
+
+- **core:** Honour TUK_BASE_URL in resolve_base_url ([8619d70](https://github.com/Piwero/tuk-tuk/commit/8619d704047ad50db2d9f090ac0b978d2045323e))
+- **mcp:** Put session handling behind FileSession and PasswordSession ([8b331db](https://github.com/Piwero/tuk-tuk/commit/8b331db41acc052165a614195f7e50cd265f3088))
+- **mcp:** Serve Streamable HTTP with bearer auth behind --http ([02cfc42](https://github.com/Piwero/tuk-tuk/commit/02cfc420fe9de254ab86051838cee543f5c587fd))
+- **mcp:** Build and release standalone MCP container image ([84fee5e](https://github.com/Piwero/tuk-tuk/commit/84fee5ef545f03cedc870f5165ba9b4730414776))
+- **mcp:** Add Kubernetes chart for Flux deployment ([f02de9c](https://github.com/Piwero/tuk-tuk/commit/f02de9c004335fd7efbe1798d25fcbc3b3889f05))
+
+### Bug Fixes
+
+- **mcp:** Address review findings (ADR refs, protocol module, log redaction, docs) ([f56a10e](https://github.com/Piwero/tuk-tuk/commit/f56a10e9d680818cf6ec949b3a8c25f4612b4dc5))
+- **mcp:** Tighten HTTP server defaults ([010f883](https://github.com/Piwero/tuk-tuk/commit/010f883e00decf1a03250a0bf5d45f296999ffe7))
+- **ci:** Run mypy hooks once, serially ([3b39f3c](https://github.com/Piwero/tuk-tuk/commit/3b39f3c241a55df1940c337430acf43feeb7736d))
+
 ## [2.16.0](https://github.com/Piwero/tuk-tuk/compare/v2.15.0...v2.16.0) - 2026-11-04
 
 _Maintenance release; no user-facing changes._
