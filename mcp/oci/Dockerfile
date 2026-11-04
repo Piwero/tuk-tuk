@@ -37,4 +37,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8901/health', timeout=2)"]
 
 # Needs MCP_BEARER_TOKEN (>=32 chars) and TUK_PASSWORD; TUK_BASE_URL points at the API.
-CMD ["tuk-mcp", "--http"]
+CMD ["tuk-mcp", "--http", "--host", "0.0.0.0"]

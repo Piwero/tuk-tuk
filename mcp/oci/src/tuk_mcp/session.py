@@ -48,9 +48,11 @@ class PasswordSession:
         self._fresh = False  # logged in during the current call: a re-login cannot help
 
     def cookie(self) -> str | None:
-        self._fresh = self._cookie is None
         if self._cookie is None:
             self._cookie = self._client.login(self._password)
+            self._fresh = True
+        else:
+            self._fresh = False
         return self._cookie
 
     def keep(self, refreshed: str) -> None:

@@ -31,6 +31,8 @@ def make_server(
     lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
+        timeout = 10
+
         def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
             # Method and status only: the request line and headers can carry secrets.
             self.log_message("%s %s", self.command, code)

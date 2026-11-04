@@ -23,6 +23,8 @@ Needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and the
    tuk login --base-url http://localhost:8080
    ```
 
+`TUK_BASE_URL` overrides the saved URL for every command. Command-line `--base-url` takes precedence over the environment variable.
+
 ## Everyday commands
 
 | Command | Does |

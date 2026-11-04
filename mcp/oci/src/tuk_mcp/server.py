@@ -38,7 +38,7 @@ def serve(box: Toolbox, source: Any, sink: Any) -> None:
 def main(transport: httpx.BaseTransport | None = None, argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="tuk-mcp")
     parser.add_argument("--http", action="store_true", help="serve Streamable HTTP, not stdio")
-    parser.add_argument("--host", default="0.0.0.0")  # noqa: S104 - in-pod listener, tailnet-only
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8901)
     args = parser.parse_args(argv)
     if not args.http:
