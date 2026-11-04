@@ -40,15 +40,23 @@ jobs:
         include:
           - component: backend
             context: backend/oci
+            file: backend/oci/Dockerfile
             target: prod
             build-args: ""
           - component: frontend
             context: frontend/oci
+            file: frontend/oci/Dockerfile
             target: runtime
             # Empty base URL = relative /api/... requests, served same-origin
             # by the nginx proxy in frontend/chart.
             build-args: |
               VITE_API_BASE_URL=
+          # Repo-root context: the MCP image installs tuk-core from shared/oci.
+          - component: mcp
+            context: .
+            file: mcp/oci/Dockerfile
+            target: runtime
+            build-args: ""
     steps:
       - uses: actions/checkout@v7
 
@@ -97,6 +105,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           target: ${{ matrix.target }}
           build-args: |
             ${{ matrix.build-args }}
@@ -116,6 +125,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           target: ${{ matrix.target }}
           build-args: |
             ${{ matrix.build-args }}
@@ -134,6 +144,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           target: ${{ matrix.target }}
           build-args: |
             ${{ matrix.build-args }}

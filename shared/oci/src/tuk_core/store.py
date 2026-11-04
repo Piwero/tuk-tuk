@@ -39,9 +39,11 @@ def write_config(base_url: str) -> None:
 
 
 def resolve_base_url(cli_value: str | None) -> str:
-    if cli_value:
-        return cli_value
-    return str(read_config().get("base_url", DEFAULT_BASE_URL))
+    return (
+        cli_value
+        or os.environ.get("TUK_BASE_URL")
+        or str(read_config().get("base_url", DEFAULT_BASE_URL))
+    )
 
 
 def read_session_cookie() -> str | None:

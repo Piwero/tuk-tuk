@@ -1,0 +1,21 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tuk-tuk-mcp-tailscale
+  namespace: tuk-tuk
+  annotations:
+    tailscale.com/tags: "${TUK_TUK_TAILNET_TAGS}"
+    tailscale.com/http-endpoint: "enabled"
+    # Tailnet only. Never public (ADR 0016).
+    tailscale.com/funnel: "false"
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: mcp
+      port:
+        number: 8901
+  tls:
+    - hosts:
+        - tuk-tuk-mcp

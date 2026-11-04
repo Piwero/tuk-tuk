@@ -23,6 +23,8 @@ Needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and the
    tuk login --base-url http://localhost:8080
    ```
 
+`TUK_BASE_URL` overrides the saved URL for every command. Command-line `--base-url` takes precedence over the environment variable.
+
 ## Everyday commands
 
 | Command | Does |
@@ -34,6 +36,10 @@ Needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and the
 | `tuk edit 12 --due tomorrow` | Reschedule |
 
 Full reference: [`cli/oci/README.md`](../../../cli/oci/README.md).
+
+To use tuk-tuk from an AI client instead, there is a separate MCP server,
+`tuk-mcp`. It is not installed with `tuk`; see
+[`mcp/oci/README.md`](../../../mcp/oci/README.md).
 
 ## Good to know
 

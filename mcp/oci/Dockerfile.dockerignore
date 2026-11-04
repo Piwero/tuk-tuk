@@ -1,0 +1,8 @@
+# Repo-root context: send only what the image needs.
+*
+!mcp/oci/pyproject.toml
+!mcp/oci/uv.lock
+!mcp/oci/src
+!shared/oci/pyproject.toml
+!shared/oci/src
+**/__pycache__

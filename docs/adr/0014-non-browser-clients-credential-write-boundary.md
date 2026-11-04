@@ -15,6 +15,13 @@ single-user premise this record rests on. (The other
 record, cited as the thing ADR 0009 narrowed — filenames, not bare
 numbers, disambiguate the two.)
 
+**Amended by [0016](0016-mcp-network-transport.md) for the MCP server's
+HTTP mode.** 0016 supersedes two premises of this record in that mode
+only: "the clients run on the owner's own machine" (credential decision)
+and "stdio transport, no listener, no network surface" (enforcement
+boundary). Stdio mode, the write principle and the no-delete rule are
+unaffected.
+
 ## Context
 
 tuk-tuk is reachable from two non-browser clients sharing `tuk-core`
