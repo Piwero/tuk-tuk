@@ -41,6 +41,7 @@ from app.routers.v1 import (
     tags,
     tasks,
     timers,
+    voice,
 )
 from app.routers.v1 import settings as settings_router
 from app.session import Clock, real_clock
@@ -133,6 +134,7 @@ def create_app(
     app.include_router(tags.router)
     app.include_router(tasks.router)
     app.include_router(timers.router)
+    app.include_router(voice.router)
 
     @app.get("/health")
     def health() -> dict[str, str]:
