@@ -198,15 +198,15 @@ class Client:
         raise self._error(response, "Could not undo check-in")
 
     def read_events(
-        self, session_cookie: str, day: str
+        self, session_cookie: str, day: str, end: str | None = None
     ) -> tuple[list[dict[str, object]], str | None]:
-        """The day's events across every enabled calendar. The endpoint
+        """The day's events (through `end`, inclusive, when given) across every enabled calendar. The endpoint
         answers empty (not 404) when Google is unconfigured, and isolates
         per-account failures into `failures` — both surface here as a plain
         event list, never an error for calendar trouble."""
         response = self._http.get(
             "/api/v1/events",
-            params={"range_start": day, "range_end": day},
+            params={"range_start": day, "range_end": end or day},
             headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
         )
         if response.status_code == 200:
@@ -286,6 +286,30 @@ class Client:
         if response.status_code == 200:
             return self._object(response, "task")
         raise self._error(response, "Could not update check item")
+
+    def list_goals(self, session_cookie: str) -> tuple[Body, str | None]:
+        """One page of Goals; each embeds its Key Results."""
+        response = self._http.get(
+            "/api/v1/goals",
+            params={"limit": 200, "offset": 0},
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 200:
+            return self._object(response, "goal list")
+        raise self._error(response, "Could not list goals")
+
+    def read_focus_stats(
+        self, session_cookie: str, start: str, end: str, tz: str
+    ) -> tuple[Body, str | None]:
+        """Focus statistics over the inclusive [start, end] day range."""
+        response = self._http.get(
+            "/api/v1/focus-stats",
+            params={"start": start, "end": end, "tz": tz},
+            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+        )
+        if response.status_code == 200:
+            return self._object(response, "focus stats")
+        raise self._error(response, "Could not read focus stats")
 
     def _object(self, response: httpx.Response, noun: str) -> tuple[Body, str | None]:
         """A successful response's JSON object, its original bytes, and a
