@@ -19,13 +19,16 @@ import {
   googleConnectUrl,
   refreshGoogleCalendars,
   fetchStandupSettings,
+  fetchVoiceConfig,
   fetchSectionSettings,
   removeAssistConfig,
   removeAssistantConfig,
   removeGoogleIntegration,
+  removeVoiceConfig,
   saveAssistConfig,
   saveAssistantConfig,
   saveGoogleCredentials,
+  saveVoiceConfig,
   updateGoogleCalendar,
   updateStandupSettings,
   updateSectionSettings,
@@ -38,10 +41,12 @@ import {
   type GoogleCalendar,
   type GoogleStatus,
   type SectionSettings,
+  type VoiceConfig,
 } from "../api";
 import { timeMinutes } from "../calendar";
 import { type ThemePreference } from "../layoutPrefs";
 import { ACCENT_PALETTE } from "../theme";
+import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
 import { Hint } from "./Hint";
 
@@ -834,6 +839,136 @@ function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX
   );
 }
 
+interface VoiceConfigFormProps {
+  config: VoiceConfig;
+  onSaved: (config: VoiceConfig) => void;
+}
+
+/** The Voice Assistant's LiveKit form (ADR 0015; issue #366): URL and API
+ * key are plain text, the API secret is write-only like the Assistant's
+ * key (a masked placeholder once saved, with an explicit choice to replace
+ * it). Saving or removing tells the app shell to re-check availability so
+ * the mic button appears or vanishes without a reload. */
+function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): JSX.Element {
+  const [url, setUrl] = useState(config.livekit_url ?? "");
+  const [apiKey, setApiKey] = useState(config.livekit_api_key ?? "");
+  const [apiSecret, setApiSecret] = useState("");
+  const [overwriteSecret, setOverwriteSecret] = useState(!config.livekit_api_secret_set);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUrl(config.livekit_url ?? "");
+    setApiKey(config.livekit_api_key ?? "");
+    setOverwriteSecret(!config.livekit_api_secret_set);
+  }, [config.livekit_url, config.livekit_api_key, config.livekit_api_secret_set]);
+
+  function handleSubmit(event: React.FormEvent): void {
+    event.preventDefault();
+    if (pending) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    // Blank fields are omitted, not sent: the backend rejects empty values
+    // and treats an omitted one as "keep what is stored".
+    saveVoiceConfig({
+      ...(url !== "" ? { url } : {}),
+      ...(apiKey !== "" ? { apiKey } : {}),
+      ...(overwriteSecret && apiSecret !== "" ? { apiSecret } : {}),
+    })
+      .then((saved) => {
+        setApiSecret("");
+        setOverwriteSecret(!saved.livekit_api_secret_set);
+        setPending(false);
+        onSaved(saved);
+        notifyVoiceConfigChanged();
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+        setPending(false);
+      });
+  }
+
+  async function handleRemove(): Promise<void> {
+    await removeVoiceConfig();
+    setUrl("");
+    setApiKey("");
+    setApiSecret("");
+    setOverwriteSecret(true);
+    onSaved({
+      livekit_url: null,
+      livekit_api_key: null,
+      livekit_api_secret_set: false,
+      configured: false,
+    });
+    notifyVoiceConfigChanged();
+  }
+
+  return (
+    <form className="voice-config-form settings-form" onSubmit={handleSubmit}>
+      <div className="settings-field">
+        <label htmlFor="settings-voice-url">LiveKit URL</label>
+        <input
+          id="settings-voice-url"
+          name="voice-livekit-url"
+          type="text"
+          placeholder="wss://your-project.livekit.cloud"
+          value={url}
+          disabled={pending}
+          onChange={(event) => setUrl(event.target.value)}
+        />
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-voice-api-key">LiveKit API key</label>
+        <input
+          id="settings-voice-api-key"
+          name="voice-livekit-api-key"
+          type="text"
+          autoComplete="off"
+          value={apiKey}
+          disabled={pending}
+          onChange={(event) => setApiKey(event.target.value)}
+        />
+      </div>
+      <div className="settings-field">
+        <label htmlFor="settings-voice-api-secret">LiveKit API secret</label>
+        {config.livekit_api_secret_set && !overwriteSecret ? (
+          <p className="settings-hint">
+            A LiveKit API secret is already saved.{" "}
+            <button type="button" onClick={() => setOverwriteSecret(true)} disabled={pending}>
+              Replace it
+            </button>
+          </p>
+        ) : (
+          <input
+            id="settings-voice-api-secret"
+            name="voice-livekit-api-secret"
+            type="password"
+            autoComplete="off"
+            value={apiSecret}
+            disabled={pending}
+            onChange={(event) => setApiSecret(event.target.value)}
+          />
+        )}
+      </div>
+      {error !== null && <p role="alert">{error}</p>}
+      <div className="settings-form-actions">
+        <button type="submit" className="settings-primary-action" disabled={pending}>
+          {pending ? "Saving…" : "Save Voice settings"}
+        </button>
+        {(config.livekit_url !== null ||
+          config.livekit_api_key !== null ||
+          config.livekit_api_secret_set) && (
+          <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+            Remove Voice configuration
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 /** Half-hour labels "00:00" … "24:00" — the Active-hours grid (issue #210). */
 const HALF_HOUR_LABELS: string[] = Array.from({ length: 49 }, (_, index) => {
   const minutes = index * 30;
@@ -1022,6 +1157,7 @@ export function SettingsView({
   });
   const [assistConfig, setAssistConfig] = useState<AssistConfig | null>(null);
   const [assistantConfig, setAssistantConfig] = useState<AssistantConfig | null>(null);
+  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
 
   useEffect(() => {
     void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
@@ -1037,6 +1173,10 @@ export function SettingsView({
 
   useEffect(() => {
     void fetchAssistantConfig().then(setAssistantConfig);
+  }, []);
+
+  useEffect(() => {
+    void fetchVoiceConfig().then(setVoiceConfig);
   }, []);
 
   async function handleStandupToggle(): Promise<void> {
@@ -1106,7 +1246,12 @@ export function SettingsView({
   const googleNeedsReconnect = accounts.some(
     (account) => account.connection_state === "needs_reconnect",
   );
-  const showAiGroup = assistConfig !== null || assistantConfig !== null;
+  const voiceConfigured =
+    voiceConfig !== null &&
+    (voiceConfig.livekit_url !== null ||
+      voiceConfig.livekit_api_key !== null ||
+      voiceConfig.livekit_api_secret_set);
+  const showAiGroup = assistConfig !== null || assistantConfig !== null || voiceConfig !== null;
   const showConnectionsGroup = googleStatus !== null;
 
   return (
@@ -1131,6 +1276,16 @@ export function SettingsView({
             <span
               className="settings-toc-dot"
               data-state={assistantConfigured ? "on" : "off"}
+              aria-hidden="true"
+            />
+          )}
+        </a>
+        <a href="#settings-voice">
+          Voice
+          {voiceConfig !== null && (
+            <span
+              className="settings-toc-dot"
+              data-state={voiceConfigured ? "on" : "off"}
               aria-hidden="true"
             />
           )}
@@ -1284,6 +1439,24 @@ export function SettingsView({
                 removed) means the Assistant stays off everywhere.
               </p>
               <AssistantConfigForm config={assistantConfig} onSaved={setAssistantConfig} />
+            </section>
+          )}
+          {voiceConfig !== null && (
+            <section aria-label="Voice" id="settings-voice" className="settings-section">
+              <div className="settings-section-head">
+                <h2>Voice</h2>
+                <span className="settings-status" data-state={voiceConfigured ? "on" : "off"}>
+                  {voiceConfigured ? "Connected" : "Not set up"}
+                </span>
+              </div>
+              <p className="settings-lead">
+                Cloud — while a voice session runs, your audio, its transcript, and the Agenda data
+                the agent reads (Tasks, Habits, Events) pass through LiveKit and its model
+                providers. LiveKit states a zero-data-retention policy for these providers; tuk-tuk
+                stores no transcripts or recordings. Unconfigured (or removed) means the microphone
+                button stays hidden everywhere.
+              </p>
+              <VoiceConfigForm config={voiceConfig} onSaved={setVoiceConfig} />
             </section>
           )}
         </section>
