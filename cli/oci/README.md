@@ -116,3 +116,17 @@ including the flag combinations that do not consume it — so a bad
 
 Config (`config.json`) and session (`session.json`, owner-only) live under
 the XDG config directory (`~/.config/tuk/`); `TUK_CONFIG_DIR` overrides it.
+
+## tuk-mcp
+
+A local MCP server (stdio) over the same session. Log in with `tuk login`,
+then register it in your client as command `tuk-mcp` (e.g. `uv tool install
+--from ./cli/oci tuk`, then `{"command": "tuk-mcp"}`). Set `TUK_TIMEZONE` if
+the host clock differs from yours.
+
+Reads: `get_agenda` (call first), `search_tasks`, `get_task`, `get_goals`,
+`get_focus_stats`. Writes: `create_task`, `schedule_task`, `reschedule_task`,
+`complete_task`, `set_priority`, `set_list`, `add_tags`, `add_check_items`,
+`check_in_habit`. Write tools only accept ids returned by a read in the same
+session. There is no delete tool, by design (ADR 0014); Task descriptions are
+sent to the model.
