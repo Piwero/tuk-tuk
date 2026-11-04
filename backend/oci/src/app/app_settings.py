@@ -56,6 +56,17 @@ def assistant_configured(app_settings: AppSettings) -> bool:
     )
 
 
+def voice_configured(app_settings: AppSettings) -> bool:
+    """Whether the Voice Assistant (ADR 0015) has its LiveKit URL, API key
+    and API secret — independent of `assistant_configured`, which it never
+    reads."""
+    return (
+        bool(app_settings.voice_livekit_url)
+        and bool(app_settings.voice_livekit_api_key)
+        and bool(app_settings.encrypted_voice_livekit_api_secret)
+    )
+
+
 async def bootstrap_app_settings(session: AsyncSession, settings: Settings) -> AppSettings:
     """Ensures the singleton settings row exists, run once from app.main's
     lifespan before the app serves any request.

@@ -65,6 +65,12 @@ class AppSettings(Base):
     assistant_model: Mapped[str | None] = mapped_column(String(255), default=None)
     encrypted_assistant_api_key: Mapped[str | None] = mapped_column(Text, default=None)
     assistant_planning_preferences: Mapped[str | None] = mapped_column(Text, default=None)
+    # The Voice Assistant's LiveKit connection (ADR 0015, issue #366). Only
+    # the API secret is a credential, so — like `encrypted_assistant_api_key`
+    # — it is encrypted with `APP_MASTER_KEY`; the URL and key are plain.
+    voice_livekit_url: Mapped[str | None] = mapped_column(String(255), default=None)
+    voice_livekit_api_key: Mapped[str | None] = mapped_column(String(255), default=None)
+    encrypted_voice_livekit_api_secret: Mapped[str | None] = mapped_column(Text, default=None)
     # UI-only visibility toggle for the Stand-up feature (issue #140):
     # turning it off hides the nav item and route, nothing more — no route
     # is blocked and no stored data is ever touched by this flag.
