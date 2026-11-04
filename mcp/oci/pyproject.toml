@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tuk-mcp"
+version = "0.1.0"
+description = "Tuk Tuk MCP server over stdio"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Piwero" }]
+dependencies = ["httpx>=0.27.0", "tuk-core"]
+
+[project.scripts]
+tuk-mcp = "tuk_mcp:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3.0", "ruff>=0.17.1", "mypy>=2.3.1"]
+
+[tool.uv.sources]
+tuk-core = { path = "../../shared/oci", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tuk_mcp"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "N", "C4", "PT", "BLE"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "../../shared/oci/src"
+strict = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]
+pythonpath = ["src"]

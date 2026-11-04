@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from tuk.client import Body
+from tuk_core.client import Body
 
 
 def format_task(task: dict[str, object]) -> str:

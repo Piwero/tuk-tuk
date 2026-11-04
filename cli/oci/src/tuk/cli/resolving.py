@@ -4,10 +4,10 @@ import argparse
 import sys
 from dataclasses import dataclass
 
-from tuk.client import Client
-from tuk.dates import BadDateError, parse_date
-from tuk.names import Kind, UnknownNameError, resolve_name
-from tuk.store import write_session_cookie
+from tuk_core.client import Client
+from tuk_core.dates import BadDateError, parse_date
+from tuk_core.names import Kind, UnknownNameError, resolve_name
+from tuk_core.store import write_session_cookie
 
 from .session import require_today
 

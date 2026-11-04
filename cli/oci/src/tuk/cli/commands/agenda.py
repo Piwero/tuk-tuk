@@ -3,8 +3,8 @@
 import concurrent.futures
 import json
 
-from tuk.client import Client, ClientError
-from tuk.store import write_session_cookie
+from tuk_core.client import Client, ClientError
+from tuk_core.store import write_session_cookie
 
 from ..errors import report_client_error
 from ..rendering import format_habits, format_ls, page_items, remaining_count

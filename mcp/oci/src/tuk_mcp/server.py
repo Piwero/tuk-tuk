@@ -1,5 +1,5 @@
-"""Minimal MCP (JSON-RPC 2.0 over stdio) — no SDK, because the package's only
-runtime dependency is an HTTP client (pinned by tests/test_packaging.py).
+"""Minimal MCP (JSON-RPC 2.0 over stdio) — no SDK, because MCP only needs the
+shared core's HTTP client.
 Only the slice a tools-only server needs: initialize, ping, tools/list,
 tools/call."""
 
@@ -8,9 +8,8 @@ import sys
 from typing import Any
 
 import httpx
-
-from tuk.client import Client
-from tuk.store import resolve_base_url
+from tuk_core.client import Client
+from tuk_core.store import resolve_base_url
 
 from .tools import Toolbox
 

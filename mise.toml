@@ -14,6 +14,36 @@ description = "Install CLI dependencies (uv)"
 run = "uv sync"
 dir = "cli/oci"
 
+[tasks."shared:install"]
+description = "Install shared client dependencies (uv)"
+run = "uv sync"
+dir = "shared/oci"
+
+[tasks."shared:test"]
+description = "Run shared client tests"
+run = "uv run pytest"
+dir = "shared/oci"
+
+[tasks."shared:lint"]
+description = "Lint, format-check, and type-check shared client"
+run = "uv run ruff check . && uv run ruff format --check . && uv run mypy src"
+dir = "shared/oci"
+
+[tasks."mcp:install"]
+description = "Install MCP server dependencies (uv)"
+run = "uv sync"
+dir = "mcp/oci"
+
+[tasks."mcp:test"]
+description = "Run MCP server tests"
+run = "uv run pytest"
+dir = "mcp/oci"
+
+[tasks."mcp:lint"]
+description = "Lint, format-check, and type-check MCP server"
+run = "uv run ruff check . && uv run ruff format --check . && uv run mypy src"
+dir = "mcp/oci"
+
 [tasks."backend:dev"]
 description = "Start backend with hot-reload (docker compose)"
 run = "docker compose up --build backend"
@@ -103,7 +133,7 @@ backend/oci/.venv/bin/pre-commit install --hook-type pre-push
 
 [tasks.install]
 description = "Install all dependencies"
-depends = ["backend:install", "frontend:install", "cli:install"]
+depends = ["backend:install", "frontend:install", "shared:install", "cli:install", "mcp:install"]
 
 [tasks.setup]
 description = "Install dependencies and configure git hooks"
@@ -119,11 +149,11 @@ run = "docker compose down"
 
 [tasks.lint]
 description = "Lint both stacks"
-depends = ["backend:lint", "frontend:lint", "cli:lint"]
+depends = ["backend:lint", "frontend:lint", "shared:lint", "cli:lint", "mcp:lint"]
 
 [tasks.test]
 description = "Run all tests"
-depends = ["backend:test", "frontend:test", "cli:test"]
+depends = ["backend:test", "frontend:test", "shared:test", "cli:test", "mcp:test"]
 
 [tasks."release:tag"]
 description = "Bump version and push a release tag (major|minor|patch), triggering the Release workflow"

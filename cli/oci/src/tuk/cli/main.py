@@ -1,9 +1,8 @@
 """`tuk` entrypoint. Errors to stderr, non-zero exit; success exits zero."""
 
 import httpx
-
-from tuk.client import Client
-from tuk.store import resolve_base_url
+from tuk_core.client import Client
+from tuk_core.store import resolve_base_url
 
 from .commands.agenda import cmd_agenda
 from .commands.checks import cmd_check_add, cmd_check_tick

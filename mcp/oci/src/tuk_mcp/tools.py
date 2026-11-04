@@ -23,11 +23,11 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
-from tuk.client import Client, ClientError
-from tuk.dates import BadDateError, parse_date
-from tuk.names import UnknownNameError, resolve_name
-from tuk.store import read_session_cookie, write_session_cookie
-from tuk.tz import TzError, local_today
+from tuk_core.client import Client, ClientError
+from tuk_core.dates import BadDateError, parse_date
+from tuk_core.names import UnknownNameError, resolve_name
+from tuk_core.store import read_session_cookie, write_session_cookie
+from tuk_core.tz import TzError, local_today
 
 PRIORITIES = ["none", "low", "medium", "high"]
 DATE_HELP = (

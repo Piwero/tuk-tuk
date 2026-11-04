@@ -21,9 +21,15 @@ jobs:
   test-cli:
     uses: ./.github/workflows/cli-ci.yml
 
+  test-shared:
+    uses: ./.github/workflows/shared-ci.yml
+
+  test-mcp:
+    uses: ./.github/workflows/mcp-ci.yml
+
   # --- Build + push both images in parallel ---
   build-push:
-    needs: [test-backend, test-frontend, test-cli]
+    needs: [test-backend, test-frontend, test-cli, test-shared, test-mcp]
     runs-on: ubuntu-latest
     permissions:
       contents: read

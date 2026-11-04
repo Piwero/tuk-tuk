@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "cli/oci/**"
+      - "shared/oci/**"
       - ".github/workflows/cli-ci.yml"
   pull_request:
     paths:
       - "cli/oci/**"
+      - "shared/oci/**"
       - ".github/workflows/cli-ci.yml"
   # Reusable: release.yml calls this as a publish gate.
   workflow_call:

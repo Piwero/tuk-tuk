@@ -2,7 +2,7 @@
 
 import sys
 
-from tuk.client import ClientError
+from tuk_core.client import ClientError
 
 SETUP_MESSAGE = "No password set yet — finish first-run setup in the web app."
 

@@ -121,7 +121,7 @@ the XDG config directory (`~/.config/tuk/`); `TUK_CONFIG_DIR` overrides it.
 
 A local MCP server (stdio) over the same session. Log in with `tuk login`,
 then register it in your client as command `tuk-mcp` (e.g. `uv tool install
---from ./cli/oci tuk`, then `{"command": "tuk-mcp"}`). Set `TUK_TIMEZONE` if
+--from ./mcp/oci tuk-mcp`, then `{"command": "tuk-mcp"}`). Set `TUK_TIMEZONE` if
 the host clock differs from yours.
 
 Reads: `get_agenda` (call first), `search_tasks`, `get_task`, `get_goals`,

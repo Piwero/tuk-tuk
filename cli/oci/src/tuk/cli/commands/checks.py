@@ -3,8 +3,8 @@
 import sys
 from zoneinfo import ZoneInfo
 
-from tuk.client import Client, ClientError
-from tuk.store import write_session_cookie
+from tuk_core.client import Client, ClientError
+from tuk_core.store import write_session_cookie
 
 from ..errors import report_client_error, report_task_error
 from ..rendering import format_check_items, occurrence_suffix, print_raw

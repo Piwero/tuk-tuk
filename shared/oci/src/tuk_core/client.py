@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 
 import httpx
 
-from tuk.store import SESSION_COOKIE_NAME
+from tuk_core.store import SESSION_COOKIE_NAME
 
 
 class ClientError(Exception):

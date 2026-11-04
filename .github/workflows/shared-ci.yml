@@ -1,0 +1,33 @@
+name: shared-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "shared/oci/**"
+      - ".github/workflows/shared-ci.yml"
+  pull_request:
+    paths:
+      - "shared/oci/**"
+      - ".github/workflows/shared-ci.yml"
+  workflow_call:
+
+defaults:
+  run:
+    working-directory: shared/oci
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: shared/oci/uv.lock
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
+      - run: uv run pytest

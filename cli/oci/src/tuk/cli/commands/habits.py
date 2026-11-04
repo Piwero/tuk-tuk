@@ -3,8 +3,8 @@
 import sys
 from datetime import date
 
-from tuk.client import Client, ClientError
-from tuk.store import write_session_cookie
+from tuk_core.client import Client, ClientError
+from tuk_core.store import write_session_cookie
 
 from ..errors import report_client_error
 from ..rendering import format_habits, page_items, print_raw, remaining_count

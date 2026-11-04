@@ -17,8 +17,8 @@ numbers, disambiguate the two.)
 
 ## Context
 
-tuk-tuk is reachable from two non-browser clients sharing one package
-(`cli/oci/`): `tuk`, a command-line client for the daily loop, and
+tuk-tuk is reachable from two non-browser clients sharing `tuk-core`
+(`shared/oci/`): `tuk` in `cli/oci/`, a command-line client for the daily loop, and
 `tuk-mcp`, a local MCP server exposing the owner's data to whichever AI
 client they already use. Both talk HTTP only to the existing API; both
 cache the same session (see Glossary: Session file).

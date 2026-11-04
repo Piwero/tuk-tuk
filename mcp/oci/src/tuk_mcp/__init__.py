@@ -1,4 +1,4 @@
-"""`tuk-mcp`: a local MCP server over stdio. See `tuk.mcp.tools` for the
+"""`tuk-mcp`: a local MCP server over stdio. See `tuk_mcp.tools` for the
 write boundary and ADR 0014 for why it is drawn where it is."""
 
 from .server import main

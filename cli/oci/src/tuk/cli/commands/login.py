@@ -3,8 +3,8 @@
 import getpass
 import sys
 
-from tuk.client import Client, ClientError
-from tuk.store import write_config, write_session_cookie
+from tuk_core.client import Client, ClientError
+from tuk_core.store import write_config, write_session_cookie
 
 from ..errors import LOGIN_SETUP_CODES, SETUP_MESSAGE, lockout_message
 

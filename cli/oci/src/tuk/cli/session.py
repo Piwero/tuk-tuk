@@ -4,8 +4,8 @@ import sys
 from datetime import date
 from zoneinfo import ZoneInfo
 
-from tuk.store import read_session_cookie
-from tuk.tz import TzError, local_today
+from tuk_core.store import read_session_cookie
+from tuk_core.tz import TzError, local_today
 
 
 def require_session() -> str | None:

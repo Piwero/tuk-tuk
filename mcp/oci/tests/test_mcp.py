@@ -7,10 +7,10 @@ from pathlib import Path
 
 import httpx
 import pytest
+from tuk_core.client import Client
 
-from tuk.client import Client
-from tuk.mcp.server import handle, serve
-from tuk.mcp.tools import TOOLS, Toolbox
+from tuk_mcp.server import handle, serve
+from tuk_mcp.tools import TOOLS, Toolbox
 
 
 def test_shared_tool_roster_contract() -> None:
