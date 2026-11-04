@@ -3,9 +3,8 @@
 The process holds the full session cookie, so every endpoint is technically
 reachable; what constrains the model is that no tool exists for anything
 outside the write set. That is structural against a model, and NOT against a
-bug or a compromised binary. It is acceptable only because the server runs as
-a local stdio subprocess under the owner's own user. A network transport
-reopens this decision and needs its own record.
+bug or a compromised binary. HTTP mode is the network transport (ADR 0016);
+it changes how clients reach the server, not this roster boundary.
 
 Write tools are admitted by a principle, not a list: idempotent,
 non-destructive, scoped to Tasks and Habits. There is no delete tool of any

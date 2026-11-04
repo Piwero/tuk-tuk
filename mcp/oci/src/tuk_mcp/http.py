@@ -11,7 +11,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from .server import _error, handle
+from .protocol import error, handle
 from .tools import Toolbox
 
 MIN_TOKEN_LENGTH = 32
@@ -31,6 +31,13 @@ def make_server(
     lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
+        def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
+            # Method and status only: the request line and headers can carry secrets.
+            self.log_message("%s %s", self.command, code)
+
+        def log_error(self, format: str, *args: Any) -> None:  # noqa: A002
+            pass  # the default echoes the raw request line
+
         def _send(
             self, status: int, body: bytes = b"", headers: dict[str, str] | None = None
         ) -> None:
@@ -78,13 +85,13 @@ def make_server(
             try:
                 message = json.loads(raw)
             except ValueError:
-                self._json(400, _error(None, -32700, "Parse error"))
+                self._json(400, error(None, -32700, "Parse error"))
                 return
             try:
                 with lock:
                     response = handle(box, message)
             except Exception:  # noqa: BLE001 - a bug must not kill the listener or leak details
-                self._json(500, _error(None, -32603, "Internal error"))
+                self._json(500, error(None, -32603, "Internal error"))
                 return
             if response is None:
                 self._send(202)

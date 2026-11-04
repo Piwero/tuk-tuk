@@ -2,7 +2,7 @@
 
 `FileSession` is the stdio mode: the cookie `tuk login` saved on disk.
 `PasswordSession` is the network mode: log in with the owner's password and
-keep the cookie in memory only (ADR 0015) — nothing is read from or written to
+keep the cookie in memory only (ADR 0016) — nothing is read from or written to
 disk, so a pod needs no login step and no volume.
 """
 

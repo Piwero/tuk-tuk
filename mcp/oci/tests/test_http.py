@@ -2,7 +2,10 @@
 
 import json
 import threading
+import urllib.error
+import urllib.request
 from collections.abc import Iterator
+from contextlib import suppress
 
 import httpx
 import pytest
@@ -127,3 +130,38 @@ def test_refuses_to_start_without_password(
     monkeypatch.delenv("TUK_PASSWORD", raising=False)
     assert main(argv=["--http", "--port", "0"]) == 1
     assert "TUK_PASSWORD" in capsys.readouterr().err
+
+
+def test_secrets_never_reach_stderr_or_logs(
+    capfd: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    password, cookie = "hunter2-password", "cookie-value-xyz"
+
+    def login_backend(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/auth/login":
+            return httpx.Response(204, headers={"set-cookie": f"tuktuk_session={cookie}"})
+        return httpx.Response(200, json={"items": [], "total": 0, "limit": 20, "offset": 0})
+
+    client = Client("http://x", transport=httpx.MockTransport(login_backend))
+    box = Toolbox(client, PasswordSession(client, password))
+    server = make_server(box, TOKEN, "127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    call = rpc("tools/call", params={"name": "search_tasks", "arguments": {"query": "x"}})
+    try:
+        with caplog.at_level("DEBUG"):
+            post(base, call)
+            post(base, call, {"Authorization": "Bearer wrong", "Cookie": f"s={cookie}"})
+            for path in (
+                f"/mcp?token={TOKEN}&password={password}",
+                f"/{TOKEN}/{password}/{cookie}",
+            ):
+                with suppress(urllib.error.HTTPError):  # urllib: httpx would log the URL itself
+                    urllib.request.urlopen(base + path, timeout=5)  # noqa: S310
+    finally:
+        server.shutdown()
+        server.server_close()
+    seen = capfd.readouterr()
+    output = seen.out + seen.err + caplog.text
+    for secret in (TOKEN, password, cookie):
+        assert secret not in output
