@@ -1,16 +1,16 @@
 """Voice tool roster, loaded from the file the MCP server and the browser also read (ADR 0014,
 issue #364). One source of truth keeps the three sides from drifting; tests/test_contract.py pins it.
 
-ponytail: resolves `shared/` relative to the repo checkout. `lk agent deploy` only ships
-`voice-agent/`, so before the deploy story (T4/T9) the file must be copied or vendored into the
-package build; swap this path then."""
+ponytail: `lk agent deploy` ships only `voice-agent/`, so the agent reads a vendored copy next to
+this module; tests/test_contract.py asserts it equals `shared/voice-tool-roster.json` when that
+file exists. Copy it over after editing the shared file. Upgrade path: a mise task that syncs it."""
 
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-ROSTER_PATH = Path(__file__).parents[3] / "shared" / "voice-tool-roster.json"
+ROSTER_PATH = Path(__file__).parent / "voice-tool-roster.json"
 
 
 @dataclass(frozen=True)

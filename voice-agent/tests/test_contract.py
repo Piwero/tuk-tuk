@@ -4,9 +4,11 @@
 import json
 from pathlib import Path
 
-from tuk_voice_agent.roster import CONTRACT_VERSION, VOICE_TOOLS
+import pytest
 
-ROSTER = json.loads((Path(__file__).parents[2] / "shared/voice-tool-roster.json").read_text())
+from tuk_voice_agent.roster import CONTRACT_VERSION, ROSTER_PATH, VOICE_TOOLS
+
+ROSTER = json.loads(ROSTER_PATH.read_text())
 
 
 def test_contract_version_matches_roster() -> None:
@@ -46,3 +48,12 @@ def test_no_tool_implies_delete() -> None:
     # ADR 0014: no destructive writes, and nothing outside Tasks/Habits.
     forbidden = ("delete", "remove", "destroy", "purge", "clear")
     assert not [n for n in VOICE_TOOLS if any(word in n for word in forbidden)]
+
+
+def test_vendored_roster_equals_shared_when_present() -> None:
+    # `lk agent deploy` ships only voice-agent/, so the agent reads a vendored copy. Skipped
+    # where the shared file is absent (e.g. building from the deployed bundle).
+    shared = Path(__file__).parents[2] / "shared/voice-tool-roster.json"
+    if not shared.exists():
+        pytest.skip("shared roster not in this checkout")
+    assert ROSTER_PATH.read_text() == shared.read_text()
