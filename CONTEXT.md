@@ -164,7 +164,7 @@ The `tuk` command-line client for the daily loop: capture, review, complete. Fir
 _Avoid_: Console app (says nothing about which contract it speaks)
 
 **MCP server**:
-The `tuk-mcp` package in `mcp/oci/`: a local Model Context Protocol server running as a stdio subprocess of the owner's own AI client, exposing reads plus a bounded write set — idempotent, non-destructive, Task-or-Habit scoped, with no delete tool of any kind. Reuses shared HTTP client, session handling and transport seam from `shared/oci`. See ADR 0014.
+The `tuk-mcp` package in `mcp/oci/`: a Model Context Protocol server exposing reads plus a bounded write set — idempotent, non-destructive, Task-or-Habit scoped, with no delete tool of any kind. Two transports: stdio (default), run as a subprocess of the owner's own AI client; and Streamable HTTP (`--http`), deployed in the cluster, reachable only on the tailnet behind a bearer token, with the pod holding the owner's password and an in-memory session. Reuses shared HTTP client, session handling and transport seam from `shared/oci`. See ADR 0014 and ADR 0016.
 _Avoid_: Agent (it takes no actions on its own; the owner's client directs it turn by turn)
 
 **Session file**:
