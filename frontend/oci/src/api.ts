@@ -356,6 +356,46 @@ export function removeAssistantConfig(): Promise<void> {
   return request("/api/v1/assistant/config", { method: "DELETE" });
 }
 
+/** The Voice Assistant's LiveKit config (ADR 0015; issue #366). The API
+ * secret is write-only — only whether one is stored round-trips, exactly as
+ * AssistantConfig's key. `configured` is the backend's own verdict that all
+ * three are set, which gates every voice affordance. */
+export interface VoiceConfig {
+  livekit_url: string | null;
+  livekit_api_key: string | null;
+  livekit_api_secret_set: boolean;
+  configured: boolean;
+}
+
+export function fetchVoiceConfig(): Promise<VoiceConfig> {
+  return request("/api/v1/voice/config");
+}
+
+/** Saves whichever fields are passed; an omitted field is left unchanged
+ * server-side (null/empty is rejected, so callers omit rather than blank).
+ * The first save must include `apiSecret`. */
+export function saveVoiceConfig(
+  fields: Partial<{ url: string; apiKey: string; apiSecret: string }>,
+): Promise<VoiceConfig> {
+  const body: { livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string } = {};
+  if (fields.url !== undefined) {
+    body.livekit_url = fields.url;
+  }
+  if (fields.apiKey !== undefined) {
+    body.livekit_api_key = fields.apiKey;
+  }
+  if (fields.apiSecret !== undefined) {
+    body.livekit_api_secret = fields.apiSecret;
+  }
+  return request("/api/v1/voice/config", { method: "PUT", body: JSON.stringify(body) });
+}
+
+/** Clears all three fields, returning the Voice Assistant to the same
+ * unconfigured, invisible state as a fresh deployment. */
+export function removeVoiceConfig(): Promise<void> {
+  return request("/api/v1/voice/config", { method: "DELETE" });
+}
+
 /** One turn of the Assistant's chat transcript (ADR 0009). The whole
  * transcript is held client-side and posted in full each turn — nothing
  * about the conversation is persisted server-side. */
