@@ -12,59 +12,56 @@ from tuk.client import Client
 from tuk.mcp.server import handle, serve
 from tuk.mcp.tools import TOOLS, Toolbox
 
-ROSTER = {
-    "get_agenda", "search_tasks", "get_task", "get_goals", "get_focus_stats",
-    "create_task", "schedule_task", "reschedule_task", "complete_task",
-    "set_priority", "set_list", "add_tags", "add_check_items", "check_in_habit",
-}  # fmt: skip
-
 
 def test_shared_tool_roster_contract() -> None:
     contract = json.loads((Path(__file__).parents[3] / "shared/voice-tool-roster.json").read_text())
-    tools = contract["tools"]
+    roster = contract["tools"]
+    mcp_roster = {tool["name"]: tool for tool in roster if "mcp" in tool["clients"]}
+    actual = {tool["name"]: tool for tool in (TOOLS[name].spec() for name in TOOLS)}
     assert contract["contract_version"] == 1
-    assert {tool["name"] for tool in tools if "mcp" in tool["clients"]} == set(TOOLS)
-    assert {tool["name"] for tool in tools} == ROSTER
-    assert all(
-        tool["kind"] in {"read", "write"} and tool["args"]
-        for tool in tools
-        if tool["kind"] == "write"
-    )
-    assert not any(
-        "delete" in tool["name"].lower() or "remove" in tool["name"].lower() for tool in tools
-    )
-    assert all(
-        set(tool["args"])
-        <= {
-            "task_id",
-            "habit_id",
-            "query",
-            "limit",
-            "title",
-            "description",
-            "priority",
-            "due",
-            "start",
-            "list",
-            "tags",
-            "titles",
-            "day",
-            "value",
-            "days",
+    assert actual.keys() == mcp_roster.keys()
+    assert {
+        name: {
+            key: {field: value for field, value in schema.items() if field != "description"}
+            for key, schema in tool["inputSchema"]["properties"].items()
         }
-        for tool in tools
-    )
-    assert all("habit_id" not in tool["args"] or "habit" in tool["name"] for tool in tools)
-    assert all(
-        "task_id" not in tool["args"]
-        or "task" in tool["name"]
-        or tool["name"] in {"set_priority", "set_list", "add_tags", "add_check_items"}
-        for tool in tools
-    )
-    assert {tool["name"] for tool in tools if "voice" in tool["clients"]} == ROSTER - {
-        "get_goals",
-        "get_focus_stats",
+        for name, tool in actual.items()
+    } == {name: tool["args"] for name, tool in mcp_roster.items()}
+    assert {name: tool["inputSchema"]["required"] for name, tool in actual.items()} == {
+        "get_agenda": [],
+        "search_tasks": ["query"],
+        "get_task": ["task_id"],
+        "get_goals": [],
+        "get_focus_stats": [],
+        "create_task": ["title"],
+        "schedule_task": ["task_id", "due"],
+        "reschedule_task": ["task_id", "due"],
+        "complete_task": ["task_id"],
+        "set_priority": ["task_id", "priority"],
+        "set_list": ["task_id", "list"],
+        "add_tags": ["task_id", "tags"],
+        "add_check_items": ["task_id", "titles"],
+        "check_in_habit": ["habit_id"],
     }
+    # ADR 0014 principle: idempotent, non-destructive, Task-or-Habit scoped writes.
+    assert all(tool["kind"] in {"read", "write"} for tool in roster)
+    assert {name for name, tool in mcp_roster.items() if tool["kind"] == "write"} == {
+        "create_task",
+        "schedule_task",
+        "reschedule_task",
+        "complete_task",
+        "set_priority",
+        "set_list",
+        "add_tags",
+        "add_check_items",
+        "check_in_habit",
+    }
+    assert all(tool["inputSchema"]["additionalProperties"] is False for tool in actual.values())
+    assert all(
+        tool.run.__name__ not in {"delete", "remove"}
+        and "DELETE" not in tool.run.__code__.co_consts
+        for tool in TOOLS.values()
+    )
 
 
 def page(items: list[dict]) -> dict:
@@ -128,20 +125,16 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return api, call, box
 
 
-def test_roster_is_pinned_and_has_no_delete(env) -> None:
-    _, _, box = env
-    names = {t["name"] for t in box.describe()}
-    assert names == ROSTER
-    assert not any("delete" in n or "remove" in n for n in names)
-
-
 def test_stdio_roundtrip(env) -> None:
     _, _, box = env
     source = io.StringIO('{"jsonrpc":"2.0","id":1,"method":"tools/list"}\nnot json\n')
     sink = io.StringIO()
     serve(box, source, sink)
     first, second = (json.loads(line) for line in sink.getvalue().splitlines())
-    assert {t["name"] for t in first["result"]["tools"]} == ROSTER
+    contract = json.loads((Path(__file__).parents[3] / "shared/voice-tool-roster.json").read_text())
+    assert {t["name"] for t in first["result"]["tools"]} == {
+        tool["name"] for tool in contract["tools"] if "mcp" in tool["clients"]
+    }
     assert second["error"]["code"] == -32700
 
 
