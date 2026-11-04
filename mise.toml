@@ -175,7 +175,7 @@ if ! command -v git-cliff >/dev/null 2>&1; then
 fi
 
 # Guard: refresh remote refs and tags
-git fetch --tags --quiet origin
+git fetch --tags --force --quiet origin
 
 # Guard: must be on main
 branch="$(git branch --show-current)"
