@@ -1,0 +1,19 @@
+{
+  "contract_version": 1,
+  "tools": [
+    { "name": "get_agenda", "kind": "read", "args": {}, "clients": ["mcp", "voice"] },
+    { "name": "search_tasks", "kind": "read", "args": { "query": { "type": "string" }, "limit": { "type": "integer", "minimum": 1, "maximum": 50 } }, "clients": ["mcp", "voice"] },
+    { "name": "get_task", "kind": "read", "args": { "task_id": { "type": "integer" } }, "clients": ["mcp", "voice"] },
+    { "name": "get_goals", "kind": "read", "args": {}, "clients": ["mcp"] },
+    { "name": "get_focus_stats", "kind": "read", "args": { "days": { "type": "integer", "minimum": 1, "maximum": 366 } }, "clients": ["mcp"] },
+    { "name": "create_task", "kind": "write", "args": { "title": { "type": "string" }, "description": { "type": "string" }, "priority": { "type": "string", "enum": ["none", "low", "medium", "high"] }, "due": { "type": "string" }, "start": { "type": "string" }, "list": { "type": "string" }, "tags": { "type": "array", "items": { "type": "string" } } }, "clients": ["mcp", "voice"] },
+    { "name": "schedule_task", "kind": "write", "args": { "task_id": { "type": "integer" }, "due": { "type": "string" }, "start": { "type": "string" } }, "clients": ["mcp", "voice"] },
+    { "name": "reschedule_task", "kind": "write", "args": { "task_id": { "type": "integer" }, "due": { "type": "string" }, "start": { "type": "string" } }, "clients": ["mcp", "voice"] },
+    { "name": "complete_task", "kind": "write", "args": { "task_id": { "type": "integer" } }, "clients": ["mcp", "voice"] },
+    { "name": "set_priority", "kind": "write", "args": { "task_id": { "type": "integer" }, "priority": { "type": "string", "enum": ["none", "low", "medium", "high"] } }, "clients": ["mcp", "voice"] },
+    { "name": "set_list", "kind": "write", "args": { "task_id": { "type": "integer" }, "list": { "type": "string" } }, "clients": ["mcp", "voice"] },
+    { "name": "add_tags", "kind": "write", "args": { "task_id": { "type": "integer" }, "tags": { "type": "array", "items": { "type": "string" } } }, "clients": ["mcp", "voice"] },
+    { "name": "add_check_items", "kind": "write", "args": { "task_id": { "type": "integer" }, "titles": { "type": "array", "items": { "type": "string" } } }, "clients": ["mcp", "voice"] },
+    { "name": "check_in_habit", "kind": "write", "args": { "habit_id": { "type": "integer" }, "day": { "type": "string" }, "value": { "type": "number" } }, "clients": ["mcp", "voice"] }
+  ]
+}

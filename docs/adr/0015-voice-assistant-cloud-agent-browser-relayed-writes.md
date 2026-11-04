@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Supersedes one clause of
+Accepted. Supersedes one clause of
 [0005 (Assist)](0005-assist-local-suggest-only-ephemeral.md) and
 [0009](0009-assistant-cloud-chat-suggest-only.md) — "Assist only ever
 proposes; it never changes data on its own" — for one new member only,

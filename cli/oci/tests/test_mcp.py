@@ -10,13 +10,61 @@ import pytest
 
 from tuk.client import Client
 from tuk.mcp.server import handle, serve
-from tuk.mcp.tools import Toolbox
+from tuk.mcp.tools import TOOLS, Toolbox
 
 ROSTER = {
     "get_agenda", "search_tasks", "get_task", "get_goals", "get_focus_stats",
     "create_task", "schedule_task", "reschedule_task", "complete_task",
     "set_priority", "set_list", "add_tags", "add_check_items", "check_in_habit",
 }  # fmt: skip
+
+
+def test_shared_tool_roster_contract() -> None:
+    contract = json.loads((Path(__file__).parents[3] / "shared/voice-tool-roster.json").read_text())
+    tools = contract["tools"]
+    assert contract["contract_version"] == 1
+    assert {tool["name"] for tool in tools if "mcp" in tool["clients"]} == set(TOOLS)
+    assert {tool["name"] for tool in tools} == ROSTER
+    assert all(
+        tool["kind"] in {"read", "write"} and tool["args"]
+        for tool in tools
+        if tool["kind"] == "write"
+    )
+    assert not any(
+        "delete" in tool["name"].lower() or "remove" in tool["name"].lower() for tool in tools
+    )
+    assert all(
+        set(tool["args"])
+        <= {
+            "task_id",
+            "habit_id",
+            "query",
+            "limit",
+            "title",
+            "description",
+            "priority",
+            "due",
+            "start",
+            "list",
+            "tags",
+            "titles",
+            "day",
+            "value",
+            "days",
+        }
+        for tool in tools
+    )
+    assert all("habit_id" not in tool["args"] or "habit" in tool["name"] for tool in tools)
+    assert all(
+        "task_id" not in tool["args"]
+        or "task" in tool["name"]
+        or tool["name"] in {"set_priority", "set_list", "add_tags", "add_check_items"}
+        for tool in tools
+    )
+    assert {tool["name"] for tool in tools if "voice" in tool["clients"]} == ROSTER - {
+        "get_goals",
+        "get_focus_stats",
+    }
 
 
 def page(items: list[dict]) -> dict:
