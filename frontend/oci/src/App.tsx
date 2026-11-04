@@ -60,6 +60,7 @@ import { useRegisterShortcut } from "./shortcuts";
 import { looksLikeDatePhrase } from "./quickAdd";
 import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
+import { useVoiceAvailable } from "./useVoiceAvailable";
 import { AssistantView } from "./components/AssistantView";
 import { AllViewControls } from "./components/AllViewControls";
 import { CalendarView } from "./components/CalendarView";
@@ -282,6 +283,9 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // before the answer arrives.
   const assistantStatus = useAssistantAvailable();
   const assistantAvailable = assistantStatus === true && sectionSettings.assistant;
+  // Voice Assistant (ADR 0015, issue #366): invisible until LiveKit is
+  // configured in Settings.
+  const voiceAvailable = useVoiceAvailable();
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
   // The Folder view's own sort preference (#126) — kept separate from the
@@ -1208,6 +1212,17 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                     "tuk-tuk"
                   )}
                 </h1>
+                {voiceAvailable && (
+                  // Placeholder mount point: the real VoiceButton replaces it
+                  // once the voice session lands.
+                  <IconButton
+                    icon="mic"
+                    size={20}
+                    label="Start voice assistant"
+                    disabled
+                    onClick={() => undefined}
+                  />
+                )}
                 {selectedList !== null && !completedMode && (
                   <button
                     type="button"
