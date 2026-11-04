@@ -8,11 +8,12 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.app_settings import require_app_settings, voice_configured
-from app.crypto import encrypt_credential
+from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
 from app.errors import APIError
 from app.models import AppSettings
 from app.schemas import reject_explicit_null
+from app.voice_token import mint_token, new_room_name
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
 
@@ -87,3 +88,36 @@ async def remove_voice_config(session: SessionDep) -> None:
     app_settings.voice_livekit_api_key = None
     app_settings.encrypted_voice_livekit_api_secret = None
     await session.commit()
+
+
+class VoiceSession(BaseModel):
+    url: str
+    token: str
+    room: str
+
+
+@router.post("/session")
+async def start_voice_session(request: Request, session: SessionDep) -> VoiceSession:
+    """Mints a join token for a fresh room, with the agent dispatched from
+    inside the token (see `app.voice_token`). Unconfigured is a 404
+    `voice_unavailable`: the feature does not exist until Settings has the
+    LiveKit credentials, and the frontend never offers the mic before that."""
+    master_key = request.app.state.settings.app_master_key
+    assert master_key is not None  # app.main refuses to start without it
+    app_settings = await require_app_settings(session)
+    if not voice_configured(app_settings):
+        raise APIError(404, "voice_unavailable", "Voice Assistant is not configured")
+
+    # voice_configured guarantees all three are set.
+    assert app_settings.voice_livekit_url is not None
+    assert app_settings.voice_livekit_api_key is not None
+    assert app_settings.encrypted_voice_livekit_api_secret is not None
+    room = new_room_name()
+    token = mint_token(
+        api_key=app_settings.voice_livekit_api_key,
+        api_secret=decrypt_credential(
+            app_settings.encrypted_voice_livekit_api_secret, key=master_key
+        ),
+        room=room,
+    )
+    return VoiceSession(url=app_settings.voice_livekit_url, token=token, room=room)
