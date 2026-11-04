@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.15.0](https://github.com/Piwero/tuk-tuk/compare/v2.14.0...v2.15.0) - 2026-11-04
+
+### Features
+
+- **cli:** Read events over a date range, Goals and focus stats in the client ([7160945](https://github.com/Piwero/tuk-tuk/commit/7160945993e90b5ba0179f4b80569ccaacf9f28c))
+- **cli:** Add tuk-mcp, a local MCP server over stdio ([8723820](https://github.com/Piwero/tuk-tuk/commit/872382089f17ddedff6b7546619f223d925c5eab))
+- Add shared voice tool roster ([5910ed5](https://github.com/Piwero/tuk-tuk/commit/5910ed51c89c735cb385c3f006723af574e16888))
+
+### Bug Fixes
+
+- Update dependencies ([6c60743](https://github.com/Piwero/tuk-tuk/commit/6c607438e2e3facd5f2a98c72fb62527f16fc3ff))
+- Force refresh release tags ([011a0d5](https://github.com/Piwero/tuk-tuk/commit/011a0d52b06563f9f3b0d64397061de061095d75))
+
 ## [2.14.1](https://github.com/Piwero/tuk-tuk/compare/v2.14.0...v2.14.1) - 2026-10-29
 
 _Maintenance release; no user-facing changes._
