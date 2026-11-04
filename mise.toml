@@ -44,6 +44,21 @@ description = "Lint, format-check, and type-check MCP server"
 run = "uv run ruff check . && uv run ruff format --check . && uv run mypy src"
 dir = "mcp/oci"
 
+[tasks."voice-agent:install"]
+description = "Install voice agent dependencies (uv)"
+run = "uv sync"
+dir = "voice-agent"
+
+[tasks."voice-agent:test"]
+description = "Run voice agent tests"
+run = "uv run pytest"
+dir = "voice-agent"
+
+[tasks."voice-agent:lint"]
+description = "Lint, format-check, and type-check voice agent"
+run = "uv run ruff check . && uv run ruff format --check . && uv run mypy src"
+dir = "voice-agent"
+
 [tasks."backend:dev"]
 description = "Start backend with hot-reload (docker compose)"
 run = "docker compose up --build backend"
@@ -133,7 +148,7 @@ backend/oci/.venv/bin/pre-commit install --hook-type pre-push
 
 [tasks.install]
 description = "Install all dependencies"
-depends = ["backend:install", "frontend:install", "shared:install", "cli:install", "mcp:install"]
+depends = ["backend:install", "frontend:install", "shared:install", "cli:install", "mcp:install", "voice-agent:install"]
 
 [tasks.setup]
 description = "Install dependencies and configure git hooks"
@@ -149,11 +164,11 @@ run = "docker compose down"
 
 [tasks.lint]
 description = "Lint both stacks"
-depends = ["backend:lint", "frontend:lint", "shared:lint", "cli:lint", "mcp:lint"]
+depends = ["backend:lint", "frontend:lint", "shared:lint", "cli:lint", "mcp:lint", "voice-agent:lint"]
 
 [tasks.test]
 description = "Run all tests"
-depends = ["backend:test", "frontend:test", "shared:test", "cli:test", "mcp:test"]
+depends = ["backend:test", "frontend:test", "shared:test", "cli:test", "mcp:test", "voice-agent:test"]
 
 [tasks."release:tag"]
 description = "Bump version and push a release tag (major|minor|patch), triggering the Release workflow"
