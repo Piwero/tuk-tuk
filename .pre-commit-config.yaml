@@ -27,9 +27,9 @@ repos:
     hooks:
       - id: ruff
         args: ["--fix"]
-        files: ^(backend|cli|shared|mcp)/oci/
+        files: ^((backend|cli|shared|mcp)/oci|voice-agent)/
       - id: ruff-format
-        files: ^(backend|cli|shared|mcp)/oci/
+        files: ^((backend|cli|shared|mcp)/oci|voice-agent)/
 
   # ---- Python: mypy ----
   - repo: local
@@ -62,6 +62,13 @@ repos:
         pass_filenames: false
         require_serial: true
         files: ^(mcp/oci/src/|shared/oci/src/)
+      - id: mypy-voice-agent
+        name: mypy (voice-agent)
+        entry: bash -c 'cd voice-agent && uv run mypy src'
+        language: system
+        pass_filenames: false
+        require_serial: true
+        files: ^voice-agent/src/
 
   # ---- Frontend: prettier ----
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -135,6 +142,12 @@ repos:
       - id: mcp-pytest
         name: mcp pytest
         entry: bash -c 'cd mcp/oci && uv run pytest'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+      - id: voice-agent-pytest
+        name: voice-agent pytest
+        entry: bash -c 'cd voice-agent && uv run pytest'
         language: system
         pass_filenames: false
         stages: [pre-push]
