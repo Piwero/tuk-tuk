@@ -16,6 +16,8 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
+      - uses: astral-sh/setup-uv@v6
+
       - uses: actions/setup-node@v7
         with:
           node-version: "20"
