@@ -26,8 +26,9 @@ from typing import Any
 from tuk_core.client import Client, ClientError
 from tuk_core.dates import BadDateError, parse_date
 from tuk_core.names import UnknownNameError, resolve_name
-from tuk_core.store import read_session_cookie, write_session_cookie
 from tuk_core.tz import TzError, local_today
+
+from .session import FileSession, Session
 
 PRIORITIES = ["none", "low", "medium", "high"]
 DATE_HELP = (
@@ -92,8 +93,9 @@ def _items(page: dict[str, object]) -> list[dict[str, object]]:
 
 
 class Toolbox:
-    def __init__(self, client: Client) -> None:
+    def __init__(self, client: Client, session: Session | None = None) -> None:
         self.client = client
+        self.session = session or FileSession()
         self.task_ids: set[int] = set()
         self.habit_ids: set[int] = set()
         self._cookie = ""
@@ -107,15 +109,23 @@ class Toolbox:
 
     def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         try:
-            cookie = read_session_cookie()
+            cookie = self.session.cookie()
             if cookie is None:
                 raise ToolError("Not logged in — the owner must run `tuk login` in a terminal.")
             self._cookie = cookie
-            result = TOOLS[name].run(self, arguments)
+            try:
+                result = TOOLS[name].run(self, arguments)
+            except ClientError as exc:
+                # One re-login and one retry, never a loop: the backend throttles logins.
+                renewed = self.session.renew() if exc.code == "unauthorized" else None
+                if renewed is None:
+                    raise
+                self._cookie = renewed
+                result = TOOLS[name].run(self, arguments)
             return {"content": [{"type": "text", "text": json.dumps(result)}]}
         except ClientError as exc:
             if exc.code == "unauthorized":
-                text = "Session expired — the owner must run `tuk login` again."
+                text = self.session.expired_hint
             elif exc.code == "setup_required":
                 text = "No password set yet — the owner must finish first-run setup in the web app."
             else:
@@ -129,7 +139,7 @@ class Toolbox:
     def keep(self, refreshed: str | None) -> None:
         if refreshed:
             self._cookie = refreshed
-            write_session_cookie(refreshed)
+            self.session.keep(refreshed)
 
     def writable_task(self, args: dict[str, Any]) -> int:
         task_id = args.get("task_id")
