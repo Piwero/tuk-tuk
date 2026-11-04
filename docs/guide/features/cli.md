@@ -35,6 +35,10 @@ Needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and the
 
 Full reference: [`cli/oci/README.md`](../../../cli/oci/README.md).
 
+To use tuk-tuk from an AI client instead, there is a separate MCP server,
+`tuk-mcp`. It is not installed with `tuk`; see
+[`mcp/oci/README.md`](../../../mcp/oci/README.md).
+
 ## Good to know
 
 - `tuk` uses flags (`--tag home`), not Quick-Add symbols (`#home`).
