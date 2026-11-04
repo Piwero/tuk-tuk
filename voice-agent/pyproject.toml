@@ -9,10 +9,17 @@ description = "Tuk Tuk Voice Assistant agent (LiveKit Cloud)"
 requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Piwero" }]
-dependencies = []
+dependencies = [
+    "livekit-agents>=1.8,<2",
+]
 
 [dependency-groups]
-dev = ["pytest>=8.3.0", "ruff>=0.17.1", "mypy>=2.3.1"]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.17.1",
+    "mypy>=2.3.1",
+    "pytest-asyncio>=1.4.1.post1",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tuk_voice_agent"]
@@ -43,4 +50,6 @@ warn_unreachable = true
 minversion = "8.0"
 addopts = "-ra --strict-markers"
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["src"]
