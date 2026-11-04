@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-config
+  namespace: tuk-tuk
+data:
+  # In-cluster backend Service (backend/chart/service.yaml). Not a secret.
+  TUK_BASE_URL: "http://backend.tuk-tuk.svc:8900"

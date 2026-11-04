@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp
+  namespace: tuk-tuk
+spec:
+  # One replica: the Toolbox is not thread-safe, and its id allowlist and
+  # session cookie live in process memory (ADR 0016). The backend also
+  # throttles logins, so extra replicas would multiply re-logins. Don't raise.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp
+  template:
+    metadata:
+      labels:
+        app: mcp
+    spec:
+      # The Service is named "mcp", so Kubernetes would inject legacy
+      # MCP_PORT/MCP_SERVICE_* service-link env vars into this pod.
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: tuk-tuk-ghcr
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+      securityContext:
+        runAsNonRoot: true
+        # The image's `appuser` (useradd, first free uid). Numeric, because
+        # runAsNonRoot cannot verify a user given by name.
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: mcp
+          image: ghcr.io/piwero/tuk-tuk/mcp:2.15.0 # {"$imagepolicy": "tuk-tuk:mcp"}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8901
+          envFrom:
+            - configMapRef:
+                name: mcp-config
+            - secretRef:
+                name: tuk-tuk-mcp
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8901
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8901
+            initialDelaySeconds: 15
+            periodSeconds: 30

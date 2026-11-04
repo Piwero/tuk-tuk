@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tuk-tuk
+# No namespace.yaml: the backend and frontend charts already own the namespace.
+resources:
+  - configmap.yaml
+  - mcp-onepassworditem.yaml
+  - imagerepository.yaml
+  - imagepolicy.yaml
+  - deployment.yaml
+  - service.yaml
+  - tailscale-ingress.yaml
