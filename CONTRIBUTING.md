@@ -15,7 +15,7 @@ lives in [`CONTEXT.md`](CONTEXT.md); design decisions in [`docs/adr/`](docs/adr/
   tested with Vitest. `frontend/chart/` holds its Kubernetes manifests.
 - **`shared/oci/`**: shared HTTP client and user configuration (`tuk-core`).
 - **`cli/oci/`**: the `tuk` terminal client. See [`cli/oci/README.md`](cli/oci/README.md).
-- **`mcp/oci/`**: standalone stdio MCP server (`tuk-mcp`).
+- **`mcp/oci/`**: standalone MCP server (`tuk-mcp`, stdio and Streamable HTTP). See [`mcp/oci/README.md`](mcp/oci/README.md).
 - **`mise.toml`**: single dev interface. Provisions tools (python, node, uv,
   git-cliff) and defines every task (`mise tasks`).
 - **`docker-compose.yml`**: runs both dev servers in containers with bind
@@ -192,7 +192,7 @@ boot with no advisory lock, and the Inbox seed is an unguarded read-then-insert.
 │   └── chart/              # Kubernetes manifests (Kustomize + Flux)
 ├── shared/oci/             # `tuk-core` shared client package
 ├── cli/oci/                # `tuk` terminal client
-├── mcp/oci/                # `tuk-mcp` stdio server
+├── mcp/oci/                # `tuk-mcp` server (stdio + HTTP)
 ├── docs/                   # User guide, self-hosting, ADRs
 ├── .github/
 │   ├── workflows/          # CI pipelines

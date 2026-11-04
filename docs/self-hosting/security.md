@@ -39,6 +39,23 @@ credentials, Google sign-ins and AI API keys. It never appears in the app or the
    ([ADR 0013](../adr/0013-optional-external-postgres.md)).
 3. **Treat backups like passwords.** Store them encrypted.
 
+## Remote MCP server
+
+Optional. If you deploy `tuk-mcp --http` on Kubernetes
+([`mcp/oci/README.md`](../../mcp/oci/README.md),
+[ADR 0016](../adr/0016-mcp-network-transport.md)), know what it changes:
+
+- **Tailnet only.** It is published as `tuk-tuk-mcp` through a Tailscale
+  Ingress with Funnel off. Never give it a public hostname.
+- **Bearer token.** Clients must send `MCP_BEARER_TOKEN` (32+ characters).
+  It is one shared secret: rotate it by changing the 1Password item and every
+  client. Keep it out of checked-in config.
+- **The pod holds your password** (`TUK_PASSWORD`) and logs in as you. Anyone
+  who can read that namespace's secrets or the 1Password item has the full
+  password. Changing the password in **Settings → Security** logs the pod
+  out; update the item too.
+- A token holder can read your tasks and use the write tools, but not delete.
+
 ## Forgotten password
 
 There's no reset email. Whoever runs the server can clear the password, and
