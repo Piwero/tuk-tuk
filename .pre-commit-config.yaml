@@ -38,21 +38,29 @@ repos:
         name: mypy (backend)
         entry: bash -c 'cd backend/oci && uv run mypy src'
         language: system
+        pass_filenames: false
+        require_serial: true
         files: ^backend/oci/src/
       - id: mypy-cli
         name: mypy (cli)
         entry: bash -c 'cd cli/oci && uv run mypy src'
         language: system
+        pass_filenames: false
+        require_serial: true
         files: ^(cli/oci/src/|shared/oci/src/)
       - id: mypy-shared
         name: mypy (shared)
         entry: bash -c 'cd shared/oci && uv run mypy src'
         language: system
+        pass_filenames: false
+        require_serial: true
         files: ^shared/oci/src/
       - id: mypy-mcp
         name: mypy (mcp)
         entry: bash -c 'cd mcp/oci && uv run mypy src'
         language: system
+        pass_filenames: false
+        require_serial: true
         files: ^(mcp/oci/src/|shared/oci/src/)
 
   # ---- Frontend: prettier ----
