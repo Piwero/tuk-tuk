@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 tuk = "tuk.cli:main"
+tuk-mcp = "tuk.mcp:main"
 
 [dependency-groups]
 dev = [
