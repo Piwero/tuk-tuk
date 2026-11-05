@@ -19,7 +19,7 @@ import concurrent.futures
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from tuk_core.client import Client, ClientError
@@ -190,7 +190,14 @@ class Toolbox:
         for field in ("start", "due"):
             word = args.get(field)
             if word is not None:
-                body[f"{field}_date"] = parse_date(str(word), today, zone).isoformat()
+                parsed = parse_date(str(word), today, zone)
+                if " " in str(word).strip() and parsed.astimezone(UTC).astimezone(zone).replace(
+                    tzinfo=None
+                ) != parsed.replace(tzinfo=None):
+                    raise ToolError(
+                        f"{field} time does not exist in {zone_key} due to a clock change."
+                    )
+                body[f"{field}_date"] = parsed.isoformat()
         # A bare day word is all-day; a word with a time is not.
         body["is_all_day"] = " " not in str(args["due"]).strip()
         return body
@@ -308,9 +315,23 @@ def schedule_task(box: Toolbox, args: dict[str, Any]) -> object:
 
 def reschedule_task(box: Toolbox, args: dict[str, Any]) -> object:
     task_id = box.writable_task(args)
-    if box.fetch(task_id).get("due_date") is None:
+    task = box.fetch(task_id)
+    if task.get("due_date") is None:
         raise ToolError(f"Task {task_id} is not scheduled — use schedule_task.")
-    return _brief(box.patch(task_id, box.schedule_fields(args)))
+    body = box.schedule_fields(args)
+    if (
+        not body["is_all_day"]
+        and args.get("start") is None
+        and task.get("is_all_day") is False
+        and task.get("start_date") is not None
+    ):
+        duration = datetime.fromisoformat(str(task["due_date"])).astimezone(
+            UTC
+        ) - datetime.fromisoformat(str(task["start_date"])).astimezone(UTC)
+        start = datetime.fromisoformat(str(body["due_date"]))
+        body["start_date"] = start.isoformat()
+        body["due_date"] = (start.astimezone(UTC) + duration).astimezone(start.tzinfo).isoformat()
+    return _brief(box.patch(task_id, body))
 
 
 def complete_task(box: Toolbox, args: dict[str, Any]) -> object:
@@ -473,7 +494,10 @@ TOOLS: dict[str, Tool] = dict(
         ),
         _tool(
             "reschedule_task",
-            "Move an already SCHEDULED Task to a new date. Fails if it has no date.",
+            "Move an already SCHEDULED Task to a new date. For a timed Task with a start "
+            "and end, due with a time moves its start and preserves duration unless start "
+            "is also supplied (then start and due are explicit endpoints). "
+            "Fails if it has no date.",
             {"task_id": TASK_ID, "due": _DUE, "start": _DUE},
             ["task_id", "due"],
             reschedule_task,

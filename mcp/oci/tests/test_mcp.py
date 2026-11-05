@@ -3,7 +3,9 @@ transport underneath. The roster test pins the enforcement boundary (ADR 0014)."
 
 import io
 import json
+from datetime import date
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -211,6 +213,116 @@ def test_schedule_requires_unscheduled_and_reschedule_scheduled(env) -> None:
     assert result["due_date"].startswith("2026-10-09")
     assert call("schedule_task", task_id=7, due="tomorrow")[0]
     assert not call("reschedule_task", task_id=7, due="2026-10-10 14:00")[0]
+
+
+def test_reschedule_timed_task_preserves_duration(env, monkeypatch: pytest.MonkeyPatch) -> None:
+    api, call, _ = env
+    monkeypatch.setattr(
+        "tuk_mcp.tools.local_today",
+        lambda: (date(2026, 11, 5), ZoneInfo("Europe/London"), "Europe/London"),
+    )
+    api.task.update(
+        start_date="2026-11-04T09:00:00+00:00",
+        due_date="2026-11-04T10:30:00+00:00",
+        is_all_day=False,
+        time_zone="Europe/London",
+    )
+    assert not call("get_task", task_id=7)[0]
+    failed, result = call("reschedule_task", task_id=7, due="tomorrow 11:00")
+    assert not failed
+    assert result["start_date"] == "2026-11-06T11:00:00+00:00"
+    assert result["due_date"] == "2026-11-06T12:30:00+00:00"
+    assert result["is_all_day"] is False
+    assert not call("reschedule_task", task_id=7, due="tomorrow 11:00")[0]
+    assert call("get_task", task_id=7)[1]["due_date"] == "2026-11-06T12:30:00+00:00"
+
+
+def test_reschedule_day_only_task_stays_all_day(env) -> None:
+    api, call, _ = env
+    api.task.update(due_date="2026-11-04T00:00:00Z", start_date=None, is_all_day=True)
+    assert not call("get_task", task_id=7)[0]
+    failed, result = call("reschedule_task", task_id=7, due="2026-11-06")
+    assert not failed
+    assert result["due_date"] == "2026-11-06T00:00:00+00:00"
+    assert result["start_date"] is None
+    assert result["is_all_day"] is True
+
+
+@pytest.mark.parametrize("due", ["not-a-date", "2026-11-06 25:00", "2026-03-29 01:30"])
+def test_reschedule_invalid_date_does_not_write(
+    env, due: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api, call, _ = env
+    monkeypatch.setenv("TUK_TIMEZONE", "Europe/London")
+    api.task.update(
+        start_date="2026-11-04T09:00:00Z",
+        due_date="2026-11-04T10:30:00Z",
+        is_all_day=False,
+    )
+    assert not call("get_task", task_id=7)[0]
+    before = call("get_task", task_id=7)[1]
+    assert call("reschedule_task", task_id=7, due=due)[0]
+    assert not any(r.method == "PATCH" for r in api.requests)
+    assert call("get_task", task_id=7)[1] == before
+
+
+def test_reschedule_rejected_schedule_leaves_task_unchanged(env) -> None:
+    api, call, box = env
+    api.task.update(
+        start_date="2026-11-04T09:00:00Z",
+        due_date="2026-11-04T10:30:00Z",
+        is_all_day=False,
+    )
+    assert not call("get_task", task_id=7)[0]
+    before = call("get_task", task_id=7)[1]
+    original = api.__call__
+
+    def rejecting(request: httpx.Request) -> httpx.Response:
+        if request.method == "PATCH":
+            api.requests.append(request)
+            return httpx.Response(
+                422,
+                json={
+                    "error": {
+                        "code": "invalid_schedule",
+                        "message": "A timed start+due duration must stay within one day",
+                    }
+                },
+            )
+        return original(request)
+
+    box.client._http._transport = httpx.MockTransport(rejecting)  # noqa: SLF001
+    failed, text = call("reschedule_task", task_id=7, due="2026-11-06 23:30")
+    assert failed
+    assert "within one day" in text
+    patch = next(r for r in api.requests if r.method == "PATCH")
+    assert json.loads(patch.content)["due_date"] == "2026-11-07T01:00:00+00:00"
+    assert call("get_task", task_id=7)[1] == before
+
+
+def test_reschedule_rejects_unread_id(env) -> None:
+    api, call, _ = env
+    assert call("reschedule_task", task_id=7, due="2026-11-06 11:00")[0]
+    assert not api.requests
+
+
+def test_reschedule_explicit_start_keeps_requested_end(env) -> None:
+    api, call, _ = env
+    api.task.update(
+        start_date="2026-11-04T09:00:00Z",
+        due_date="2026-11-04T10:30:00Z",
+        is_all_day=False,
+    )
+    assert not call("get_task", task_id=7)[0]
+    failed, result = call(
+        "reschedule_task",
+        task_id=7,
+        start="2026-11-06 11:00",
+        due="2026-11-06 13:00",
+    )
+    assert not failed
+    assert result["start_date"] == "2026-11-06T11:00:00+00:00"
+    assert result["due_date"] == "2026-11-06T13:00:00+00:00"
 
 
 def test_habit_checkin_needs_read_and_is_a_put(env) -> None:
