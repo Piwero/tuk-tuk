@@ -5,12 +5,12 @@ import { registerVoiceReads } from "./rpc";
 import { FakeRoom } from "../test/fakeRoom";
 
 describe("browser voice RPC contract", () => {
-  it("registers exactly roster voice reads", () => {
+  it("registers exactly the roster voice reads and writes", () => {
     const room = new FakeRoom();
     registerVoiceReads(room as never);
     const registered = [...room.methods.keys()].sort();
     const expected = roster.tools
-      .filter((tool) => tool.clients.includes("voice") && tool.kind === "read")
+      .filter((tool) => tool.clients.includes("voice"))
       .map((tool) => tool.name)
       .sort();
     expect(registered).toEqual(expected);

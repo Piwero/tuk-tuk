@@ -31,7 +31,7 @@ describe("Voice Assistant session", () => {
       .setup()
       .click(await screen.findByRole("button", { name: "Start voice assistant" }));
     await waitFor(() => expect(rooms[0]?.connected).toBe(true));
-    expect(rooms[0]?.methods.size).toBe(3);
+    expect(rooms[0]?.methods.size).toBe(12);
     expect(screen.getByRole("button", { name: "End voice assistant" })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "End voice assistant" }));
     await waitFor(() => expect(rooms[0]?.connected).toBe(false));

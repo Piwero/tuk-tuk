@@ -3,7 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { IconButton } from "./IconButton";
 import { createVoiceSession, type RoomFactory, type VoiceState } from "../voice/session";
 
-export function VoiceButton({ createRoom }: { createRoom?: RoomFactory } = {}): JSX.Element {
+/** `refresh` runs after each voice write is applied, so the views on screen show it live. */
+export function VoiceButton({
+  createRoom,
+  refresh,
+}: { createRoom?: RoomFactory; refresh?: () => void } = {}): JSX.Element {
   const [state, setState] = useState<VoiceState>("idle");
   const [caption, setCaption] = useState("");
   const [error, setError] = useState("");
@@ -18,6 +22,7 @@ export function VoiceButton({ createRoom }: { createRoom?: RoomFactory } = {}): 
     setError("");
     session.current = createVoiceSession({
       createRoom,
+      refresh,
       onState: setState,
       onCaption: setCaption,
       onError: setError,

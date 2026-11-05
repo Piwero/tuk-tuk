@@ -1854,6 +1854,9 @@ export function installFakeApi({
       if (!task) {
         return notFound(`Task ${taskId} not found`);
       }
+      if (method === "GET") {
+        return json(task);
+      }
       if (method === "PATCH") {
         const { tag_ids, completed, ...rest } = body as {
           tag_ids?: number[];

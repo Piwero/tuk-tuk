@@ -288,6 +288,14 @@ export function App({ onLogout, voiceRoomFactory }: AppProps = {}): JSX.Element 
   // Voice Assistant (ADR 0015, issue #366): invisible until LiveKit is
   // configured in Settings.
   const voiceAvailable = useVoiceAvailable();
+  // Voice writes (issue #369) land through the API, not through a view's own handlers, so every
+  // surface that can show a Task or Habit re-reads. A ref keeps the callback the open session
+  // holds pointed at the current view's loader.
+  const [habitsRefresh, setHabitsRefresh] = useState(0);
+  const voiceRefreshRef = useRef<() => void>(() => undefined);
+  const refreshAfterVoiceWrite = useCallback((): void => {
+    voiceRefreshRef.current();
+  }, []);
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
   // The Folder view's own sort preference (#126) — kept separate from the
@@ -552,6 +560,13 @@ export function App({ onLogout, voiceRoomFactory }: AppProps = {}): JSX.Element 
       setTasks((await fetchTasksByTag(view.id)).items);
     }
   }, [view, completedMode, lists, allFilters]);
+
+  voiceRefreshRef.current = () => {
+    void loadTasks();
+    void fetchOpenTasks().then((page) => setOpenTasks(page.items));
+    setCalendarRefresh((current) => current + 1);
+    setHabitsRefresh((current) => current + 1);
+  };
 
   useEffect(() => {
     if (view === null) {
@@ -1214,7 +1229,9 @@ export function App({ onLogout, voiceRoomFactory }: AppProps = {}): JSX.Element 
                     "tuk-tuk"
                   )}
                 </h1>
-                {voiceAvailable && <VoiceButton createRoom={voiceRoomFactory} />}
+                {voiceAvailable && (
+                  <VoiceButton createRoom={voiceRoomFactory} refresh={refreshAfterVoiceWrite} />
+                )}
                 {selectedList !== null && !completedMode && (
                   <button
                     type="button"
@@ -1372,7 +1389,7 @@ export function App({ onLogout, voiceRoomFactory }: AppProps = {}): JSX.Element 
             ) : view?.kind === "goals" ? (
               <GoalsView />
             ) : view?.kind === "habits" ? (
-              <HabitsView />
+              <HabitsView refreshToken={habitsRefresh} />
             ) : view?.kind === "standup" ? (
               <StandupView />
             ) : view?.kind === "assistant" ? (

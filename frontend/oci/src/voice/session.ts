@@ -32,6 +32,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   let ended = false;
   let started = false;
   let caption = "";
+  let methods: string[] = [];
   const factory = options.createRoom ?? (() => new Room());
   const end = (message?: string) => {
     if (ended) return;
@@ -39,7 +40,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     window.removeEventListener("pagehide", leave);
     if (room) {
       room.unregisterTextStreamHandler("lk.transcription");
-      for (const name of ["get_agenda", "search_tasks", "get_task"]) room.unregisterRpcMethod(name);
+      for (const name of methods) room.unregisterRpcMethod(name);
       room.off(RoomEvent.Disconnected, disconnected);
       void room.disconnect();
     }
@@ -70,7 +71,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
             })
             .catch(() => undefined);
         });
-        registerVoiceReads(room, options.refresh);
+        methods = registerVoiceReads(room, options.refresh);
         await room.connect(url, token);
         if (ended) return;
         await room.localParticipant.setAttributes({
