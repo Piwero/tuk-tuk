@@ -98,6 +98,7 @@ export class ApiError extends Error {
   constructor(
     public readonly code: string,
     message: string,
+    public readonly status?: number,
   ) {
     super(message);
   }
@@ -137,7 +138,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         listener();
       }
     }
-    throw new ApiError(body.error.code, body.error.message);
+    throw new ApiError(body.error.code, body.error.message, response.status);
   }
   if (response.status === 204) {
     return undefined as T;

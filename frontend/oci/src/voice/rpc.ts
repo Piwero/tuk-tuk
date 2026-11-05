@@ -328,7 +328,11 @@ export function registerVoiceReads(room: VoiceRoom, refresh?: () => void): strin
         if (writes.has(name)) refresh?.();
         return result;
       } catch (error) {
-        throw new RpcError(1500, error instanceof Error ? error.message : "Voice tool failed", "");
+        throw new RpcError(
+          error instanceof ApiError && error.status === 401 ? 2001 : 1500,
+          error instanceof Error ? error.message : "Voice tool failed",
+          "",
+        );
       }
     });
   return Object.keys(handlers);

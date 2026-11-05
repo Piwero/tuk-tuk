@@ -1,4 +1,4 @@
-import { Room, RoomEvent } from "livekit-client";
+import { ConnectionError, ConnectionErrorReason, Room, RoomEvent } from "livekit-client";
 
 import { localDayOf } from "../dates";
 import { postVoiceSession } from "../api";
@@ -107,11 +107,15 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         checkVersion();
       } catch (error) {
         const message =
-          error instanceof Error && /permission|denied|notallowed/i.test(error.message)
-            ? "Microphone permission denied. Allow microphone access and try again."
-            : error instanceof Error
-              ? error.message
-              : "Could not start voice session.";
+          error instanceof ConnectionError && error.reason === ConnectionErrorReason.NotAllowed
+            ? "LiveKit credentials are invalid. Check voice settings."
+            : error instanceof ConnectionError
+              ? "LiveKit is unreachable. Check your connection and try again."
+              : error instanceof Error && /permission|denied|notallowed/i.test(error.message)
+                ? "Microphone permission denied. Allow microphone access and try again."
+                : error instanceof Error
+                  ? error.message
+                  : "Could not start voice session.";
         end(message);
       }
     },
