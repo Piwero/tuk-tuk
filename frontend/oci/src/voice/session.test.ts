@@ -179,12 +179,12 @@ describe("provider-neutral voice session", () => {
     expect(states.at(-1)).toBe("disconnected");
   });
 
-  it("surfaces connection errors and microphone refusal", async () => {
+  it("surfaces connection errors as-is, never as a microphone refusal (connect never opens the mic)", async () => {
     for (const [thrown, shown] of [
       [new Error("LiveKit is unreachable."), "LiveKit is unreachable."],
       [
-        new Error("Permission denied"),
-        "Microphone permission denied. Allow microphone access and try again.",
+        new Error("does not have permission to update own metadata"),
+        "does not have permission to update own metadata",
       ],
     ] as const) {
       const { session, states, errors } = setup((t) => {

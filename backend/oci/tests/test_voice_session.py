@@ -81,6 +81,9 @@ def test_token_grants_only_the_returned_room(client: TestClient) -> None:
         "canPublish": True,
         "canSubscribe": True,
         "canPublishData": True,
+        # The browser publishes its clock as participant attributes on join; LiveKit
+        # refuses that without this grant ("does not have permission to update own metadata").
+        "canUpdateOwnMetadata": True,
     }
 
 

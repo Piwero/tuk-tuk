@@ -56,18 +56,18 @@ it("shows a connection failure to the owner", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("Provider is unreachable.");
 });
 
-it("shows a microphone refusal distinctly", async () => {
+it("does not blame the microphone for a connection permission failure", async () => {
   installFakeApi(configured);
   const fake = fakeVoiceTransport((t) => {
     t.connect = async () => {
-      throw new Error("Permission denied");
+      throw new Error("does not have permission to update own metadata");
     };
   });
   render(<App voiceProvider={fake.provider} />);
   await connectVoiceFromAssistant(userEvent.setup());
-  expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Microphone permission denied. Allow microphone access and try again.",
-  );
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("does not have permission to update own metadata");
+  expect(alert).not.toHaveTextContent("Microphone");
 });
 
 it("maps API 401 to an auth-expired tool failure", async () => {

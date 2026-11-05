@@ -216,13 +216,8 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         });
         if (!ended && state === "connecting") setState("listening");
       } catch (error) {
-        recover(
-          error instanceof Error && MIC_REFUSED.test(error.message)
-            ? MIC_REFUSED_MESSAGE
-            : error instanceof Error
-              ? error.message
-              : "Could not start voice session.",
-        );
+        // connect() never opens the microphone, so nothing here is a microphone refusal.
+        recover(error instanceof Error ? error.message : "Could not start voice session.");
       }
     },
     startConversation() {

@@ -73,6 +73,8 @@ def mint_token(*, api_key: str, api_secret: str, room: str) -> str:
             "canPublish": True,
             "canSubscribe": True,
             "canPublishData": True,
+            # The browser publishes its clock (tz, date) as participant attributes.
+            "canUpdateOwnMetadata": True,
         },
         "roomConfig": {"agents": [{"agentName": AGENT_NAME}]},
     }
