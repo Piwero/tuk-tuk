@@ -11,6 +11,7 @@ license = "MIT"
 authors = [{ name = "Piwero" }]
 dependencies = [
     "livekit-agents>=1.8,<2",
+    "pydantic-settings>=2.15.0",
 ]
 
 [dependency-groups]
