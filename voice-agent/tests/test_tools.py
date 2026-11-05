@@ -33,12 +33,31 @@ def tools_by_name(fake: FakeLocalParticipant) -> dict[str, RawFunctionTool[..., 
     return {t.id: t for t in build_tools(fake, BROWSER)}  # type: ignore[arg-type]
 
 
-def test_tools_are_the_roster_read_tools_with_roster_args() -> None:
+def test_tools_are_the_roster_voice_tools_with_roster_args() -> None:
     tools = tools_by_name(FakeLocalParticipant())
-    reads = {n: t for n, t in VOICE_TOOLS.items() if t.kind == "read"}
-    assert tools.keys() == reads.keys()
+    assert tools.keys() == VOICE_TOOLS.keys()
     for name, tool in tools.items():
-        assert tool.info.raw_schema["parameters"]["properties"] == reads[name].args
+        assert tool.info.raw_schema["parameters"]["properties"] == VOICE_TOOLS[name].args
+
+
+def test_write_tools_have_kind_write_and_required_args() -> None:
+    # Literal: which tools mutate, and which args the model must supply, is deliberate.
+    writes = {n for n, t in VOICE_TOOLS.items() if t.kind == "write"}
+    required = {
+        n: t.info.raw_schema["parameters"]["required"]
+        for n, t in tools_by_name(FakeLocalParticipant()).items()
+    }
+    assert {n: required[n] for n in writes} == {
+        "create_task": ["title"],
+        "schedule_task": ["task_id", "due"],
+        "reschedule_task": ["task_id", "due"],
+        "complete_task": ["task_id"],
+        "set_priority": ["task_id", "priority"],
+        "set_list": ["task_id", "list"],
+        "add_tags": ["task_id", "tags"],
+        "add_check_items": ["task_id", "titles"],
+        "check_in_habit": ["habit_id"],
+    }
 
 
 @pytest.mark.parametrize(
@@ -47,6 +66,15 @@ def test_tools_are_the_roster_read_tools_with_roster_args() -> None:
         ("get_agenda", {}),
         ("search_tasks", {"query": "dentist", "limit": 5}),
         ("get_task", {"task_id": 42}),
+        ("create_task", {"title": "buy milk", "due": "tomorrow", "list": "Home"}),
+        ("schedule_task", {"task_id": 7, "due": "friday 14:00"}),
+        ("reschedule_task", {"task_id": 7, "due": "monday"}),
+        ("complete_task", {"task_id": 7}),
+        ("set_priority", {"task_id": 7, "priority": "high"}),
+        ("set_list", {"task_id": 7, "list": "Work"}),
+        ("add_tags", {"task_id": 7, "tags": ["urgent"]}),
+        ("add_check_items", {"task_id": 7, "titles": ["eggs", "bread"]}),
+        ("check_in_habit", {"habit_id": 3, "value": 2}),
     ],
 )
 async def test_tool_relays_rpc_named_like_roster_with_json_payload(
@@ -79,3 +107,13 @@ def test_instructions_carry_owner_clock_and_core_rules() -> None:
     assert "get_agenda" in text  # Agenda is the first action
     assert "Spanish" in text
     assert "delete" in text.lower()  # refusal rule (ADR 0014)
+
+
+def test_instructions_enforce_batch_confirmation_before_any_write() -> None:
+    text = build_instructions(tz="Europe/Madrid", date="2026-11-04").lower()
+    assert "placeholder" not in text
+    assert "read the whole batch back" in text
+    assert "spoken yes" in text
+    assert "same turn" in text
+    assert "no writes" in text  # decline or correction applies nothing
+    assert "never propose moving" in text  # Events stay put
