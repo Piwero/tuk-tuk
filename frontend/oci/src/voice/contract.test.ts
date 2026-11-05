@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 
 import { registerVoiceReads } from "./rpc";
-import { FakeRoom } from "../test/fakeRoom";
+import { FakeRoom, RpcError } from "../test/fakeRoom";
 
 describe("browser voice RPC contract", () => {
   it("requests the local day for agenda tasks and events", async () => {
@@ -52,5 +52,22 @@ describe("browser voice RPC contract", () => {
       .sort();
     expect(registered).toEqual(expected);
     expect(roster.contract_version).toBe(1);
+  });
+
+  it("translates tool failures to RpcError codes and keeps JSON payloads", async () => {
+    const room = new FakeRoom();
+    registerVoiceReads(room as never);
+    vi.spyOn(api, "fetchSearchTasks")
+      .mockResolvedValueOnce({ items: [], total: 0 } as never)
+      .mockRejectedValueOnce(new api.ApiError("unauthorized", "expired", 401))
+      .mockRejectedValueOnce(new Error("offline"));
+    const search = room.methods.get("search_tasks")!;
+    await expect(search({ payload: '{"query":"a"}' })).resolves.toBe('{"tasks":[],"total":0}');
+    await expect(search({ payload: '{"query":"a"}' })).rejects.toMatchObject({
+      code: 2001,
+      message: "expired",
+    });
+    await expect(search({ payload: '{"query":"a"}' })).rejects.toBeInstanceOf(RpcError);
+    await expect(search({ payload: "{" })).rejects.toMatchObject({ code: 1500 });
   });
 });
