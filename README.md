@@ -41,7 +41,8 @@ in a single self-hosted app. Your data stays on your machine.
 Also: [Quick-Add shortcuts](docs/guide/features/quick-add.md) ·
 [AI Assist](docs/guide/features/ai-assist.md) ·
 [Voice Assistant](docs/guide/features/voice.md) ([setup](docs/self-hosting/voice.md)) ·
-[Terminal app](docs/guide/features/cli.md)
+[Terminal app](docs/guide/features/cli.md) ·
+[MCP server](docs/guide/features/mcp.md)
 
 ## Get started
 
