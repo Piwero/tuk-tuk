@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.19.4](https://github.com/Piwero/tuk-tuk/compare/v2.19.3...v2.19.4) - 2026-11-05
+
+### Bug Fixes
+
+- **voice:** Bound optional agenda calendar read ([9e50a17](https://github.com/Piwero/tuk-tuk/commit/9e50a17bfb77c71de623352a72dce31df1b2822f))
+
 ## [2.19.3](https://github.com/Piwero/tuk-tuk/compare/v2.19.2...v2.19.3) - 2026-11-05
 
 ### Bug Fixes
