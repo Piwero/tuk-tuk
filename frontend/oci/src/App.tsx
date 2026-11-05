@@ -186,14 +186,14 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
 }
 
 interface AppProps {
-  voiceRoomFactory?: import("./voice/session").RoomFactory;
+  voiceTransport?: import("./voice/session").VoiceTransportFactory;
   /** Absent in tests that render App on its own — AuthGate is the only
    * caller that supplies it, so App's bootstrap and tests never need to
    * know authentication exists beyond forwarding this one callback. */
   onLogout?: () => void;
 }
 
-export function App({ onLogout, voiceRoomFactory }: AppProps = {}): JSX.Element {
+export function App({ onLogout, voiceTransport }: AppProps = {}): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -1230,7 +1230,7 @@ export function App({ onLogout, voiceRoomFactory }: AppProps = {}): JSX.Element 
                   )}
                 </h1>
                 {voiceAvailable && (
-                  <VoiceButton createRoom={voiceRoomFactory} refresh={refreshAfterVoiceWrite} />
+                  <VoiceButton createTransport={voiceTransport} refresh={refreshAfterVoiceWrite} />
                 )}
                 {selectedList !== null && !completedMode && (
                   <button

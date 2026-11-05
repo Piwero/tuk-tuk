@@ -12,7 +12,7 @@ import {
   installFakeApi,
   type FakeApiState,
 } from "./test/fakeApi";
-import { FakeRoom } from "./test/fakeRoom";
+import { fakeVoiceTransport } from "./test/fakeVoiceTransport";
 
 // Pinned: Friday 2026-07-03 12:00 in the suite's UTC zone, so "tomorrow", "monday" and
 // "today" resolve the same way for every runner.
@@ -32,8 +32,8 @@ interface Voice {
   call: (name: string, args?: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }
 
-/** Renders App with the Voice Assistant configured, starts a session on the fake room and
- * lets tests call the tab's RPC methods exactly as the agent would (JSON string in/out). */
+/** Renders App with the Voice Assistant configured, starts a session on a provider-neutral fake
+ * transport and lets tests call the tab's tools exactly as the agent would. */
 async function startVoice(options: FakeApiOptions = {}): Promise<Voice> {
   const api = installFakeApi({
     ...options,
@@ -41,21 +41,19 @@ async function startVoice(options: FakeApiOptions = {}): Promise<Voice> {
     voiceLivekitApiKey: "key",
     voiceSecretSet: true,
   });
-  const room = new FakeRoom();
-  render(<App voiceRoomFactory={(() => room) as never} />);
+  const fake = fakeVoiceTransport();
+  render(<App voiceTransport={fake.factory} />);
   await userEvent
     .setup({ advanceTimers: vi.advanceTimersByTime })
     .click(await screen.findByRole("button", { name: "Start voice assistant" }));
-  await waitFor(() => expect(room.connected).toBe(true));
+  await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
   const call = async (name: string, args: Record<string, unknown> = {}) => {
-    const handler = room.methods.get(name);
-    if (!handler) throw new Error(`no RPC method ${name}`);
-    // act: the agent's RPC lands outside any user event, and the refresh it triggers updates App.
-    let raw = "";
+    // act: the agent's call lands outside any user event, and the refresh it triggers updates App.
+    let result: unknown;
     await act(async () => {
-      raw = await handler({ payload: JSON.stringify(args) });
+      result = await fake.transports[0]!.call(name, args);
     });
-    return JSON.parse(raw) as Record<string, unknown>;
+    return result as Record<string, unknown>;
   };
   return { api, call };
 }

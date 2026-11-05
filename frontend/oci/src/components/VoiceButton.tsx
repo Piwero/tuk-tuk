@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
 import { IconButton } from "./IconButton";
-import { createVoiceSession, type RoomFactory, type VoiceState } from "../voice/session";
+import { livekitTransport } from "../voice/livekit";
+import { createVoiceSession, type VoiceState, type VoiceTransportFactory } from "../voice/session";
 
 /** `refresh` runs after each voice write is applied, so the views on screen show it live. */
 export function VoiceButton({
-  createRoom,
+  createTransport = livekitTransport(),
   refresh,
-}: { createRoom?: RoomFactory; refresh?: () => void } = {}): JSX.Element {
+}: { createTransport?: VoiceTransportFactory; refresh?: () => void } = {}): JSX.Element {
   const [state, setState] = useState<VoiceState>("idle");
   const [caption, setCaption] = useState("");
   const [error, setError] = useState("");
@@ -21,7 +22,7 @@ export function VoiceButton({
     }
     setError("");
     session.current = createVoiceSession({
-      createRoom,
+      createTransport,
       refresh,
       onState: setState,
       onCaption: setCaption,

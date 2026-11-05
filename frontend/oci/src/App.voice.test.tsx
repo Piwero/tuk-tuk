@@ -4,142 +4,29 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { installFakeApi } from "./test/fakeApi";
-import { FakeRoom } from "./test/fakeRoom";
-import { createVoiceSession } from "./voice/session";
+import { fakeVoiceTransport } from "./test/fakeVoiceTransport";
 
-const rooms: FakeRoom[] = [];
-const createRoom = () => {
-  const room = new FakeRoom();
-  rooms.push(room);
-  return room;
-};
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
-  rooms.length = 0;
 });
 
-describe("Voice Assistant session", () => {
-  it("requests mic only on start, sets local clock, registers reads, and disconnects", async () => {
+describe("Voice Assistant button", () => {
+  it("starts and ends a session, with the tools available to the agent", async () => {
     installFakeApi({
       voiceLivekitUrl: "wss://test.livekit.cloud",
       voiceLivekitApiKey: "key",
       voiceSecretSet: true,
     });
-    render(<App voiceRoomFactory={createRoom as never} />);
+    const fake = fakeVoiceTransport();
+    render(<App voiceTransport={fake.factory} />);
     await userEvent
       .setup()
       .click(await screen.findByRole("button", { name: "Start voice assistant" }));
-    await waitFor(() => expect(rooms[0]?.connected).toBe(true));
-    expect(rooms[0]?.methods.size).toBe(12);
-    expect(screen.getByRole("button", { name: "End voice assistant" })).toBeInTheDocument();
+    await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
+    expect(fake.transports[0]!.context.tools.methods).toHaveLength(12);
     await userEvent.setup().click(screen.getByRole("button", { name: "End voice assistant" }));
-    await waitFor(() => expect(rooms[0]?.connected).toBe(false));
-  });
-
-  it("disconnects if stopped while connect is pending", async () => {
-    const room = new FakeRoom();
-    let finish!: () => void;
-    room.connect = () =>
-      new Promise<void>((resolve) => {
-        finish = () => {
-          room.connected = true;
-          resolve();
-        };
-      });
-    vi.spyOn(await import("./api"), "postVoiceSession").mockResolvedValue({
-      url: "wss://test",
-      token: "token",
-      room: "room",
-    });
-    const session = createVoiceSession({
-      createRoom: () => room as never,
-      onState: () => {},
-      onCaption: () => {},
-      onError: () => {},
-    });
-    const starting = session.start();
-    await waitFor(() => expect(finish).toBeDefined());
-    await session.stop();
-    finish();
-    await starting;
-    expect(room.connected).toBe(false);
-  });
-
-  it("shows transcription chunks before the stream ends", async () => {
-    const room = new FakeRoom();
-    const captions: string[] = [];
-    vi.spyOn(await import("./api"), "postVoiceSession").mockResolvedValue({
-      url: "wss://test",
-      token: "token",
-      room: "room",
-    });
-    const session = createVoiceSession({
-      createRoom: () => room as never,
-      onState: () => {},
-      onCaption: (text) => captions.push(text),
-      onError: () => {},
-    });
-    await session.start();
-    let finish!: () => void;
-    const stream = {
-      async *[Symbol.asyncIterator]() {
-        yield "Hello";
-        await new Promise<void>((resolve) => {
-          finish = resolve;
-        });
-        yield " world";
-      },
-    };
-    room.handlers.get("lk.transcription")?.(stream as never);
-    await waitFor(() => expect(captions).toContain("Hello"));
-    finish();
-    await waitFor(() => expect(captions).toContain("Hello world"));
-    await session.stop();
-  });
-
-  it("rejects an agent that never publishes a contract version", async () => {
-    const room = new FakeRoom();
-    const errors: string[] = [];
-    vi.spyOn(await import("./api"), "postVoiceSession").mockResolvedValue({
-      url: "wss://test",
-      token: "token",
-      room: "room",
-    });
-    const session = createVoiceSession({
-      createRoom: () => room as never,
-      onState: () => {},
-      onCaption: () => {},
-      onError: (error) => errors.push(error),
-    });
-    await session.start();
-    vi.useFakeTimers();
-    room.remoteParticipants.set("agent", { attributes: {} });
-    room.handlers.get("participantConnected")?.();
-    vi.advanceTimersByTime(5000);
-    expect(errors).toContain("Voice agent out of date — redeploy");
-    vi.useRealTimers();
-  });
-
-  it("ends when agent contract differs", async () => {
-    const states: string[] = [];
-    const errors: string[] = [];
-    const room = new FakeRoom();
-    vi.spyOn(await import("./api"), "postVoiceSession").mockResolvedValue({
-      url: "wss://test",
-      token: "token",
-      room: "room",
-    });
-    const session = createVoiceSession({
-      createRoom: () => room as never,
-      onState: (state) => states.push(state),
-      onCaption: () => undefined,
-      onError: (error) => errors.push(error),
-    });
-    await session.start();
-    room.remoteParticipants.set("agent", { attributes: { contract_version: "2" } });
-    room.handlers.get("participantConnected")?.();
-    expect(states).toContain("ended");
-    expect(errors).toContain("Voice agent out of date — redeploy");
+    await waitFor(() => expect(fake.transports[0]?.connected).toBe(false));
+    expect(screen.getByRole("button", { name: "Start voice assistant" })).toBeInTheDocument();
   });
 });

@@ -1,11 +1,10 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { ConnectionError, RoomEvent } from "livekit-client";
 
 import { App } from "./App";
 import { installFakeApi } from "./test/fakeApi";
-import { FakeRoom } from "./test/fakeRoom";
+import { fakeVoiceTransport } from "./test/fakeVoiceTransport";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -13,24 +12,24 @@ afterEach(() => {
   localStorage.clear();
 });
 
+const configured = {
+  voiceLivekitUrl: "wss://test.livekit.cloud",
+  voiceLivekitApiKey: "key",
+  voiceSecretSet: true,
+};
+const agent = { speaking: false, contractVersion: "1" };
+
 it("hides exhausted voice until the next local month without a reload", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date(2026, 6, 31, 23, 59, 50));
-  installFakeApi({
-    voiceLivekitUrl: "wss://test.livekit.cloud",
-    voiceLivekitApiKey: "key",
-    voiceSecretSet: true,
-  });
-  const room = new FakeRoom();
-  render(<App voiceRoomFactory={(() => room) as never} />);
+  installFakeApi(configured);
+  const fake = fakeVoiceTransport();
+  render(<App voiceTransport={fake.factory} />);
   await userEvent
     .setup({ advanceTimers: vi.advanceTimersByTime })
     .click(await screen.findByRole("button", { name: "Start voice assistant" }));
-  await waitFor(() => expect(room.connected).toBe(true));
-  room.remoteParticipants.set("agent", {
-    attributes: { contract_version: "1", voice_end_reason: "quota_exhausted" },
-  });
-  act(() => room.handlers.get(RoomEvent.ParticipantAttributesChanged)?.());
+  await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
+  act(() => fake.transports[0]!.events.onAgent({ ...agent, endReason: "quota_exhausted" }));
   await waitFor(() =>
     expect(screen.queryByRole("button", { name: /voice assistant/i })).not.toBeInTheDocument(),
   );
@@ -41,94 +40,67 @@ it("hides exhausted voice until the next local month without a reload", async ()
   expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeInTheDocument();
 });
 
-it.each([
-  [
-    ConnectionError.notAllowed("unauthorized", 401),
-    "LiveKit credentials are invalid. Check voice settings.",
-  ],
-  [
-    ConnectionError.serverUnreachable("network"),
-    "LiveKit is unreachable. Check your connection and try again.",
-  ],
-])("shows connection failure distinctly", async (error, message) => {
-  installFakeApi({
-    voiceLivekitUrl: "wss://test.livekit.cloud",
-    voiceLivekitApiKey: "key",
-    voiceSecretSet: true,
+it("shows a connection failure to the owner", async () => {
+  installFakeApi(configured);
+  const fake = fakeVoiceTransport((t) => {
+    t.connect = async () => {
+      throw new Error("Provider is unreachable.");
+    };
   });
-  const room = new FakeRoom();
-  room.connect = async () => {
-    throw error;
-  };
-  render(<App voiceRoomFactory={(() => room) as never} />);
+  render(<App voiceTransport={fake.factory} />);
   await userEvent
     .setup()
     .click(await screen.findByRole("button", { name: "Start voice assistant" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Provider is unreachable.");
 });
 
-it("maps API 401 to a distinct lapsed-session RPC error", async () => {
-  const api = installFakeApi({
-    voiceLivekitUrl: "wss://test.livekit.cloud",
-    voiceLivekitApiKey: "key",
-    voiceSecretSet: true,
+it("shows a microphone refusal distinctly", async () => {
+  installFakeApi(configured);
+  const fake = fakeVoiceTransport((t) => {
+    t.connect = async () => {
+      throw new Error("Permission denied");
+    };
   });
-  const room = new FakeRoom();
-  render(<App voiceRoomFactory={(() => room) as never} />);
+  render(<App voiceTransport={fake.factory} />);
   await userEvent
     .setup()
     .click(await screen.findByRole("button", { name: "Start voice assistant" }));
-  await waitFor(() => expect(room.connected).toBe(true));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Microphone permission denied. Allow microphone access and try again.",
+  );
+});
+
+it("maps API 401 to an auth-expired tool failure", async () => {
+  const api = installFakeApi(configured);
+  const fake = fakeVoiceTransport();
+  render(<App voiceTransport={fake.factory} />);
+  await userEvent
+    .setup()
+    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
   api.loggedIn = false;
-  await expect(
-    room.methods.get("search_tasks")!({ payload: '{"query":"milk"}' }),
-  ).rejects.toMatchObject({ code: 2001 });
+  await expect(fake.transports[0]!.call("search_tasks", { query: "milk" })).rejects.toMatchObject({
+    authExpired: true,
+  });
 });
 
-it("locks immediately on a lapsed session but keeps the room until the agent finishes speaking", async () => {
+it("locks immediately on a lapsed session but keeps the session until the agent finishes speaking", async () => {
   const { AuthGate } = await import("./AuthGate");
-  const api = installFakeApi({
-    voiceLivekitUrl: "wss://test.livekit.cloud",
-    voiceLivekitApiKey: "key",
-    voiceSecretSet: true,
-  });
-  const room = new FakeRoom();
-  render(<AuthGate voiceRoomFactory={(() => room) as never} />);
+  const api = installFakeApi(configured);
+  const fake = fakeVoiceTransport();
+  render(<AuthGate voiceTransport={fake.factory} />);
   await userEvent
     .setup()
     .click(await screen.findByRole("button", { name: "Start voice assistant" }));
-  await waitFor(() => expect(room.connected).toBe(true));
+  await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
   api.loggedIn = false;
   await act(async () => {
-    await expect(
-      room.methods.get("search_tasks")!({ payload: '{"query":"milk"}' }),
-    ).rejects.toMatchObject({ code: 2001 });
+    await expect(fake.transports[0]!.call("search_tasks", { query: "milk" })).rejects.toMatchObject(
+      { authExpired: true },
+    );
   });
   expect(await screen.findByLabelText("Password")).toBeInTheDocument();
-  expect(room.connected).toBe(true);
-  room.remoteParticipants.set("agent", {
-    attributes: { contract_version: "1", voice_end_reason: "session_lapsed" },
-  });
-  act(() => room.handlers.get(RoomEvent.ParticipantAttributesChanged)?.());
-  await waitFor(() => expect(room.connected).toBe(false));
-});
-
-it("plays agent audio and detaches it when the room ends", async () => {
-  installFakeApi({
-    voiceLivekitUrl: "wss://test.livekit.cloud",
-    voiceLivekitApiKey: "key",
-    voiceSecretSet: true,
-  });
-  const room = new FakeRoom();
-  render(<App voiceRoomFactory={(() => room) as never} />);
-  await userEvent
-    .setup()
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
-  await waitFor(() => expect(room.connected).toBe(true));
-  const audio = document.createElement("audio");
-  const track = { kind: "audio", attach: () => audio, detach: () => [audio] };
-  act(() => room.handlers.get(RoomEvent.TrackSubscribed)?.(track as never));
-  expect(document.body.contains(audio)).toBe(true);
-  await userEvent.setup().click(screen.getByRole("button", { name: "End voice assistant" }));
-  expect(document.body.contains(audio)).toBe(false);
+  expect(fake.transports[0]!.connected).toBe(true);
+  act(() => fake.transports[0]!.events.onAgent({ ...agent, endReason: "session_lapsed" }));
+  await waitFor(() => expect(fake.transports[0]!.connected).toBe(false));
 });

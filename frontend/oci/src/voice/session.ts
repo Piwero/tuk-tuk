@@ -1,35 +1,45 @@
-import {
-  ConnectionError,
-  ConnectionErrorReason,
-  Room,
-  RoomEvent,
-  Track,
-  type RemoteTrack,
-} from "livekit-client";
-
 import roster from "../../../../shared/voice-tool-roster.json";
 import { localDayOf } from "../dates";
-import { onUnauthorized, postVoiceSession } from "../api";
-import { registerVoiceReads } from "./rpc";
+import { onUnauthorized } from "../api";
+import { createVoiceTools } from "./tools";
 import { currentMonth, notifyVoiceConfigChanged, VOICE_EXHAUSTED_KEY } from "../useVoiceAvailable";
 
 export type VoiceState = "idle" | "connecting" | "listening" | "speaking" | "ended";
-export type VoiceRoom = Pick<
-  Room,
-  | "connect"
-  | "disconnect"
-  | "localParticipant"
-  | "remoteParticipants"
-  | "on"
-  | "off"
-  | "registerTextStreamHandler"
-  | "unregisterTextStreamHandler"
-  | "registerRpcMethod"
-  | "unregisterRpcMethod"
->;
-export type RoomFactory = () => VoiceRoom;
+
+/** What a transport reports about the remote agent. `contractVersion` is absent until the agent
+ * has published one; `endReason` is set when the agent is ending the session. */
+export interface VoiceAgent {
+  speaking: boolean;
+  contractVersion?: string;
+  endReason?: string;
+}
+
+/** What a transport tells the session. A transport owns audio playback and the microphone. */
+export interface VoiceTransportEvents {
+  /** The agent started speaking a caption; its text arrives in chunks. */
+  onUtterance(chunks: AsyncIterable<string>): void;
+  /** The agent joined or changed; `undefined` while none has joined. */
+  onAgent(agent: VoiceAgent | undefined): void;
+  onDisconnected(): void;
+}
+
+export interface VoiceTransportContext {
+  /** The browser-side tools the transport exposes to the agent. */
+  tools: ReturnType<typeof createVoiceTools>;
+  events: VoiceTransportEvents;
+}
+
+/** One provider's way to carry a voice session. `connect` resolves once the microphone is live
+ * and the agent can be heard; `disconnect` is safe at any point, including while `connect` is
+ * pending, and leaves nothing behind. Errors thrown by `connect` are shown to the owner as-is. */
+export interface VoiceTransport {
+  connect(clock: { timeZone: string; date: string }): Promise<void>;
+  disconnect(): Promise<void>;
+}
+export type VoiceTransportFactory = (context: VoiceTransportContext) => VoiceTransport;
+
 export interface VoiceSessionOptions {
-  createRoom?: RoomFactory;
+  createTransport: VoiceTransportFactory;
   onState(state: VoiceState): void;
   onCaption(text: string): void;
   onError(message: string): void;
@@ -37,20 +47,14 @@ export interface VoiceSessionOptions {
 }
 
 export function createVoiceSession(options: VoiceSessionOptions) {
-  let room: VoiceRoom | undefined;
+  let transport: VoiceTransport | undefined;
   let ended = false;
   let started = false;
+  let state: VoiceState = "idle";
   let caption = "";
-  let methods: string[] = [];
-  const audioTracks = new Set<RemoteTrack>();
-  const unsubscribed = (track: RemoteTrack) => {
-    if (!audioTracks.delete(track)) return;
-    for (const element of track.detach()) element.remove();
-  };
-  const subscribed = (track: RemoteTrack) => {
-    if (track.kind !== Track.Kind.Audio) return;
-    audioTracks.add(track);
-    document.body.appendChild(track.attach());
+  const setState = (next: VoiceState) => {
+    state = next;
+    options.onState(next);
   };
   let lapsed = false;
   let lapsedTimer: number | undefined;
@@ -58,7 +62,6 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   const stopWatchingAuth = onUnauthorized(() => {
     lapsed = true;
   });
-  const factory = options.createRoom ?? (() => new Room());
   const end = (message?: string) => {
     if (ended) return;
     ended = true;
@@ -66,116 +69,79 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     window.clearTimeout(lapsedTimer);
     window.clearTimeout(versionTimer);
     window.removeEventListener("pagehide", leave);
-    if (room) {
-      room.unregisterTextStreamHandler("lk.transcription");
-      for (const name of methods) room.unregisterRpcMethod(name);
-      room.off(RoomEvent.Disconnected, disconnected);
-      room.off(RoomEvent.TrackSubscribed, subscribed);
-      room.off(RoomEvent.TrackUnsubscribed, unsubscribed);
-      for (const track of audioTracks) unsubscribed(track);
-      void room.disconnect();
-    }
+    void transport?.disconnect();
     caption = "";
     options.onCaption("");
-    options.onState("ended");
+    setState("ended");
     if (message) options.onError(message);
   };
   const leave = () => end();
-  const disconnected = () => end();
+  const outOfDate = () => end("Voice agent out of date — redeploy");
+  const events: VoiceTransportEvents = {
+    onUtterance(chunks) {
+      void (async () => {
+        let text = "";
+        const previous = caption;
+        for await (const chunk of chunks) {
+          if (ended) break;
+          text += chunk;
+          caption = previous ? `${previous} ${text}` : text;
+          options.onCaption(caption);
+        }
+      })().catch(() => undefined);
+    },
+    onAgent(agent) {
+      if (ended) return;
+      if (agent && agent.contractVersion === undefined) {
+        versionTimer ??= window.setTimeout(outOfDate, 5000);
+      } else {
+        window.clearTimeout(versionTimer);
+        versionTimer = undefined;
+      }
+      if (agent?.endReason === "quota_exhausted") {
+        try {
+          localStorage.setItem(VOICE_EXHAUSTED_KEY, currentMonth());
+        } catch {
+          /* storage may be unavailable */
+        }
+        end();
+        notifyVoiceConfigChanged();
+      } else if (agent?.endReason === "session_lapsed") {
+        end();
+      } else if (
+        agent?.contractVersion !== undefined &&
+        agent.contractVersion !== String(roster.contract_version)
+      ) {
+        outOfDate();
+      } else if (agent?.speaking) {
+        setState("speaking");
+      } else if (agent) {
+        setState("listening");
+      }
+    },
+    onDisconnected: () => end(),
+  };
   return {
     async start() {
       if (started || ended) return;
       started = true;
       window.addEventListener("pagehide", leave);
-      options.onState("connecting");
+      setState("connecting");
       try {
-        const { url, token } = await postVoiceSession();
-        if (ended) return;
-        room = factory();
-        room.on(RoomEvent.Disconnected, disconnected);
-        room.on(RoomEvent.TrackSubscribed, subscribed);
-        room.on(RoomEvent.TrackUnsubscribed, unsubscribed);
-        room.registerTextStreamHandler("lk.transcription", (reader) => {
-          void (async () => {
-            let text = "";
-            const previous = caption;
-            for await (const chunk of reader) {
-              if (ended) break;
-              text += chunk;
-              caption = previous ? `${previous} ${text}` : text;
-              options.onCaption(caption);
-            }
-          })().catch(() => undefined);
-        });
-        methods = registerVoiceReads(room, options.refresh);
-        await room.connect(url, token);
-        if (ended) {
-          await room.disconnect();
-          return;
-        }
-        await room.localParticipant.setAttributes({
-          tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        transport = options.createTransport({ tools: createVoiceTools(options.refresh), events });
+        await transport.connect({
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           date: localDayOf(new Date()),
         });
-        if (ended) return;
-        await room.localParticipant.setMicrophoneEnabled(true);
-        if (ended) {
-          await room.disconnect();
-          return;
-        }
-        options.onState("listening");
-        const checkVersion = () => {
-          const participant = [...room!.remoteParticipants.values()][0];
-          if (participant && participant.attributes.contract_version === undefined) {
-            versionTimer ??= window.setTimeout(() => {
-              versionTimer = undefined;
-              if (
-                [...room!.remoteParticipants.values()].some(
-                  (p) => p.attributes.contract_version === undefined,
-                )
-              )
-                end("Voice agent out of date — redeploy");
-            }, 5000);
-          } else {
-            window.clearTimeout(versionTimer);
-            versionTimer = undefined;
-          }
-          if (participant?.attributes.voice_end_reason === "quota_exhausted") {
-            try {
-              localStorage.setItem(VOICE_EXHAUSTED_KEY, currentMonth());
-            } catch {
-              /* storage may be unavailable */
-            }
-            end();
-            notifyVoiceConfigChanged();
-          } else if (participant?.attributes.voice_end_reason === "session_lapsed") {
-            end();
-          } else if (
-            participant?.attributes.contract_version !== undefined &&
-            participant.attributes.contract_version !== String(roster.contract_version)
-          ) {
-            end("Voice agent out of date — redeploy");
-          } else if (participant?.attributes["lk.agent.state"] === "speaking") {
-            options.onState("speaking");
-          } else if (participant && !ended) {
-            options.onState("listening");
-          }
-        };
-        room.on(RoomEvent.ParticipantConnected, checkVersion);
-        room.on(RoomEvent.ParticipantAttributesChanged, checkVersion);
-        checkVersion();
+        if (!ended && state === "connecting") setState("listening");
       } catch (error) {
-        const message =
-          error instanceof ConnectionError && error.reason === ConnectionErrorReason.NotAllowed
-            ? "LiveKit credentials are invalid. Check voice settings."
-            : error instanceof ConnectionError
-              ? "LiveKit is unreachable. Check your connection and try again."
-              : error instanceof Error && /permission|denied|notallowed/i.test(error.message)
-                ? "Microphone permission denied. Allow microphone access and try again."
-                : error instanceof Error
-                  ? error.message
-                  : "Could not start voice session.";
-        end(message);
+        end(
+          error instanceof Error && /permission|denied|notallowed/i.test(error.message)
+            ? "Microphone permission denied. Allow microphone access and try again."
+            : error instanceof Error
+              ? error.message
+              : "Could not start voice session.",
+        );
       }
     },
     async stop() {
@@ -183,17 +149,14 @@ export function createVoiceSession(options: VoiceSessionOptions) {
       end();
     },
     dispose() {
-      if (!ended && lapsed && room) {
+      if (!ended && lapsed && transport) {
         options.onState = () => undefined;
         options.onCaption = () => undefined;
         options.onError = () => undefined;
         lapsedTimer = window.setTimeout(() => end(), 10000);
         return;
       }
-      if (!ended) {
-        if (room) void room.disconnect();
-        end();
-      }
+      end();
     },
   };
 }
