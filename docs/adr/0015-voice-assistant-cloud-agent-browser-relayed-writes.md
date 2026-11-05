@@ -105,7 +105,8 @@ look like it works. Starting choices, for English and Spanish:
 - STT: AssemblyAI Universal-Streaming-Multilingual
 - LLM: Gemini 3.1 Flash Lite (tool-call quality is the risk; swap the
   model name if it misfires)
-- TTS: Inworld Realtime TTS 2.0 Flash
+- TTS: xAI TTS 1 (`xai/tts-1`). Inworld was the first pick but has no EU
+  endpoint, so it fails with `REGION_RESTRICTED` on EU-region projects.
 
 ## Decision: the backend mints room tokens; credentials live in settings
 

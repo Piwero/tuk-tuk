@@ -18,6 +18,7 @@ from tuk_voice_agent.config import (
     LLM_MODEL,
     STT_LANGUAGE,
     STT_MODEL,
+    TTS_LANGUAGE,
     TTS_MODEL,
     TTS_VOICE,
 )
@@ -102,7 +103,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     session: AgentSession[None] = AgentSession(
         stt=inference.STT(model=STT_MODEL, language=STT_LANGUAGE),
         llm=inference.LLM(model=LLM_MODEL),
-        tts=inference.TTS(model=TTS_MODEL, voice=TTS_VOICE),
+        tts=inference.TTS(model=TTS_MODEL, voice=TTS_VOICE, language=TTS_LANGUAGE),
         # Push-to-talk: the tab decides when a turn starts and ends (tuk_voice_agent.turns).
         turn_handling=TurnHandlingOptions(turn_detection="manual"),
     )
