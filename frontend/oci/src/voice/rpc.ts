@@ -39,13 +39,10 @@ const brief = (task: Task) => ({
 
 export async function getAgenda(): Promise<object> {
   const today = localDayOf(new Date());
-  const end = new Date(`${today}T00:00:00`);
-  end.setDate(end.getDate() + 6);
-  const windowEnd = localDayOf(end);
   const [taskPage, habitPage, events, lists, tags] = await Promise.all([
-    fetchSmartTasks("next7", today, EMPTY),
+    fetchSmartTasks("today", today, EMPTY),
     fetchHabits(today),
-    fetchCalendarEvents(today, windowEnd).catch(() => ({ events: [], failures: [] })),
+    fetchCalendarEvents(today, today).catch(() => ({ events: [], failures: [] })),
     fetchLists(),
     fetchTags(),
   ]);
@@ -53,7 +50,7 @@ export async function getAgenda(): Promise<object> {
   habitPage.items.forEach((habit) => writableHabitIds.add(habit.id));
   return {
     today,
-    window_end: windowEnd,
+    window_end: today,
     time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     tasks: taskPage.items.map(brief),
     tasks_total: taskPage.total,
