@@ -96,7 +96,7 @@ async def test_tool_relays_rpc_named_like_roster_with_json_payload(
 async def test_rpc_failure_reaches_llm_as_tool_error() -> None:
     err = rtc.RpcError(rtc.RpcError.ErrorCode.RESPONSE_TIMEOUT, "Response timeout")
     fake = FakeLocalParticipant(error=err)
-    with pytest.raises(ToolError, match="Response timeout"):
+    with pytest.raises(ToolError, match="couldn't reach your app"):
         await tools_by_name(fake)["get_agenda"](raw_arguments={})
 
 

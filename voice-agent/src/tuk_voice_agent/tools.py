@@ -4,7 +4,7 @@ never touches the API itself. Writes carry no extra guard here: the batch-confir
 the prompt (issue #369) and the id allowlist, name resolution and recurrence handling in the tab."""
 
 import json
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from livekit import rtc
@@ -51,7 +51,10 @@ _REQUIRED = {
 
 
 def _relay(
-    participant: rtc.LocalParticipant, identity: str, name: str
+    participant: rtc.LocalParticipant,
+    identity: str,
+    name: str,
+    on_lapsed: Callable[[], None] | None,
 ) -> RawFunctionTool[..., Awaitable[str]]:
     async def call(raw_arguments: dict[str, object]) -> str:
         try:
@@ -62,7 +65,19 @@ def _relay(
                 response_timeout=RPC_TIMEOUT_SECONDS,
             )
         except rtc.RpcError as exc:
-            raise ToolError(exc.message) from exc
+            if exc.code == 2001:
+                if on_lapsed:
+                    on_lapsed()
+                raise ToolError("You need to log in again. Do not retry.") from exc
+            if exc.code != 1500:
+                raise ToolError(
+                    "I couldn't reach your app. Do not retry. Report which changes "
+                    "succeeded and which failed."
+                ) from exc
+            raise ToolError(
+                f"{name} failed: {exc.message}. Do not retry. Report which changes "
+                "succeeded and which failed."
+            ) from exc
 
     schema: dict[str, Any] = {
         "type": "function",
@@ -78,6 +93,8 @@ def _relay(
 
 
 def build_tools(
-    participant: rtc.LocalParticipant, browser_identity: str
+    participant: rtc.LocalParticipant,
+    browser_identity: str,
+    on_lapsed: Callable[[], None] | None = None,
 ) -> list[RawFunctionTool[..., Awaitable[str]]]:
-    return [_relay(participant, browser_identity, name) for name in VOICE_TOOLS]
+    return [_relay(participant, browser_identity, name, on_lapsed) for name in VOICE_TOOLS]
