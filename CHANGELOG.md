@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.18.0](https://github.com/Piwero/tuk-tuk/compare/v2.17.0...v2.18.0) - 2026-11-05
+
+### Bug Fixes
+
+- Include shared roster in frontend image build ([5ca5f80](https://github.com/Piwero/tuk-tuk/commit/5ca5f808cec98fa19249f451506688c6f5a0c6db))
+
 ## [2.17.0](https://github.com/Piwero/tuk-tuk/compare/v2.16.1...v2.17.0) - 2026-11-05
 
 ### Features
