@@ -22,6 +22,10 @@ something to tomorrow, check in a Habit. Works in English and Spanish.
 5. Choose **End session** when done. There is no silence timeout, so a connected session keeps
    using your free minutes until you end it or close the tab.
 
+For hands-free conversation, choose **Start conversation**. The microphone stays on and the
+assistant greets you once per session. Speak to interrupt a reply. Choose **Switch to
+hold-to-talk** to mute the microphone and keep the same session and captions.
+
 ## Things to try
 
 | Say | What happens |
