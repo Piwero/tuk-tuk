@@ -7,13 +7,12 @@ read endpoint reports whether it is set, never its value.
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
 
-from app.app_settings import require_app_settings, voice_configured
-from app.crypto import decrypt_credential, encrypt_credential
+from app import voice_livekit
+from app.app_settings import require_app_settings
 from app.db import SessionDep
 from app.errors import APIError
 from app.models import AppSettings
 from app.schemas import reject_explicit_null
-from app.voice_token import mint_token, new_room_name
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
 
@@ -42,7 +41,7 @@ def _config_from(app_settings: AppSettings) -> VoiceConfig:
         livekit_url=app_settings.voice_livekit_url,
         livekit_api_key=app_settings.voice_livekit_api_key,
         livekit_api_secret_set=app_settings.encrypted_voice_livekit_api_secret is not None,
-        configured=voice_configured(app_settings),
+        configured=voice_livekit.is_configured(app_settings),
     )
 
 
@@ -66,14 +65,13 @@ async def update_voice_config(
     ):
         raise APIError(422, "livekit_secret_required", "A LiveKit API secret is required")
 
-    if payload.livekit_url is not None:
-        app_settings.voice_livekit_url = payload.livekit_url
-    if payload.livekit_api_key is not None:
-        app_settings.voice_livekit_api_key = payload.livekit_api_key
-    if payload.livekit_api_secret is not None:
-        app_settings.encrypted_voice_livekit_api_secret = encrypt_credential(
-            payload.livekit_api_secret, key=master_key
-        )
+    voice_livekit.apply_update(
+        app_settings,
+        master_key=master_key,
+        url=payload.livekit_url,
+        api_key=payload.livekit_api_key,
+        api_secret=payload.livekit_api_secret,
+    )
 
     await session.commit()
     return _config_from(app_settings)
@@ -84,9 +82,7 @@ async def remove_voice_config(session: SessionDep) -> None:
     """Clears every field, returning the Voice Assistant to the same
     unconfigured, invisible state as a fresh deployment."""
     app_settings = await require_app_settings(session)
-    app_settings.voice_livekit_url = None
-    app_settings.voice_livekit_api_key = None
-    app_settings.encrypted_voice_livekit_api_secret = None
+    voice_livekit.clear(app_settings)
     await session.commit()
 
 
@@ -99,25 +95,12 @@ class VoiceSession(BaseModel):
 @router.post("/session")
 async def start_voice_session(request: Request, session: SessionDep) -> VoiceSession:
     """Mints a join token for a fresh room, with the agent dispatched from
-    inside the token (see `app.voice_token`). Unconfigured is a 404
+    inside the token (see `app.voice_livekit`). Unconfigured is a 404
     `voice_unavailable`: the feature does not exist until Settings has the
     LiveKit credentials, and the frontend never offers the mic before that."""
     master_key = request.app.state.settings.app_master_key
     assert master_key is not None  # app.main refuses to start without it
     app_settings = await require_app_settings(session)
-    if not voice_configured(app_settings):
+    if not voice_livekit.is_configured(app_settings):
         raise APIError(404, "voice_unavailable", "Voice Assistant is not configured")
-
-    # voice_configured guarantees all three are set.
-    assert app_settings.voice_livekit_url is not None
-    assert app_settings.voice_livekit_api_key is not None
-    assert app_settings.encrypted_voice_livekit_api_secret is not None
-    room = new_room_name()
-    token = mint_token(
-        api_key=app_settings.voice_livekit_api_key,
-        api_secret=decrypt_credential(
-            app_settings.encrypted_voice_livekit_api_secret, key=master_key
-        ),
-        room=room,
-    )
-    return VoiceSession(url=app_settings.voice_livekit_url, token=token, room=room)
+    return VoiceSession(**voice_livekit.create_session(app_settings, master_key=master_key))

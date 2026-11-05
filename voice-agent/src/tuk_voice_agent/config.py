@@ -1,6 +1,6 @@
 """Single place for models and timings (issue #367/#368, ADR 0015). Swap a model here only."""
 
-# Must equal AGENT_NAME in backend/oci/src/app/voice_token.py: the backend dispatches this agent
+# Must equal AGENT_NAME in backend/oci/src/app/voice_livekit.py: the backend dispatches this agent
 # by name via the token's roomConfig. Plain string on both sides; docs note covers drift.
 AGENT_NAME = "tuktuk-voice"
 

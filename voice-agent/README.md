@@ -19,7 +19,7 @@ lk agent status
 
 The included Dockerfile starts `tuk_voice_agent.agent`. The agent name `tuktuk-voice` in
 `src/tuk_voice_agent/config.py` must match `AGENT_NAME` in
-`backend/oci/src/app/voice_token.py`: the backend dispatches by name.
+`backend/oci/src/app/voice_livekit.py`: the backend dispatches by name.
 
 `lk agent deploy` uploads this directory only. After editing `shared/voice-tool-roster.json`,
 copy it to `src/tuk_voice_agent/voice-tool-roster.json`; the contract test checks they match.

@@ -24,7 +24,7 @@ class FakeParticipant:
 
 
 def test_agent_name_matches_backend_dispatch() -> None:
-    # Literal on purpose: backend/oci/src/app/voice_token.py AGENT_NAME dispatches this string.
+    # Literal on purpose: backend/oci/src/app/voice_livekit.py AGENT_NAME dispatches this string.
     assert AGENT_NAME == "tuktuk-voice"
 
 

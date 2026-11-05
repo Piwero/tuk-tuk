@@ -61,7 +61,7 @@ output. The CLI writes `voice-agent/livekit.toml` (your project and agent ID); k
 The agent registers as **`tuktuk-voice`**. The backend asks LiveKit for exactly that name, so
 the two must match. Don't rename it. If you ever fork the agent, change `AGENT_NAME` in
 `voice-agent/src/tuk_voice_agent/config.py` **and** `AGENT_NAME` in
-`backend/oci/src/app/voice_token.py` together. There is no shared code between the two sides
+`backend/oci/src/app/voice_livekit.py` together. There is no shared code between the two sides
 on purpose. The symptom is a session that connects and
 then sits in silence.
 
