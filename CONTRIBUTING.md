@@ -17,6 +17,7 @@ lives in [`CONTEXT.md`](CONTEXT.md); design decisions in [`docs/adr/`](docs/adr/
 - **`cli/oci/`**: the `tuk` terminal client. See [`cli/oci/README.md`](cli/oci/README.md).
 - **`mcp/oci/`**: standalone MCP server (`tuk-mcp`, stdio and Streamable HTTP). See [`mcp/oci/README.md`](mcp/oci/README.md).
   `mcp/chart/` holds its Kubernetes manifests.
+- **`voice-agent/`**: Python LiveKit Cloud worker, with manual text simulations. See [`voice-agent/README.md`](voice-agent/README.md).
 - **`mise.toml`**: single dev interface. Provisions tools (python, node, uv,
   git-cliff) and defines every task (`mise tasks`).
 - **`docker-compose.yml`**: runs both dev servers in containers with bind
@@ -196,6 +197,7 @@ boot with no advisory lock, and the Inbox seed is an unguarded read-then-insert.
 ├── mcp/
 │   ├── oci/                # `tuk-mcp` server (stdio + HTTP; the image)
 │   └── chart/              # Kubernetes manifests (Kustomize + Flux)
+├── voice-agent/            # LiveKit Cloud agent and hand-run simulations
 ├── docs/                   # User guide, self-hosting, ADRs
 ├── .github/
 │   ├── workflows/          # CI pipelines (backend, frontend, cli, shared, mcp) + release

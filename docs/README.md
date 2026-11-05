@@ -18,6 +18,7 @@ For anyone using Tuk Tuk day to day.
    - [Focus timer](guide/features/focus.md)
    - [Goals and daily stand-up](guide/features/goals-and-standup.md)
    - [AI Assist (optional)](guide/features/ai-assist.md)
+   - [Voice Assistant (optional)](guide/features/voice.md)
    - [Terminal app](guide/features/cli.md)
 3. [Glossary](guide/glossary.md): what each word in the app means
 4. [FAQ](guide/faq.md): privacy, backups, phones, cost

@@ -1,7 +1,7 @@
 """Hand-run text simulations of the Voice Assistant (issue #372, ADR 0015). NOT part of CI.
 
 Each case drives the real prompt, tools and model through LiveKit's `AgentSession.run()` text
-mode, no audio and no room, so a run spends a few of the free 350 turns and no voice minutes. The
+mode, no audio and no room. A run uses LiveKit Inference credit, not voice minutes. The
 browser tab is replaced by `FakeTab`: it answers the agent's RPC calls from a canned Agenda and
 records every call, which is how the "zero writes" cases are checked.
 
