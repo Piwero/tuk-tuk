@@ -11,7 +11,6 @@ TTS_MODEL = "inworld/inworld-tts-2-flash"
 TTS_VOICE = "Ashley"  # language auto-detected from the text, so Spanish replies still work
 
 RPC_TIMEOUT_SECONDS = 5.0
-SILENCE_TIMEOUT_SECONDS = 20.0  # enforced in T8
 ATTRIBUTES_WAIT_SECONDS = 3.0  # how long to wait for the tab's tz/date attributes after join
 
 # Participant attribute names shared with the browser (frontend/oci/src/voice/session.ts).

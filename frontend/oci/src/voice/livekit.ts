@@ -3,13 +3,19 @@ import {
   ConnectionErrorReason,
   Room,
   RoomEvent,
+  RpcError,
   Track,
   type RemoteTrack,
 } from "livekit-client";
 
 import { postVoiceSession } from "../api";
 import { registerVoiceReads } from "./rpc";
-import type { VoiceEndReason, VoiceProvider, VoiceTransportFactory } from "./session";
+import {
+  OUT_OF_DATE,
+  type VoiceEndReason,
+  type VoiceProvider,
+  type VoiceTransportFactory,
+} from "./session";
 
 export type VoiceRoom = Pick<
   Room,
@@ -64,6 +70,7 @@ export const livekitTransport =
   ({ tools, events }) => {
     let room: VoiceRoom | undefined;
     let closed = false;
+    let continuous = false;
     let methods: string[] = [];
     const audioTracks = new Set<RemoteTrack>();
     const unsubscribed = (track: RemoteTrack) => {
@@ -82,6 +89,7 @@ export const livekitTransport =
       events.onAgent(
         participant && {
           speaking: participant.attributes["lk.agent.state"] === "speaking",
+          thinking: participant.attributes["lk.agent.state"] === "thinking",
           contractVersion: participant.attributes.contract_version,
           endReason:
             reason === "quota_exhausted" ? "unavailable" : (reason as VoiceEndReason | undefined),
@@ -103,8 +111,70 @@ export const livekitTransport =
       for (const track of audioTracks) unsubscribed(track);
       await room.disconnect();
     };
+    // Turn control is the browser telling the agent when the owner starts, ends or abandons a
+    // spoken turn (ADR 0015 amendment, issue #395). These RPCs are not roster tools.
+    const turn = async (method: "start_turn" | "end_turn" | "cancel_turn") => {
+      const identity = room && [...room.remoteParticipants.keys()][0];
+      if (!room || closed) return;
+      if (!identity) throw new Error("Voice agent is still joining. Try again in a moment.");
+      const local = room.localParticipant;
+      const starting = method === "start_turn";
+      // Speech must be flushed before the agent hears the turn end, so the mic closes first.
+      if (!starting) await local.setMicrophoneEnabled(false);
+      if (closed) return;
+      let ready = false;
+      try {
+        await local.performRpc({ destinationIdentity: identity, method, payload: "" });
+        ready = starting;
+        if (starting && !closed) {
+          await local.setMicrophoneEnabled(true);
+          if (closed) await local.setMicrophoneEnabled(false);
+        }
+      } catch (error) {
+        if (starting) {
+          await local.setMicrophoneEnabled(false);
+          if (ready && !closed) {
+            await local
+              .performRpc({ destinationIdentity: identity, method: "cancel_turn", payload: "" })
+              .catch(() => undefined);
+          }
+        }
+        throw error instanceof RpcError && error.code === RpcError.ErrorCode.UNSUPPORTED_METHOD
+          ? new Error(OUT_OF_DATE)
+          : error;
+      }
+    };
+    const conversation = async (starting: boolean) => {
+      const identity = room && [...room.remoteParticipants.keys()][0];
+      if (!room || closed) return;
+      if (!identity) throw new Error("Voice agent is still joining. Try again in a moment.");
+      const local = room.localParticipant;
+      continuous = starting;
+      if (!starting) await local.setMicrophoneEnabled(false);
+      try {
+        await local.performRpc({
+          destinationIdentity: identity,
+          method: starting ? "start_conversation" : "stop_conversation",
+          payload: "",
+        });
+        if (starting && continuous && !closed) {
+          await local.setMicrophoneEnabled(true);
+          if (!continuous || closed) await local.setMicrophoneEnabled(false);
+        }
+      } catch (error) {
+        if (starting) await local.setMicrophoneEnabled(false);
+        throw error instanceof RpcError && error.code === RpcError.ErrorCode.UNSUPPORTED_METHOD
+          ? new Error(OUT_OF_DATE)
+          : error;
+      }
+    };
     return {
       disconnect,
+      startConversation: () => conversation(true),
+      stopConversation: () => conversation(false),
+      startTurn: () => turn("start_turn"),
+      endTurn: () => turn("end_turn"),
+      cancelTurn: () => turn("cancel_turn"),
       async connect(clock) {
         try {
           const { url, token } = await postVoiceSession();
@@ -121,7 +191,6 @@ export const livekitTransport =
           if (closed) return void (await joined.disconnect());
           await joined.localParticipant.setAttributes({ tz: clock.timeZone, date: clock.date });
           if (closed) return;
-          await joined.localParticipant.setMicrophoneEnabled(true);
           if (closed) return void (await joined.disconnect());
           joined.on(RoomEvent.ParticipantConnected, agentChanged);
           joined.on(RoomEvent.ParticipantAttributesChanged, agentChanged);

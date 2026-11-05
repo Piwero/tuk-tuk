@@ -12,7 +12,11 @@ import {
   installFakeApi,
   type FakeApiState,
 } from "./test/fakeApi";
-import { fakeVoiceTransport } from "./test/fakeVoiceTransport";
+import {
+  backToAllTasks,
+  connectVoiceFromAssistant,
+  fakeVoiceTransport,
+} from "./test/fakeVoiceTransport";
 
 // Pinned: Friday 2026-07-03 12:00 in the suite's UTC zone, so "tomorrow", "monday" and
 // "today" resolve the same way for every runner.
@@ -43,10 +47,11 @@ async function startVoice(options: FakeApiOptions = {}): Promise<Voice> {
   });
   const fake = fakeVoiceTransport();
   render(<App voiceProvider={fake.provider} />);
-  await userEvent
-    .setup({ advanceTimers: vi.advanceTimersByTime })
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  await connectVoiceFromAssistant(user);
   await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
+  // The session outlives the Voice view: back on the task list, the agent's writes show live.
+  await backToAllTasks(user);
   const call = async (name: string, args: Record<string, unknown> = {}) => {
     // act: the agent's call lands outside any user event, and the refresh it triggers updates App.
     let result: unknown;

@@ -20,7 +20,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"],
+    setupFiles: ["./src/test/setup.tsx"],
     // Pin the suite to UTC: the calendar tests assume local wall-clock times
     // equal their stored UTC instants (see pinCalendarClock), which only holds
     // when the runner's timezone is UTC.

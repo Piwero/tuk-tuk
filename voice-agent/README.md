@@ -62,3 +62,20 @@ Run one case with, for example, `uv run pytest -s simulations -k delete`. Withou
 the cases skip. Never commit credentials; unset the variables after use. Tests do not exercise
 speech recognition, audio, real browser RPC or the deployed agent. Review verbose output only
 in a safe environment, as it includes conversation text.
+
+### Real LiveKit audio check (#397)
+
+Not run in implementation environment: no LiveKit credentials or browser audio device.
+With a deployed agent and configured app, use a browser with a working microphone and speaker:
+
+1. Open `/assistant` Voice. Confirm no microphone indicator and no greeting.
+2. Select Start conversation. Confirm microphone indicator, brief greeting, and audible reply
+   after speaking and pausing. Interrupt a long reply by speaking; ask a follow-up that depends
+   on earlier context and confirm it answers in context.
+3. Select Switch to hold-to-talk. Confirm the microphone indicator turns off and captions remain.
+   Hold to speak, release, and confirm the reply completes. Hold while it speaks and confirm
+   interruption. Slide off a held control and confirm no reply to the canceled turn.
+4. Select Start conversation again. Confirm no second greeting. End session and confirm browser
+   microphone indicator turns off. Repeat with tab closure and confirm microphone release.
+
+Record browser, agent version, date, and results for each step; fake transports cannot verify audio.

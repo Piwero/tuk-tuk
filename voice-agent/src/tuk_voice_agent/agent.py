@@ -16,7 +16,6 @@ from tuk_voice_agent.config import (
     ATTR_TZ,
     ATTRIBUTES_WAIT_SECONDS,
     LLM_MODEL,
-    SILENCE_TIMEOUT_SECONDS,
     STT_LANGUAGE,
     STT_MODEL,
     TTS_MODEL,
@@ -25,6 +24,7 @@ from tuk_voice_agent.config import (
 from tuk_voice_agent.livekit_tools import build_tools
 from tuk_voice_agent.prompt import build_instructions
 from tuk_voice_agent.roster import CONTRACT_VERSION
+from tuk_voice_agent.turns import register_turn_control
 
 server = AgentServer()
 
@@ -81,50 +81,13 @@ async def finish_session(
         shutdown(reason)
 
 
-def setup_lifecycle(
-    session: AgentSession[None], room: rtc.Room, identity: str, end: Callable[[str], None]
-) -> None:
-    timer: asyncio.TimerHandle | None = None
-    agent_listening = False
-    user_speaking = False
-    started = False
-
-    def cancel() -> None:
-        nonlocal timer
-        if timer:
-            timer.cancel()
-            timer = None
-
-    def arm() -> None:
-        nonlocal timer
-        cancel()
-        if started and agent_listening and not user_speaking:
-            timer = asyncio.get_running_loop().call_later(SILENCE_TIMEOUT_SECONDS, end, "silence")
-
-    def agent_changed(event: agents.AgentStateChangedEvent) -> None:
-        nonlocal agent_listening, started
-        agent_listening = event.new_state == "listening"
-        if not agent_listening:
-            cancel()
-        elif event.old_state == "speaking":
-            started = True
-            arm()
-
-    def user_changed(event: agents.UserStateChangedEvent) -> None:
-        nonlocal user_speaking
-        user_speaking = event.new_state == "speaking"
-        if user_speaking:
-            cancel()
-        else:
-            arm()
+def setup_lifecycle(room: rtc.Room, identity: str, end: Callable[[str], None]) -> None:
+    """There is no silence timeout: a session lasts until the owner ends it or the tab goes."""
 
     def participant_left(participant: rtc.RemoteParticipant) -> None:
         if participant.identity == identity:
-            cancel()
             end("browser_left")
 
-    session.on("agent_state_changed", agent_changed)
-    session.on("user_state_changed", user_changed)
     room.on("participant_disconnected", participant_left)
 
 
@@ -140,7 +103,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         stt=inference.STT(model=STT_MODEL, language=STT_LANGUAGE),
         llm=inference.LLM(model=LLM_MODEL),
         tts=inference.TTS(model=TTS_MODEL, voice=TTS_VOICE),
-        turn_handling=TurnHandlingOptions(turn_detection=inference.TurnDetector()),
+        # Push-to-talk: the tab decides when a turn starts and ends (tuk_voice_agent.turns).
+        turn_handling=TurnHandlingOptions(turn_detection="manual"),
     )
     ending = False
 
@@ -160,17 +124,17 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             end("quota_exhausted")
 
     session.on("error", on_error)
-    setup_lifecycle(session, ctx.room, browser.identity, end)
+    setup_lifecycle(ctx.room, browser.identity, end)
+    register_turn_control(session, ctx.room.local_participant, browser.identity)
     agent = Agent(
         instructions=build_instructions(tz=tz, date=date),
         tools=list(
             build_tools(ctx.room.local_participant, browser.identity, lambda: end("session_lapsed"))
         ),
     )
+    # No greeting: push-to-talk sessions stay silent until the owner speaks. The greeting returns
+    # with continuous conversation (issue #397).
     await session.start(room=ctx.room, agent=agent)
-    await session.generate_reply(
-        instructions="Call get_agenda first, then greet the owner briefly and say what is on today."
-    )
 
 
 if __name__ == "__main__":

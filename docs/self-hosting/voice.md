@@ -71,19 +71,19 @@ The free plan allows one agent deployment per project.
 
 1. Open **Settings → AI helpers → Voice**.
 2. Paste the **LiveKit URL**, **API key** and **API secret**. Save.
-3. The status changes to **Connected** and a microphone button appears. No restart is needed.
+3. The status changes to **Connected** and the Voice view becomes available in Assistant. No restart is needed.
 
 The secret is stored encrypted with your master key and never shown again. The panel says
 "already saved" instead. To turn voice off, use the clear button in the same panel: the
-microphone disappears everywhere.
+Voice view is unavailable everywhere.
 
 ## 5. Try it
 
-Tap the microphone, allow the browser's microphone prompt, and say "what's on today?". See
+Open Assistant, choose Voice, press and hold the button (first press connects), allow the browser's microphone prompt, and say "what's on today?". See
 [Voice Assistant](../guide/features/voice.md) for what to say.
 
 **The first session after a quiet spell is slow.** On the free plan LiveKit stops an idle agent,
-and starting it again takes 10–20 seconds before it greets you. Later sessions are quick.
+and starting it again takes 10–20 seconds before it can answer. Later sessions are quick.
 
 ## After you upgrade Tuk Tuk
 
@@ -95,7 +95,7 @@ cd voice-agent
 lk agent deploy
 ```
 
-LiveKit rolls it out without dropping a running session. If you forget, the microphone shows
+LiveKit rolls it out without dropping a running session. If you forget, the Voice view shows
 **Voice agent out of date — redeploy** and ends the session before anything changes. The two
 sides compare a `contract_version` number to catch this.
 
@@ -131,22 +131,22 @@ when the session ends. Saving the credentials is the opt-in. Clearing them is th
 
 | What you see or hear | Why | What to do |
 | --- | --- | --- |
-| No microphone button | Credentials not saved, or the free minutes ran out this month | Check **Settings → AI helpers → Voice**. See the last row |
+| Voice view unavailable | Credentials not saved, or the free minutes ran out this month | Check **Settings → AI helpers → Voice**. See the last row |
 | **Voice agent out of date — redeploy** | You upgraded Tuk Tuk and not the agent | `cd voice-agent && lk agent deploy` |
 | Connects, then silence | Agent not running, or its name doesn't match | `lk agent status`; see step 3 about `tuktuk-voice` |
 | Message about LiveKit being unreachable | LiveKit is down or your network blocks it | Retry later. Setup is fine |
 | Message about bad credentials | URL, key or secret is wrong | Re-enter them from LiveKit **Settings → Keys** |
 | Agent says "I couldn't reach your app" | The tab didn't answer in about 5 seconds | Say it again. The agent never retries on its own |
 | Agent says you need to log in again | Your Tuk Tuk session expired | Log in, then restart the voice session |
-| Agent says free voice minutes are used up | The free plan's monthly credit ran out | The microphone hides until next month, using your browser's local clock |
-| The session ends by itself | 20 seconds of silence after the agent stopped talking, or you closed the tab | Tap the microphone again |
+| Agent says free voice minutes are used up | The free plan's monthly credit ran out | Voice is unavailable until next month, using your browser's local clock |
+| The session ends by itself | You closed the tab, or the tab lost its login. There is no silence timeout | Press and hold to talk again |
 
 ## Cost
 
 The free Build plan includes 1,000 agent-session minutes and $2.50 a month of LiveKit
 Inference credit. The credit is the real limit: roughly 200 minutes of talking a month with the
 default models. The plan has no balance meter, so Tuk Tuk learns the credit is gone only when
-a session fails, and then hides the microphone for the rest of the month.
+a session fails, and then marks Voice unavailable for the rest of the month.
 
 ## Testing changes to the agent
 
@@ -172,7 +172,7 @@ A different provider or a custom voice LLM would still need its own:
   connection error wording. It must run `tools.execute` for the same tool names.
 - **Agent runtime:** a program that reuses `tools.py`, `prompt.py` and the roster and binds
   them to its own runtime, as `livekit_tools.py` and `agent.py` do for LiveKit. It must publish
-  `contract_version`, enforce silence and quota behaviour, and keep the no-retry wording.
+  `contract_version`, implement the `start_turn`/`end_turn`/`cancel_turn` RPCs, enforce quota behaviour, and keep the no-retry wording.
 - **Deployment and privacy:** how it is hosted, what it stores, where audio and Agenda data go.
   This page, the Settings disclosure and the guide's privacy note all say LiveKit today.
 
@@ -180,6 +180,12 @@ Spoken confirmation of each batch is an instruction in the prompt, so a new runt
 over and test it, and nothing guarantees a model obeys it.
 
 Live LiveKit checks (a real project, the deployed agent, real audio) are manual; CI uses fakes.
+PR #401 review fixes have not been verified with real LiveKit audio: credentials and an audio device
+were unavailable. Before release, connect with a deployed agent and microphone, hold to speak a
+known phrase beginning immediately after pressing, and confirm the entire phrase is transcribed.
+Switch from continuous to hold-to-talk during connection and during a delayed mode change; confirm
+the microphone stays off after switching. Check cancellation, playback, and captions as well.
+The focused simulated checks run with `cd frontend/oci && npx vitest run src/voice/session.test.ts src/voice/livekit.test.ts src/App.voiceOverlay.test.tsx`; they do not replace real audio verification.
 
 ## Next
 

@@ -1,10 +1,11 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RoomEvent } from "livekit-client";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { FakeRoom } from "./test/fakeRoom";
+import { backToAllTasks, connectVoiceFromAssistant } from "./test/fakeVoiceTransport";
 import { installFakeApi } from "./test/fakeApi";
 import { livekitProvider, livekitTransport } from "./voice/livekit";
 
@@ -29,9 +30,7 @@ async function start(options: Parameters<typeof installFakeApi>[0] = configured)
       voiceProvider={{ ...livekitProvider, transport: livekitTransport(() => room as never) }}
     />,
   );
-  await userEvent
-    .setup()
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await connectVoiceFromAssistant(userEvent.setup());
   await waitFor(() => expect(room.connected).toBe(true));
   const agent = (attributes: Record<string, string>) =>
     act(() => {
@@ -49,7 +48,26 @@ it("starts a configured session and relays an agent write through the tab's API"
   await agent({ contract_version: "1" });
   await rpc("create_task", { title: "buy milk" });
   expect(api.tasks.map((t) => t.title)).toEqual(["buy milk"]);
+  await backToAllTasks(userEvent.setup());
   expect(await screen.findByRole("button", { name: "Open details for buy milk" })).toBeVisible();
+});
+
+it("opens the microphone only for a held turn, over the real adapter", async () => {
+  const { room, agent } = await start();
+  await agent({ contract_version: "1" });
+  const mic: boolean[] = [];
+  const rpcs: string[] = [];
+  room.localParticipant.setMicrophoneEnabled = async (on) => void mic.push(on);
+  room.localParticipant.performRpc = async (request) => {
+    rpcs.push(request.method);
+    return "";
+  };
+  expect(mic).toEqual([]);
+  const hold = await screen.findByRole("button", { name: "Hold to talk" });
+  fireEvent.pointerDown(hold);
+  fireEvent.pointerUp(hold);
+  await waitFor(() => expect(rpcs).toEqual(["start_turn", "end_turn"]));
+  expect(mic).toEqual([true, false]);
 });
 
 it("answers an expired login with the LiveKit auth error code", async () => {
@@ -58,11 +76,13 @@ it("answers an expired login with the LiveKit auth error code", async () => {
   await expect(rpc("search_tasks", { query: "milk" })).rejects.toMatchObject({ code: 2001 });
 });
 
-it("ends and hides the mic until next month when the agent reports exhausted credit", async () => {
+it("ends and hides Voice until next month when the agent reports exhausted credit", async () => {
   const { room, agent } = await start();
   await agent({ contract_version: "1", voice_end_reason: "quota_exhausted" });
   await waitFor(() => expect(room.connected).toBe(false));
-  expect(screen.queryByRole("button", { name: /voice assistant/i })).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Press to connect" })).not.toBeInTheDocument(),
+  );
 });
 
 it("ends with a redeploy message when the agent contract differs", async () => {
@@ -80,9 +100,7 @@ it("leaves the room and drops its tools when the app unmounts mid-session", asyn
       voiceProvider={{ ...livekitProvider, transport: livekitTransport(() => room as never) }}
     />,
   );
-  await userEvent
-    .setup()
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await connectVoiceFromAssistant(userEvent.setup());
   await waitFor(() => expect(room.connected).toBe(true));
   view.unmount();
   await waitFor(() => expect(room.connected).toBe(false));

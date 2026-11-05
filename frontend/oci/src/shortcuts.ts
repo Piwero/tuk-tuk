@@ -24,8 +24,11 @@ export const ShortcutContext = createContext<ShortcutRegistry | null>(null);
  * a text field, or focus sits inside an open dialog. Keeps the layer from
  * swallowing the browser's own keys or firing over a form the user is typing
  * into. */
-export function isTypingContext(event: KeyboardEvent): boolean {
-  if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
+export function isTypingContext(event: KeyboardEvent, allowModifiers = false): boolean {
+  if (
+    event.defaultPrevented ||
+    (!allowModifiers && (event.ctrlKey || event.metaKey || event.altKey))
+  ) {
     return true;
   }
   const target = event.target;
