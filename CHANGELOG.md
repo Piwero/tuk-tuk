@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.19.2](https://github.com/Piwero/tuk-tuk/compare/v2.19.1...v2.19.2) - 2026-11-05
+
+### Bug Fixes
+
+- **voice:** Grant metadata updates for LiveKit session ([4fd6cb8](https://github.com/Piwero/tuk-tuk/commit/4fd6cb8852fa7dd4445a837a087c47046d1c9aaa))
+
 ## [2.19.1](https://github.com/Piwero/tuk-tuk/compare/v2.19.0...v2.19.1) - 2026-11-05
 
 ### Bug Fixes
