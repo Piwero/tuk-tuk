@@ -37,6 +37,35 @@ describe("Voice Assistant session", () => {
     await waitFor(() => expect(rooms[0]?.connected).toBe(false));
   });
 
+  it("disconnects if stopped while connect is pending", async () => {
+    const room = new FakeRoom();
+    let finish!: () => void;
+    room.connect = () =>
+      new Promise<void>((resolve) => {
+        finish = () => {
+          room.connected = true;
+          resolve();
+        };
+      });
+    vi.spyOn(await import("./api"), "postVoiceSession").mockResolvedValue({
+      url: "wss://test",
+      token: "token",
+      room: "room",
+    });
+    const session = createVoiceSession({
+      createRoom: () => room as never,
+      onState: () => {},
+      onCaption: () => {},
+      onError: () => {},
+    });
+    const starting = session.start();
+    await waitFor(() => expect(finish).toBeDefined());
+    await session.stop();
+    finish();
+    await starting;
+    expect(room.connected).toBe(false);
+  });
+
   it("ends when agent contract differs", async () => {
     const states: string[] = [];
     const errors: string[] = [];

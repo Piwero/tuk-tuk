@@ -83,6 +83,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     async start() {
       if (started || ended) return;
       started = true;
+      window.addEventListener("pagehide", leave);
       options.onState("connecting");
       try {
         const { url, token } = await postVoiceSession();
@@ -103,13 +104,16 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         });
         methods = registerVoiceReads(room, options.refresh);
         await room.connect(url, token);
-        if (ended) return;
+        if (ended) {
+          await room.disconnect();
+          return;
+        }
         await room.localParticipant.setAttributes({
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           date: localDayOf(new Date()),
         });
         await room.localParticipant.setMicrophoneEnabled(true);
-        window.addEventListener("pagehide", leave);
+        if (ended) return;
         options.onState("listening");
         const checkVersion = () => {
           const participant = [...room!.remoteParticipants.values()].find(
@@ -152,7 +156,6 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     },
     async stop() {
       if (ended) return;
-      if (room) await room.disconnect();
       end();
     },
     dispose() {
