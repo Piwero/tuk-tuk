@@ -62,7 +62,6 @@ import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { useVoiceAvailable } from "./useVoiceAvailable";
 import { livekitProvider } from "./voice/livekit";
-import { AssistantView } from "./components/AssistantView";
 import { AllViewControls } from "./components/AllViewControls";
 import { CalendarView } from "./components/CalendarView";
 import { CommandPalette, type TaskActionHandlers } from "./components/CommandPalette";
@@ -75,7 +74,8 @@ import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { Hint } from "./components/Hint";
 import { IconButton } from "./components/IconButton";
-import { VoiceButton } from "./components/VoiceButton";
+import { AssistantPage } from "./components/AssistantPage";
+import { VoiceProvider } from "./voice/VoiceProvider";
 import { KanbanView } from "./components/KanbanView";
 import { MobileQuickAddButton } from "./components/MobileQuickAddButton";
 import { MobileTabBar } from "./components/MobileTabBar";
@@ -285,10 +285,13 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // a settled `false`, or a hard load of /assistant redirects itself away
   // before the answer arrives.
   const assistantStatus = useAssistantAvailable();
-  const assistantAvailable = assistantStatus === true && sectionSettings.assistant;
+  const textAssistantAvailable = assistantStatus === true && sectionSettings.assistant;
   // Voice Assistant (ADR 0015, issue #366): invisible until LiveKit is
   // configured in Settings.
-  const voiceAvailable = useVoiceAvailable(voiceProvider);
+  const voiceStatus = useVoiceAvailable(voiceProvider);
+  const voiceAvailable = voiceStatus === true;
+  // /assistant holds both the text and the voice assistant: it is there when either is.
+  const assistantAvailable = textAssistantAvailable || voiceAvailable;
   // Voice writes (issue #369) land through the API, not through a view's own handlers, so every
   // surface that can show a Task or Habit re-reads. A ref keeps the callback the open session
   // holds pointed at the current view's loader.
@@ -479,11 +482,15 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       // no-op — falls through to the shared reset below
     } else if ((view?.kind === "focus" || view?.kind === "focus-stats") && !sectionSettings.focus) {
       // no-op — falls through to the shared reset below
-    } else if (view?.kind === "assistant" && !sectionSettings.assistant) {
-      // no-op — falls through to the shared reset below
-    } else if (view?.kind === "assistant" && assistantStatus === false) {
+    } else if (
+      view?.kind === "assistant" &&
+      (!sectionSettings.assistant || assistantStatus === false) &&
+      voiceStatus === false
+    ) {
       // Same fallback, for the Assistant becoming (or already being)
-      // unconfigured while this route was showing.
+      // unavailable while this route was showing — but only once neither the
+      // text nor the voice assistant can serve it (voice `null` is "still
+      // checking", which must not bounce a hard load).
     } else if (
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
@@ -513,7 +520,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     // effect's render and it running (e.g. the user clicks Calendar just as
     // the lists load). Never stomp a view that changed in the meantime.
     setView((current) => (current === view ? next : current));
-  }, [lists, tags, folders, view, standupEnabled, sectionSettings, assistantStatus]);
+  }, [lists, tags, folders, view, standupEnabled, sectionSettings, assistantStatus, voiceStatus]);
 
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
@@ -1060,454 +1067,461 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   ];
 
   return (
-    <FocusRunProvider>
-      <ShortcutsProvider>
-        <ShellShortcuts onQuickAdd={() => setQuickAddOpen(true)} />
-        {(paletteOpen || paletteTask !== null) && (
-          <TaskPalette
-            task={paletteTask ?? undefined}
-            items={paletteItems}
-            lists={lists}
-            tags={tags}
-            defaultListId={
-              selectedList?.id ?? lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? 0
-            }
-            actions={{
-              onComplete: completeTaskNow,
-              onStartFocus: (task) => switchView({ kind: "focus", task }),
-              onReschedule: (task, day) =>
-                patchTaskNow(
-                  task.id,
-                  day === null ? clearedSchedule() : rescheduledToDay(task, day),
-                ),
-              onMove: (task, listId) => patchTaskNow(task.id, { list_id: listId }),
-              onAddTag: (task, tagId) =>
-                patchTaskNow(task.id, {
-                  tag_ids: [...new Set([...task.tags.map((tag) => tag.id), tagId])],
-                }),
-              onSetRepeat: (task, recurrence) => patchTaskNow(task.id, { recurrence }),
-              onDelete: deleteTaskWithUndo,
-            }}
-            onTagCreated={(tag) => setTags((current) => [...current, tag])}
-            onListCreated={(list) => setLists((current) => [...current, list])}
-            onCreated={addCreatedTask}
-            onClose={() => {
-              setPaletteOpen(false);
-              setPaletteTask(null);
-            }}
-          />
-        )}
-        <div
-          className={[
-            "app",
-            selectedTask === null ? "" : "with-detail",
-            sidebarCollapsed ? "sidebar-collapsed" : "",
-            drawerOpen ? "drawer-open" : "",
-          ]
-            .filter((name) => name !== "")
-            .join(" ")}
-        >
-          <Sidebar
-            lists={lists}
-            folders={folders}
-            tags={tags}
-            selectedListId={view?.kind === "list" ? view.id : null}
-            selectedTagId={view?.kind === "tag" ? view.id : null}
-            selectedFolderId={view?.kind === "folder" ? view.id : null}
-            selectedSmart={smartView}
-            smartOpenCounts={openTaskCounts.smart}
-            listOpenCounts={openTaskCounts.byList}
-            calendarSelected={calendarSelected}
-            calendarEnabled={sectionSettings.calendar}
-            goalsSelected={goalsSelected}
-            goalsEnabled={sectionSettings.goals}
-            habitsSelected={habitsSelected}
-            habitsEnabled={sectionSettings.habits}
-            standupSelected={standupSelected}
-            standupEnabled={standupEnabled}
-            assistantSelected={assistantSelected}
-            assistantAvailable={assistantAvailable}
-            focusSelected={focusSelected}
-            focusEnabled={sectionSettings.focus}
-            settingsSelected={settingsSelected}
-            searchSelected={searchSelected}
-            onSelect={(listId) => switchView({ kind: "list", id: listId })}
-            onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
-            onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
-            onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
-            onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
-            onSelectGoals={() => switchView({ kind: "goals" })}
-            onSelectHabits={() => switchView({ kind: "habits" })}
-            onSelectStandup={() => switchView({ kind: "standup" })}
-            onSelectAssistant={() => switchView({ kind: "assistant" })}
-            onSelectFocus={() => switchView({ kind: "focus" })}
-            onSelectSettings={() => switchView({ kind: "settings" })}
-            onQuickAdd={() => setQuickAddOpen(true)}
-            collapsed={sidebarCollapsed}
-            onToggleCollapsed={toggleSidebar}
-            resolvedTheme={resolveThemePreference(themePreference)}
-            onToggleTheme={toggleTheme}
-            onCloseDrawer={() => setDrawerOpen(false)}
-            onLogout={onLogout}
-            onSearch={(query) =>
-              switchView({ kind: "search", search: { ...BLANK_SEARCH_STATE, query } })
-            }
-            onOpenSearch={() => switchView({ kind: "search", search: BLANK_SEARCH_STATE })}
-            onListsChanged={setLists}
-            onFoldersChanged={setFolders}
-            onTagCreated={(tag) => setTags((current) => [...current, tag])}
-            onTagSaved={applyTagChange}
-            onTagDeleted={applyTagDeletion}
-            onTaskMoved={(moved) => {
-              reconcileOpenTask(moved);
-              setTasks((current) =>
-                view?.kind === "list" && moved.list_id !== view.id
-                  ? current.filter((task) => task.id !== moved.id)
-                  : current.map((task) => (task.id === moved.id ? moved : task)),
-              );
-            }}
-          />
-          {drawerOpen && (
-            <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
+    <VoiceProvider
+      createTransport={voiceProvider.transport}
+      refresh={refreshAfterVoiceWrite}
+      available={voiceStatus}
+    >
+      <FocusRunProvider>
+        <ShortcutsProvider>
+          <ShellShortcuts onQuickAdd={() => setQuickAddOpen(true)} />
+          {(paletteOpen || paletteTask !== null) && (
+            <TaskPalette
+              task={paletteTask ?? undefined}
+              items={paletteItems}
+              lists={lists}
+              tags={tags}
+              defaultListId={
+                selectedList?.id ?? lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? 0
+              }
+              actions={{
+                onComplete: completeTaskNow,
+                onStartFocus: (task) => switchView({ kind: "focus", task }),
+                onReschedule: (task, day) =>
+                  patchTaskNow(
+                    task.id,
+                    day === null ? clearedSchedule() : rescheduledToDay(task, day),
+                  ),
+                onMove: (task, listId) => patchTaskNow(task.id, { list_id: listId }),
+                onAddTag: (task, tagId) =>
+                  patchTaskNow(task.id, {
+                    tag_ids: [...new Set([...task.tags.map((tag) => tag.id), tagId])],
+                  }),
+                onSetRepeat: (task, recurrence) => patchTaskNow(task.id, { recurrence }),
+                onDelete: deleteTaskWithUndo,
+              }}
+              onTagCreated={(tag) => setTags((current) => [...current, tag])}
+              onListCreated={(list) => setLists((current) => [...current, list])}
+              onCreated={addCreatedTask}
+              onClose={() => {
+                setPaletteOpen(false);
+                setPaletteTask(null);
+              }}
+            />
           )}
-          <main ref={mainRef}>
-            <div className="main-chrome">
-              <div className="main-header">
-                <IconButton
-                  icon="menu"
-                  size={20}
-                  label="Show navigation"
-                  className="drawer-toggle"
-                  aria-expanded={drawerOpen}
-                  onClick={() => setDrawerOpen((current) => !current)}
-                />
-                <h1>
-                  {selectedList !== null ? (
-                    // A List filed in a Folder shows "Folder / List" (#126): the
-                    // Folder segment is clickable through to the Folder view,
-                    // same destination as clicking the Folder's name in the
-                    // sidebar.
-                    parentFolder !== null ? (
-                      <>
-                        <button
-                          type="button"
-                          className="breadcrumb-folder"
-                          onClick={() => switchView({ kind: "folder", id: parentFolder.id })}
-                        >
-                          {parentFolder.name}
-                        </button>
-                        <span aria-hidden="true"> / </span>
-                        {selectedList.name}
-                      </>
-                    ) : (
-                      selectedList.name
-                    )
-                  ) : selectedFolder !== null ? (
-                    selectedFolder.name
-                  ) : selectedTag !== null ? (
-                    `#${selectedTag.name}`
-                  ) : smartView !== null ? (
-                    SMART_LABELS[smartView]
-                  ) : view?.kind === "calendar" ? (
-                    "Calendar"
-                  ) : view?.kind === "goals" ? (
-                    "Goals"
-                  ) : view?.kind === "habits" ? (
-                    "Habits"
-                  ) : view?.kind === "standup" ? (
-                    "Stand-up"
-                  ) : view?.kind === "assistant" ? (
-                    "Assistant"
-                  ) : view?.kind === "focus" ? (
-                    "Focus"
-                  ) : view?.kind === "focus-stats" ? (
-                    "Focus statistics"
-                  ) : view?.kind === "search" ? (
-                    "Search"
-                  ) : view?.kind === "settings" ? (
-                    "Settings"
-                  ) : (
-                    "tuk-tuk"
-                  )}
-                </h1>
-                {voiceAvailable && (
-                  <VoiceButton
-                    createTransport={voiceProvider.transport}
-                    refresh={refreshAfterVoiceWrite}
+          <div
+            className={[
+              "app",
+              selectedTask === null ? "" : "with-detail",
+              sidebarCollapsed ? "sidebar-collapsed" : "",
+              drawerOpen ? "drawer-open" : "",
+            ]
+              .filter((name) => name !== "")
+              .join(" ")}
+          >
+            <Sidebar
+              lists={lists}
+              folders={folders}
+              tags={tags}
+              selectedListId={view?.kind === "list" ? view.id : null}
+              selectedTagId={view?.kind === "tag" ? view.id : null}
+              selectedFolderId={view?.kind === "folder" ? view.id : null}
+              selectedSmart={smartView}
+              smartOpenCounts={openTaskCounts.smart}
+              listOpenCounts={openTaskCounts.byList}
+              calendarSelected={calendarSelected}
+              calendarEnabled={sectionSettings.calendar}
+              goalsSelected={goalsSelected}
+              goalsEnabled={sectionSettings.goals}
+              habitsSelected={habitsSelected}
+              habitsEnabled={sectionSettings.habits}
+              standupSelected={standupSelected}
+              standupEnabled={standupEnabled}
+              assistantSelected={assistantSelected}
+              assistantAvailable={assistantAvailable}
+              focusSelected={focusSelected}
+              focusEnabled={sectionSettings.focus}
+              settingsSelected={settingsSelected}
+              searchSelected={searchSelected}
+              onSelect={(listId) => switchView({ kind: "list", id: listId })}
+              onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
+              onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
+              onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
+              onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
+              onSelectGoals={() => switchView({ kind: "goals" })}
+              onSelectHabits={() => switchView({ kind: "habits" })}
+              onSelectStandup={() => switchView({ kind: "standup" })}
+              onSelectAssistant={() => switchView({ kind: "assistant" })}
+              onSelectFocus={() => switchView({ kind: "focus" })}
+              onSelectSettings={() => switchView({ kind: "settings" })}
+              onQuickAdd={() => setQuickAddOpen(true)}
+              collapsed={sidebarCollapsed}
+              onToggleCollapsed={toggleSidebar}
+              resolvedTheme={resolveThemePreference(themePreference)}
+              onToggleTheme={toggleTheme}
+              onCloseDrawer={() => setDrawerOpen(false)}
+              onLogout={onLogout}
+              onSearch={(query) =>
+                switchView({ kind: "search", search: { ...BLANK_SEARCH_STATE, query } })
+              }
+              onOpenSearch={() => switchView({ kind: "search", search: BLANK_SEARCH_STATE })}
+              onListsChanged={setLists}
+              onFoldersChanged={setFolders}
+              onTagCreated={(tag) => setTags((current) => [...current, tag])}
+              onTagSaved={applyTagChange}
+              onTagDeleted={applyTagDeletion}
+              onTaskMoved={(moved) => {
+                reconcileOpenTask(moved);
+                setTasks((current) =>
+                  view?.kind === "list" && moved.list_id !== view.id
+                    ? current.filter((task) => task.id !== moved.id)
+                    : current.map((task) => (task.id === moved.id ? moved : task)),
+                );
+              }}
+            />
+            {drawerOpen && (
+              <div
+                className="drawer-scrim"
+                aria-hidden="true"
+                onClick={() => setDrawerOpen(false)}
+              />
+            )}
+            <main ref={mainRef}>
+              <div className="main-chrome">
+                <div className="main-header">
+                  <IconButton
+                    icon="menu"
+                    size={20}
+                    label="Show navigation"
+                    className="drawer-toggle"
+                    aria-expanded={drawerOpen}
+                    onClick={() => setDrawerOpen((current) => !current)}
                   />
+                  <h1>
+                    {selectedList !== null ? (
+                      // A List filed in a Folder shows "Folder / List" (#126): the
+                      // Folder segment is clickable through to the Folder view,
+                      // same destination as clicking the Folder's name in the
+                      // sidebar.
+                      parentFolder !== null ? (
+                        <>
+                          <button
+                            type="button"
+                            className="breadcrumb-folder"
+                            onClick={() => switchView({ kind: "folder", id: parentFolder.id })}
+                          >
+                            {parentFolder.name}
+                          </button>
+                          <span aria-hidden="true"> / </span>
+                          {selectedList.name}
+                        </>
+                      ) : (
+                        selectedList.name
+                      )
+                    ) : selectedFolder !== null ? (
+                      selectedFolder.name
+                    ) : selectedTag !== null ? (
+                      `#${selectedTag.name}`
+                    ) : smartView !== null ? (
+                      SMART_LABELS[smartView]
+                    ) : view?.kind === "calendar" ? (
+                      "Calendar"
+                    ) : view?.kind === "goals" ? (
+                      "Goals"
+                    ) : view?.kind === "habits" ? (
+                      "Habits"
+                    ) : view?.kind === "standup" ? (
+                      "Stand-up"
+                    ) : view?.kind === "assistant" ? (
+                      "Assistant"
+                    ) : view?.kind === "focus" ? (
+                      "Focus"
+                    ) : view?.kind === "focus-stats" ? (
+                      "Focus statistics"
+                    ) : view?.kind === "search" ? (
+                      "Search"
+                    ) : view?.kind === "settings" ? (
+                      "Settings"
+                    ) : (
+                      "tuk-tuk"
+                    )}
+                  </h1>
+                  {selectedList !== null && !completedMode && (
+                    <button
+                      type="button"
+                      className="view-toggle"
+                      aria-label={
+                        selectedList.view_mode === "kanban"
+                          ? "Switch to list view"
+                          : "Switch to kanban view"
+                      }
+                      onClick={() => void toggleViewMode(selectedList)}
+                    >
+                      {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
+                    </button>
+                  )}
+                  {showHideCompletedToggle && (
+                    <button
+                      type="button"
+                      className="hide-completed-toggle"
+                      aria-pressed={hideCompleted}
+                      onClick={() =>
+                        setHideCompleted((current) => {
+                          const next = !current;
+                          saveHideCompleted(next);
+                          return next;
+                        })
+                      }
+                    >
+                      {hideCompleted ? "Show completed" : "Hide completed"}
+                    </button>
+                  )}
+                  {hasCompletedView && (
+                    <button
+                      type="button"
+                      className="completed-toggle"
+                      onClick={() => setCompletedMode((current) => !current)}
+                    >
+                      {completedMode ? "Open tasks" : "Completed"}
+                    </button>
+                  )}
+                </div>
+                {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
+                  <>
+                    <QuickAdd
+                      listId={selectedList.id}
+                      lists={lists}
+                      tags={tags}
+                      onTagCreated={(tag) => setTags((current) => [...current, tag])}
+                      onListCreated={(list) => setLists((current) => [...current, list])}
+                      // A ~list token may have filed the task elsewhere; the shared
+                      // handler already accounts for that, and confirms either way.
+                      onCreated={addCreatedTask}
+                    />
+                    <div className="view-controls">
+                      <Hint hintKey="group-by">
+                        <label>
+                          Group by
+                          <select
+                            value={groupBy}
+                            onChange={(event) => setGroupBy(event.target.value as GroupBy)}
+                          >
+                            <option value="section">Section</option>
+                            <option value="date">Date</option>
+                            <option value="priority">Priority</option>
+                          </select>
+                        </label>
+                      </Hint>
+                      <SortBySelect value={sortBy} onChange={setSortBy} />
+                    </div>
+                  </>
                 )}
-                {selectedList !== null && !completedMode && (
-                  <button
-                    type="button"
-                    className="view-toggle"
-                    aria-label={
-                      selectedList.view_mode === "kanban"
-                        ? "Switch to list view"
-                        : "Switch to kanban view"
-                    }
-                    onClick={() => void toggleViewMode(selectedList)}
-                  >
-                    {selectedList.view_mode === "kanban" ? "List view" : "Kanban view"}
-                  </button>
-                )}
-                {showHideCompletedToggle && (
-                  <button
-                    type="button"
-                    className="hide-completed-toggle"
-                    aria-pressed={hideCompleted}
-                    onClick={() =>
-                      setHideCompleted((current) => {
-                        const next = !current;
-                        saveHideCompleted(next);
-                        return next;
-                      })
-                    }
-                  >
-                    {hideCompleted ? "Show completed" : "Hide completed"}
-                  </button>
-                )}
-                {hasCompletedView && (
-                  <button
-                    type="button"
-                    className="completed-toggle"
-                    onClick={() => setCompletedMode((current) => !current)}
-                  >
-                    {completedMode ? "Open tasks" : "Completed"}
-                  </button>
-                )}
-              </div>
-              {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
-                <>
-                  <QuickAdd
-                    listId={selectedList.id}
+                {smartView !== null && !completedMode && (
+                  <AllViewControls
+                    filters={allFilters}
+                    onFiltersUpdate={setAllFilters}
+                    groupBy={groupBy}
+                    onGroupByChange={setGroupBy}
+                    sortBy={sortBy}
+                    onSortByChange={setSortBy}
                     lists={lists}
                     tags={tags}
-                    onTagCreated={(tag) => setTags((current) => [...current, tag])}
-                    onListCreated={(list) => setLists((current) => [...current, list])}
-                    // A ~list token may have filed the task elsewhere; the shared
-                    // handler already accounts for that, and confirms either way.
-                    onCreated={addCreatedTask}
                   />
-                  <div className="view-controls">
-                    <Hint hintKey="group-by">
-                      <label>
-                        Group by
-                        <select
-                          value={groupBy}
-                          onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-                        >
-                          <option value="section">Section</option>
-                          <option value="date">Date</option>
-                          <option value="priority">Priority</option>
-                        </select>
-                      </label>
-                    </Hint>
-                    <SortBySelect value={sortBy} onChange={setSortBy} />
-                  </div>
-                </>
-              )}
-              {smartView !== null && !completedMode && (
-                <AllViewControls
-                  filters={allFilters}
-                  onFiltersUpdate={setAllFilters}
-                  groupBy={groupBy}
-                  onGroupByChange={setGroupBy}
-                  sortBy={sortBy}
-                  onSortByChange={setSortBy}
-                  lists={lists}
-                  tags={tags}
-                />
-              )}
-              {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
-                <>
-                  {/* Quick-Add has no notion of "this Folder" — it always files
+                )}
+                {selectedFolder !== null && !completedMode && folderMembers.length > 0 && (
+                  <>
+                    {/* Quick-Add has no notion of "this Folder" — it always files
                   by List, so it targets the Folder's first List and names
                   it in the placeholder (#126) since that target isn't the
                   one on screen. */}
-                  <QuickAdd
-                    listId={folderMembers[0]?.id ?? 0}
+                    <QuickAdd
+                      listId={folderMembers[0]?.id ?? 0}
+                      lists={lists}
+                      tags={tags}
+                      placeholder={`Add a task to ${folderMembers[0]?.name}…`}
+                      onTagCreated={(tag) => setTags((current) => [...current, tag])}
+                      onListCreated={(list) => setLists((current) => [...current, list])}
+                      onCreated={(task) => {
+                        reconcileOpenTask(task);
+                        // A ~list token may have filed the task elsewhere in the Folder.
+                        if (folderMembers.some((list) => list.id === task.list_id)) {
+                          setTasks((current) => [...current, task]);
+                        }
+                      }}
+                    />
+                    <div className="view-controls">
+                      <label>
+                        Sort by
+                        <select
+                          value={folderSortBy}
+                          onChange={(event) => setFolderSortBy(event.target.value as FolderSortBy)}
+                        >
+                          <option value="date">Date</option>
+                          <option value="priority">Priority</option>
+                          <option value="title">Title</option>
+                        </select>
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+              {quickAddOpen && (
+                <Modal title="Quick add" onClose={() => setQuickAddOpen(false)}>
+                  <QuickAddDialog
                     lists={lists}
                     tags={tags}
-                    placeholder={`Add a task to ${folderMembers[0]?.name}…`}
+                    defaultListId={selectedList?.id ?? null}
                     onTagCreated={(tag) => setTags((current) => [...current, tag])}
                     onListCreated={(list) => setLists((current) => [...current, list])}
-                    onCreated={(task) => {
-                      reconcileOpenTask(task);
-                      // A ~list token may have filed the task elsewhere in the Folder.
-                      if (folderMembers.some((list) => list.id === task.list_id)) {
-                        setTasks((current) => [...current, task]);
-                      }
-                    }}
+                    onCreated={addCreatedTask}
+                    onClose={() => setQuickAddOpen(false)}
                   />
-                  <div className="view-controls">
-                    <label>
-                      Sort by
-                      <select
-                        value={folderSortBy}
-                        onChange={(event) => setFolderSortBy(event.target.value as FolderSortBy)}
-                      >
-                        <option value="date">Date</option>
-                        <option value="priority">Priority</option>
-                        <option value="title">Title</option>
-                      </select>
-                    </label>
-                  </div>
-                </>
+                </Modal>
               )}
-            </div>
-            {quickAddOpen && (
-              <Modal title="Quick add" onClose={() => setQuickAddOpen(false)}>
-                <QuickAddDialog
+              {view?.kind === "settings" ? (
+                <SettingsView
+                  googleOAuthError={googleOAuthError}
+                  themePreference={themePreference}
+                  onThemeChange={chooseTheme}
+                />
+              ) : view?.kind === "calendar" ? (
+                <CalendarView
+                  onSelect={(task) => {
+                    setCalendarTask(task);
+                    setSelectedTaskId(task.id);
+                  }}
+                  onSelectEvent={setSelectedEvent}
+                  refreshToken={calendarRefresh}
                   lists={lists}
                   tags={tags}
-                  defaultListId={selectedList?.id ?? null}
                   onTagCreated={(tag) => setTags((current) => [...current, tag])}
                   onListCreated={(list) => setLists((current) => [...current, list])}
-                  onCreated={addCreatedTask}
-                  onClose={() => setQuickAddOpen(false)}
+                  initialMode={view.mode}
+                  onModeChange={handleCalendarModeChange}
+                  undoQueue={toasts}
                 />
-              </Modal>
-            )}
-            {view?.kind === "settings" ? (
-              <SettingsView
-                googleOAuthError={googleOAuthError}
-                themePreference={themePreference}
-                onThemeChange={chooseTheme}
-              />
-            ) : view?.kind === "calendar" ? (
-              <CalendarView
-                onSelect={(task) => {
-                  setCalendarTask(task);
-                  setSelectedTaskId(task.id);
-                }}
-                onSelectEvent={setSelectedEvent}
-                refreshToken={calendarRefresh}
-                lists={lists}
-                tags={tags}
-                onTagCreated={(tag) => setTags((current) => [...current, tag])}
-                onListCreated={(list) => setLists((current) => [...current, list])}
-                initialMode={view.mode}
-                onModeChange={handleCalendarModeChange}
-                undoQueue={toasts}
-              />
-            ) : view?.kind === "goals" ? (
-              <GoalsView />
-            ) : view?.kind === "habits" ? (
-              <HabitsView refreshToken={habitsRefresh} />
-            ) : view?.kind === "standup" ? (
-              <StandupView />
-            ) : view?.kind === "assistant" ? (
-              <AssistantView />
-            ) : view?.kind === "focus" ? (
-              <FocusView
-                key={view.task?.id ?? "focus"}
-                initialTask={view.task ?? null}
-                onOpenStats={() => switchView({ kind: "focus-stats" })}
-              />
-            ) : view?.kind === "focus-stats" ? (
-              <FocusStatsView onBack={() => switchView({ kind: "focus" })} />
-            ) : view?.kind === "search" ? (
-              <SearchView
-                tasks={tasks}
-                lists={lists}
-                tags={tags}
-                state={view.search}
-                onStateChange={(search) => switchView({ kind: "search", search })}
-                onChanged={changeTasksAndRecompute}
-                onSelect={setSelectedTaskId}
-              />
-            ) : selectedFolder !== null ? (
-              <FolderView
-                folder={selectedFolder}
-                lists={folderMembers}
-                tasks={visibleTasks}
-                sortBy={folderSortBy}
-                onChanged={changeTasks}
-                onSelect={setSelectedTaskId}
-                onSelectList={(listId) => switchView({ kind: "list", id: listId })}
-                onStartFocus={(task) => switchView({ kind: "focus", task })}
-              />
-            ) : completedMode ? (
-              <CompletedView
-                tasks={tasks}
-                occurrences={occurrences}
-                listId={selectedList?.id ?? null}
-                onChanged={changeTasksAndRecompute}
-                onSelect={setSelectedTaskId}
-              />
-            ) : selectedList !== null && selectedList.view_mode === "kanban" ? (
-              <KanbanView
-                tasks={visibleTasks}
-                sections={sections}
-                listId={selectedList.id}
-                onChanged={changeTasks}
-                onSelect={setSelectedTaskId}
-                onSectionsChanged={setSections}
-                toasts={toasts}
-                onCreated={announceCreated}
-              />
-            ) : (
-              <TaskListView
-                tasks={visibleTasks}
-                sections={sections}
-                listId={smartView !== null ? null : (selectedList?.id ?? null)}
-                lists={lists}
-                tags={tags}
-                viewKey={viewKey}
-                groupBy={groupBy}
-                sortBy={sortBy}
-                onChanged={smartView !== null ? changeTasksAndRecompute : changeTasks}
-                onSelect={setSelectedTaskId}
-                onSectionsChanged={setSections}
-                onOpenActions={setPaletteTask}
-                toasts={toasts}
-              />
-            )}
-            {/* The shortcut hint strip lives at the foot of the task list;
+              ) : view?.kind === "goals" ? (
+                <GoalsView />
+              ) : view?.kind === "habits" ? (
+                <HabitsView refreshToken={habitsRefresh} />
+              ) : view?.kind === "standup" ? (
+                <StandupView />
+              ) : view?.kind === "assistant" ? (
+                <AssistantPage
+                  textAvailable={textAssistantAvailable}
+                  voiceAvailable={voiceAvailable}
+                />
+              ) : view?.kind === "focus" ? (
+                <FocusView
+                  key={view.task?.id ?? "focus"}
+                  initialTask={view.task ?? null}
+                  onOpenStats={() => switchView({ kind: "focus-stats" })}
+                />
+              ) : view?.kind === "focus-stats" ? (
+                <FocusStatsView onBack={() => switchView({ kind: "focus" })} />
+              ) : view?.kind === "search" ? (
+                <SearchView
+                  tasks={tasks}
+                  lists={lists}
+                  tags={tags}
+                  state={view.search}
+                  onStateChange={(search) => switchView({ kind: "search", search })}
+                  onChanged={changeTasksAndRecompute}
+                  onSelect={setSelectedTaskId}
+                />
+              ) : selectedFolder !== null ? (
+                <FolderView
+                  folder={selectedFolder}
+                  lists={folderMembers}
+                  tasks={visibleTasks}
+                  sortBy={folderSortBy}
+                  onChanged={changeTasks}
+                  onSelect={setSelectedTaskId}
+                  onSelectList={(listId) => switchView({ kind: "list", id: listId })}
+                  onStartFocus={(task) => switchView({ kind: "focus", task })}
+                />
+              ) : completedMode ? (
+                <CompletedView
+                  tasks={tasks}
+                  occurrences={occurrences}
+                  listId={selectedList?.id ?? null}
+                  onChanged={changeTasksAndRecompute}
+                  onSelect={setSelectedTaskId}
+                />
+              ) : selectedList !== null && selectedList.view_mode === "kanban" ? (
+                <KanbanView
+                  tasks={visibleTasks}
+                  sections={sections}
+                  listId={selectedList.id}
+                  onChanged={changeTasks}
+                  onSelect={setSelectedTaskId}
+                  onSectionsChanged={setSections}
+                  toasts={toasts}
+                  onCreated={announceCreated}
+                />
+              ) : (
+                <TaskListView
+                  tasks={visibleTasks}
+                  sections={sections}
+                  listId={smartView !== null ? null : (selectedList?.id ?? null)}
+                  lists={lists}
+                  tags={tags}
+                  viewKey={viewKey}
+                  groupBy={groupBy}
+                  sortBy={sortBy}
+                  onChanged={smartView !== null ? changeTasksAndRecompute : changeTasks}
+                  onSelect={setSelectedTaskId}
+                  onSectionsChanged={setSections}
+                  onOpenActions={setPaletteTask}
+                  toasts={toasts}
+                />
+              )}
+              {/* The shortcut hint strip lives at the foot of the task list;
               it reads the live registry, so later slices that register
               shortcuts appear here automatically (issue #192). */}
-            <ShortcutHints />
-          </main>
-          <MobileTabBar
-            tasksSelected={tasksSelected}
-            calendarSelected={calendarSelected}
-            calendarEnabled={sectionSettings.calendar}
-            habitsSelected={habitsSelected}
-            habitsEnabled={sectionSettings.habits}
-            focusSelected={focusSelected}
-            focusEnabled={sectionSettings.focus}
-            onSelectTasks={() => switchView({ kind: "smart", view: "today" })}
-            onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
-            onSelectHabits={() => switchView({ kind: "habits" })}
-            onSelectFocus={() => switchView({ kind: "focus" })}
-          />
-          <MobileQuickAddButton onClick={() => setQuickAddOpen(true)} />
-          {selectedTask !== null && (
-            <div className="task-detail-backdrop" aria-hidden="true" onClick={closeTaskDetail} />
-          )}
-          {selectedTask !== null && (
-            <TaskDetail
-              task={selectedTask}
-              allTags={tags}
-              listName={selectedTaskListName}
-              lists={lists}
-              onTaskChanged={applyTaskChange}
-              onClose={closeTaskDetail}
+              <ShortcutHints />
+            </main>
+            <MobileTabBar
+              tasksSelected={tasksSelected}
+              calendarSelected={calendarSelected}
+              calendarEnabled={sectionSettings.calendar}
+              habitsSelected={habitsSelected}
+              habitsEnabled={sectionSettings.habits}
+              focusSelected={focusSelected}
+              focusEnabled={sectionSettings.focus}
+              onSelectTasks={() => switchView({ kind: "smart", view: "today" })}
+              onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
+              onSelectHabits={() => switchView({ kind: "habits" })}
+              onSelectFocus={() => switchView({ kind: "focus" })}
             />
-          )}
-          {selectedEvent !== null && (
-            <Modal title={selectedEvent.title} onClose={() => setSelectedEvent(null)}>
-              <EventDetail event={selectedEvent} onConverted={handleEventConverted} />
-            </Modal>
-          )}
-          {/* The app's only toast stack. It sits here, outside <main>, so a
+            <MobileQuickAddButton onClick={() => setQuickAddOpen(true)} />
+            {selectedTask !== null && (
+              <div className="task-detail-backdrop" aria-hidden="true" onClick={closeTaskDetail} />
+            )}
+            {selectedTask !== null && (
+              <TaskDetail
+                task={selectedTask}
+                allTags={tags}
+                listName={selectedTaskListName}
+                lists={lists}
+                onTaskChanged={applyTaskChange}
+                onClose={closeTaskDetail}
+              />
+            )}
+            {selectedEvent !== null && (
+              <Modal title={selectedEvent.title} onClose={() => setSelectedEvent(null)}>
+                <EventDetail event={selectedEvent} onConverted={handleEventConverted} />
+              </Modal>
+            )}
+            {/* The app's only toast stack. It sits here, outside <main>, so a
             toast raised from Quick add covers Focus, Settings and Calendar
             too — the task views used to each own one and could only cover
             themselves (#191). */}
-          <ToastStack entries={toasts.entries} onUndo={toasts.undo} onDismiss={toasts.dismiss} />
-        </div>
-      </ShortcutsProvider>
-    </FocusRunProvider>
+            <ToastStack entries={toasts.entries} onUndo={toasts.undo} onDismiss={toasts.dismiss} />
+          </div>
+        </ShortcutsProvider>
+      </FocusRunProvider>
+    </VoiceProvider>
   );
 }
 

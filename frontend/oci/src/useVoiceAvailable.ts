@@ -4,7 +4,8 @@
  * free credit used up this month). Checked on mount, on window refocus, when
  * Settings saves or clears the config (`notifyVoiceConfigChanged`) and when an
  * unavailability period ends, so the mic appears/vanishes without a reload.
- * `false` until the first answer and on any error, so nothing voice-related
+ * `null` until the first answer (so a hard load of /assistant is not bounced
+ * before the probe has answered), `false` on any error: nothing voice-related
  * renders speculatively. */
 import { useEffect, useState } from "react";
 
@@ -17,8 +18,8 @@ export function notifyVoiceConfigChanged(): void {
   window.dispatchEvent(new Event(CHANGED_EVENT));
 }
 
-export function useVoiceAvailable(provider: VoiceProvider): boolean {
-  const [available, setAvailable] = useState(false);
+export function useVoiceAvailable(provider: VoiceProvider): boolean | null {
+  const [available, setAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;

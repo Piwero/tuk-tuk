@@ -13,13 +13,15 @@ function setup(configure?: Parameters<typeof fakeVoiceTransport>[0]) {
   const states: string[] = [];
   const captions: string[] = [];
   const errors: string[] = [];
+  const capturing: boolean[] = [];
   const session = createVoiceSession({
     createTransport: fake.factory,
     onState: (s) => states.push(s),
     onCaption: (c) => captions.push(c),
     onError: (e) => errors.push(e),
+    onCapturing: (c) => capturing.push(c),
   });
-  return { session, states, captions, errors, transport: () => fake.transports[0]! };
+  return { session, states, captions, errors, capturing, transport: () => fake.transports[0]! };
 }
 
 const agent = { speaking: false, contractVersion: "1" };
@@ -90,6 +92,15 @@ describe("provider-neutral voice session", () => {
     expect(states.at(-1)).toBe("speaking");
     transport().events.onAgent(agent);
     expect(states.at(-1)).toBe("listening");
+  });
+
+  it("shows the agent thinking between listening and speaking", async () => {
+    const { session, states, transport } = setup();
+    await session.start();
+    transport().events.onAgent({ ...agent, thinking: true });
+    expect(states.at(-1)).toBe("thinking");
+    transport().events.onAgent({ ...agent, speaking: true });
+    expect(states.at(-1)).toBe("speaking");
   });
 
   it("rejects an agent that never publishes a contract version", async () => {
@@ -171,5 +182,93 @@ describe("provider-neutral voice session", () => {
     await b.session.start();
     b.session.dispose();
     expect(b.transport().connected).toBe(false);
+  });
+
+  it("does not capture speech just by connecting", async () => {
+    const { session, capturing, transport } = setup();
+    await session.start();
+    expect(transport().turns).toEqual([]);
+    expect(capturing).toEqual([]);
+    session.dispose();
+  });
+
+  it("captures while a turn is held and submits it on release, in order", async () => {
+    const { session, capturing, transport } = setup();
+    await session.start();
+    const held = session.startTurn();
+    session.endTurn();
+    await held;
+    await vi.waitFor(() => expect(transport().turns).toEqual(["start", "end"]));
+    expect(capturing).toEqual([true, false]);
+  });
+
+  it("abandons a held turn without submitting it", async () => {
+    const { session, capturing, transport } = setup();
+    await session.start();
+    await session.startTurn();
+    session.cancelTurn();
+    await vi.waitFor(() => expect(transport().turns).toEqual(["start", "cancel"]));
+    expect(capturing).toEqual([true, false]);
+  });
+
+  it("ignores a release or cancel when no turn is held, and a second press while held", async () => {
+    const { session, transport } = setup();
+    await session.start();
+    session.endTurn();
+    session.cancelTurn();
+    await session.startTurn();
+    await session.startTurn();
+    session.endTurn();
+    await vi.waitFor(() => expect(transport().turns).toEqual(["start", "end"]));
+  });
+
+  it("ignores turns before the session is ready and after it ended", async () => {
+    const { session, capturing, transport } = setup((t) => {
+      t.connect = () => new Promise<void>(() => undefined);
+    });
+    const starting = session.start();
+    await session.startTurn();
+    expect(capturing).toEqual([]);
+    expect(transport().turns).toEqual([]);
+    await session.stop();
+    await session.startTurn();
+    expect(transport().turns).toEqual([]);
+    void starting;
+  });
+
+  it("releases the held turn when the session ends", async () => {
+    const { session, capturing } = setup();
+    await session.start();
+    await session.startTurn();
+    await session.stop();
+    expect(capturing).toEqual([true, false]);
+  });
+
+  it("keeps the session when the agent is not ready for a turn yet", async () => {
+    const { session, states, errors, capturing } = setup((t) => {
+      t.startTurn = async () => {
+        throw new Error("Voice agent is still joining. Try again in a moment.");
+      };
+    });
+    await session.start();
+    await session.startTurn();
+    expect(errors).toEqual(["Voice agent is still joining. Try again in a moment."]);
+    expect(states.at(-1)).toBe("listening");
+    expect(capturing).toEqual([true, false]);
+    session.dispose();
+  });
+
+  it("ends the session with the microphone message when the microphone is refused", async () => {
+    const { session, states, errors } = setup((t) => {
+      t.startTurn = async () => {
+        throw new Error("Permission denied");
+      };
+    });
+    await session.start();
+    await session.startTurn();
+    expect(errors).toEqual([
+      "Microphone permission denied. Allow microphone access and try again.",
+    ]);
+    expect(states.at(-1)).toBe("ended");
   });
 });

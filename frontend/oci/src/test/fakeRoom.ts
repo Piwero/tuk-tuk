@@ -3,7 +3,12 @@ import { RoomEvent, RpcError } from "livekit-client";
 export class FakeRoom {
   localParticipant = {
     setAttributes: async () => undefined,
-    setMicrophoneEnabled: async () => undefined,
+    setMicrophoneEnabled: (async () => undefined) as (enabled: boolean) => Promise<unknown>,
+    performRpc: (async () => "") as (request: {
+      destinationIdentity: string;
+      method: string;
+      payload: string;
+    }) => Promise<string>,
   };
   remoteParticipants = new Map<string, { attributes: Record<string, string> }>();
   methods = new Map<string, (data: { payload: string }) => Promise<string>>();

@@ -29,64 +29,10 @@ async def test_lapsed_session_triggers_shutdown_handler() -> None:
     assert ended == ["lapsed"]
 
 
-def test_silence_starts_after_agent_speech_and_resets_on_user_speech(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from types import SimpleNamespace
+def test_session_has_no_silence_timeout() -> None:
+    from tuk_voice_agent import config
 
-    from tuk_voice_agent.agent import setup_lifecycle
-
-    class FakeTimer:
-        def __init__(self, callback: object) -> None:
-            self.callback = callback
-            self.cancelled = False
-
-        def cancel(self) -> None:
-            self.cancelled = True
-
-    class FakeLoop:
-        def __init__(self) -> None:
-            self.timers: list[FakeTimer] = []
-
-        def call_later(self, delay: float, callback: object, *args: object) -> FakeTimer:
-            assert delay == 20
-            timer = FakeTimer(lambda: callback(*args))  # type: ignore[operator]
-            self.timers.append(timer)
-            return timer
-
-    class Emitter:
-        def __init__(self) -> None:
-            self.events: dict[str, object] = {}
-
-        def on(self, name: str, callback: object) -> None:
-            self.events[name] = callback
-
-    loop, session, room = FakeLoop(), Emitter(), Emitter()
-    ended: list[str] = []
-    monkeypatch.setattr("tuk_voice_agent.agent.asyncio.get_running_loop", lambda: loop)
-    setup_lifecycle(session, room, "browser", ended.append)  # type: ignore[arg-type]
-    session.events["agent_state_changed"](
-        SimpleNamespace(old_state="speaking", new_state="listening")
-    )  # type: ignore[operator]
-    first = loop.timers[-1]
-    session.events["user_state_changed"](SimpleNamespace(new_state="speaking"))  # type: ignore[operator]
-    assert first.cancelled
-    session.events["user_state_changed"](SimpleNamespace(new_state="listening"))  # type: ignore[operator]
-    second = loop.timers[-1]
-    session.events["agent_state_changed"](
-        SimpleNamespace(old_state="listening", new_state="thinking")
-    )  # type: ignore[operator]
-    assert second.cancelled
-    session.events["user_state_changed"](SimpleNamespace(new_state="listening"))  # type: ignore[operator]
-    assert loop.timers[-1] is second
-    session.events["agent_state_changed"](
-        SimpleNamespace(old_state="thinking", new_state="speaking")
-    )  # type: ignore[operator]
-    session.events["agent_state_changed"](
-        SimpleNamespace(old_state="speaking", new_state="listening")
-    )  # type: ignore[operator]
-    loop.timers[-1].callback()  # type: ignore[operator]
-    assert ended == ["silence"]
+    assert not hasattr(config, "SILENCE_TIMEOUT_SECONDS")
 
 
 def test_browser_leaving_ends_session() -> None:
@@ -101,9 +47,9 @@ def test_browser_leaving_ends_session() -> None:
         def on(self, name: str, callback: object) -> None:
             self.events[name] = callback
 
-    session, room = Emitter(), Emitter()
+    room = Emitter()
     ended: list[str] = []
-    setup_lifecycle(session, room, "browser", ended.append)  # type: ignore[arg-type]
+    setup_lifecycle(room, "browser", ended.append)  # type: ignore[arg-type]
     room.events["participant_disconnected"](SimpleNamespace(identity="other"))  # type: ignore[operator]
     assert ended == []
     room.events["participant_disconnected"](SimpleNamespace(identity="browser"))  # type: ignore[operator]

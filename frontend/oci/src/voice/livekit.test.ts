@@ -1,4 +1,4 @@
-import { ConnectionError, RoomEvent } from "livekit-client";
+import { ConnectionError, RoomEvent, RpcError } from "livekit-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 
@@ -34,7 +34,7 @@ function setup(configure?: (room: FakeRoom) => void) {
 }
 
 describe("LiveKit transport", () => {
-  it("joins with the minted token, publishes the clock, enables the mic, exposes tools as RPC", async () => {
+  it("joins with the minted token, publishes the clock, leaves the mic off, exposes tools as RPC", async () => {
     const attributes = vi.fn(async () => undefined);
     const mic = vi.fn(async () => undefined);
     const connect = vi.fn(async () => undefined);
@@ -46,11 +46,62 @@ describe("LiveKit transport", () => {
     await transport.connect(clock);
     expect(connect).toHaveBeenCalledWith("wss://x", "t");
     expect(attributes).toHaveBeenCalledWith({ tz: "UTC", date: "2026-07-03" });
-    expect(mic).toHaveBeenCalledWith(true);
+    expect(mic).not.toHaveBeenCalled();
     expect(room.methods.size).toBe(12);
     await transport.disconnect();
     expect(room.methods.size).toBe(0);
     expect(room.connected).toBe(false);
+  });
+
+  it("opens the mic only while a turn is held, telling the agent when it starts and ends", async () => {
+    const calls: string[] = [];
+    const { room, transport } = setup((r) => {
+      r.localParticipant.setMicrophoneEnabled = async (on?: boolean) =>
+        void calls.push(`mic:${on}`);
+      r.localParticipant.performRpc = async (request) => {
+        calls.push(`rpc:${request?.destinationIdentity}:${request?.method}`);
+        return "";
+      };
+    });
+    await transport.connect(clock);
+    room.remoteParticipants.set("agent-1", { attributes: {} });
+    await transport.startTurn();
+    await transport.endTurn();
+    await transport.startTurn();
+    await transport.cancelTurn();
+    expect(calls).toEqual([
+      "mic:true",
+      "rpc:agent-1:start_turn",
+      "mic:false",
+      "rpc:agent-1:end_turn",
+      "mic:true",
+      "rpc:agent-1:start_turn",
+      "mic:false",
+      "rpc:agent-1:cancel_turn",
+    ]);
+  });
+
+  it("refuses a turn while no agent has joined, leaving the mic off", async () => {
+    const mic = vi.fn(async () => undefined);
+    const { transport } = setup((r) => (r.localParticipant.setMicrophoneEnabled = mic));
+    await transport.connect(clock);
+    await expect(transport.startTurn()).rejects.toThrow(/still joining/i);
+    expect(mic).not.toHaveBeenCalled();
+  });
+
+  it("mutes again and reports an out-of-date agent that lacks turn control", async () => {
+    const calls: string[] = [];
+    const { room, transport } = setup((r) => {
+      r.localParticipant.setMicrophoneEnabled = async (on?: boolean) =>
+        void calls.push(`mic:${on}`);
+      r.localParticipant.performRpc = async () => {
+        throw new RpcError(RpcError.ErrorCode.UNSUPPORTED_METHOD, "nope");
+      };
+    });
+    await transport.connect(clock);
+    room.remoteParticipants.set("agent", { attributes: {} });
+    await expect(transport.startTurn()).rejects.toThrow("Voice agent out of date — redeploy");
+    expect(calls).toEqual(["mic:true", "mic:false"]);
   });
 
   it("translates participant attributes into agent state", async () => {
@@ -68,15 +119,20 @@ describe("LiveKit transport", () => {
     room.handlers.get(RoomEvent.ParticipantConnected)?.();
     expect(agents.at(-1)).toEqual({
       speaking: true,
+      thinking: false,
       contractVersion: "1",
       endReason: "unavailable",
     });
     expect(localStorage.getItem("tuktuk.voice.exhaustedMonth")).toMatch(/^\d{4}-\d{2}$/);
     expect(livekitProvider.unavailableUntil()).toBeInstanceOf(Date);
+    room.remoteParticipants.set("agent", { attributes: { "lk.agent.state": "thinking" } });
+    room.handlers.get(RoomEvent.ParticipantAttributesChanged)?.();
+    expect(agents.at(-1)).toMatchObject({ speaking: false, thinking: true });
     room.remoteParticipants.set("agent", { attributes: {} });
     room.handlers.get(RoomEvent.ParticipantAttributesChanged)?.();
     expect(agents.at(-1)).toEqual({
       speaking: false,
+      thinking: false,
       contractVersion: undefined,
       endReason: undefined,
     });
@@ -129,13 +185,15 @@ describe("LiveKit transport", () => {
     await expect(transport.connect(clock)).rejects.toThrow(message);
   });
 
-  it("lets other errors through, e.g. a microphone refusal", async () => {
-    const { transport } = setup((r) => {
+  it("lets a microphone refusal through when the owner first holds to talk", async () => {
+    const { room, transport } = setup((r) => {
       r.localParticipant.setMicrophoneEnabled = async () => {
         throw new Error("Permission denied");
       };
     });
-    await expect(transport.connect(clock)).rejects.toThrow("Permission denied");
+    await transport.connect(clock);
+    room.remoteParticipants.set("agent", { attributes: {} });
+    await expect(transport.startTurn()).rejects.toThrow("Permission denied");
   });
 
   it("disconnects the room when stopped while connect is pending", async () => {
@@ -157,10 +215,10 @@ describe("LiveKit transport", () => {
     expect(room.connected).toBe(false);
   });
 
-  it("disconnects the room when stopped during delayed microphone setup", async () => {
+  it("disconnects the room when stopped during delayed attribute setup", async () => {
     let finish!: () => void;
     const { room, transport } = setup((r) => {
-      r.localParticipant.setMicrophoneEnabled = () =>
+      r.localParticipant.setAttributes = () =>
         new Promise<undefined>((resolve) => {
           finish = () => resolve(undefined);
         });

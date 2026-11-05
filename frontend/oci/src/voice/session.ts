@@ -4,7 +4,9 @@ import { onUnauthorized } from "../api";
 import { createVoiceTools } from "./tools";
 import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 
-export type VoiceState = "idle" | "connecting" | "listening" | "speaking" | "ended";
+export type VoiceState = "idle" | "connecting" | "listening" | "thinking" | "speaking" | "ended";
+
+export const OUT_OF_DATE = "Voice agent out of date — redeploy";
 
 /** What a transport reports about the remote agent. `contractVersion` is absent until the agent
  * has published one; `endReason` is set when the agent is ending the session: `unavailable` means
@@ -13,6 +15,7 @@ export type VoiceEndReason = "unavailable" | "session_lapsed";
 
 export interface VoiceAgent {
   speaking: boolean;
+  thinking?: boolean;
   contractVersion?: string;
   endReason?: VoiceEndReason;
 }
@@ -32,12 +35,19 @@ export interface VoiceTransportContext {
   events: VoiceTransportEvents;
 }
 
-/** One provider's way to carry a voice session. `connect` resolves once the microphone is live
- * and the agent can be heard; `disconnect` is safe at any point, including while `connect` is
- * pending, and leaves nothing behind. Errors thrown by `connect` are shown to the owner as-is. */
+/** One provider's way to carry a voice session. `connect` resolves once the agent can be reached;
+ * it never opens the microphone. `disconnect` is safe at any point, including while `connect` is
+ * pending, and leaves nothing behind. Errors thrown by `connect` are shown to the owner as-is.
+ *
+ * Push-to-talk (ADR 0015): `startTurn` opens the microphone and tells the agent the owner is
+ * speaking (which interrupts the agent); `endTurn` closes the microphone and submits the turn;
+ * `cancelTurn` closes it and discards what was said. All three are no-ops after `disconnect`. */
 export interface VoiceTransport {
   connect(clock: { timeZone: string; date: string }): Promise<void>;
   disconnect(): Promise<void>;
+  startTurn(): Promise<void>;
+  endTurn(): Promise<void>;
+  cancelTurn(): Promise<void>;
 }
 export type VoiceTransportFactory = (context: VoiceTransportContext) => VoiceTransport;
 
@@ -53,8 +63,13 @@ export interface VoiceSessionOptions {
   onState(state: VoiceState): void;
   onCaption(text: string): void;
   onError(message: string): void;
+  /** Whether the owner's microphone is open for a held push-to-talk turn. */
+  onCapturing(capturing: boolean): void;
   refresh?: () => void;
 }
+
+const MIC_REFUSED = /permission|denied|notallowed/i;
+const MIC_REFUSED_MESSAGE = "Microphone permission denied. Allow microphone access and try again.";
 
 export function createVoiceSession(options: VoiceSessionOptions) {
   let transport: VoiceTransport | undefined;
@@ -62,6 +77,13 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   let started = false;
   let state: VoiceState = "idle";
   let caption = "";
+  let capturing = false;
+  let turns: Promise<void> = Promise.resolve();
+  const setCapturing = (next: boolean) => {
+    if (capturing === next) return;
+    capturing = next;
+    options.onCapturing(next);
+  };
   const setState = (next: VoiceState) => {
     state = next;
     options.onState(next);
@@ -82,11 +104,12 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     void transport?.disconnect();
     caption = "";
     options.onCaption("");
+    setCapturing(false);
     setState("ended");
     if (message) options.onError(message);
   };
   const leave = () => end();
-  const outOfDate = () => end("Voice agent out of date — redeploy");
+  const outOfDate = () => end(OUT_OF_DATE);
   const events: VoiceTransportEvents = {
     onUtterance(chunks) {
       void (async () => {
@@ -120,13 +143,31 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         outOfDate();
       } else if (agent?.speaking) {
         setState("speaking");
+      } else if (agent?.thinking) {
+        setState("thinking");
       } else if (agent) {
         setState("listening");
       }
     },
     onDisconnected: () => end(),
   };
+  // Turn calls run one at a time so a quick release can never overtake its press.
+  const queueTurn = (call: () => Promise<void>, opening = false) =>
+    (turns = turns.then(call).catch((error: unknown) => {
+      if (ended) return;
+      if (opening) setCapturing(false);
+      const message = error instanceof Error ? error.message : "Voice turn failed.";
+      if (message === OUT_OF_DATE || MIC_REFUSED.test(message)) {
+        end(MIC_REFUSED.test(message) ? MIC_REFUSED_MESSAGE : message);
+      } else {
+        options.onError(message);
+      }
+    }));
   return {
+    /** Whether the session is over: a new one is needed to talk again. */
+    get ended() {
+      return ended;
+    },
     async start() {
       if (started || ended) return;
       started = true;
@@ -141,13 +182,32 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         if (!ended && state === "connecting") setState("listening");
       } catch (error) {
         end(
-          error instanceof Error && /permission|denied|notallowed/i.test(error.message)
-            ? "Microphone permission denied. Allow microphone access and try again."
+          error instanceof Error && MIC_REFUSED.test(error.message)
+            ? MIC_REFUSED_MESSAGE
             : error instanceof Error
               ? error.message
               : "Could not start voice session.",
         );
       }
+    },
+    /** The owner pressed and holds the push-to-talk control. Only once the session is connected:
+     * a press during connection is never remembered, so speech is not captured early. */
+    async startTurn() {
+      if (ended || !started || state === "connecting" || capturing) return;
+      setCapturing(true);
+      await queueTurn(() => transport!.startTurn(), true);
+    },
+    /** The owner released the control: submit what was said. */
+    endTurn() {
+      if (!capturing) return;
+      setCapturing(false);
+      void queueTurn(() => transport!.endTurn());
+    },
+    /** The owner slid off, lost focus or left: discard what was said. */
+    cancelTurn() {
+      if (!capturing) return;
+      setCapturing(false);
+      void queueTurn(() => transport!.cancelTurn());
     },
     async stop() {
       if (ended) return;
@@ -158,6 +218,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         options.onState = () => undefined;
         options.onCaption = () => undefined;
         options.onError = () => undefined;
+        options.onCapturing = () => undefined;
         lapsedTimer = window.setTimeout(() => end(), 10000);
         return;
       }
