@@ -98,6 +98,29 @@ describe("Voice Assistant session", () => {
     await session.stop();
   });
 
+  it("rejects an agent that never publishes a contract version", async () => {
+    const room = new FakeRoom();
+    const errors: string[] = [];
+    vi.spyOn(await import("./api"), "postVoiceSession").mockResolvedValue({
+      url: "wss://test",
+      token: "token",
+      room: "room",
+    });
+    const session = createVoiceSession({
+      createRoom: () => room as never,
+      onState: () => {},
+      onCaption: () => {},
+      onError: (error) => errors.push(error),
+    });
+    await session.start();
+    vi.useFakeTimers();
+    room.remoteParticipants.set("agent", { attributes: {} });
+    room.handlers.get("participantConnected")?.();
+    vi.advanceTimersByTime(5000);
+    expect(errors).toContain("Voice agent out of date — redeploy");
+    vi.useRealTimers();
+  });
+
   it("ends when agent contract differs", async () => {
     const states: string[] = [];
     const errors: string[] = [];

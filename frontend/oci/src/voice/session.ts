@@ -7,6 +7,7 @@ import {
   type RemoteTrack,
 } from "livekit-client";
 
+import roster from "../../../../shared/voice-tool-roster.json";
 import { localDayOf } from "../dates";
 import { onUnauthorized, postVoiceSession } from "../api";
 import { registerVoiceReads } from "./rpc";
@@ -53,6 +54,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   };
   let lapsed = false;
   let lapsedTimer: number | undefined;
+  let versionTimer: number | undefined;
   const stopWatchingAuth = onUnauthorized(() => {
     lapsed = true;
   });
@@ -62,6 +64,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     ended = true;
     stopWatchingAuth();
     window.clearTimeout(lapsedTimer);
+    window.clearTimeout(versionTimer);
     window.removeEventListener("pagehide", leave);
     if (room) {
       room.unregisterTextStreamHandler("lk.transcription");
@@ -118,9 +121,21 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         if (ended) return;
         options.onState("listening");
         const checkVersion = () => {
-          const participant = [...room!.remoteParticipants.values()].find(
-            (p) => p.attributes.contract_version !== undefined,
-          );
+          const participant = [...room!.remoteParticipants.values()][0];
+          if (participant && participant.attributes.contract_version === undefined) {
+            versionTimer ??= window.setTimeout(() => {
+              versionTimer = undefined;
+              if (
+                [...room!.remoteParticipants.values()].some(
+                  (p) => p.attributes.contract_version === undefined,
+                )
+              )
+                end("Voice agent out of date — redeploy");
+            }, 5000);
+          } else {
+            window.clearTimeout(versionTimer);
+            versionTimer = undefined;
+          }
           if (participant?.attributes.voice_end_reason === "quota_exhausted") {
             try {
               localStorage.setItem(VOICE_EXHAUSTED_KEY, currentMonth());
@@ -131,7 +146,10 @@ export function createVoiceSession(options: VoiceSessionOptions) {
             notifyVoiceConfigChanged();
           } else if (participant?.attributes.voice_end_reason === "session_lapsed") {
             end();
-          } else if (participant && participant.attributes.contract_version !== "1") {
+          } else if (
+            participant?.attributes.contract_version !== undefined &&
+            participant.attributes.contract_version !== String(roster.contract_version)
+          ) {
             end("Voice agent out of date — redeploy");
           } else if (participant?.attributes["lk.agent.state"] === "speaking") {
             options.onState("speaking");
