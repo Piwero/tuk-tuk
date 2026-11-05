@@ -72,6 +72,19 @@ def test_silence_starts_after_agent_speech_and_resets_on_user_speech(
     session.events["user_state_changed"](SimpleNamespace(new_state="speaking"))  # type: ignore[operator]
     assert first.cancelled
     session.events["user_state_changed"](SimpleNamespace(new_state="listening"))  # type: ignore[operator]
+    second = loop.timers[-1]
+    session.events["agent_state_changed"](
+        SimpleNamespace(old_state="listening", new_state="thinking")
+    )  # type: ignore[operator]
+    assert second.cancelled
+    session.events["user_state_changed"](SimpleNamespace(new_state="listening"))  # type: ignore[operator]
+    assert loop.timers[-1] is second
+    session.events["agent_state_changed"](
+        SimpleNamespace(old_state="thinking", new_state="speaking")
+    )  # type: ignore[operator]
+    session.events["agent_state_changed"](
+        SimpleNamespace(old_state="speaking", new_state="listening")
+    )  # type: ignore[operator]
     loop.timers[-1].callback()  # type: ignore[operator]
     assert ended == ["silence"]
 

@@ -85,7 +85,7 @@ def setup_lifecycle(
     session: AgentSession[None], room: rtc.Room, identity: str, end: Callable[[str], None]
 ) -> None:
     timer: asyncio.TimerHandle | None = None
-    agent_speaking = False
+    agent_listening = False
     user_speaking = False
     started = False
 
@@ -98,13 +98,13 @@ def setup_lifecycle(
     def arm() -> None:
         nonlocal timer
         cancel()
-        if started and not agent_speaking and not user_speaking:
+        if started and agent_listening and not user_speaking:
             timer = asyncio.get_running_loop().call_later(SILENCE_TIMEOUT_SECONDS, end, "silence")
 
     def agent_changed(event: agents.AgentStateChangedEvent) -> None:
-        nonlocal agent_speaking, started
-        agent_speaking = event.new_state == "speaking"
-        if agent_speaking:
+        nonlocal agent_listening, started
+        agent_listening = event.new_state == "listening"
+        if not agent_listening:
             cancel()
         elif event.old_state == "speaking":
             started = True
