@@ -76,6 +76,7 @@ import { Hint } from "./components/Hint";
 import { IconButton } from "./components/IconButton";
 import { AssistantPage } from "./components/AssistantPage";
 import { VoiceProvider } from "./voice/VoiceProvider";
+import { VoiceOverlay } from "./components/VoiceOverlay";
 import { KanbanView } from "./components/KanbanView";
 import { MobileQuickAddButton } from "./components/MobileQuickAddButton";
 import { MobileTabBar } from "./components/MobileTabBar";
@@ -1075,6 +1076,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       <FocusRunProvider>
         <ShortcutsProvider>
           <ShellShortcuts onQuickAdd={() => setQuickAddOpen(true)} />
+          <VoiceOverlay available={voiceAvailable} navigation={view} />
           {(paletteOpen || paletteTask !== null) && (
             <TaskPalette
               task={paletteTask ?? undefined}
