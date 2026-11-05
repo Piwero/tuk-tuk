@@ -3,11 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 
 import { FakeRoom } from "../test/fakeRoom";
-import { livekitTransport } from "./livekit";
+import { livekitProvider, livekitTransport } from "./livekit";
 import { createVoiceTools } from "./tools";
 import type { VoiceAgent, VoiceTransportEvents } from "./session";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  localStorage.clear();
+});
 
 const clock = { timeZone: "UTC", date: "2026-07-03" };
 
@@ -66,8 +69,10 @@ describe("LiveKit transport", () => {
     expect(agents.at(-1)).toEqual({
       speaking: true,
       contractVersion: "1",
-      endReason: "quota_exhausted",
+      endReason: "unavailable",
     });
+    expect(localStorage.getItem("tuktuk.voice.exhaustedMonth")).toMatch(/^\d{4}-\d{2}$/);
+    expect(livekitProvider.unavailableUntil()).toBeInstanceOf(Date);
     room.remoteParticipants.set("agent", { attributes: {} });
     room.handlers.get(RoomEvent.ParticipantAttributesChanged)?.();
     expect(agents.at(-1)).toEqual({
@@ -177,5 +182,22 @@ describe("LiveKit transport", () => {
     await transport.connect(clock);
     expect(room.connected).toBe(false);
     expect(room.methods.size).toBe(0);
+  });
+});
+
+describe("LiveKit quota marker", () => {
+  it("is unavailable until the first of next month and forgets stale months", () => {
+    expect(livekitProvider.unavailableUntil()).toBeUndefined();
+    localStorage.setItem("tuktuk.voice.exhaustedMonth", "2000-01");
+    expect(livekitProvider.unavailableUntil()).toBeUndefined();
+    expect(localStorage.getItem("tuktuk.voice.exhaustedMonth")).toBeNull();
+    const now = new Date();
+    localStorage.setItem(
+      "tuktuk.voice.exhaustedMonth",
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    );
+    expect(livekitProvider.unavailableUntil()).toEqual(
+      new Date(now.getFullYear(), now.getMonth() + 1, 1),
+    );
   });
 });

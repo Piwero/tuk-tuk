@@ -1,49 +1,39 @@
 /** The Voice Assistant's availability (ADR 0015; issue #366): the backend
- * reports LiveKit URL/key/secret all saved, and this month's free minutes
- * are not marked used up. Checked on mount, on window refocus, and when
- * Settings saves or clears the config (`notifyVoiceConfigChanged`) so the
- * mic appears/vanishes without a reload. `false` until the first answer
- * and on any error, so nothing voice-related renders speculatively. */
+ * reports the provider's credentials all saved, and the provider has not
+ * reported itself unavailable (`VoiceProvider.unavailableUntil`, e.g. LiveKit's
+ * free credit used up this month). Checked on mount, on window refocus, when
+ * Settings saves or clears the config (`notifyVoiceConfigChanged`) and when an
+ * unavailability period ends, so the mic appears/vanishes without a reload.
+ * `false` until the first answer and on any error, so nothing voice-related
+ * renders speculatively. */
 import { useEffect, useState } from "react";
 
 import { fetchVoiceConfig } from "./api";
+import type { VoiceProvider } from "./voice/session";
 
 const CHANGED_EVENT = "tuktuk:voice-config-changed";
-
-/** localStorage key holding the `YYYY-MM` in which LiveKit's free minutes
- * ran out (written by the session code, T8). */
-export const VOICE_EXHAUSTED_KEY = "tuktuk.voice.exhaustedMonth";
 
 export function notifyVoiceConfigChanged(): void {
   window.dispatchEvent(new Event(CHANGED_EVENT));
 }
 
-export function currentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
-
-// ponytail: Build plan has no balance API; switch to a pre-check if one appears.
-// The per-browser marker only learns about the account-wide quota on failure.
-function exhaustedThisMonth(): boolean {
-  try {
-    return localStorage.getItem(VOICE_EXHAUSTED_KEY) === currentMonth();
-  } catch {
-    return false;
-  }
-}
-
-export function useVoiceAvailable(): boolean {
+export function useVoiceAvailable(provider: VoiceProvider): boolean {
   const [available, setAvailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    let timer: number | undefined;
 
     function check(): void {
+      window.clearTimeout(timer);
       fetchVoiceConfig()
         .then((config) => {
-          if (!cancelled) {
-            setAvailable(config.configured && !exhaustedThisMonth());
+          if (cancelled) return;
+          const until = provider.unavailableUntil();
+          setAvailable(config.configured && !until);
+          if (until) {
+            // Browser timers cap delays at 2^31-1 ms; recheck after that ceiling.
+            timer = window.setTimeout(check, Math.min(until.getTime() - Date.now(), 2147483647));
           }
         })
         .catch(() => {
@@ -53,26 +43,7 @@ export function useVoiceAvailable(): boolean {
         });
     }
 
-    function scheduleMonth(): void {
-      const now = new Date();
-      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      // Browser timers cap delays at 2^31-1 ms; recheck after that ceiling.
-      timer = window.setTimeout(
-        () => {
-          try {
-            if (!exhaustedThisMonth()) localStorage.removeItem(VOICE_EXHAUSTED_KEY);
-          } catch {
-            /* storage may be unavailable */
-          }
-          check();
-          scheduleMonth();
-        },
-        Math.min(next.getTime() - now.getTime(), 2147483647),
-      );
-    }
-    let timer: number;
     check();
-    scheduleMonth();
     window.addEventListener("focus", check);
     window.addEventListener(CHANGED_EVENT, check);
     return () => {
@@ -81,7 +52,7 @@ export function useVoiceAvailable(): boolean {
       window.removeEventListener("focus", check);
       window.removeEventListener(CHANGED_EVENT, check);
     };
-  }, []);
+  }, [provider]);
 
   return available;
 }

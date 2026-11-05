@@ -2,12 +2,13 @@ import roster from "../../../../shared/voice-tool-roster.json";
 import { localDayOf } from "../dates";
 import { onUnauthorized } from "../api";
 import { createVoiceTools } from "./tools";
-import { currentMonth, notifyVoiceConfigChanged, VOICE_EXHAUSTED_KEY } from "../useVoiceAvailable";
+import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 
 export type VoiceState = "idle" | "connecting" | "listening" | "speaking" | "ended";
 
 /** What a transport reports about the remote agent. `contractVersion` is absent until the agent
- * has published one; `endReason` is set when the agent is ending the session. */
+ * has published one; `endReason` is set when the agent is ending the session: `unavailable` means
+ * the provider can no longer serve voice (the provider records why and says until when). */
 export interface VoiceAgent {
   speaking: boolean;
   contractVersion?: string;
@@ -37,6 +38,13 @@ export interface VoiceTransport {
   disconnect(): Promise<void>;
 }
 export type VoiceTransportFactory = (context: VoiceTransportContext) => VoiceTransport;
+
+/** A voice provider: its transport, and when it is available again if it has reported itself
+ * unavailable (`undefined` while available). Availability is the provider's own business. */
+export interface VoiceProvider {
+  transport: VoiceTransportFactory;
+  unavailableUntil(): Date | undefined;
+}
 
 export interface VoiceSessionOptions {
   createTransport: VoiceTransportFactory;
@@ -98,12 +106,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         window.clearTimeout(versionTimer);
         versionTimer = undefined;
       }
-      if (agent?.endReason === "quota_exhausted") {
-        try {
-          localStorage.setItem(VOICE_EXHAUSTED_KEY, currentMonth());
-        } catch {
-          /* storage may be unavailable */
-        }
+      if (agent?.endReason === "unavailable") {
         end();
         notifyVoiceConfigChanged();
       } else if (agent?.endReason === "session_lapsed") {

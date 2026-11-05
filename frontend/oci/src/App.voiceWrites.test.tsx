@@ -42,7 +42,7 @@ async function startVoice(options: FakeApiOptions = {}): Promise<Voice> {
     voiceSecretSet: true,
   });
   const fake = fakeVoiceTransport();
-  render(<App voiceTransport={fake.factory} />);
+  render(<App voiceProvider={fake.provider} />);
   await userEvent
     .setup({ advanceTimers: vi.advanceTimersByTime })
     .click(await screen.findByRole("button", { name: "Start voice assistant" }));

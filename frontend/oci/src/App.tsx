@@ -61,6 +61,7 @@ import { looksLikeDatePhrase } from "./quickAdd";
 import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { useVoiceAvailable } from "./useVoiceAvailable";
+import { livekitProvider } from "./voice/livekit";
 import { AssistantView } from "./components/AssistantView";
 import { AllViewControls } from "./components/AllViewControls";
 import { CalendarView } from "./components/CalendarView";
@@ -186,14 +187,14 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
 }
 
 interface AppProps {
-  voiceTransport?: import("./voice/session").VoiceTransportFactory;
+  voiceProvider?: import("./voice/session").VoiceProvider;
   /** Absent in tests that render App on its own — AuthGate is the only
    * caller that supplies it, so App's bootstrap and tests never need to
    * know authentication exists beyond forwarding this one callback. */
   onLogout?: () => void;
 }
 
-export function App({ onLogout, voiceTransport }: AppProps = {}): JSX.Element {
+export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -287,7 +288,7 @@ export function App({ onLogout, voiceTransport }: AppProps = {}): JSX.Element {
   const assistantAvailable = assistantStatus === true && sectionSettings.assistant;
   // Voice Assistant (ADR 0015, issue #366): invisible until LiveKit is
   // configured in Settings.
-  const voiceAvailable = useVoiceAvailable();
+  const voiceAvailable = useVoiceAvailable(voiceProvider);
   // Voice writes (issue #369) land through the API, not through a view's own handlers, so every
   // surface that can show a Task or Habit re-reads. A ref keeps the callback the open session
   // holds pointed at the current view's loader.
@@ -1230,7 +1231,10 @@ export function App({ onLogout, voiceTransport }: AppProps = {}): JSX.Element {
                   )}
                 </h1>
                 {voiceAvailable && (
-                  <VoiceButton createTransport={voiceTransport} refresh={refreshAfterVoiceWrite} />
+                  <VoiceButton
+                    createTransport={voiceProvider.transport}
+                    refresh={refreshAfterVoiceWrite}
+                  />
                 )}
                 {selectedList !== null && !completedMode && (
                   <button

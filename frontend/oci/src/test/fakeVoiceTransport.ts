@@ -22,17 +22,19 @@ export class FakeVoiceTransport implements VoiceTransport {
   }
 }
 
-/** Pass `factory` as the transport factory; `transports` collects what sessions created.
+/** Pass `provider` to `App`; `transports` collects what sessions created.
  * `setup` runs on each new transport before the session uses it. */
 export function fakeVoiceTransport(setup?: (transport: FakeVoiceTransport) => void) {
   const transports: FakeVoiceTransport[] = [];
+  const factory = (context: VoiceTransportContext) => {
+    const transport = new FakeVoiceTransport(context);
+    setup?.(transport);
+    transports.push(transport);
+    return transport;
+  };
   return {
     transports,
-    factory: (context: VoiceTransportContext) => {
-      const transport = new FakeVoiceTransport(context);
-      setup?.(transport);
-      transports.push(transport);
-      return transport;
-    },
+    factory,
+    provider: { transport: factory, unavailableUntil: () => undefined },
   };
 }

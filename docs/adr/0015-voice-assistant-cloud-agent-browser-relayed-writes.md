@@ -142,6 +142,10 @@ not the `livekit-api` package. The browser never holds the API secret.
   minutes are used up and ends. The tab hides the mic until the next
   calendar month (browser-local). The Build plan has no balance API, so
   this is the closest thing to a hard stop available.
+  The monthly marker belongs to the LiveKit adapter (`voice/livekit.ts`,
+  which maps the `quota_exhausted` attribute to a generic `unavailable`
+  end reason); generic availability only asks the provider when it is
+  next available, so another provider is never gated by LiveKit credit.
 - **Version skew:** the agent publishes `contract_version` as a
   participant attribute. On a mismatch the tab ends the session with
   "Voice agent out of date — redeploy".

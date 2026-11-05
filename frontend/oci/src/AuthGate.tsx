@@ -18,8 +18,8 @@ const MIN_PASSWORD_LENGTH = 12;
  * bootstrap effects — and its whole test suite — never need to know
  * authentication exists. */
 export function AuthGate({
-  voiceTransport,
-}: { voiceTransport?: import("./voice/session").VoiceTransportFactory } = {}): JSX.Element | null {
+  voiceProvider,
+}: { voiceProvider?: import("./voice/session").VoiceProvider } = {}): JSX.Element | null {
   const [state, setState] = useState<GateState>("checking");
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export function AuthGate({
     // is left sitting in component state behind it.
     return (
       <App
-        voiceTransport={voiceTransport}
+        voiceProvider={voiceProvider}
         onLogout={() => void logout().finally(() => setState("locked"))}
       />
     );

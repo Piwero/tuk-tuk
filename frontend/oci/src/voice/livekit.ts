@@ -9,7 +9,7 @@ import {
 
 import { postVoiceSession } from "../api";
 import { registerVoiceReads } from "./rpc";
-import type { VoiceTransportFactory } from "./session";
+import type { VoiceProvider, VoiceTransportFactory } from "./session";
 
 export type VoiceRoom = Pick<
   Room,
@@ -25,6 +25,36 @@ export type VoiceRoom = Pick<
   | "unregisterRpcMethod"
 >;
 export type RoomFactory = () => VoiceRoom;
+
+/** localStorage key holding the `YYYY-MM` in which LiveKit's free inference credit ran out. */
+const EXHAUSTED_KEY = "tuktuk.voice.exhaustedMonth";
+
+const monthOf = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+// ponytail: Build plan has no balance API; switch to a pre-check if one appears.
+// The per-browser marker only learns about the account-wide quota on failure.
+function markExhausted(): void {
+  try {
+    localStorage.setItem(EXHAUSTED_KEY, monthOf(new Date()));
+  } catch {
+    /* storage may be unavailable */
+  }
+}
+
+/** The first of next month while this month's marker is set; a stale marker is forgotten. */
+function exhaustedUntil(): Date | undefined {
+  try {
+    const now = new Date();
+    if (localStorage.getItem(EXHAUSTED_KEY) === monthOf(now)) {
+      return new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    }
+    localStorage.removeItem(EXHAUSTED_KEY);
+  } catch {
+    /* storage may be unavailable */
+  }
+  return undefined;
+}
 
 /** The LiveKit transport (ADR 0015): the backend mints the room token, tools are RPC methods on
  * the room, captions arrive on `lk.transcription`, and the agent publishes its state, contract
@@ -47,11 +77,13 @@ export const livekitTransport =
     };
     const agentChanged = () => {
       const participant = [...room!.remoteParticipants.values()][0];
+      const reason = participant?.attributes.voice_end_reason;
+      if (reason === "quota_exhausted") markExhausted();
       events.onAgent(
         participant && {
           speaking: participant.attributes["lk.agent.state"] === "speaking",
           contractVersion: participant.attributes.contract_version,
-          endReason: participant.attributes.voice_end_reason,
+          endReason: reason === "quota_exhausted" ? "unavailable" : reason,
         },
       );
     };
@@ -105,3 +137,8 @@ export const livekitTransport =
       },
     };
   };
+
+export const livekitProvider: VoiceProvider = {
+  transport: livekitTransport(),
+  unavailableUntil: exhaustedUntil,
+};

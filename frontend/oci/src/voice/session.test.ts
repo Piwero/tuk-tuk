@@ -120,11 +120,11 @@ describe("provider-neutral voice session", () => {
     expect(transport().connected).toBe(false);
   });
 
-  it("marks quota exhaustion for this month and ends quietly", async () => {
+  it("ends quietly when the provider reports itself unavailable, without provider state", async () => {
     const { session, states, errors, transport } = setup();
     await session.start();
-    transport().events.onAgent({ ...agent, endReason: "quota_exhausted" });
-    expect(localStorage.getItem("tuktuk.voice.exhaustedMonth")).toMatch(/^\d{4}-\d{2}$/);
+    transport().events.onAgent({ ...agent, endReason: "unavailable" });
+    expect(localStorage.length).toBe(0);
     expect(states.at(-1)).toBe("ended");
     expect(errors).toEqual([]);
   });

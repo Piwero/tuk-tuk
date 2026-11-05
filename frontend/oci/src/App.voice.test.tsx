@@ -19,7 +19,7 @@ describe("Voice Assistant button", () => {
       voiceSecretSet: true,
     });
     const fake = fakeVoiceTransport();
-    render(<App voiceTransport={fake.factory} />);
+    render(<App voiceProvider={fake.provider} />);
     await userEvent
       .setup()
       .click(await screen.findByRole("button", { name: "Start voice assistant" }));

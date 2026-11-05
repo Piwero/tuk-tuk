@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { installFakeApi } from "./test/fakeApi";
+import { fakeVoiceTransport } from "./test/fakeVoiceTransport";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
 afterEach(() => {
@@ -141,6 +142,22 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
 
     await screen.findByRole("link", { name: "Settings" });
     expect(screen.queryByRole("button", { name: "Start voice assistant" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a neutral provider available despite the LiveKit exhaustion marker", async () => {
+    const now = new Date();
+    localStorage.setItem(
+      "tuktuk.voice.exhaustedMonth",
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    );
+    installFakeApi({
+      voiceLivekitUrl: "wss://tuk.livekit.cloud",
+      voiceLivekitApiKey: "APIabc",
+      voiceSecretSet: true,
+    });
+    render(<App voiceProvider={fakeVoiceTransport().provider} />);
+
+    expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeEnabled();
   });
 
   it("shows the mic again when the marker is from a past month", async () => {
