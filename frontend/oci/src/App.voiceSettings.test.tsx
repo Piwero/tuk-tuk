@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +28,53 @@ async function openVoiceSettings(): Promise<ReturnType<typeof userEvent.setup>> 
 }
 
 describe("The Voice Assistant's settings (ADR 0015, issue #366)", () => {
+  it("sets, persists, resets, and activates a valid overlay shortcut without starting voice", async () => {
+    installFakeApi({
+      voiceLivekitUrl: "wss://tuk.livekit.cloud",
+      voiceLivekitApiKey: "APIabc",
+      voiceSecretSet: true,
+    });
+    render(<App voiceProvider={fakeVoiceTransport().provider} />);
+    const user = await openVoiceSettings();
+    const field = await screen.findByRole("textbox", { name: "Voice overlay shortcut" });
+    expect(field).toHaveValue("Alt+Shift+V");
+    await user.clear(field);
+    await user.type(field, "Ctrl+Shift+K");
+    fireEvent.blur(field);
+    expect(localStorage.getItem("tuktuk.voice.overlayShortcut")).toBe("Ctrl+Shift+K");
+    fireEvent.keyDown(document.body, { key: "k", code: "KeyK", ctrlKey: true, shiftKey: true });
+    expect(screen.getByRole("region", { name: "Voice overlay" })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Voice overlay shortcut" }), {
+      key: "k",
+      code: "KeyK",
+      ctrlKey: true,
+      shiftKey: true,
+    });
+    expect(screen.getByRole("region", { name: "Voice overlay" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Press to connect" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close voice overlay" }));
+    expect(screen.queryByRole("region", { name: "Voice overlay" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reset shortcut" }));
+    expect(field).toHaveValue("Alt+Shift+V");
+    expect(localStorage.getItem("tuktuk.voice.overlayShortcut")).toBe("Alt+Shift+V");
+  });
+
+  it("rejects invalid and conflicting overlay shortcuts", async () => {
+    installFakeApi({
+      voiceLivekitUrl: "wss://tuk.livekit.cloud",
+      voiceLivekitApiKey: "APIabc",
+      voiceSecretSet: true,
+    });
+    render(<App />);
+    const user = await openVoiceSettings();
+    const field = await screen.findByRole("textbox", { name: "Voice overlay shortcut" });
+    await user.clear(field);
+    await user.type(field, "Ctrl+N");
+    fireEvent.blur(field);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Alt, Ctrl, or Meta/);
+    expect(localStorage.getItem("tuktuk.voice.overlayShortcut")).toBeNull();
+  });
+
   it("shows the saved URL and key and discloses where audio and data go", async () => {
     installFakeApi({
       voiceLivekitUrl: "wss://tuk.livekit.cloud",
