@@ -93,14 +93,16 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         room.on(RoomEvent.TrackSubscribed, subscribed);
         room.on(RoomEvent.TrackUnsubscribed, unsubscribed);
         room.registerTextStreamHandler("lk.transcription", (reader) => {
-          void reader
-            .readAll()
-            .then((text) => {
-              if (ended) return;
-              caption = caption ? `${caption} ${text}` : text;
+          void (async () => {
+            let text = "";
+            const previous = caption;
+            for await (const chunk of reader) {
+              if (ended) break;
+              text += chunk;
+              caption = previous ? `${previous} ${text}` : text;
               options.onCaption(caption);
-            })
-            .catch(() => undefined);
+            }
+          })().catch(() => undefined);
         });
         methods = registerVoiceReads(room, options.refresh);
         await room.connect(url, token);

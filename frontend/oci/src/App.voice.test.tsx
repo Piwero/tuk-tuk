@@ -66,6 +66,38 @@ describe("Voice Assistant session", () => {
     expect(room.connected).toBe(false);
   });
 
+  it("shows transcription chunks before the stream ends", async () => {
+    const room = new FakeRoom();
+    const captions: string[] = [];
+    vi.spyOn(await import("./api"), "postVoiceSession").mockResolvedValue({
+      url: "wss://test",
+      token: "token",
+      room: "room",
+    });
+    const session = createVoiceSession({
+      createRoom: () => room as never,
+      onState: () => {},
+      onCaption: (text) => captions.push(text),
+      onError: () => {},
+    });
+    await session.start();
+    let finish!: () => void;
+    const stream = {
+      async *[Symbol.asyncIterator]() {
+        yield "Hello";
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        yield " world";
+      },
+    };
+    room.handlers.get("lk.transcription")?.(stream as never);
+    await waitFor(() => expect(captions).toContain("Hello"));
+    finish();
+    await waitFor(() => expect(captions).toContain("Hello world"));
+    await session.stop();
+  });
+
   it("ends when agent contract differs", async () => {
     const states: string[] = [];
     const errors: string[] = [];
