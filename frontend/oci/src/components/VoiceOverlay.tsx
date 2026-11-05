@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { isTypingContext } from "../shortcuts";
+import { loadOverlayShortcut, parseOverlayShortcut } from "../voice/overlayShortcut";
 import { useVoice } from "../voice/VoiceProvider";
 import { VoiceView } from "./VoiceView";
-
-// ponytail: fixed shortcut until #399 adds browser-local preferences.
-const OVERLAY_SHORTCUT = { key: "v", code: "KeyV", label: "Alt+Shift+V" };
 
 export function VoiceOverlay({
   available,
@@ -15,6 +13,7 @@ export function VoiceOverlay({
   navigation: unknown;
 }): JSX.Element | null {
   const voice = useVoice();
+  const [shortcut, setShortcut] = useState(loadOverlayShortcut);
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLElement | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -28,15 +27,28 @@ export function VoiceOverlay({
     opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setOpen(true);
   };
-  const latest = useRef({ open, available, close, show });
-  latest.current = { open, available, close, show };
+  const latest = useRef({ open, available, close, show, shortcut });
+  latest.current = { open, available, close, show, shortcut };
 
+  useEffect(() => {
+    const onPreferenceChange = () => setShortcut(loadOverlayShortcut());
+    window.addEventListener("tuktuk:voice-overlay-shortcut-changed", onPreferenceChange);
+    return () =>
+      window.removeEventListener("tuktuk:voice-overlay-shortcut-changed", onPreferenceChange);
+  }, []);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!latest.current.available || event.repeat || isTypingContext(event, true)) return;
-      if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
-      if (event.key.toLowerCase() !== OVERLAY_SHORTCUT.key && event.code !== OVERLAY_SHORTCUT.code)
+      const chord = parseOverlayShortcut(latest.current.shortcut);
+      if (
+        !chord ||
+        event.altKey !== chord.alt ||
+        event.ctrlKey !== chord.ctrl ||
+        event.metaKey !== chord.meta ||
+        event.shiftKey !== chord.shift
+      )
         return;
+      if (event.key.toUpperCase() !== chord.key && event.code !== `Key${chord.key}`) return;
       event.preventDefault();
       if (latest.current.open) latest.current.close();
       else latest.current.show();
@@ -65,7 +77,7 @@ export function VoiceOverlay({
         className="voice-overlay-entry"
         aria-label="Open voice overlay"
         aria-expanded={open}
-        title={`Voice (${OVERLAY_SHORTCUT.label})`}
+        title={`Voice (${shortcut})`}
         onClick={open ? close : show}
       >
         Voice

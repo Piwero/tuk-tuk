@@ -45,6 +45,13 @@ import {
 } from "../api";
 import { timeMinutes } from "../calendar";
 import { type ThemePreference } from "../layoutPrefs";
+import {
+  DEFAULT_OVERLAY_SHORTCUT,
+  formatOverlayShortcut,
+  loadOverlayShortcut,
+  parseOverlayShortcut,
+  saveOverlayShortcut,
+} from "../voice/overlayShortcut";
 import { ACCENT_PALETTE } from "../theme";
 import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
@@ -1158,6 +1165,9 @@ export function SettingsView({
   const [assistConfig, setAssistConfig] = useState<AssistConfig | null>(null);
   const [assistantConfig, setAssistantConfig] = useState<AssistantConfig | null>(null);
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
+  const [overlayShortcut, setOverlayShortcut] = useState(loadOverlayShortcut);
+  const [shortcutDraft, setShortcutDraft] = useState(overlayShortcut);
+  const [shortcutError, setShortcutError] = useState("");
 
   useEffect(() => {
     void fetchStandupSettings().then((settings) => setStandupEnabled(settings.enabled));
@@ -1457,6 +1467,50 @@ export function SettingsView({
                 button stays hidden everywhere.
               </p>
               <VoiceConfigForm config={voiceConfig} onSaved={setVoiceConfig} />
+              <p>Shortcut conflicts with app or browser shortcuts cannot be used.</p>
+              <fieldset className="settings-voice-shortcut">
+                <legend>Voice overlay shortcut</legend>
+                <label>
+                  Shortcut
+                  <input
+                    aria-label="Voice overlay shortcut"
+                    value={shortcutDraft}
+                    onChange={(event) => {
+                      setShortcutDraft(event.target.value);
+                      setShortcutError("");
+                    }}
+                    onBlur={() => {
+                      const parsed = parseOverlayShortcut(shortcutDraft);
+                      if (!parsed) {
+                        setShortcutError("Use a letter or number with Alt, Ctrl, or Meta.");
+                        return;
+                      }
+                      const normalized = formatOverlayShortcut(parsed);
+                      setOverlayShortcut(normalized);
+                      setShortcutDraft(normalized);
+                      saveOverlayShortcut(normalized);
+                      window.dispatchEvent(new Event("tuktuk:voice-overlay-shortcut-changed"));
+                      setShortcutError("");
+                    }}
+                  />
+                </label>
+                {shortcutError && <p role="alert">{shortcutError}</p>}
+                {!shortcutError && overlayShortcut === DEFAULT_OVERLAY_SHORTCUT && (
+                  <p>Default shortcut</p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOverlayShortcut(DEFAULT_OVERLAY_SHORTCUT);
+                    setShortcutDraft(DEFAULT_OVERLAY_SHORTCUT);
+                    saveOverlayShortcut(DEFAULT_OVERLAY_SHORTCUT);
+                    window.dispatchEvent(new Event("tuktuk:voice-overlay-shortcut-changed"));
+                    setShortcutError("");
+                  }}
+                >
+                  Reset shortcut
+                </button>
+              </fieldset>
             </section>
           )}
         </section>
