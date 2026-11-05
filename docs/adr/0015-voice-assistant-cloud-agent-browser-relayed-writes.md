@@ -122,10 +122,12 @@ not the `livekit-api` package. The browser never holds the API secret.
 
 - Web only. Telephony (the free US number) is out: caller ID is
   spoofable and needs its own authentication design.
-- Tap to start and to end. Open mic with turn detection while the
-  session is open.
-- Auto-end after 20 s of silence, counted from when the agent stops
-  speaking, to protect the monthly budget.
+- Push-to-talk by default (amended, see below). The first press
+  connects without recording; a fresh hold after that captures; release
+  submits. Continuous (open-mic) mode is an explicit opt-in, not the
+  default.
+- No silence timeout (amended, see below). The session ends on End
+  session, on the tab closing, or on a tab-driven failure.
 - On start, the agent pulls the Agenda in one RPC. The tab sends its
   IANA timezone and local date as participant attributes, so relative
   dates resolve in the owner's day, not UTC.
@@ -204,7 +206,7 @@ stored column changed.
 - **Agent:** `tools.py`, `prompt.py` and `roster.py` hold behavior and
   tool semantics with no LiveKit import (a test enforces it).
   `livekit_tools.py` and `agent.py` bind them to LiveKit Agents, RPC and
-  the lifecycle, quota and silence handling.
+  the lifecycle and quota handling.
 - **Unchanged and still authoritative:** the shared roster and
   `contract_version`; browser-relayed tools; the write allowlist; no
   retry; one spoken confirmation per turn, which remains an instruction to
@@ -218,6 +220,27 @@ The remaining provider-specific work is listed in
 Not decided here: a second provider, a plugin registry, or a custom voice
 LLM. Any of those is its own record, and it must say how its egress, data
 path and credentials compare with the decisions above.
+
+## Amendment: push-to-talk default, no silence timeout (issue #395)
+
+The original shape was open mic with a 20 s silence auto-end. It is
+replaced:
+
+- **Push-to-talk is the default.** The browser keeps the microphone muted
+  and the agent's audio input disabled until a hold begins. The agent
+  uses manual turn detection, so a turn is exactly one hold. Opening the
+  page or the Voice view starts no session and no microphone. The agent
+  does not greet on connect.
+- **Turn control is browser to agent over RPC** (`start_turn`, `end_turn`,
+  `cancel_turn`), owner-only. These are not roster tools, so
+  `contract_version` is unchanged. An agent that lacks them reports
+  "Voice agent out of date — redeploy".
+- **The 20 s silence timeout is removed.** It was a budget guard that
+  fit open mic. Under push-to-talk silence is normal.
+- **Budget impact, stated plainly:** an idle connected session keeps
+  burning free session minutes. End session or closing the tab are the
+  only terminators. The ~200 min/month figure is easier to exhaust.
+- Continuous mode, and the spoken greeting, return in #397.
 
 ## What would justify revisiting this
 
