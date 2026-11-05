@@ -32,8 +32,10 @@ export function useVoiceAvailable(provider: VoiceProvider): boolean {
           const until = provider.unavailableUntil();
           setAvailable(config.configured && !until);
           if (until) {
-            // Browser timers cap delays at 2^31-1 ms; recheck after that ceiling.
-            timer = window.setTimeout(check, Math.min(until.getTime() - Date.now(), 2147483647));
+            // Browser timers cap delays at 2^31-1 ms; recheck after that ceiling. The floor stops
+            // a tight loop when `until` is already past but the provider still reports it.
+            const delay = Math.min(until.getTime() - Date.now(), 2147483647);
+            timer = window.setTimeout(check, Math.max(delay, 1000));
           }
         })
         .catch(() => {
