@@ -12,6 +12,7 @@ const AURA_COLOR_SHIFT = 1.04;
 export const VOICE_STATE_LABEL: Record<VoiceState, string> = {
   idle: "Disconnected",
   ended: "Disconnected",
+  disconnected: "Disconnected",
   connecting: "Connecting…",
   listening: "Listening",
   thinking: "Thinking",
@@ -21,6 +22,7 @@ export const VOICE_STATE_LABEL: Record<VoiceState, string> = {
 const AURA_STATE: Record<VoiceState, AgentState> = {
   idle: "disconnected",
   ended: "disconnected",
+  disconnected: "disconnected",
   connecting: "connecting",
   listening: "listening",
   thinking: "thinking",

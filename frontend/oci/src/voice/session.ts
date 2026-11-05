@@ -4,7 +4,8 @@ import { onUnauthorized } from "../api";
 import { createVoiceTools } from "./tools";
 import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 
-export type VoiceState = "idle" | "connecting" | "listening" | "thinking" | "speaking" | "ended";
+export type VoiceState =
+  "idle" | "connecting" | "listening" | "thinking" | "speaking" | "disconnected" | "ended";
 
 export const OUT_OF_DATE = "Voice agent out of date — redeploy";
 
@@ -113,6 +114,16 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     setState("ended");
     if (message) options.onError(message);
   };
+  const recover = (message?: string) => {
+    if (ended || state === "disconnected") return;
+    window.clearTimeout(versionTimer);
+    pendingConversation = false;
+    continuous = false;
+    setCapturing(false);
+    setState("disconnected");
+    if (message) options.onError(message);
+    void transport?.disconnect();
+  };
   const leave = () => end();
   const outOfDate = () => end(OUT_OF_DATE);
   const events: VoiceTransportEvents = {
@@ -121,7 +132,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         let text = "";
         const previous = caption;
         for await (const chunk of chunks) {
-          if (ended) break;
+          if (ended || state === "disconnected") break;
           text += chunk;
           caption = previous ? `${previous} ${text}` : text;
           options.onCaption(caption);
@@ -129,7 +140,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
       })().catch(() => undefined);
     },
     onAgent(agent) {
-      if (ended) return;
+      if (ended || state === "disconnected") return;
       if (agent?.contractVersion === String(roster.contract_version)) {
         agentReady = true;
         if (pendingConversation) {
@@ -161,27 +172,32 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         setState("listening");
       }
     },
-    onDisconnected: () => end(),
+    onDisconnected: () => recover(),
   };
   // Turn calls run one at a time so a quick release can never overtake its press.
   const queueTurn = (call: () => Promise<void>, opening = false) =>
-    (turns = turns.then(call).catch((error: unknown) => {
-      if (ended) return;
-      if (opening) {
-        setCapturing(false);
-        if (continuous) {
-          const message = error instanceof Error ? error.message : "Voice mode switch failed.";
-          end(MIC_REFUSED.test(message) ? MIC_REFUSED_MESSAGE : message);
-          return;
+    (turns = turns
+      .then(() => {
+        if (!ended && state !== "disconnected") return call();
+      })
+      .catch((error: unknown) => {
+        if (ended || state === "disconnected") return;
+        if (opening) {
+          setCapturing(false);
+          if (continuous) {
+            const message = error instanceof Error ? error.message : "Voice mode switch failed.";
+            recover(MIC_REFUSED.test(message) ? MIC_REFUSED_MESSAGE : message);
+            return;
+          }
         }
-      }
-      const message = error instanceof Error ? error.message : "Voice turn failed.";
-      if (message === OUT_OF_DATE || MIC_REFUSED.test(message)) {
-        end(MIC_REFUSED.test(message) ? MIC_REFUSED_MESSAGE : message);
-      } else {
-        options.onError(message);
-      }
-    }));
+        const message = error instanceof Error ? error.message : "Voice turn failed.";
+        if (message === OUT_OF_DATE || MIC_REFUSED.test(message)) {
+          if (message === OUT_OF_DATE) end(message);
+          else recover(MIC_REFUSED_MESSAGE);
+        } else {
+          options.onError(message);
+        }
+      }));
   return {
     /** Whether the session is over: a new one is needed to talk again. */
     get ended() {
@@ -200,7 +216,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         });
         if (!ended && state === "connecting") setState("listening");
       } catch (error) {
-        end(
+        recover(
           error instanceof Error && MIC_REFUSED.test(error.message)
             ? MIC_REFUSED_MESSAGE
             : error instanceof Error
@@ -230,7 +246,8 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     /** The owner pressed and holds the push-to-talk control. Only once the session is connected:
      * a press during connection is never remembered, so speech is not captured early. */
     async startTurn() {
-      if (ended || !started || state === "connecting" || capturing) return;
+      if (ended || !started || state === "connecting" || state === "disconnected" || capturing)
+        return;
       setCapturing(true);
       await queueTurn(() => transport!.startTurn(), true);
     },

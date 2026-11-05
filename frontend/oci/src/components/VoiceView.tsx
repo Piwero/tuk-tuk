@@ -57,7 +57,11 @@ export function VoiceView(): JSX.Element {
         {VOICE_STATE_LABEL[state]}
       </p>
       <p>{voice.mode === "continuous" ? "Continuous conversation" : "Hold-to-talk"}</p>
-      {voice.mode === "continuous" ? (
+      {state === "disconnected" ? (
+        <button type="button" className="voice-end" onClick={voice.connect}>
+          {voice.error ? "Retry" : "Reconnect"}
+        </button>
+      ) : voice.mode === "continuous" ? (
         <button type="button" className="voice-end" onClick={voice.stopConversation}>
           Switch to hold-to-talk
         </button>
@@ -66,7 +70,7 @@ export function VoiceView(): JSX.Element {
           Start conversation
         </button>
       )}
-      {voice.mode === "push-to-talk" && (
+      {voice.mode === "push-to-talk" && state !== "disconnected" && (
         <button
           type="button"
           className="voice-talk"
@@ -96,7 +100,7 @@ export function VoiceView(): JSX.Element {
           {label}
         </button>
       )}
-      {voice.mode === "push-to-talk" && (
+      {voice.mode === "push-to-talk" && state !== "disconnected" && (
         <p className="voice-hint">
           {!active
             ? "Press once to connect. Then hold to talk and let go to send."
@@ -105,7 +109,7 @@ export function VoiceView(): JSX.Element {
               : "Hold to talk, let go to send. Slide off the button to cancel."}
         </p>
       )}
-      {active && (
+      {(active || state === "disconnected") && (
         <button type="button" className="voice-end" onClick={voice.end}>
           End session
         </button>

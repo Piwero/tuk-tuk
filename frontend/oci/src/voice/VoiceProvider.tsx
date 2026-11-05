@@ -61,6 +61,8 @@ export function VoiceProvider({
 }): JSX.Element {
   const [state, setState] = useState<VoiceState>("idle");
   const [captions, setCaptions] = useState("");
+  const captionRef = useRef("");
+  captionRef.current = captions;
   const [error, setError] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [mode, setMode] = useState<Voice["mode"]>("push-to-talk");
@@ -76,29 +78,34 @@ export function VoiceProvider({
   const active =
     state === "connecting" || state === "listening" || state === "thinking" || state === "speaking";
   const connect = useCallback(() => {
-    if (session.current && !session.current.ended) return;
+    if (session.current && !session.current.ended && state !== "disconnected") return;
+    const recovering = state === "disconnected";
     // A replaced session's late events must not touch the new one.
     const id = ++generation.current;
+    session.current?.dispose();
     const current =
       <T,>(set: (value: T) => void) =>
       (value: T) => {
         if (id === generation.current) set(value);
       };
     setError("");
-    setCaptions("");
+    const previousCaptions = recovering ? captionRef.current : "";
+    if (!recovering) setCaptions("");
     session.current = createVoiceSession({
       createTransport: (context) => latest.current.createTransport(context),
       refresh: () => latest.current.refresh?.(),
       onState: current((next) => {
         setState(next);
-        if (next === "ended") setMode("push-to-talk");
+        if (next === "ended" || next === "disconnected") setMode("push-to-talk");
       }),
-      onCaption: current(setCaptions),
+      onCaption: current((text) =>
+        setCaptions(text ? [previousCaptions, text].filter(Boolean).join(" ") : ""),
+      ),
       onError: current(setError),
       onCapturing: current(setCapturing),
     });
     void session.current.start();
-  }, []);
+  }, [state]);
 
   const voice = useMemo<Voice>(
     () => ({

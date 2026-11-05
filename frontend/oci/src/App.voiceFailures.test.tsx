@@ -100,3 +100,53 @@ it("locks immediately on a lapsed session but keeps the session until the agent 
   act(() => fake.transports[0]!.events.onAgent({ ...agent, endReason: "session_lapsed" }));
   await waitFor(() => expect(fake.transports[0]!.connected).toBe(false));
 });
+
+it("reconnects explicitly without capture and keeps captions despite stale events", async () => {
+  installFakeApi(configured);
+  const fake = fakeVoiceTransport();
+  const user = userEvent.setup();
+  render(<App voiceProvider={fake.provider} />);
+  await connectVoiceFromAssistant(user);
+  const old = fake.transports[0]!;
+  await act(async () => {
+    old.events.onAgent(agent);
+    old.events.onUtterance(
+      (async function* () {
+        yield "Hello";
+      })(),
+    );
+  });
+  expect(screen.getByLabelText("Captions")).toHaveTextContent("Hello");
+  act(() => old.events.onDisconnected());
+  await user.click(screen.getByRole("button", { name: "Reconnect" }));
+  await waitFor(() => expect(fake.transports).toHaveLength(2));
+  expect(fake.transports[1]!.turns).toEqual([]);
+  act(() => old.events.onAgent({ ...agent, speaking: true }));
+  expect(screen.getByLabelText("Captions")).toHaveTextContent("Hello");
+  expect(screen.queryByText("Speaking")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "End session" }));
+  expect(screen.queryByLabelText("Captions")).not.toBeInTheDocument();
+});
+
+it("retries microphone permission from the overlay without resuming capture", async () => {
+  installFakeApi({ ...configured, assistantAvailable: true });
+  const fake = fakeVoiceTransport((t) => {
+    t.startTurn = async () => {
+      throw new Error("Permission denied");
+    };
+  });
+  const user = userEvent.setup();
+  render(<App voiceProvider={fake.provider} />);
+  await user.click(await screen.findByRole("button", { name: "Open voice overlay" }));
+  await user.click(screen.getByRole("button", { name: "Press to connect" }));
+  await screen.findByRole("button", { name: "Hold to talk" });
+  await user.keyboard("{Tab}");
+  const hold = screen.getByRole("button", { name: "Hold to talk" });
+  hold.focus();
+  await user.keyboard("{Enter>}");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Microphone permission denied");
+  await user.keyboard("{/Enter}");
+  await user.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(fake.transports).toHaveLength(2));
+  expect(fake.transports[1]!.turns).toEqual([]);
+});

@@ -147,11 +147,11 @@ describe("provider-neutral voice session", () => {
     expect(states.at(-1)).toBe("ended");
   });
 
-  it("ends when the transport disconnects", async () => {
+  it("enters recovery when the transport disconnects", async () => {
     const { session, states, transport } = setup();
     await session.start();
     transport().events.onDisconnected();
-    expect(states.at(-1)).toBe("ended");
+    expect(states.at(-1)).toBe("disconnected");
   });
 
   it("surfaces connection errors and microphone refusal", async () => {
@@ -169,7 +169,7 @@ describe("provider-neutral voice session", () => {
       });
       await session.start();
       expect(errors).toEqual([shown]);
-      expect(states.at(-1)).toBe("ended");
+      expect(states.at(-1)).toBe("disconnected");
     }
   });
 
@@ -269,6 +269,6 @@ describe("provider-neutral voice session", () => {
     expect(errors).toEqual([
       "Microphone permission denied. Allow microphone access and try again.",
     ]);
-    expect(states.at(-1)).toBe("ended");
+    expect(states.at(-1)).toBe("disconnected");
   });
 });

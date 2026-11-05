@@ -121,6 +121,10 @@ export const livekitTransport =
       const starting = method === "start_turn";
       // Speech must be flushed before the agent hears the turn end, so the mic closes first.
       await local.setMicrophoneEnabled(starting);
+      if (closed) {
+        if (starting) await local.setMicrophoneEnabled(false);
+        return;
+      }
       try {
         await local.performRpc({ destinationIdentity: identity, method, payload: "" });
       } catch (error) {
