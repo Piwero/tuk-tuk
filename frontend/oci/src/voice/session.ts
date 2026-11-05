@@ -1,4 +1,11 @@
-import { ConnectionError, ConnectionErrorReason, Room, RoomEvent } from "livekit-client";
+import {
+  ConnectionError,
+  ConnectionErrorReason,
+  Room,
+  RoomEvent,
+  Track,
+  type RemoteTrack,
+} from "livekit-client";
 
 import { localDayOf } from "../dates";
 import { onUnauthorized, postVoiceSession } from "../api";
@@ -34,6 +41,16 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   let started = false;
   let caption = "";
   let methods: string[] = [];
+  const audioTracks = new Set<RemoteTrack>();
+  const unsubscribed = (track: RemoteTrack) => {
+    if (!audioTracks.delete(track)) return;
+    for (const element of track.detach()) element.remove();
+  };
+  const subscribed = (track: RemoteTrack) => {
+    if (track.kind !== Track.Kind.Audio) return;
+    audioTracks.add(track);
+    document.body.appendChild(track.attach());
+  };
   let lapsed = false;
   let lapsedTimer: number | undefined;
   const stopWatchingAuth = onUnauthorized(() => {
@@ -50,6 +67,9 @@ export function createVoiceSession(options: VoiceSessionOptions) {
       room.unregisterTextStreamHandler("lk.transcription");
       for (const name of methods) room.unregisterRpcMethod(name);
       room.off(RoomEvent.Disconnected, disconnected);
+      room.off(RoomEvent.TrackSubscribed, subscribed);
+      room.off(RoomEvent.TrackUnsubscribed, unsubscribed);
+      for (const track of audioTracks) unsubscribed(track);
       void room.disconnect();
     }
     caption = "";
@@ -69,6 +89,8 @@ export function createVoiceSession(options: VoiceSessionOptions) {
         if (ended) return;
         room = factory();
         room.on(RoomEvent.Disconnected, disconnected);
+        room.on(RoomEvent.TrackSubscribed, subscribed);
+        room.on(RoomEvent.TrackUnsubscribed, unsubscribed);
         room.registerTextStreamHandler("lk.transcription", (reader) => {
           void reader
             .readAll()

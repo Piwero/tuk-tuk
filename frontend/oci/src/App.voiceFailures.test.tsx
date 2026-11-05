@@ -112,3 +112,23 @@ it("locks immediately on a lapsed session but keeps the room until the agent fin
   act(() => room.handlers.get(RoomEvent.ParticipantAttributesChanged)?.());
   await waitFor(() => expect(room.connected).toBe(false));
 });
+
+it("plays agent audio and detaches it when the room ends", async () => {
+  installFakeApi({
+    voiceLivekitUrl: "wss://test.livekit.cloud",
+    voiceLivekitApiKey: "key",
+    voiceSecretSet: true,
+  });
+  const room = new FakeRoom();
+  render(<App voiceRoomFactory={(() => room) as never} />);
+  await userEvent
+    .setup()
+    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await waitFor(() => expect(room.connected).toBe(true));
+  const audio = document.createElement("audio");
+  const track = { kind: "audio", attach: () => audio, detach: () => [audio] };
+  act(() => room.handlers.get(RoomEvent.TrackSubscribed)?.(track as never));
+  expect(document.body.contains(audio)).toBe(true);
+  await userEvent.setup().click(screen.getByRole("button", { name: "End voice assistant" }));
+  expect(document.body.contains(audio)).toBe(false);
+});
