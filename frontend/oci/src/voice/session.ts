@@ -9,10 +9,12 @@ export type VoiceState = "idle" | "connecting" | "listening" | "speaking" | "end
 /** What a transport reports about the remote agent. `contractVersion` is absent until the agent
  * has published one; `endReason` is set when the agent is ending the session: `unavailable` means
  * the provider can no longer serve voice (the provider records why and says until when). */
+export type VoiceEndReason = "unavailable" | "session_lapsed";
+
 export interface VoiceAgent {
   speaking: boolean;
   contractVersion?: string;
-  endReason?: string;
+  endReason?: VoiceEndReason;
 }
 
 /** What a transport tells the session. A transport owns audio playback and the microphone. */

@@ -9,7 +9,7 @@ import {
 
 import { postVoiceSession } from "../api";
 import { registerVoiceReads } from "./rpc";
-import type { VoiceProvider, VoiceTransportFactory } from "./session";
+import type { VoiceEndReason, VoiceProvider, VoiceTransportFactory } from "./session";
 
 export type VoiceRoom = Pick<
   Room,
@@ -83,7 +83,8 @@ export const livekitTransport =
         participant && {
           speaking: participant.attributes["lk.agent.state"] === "speaking",
           contractVersion: participant.attributes.contract_version,
-          endReason: reason === "quota_exhausted" ? "unavailable" : reason,
+          endReason:
+            reason === "quota_exhausted" ? "unavailable" : (reason as VoiceEndReason | undefined),
         },
       );
     };
