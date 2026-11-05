@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_OVERLAY_SHORTCUT,
@@ -15,6 +15,16 @@ describe("voice overlay shortcut preference", () => {
     expect(parseOverlayShortcut("Shift+V")).toBeNull();
     expect(parseOverlayShortcut("Ctrl+Alt+N")).toBeNull();
     expect(parseOverlayShortcut("Ctrl+T")).toBeNull();
+  });
+
+  it("keeps saved shortcut in sync when storage rejects writes", () => {
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    saveOverlayShortcut("Ctrl+Shift+K");
+    expect(loadOverlayShortcut()).toBe("Ctrl+Shift+K");
+    set.mockRestore();
+    saveOverlayShortcut(DEFAULT_OVERLAY_SHORTCUT);
   });
 
   it("persists locally and falls back to default for invalid stored values", () => {

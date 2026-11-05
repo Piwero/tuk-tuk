@@ -180,6 +180,12 @@ Spoken confirmation of each batch is an instruction in the prompt, so a new runt
 over and test it, and nothing guarantees a model obeys it.
 
 Live LiveKit checks (a real project, the deployed agent, real audio) are manual; CI uses fakes.
+PR #401 review fixes have not been verified with real LiveKit audio: credentials and an audio device
+were unavailable. Before release, connect with a deployed agent and microphone, hold to speak a
+known phrase beginning immediately after pressing, and confirm the entire phrase is transcribed.
+Switch from continuous to hold-to-talk during connection and during a delayed mode change; confirm
+the microphone stays off after switching. Check cancellation, playback, and captions as well.
+The focused simulated checks run with `cd frontend/oci && npx vitest run src/voice/session.test.ts src/voice/livekit.test.ts src/App.voiceOverlay.test.tsx`; they do not replace real audio verification.
 
 ## Next
 

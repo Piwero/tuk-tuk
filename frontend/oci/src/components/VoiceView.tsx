@@ -22,13 +22,21 @@ function onControl(event: PointerEvent<HTMLElement>): boolean {
 export function VoiceView(): JSX.Element {
   const voice = useVoice();
   const { state, active, capturing } = voice;
+  const held = useRef(false);
   const live = useRef(voice);
   live.current = voice;
+  useEffect(() => {
+    if (!capturing || voice.mode !== "push-to-talk") held.current = false;
+  }, [capturing, voice.mode]);
 
   // Anything that takes the owner away from the control abandons the turn instead of leaving
   // the microphone open: another tab or window, leaving this view.
   useEffect(() => {
-    const abandon = () => live.current.cancel();
+    const abandon = () => {
+      if (!held.current) return;
+      held.current = false;
+      live.current.cancel();
+    };
     const hidden = () => document.visibilityState === "hidden" && abandon();
     document.addEventListener("visibilitychange", hidden);
     window.addEventListener("blur", abandon);
@@ -41,7 +49,22 @@ export function VoiceView(): JSX.Element {
 
   // A press while not ready connects; it is never remembered, so a slow connection can't start
   // recording when it finally completes. The next press captures.
-  const press = () => (active ? voice.hold() : voice.connect());
+  const press = () => {
+    if (active && state !== "connecting" && !capturing) {
+      held.current = true;
+      voice.hold();
+    } else if (!active) voice.connect();
+  };
+  const cancel = () => {
+    if (!held.current) return;
+    held.current = false;
+    voice.cancel();
+  };
+  const release = () => {
+    if (!held.current) return;
+    held.current = false;
+    voice.release();
+  };
   const label = capturing
     ? "Release to send"
     : !active
@@ -79,10 +102,10 @@ export function VoiceView(): JSX.Element {
           onPointerDown={(event) => {
             if (event.button === 0 || event.pointerType !== "mouse") press();
           }}
-          onPointerUp={(event) => (onControl(event) ? voice.release() : voice.cancel())}
-          onPointerMove={(event) => capturing && !onControl(event) && voice.cancel()}
-          onPointerLeave={() => voice.cancel()}
-          onPointerCancel={() => voice.cancel()}
+          onPointerUp={(event) => (onControl(event) ? release() : cancel())}
+          onPointerMove={(event) => capturing && !onControl(event) && cancel()}
+          onPointerLeave={cancel}
+          onPointerCancel={cancel}
           onContextMenu={(event) => event.preventDefault()}
           onKeyDown={(event) => {
             if (!isHoldKey(event)) return;
@@ -92,9 +115,9 @@ export function VoiceView(): JSX.Element {
           onKeyUp={(event) => {
             if (!isHoldKey(event)) return;
             event.preventDefault();
-            voice.release();
+            release();
           }}
-          onBlur={() => voice.cancel()}
+          onBlur={cancel}
           onClick={() => !active && voice.connect()}
         >
           {label}

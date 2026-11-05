@@ -120,15 +120,25 @@ export const livekitTransport =
       const local = room.localParticipant;
       const starting = method === "start_turn";
       // Speech must be flushed before the agent hears the turn end, so the mic closes first.
-      await local.setMicrophoneEnabled(starting);
-      if (closed) {
-        if (starting) await local.setMicrophoneEnabled(false);
-        return;
-      }
+      if (!starting) await local.setMicrophoneEnabled(false);
+      if (closed) return;
+      let ready = false;
       try {
         await local.performRpc({ destinationIdentity: identity, method, payload: "" });
+        ready = starting;
+        if (starting && !closed) {
+          await local.setMicrophoneEnabled(true);
+          if (closed) await local.setMicrophoneEnabled(false);
+        }
       } catch (error) {
-        if (starting) await local.setMicrophoneEnabled(false);
+        if (starting) {
+          await local.setMicrophoneEnabled(false);
+          if (ready && !closed) {
+            await local
+              .performRpc({ destinationIdentity: identity, method: "cancel_turn", payload: "" })
+              .catch(() => undefined);
+          }
+        }
         throw error instanceof RpcError && error.code === RpcError.ErrorCode.UNSUPPORTED_METHOD
           ? new Error(OUT_OF_DATE)
           : error;

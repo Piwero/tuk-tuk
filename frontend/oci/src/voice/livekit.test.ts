@@ -70,12 +70,12 @@ describe("LiveKit transport", () => {
     await transport.startTurn();
     await transport.cancelTurn();
     expect(calls).toEqual([
-      "mic:true",
       "rpc:agent-1:start_turn",
+      "mic:true",
       "mic:false",
       "rpc:agent-1:end_turn",
-      "mic:true",
       "rpc:agent-1:start_turn",
+      "mic:true",
       "mic:false",
       "rpc:agent-1:cancel_turn",
     ]);
@@ -116,7 +116,7 @@ describe("LiveKit transport", () => {
     await transport.connect(clock);
     room.remoteParticipants.set("agent", { attributes: {} });
     await expect(transport.startTurn()).rejects.toThrow("Voice agent out of date — redeploy");
-    expect(calls).toEqual(["mic:true", "mic:false"]);
+    expect(calls).toEqual(["mic:false"]);
   });
 
   it("translates participant attributes into agent state", async () => {

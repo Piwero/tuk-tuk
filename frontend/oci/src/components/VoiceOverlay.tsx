@@ -19,7 +19,6 @@ export function VoiceOverlay({
   const closeButton = useRef<HTMLButtonElement>(null);
   const previousNavigation = useRef(navigation);
   const close = () => {
-    voice.cancel();
     setOpen(false);
     if (opener.current?.isConnected) opener.current.focus();
   };

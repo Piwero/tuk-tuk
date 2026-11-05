@@ -237,11 +237,7 @@ export function createVoiceSession(options: VoiceSessionOptions) {
       continuous = false;
       setCapturing(false);
       if (pendingConversation) pendingConversation = false;
-      else
-        void transport!.stopConversation().catch((error: unknown) => {
-          if (!ended)
-            options.onError(error instanceof Error ? error.message : "Voice mode switch failed.");
-        });
+      else void queueTurn(() => transport!.stopConversation());
     },
     /** The owner pressed and holds the push-to-talk control. Only once the session is connected:
      * a press during connection is never remembered, so speech is not captured early. */

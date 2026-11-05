@@ -1,5 +1,6 @@
 export const DEFAULT_OVERLAY_SHORTCUT = "Alt+Shift+V";
 const STORAGE_KEY = "tuktuk.voice.overlayShortcut";
+let temporaryShortcut: string | undefined;
 
 export interface OverlayShortcut {
   key: string;
@@ -49,6 +50,7 @@ export function formatOverlayShortcut(shortcut: OverlayShortcut): string {
 }
 
 export function loadOverlayShortcut(): string {
+  if (temporaryShortcut !== undefined) return temporaryShortcut;
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     const parsed = stored ? parseOverlayShortcut(stored) : null;
@@ -61,7 +63,9 @@ export function loadOverlayShortcut(): string {
 export function saveOverlayShortcut(value: string): void {
   try {
     localStorage.setItem(STORAGE_KEY, value);
+    temporaryShortcut = undefined;
   } catch {
-    // Storage can be disabled; keep current shortcut for this page session.
+    const parsed = parseOverlayShortcut(value);
+    temporaryShortcut = parsed ? formatOverlayShortcut(parsed) : DEFAULT_OVERLAY_SHORTCUT;
   }
 }

@@ -39,6 +39,33 @@ it("shares one session and captions across the page and dismissible overlay", as
   expect(screen.getByText("Hello")).toBeInTheDocument();
 });
 
+it("closing overlay does not cancel a turn held on the page", async () => {
+  installFakeApi({
+    voiceLivekitUrl: "wss://test.livekit.cloud",
+    voiceLivekitApiKey: "key",
+    voiceSecretSet: true,
+  });
+  const fake = fakeVoiceTransport();
+  const user = userEvent.setup();
+  render(<App voiceProvider={fake.provider} />);
+  fireEvent.pointerDown(await screen.findByRole("button", { name: "Press to connect" }));
+  await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
+  act(() => fake.transports[0]!.events.onAgent({ speaking: false, contractVersion: "1" }));
+  await user.click(await screen.findByRole("button", { name: "Open voice overlay" }));
+  const panel = screen.getByRole("region", { name: "Voice overlay" });
+  const pageButton = screen
+    .getAllByRole("button", { name: "Hold to talk" })
+    .find((button) => !panel.contains(button))!;
+  fireEvent.pointerDown(pageButton);
+  await waitFor(() => expect(fake.transports[0]!.turns).toContain("start"));
+  fireEvent.keyDown(within(panel).getByRole("button", { name: "Close voice overlay" }), {
+    key: "Escape",
+  });
+  expect(fake.transports[0]!.turns).not.toContain("cancel");
+  fireEvent.pointerUp(pageButton, { clientX: 0, clientY: 0 });
+  await waitFor(() => expect(fake.transports[0]!.turns).toContain("end"));
+});
+
 it("keeps a stop indicator when continuous conversation is hidden", async () => {
   installFakeApi({
     voiceLivekitUrl: "wss://test.livekit.cloud",

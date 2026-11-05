@@ -27,6 +27,31 @@ function setup(configure?: Parameters<typeof fakeVoiceTransport>[0]) {
 const agent = { speaking: false, contractVersion: "1" };
 
 describe("provider-neutral voice session", () => {
+  it("finishes starting continuous mode before stopping it", async () => {
+    let finish!: () => void;
+    const calls: string[] = [];
+    const { session, transport } = setup((t) => {
+      t.startConversation = async () => {
+        calls.push("start");
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        calls.push("started");
+      };
+      t.stopConversation = async () => {
+        calls.push("stop");
+      };
+    });
+    await session.start();
+    transport().events.onAgent(agent);
+    session.startConversation();
+    await vi.waitFor(() => expect(calls).toEqual(["start"]));
+    session.stopConversation();
+    expect(calls).toEqual(["start"]);
+    finish();
+    await vi.waitFor(() => expect(calls).toEqual(["start", "started", "stop"]));
+    await session.stop();
+  });
   it("connects with the local clock, then listens; stop disconnects and clears", async () => {
     const { session, states, transport } = setup();
     await session.start();
