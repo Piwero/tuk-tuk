@@ -3,6 +3,7 @@ import { Room, RoomEvent } from "livekit-client";
 import { localDayOf } from "../dates";
 import { postVoiceSession } from "../api";
 import { registerVoiceReads } from "./rpc";
+import { currentMonth, notifyVoiceConfigChanged, VOICE_EXHAUSTED_KEY } from "../useVoiceAvailable";
 
 export type VoiceState = "idle" | "connecting" | "listening" | "speaking" | "ended";
 export type VoiceRoom = Pick<
@@ -85,7 +86,15 @@ export function createVoiceSession(options: VoiceSessionOptions) {
           const participant = [...room!.remoteParticipants.values()].find(
             (p) => p.attributes.contract_version !== undefined,
           );
-          if (participant && participant.attributes.contract_version !== "1") {
+          if (participant?.attributes.voice_end_reason === "quota_exhausted") {
+            try {
+              localStorage.setItem(VOICE_EXHAUSTED_KEY, currentMonth());
+            } catch {
+              /* storage may be unavailable */
+            }
+            end();
+            notifyVoiceConfigChanged();
+          } else if (participant && participant.attributes.contract_version !== "1") {
             end("Voice agent out of date — redeploy");
           } else if (participant?.attributes["lk.agent.state"] === "speaking") {
             options.onState("speaking");
