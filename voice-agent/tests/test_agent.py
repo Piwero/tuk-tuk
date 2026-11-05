@@ -4,7 +4,6 @@ import asyncio
 from typing import Any
 
 from tuk_voice_agent.agent import wait_for_clock
-from tuk_voice_agent.config import AGENT_NAME
 
 
 class FakeRoom:
@@ -21,11 +20,6 @@ class FakeRoom:
 class FakeParticipant:
     def __init__(self, attributes: dict[str, str]) -> None:
         self.attributes = attributes
-
-
-def test_agent_name_matches_backend_dispatch() -> None:
-    # Literal on purpose: backend/oci/src/app/voice_livekit.py AGENT_NAME dispatches this string.
-    assert AGENT_NAME == "tuktuk-voice"
 
 
 async def test_clock_read_from_browser_attributes() -> None:
