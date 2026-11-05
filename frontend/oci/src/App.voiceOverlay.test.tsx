@@ -39,6 +39,29 @@ it("shares one session and captions across the page and dismissible overlay", as
   expect(screen.getByText("Hello")).toBeInTheDocument();
 });
 
+it("keeps a stop indicator when continuous conversation is hidden", async () => {
+  installFakeApi({
+    voiceLivekitUrl: "wss://test.livekit.cloud",
+    voiceLivekitApiKey: "key",
+    voiceSecretSet: true,
+  });
+  const fake = fakeVoiceTransport();
+  const user = userEvent.setup();
+  render(<App voiceProvider={fake.provider} />);
+  await user.click(await screen.findByRole("button", { name: "Open voice overlay" }));
+  const panel = screen.getByRole("region", { name: "Voice overlay" });
+  await user.click(within(panel).getByRole("button", { name: "Start conversation" }));
+  await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
+  act(() => fake.transports[0]!.events.onAgent({ speaking: false, contractVersion: "1" }));
+  await waitFor(() => expect(fake.transports[0]?.turns).toContain("continuous"));
+  await user.click(within(panel).getByRole("button", { name: "Close voice overlay" }));
+  const indicator = await screen.findByText("Microphone live");
+  expect(indicator).toHaveAttribute("role", "status");
+  expect(fake.transports[0]!.connected).toBe(true);
+  await user.click(within(indicator).getByRole("button", { name: "Stop voice" }));
+  await waitFor(() => expect(screen.queryByText("Microphone live")).not.toBeInTheDocument());
+});
+
 it("shortcut respects editing and dialogs, toggles without connecting, and Escape restores focus", async () => {
   installFakeApi({
     voiceLivekitUrl: "wss://test.livekit.cloud",
