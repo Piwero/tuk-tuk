@@ -23,6 +23,24 @@ describe("browser voice RPC contract", () => {
     expect(events.mock.calls[0][0]).toBe(events.mock.calls[0][1]);
     vi.restoreAllMocks();
   });
+  it("reports and refreshes check items that landed before failure", async () => {
+    vi.spyOn(api, "fetchTask").mockResolvedValue({ id: 1 } as never);
+    vi.spyOn(api, "createCheckItem")
+      .mockResolvedValueOnce({ id: 1 } as never)
+      .mockRejectedValueOnce(new Error("offline"));
+    const refresh = vi.fn();
+    const room = new FakeRoom();
+    registerVoiceReads(room as never, refresh);
+    await room.methods.get("get_task")!({ payload: '{"task_id":1}' });
+    await expect(
+      room.methods.get("add_check_items")!({
+        payload: '{"task_id":1,"titles":["first","second","third"]}',
+      }),
+    ).rejects.toThrow(/first.*second.*third/);
+    expect(refresh).toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
   it("registers exactly the roster voice reads and writes", () => {
     const room = new FakeRoom();
     registerVoiceReads(room as never);

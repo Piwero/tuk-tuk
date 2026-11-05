@@ -230,16 +230,25 @@ async function addTagsRpc(args: Record<string, unknown>): Promise<object> {
   return brief(await patchTask(id, { tag_ids: merged }));
 }
 
-async function addCheckItemsRpc(args: Record<string, unknown>): Promise<object> {
+async function addCheckItemsRpc(
+  args: Record<string, unknown>,
+  refresh?: () => void,
+): Promise<object> {
   const id = writableTask(args);
   const { titles } = args;
   if (!Array.isArray(titles) || !titles.length || !titles.every((t) => typeof t === "string"))
     throw new Error("titles must be a non-empty list of strings.");
   let task: Task | undefined;
-  for (const title of titles as string[]) {
+  for (const [index, title] of (titles as string[]).entries()) {
     try {
       task = await createCheckItem(id, title);
     } catch (error) {
+      if (index > 0) {
+        refresh?.();
+        const detail = `Landed: ${titles.slice(0, index).join(", ")}. Failed or not attempted: ${titles.slice(index).join(", ")}. ${error instanceof Error ? error.message : "Voice tool failed"}`;
+        if (error instanceof ApiError && error.status === 401) throw new RpcError(2001, detail, "");
+        throw new Error(detail);
+      }
       throw error instanceof ApiError && error.code === "not_found"
         ? new Error(`Task ${id} not found.`)
         : error;
@@ -302,7 +311,7 @@ export function registerVoiceReads(room: VoiceRoom, refresh?: () => void): strin
       );
     },
     add_tags: addTagsRpc,
-    add_check_items: addCheckItemsRpc,
+    add_check_items: (args) => addCheckItemsRpc(args, refresh),
     check_in_habit: checkInRpc,
   };
   const writes = new Set([
@@ -325,6 +334,7 @@ export function registerVoiceReads(room: VoiceRoom, refresh?: () => void): strin
         if (writes.has(name)) refresh?.();
         return result;
       } catch (error) {
+        if (error instanceof RpcError) throw error;
         throw new RpcError(
           error instanceof ApiError && error.status === 401 ? 2001 : 1500,
           error instanceof Error ? error.message : "Voice tool failed",
