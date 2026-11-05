@@ -2,6 +2,8 @@
 from `voice-agent/`; the backend dispatches it by AGENT_NAME through the session token."""
 
 import asyncio
+from collections.abc import Callable
+from contextlib import suppress
 from datetime import UTC, datetime
 
 from livekit import agents, rtc
@@ -14,6 +16,7 @@ from tuk_voice_agent.config import (
     ATTR_TZ,
     ATTRIBUTES_WAIT_SECONDS,
     LLM_MODEL,
+    SILENCE_TIMEOUT_SECONDS,
     STT_LANGUAGE,
     STT_MODEL,
     TTS_MODEL,
@@ -46,6 +49,65 @@ async def wait_for_clock(room: rtc.Room, participant: rtc.RemoteParticipant) -> 
     return participant.attributes[ATTR_TZ], participant.attributes[ATTR_DATE]
 
 
+def is_quota_exhausted(error: object) -> bool:
+    if not isinstance(error, agents.APIStatusError):
+        return False
+    body = error.body
+    if isinstance(body, dict):
+        category = str(body.get("category", "")).lower()
+        if category:
+            return "credit" in category or "monthly" in category
+        return body.get("type") == "inference_quota_exceeded"
+    return error.status_code == 402 or "credit" in error.message.lower()
+
+
+def setup_lifecycle(
+    session: AgentSession[None], room: rtc.Room, identity: str, end: Callable[[str], None]
+) -> None:
+    timer: asyncio.TimerHandle | None = None
+    agent_speaking = False
+    user_speaking = False
+    started = False
+
+    def cancel() -> None:
+        nonlocal timer
+        if timer:
+            timer.cancel()
+            timer = None
+
+    def arm() -> None:
+        nonlocal timer
+        cancel()
+        if started and not agent_speaking and not user_speaking:
+            timer = asyncio.get_running_loop().call_later(SILENCE_TIMEOUT_SECONDS, end, "silence")
+
+    def agent_changed(event: agents.AgentStateChangedEvent) -> None:
+        nonlocal agent_speaking, started
+        agent_speaking = event.new_state == "speaking"
+        if agent_speaking:
+            cancel()
+        elif event.old_state == "speaking":
+            started = True
+            arm()
+
+    def user_changed(event: agents.UserStateChangedEvent) -> None:
+        nonlocal user_speaking
+        user_speaking = event.new_state == "speaking"
+        if user_speaking:
+            cancel()
+        else:
+            arm()
+
+    def participant_left(participant: rtc.RemoteParticipant) -> None:
+        if participant.identity == identity:
+            cancel()
+            end("browser_left")
+
+    session.on("agent_state_changed", agent_changed)
+    session.on("user_state_changed", user_changed)
+    room.on("participant_disconnected", participant_left)
+
+
 @server.rtc_session(agent_name=AGENT_NAME)
 async def entrypoint(ctx: agents.JobContext) -> None:
     await ctx.connect()
@@ -60,9 +122,42 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         tts=inference.TTS(model=TTS_MODEL, voice=TTS_VOICE),
         turn_handling=TurnHandlingOptions(turn_detection=inference.TurnDetector()),
     )
+    ending = False
+
+    def end(reason: str) -> None:
+        nonlocal ending
+        if ending:
+            return
+        ending = True
+
+        async def finish() -> None:
+            message = {
+                "session_lapsed": "You need to log in again.",
+                "quota_exhausted": "Free voice minutes used up for this month.",
+            }.get(reason)
+            if message:
+                # TTS may itself have exhausted its credits.
+                with suppress(Exception):
+                    await session.say(message, allow_interruptions=False)
+            try:
+                await ctx.room.local_participant.set_attributes({"voice_end_reason": reason})
+            finally:
+                ctx.shutdown(reason)
+
+        asyncio.create_task(finish())
+
+    def on_error(event: agents.ErrorEvent) -> None:
+        error = getattr(event.error, "error", event.error)
+        if is_quota_exhausted(error):
+            end("quota_exhausted")
+
+    session.on("error", on_error)
+    setup_lifecycle(session, ctx.room, browser.identity, end)
     agent = Agent(
         instructions=build_instructions(tz=tz, date=date),
-        tools=list(build_tools(ctx.room.local_participant, browser.identity)),
+        tools=list(
+            build_tools(ctx.room.local_participant, browser.identity, lambda: end("session_lapsed"))
+        ),
     )
     await session.start(room=ctx.room, agent=agent)
     await session.generate_reply(
