@@ -48,6 +48,8 @@ export interface VoiceTransport {
   startTurn(): Promise<void>;
   endTurn(): Promise<void>;
   cancelTurn(): Promise<void>;
+  startConversation(): Promise<void>;
+  stopConversation(): Promise<void>;
 }
 export type VoiceTransportFactory = (context: VoiceTransportContext) => VoiceTransport;
 
@@ -79,6 +81,9 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   let caption = "";
   let capturing = false;
   let turns: Promise<void> = Promise.resolve();
+  let agentReady = false;
+  let pendingConversation = false;
+  let continuous = false;
   const setCapturing = (next: boolean) => {
     if (capturing === next) return;
     capturing = next;
@@ -125,6 +130,13 @@ export function createVoiceSession(options: VoiceSessionOptions) {
     },
     onAgent(agent) {
       if (ended) return;
+      if (agent?.contractVersion === String(roster.contract_version)) {
+        agentReady = true;
+        if (pendingConversation) {
+          pendingConversation = false;
+          void queueTurn(() => transport!.startConversation(), true);
+        }
+      }
       if (agent && agent.contractVersion === undefined) {
         versionTimer ??= window.setTimeout(outOfDate, 5000);
       } else {
@@ -155,7 +167,14 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   const queueTurn = (call: () => Promise<void>, opening = false) =>
     (turns = turns.then(call).catch((error: unknown) => {
       if (ended) return;
-      if (opening) setCapturing(false);
+      if (opening) {
+        setCapturing(false);
+        if (continuous) {
+          const message = error instanceof Error ? error.message : "Voice mode switch failed.";
+          end(MIC_REFUSED.test(message) ? MIC_REFUSED_MESSAGE : message);
+          return;
+        }
+      }
       const message = error instanceof Error ? error.message : "Voice turn failed.";
       if (message === OUT_OF_DATE || MIC_REFUSED.test(message)) {
         end(MIC_REFUSED.test(message) ? MIC_REFUSED_MESSAGE : message);
@@ -189,6 +208,24 @@ export function createVoiceSession(options: VoiceSessionOptions) {
               : "Could not start voice session.",
         );
       }
+    },
+    startConversation() {
+      if (ended || !started) return;
+      continuous = true;
+      setCapturing(true);
+      if (agentReady) void queueTurn(() => transport!.startConversation(), true);
+      else pendingConversation = true;
+    },
+    stopConversation() {
+      if (ended || !started) return;
+      continuous = false;
+      setCapturing(false);
+      if (pendingConversation) pendingConversation = false;
+      else
+        void transport!.stopConversation().catch((error: unknown) => {
+          if (!ended)
+            options.onError(error instanceof Error ? error.message : "Voice mode switch failed.");
+        });
     },
     /** The owner pressed and holds the push-to-talk control. Only once the session is connected:
      * a press during connection is never remembered, so speech is not captured early. */

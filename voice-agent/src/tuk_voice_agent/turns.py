@@ -6,7 +6,7 @@ from contextlib import suppress
 from typing import Any
 
 from livekit import rtc
-from livekit.agents import AgentSession
+from livekit.agents import AgentSession, inference
 
 START_TURN = "start_turn"
 END_TURN = "end_turn"
@@ -47,7 +47,31 @@ def register_turn_control(
         session.clear_user_turn()
         return ""
 
+    greeted = False
+
+    async def start_conversation(data: rtc.RpcInvocationData) -> str:
+        nonlocal greeted
+        only_owner(data)
+        session.clear_user_turn()
+        session.update_options(turn_detection=inference.TurnDetector())
+        session.input.set_audio_enabled(True)
+        if not greeted:
+            greeted = True
+            session.generate_reply(
+                instructions="Call get_agenda first, then greet the owner briefly and say what is on today."
+            )
+        return ""
+
+    async def stop_conversation(data: rtc.RpcInvocationData) -> str:
+        only_owner(data)
+        session.input.set_audio_enabled(False)
+        session.clear_user_turn()
+        session.update_options(turn_detection="manual")
+        return ""
+
     handlers: dict[str, Any] = {
+        "start_conversation": start_conversation,
+        "stop_conversation": stop_conversation,
         START_TURN: start_turn,
         END_TURN: end_turn,
         CANCEL_TURN: cancel_turn,

@@ -18,6 +18,12 @@ class FakeSession:
         self.uninterruptible = uninterruptible
         self.input = SimpleNamespace(set_audio_enabled=lambda on: self.calls.append(f"audio:{on}"))
 
+    def update_options(self, *, turn_detection: Any) -> None:
+        self.calls.append("manual" if turn_detection == "manual" else "continuous")
+
+    def generate_reply(self, **_: Any) -> None:
+        self.calls.append("greet")
+
     def interrupt(self) -> None:
         if self.uninterruptible:
             raise RuntimeError("speech disallows interruptions")
@@ -82,10 +88,23 @@ async def test_starting_a_turn_survives_speech_that_cannot_be_interrupted() -> N
     assert session.calls == ["clear", "audio:True"]
 
 
-@pytest.mark.parametrize("name", ["start_turn", "end_turn", "cancel_turn"])
+@pytest.mark.parametrize(
+    "name", ["start_turn", "end_turn", "cancel_turn", "start_conversation", "stop_conversation"]
+)
 async def test_only_the_owners_tab_may_control_turns(name: str) -> None:
     session, participant = setup()
     session.calls.clear()
     with pytest.raises(rtc.RpcError):
         await call(participant, name, caller="someone-else")
     assert session.calls == []
+
+
+async def test_continuous_conversation_greets_once_and_switches_back_to_manual() -> None:
+    session, participant = setup()
+    session.calls.clear()
+    await call(participant, "start_conversation")
+    assert session.calls == ["clear", "continuous", "audio:True", "greet"]
+    await call(participant, "stop_conversation")
+    assert session.calls[-3:] == ["audio:False", "clear", "manual"]
+    await call(participant, "start_conversation")
+    assert session.calls.count("greet") == 1

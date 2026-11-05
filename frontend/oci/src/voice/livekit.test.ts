@@ -81,6 +81,21 @@ describe("LiveKit transport", () => {
     ]);
   });
 
+  it("starts and stops continuous conversation using the same room", async () => {
+    const { transport, room } = setup();
+    const mic = vi.spyOn(room.localParticipant, "setMicrophoneEnabled");
+    const rpc = vi.spyOn(room.localParticipant, "performRpc");
+    await transport.connect(clock);
+    room.remoteParticipants.set("agent", { attributes: {} });
+    await transport.startConversation();
+    await transport.stopConversation();
+    expect(mic.mock.calls.map(([enabled]) => enabled)).toEqual([true, false]);
+    expect(rpc.mock.calls.map(([request]) => request.method)).toEqual([
+      "start_conversation",
+      "stop_conversation",
+    ]);
+  });
+
   it("refuses a turn while no agent has joined, leaving the mic off", async () => {
     const mic = vi.fn(async () => undefined);
     const { transport } = setup((r) => (r.localParticipant.setMicrophoneEnabled = mic));

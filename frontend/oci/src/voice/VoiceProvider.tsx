@@ -20,6 +20,9 @@ export interface Voice {
   active: boolean;
   /** Whether the owner's microphone is open for a held push-to-talk turn. */
   capturing: boolean;
+  mode: "push-to-talk" | "continuous";
+  startConversation(): void;
+  stopConversation(): void;
   /** The agent's words so far; cleared when the session ends. */
   captions: string;
   error: string;
@@ -60,6 +63,7 @@ export function VoiceProvider({
   const [captions, setCaptions] = useState("");
   const [error, setError] = useState("");
   const [capturing, setCapturing] = useState(false);
+  const [mode, setMode] = useState<Voice["mode"]>("push-to-talk");
   const session = useRef<ReturnType<typeof createVoiceSession>>();
   const generation = useRef(0);
   const latest = useRef({ createTransport, refresh });
@@ -85,7 +89,10 @@ export function VoiceProvider({
     session.current = createVoiceSession({
       createTransport: (context) => latest.current.createTransport(context),
       refresh: () => latest.current.refresh?.(),
-      onState: current(setState),
+      onState: current((next) => {
+        setState(next);
+        if (next === "ended") setMode("push-to-talk");
+      }),
       onCaption: current(setCaptions),
       onError: current(setError),
       onCapturing: current(setCapturing),
@@ -98,15 +105,31 @@ export function VoiceProvider({
       state,
       active,
       capturing,
+      mode,
+      startConversation: () => {
+        if (!session.current || session.current.ended) connect();
+        session.current?.cancelTurn();
+        setMode("continuous");
+        session.current?.startConversation();
+      },
+      stopConversation: () => {
+        setMode("push-to-talk");
+        session.current?.stopConversation();
+      },
       captions,
       error,
       connect,
       hold: () => void session.current?.startTurn(),
       release: () => session.current?.endTurn(),
-      cancel: () => session.current?.cancelTurn(),
-      end: () => void session.current?.stop(),
+      cancel: () => {
+        if (mode === "push-to-talk") session.current?.cancelTurn();
+      },
+      end: () => {
+        setMode("push-to-talk");
+        void session.current?.stop();
+      },
     }),
-    [state, active, capturing, captions, error, connect],
+    [state, active, capturing, mode, captions, error, connect],
   );
   return <VoiceContext.Provider value={voice}>{children}</VoiceContext.Provider>;
 }

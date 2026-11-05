@@ -240,7 +240,13 @@ replaced:
 - **Budget impact, stated plainly:** an idle connected session keeps
   burning free session minutes. End session or closing the tab are the
   only terminators. The ~200 min/month figure is easier to exhaust.
-- Continuous mode, and the spoken greeting, return in #397.
+- **Continuous conversation is explicit opt-in.** Starting it opens the default microphone,
+  enables automatic turn detection and interruption, and greets briefly once per session.
+  Switching back to hold-to-talk mutes immediately and retains captions and context.
+  Opening the UI and push-to-talk connection remain silent. Owner-only
+  `start_conversation` and `stop_conversation` RPCs switch detection modes.
+- Real LiveKit audio check: **not run** in the implementation environment; no LiveKit
+  credentials or browser audio device available. See `voice-agent/README.md` for the check.
 
 ## What would justify revisiting this
 

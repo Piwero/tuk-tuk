@@ -44,6 +44,23 @@ async function ready() {
   return { ...s, transport: s.fake.transports[0]!, hold };
 }
 
+describe("Voice view: continuous conversation", () => {
+  it("starts explicitly and returns to hold-to-talk without losing the session", async () => {
+    const { fake } = await setup();
+    await userEvent
+      .setup()
+      .click(await screen.findByRole("button", { name: "Start conversation" }));
+    await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
+    act(() => fake.transports[0]!.events.onAgent(agent));
+    await waitFor(() => expect(fake.transports[0]?.turns).toEqual(["continuous"]));
+    expect(screen.getByText("Continuous conversation")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Switch to hold-to-talk" }));
+    await waitFor(() => expect(fake.transports[0]?.turns).toEqual(["continuous", "manual"]));
+    expect(screen.getByRole("button", { name: "Hold to talk" })).toBeInTheDocument();
+    expect(fake.transports).toHaveLength(1);
+  });
+});
+
 describe("Voice view: starting", () => {
   it("opens without starting a session or activating the microphone", async () => {
     const { fake, talk } = await setup();

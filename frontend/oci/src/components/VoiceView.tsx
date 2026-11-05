@@ -56,41 +56,55 @@ export function VoiceView(): JSX.Element {
       <p className="voice-state" role="status">
         {VOICE_STATE_LABEL[state]}
       </p>
-      <button
-        type="button"
-        className="voice-talk"
-        data-capturing={capturing}
-        aria-disabled={state === "connecting"}
-        onPointerDown={(event) => {
-          if (event.button === 0 || event.pointerType !== "mouse") press();
-        }}
-        onPointerUp={(event) => (onControl(event) ? voice.release() : voice.cancel())}
-        onPointerMove={(event) => capturing && !onControl(event) && voice.cancel()}
-        onPointerLeave={() => voice.cancel()}
-        onPointerCancel={() => voice.cancel()}
-        onContextMenu={(event) => event.preventDefault()}
-        onKeyDown={(event) => {
-          if (!isHoldKey(event)) return;
-          event.preventDefault();
-          if (!event.repeat) press();
-        }}
-        onKeyUp={(event) => {
-          if (!isHoldKey(event)) return;
-          event.preventDefault();
-          voice.release();
-        }}
-        onBlur={() => voice.cancel()}
-        onClick={() => !active && voice.connect()}
-      >
-        {label}
-      </button>
-      <p className="voice-hint">
-        {!active
-          ? "Press once to connect. Then hold to talk and let go to send."
-          : state === "connecting"
-            ? "The first connection can take 10–20 seconds. Nothing is recorded until you hold again."
-            : "Hold to talk, let go to send. Slide off the button to cancel."}
-      </p>
+      <p>{voice.mode === "continuous" ? "Continuous conversation" : "Hold-to-talk"}</p>
+      {voice.mode === "continuous" ? (
+        <button type="button" className="voice-end" onClick={voice.stopConversation}>
+          Switch to hold-to-talk
+        </button>
+      ) : (
+        <button type="button" className="voice-end" onClick={voice.startConversation}>
+          Start conversation
+        </button>
+      )}
+      {voice.mode === "push-to-talk" && (
+        <button
+          type="button"
+          className="voice-talk"
+          data-capturing={capturing}
+          aria-disabled={state === "connecting"}
+          onPointerDown={(event) => {
+            if (event.button === 0 || event.pointerType !== "mouse") press();
+          }}
+          onPointerUp={(event) => (onControl(event) ? voice.release() : voice.cancel())}
+          onPointerMove={(event) => capturing && !onControl(event) && voice.cancel()}
+          onPointerLeave={() => voice.cancel()}
+          onPointerCancel={() => voice.cancel()}
+          onContextMenu={(event) => event.preventDefault()}
+          onKeyDown={(event) => {
+            if (!isHoldKey(event)) return;
+            event.preventDefault();
+            if (!event.repeat) press();
+          }}
+          onKeyUp={(event) => {
+            if (!isHoldKey(event)) return;
+            event.preventDefault();
+            voice.release();
+          }}
+          onBlur={() => voice.cancel()}
+          onClick={() => !active && voice.connect()}
+        >
+          {label}
+        </button>
+      )}
+      {voice.mode === "push-to-talk" && (
+        <p className="voice-hint">
+          {!active
+            ? "Press once to connect. Then hold to talk and let go to send."
+            : state === "connecting"
+              ? "The first connection can take 10–20 seconds. Nothing is recorded until you hold again."
+              : "Hold to talk, let go to send. Slide off the button to cancel."}
+        </p>
+      )}
       {active && (
         <button type="button" className="voice-end" onClick={voice.end}>
           End session

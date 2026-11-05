@@ -25,6 +25,8 @@ export class FakeVoiceTransport implements VoiceTransport {
   startTurn = async (): Promise<void> => void this.turns.push("start");
   endTurn = async (): Promise<void> => void this.turns.push("end");
   cancelTurn = async (): Promise<void> => void this.turns.push("cancel");
+  startConversation = async (): Promise<void> => void this.turns.push("continuous");
+  stopConversation = async (): Promise<void> => void this.turns.push("manual");
   call(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
     return this.context.tools.execute(name, args);
   }

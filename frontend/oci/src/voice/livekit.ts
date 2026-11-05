@@ -70,6 +70,7 @@ export const livekitTransport =
   ({ tools, events }) => {
     let room: VoiceRoom | undefined;
     let closed = false;
+    let continuous = false;
     let methods: string[] = [];
     const audioTracks = new Set<RemoteTrack>();
     const unsubscribed = (track: RemoteTrack) => {
@@ -129,8 +130,34 @@ export const livekitTransport =
           : error;
       }
     };
+    const conversation = async (starting: boolean) => {
+      const identity = room && [...room.remoteParticipants.keys()][0];
+      if (!room || closed) return;
+      if (!identity) throw new Error("Voice agent is still joining. Try again in a moment.");
+      const local = room.localParticipant;
+      continuous = starting;
+      if (!starting) await local.setMicrophoneEnabled(false);
+      try {
+        await local.performRpc({
+          destinationIdentity: identity,
+          method: starting ? "start_conversation" : "stop_conversation",
+          payload: "",
+        });
+        if (starting && continuous && !closed) {
+          await local.setMicrophoneEnabled(true);
+          if (!continuous || closed) await local.setMicrophoneEnabled(false);
+        }
+      } catch (error) {
+        if (starting) await local.setMicrophoneEnabled(false);
+        throw error instanceof RpcError && error.code === RpcError.ErrorCode.UNSUPPORTED_METHOD
+          ? new Error(OUT_OF_DATE)
+          : error;
+      }
+    };
     return {
       disconnect,
+      startConversation: () => conversation(true),
+      stopConversation: () => conversation(false),
       startTurn: () => turn("start_turn"),
       endTurn: () => turn("end_turn"),
       cancelTurn: () => turn("cancel_turn"),
