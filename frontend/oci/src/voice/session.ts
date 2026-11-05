@@ -117,8 +117,12 @@ export function createVoiceSession(options: VoiceSessionOptions) {
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           date: localDayOf(new Date()),
         });
-        await room.localParticipant.setMicrophoneEnabled(true);
         if (ended) return;
+        await room.localParticipant.setMicrophoneEnabled(true);
+        if (ended) {
+          await room.disconnect();
+          return;
+        }
         options.onState("listening");
         const checkVersion = () => {
           const participant = [...room!.remoteParticipants.values()][0];

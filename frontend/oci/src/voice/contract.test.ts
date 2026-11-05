@@ -19,8 +19,9 @@ describe("browser voice RPC contract", () => {
     const room = new FakeRoom();
     registerVoiceReads(room as never);
     await room.methods.get("get_agenda")!({ payload: "{}" });
-    expect(tasks.mock.calls[0][0]).toBe("today");
-    expect(events.mock.calls[0][0]).toBe(events.mock.calls[0][1]);
+    expect(tasks.mock.calls[0]?.[0]).toBe("today");
+    expect(events).toHaveBeenCalledOnce();
+    expect(events.mock.calls[0]?.[0]).toBe(events.mock.calls[0]?.[1]);
     vi.restoreAllMocks();
   });
   it("reports and refreshes check items that landed before failure", async () => {
