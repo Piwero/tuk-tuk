@@ -98,6 +98,7 @@ export class ApiError extends Error {
   constructor(
     public readonly code: string,
     message: string,
+    public readonly status?: number,
   ) {
     super(message);
   }
@@ -137,7 +138,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         listener();
       }
     }
-    throw new ApiError(body.error.code, body.error.message);
+    throw new ApiError(body.error.code, body.error.message, response.status);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -354,6 +355,56 @@ export function saveAssistantConfig(
  * invisible state as a fresh deployment. */
 export function removeAssistantConfig(): Promise<void> {
   return request("/api/v1/assistant/config", { method: "DELETE" });
+}
+
+/** The Voice Assistant's LiveKit config (ADR 0015; issue #366). The API
+ * secret is write-only — only whether one is stored round-trips, exactly as
+ * AssistantConfig's key. `configured` is the backend's own verdict that all
+ * three are set, which gates every voice affordance. */
+export interface VoiceConfig {
+  livekit_url: string | null;
+  livekit_api_key: string | null;
+  livekit_api_secret_set: boolean;
+  configured: boolean;
+}
+
+export function fetchVoiceConfig(): Promise<VoiceConfig> {
+  return request("/api/v1/voice/config");
+}
+
+/** Saves whichever fields are passed; an omitted field is left unchanged
+ * server-side (null/empty is rejected, so callers omit rather than blank).
+ * The first save must include `apiSecret`. */
+export function saveVoiceConfig(
+  fields: Partial<{ url: string; apiKey: string; apiSecret: string }>,
+): Promise<VoiceConfig> {
+  const body: { livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string } = {};
+  if (fields.url !== undefined) {
+    body.livekit_url = fields.url;
+  }
+  if (fields.apiKey !== undefined) {
+    body.livekit_api_key = fields.apiKey;
+  }
+  if (fields.apiSecret !== undefined) {
+    body.livekit_api_secret = fields.apiSecret;
+  }
+  return request("/api/v1/voice/config", { method: "PUT", body: JSON.stringify(body) });
+}
+
+/** Clears all three fields, returning the Voice Assistant to the same
+ * unconfigured, invisible state as a fresh deployment. */
+export function removeVoiceConfig(): Promise<void> {
+  return request("/api/v1/voice/config", { method: "DELETE" });
+}
+
+export interface VoiceSessionCredentials {
+  url: string;
+  token: string;
+  room: string;
+}
+
+export function postVoiceSession(): Promise<VoiceSessionCredentials> {
+  return request("/api/v1/voice/session", { method: "POST" });
 }
 
 /** One turn of the Assistant's chat transcript (ADR 0009). The whole
@@ -580,6 +631,10 @@ export function updateFolder(folderId: number, patch: FolderPatch): Promise<Fold
 
 export function deleteFolder(folderId: number): Promise<void> {
   return request(`/api/v1/folders/${folderId}`, { method: "DELETE" });
+}
+
+export function fetchTask(taskId: number): Promise<Task> {
+  return request(`/api/v1/tasks/${taskId}`);
 }
 
 export function fetchTasks(listId: number, limit?: number): Promise<Page<Task>> {

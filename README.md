@@ -24,8 +24,8 @@ in a single self-hosted app. Your data stays on your machine.
   no subscription, no tracking.
 - **Capture in one line.** Type `Review metrics #launch !high @tomorrow @9am`
   and it's filed, tagged and scheduled.
-- **AI is optional and never acts alone.** Turn it on and it suggests. You
-  click to accept. Nothing changes without you.
+- **AI is optional.** Assist suggests changes for you to accept. Voice applies
+  bounded Task and Habit changes after spoken confirmation.
 - **Works on your phone.** Add it to your home screen and use it like an app.
 
 ## What you can do
@@ -40,7 +40,9 @@ in a single self-hosted app. Your data stays on your machine.
 
 Also: [Quick-Add shortcuts](docs/guide/features/quick-add.md) ·
 [AI Assist](docs/guide/features/ai-assist.md) ·
-[Terminal app](docs/guide/features/cli.md)
+[Voice Assistant](docs/guide/features/voice.md) ([setup](docs/self-hosting/voice.md)) ·
+[Terminal app](docs/guide/features/cli.md) ·
+[MCP server](docs/guide/features/mcp.md)
 
 ## Get started
 

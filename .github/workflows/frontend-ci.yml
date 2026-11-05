@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "frontend/oci/**"
+      - "shared/voice-tool-roster.json"
       - ".github/workflows/frontend-ci.yml"
   pull_request:
     paths:
       - "frontend/oci/**"
+      - "shared/voice-tool-roster.json"
       - ".github/workflows/frontend-ci.yml"
   # Reusable: release.yml calls this as a publish gate.
   workflow_call:

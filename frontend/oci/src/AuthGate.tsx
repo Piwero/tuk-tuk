@@ -17,7 +17,9 @@ const MIN_PASSWORD_LENGTH = 12;
  * Composed at the entry point rather than inside App, so App's own
  * bootstrap effects — and its whole test suite — never need to know
  * authentication exists. */
-export function AuthGate(): JSX.Element | null {
+export function AuthGate({
+  voiceProvider,
+}: { voiceProvider?: import("./voice/session").VoiceProvider } = {}): JSX.Element | null {
   const [state, setState] = useState<GateState>("checking");
 
   useEffect(() => {
@@ -52,7 +54,12 @@ export function AuthGate(): JSX.Element | null {
     // locking regardless of the request's outcome just gets the password
     // screen back up promptly, and unmounts App so no Task or List content
     // is left sitting in component state behind it.
-    return <App onLogout={() => void logout().finally(() => setState("locked"))} />;
+    return (
+      <App
+        voiceProvider={voiceProvider}
+        onLogout={() => void logout().finally(() => setState("locked"))}
+      />
+    );
   }
   if (state === "setup") {
     return <SetupScreen onSuccess={() => setState("unlocked")} />;

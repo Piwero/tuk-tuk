@@ -7,13 +7,13 @@
 
 ## Not finished yet
 
-These appear in the app or design but don't fully work yet:
+These appear in the app or design but don't fully work yet. MCP is available now; see the
+[MCP server guide](features/mcp.md).
 
 | Feature | Today | Planned |
 | --- | --- | --- |
 | **Reminder notifications** | Reminders are saved and editable | Notifications that actually reach you |
 | **Overdue triage** | Reschedule overdue tasks by hand (select them, then use **Reschedule to…**) | AI proposes a new date for each overdue task |
-| **AI-client connector (MCP)** | Not available | Let your own AI app (e.g. Claude Desktop) read and update your tasks |
 
 ## Not planned
 

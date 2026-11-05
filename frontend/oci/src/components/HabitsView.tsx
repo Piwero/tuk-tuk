@@ -31,7 +31,7 @@ type Editor = { mode: "create" } | { mode: "edit"; habitId: number } | null;
  * like the CalendarView — check-in state is the server's call, not local
  * bookkeeping's.
  */
-export function HabitsView(): JSX.Element {
+export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {}): JSX.Element {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [dueIds, setDueIds] = useState<Set<number>>(new Set());
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
@@ -62,9 +62,10 @@ export function HabitsView(): JSX.Element {
     setStatsByHabit(new Map(statsEntries));
   }, [today]);
 
+  // `refreshToken` bumps when a Voice Assistant write lands (issue #370): re-read, as ever.
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshToken]);
 
   const dueToday = habits.filter((habit) => dueIds.has(habit.id));
   const others = habits.filter((habit) => !dueIds.has(habit.id) && !habit.is_archived);

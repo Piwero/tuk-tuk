@@ -142,6 +142,10 @@ not the `livekit-api` package. The browser never holds the API secret.
   minutes are used up and ends. The tab hides the mic until the next
   calendar month (browser-local). The Build plan has no balance API, so
   this is the closest thing to a hard stop available.
+  The monthly marker belongs to the LiveKit adapter (`voice/livekit.ts`,
+  which maps the `quota_exhausted` attribute to a generic `unavailable`
+  end reason); generic availability only asks the provider when it is
+  next available, so another provider is never gated by LiveKit credit.
 - **Version skew:** the agent publishes `contract_version` as a
   participant attribute. On a mismatch the tab ends the session with
   "Voice agent out of date — redeploy".
@@ -177,6 +181,43 @@ credentials is the opt-in.
   of why the agent is cloud-hosted.
 - Credit exhaustion is detected after the fact, from a failed inference
   call, not predicted.
+
+## Amendment: provider adapter seams (issue #388)
+
+LiveKit stays the only provider, and every decision above stands. This
+amendment records where LiveKit is isolated so that replacing it later is
+adapter work, not a rewrite. Nothing user-visible, no HTTP shape and no
+stored column changed.
+
+- **Browser:** the session (`voice/session.ts`) talks to a
+  `VoiceTransport` and a `VoiceProvider` (transport factory plus
+  `unavailableUntil()`). It never sees rooms, tracks, attributes or RPC.
+  `voice/livekit.ts` is the adapter: token fetch, room events, audio,
+  captions, attribute-to-`VoiceAgent` translation and the monthly credit
+  marker. Tools (`voice/tools.ts`) are transport-neutral; `voice/rpc.ts`
+  is only the LiveKit RPC binding and error codes (2001 login expired,
+  1500 tool failed).
+- **Backend:** `app/voice_livekit.py` owns the `voice_livekit_*` columns,
+  token minting, agent dispatch and `AGENT_NAME`. The router calls its
+  five functions and exposes the same `/voice/config` and `/voice/session`
+  as before. Columns are not renamed; no migration.
+- **Agent:** `tools.py`, `prompt.py` and `roster.py` hold behavior and
+  tool semantics with no LiveKit import (a test enforces it).
+  `livekit_tools.py` and `agent.py` bind them to LiveKit Agents, RPC and
+  the lifecycle, quota and silence handling.
+- **Unchanged and still authoritative:** the shared roster and
+  `contract_version`; browser-relayed tools; the write allowlist; no
+  retry; one spoken confirmation per turn, which remains an instruction to
+  the model and is not deterministically enforced; the egress disclosure.
+- **Availability** is now the provider's call. The "free minutes used up"
+  marker is a LiveKit-adapter rule, so another provider is never hidden
+  by LiveKit credit.
+
+The remaining provider-specific work is listed in
+[Replacing LiveKit](../self-hosting/voice.md#replacing-livekit-whats-still-provider-specific).
+Not decided here: a second provider, a plugin registry, or a custom voice
+LLM. Any of those is its own record, and it must say how its egress, data
+path and credentials compare with the decisions above.
 
 ## What would justify revisiting this
 

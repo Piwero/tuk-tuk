@@ -38,17 +38,51 @@ tuk login --base-url http://localhost:8900
 Nothing is published to a package index. `tuk-mcp` reads the session `tuk
 login` saved under `~/.config/tuk/` (`TUK_CONFIG_DIR` overrides it).
 
-Register it in your client, for example Claude Code:
+### Claude Code
 
 ```bash
 claude mcp add tuk-tuk -- tuk-mcp
 ```
 
-or any client that takes a JSON config:
+### Codex CLI
+
+```bash
+codex mcp add tuk-tuk -- tuk-mcp
+```
+
+### OpenCode
+
+Add this server to project-level `opencode.json`:
 
 ```json
-{ "mcpServers": { "tuk-tuk": { "command": "tuk-mcp" } } }
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "tuk-tuk": {
+      "type": "local",
+      "command": ["tuk-mcp"],
+      "enabled": true
+    }
+  }
+}
 ```
+
+### Custom JSON config
+
+For clients using the `mcpServers` format, add:
+
+```json
+{
+  "mcpServers": {
+    "tuk-tuk": {
+      "command": "tuk-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+Client config formats vary; use that client's stdio MCP configuration format if it differs.
 
 ## Streamable HTTP (remote, Kubernetes)
 
@@ -94,6 +128,12 @@ secret):
   }
 }
 ```
+
+Export the same token value configured on the server before starting the
+client. The client sends it in the `Authorization: Bearer ...` header; do not
+put the token value in checked-in config. For Claude Code, the `.mcp.json`
+header above uses `${MCP_BEARER_TOKEN}` expansion. Other clients may require
+setting the header through their own HTTP MCP config or CLI option.
 
 `<your-tailnet>` is your tailnet's MagicDNS name (`tailscale status` or the
 admin console). Use the full `.ts.net` name: the Tailscale certificate is

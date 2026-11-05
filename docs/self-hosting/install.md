@@ -97,6 +97,11 @@ click **Advanced → Go to (your project)**.
 
 Each redirect address must also be listed in `CORS_ORIGINS` (see above).
 
+## Optional: enable voice
+
+For hands-free Task and Habit changes, see [Set up the Voice Assistant](voice.md).
+It needs a free LiveKit Cloud project and a separately deployed agent.
+
 ## Running on Kubernetes
 
 For a cluster install with Flux and 1Password, see

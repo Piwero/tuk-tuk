@@ -60,6 +60,8 @@ import { useRegisterShortcut } from "./shortcuts";
 import { looksLikeDatePhrase } from "./quickAdd";
 import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
+import { useVoiceAvailable } from "./useVoiceAvailable";
+import { livekitProvider } from "./voice/livekit";
 import { AssistantView } from "./components/AssistantView";
 import { AllViewControls } from "./components/AllViewControls";
 import { CalendarView } from "./components/CalendarView";
@@ -73,6 +75,7 @@ import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { Hint } from "./components/Hint";
 import { IconButton } from "./components/IconButton";
+import { VoiceButton } from "./components/VoiceButton";
 import { KanbanView } from "./components/KanbanView";
 import { MobileQuickAddButton } from "./components/MobileQuickAddButton";
 import { MobileTabBar } from "./components/MobileTabBar";
@@ -184,13 +187,14 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
 }
 
 interface AppProps {
+  voiceProvider?: import("./voice/session").VoiceProvider;
   /** Absent in tests that render App on its own — AuthGate is the only
    * caller that supplies it, so App's bootstrap and tests never need to
    * know authentication exists beyond forwarding this one callback. */
   onLogout?: () => void;
 }
 
-export function App({ onLogout }: AppProps = {}): JSX.Element {
+export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -282,6 +286,17 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
   // before the answer arrives.
   const assistantStatus = useAssistantAvailable();
   const assistantAvailable = assistantStatus === true && sectionSettings.assistant;
+  // Voice Assistant (ADR 0015, issue #366): invisible until LiveKit is
+  // configured in Settings.
+  const voiceAvailable = useVoiceAvailable(voiceProvider);
+  // Voice writes (issue #369) land through the API, not through a view's own handlers, so every
+  // surface that can show a Task or Habit re-reads. A ref keeps the callback the open session
+  // holds pointed at the current view's loader.
+  const [habitsRefresh, setHabitsRefresh] = useState(0);
+  const voiceRefreshRef = useRef<() => void>(() => undefined);
+  const refreshAfterVoiceWrite = useCallback((): void => {
+    voiceRefreshRef.current();
+  }, []);
   const [groupBy, setGroupBy] = useState<GroupBy>("section");
   const [sortBy, setSortBy] = useState<SortBy>("custom");
   // The Folder view's own sort preference (#126) — kept separate from the
@@ -546,6 +561,13 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
       setTasks((await fetchTasksByTag(view.id)).items);
     }
   }, [view, completedMode, lists, allFilters]);
+
+  voiceRefreshRef.current = () => {
+    void loadTasks();
+    void fetchOpenTasks().then((page) => setOpenTasks(page.items));
+    setCalendarRefresh((current) => current + 1);
+    setHabitsRefresh((current) => current + 1);
+  };
 
   useEffect(() => {
     if (view === null) {
@@ -1208,6 +1230,12 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                     "tuk-tuk"
                   )}
                 </h1>
+                {voiceAvailable && (
+                  <VoiceButton
+                    createTransport={voiceProvider.transport}
+                    refresh={refreshAfterVoiceWrite}
+                  />
+                )}
                 {selectedList !== null && !completedMode && (
                   <button
                     type="button"
@@ -1365,7 +1393,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
             ) : view?.kind === "goals" ? (
               <GoalsView />
             ) : view?.kind === "habits" ? (
-              <HabitsView />
+              <HabitsView refreshToken={habitsRefresh} />
             ) : view?.kind === "standup" ? (
               <StandupView />
             ) : view?.kind === "assistant" ? (

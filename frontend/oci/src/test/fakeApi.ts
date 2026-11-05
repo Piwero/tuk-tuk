@@ -366,6 +366,12 @@ export interface FakeApiState {
    * no-suggestions turn the real backend returns for an unconfigured
    * provider. */
   assistantChatQueue: AssistantChatTurn[];
+  /** The Voice Assistant's LiveKit config (ADR 0015, issue #366). All
+   * null/unset by default, matching a fresh deployment; the secret is
+   * write-only so only whether one is stored exists here. */
+  voiceLivekitUrl: string | null;
+  voiceLivekitApiKey: string | null;
+  voiceSecretSet: boolean;
 }
 
 /** The password installFakeApi's fake login route accepts. */
@@ -726,6 +732,9 @@ export function installFakeApi({
   assistantApiKeySet = false,
   assistantPlanningPreferences = null,
   assistantChatQueue = [],
+  voiceLivekitUrl = null,
+  voiceLivekitApiKey = null,
+  voiceSecretSet = false,
 }: {
   lists?: FakeList[];
   folders?: FakeFolder[];
@@ -817,6 +826,10 @@ export function installFakeApi({
   assistantPlanningPreferences?: string | null;
   /** Queued chat turns (ADR 0009, issue #188) — see the field's own doc. */
   assistantChatQueue?: AssistantChatTurn[];
+  /** The saved Voice Assistant config (ADR 0015, issue #366). */
+  voiceLivekitUrl?: string | null;
+  voiceLivekitApiKey?: string | null;
+  voiceSecretSet?: boolean;
 } = {}): FakeApiState {
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
@@ -871,7 +884,18 @@ export function installFakeApi({
     assistantApiKeySet,
     assistantPlanningPreferences,
     assistantChatQueue: [...assistantChatQueue],
+    voiceLivekitUrl,
+    voiceLivekitApiKey,
+    voiceSecretSet,
   };
+
+  const voiceConfig = (): object => ({
+    livekit_url: state.voiceLivekitUrl,
+    livekit_api_key: state.voiceLivekitApiKey,
+    livekit_api_secret_set: state.voiceSecretSet,
+    configured:
+      state.voiceLivekitUrl !== null && state.voiceLivekitApiKey !== null && state.voiceSecretSet,
+  });
 
   const json = (data: unknown, status = 200): Response =>
     new Response(JSON.stringify(data), {
@@ -1109,6 +1133,59 @@ export function installFakeApi({
       state.assistantApiKeySet = false;
       state.assistantPlanningPreferences = null;
       return new Response(null, { status: 204 });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/voice/session") {
+      if (!state.loggedIn) return unauthorized();
+      return json({ url: "wss://test.livekit.cloud", token: "fake-token", room: "test-room" });
+    }
+    if (url.pathname === "/api/v1/voice/config") {
+      if (!state.loggedIn) {
+        return unauthorized();
+      }
+      if (method === "GET") {
+        return json(voiceConfig());
+      }
+      if (method === "PUT") {
+        const input = body as {
+          livekit_url?: string | null;
+          livekit_api_key?: string | null;
+          livekit_api_secret?: string | null;
+        };
+        // Mirrors the backend: omitted keeps, null/empty is 422, and the
+        // first save needs a secret.
+        for (const value of Object.values(input)) {
+          if (value === null || value === "") {
+            return json({ error: { code: "validation_error", message: "Invalid value" } }, 422);
+          }
+        }
+        if (input.livekit_api_secret === undefined && !state.voiceSecretSet) {
+          return json(
+            {
+              error: {
+                code: "livekit_secret_required",
+                message: "A LiveKit API secret is required",
+              },
+            },
+            422,
+          );
+        }
+        if (input.livekit_url !== undefined) {
+          state.voiceLivekitUrl = input.livekit_url;
+        }
+        if (input.livekit_api_key !== undefined) {
+          state.voiceLivekitApiKey = input.livekit_api_key;
+        }
+        if (input.livekit_api_secret !== undefined) {
+          state.voiceSecretSet = true;
+        }
+        return json(voiceConfig());
+      }
+      if (method === "DELETE") {
+        state.voiceLivekitUrl = null;
+        state.voiceLivekitApiKey = null;
+        state.voiceSecretSet = false;
+        return new Response(null, { status: 204 });
+      }
     }
     if (method === "POST" && url.pathname === "/api/v1/assistant/chat") {
       if (!state.loggedIn) {
@@ -1776,6 +1853,9 @@ export function installFakeApi({
       const task = state.tasks.find((t) => t.id === taskId);
       if (!task) {
         return notFound(`Task ${taskId} not found`);
+      }
+      if (method === "GET") {
+        return json(task);
       }
       if (method === "PATCH") {
         const { tag_ids, completed, ...rest } = body as {
