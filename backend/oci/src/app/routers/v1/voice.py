@@ -37,12 +37,7 @@ class VoiceConfigUpdate(BaseModel):
 
 
 def _config_from(app_settings: AppSettings) -> VoiceConfig:
-    return VoiceConfig(
-        livekit_url=app_settings.voice_livekit_url,
-        livekit_api_key=app_settings.voice_livekit_api_key,
-        livekit_api_secret_set=app_settings.encrypted_voice_livekit_api_secret is not None,
-        configured=voice_livekit.is_configured(app_settings),
-    )
+    return VoiceConfig(**voice_livekit.read_config(app_settings))
 
 
 @router.get("/config")

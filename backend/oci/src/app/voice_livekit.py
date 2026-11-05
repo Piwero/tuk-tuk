@@ -1,10 +1,9 @@
 """The LiveKit adapter for the Voice Assistant (ADR 0015; issues #367, #391):
 credential storage on `AppSettings`, token minting and agent dispatch. The
-router only calls `is_configured`, `apply_update`, `clear` and `create_session`
-and knows nothing of tokens or the `voice_livekit_*` columns (kept as-is, so
+router only calls `is_configured`, `read_config`, `apply_update`, `clear` and
+`create_session` and knows nothing of tokens or the `voice_livekit_*` columns (kept as-is, so
 installs upgrade without a migration).
 
-A LiveKit access token
 A LiveKit access token is a plain HS256 JWT signed with the project's API
 secret, so the stdlib is enough and the backend takes no new dependency.
 Claim names follow LiveKit's "Access tokens & grants" docs: `iss` is the API
@@ -28,7 +27,15 @@ from app.app_settings import voice_configured as is_configured
 from app.crypto import decrypt_credential, encrypt_credential
 from app.models import AppSettings
 
-__all__ = ["AGENT_NAME", "apply_update", "clear", "create_session", "is_configured", "mint_token"]
+__all__ = [
+    "AGENT_NAME",
+    "apply_update",
+    "clear",
+    "create_session",
+    "is_configured",
+    "mint_token",
+    "read_config",
+]
 
 # The name the deployed voice agent registers under. `voice-agent/` has to use
 # the same plain string (no shared code across the two, by design — see docs
@@ -72,6 +79,16 @@ def mint_token(*, api_key: str, api_secret: str, room: str) -> str:
     signing_input = f"{_segment({'alg': 'HS256', 'typ': 'JWT'})}.{_segment(claims)}"
     signature = hmac.new(api_secret.encode(), signing_input.encode(), hashlib.sha256).digest()
     return f"{signing_input}.{_b64(signature)}"
+
+
+def read_config(app_settings: AppSettings) -> dict[str, Any]:
+    """The `/voice/config` fields; the secret is only reported as set or not."""
+    return {
+        "livekit_url": app_settings.voice_livekit_url,
+        "livekit_api_key": app_settings.voice_livekit_api_key,
+        "livekit_api_secret_set": app_settings.encrypted_voice_livekit_api_secret is not None,
+        "configured": is_configured(app_settings),
+    }
 
 
 def apply_update(

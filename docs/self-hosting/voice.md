@@ -161,8 +161,8 @@ list and `contract_version` don't depend on it (see the
 [ADR amendment](../adr/0015-voice-assistant-cloud-agent-browser-relayed-writes.md#amendment-provider-adapter-seams-issue-388)).
 A different provider or a custom voice LLM would still need its own:
 
-- **Backend config:** `voice_livekit_*` columns on `settings`, `/voice/config` fields,
-  `voice_livekit.apply_update` and the encrypted secret. A new provider adds its own columns
+- **Backend config:** `voice_livekit_*` columns on `settings`, `/voice/config` fields (the `VoiceConfig` model, GET and PUT, is LiveKit-shaped),
+  `voice_livekit.read_config`, `voice_livekit.apply_update` and the encrypted secret. A new provider adds its own columns
   and migration; don't repurpose these.
 - **Settings form:** the URL, key and secret fields in the Voice panel, plus its error texts.
 - **Session creation:** `voice_livekit.create_session`, which mints the room token and

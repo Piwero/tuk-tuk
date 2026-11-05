@@ -199,7 +199,7 @@ stored column changed.
   1500 tool failed).
 - **Backend:** `app/voice_livekit.py` owns the `voice_livekit_*` columns,
   token minting, agent dispatch and `AGENT_NAME`. The router calls its
-  four functions and exposes the same `/voice/config` and `/voice/session`
+  five functions and exposes the same `/voice/config` and `/voice/session`
   as before. Columns are not renamed; no migration.
 - **Agent:** `tools.py`, `prompt.py` and `roster.py` hold behavior and
   tool semantics with no LiveKit import (a test enforces it).
