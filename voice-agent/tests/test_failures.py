@@ -3,7 +3,7 @@ from livekit import rtc
 from livekit.agents.llm import ToolError
 
 from test_tools import FakeLocalParticipant
-from tuk_voice_agent.tools import build_tools
+from tuk_voice_agent.livekit_tools import build_tools
 
 
 async def test_timeout_is_reported_without_retry() -> None:

@@ -10,9 +10,9 @@ from livekit import rtc
 from livekit.agents.llm import RawFunctionTool, ToolError
 
 from tuk_voice_agent.config import RPC_TIMEOUT_SECONDS
+from tuk_voice_agent.livekit_tools import build_tools
 from tuk_voice_agent.prompt import build_instructions
 from tuk_voice_agent.roster import VOICE_TOOLS
-from tuk_voice_agent.tools import build_tools
 
 BROWSER = "owner-browser"
 

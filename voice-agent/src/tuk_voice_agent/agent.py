@@ -22,9 +22,9 @@ from tuk_voice_agent.config import (
     TTS_MODEL,
     TTS_VOICE,
 )
+from tuk_voice_agent.livekit_tools import build_tools
 from tuk_voice_agent.prompt import build_instructions
 from tuk_voice_agent.roster import CONTRACT_VERSION
-from tuk_voice_agent.tools import build_tools
 
 server = AgentServer()
 

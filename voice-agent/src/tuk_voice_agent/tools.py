@@ -1,18 +1,17 @@
-"""Read and write tools: each relays to the owner's open tab over LiveKit RPC (ADR 0015). The method name is
-the roster tool name, the payload is the JSON args, the result is the tab's JSON string. The agent
-never touches the API itself. Writes carry no extra guard here: the batch-confirmation rule lives in
-the prompt (issue #369) and the id allowlist, name resolution and recurrence handling in the tab."""
+"""Provider-neutral voice tool semantics (ADR 0015): tool specs derived from the roster, and the
+relay-to-the-owner's-tab call with its no-retry error wording. No LiveKit imports; the runtime
+adapter (livekit_tools.py) supplies the transport. The batch-confirmation rule lives in the prompt
+(issue #369) and the id allowlist, name resolution and recurrence handling in the tab."""
 
 import json
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
-from livekit import rtc
-from livekit.agents import function_tool
-from livekit.agents.llm import RawFunctionTool, ToolError
-
-from tuk_voice_agent.config import RPC_TIMEOUT_SECONDS
 from tuk_voice_agent.roster import VOICE_TOOLS
+
+LAPSED_CODE = 2001  # the tab's reply when the owner's login expired
+TAB_ERROR_CODE = 1500  # the tab ran the tool and it failed
 
 _DESCRIPTIONS = {
     "get_agenda": "Today's Agenda: open Tasks with ids, Habits due today, Events, List and Tag "
@@ -50,51 +49,59 @@ _REQUIRED = {
 }
 
 
-def _relay(
-    participant: rtc.LocalParticipant,
-    identity: str,
-    name: str,
-    on_lapsed: Callable[[], None] | None,
-) -> RawFunctionTool[..., Awaitable[str]]:
-    async def call(raw_arguments: dict[str, object]) -> str:
-        try:
-            return await participant.perform_rpc(
-                destination_identity=identity,
-                method=name,
-                payload=json.dumps(raw_arguments),
-                response_timeout=RPC_TIMEOUT_SECONDS,
-            )
-        except rtc.RpcError as exc:
-            if exc.code == 2001:
-                if on_lapsed:
-                    on_lapsed()
-                raise ToolError("You need to log in again. Do not retry.") from exc
-            if exc.code != 1500:
-                raise ToolError(
-                    "I couldn't reach your app. Do not retry. Report which changes "
-                    "succeeded and which failed."
-                ) from exc
-            raise ToolError(
-                f"{name} failed: {exc.message}. Do not retry. Report which changes "
+class RelayError(Exception):
+    """Transport-neutral failure from relaying a call to the tab."""
+
+    def __init__(self, code: int, message: str) -> None:
+        super().__init__(message)
+        self.code, self.message = code, message
+
+
+class ToolFailureError(Exception):
+    """Failure whose text goes back to the model verbatim."""
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    name: str
+    description: str
+    parameters: dict[str, Any]
+
+
+Relay = Callable[[str, str], Awaitable[str]]  # (method, json payload) -> json result
+
+
+def tool_specs() -> list[ToolSpec]:
+    return [
+        ToolSpec(
+            name,
+            _DESCRIPTIONS[name],
+            {
+                "type": "object",
+                "properties": VOICE_TOOLS[name].args,
+                "required": _REQUIRED.get(name, []),
+            },
+        )
+        for name in VOICE_TOOLS
+    ]
+
+
+async def run_tool(
+    name: str, args: dict[str, object], relay: Relay, on_lapsed: Callable[[], None] | None
+) -> str:
+    try:
+        return await relay(name, json.dumps(args))
+    except RelayError as exc:
+        if exc.code == LAPSED_CODE:
+            if on_lapsed:
+                on_lapsed()
+            raise ToolFailureError("You need to log in again. Do not retry.") from exc
+        if exc.code != TAB_ERROR_CODE:
+            raise ToolFailureError(
+                "I couldn't reach your app. Do not retry. Report which changes "
                 "succeeded and which failed."
             ) from exc
-
-    schema: dict[str, Any] = {
-        "type": "function",
-        "name": name,
-        "description": _DESCRIPTIONS[name],
-        "parameters": {
-            "type": "object",
-            "properties": VOICE_TOOLS[name].args,
-            "required": _REQUIRED.get(name, []),
-        },
-    }
-    return function_tool(call, raw_schema=schema)
-
-
-def build_tools(
-    participant: rtc.LocalParticipant,
-    browser_identity: str,
-    on_lapsed: Callable[[], None] | None = None,
-) -> list[RawFunctionTool[..., Awaitable[str]]]:
-    return [_relay(participant, browser_identity, name, on_lapsed) for name in VOICE_TOOLS]
+        raise ToolFailureError(
+            f"{name} failed: {exc.message}. Do not retry. Report which changes "
+            "succeeded and which failed."
+        ) from exc
