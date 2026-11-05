@@ -117,7 +117,7 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     expect(screen.queryByRole("button", { name: "Start voice assistant" })).not.toBeInTheDocument();
   });
 
-  it("shows a disabled mic button once configured", async () => {
+  it("shows an enabled mic button once configured", async () => {
     installFakeApi({
       voiceLivekitUrl: "wss://tuk.livekit.cloud",
       voiceLivekitApiKey: "APIabc",
@@ -125,7 +125,7 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     });
     render(<App />);
 
-    expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeEnabled();
   });
 
   it("hides the mic while this month's free minutes are marked used up", async () => {
@@ -166,7 +166,7 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     await user.type(screen.getByLabelText("LiveKit API key"), "APIabc");
     await user.type(screen.getByLabelText("LiveKit API secret"), "s3cret");
     await user.click(screen.getByRole("button", { name: "Save Voice settings" }));
-    expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "Remove Voice configuration" }));
     await vi.waitFor(() =>

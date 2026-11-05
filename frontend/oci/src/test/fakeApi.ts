@@ -1134,6 +1134,10 @@ export function installFakeApi({
       state.assistantPlanningPreferences = null;
       return new Response(null, { status: 204 });
     }
+    if (method === "POST" && url.pathname === "/api/v1/voice/session") {
+      if (!state.loggedIn) return unauthorized();
+      return json({ url: "wss://test.livekit.cloud", token: "fake-token", room: "test-room" });
+    }
     if (url.pathname === "/api/v1/voice/config") {
       if (!state.loggedIn) {
         return unauthorized();

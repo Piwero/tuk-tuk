@@ -74,6 +74,7 @@ import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { Hint } from "./components/Hint";
 import { IconButton } from "./components/IconButton";
+import { VoiceButton } from "./components/VoiceButton";
 import { KanbanView } from "./components/KanbanView";
 import { MobileQuickAddButton } from "./components/MobileQuickAddButton";
 import { MobileTabBar } from "./components/MobileTabBar";
@@ -185,13 +186,14 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
 }
 
 interface AppProps {
+  voiceRoomFactory?: import("./voice/session").RoomFactory;
   /** Absent in tests that render App on its own — AuthGate is the only
    * caller that supplies it, so App's bootstrap and tests never need to
    * know authentication exists beyond forwarding this one callback. */
   onLogout?: () => void;
 }
 
-export function App({ onLogout }: AppProps = {}): JSX.Element {
+export function App({ onLogout, voiceRoomFactory }: AppProps = {}): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -1212,17 +1214,7 @@ export function App({ onLogout }: AppProps = {}): JSX.Element {
                     "tuk-tuk"
                   )}
                 </h1>
-                {voiceAvailable && (
-                  // Placeholder mount point: the real VoiceButton replaces it
-                  // once the voice session lands.
-                  <IconButton
-                    icon="mic"
-                    size={20}
-                    label="Start voice assistant"
-                    disabled
-                    onClick={() => undefined}
-                  />
-                )}
+                {voiceAvailable && <VoiceButton createRoom={voiceRoomFactory} />}
                 {selectedList !== null && !completedMode && (
                   <button
                     type="button"

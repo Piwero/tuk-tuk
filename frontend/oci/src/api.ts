@@ -396,6 +396,16 @@ export function removeVoiceConfig(): Promise<void> {
   return request("/api/v1/voice/config", { method: "DELETE" });
 }
 
+export interface VoiceSessionCredentials {
+  url: string;
+  token: string;
+  room: string;
+}
+
+export function postVoiceSession(): Promise<VoiceSessionCredentials> {
+  return request("/api/v1/voice/session", { method: "POST" });
+}
+
 /** One turn of the Assistant's chat transcript (ADR 0009). The whole
  * transcript is held client-side and posted in full each turn — nothing
  * about the conversation is persisted server-side. */
@@ -620,6 +630,10 @@ export function updateFolder(folderId: number, patch: FolderPatch): Promise<Fold
 
 export function deleteFolder(folderId: number): Promise<void> {
   return request(`/api/v1/folders/${folderId}`, { method: "DELETE" });
+}
+
+export function fetchTask(taskId: number): Promise<Task> {
+  return request(`/api/v1/tasks/${taskId}`);
 }
 
 export function fetchTasks(listId: number, limit?: number): Promise<Page<Task>> {
