@@ -4,6 +4,44 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.17.0](https://github.com/Piwero/tuk-tuk/compare/v2.16.1...v2.17.0) - 2026-11-05
+
+### Features
+
+- **voice:** Add voice-agent package skeleton with roster contract test ([199291c](https://github.com/Piwero/tuk-tuk/commit/199291c19ae975494831a511d0f90f10caccb753))
+- **backend:** Add voice settings columns and migration ([be6f1e2](https://github.com/Piwero/tuk-tuk/commit/be6f1e29e00e4ad7789a625b599c91c30a40103c))
+- **backend:** Add voice config endpoints ([6d367e5](https://github.com/Piwero/tuk-tuk/commit/6d367e5efae093ede273d7abfd46fe3563bac10f))
+- **frontend:** Add voice config api client and fake ([ce324c7](https://github.com/Piwero/tuk-tuk/commit/ce324c76bba925ff3095f36378f66b12727cc369))
+- **voice:** Gate disabled mic button on voice availability ([51f9da8](https://github.com/Piwero/tuk-tuk/commit/51f9da822d6589b35fbc83e06ee5250d33cbd903))
+- **voice:** Add voice settings panel with egress disclosure ([16dd48a](https://github.com/Piwero/tuk-tuk/commit/16dd48a2b01878dcb6f2212cd7973e84817212a4))
+- **backend:** Add stdlib LiveKit token minting for voice ([e717075](https://github.com/Piwero/tuk-tuk/commit/e7170750f58a4135562659afd2d26efc0c7b44ab))
+- **backend:** Add POST /voice/session endpoint ([468618d](https://github.com/Piwero/tuk-tuk/commit/468618d8d24d5b00b2fd1eb380f5adab3b05158e))
+- **voice:** Add agent read tools relayed over browser RPC ([89f8e80](https://github.com/Piwero/tuk-tuk/commit/89f8e8045be90d55f9dd155ebb38b2a94655ae19))
+- **voice:** Add agent entrypoint with contract_version and tz/date handshake ([24301f8](https://github.com/Piwero/tuk-tuk/commit/24301f81f680ce7c101b32534f319fc5b80f1bee))
+- **frontend:** Add LiveKit voice session and reads ([1b3d75d](https://github.com/Piwero/tuk-tuk/commit/1b3d75d1b9e0b877160330d4f981e6b16ce1ec7f))
+- **voice:** Relay the nine write tools from the agent ([e1b29e0](https://github.com/Piwero/tuk-tuk/commit/e1b29e0ee9240037b5509a76218a1893f687deed))
+- **voice:** Enforce batch confirmation in the agent prompt ([16410c5](https://github.com/Piwero/tuk-tuk/commit/16410c58abe16a825dd3843bdb8025daacc9a409))
+- **frontend:** Apply voice writes through the API and refresh visible views ([ea7d702](https://github.com/Piwero/tuk-tuk/commit/ea7d7026e42ea8a75f22280ce6fc9f587c65ce46))
+- **frontend:** Hide exhausted voice until next month ([c7fd601](https://github.com/Piwero/tuk-tuk/commit/c7fd601eecbc3bd11fad14aee4eb0d05d53c021c))
+- **voice:** End sessions on silence disconnect and quota ([416cacb](https://github.com/Piwero/tuk-tuk/commit/416cacbc6088db418ba1563b05fe8640c8fb32bc))
+
+### Bug Fixes
+
+- **voice:** Vendor roster inside agent package so lk agent deploy works ([cbe275a](https://github.com/Piwero/tuk-tuk/commit/cbe275a62250c053c8013a9be9b4ca6bb11923f7))
+- **frontend:** Satisfy typecheck for optional voice start date ([825c42c](https://github.com/Piwero/tuk-tuk/commit/825c42c32b9ff40704ecb88c3aad8f00c5d5b485))
+- **frontend:** Distinguish voice session failures ([43c478a](https://github.com/Piwero/tuk-tuk/commit/43c478a378d96ed377166c8d16d93f8057df2461))
+- **voice:** Report RPC failures without retry ([c67669b](https://github.com/Piwero/tuk-tuk/commit/c67669bf1f53433cab96ba00d746ddecb424ff3b))
+- **frontend:** Preserve voice until lapsed session is announced ([35502ae](https://github.com/Piwero/tuk-tuk/commit/35502ae4844d7ec193314b5577d832b0479ed6c1))
+- **frontend:** Play subscribed voice audio ([f29829d](https://github.com/Piwero/tuk-tuk/commit/f29829d9df6e69204cce220854cd0e4f1263d37b))
+- **voice:** Pause silence timer while agent thinks ([f73ed94](https://github.com/Piwero/tuk-tuk/commit/f73ed9476f8486f2f79b745e3154ad092985c07d))
+- **voice:** Limit agenda to local today ([7a63749](https://github.com/Piwero/tuk-tuk/commit/7a637491aed0740343921b6de81108c0d56b6d3f))
+- **voice:** Close rooms after cancelled connections ([ed27cc6](https://github.com/Piwero/tuk-tuk/commit/ed27cc6e474702195fe1f98edb8d26521ed3375d))
+- **voice:** Stream captions as text arrives ([0d6331a](https://github.com/Piwero/tuk-tuk/commit/0d6331a1ed5bc34e70cb559300b46f3422308403))
+- **voice:** Reject agents missing contract version ([8df4a26](https://github.com/Piwero/tuk-tuk/commit/8df4a26f40f693ef44c7dcc2c60f7edcb89d925c))
+- **voice:** Report partial checklist writes ([a5c6b85](https://github.com/Piwero/tuk-tuk/commit/a5c6b853793f2bebf4b84dc394711dde4c5fa14f))
+- **voice:** Guard late microphone setup ([ee04586](https://github.com/Piwero/tuk-tuk/commit/ee045869d45749d77cf045117d61730547ec688c))
+- **voice:** Floor availability recheck delay at 1s ([f771f18](https://github.com/Piwero/tuk-tuk/commit/f771f18fd375a30dbfe4661f225a7659fb0c609d))
+
 ## [2.16.1](https://github.com/Piwero/tuk-tuk/compare/v2.16.0...v2.16.1) - 2026-11-04
 
 ### Features
