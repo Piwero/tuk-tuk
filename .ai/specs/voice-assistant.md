@@ -93,9 +93,9 @@ A mic button in the web app starts a LiveKit voice session with an agent (`voice
 
 ### T3: Backend voice session endpoint
 
-**Do:** `POST /api/v1/voice/session` in `voice.py` (token minting in `app/voice_token.py`, stdlib only, `ponytail:` comment). Unconfigured → 404 `voice_unavailable` (match how other unconfigured Assist features report; check `assist.py`). Returns `{url, token, room}`. Tests: 401 without session, unconfigured error, JWT verifies with HS256 under stored secret, grants only returned room, `exp - iat` ≈ 600s, includes agent dispatch, two calls → different rooms.
+**Do:** `POST /api/v1/voice/session` in `voice.py` (token minting in `app/voice_livekit.py`, stdlib only, `ponytail:` comment). Unconfigured → 404 `voice_unavailable` (match how other unconfigured Assist features report; check `assist.py`). Returns `{url, token, room}`. Tests: 401 without session, unconfigured error, JWT verifies with HS256 under stored secret, grants only returned room, `exp - iat` ≈ 600s, includes agent dispatch, two calls → different rooms.
 
-**Files:** `backend/oci/src/app/voice_token.py`, `backend/oci/src/app/routers/v1/voice.py`, `backend/oci/tests/test_voice_session.py`
+**Files:** `backend/oci/src/app/voice_livekit.py`, `backend/oci/src/app/routers/v1/voice.py`, `backend/oci/tests/test_voice_session.py`
 
 **Verify:** `cd backend/oci && uv run pytest tests/test_voice_session.py && uv run ruff check . && uv run mypy src`
 

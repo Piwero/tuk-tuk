@@ -47,8 +47,8 @@ something to tomorrow, check in a Habit. Works in English and Spanish.
 ## Good to know
 
 - **Privacy:** this is the only feature where your voice, the transcript and Agenda data
-  (Task titles, Habit names, today's Events) leave your network. They pass through LiveKit and
-  its model providers, which LiveKit says keep nothing. Tuk Tuk saves no transcripts or
+  (Task titles, Habit names, today's Events) leave your network. They pass through LiveKit (the
+  current provider) and its model providers, which LiveKit says keep nothing. Tuk Tuk saves no transcripts or
   recordings, and captions vanish when you end the session. The Settings panel says the same.
 - **Keep the tab open.** The assistant works through your open Tuk Tuk tab. Close it and the
   session ends. If your login lapses, it tells you to log in again.

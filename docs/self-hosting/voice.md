@@ -114,7 +114,8 @@ differs from `shared/voice-tool-roster.json`. If you edit the shared file, copy 
 
 ## What leaves your network
 
-While a session is open, these pass through LiveKit and the model providers it runs
+This section describes the current provider, LiveKit. A different provider would have its own
+disclosure. While a session is open, these pass through LiveKit and the model providers it runs
 (speech-to-text, language model, text-to-speech):
 
 - your voice
@@ -152,6 +153,33 @@ a session fails, and then hides the microphone for the rest of the month.
 Changed a model or the prompt? `voice-agent/simulations/` has five text conversations that
 check tool choice without spending voice minutes. See
 [`voice-agent/README.md`](../../voice-agent/README.md#hand-run-simulations).
+
+## Replacing LiveKit: what's still provider-specific
+
+Tuk Tuk ships one provider, LiveKit. The browser session, the Task and Habit tools, the tool
+list and `contract_version` don't depend on it (see the
+[ADR amendment](../adr/0015-voice-assistant-cloud-agent-browser-relayed-writes.md#amendment-provider-adapter-seams-issue-388)).
+A different provider or a custom voice LLM would still need its own:
+
+- **Backend config:** `voice_livekit_*` columns on `settings`, `/voice/config` fields,
+  `voice_livekit.apply_update` and the encrypted secret. A new provider adds its own columns
+  and migration; don't repurpose these.
+- **Settings form:** the URL, key and secret fields in the Voice panel, plus its error texts.
+- **Session creation:** `voice_livekit.create_session`, which mints the room token and
+  dispatches `tuktuk-voice`. `POST /voice/session` returns `{url, token, room}` today.
+- **Browser transport:** a `VoiceProvider` like `voice/livekit.ts`: connect, audio, captions,
+  agent state and contract version, its own credit or availability rule, and its own
+  connection error wording. It must run `tools.execute` for the same tool names.
+- **Agent runtime:** a program that reuses `tools.py`, `prompt.py` and the roster and binds
+  them to its own runtime, as `livekit_tools.py` and `agent.py` do for LiveKit. It must publish
+  `contract_version`, enforce silence and quota behaviour, and keep the no-retry wording.
+- **Deployment and privacy:** how it is hosted, what it stores, where audio and Agenda data go.
+  This page, the Settings disclosure and the guide's privacy note all say LiveKit today.
+
+Spoken confirmation of each batch is an instruction in the prompt, so a new runtime must carry it
+over and test it, and nothing guarantees a model obeys it.
+
+Live LiveKit checks (a real project, the deployed agent, real audio) are manual; CI uses fakes.
 
 ## Next
 
