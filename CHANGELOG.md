@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.19.0](https://github.com/Piwero/tuk-tuk/compare/v2.18.0...v2.19.0) - 2026-11-05
+
+### Features
+
+- **voice:** Push-to-talk Voice view with Aura visualizer ([7b6ee21](https://github.com/Piwero/tuk-tuk/commit/7b6ee214e0b1dfcda70400bff9e9ddfd5fa13349))
+- **voice:** Add Voice view with push-to-talk (#396) ([d0221ff](https://github.com/Piwero/tuk-tuk/commit/d0221ff689fbf7abc18cc958160b2b046d306553))
+- **voice:** Add continuous conversation mode ([01c6a5e](https://github.com/Piwero/tuk-tuk/commit/01c6a5e958a661ed0695cef57b26c0bf85d14a76))
+- **voice:** Add shared floating overlay ([45d35dd](https://github.com/Piwero/tuk-tuk/commit/45d35dd36df949245fb1ec2bacd524514349ce83))
+- **voice:** Recover disconnected sessions safely ([1cd1cbf](https://github.com/Piwero/tuk-tuk/commit/1cd1cbf9abdd9779fd1f5528d6d224f722d9eeb7))
+- **voice:** Configure overlay shortcut ([57c6aa3](https://github.com/Piwero/tuk-tuk/commit/57c6aa345566a2a51abc6844ef6a741151f045cb))
+- **voice:** Merge configurable overlay shortcut ([ea13b23](https://github.com/Piwero/tuk-tuk/commit/ea13b23adf3fdf4f5f45faa3d4344a242efb148f))
+
+### Bug Fixes
+
+- **voice:** Preserve turn ownership and serialize mode changes ([5fa23ba](https://github.com/Piwero/tuk-tuk/commit/5fa23ba140aec5b3d145efd152a4fe999277cff6))
+
 ## [2.18.0](https://github.com/Piwero/tuk-tuk/compare/v2.17.0...v2.18.0) - 2026-11-05
 
 ### Bug Fixes
