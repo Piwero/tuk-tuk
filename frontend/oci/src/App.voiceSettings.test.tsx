@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +13,13 @@ afterEach(() => {
   localStorage.clear();
   window.history.replaceState(null, "", "/");
 });
+
+const views = () => within(screen.getByRole("navigation", { name: "Views" }));
+const assistantLink = () => views().queryByRole("link", { name: "Assistant" });
+const findAssistantLink = async () => {
+  await screen.findByRole("navigation", { name: "Views" });
+  return views().findByRole("link", { name: "Assistant" });
+};
 
 async function openVoiceSettings(): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
@@ -110,15 +117,15 @@ describe("The Voice Assistant's settings (ADR 0015, issue #366)", () => {
 });
 
 describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
-  it("shows no mic button while unconfigured", async () => {
+  it("shows no Assistant entry while unconfigured", async () => {
     installFakeApi({});
     render(<App />);
 
     await screen.findByRole("link", { name: "Settings" });
-    expect(screen.queryByRole("button", { name: "Start voice assistant" })).not.toBeInTheDocument();
+    expect(assistantLink()).not.toBeInTheDocument();
   });
 
-  it("shows an enabled mic button once configured", async () => {
+  it("shows the Assistant entry once configured", async () => {
     installFakeApi({
       voiceLivekitUrl: "wss://tuk.livekit.cloud",
       voiceLivekitApiKey: "APIabc",
@@ -126,10 +133,10 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     });
     render(<App />);
 
-    expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeEnabled();
+    expect(await findAssistantLink()).toBeEnabled();
   });
 
-  it("hides the mic while this month's free minutes are marked used up", async () => {
+  it("hides Voice while this month's free minutes are marked used up", async () => {
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     localStorage.setItem("tuktuk.voice.exhaustedMonth", month);
@@ -141,7 +148,7 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     render(<App />);
 
     await screen.findByRole("link", { name: "Settings" });
-    expect(screen.queryByRole("button", { name: "Start voice assistant" })).not.toBeInTheDocument();
+    expect(assistantLink()).not.toBeInTheDocument();
   });
 
   it("keeps a neutral provider available despite the LiveKit exhaustion marker", async () => {
@@ -157,10 +164,10 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     });
     render(<App voiceProvider={fakeVoiceTransport().provider} />);
 
-    expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeEnabled();
+    expect(await findAssistantLink()).toBeEnabled();
   });
 
-  it("shows the mic again when the marker is from a past month", async () => {
+  it("shows Voice again when the marker is from a past month", async () => {
     localStorage.setItem("tuktuk.voice.exhaustedMonth", "2000-01");
     installFakeApi({
       voiceLivekitUrl: "wss://tuk.livekit.cloud",
@@ -169,12 +176,10 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     });
     render(<App />);
 
-    expect(
-      await screen.findByRole("button", { name: "Start voice assistant" }),
-    ).toBeInTheDocument();
+    expect(await findAssistantLink()).toBeInTheDocument();
   });
 
-  it("mic appears after saving and disappears after removing, without a reload", async () => {
+  it("Voice appears after saving and disappears after removing, without a reload", async () => {
     installFakeApi({});
     render(<App />);
     const user = await openVoiceSettings();
@@ -183,13 +188,9 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     await user.type(screen.getByLabelText("LiveKit API key"), "APIabc");
     await user.type(screen.getByLabelText("LiveKit API secret"), "s3cret");
     await user.click(screen.getByRole("button", { name: "Save Voice settings" }));
-    expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeEnabled();
+    expect(await findAssistantLink()).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "Remove Voice configuration" }));
-    await vi.waitFor(() =>
-      expect(
-        screen.queryByRole("button", { name: "Start voice assistant" }),
-      ).not.toBeInTheDocument(),
-    );
+    await vi.waitFor(() => expect(assistantLink()).not.toBeInTheDocument());
   });
 });

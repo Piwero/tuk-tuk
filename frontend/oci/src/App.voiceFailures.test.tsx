@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { livekitProvider } from "./voice/livekit";
 import { installFakeApi } from "./test/fakeApi";
-import { fakeVoiceTransport } from "./test/fakeVoiceTransport";
+import { connectVoiceFromAssistant, fakeVoiceTransport } from "./test/fakeVoiceTransport";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -30,19 +30,18 @@ it("hides exhausted LiveKit voice until the next local month without a reload", 
       voiceProvider={{ ...fake.provider, unavailableUntil: livekitProvider.unavailableUntil }}
     />,
   );
-  await userEvent
-    .setup({ advanceTimers: vi.advanceTimersByTime })
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await connectVoiceFromAssistant(userEvent.setup({ advanceTimers: vi.advanceTimersByTime }));
   await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
   localStorage.setItem("tuktuk.voice.exhaustedMonth", "2026-07");
   act(() => fake.transports[0]!.events.onAgent({ ...agent, endReason: "unavailable" }));
+  // Voice is the only assistant here, so its nav item goes with it.
   await waitFor(() =>
-    expect(screen.queryByRole("button", { name: /voice assistant/i })).not.toBeInTheDocument(),
+    expect(screen.queryByRole("link", { name: "Assistant" })).not.toBeInTheDocument(),
   );
   await act(async () => {
     await vi.advanceTimersByTimeAsync(10001);
   });
-  expect(await screen.findByRole("button", { name: "Start voice assistant" })).toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Assistant" })).toBeInTheDocument();
 });
 
 it("shows a connection failure to the owner", async () => {
@@ -53,9 +52,7 @@ it("shows a connection failure to the owner", async () => {
     };
   });
   render(<App voiceProvider={fake.provider} />);
-  await userEvent
-    .setup()
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await connectVoiceFromAssistant(userEvent.setup());
   expect(await screen.findByRole("alert")).toHaveTextContent("Provider is unreachable.");
 });
 
@@ -67,9 +64,7 @@ it("shows a microphone refusal distinctly", async () => {
     };
   });
   render(<App voiceProvider={fake.provider} />);
-  await userEvent
-    .setup()
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await connectVoiceFromAssistant(userEvent.setup());
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Microphone permission denied. Allow microphone access and try again.",
   );
@@ -79,9 +74,7 @@ it("maps API 401 to an auth-expired tool failure", async () => {
   const api = installFakeApi(configured);
   const fake = fakeVoiceTransport();
   render(<App voiceProvider={fake.provider} />);
-  await userEvent
-    .setup()
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await connectVoiceFromAssistant(userEvent.setup());
   await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
   api.loggedIn = false;
   await expect(fake.transports[0]!.call("search_tasks", { query: "milk" })).rejects.toMatchObject({
@@ -94,9 +87,7 @@ it("locks immediately on a lapsed session but keeps the session until the agent 
   const api = installFakeApi(configured);
   const fake = fakeVoiceTransport();
   render(<AuthGate voiceProvider={fake.provider} />);
-  await userEvent
-    .setup()
-    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await connectVoiceFromAssistant(userEvent.setup());
   await waitFor(() => expect(fake.transports[0]?.connected).toBe(true));
   api.loggedIn = false;
   await act(async () => {

@@ -4,7 +4,7 @@
 
 **Do this first:** the setup takes about 20 minutes and uses a free cloud service. Follow
 [Set up the Voice Assistant](../../self-hosting/voice.md). Until you do, there is no
-microphone button anywhere in the app.
+Voice view in the Assistant.
 
 ## What it's for
 
@@ -13,14 +13,14 @@ something to tomorrow, check in a Habit. Works in English and Spanish.
 
 ## How a conversation goes
 
-1. Tap the **microphone** button and allow the browser's microphone prompt.
-2. The assistant greets you and says what's on today. Captions show on screen.
+1. Open **Assistant**, choose **Voice**, and press **Hold to talk** once. Allow the browser's microphone prompt. The first press only connects.
+2. Press and hold the button (or Space/Enter), speak, then release. Slide off the button to cancel. Captions show on screen.
 3. Ask for what you want. It collects your requests, then reads the whole batch back:
    *"I'll add one task and check in Water twice, ok?"*
 4. Say **yes** and the changes happen. They appear on screen as it does them.
    Say **no**, or change your mind, and nothing is changed.
-5. Tap the button again to end. The session also ends after 20 seconds of silence, or when you
-   close the tab.
+5. Choose **End session** when done. There is no silence timeout, so a connected session keeps
+   using your free minutes until you end it or close the tab.
 
 ## Things to try
 
@@ -54,8 +54,8 @@ something to tomorrow, check in a Habit. Works in English and Spanish.
   session ends. If your login lapses, it tells you to log in again.
 - **First session is slow.** After a quiet spell, allow 10–20 seconds for the agent to start.
 - **Cost:** free. The free plan covers roughly 200 minutes of talking a month. When it runs
-  out, the microphone hides until next month.
-- **After an upgrade,** redeploy the agent or the microphone says **Voice agent out of
+  out, the Voice view is unavailable until next month.
+- **After an upgrade,** redeploy the agent or the Voice view says **Voice agent out of
   date — redeploy**. See [the setup guide](../../self-hosting/voice.md#after-you-upgrade-tuk-tuk).
 - **Failures are spoken, not hidden.** If the app can't be reached, it says so and doesn't
   retry on its own.
