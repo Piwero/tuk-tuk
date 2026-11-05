@@ -1,7 +1,7 @@
 import { ConnectionError, ConnectionErrorReason, Room, RoomEvent } from "livekit-client";
 
 import { localDayOf } from "../dates";
-import { postVoiceSession } from "../api";
+import { onUnauthorized, postVoiceSession } from "../api";
 import { registerVoiceReads } from "./rpc";
 import { currentMonth, notifyVoiceConfigChanged, VOICE_EXHAUSTED_KEY } from "../useVoiceAvailable";
 
@@ -34,10 +34,17 @@ export function createVoiceSession(options: VoiceSessionOptions) {
   let started = false;
   let caption = "";
   let methods: string[] = [];
+  let lapsed = false;
+  let lapsedTimer: number | undefined;
+  const stopWatchingAuth = onUnauthorized(() => {
+    lapsed = true;
+  });
   const factory = options.createRoom ?? (() => new Room());
   const end = (message?: string) => {
     if (ended) return;
     ended = true;
+    stopWatchingAuth();
+    window.clearTimeout(lapsedTimer);
     window.removeEventListener("pagehide", leave);
     if (room) {
       room.unregisterTextStreamHandler("lk.transcription");
@@ -94,6 +101,8 @@ export function createVoiceSession(options: VoiceSessionOptions) {
             }
             end();
             notifyVoiceConfigChanged();
+          } else if (participant?.attributes.voice_end_reason === "session_lapsed") {
+            end();
           } else if (participant && participant.attributes.contract_version !== "1") {
             end("Voice agent out of date — redeploy");
           } else if (participant?.attributes["lk.agent.state"] === "speaking") {
@@ -125,6 +134,13 @@ export function createVoiceSession(options: VoiceSessionOptions) {
       end();
     },
     dispose() {
+      if (!ended && lapsed && room) {
+        options.onState = () => undefined;
+        options.onCaption = () => undefined;
+        options.onError = () => undefined;
+        lapsedTimer = window.setTimeout(() => end(), 10000);
+        return;
+      }
       if (!ended) {
         if (room) void room.disconnect();
         end();

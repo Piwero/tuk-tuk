@@ -84,3 +84,31 @@ it("maps API 401 to a distinct lapsed-session RPC error", async () => {
     room.methods.get("search_tasks")!({ payload: '{"query":"milk"}' }),
   ).rejects.toMatchObject({ code: 2001 });
 });
+
+it("locks immediately on a lapsed session but keeps the room until the agent finishes speaking", async () => {
+  const { AuthGate } = await import("./AuthGate");
+  const api = installFakeApi({
+    voiceLivekitUrl: "wss://test.livekit.cloud",
+    voiceLivekitApiKey: "key",
+    voiceSecretSet: true,
+  });
+  const room = new FakeRoom();
+  render(<AuthGate voiceRoomFactory={(() => room) as never} />);
+  await userEvent
+    .setup()
+    .click(await screen.findByRole("button", { name: "Start voice assistant" }));
+  await waitFor(() => expect(room.connected).toBe(true));
+  api.loggedIn = false;
+  await act(async () => {
+    await expect(
+      room.methods.get("search_tasks")!({ payload: '{"query":"milk"}' }),
+    ).rejects.toMatchObject({ code: 2001 });
+  });
+  expect(await screen.findByLabelText("Password")).toBeInTheDocument();
+  expect(room.connected).toBe(true);
+  room.remoteParticipants.set("agent", {
+    attributes: { contract_version: "1", voice_end_reason: "session_lapsed" },
+  });
+  act(() => room.handlers.get(RoomEvent.ParticipantAttributesChanged)?.());
+  await waitFor(() => expect(room.connected).toBe(false));
+});
