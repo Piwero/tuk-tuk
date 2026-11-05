@@ -191,7 +191,7 @@ async function createTaskRpc(args: Record<string, unknown>): Promise<object> {
   if (args.due != null) {
     const { time_zone, start_date, due_date, is_all_day } = scheduleFields(args);
     Object.assign(body, { time_zone, due_date, is_all_day });
-    if (start_date !== undefined) body.start_date = start_date;
+    if (start_date != null) body.start_date = start_date;
   }
   if (args.list != null) body.list_id = await namedId(String(args.list), "list"); // else Inbox
   if (Array.isArray(args.tags) && args.tags.length)
