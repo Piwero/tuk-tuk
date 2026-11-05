@@ -49,7 +49,11 @@ export async function getAgenda(): Promise<object> {
   const [taskPage, habitPage, events, lists, tags] = await Promise.all([
     fetchSmartTasks("today", today, EMPTY),
     fetchHabits(today),
-    fetchCalendarEvents(today, today).catch(() => ({ events: [], failures: [] })),
+    // Optional calendar reads must leave headroom within the agent's 5-second RPC deadline.
+    fetchCalendarEvents(today, today, false, AbortSignal.timeout(2000)).catch(() => ({
+      events: [],
+      failures: [],
+    })),
     fetchLists(),
     fetchTags(),
   ]);

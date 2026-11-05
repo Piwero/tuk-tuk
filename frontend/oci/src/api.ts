@@ -890,9 +890,12 @@ export function fetchCalendarEvents(
   rangeStart: string,
   rangeEnd: string,
   force = false,
+  signal?: AbortSignal,
 ): Promise<EventsResult> {
   const forceParam = force ? "&force=true" : "";
-  return request(`/api/v1/events?range_start=${rangeStart}&range_end=${rangeEnd}${forceParam}`);
+  return request(`/api/v1/events?range_start=${rangeStart}&range_end=${rangeEnd}${forceParam}`, {
+    signal,
+  });
 }
 
 /** Undated open tasks — the unscheduled panel's query. */

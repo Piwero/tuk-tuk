@@ -14,20 +14,58 @@ describe("LiveKit voice RPC binding", () => {
     const tasks = vi
       .spyOn(api, "fetchSmartTasks")
       .mockResolvedValue({ items: [], total: 0 } as never);
-    const events = vi
-      .spyOn(api, "fetchCalendarEvents")
-      .mockResolvedValue({ events: [], failures: [] });
+    const events = vi.spyOn(api, "fetchCalendarEvents").mockResolvedValue({
+      events: [{ id: "calendar:1", title: "Meeting" }],
+      failures: [],
+    } as never);
     vi.spyOn(api, "fetchHabits").mockResolvedValue({ items: [] } as never);
     vi.spyOn(api, "fetchLists").mockResolvedValue({ items: [] } as never);
     vi.spyOn(api, "fetchTags").mockResolvedValue({ items: [] } as never);
     const room = new FakeRoom();
     registerVoiceReads(room);
-    await room.methods.get("get_agenda")!({ payload: "{}" });
+    const result = JSON.parse(await room.methods.get("get_agenda")!({ payload: "{}" }));
+    expect(result.events).toEqual([{ id: "calendar:1", title: "Meeting" }]);
     expect(tasks.mock.calls[0]?.[0]).toBe("today");
     expect(events).toHaveBeenCalledOnce();
     expect(events.mock.calls[0]?.[0]).toBe(events.mock.calls[0]?.[1]);
     vi.restoreAllMocks();
   });
+  it("returns agenda before the RPC deadline when calendar stalls", async () => {
+    vi.spyOn(api, "fetchSmartTasks").mockResolvedValue({ items: [], total: 0 } as never);
+    vi.spyOn(api, "fetchHabits").mockResolvedValue({
+      items: [{ id: 7, name: "Water" }],
+    } as never);
+    vi.spyOn(api, "fetchLists").mockResolvedValue({
+      items: [{ id: 1, name: "Inbox" }],
+    } as never);
+    vi.spyOn(api, "fetchTags").mockResolvedValue({ items: [] } as never);
+    let signal: AbortSignal | undefined;
+    vi.spyOn(api, "fetchCalendarEvents").mockImplementation(
+      (...args: unknown[]) =>
+        new Promise((_, reject) => {
+          signal = args[3] as AbortSignal | undefined;
+          signal?.addEventListener("abort", () => reject(signal?.reason), { once: true });
+        }),
+    );
+    const room = new FakeRoom();
+    registerVoiceReads(room);
+    try {
+      const started = performance.now();
+      const result = JSON.parse(await room.methods.get("get_agenda")!({ payload: "{}" }));
+      expect(performance.now() - started).toBeLessThan(4500);
+      expect(signal?.aborted).toBe(true);
+      expect(result).toMatchObject({
+        tasks: [],
+        habits_due_today: [{ id: 7, name: "Water" }],
+        events: [],
+        lists: [{ id: 1, name: "Inbox" }],
+        tags: [],
+      });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("reports and refreshes check items that landed before failure", async () => {
     vi.spyOn(api, "fetchTask").mockResolvedValue({ id: 1 } as never);
     vi.spyOn(api, "createCheckItem")
