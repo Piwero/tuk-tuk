@@ -114,3 +114,35 @@ def test_quota_classification_does_not_confuse_rate_limits() -> None:
     )
     assert is_quota_exhausted(exhausted)
     assert not is_quota_exhausted(rate_limit)
+
+
+async def test_quota_speaks_before_publishing_reason_and_shutting_down() -> None:
+    from tuk_voice_agent.agent import finish_session
+
+    events: list[object] = []
+
+    class Session:
+        async def say(self, text: str, *, allow_interruptions: bool) -> None:
+            events.append((text, allow_interruptions))
+
+    class Participant:
+        async def set_attributes(self, attributes: dict[str, str]) -> None:
+            events.append(attributes)
+
+    await finish_session(Session(), Participant(), events.append, "quota_exhausted")  # type: ignore[arg-type]
+    assert events == [
+        ("Free voice minutes used up for this month.", False),
+        {"voice_end_reason": "quota_exhausted"},
+        "quota_exhausted",
+    ]
+
+
+async def test_batch_mixed_outcomes_are_available_per_change() -> None:
+    fake = FakeLocalParticipant(reply='{"id": 7, "title": "milk"}')
+    tools = {t.id: t for t in build_tools(fake, "browser")}  # type: ignore[arg-type]
+    assert (
+        await tools["create_task"](raw_arguments={"title": "milk"}) == '{"id": 7, "title": "milk"}'
+    )
+    fake._error = rtc.RpcError(1500, "unknown list")
+    with pytest.raises(ToolError, match="set_list failed: unknown list.*succeeded.*failed"):
+        await tools["set_list"](raw_arguments={"task_id": 7, "list": "missing"})

@@ -61,6 +61,26 @@ def is_quota_exhausted(error: object) -> bool:
     return error.status_code == 402 or "credit" in error.message.lower()
 
 
+async def finish_session(
+    session: AgentSession[None],
+    participant: rtc.LocalParticipant,
+    shutdown: Callable[[str], None],
+    reason: str,
+) -> None:
+    message = {
+        "session_lapsed": "You need to log in again.",
+        "quota_exhausted": "Free voice minutes used up for this month.",
+    }.get(reason)
+    if message:
+        # TTS may itself have exhausted its credits.
+        with suppress(Exception):
+            await session.say(message, allow_interruptions=False)
+    try:
+        await participant.set_attributes({"voice_end_reason": reason})
+    finally:
+        shutdown(reason)
+
+
 def setup_lifecycle(
     session: AgentSession[None], room: rtc.Room, identity: str, end: Callable[[str], None]
 ) -> None:
@@ -130,21 +150,9 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             return
         ending = True
 
-        async def finish() -> None:
-            message = {
-                "session_lapsed": "You need to log in again.",
-                "quota_exhausted": "Free voice minutes used up for this month.",
-            }.get(reason)
-            if message:
-                # TTS may itself have exhausted its credits.
-                with suppress(Exception):
-                    await session.say(message, allow_interruptions=False)
-            try:
-                await ctx.room.local_participant.set_attributes({"voice_end_reason": reason})
-            finally:
-                ctx.shutdown(reason)
-
-        asyncio.create_task(finish())
+        asyncio.create_task(
+            finish_session(session, ctx.room.local_participant, ctx.shutdown, reason)
+        )
 
     def on_error(event: agents.ErrorEvent) -> None:
         error = getattr(event.error, "error", event.error)
