@@ -32,7 +32,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend/oci
+      context: .
+      dockerfile: frontend/oci/Dockerfile
       target: runtime
     restart: unless-stopped
     ports:

@@ -55,6 +55,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build runtime image (no push)
+        working-directory: .
+        run: docker build --target runtime -f frontend/oci/Dockerfile .
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:

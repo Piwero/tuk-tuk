@@ -15,7 +15,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend/oci
+      context: .
+      dockerfile: frontend/oci/Dockerfile
       target: dev
     ports:
       - "5900:5900"
@@ -23,8 +24,9 @@ services:
       - path: .env
         format: raw
     volumes:
-      - ./frontend/oci:/app
-      - /app/node_modules
+      - ./frontend/oci:/app/frontend/oci
+      - ./shared:/app/shared:ro
+      - /app/frontend/oci/node_modules
     depends_on:
       backend:
         condition: service_healthy

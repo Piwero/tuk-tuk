@@ -2,15 +2,16 @@
 
 # ---- Base: node + deps (shared by dev and build) ----
 FROM node:20-alpine AS base
-WORKDIR /app
+WORKDIR /app/frontend/oci
 
-COPY package*.json ./
+COPY frontend/oci/package*.json ./
 RUN npm ci
 
 # ---- Dev: vite dev server with HMR (used by docker-compose) ----
 FROM base AS dev
 
-COPY . .
+COPY frontend/oci/ ./
+COPY shared/voice-tool-roster.json /app/shared/voice-tool-roster.json
 
 EXPOSE 5900
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
@@ -28,14 +29,15 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ARG VITE_APP_VERSION="dev"
 ENV VITE_APP_VERSION=$VITE_APP_VERSION
 
-COPY . .
+COPY frontend/oci/ ./
+COPY shared/voice-tool-roster.json /app/shared/voice-tool-roster.json
 RUN npm run build
 
 # ---- Runtime stage (nginx: static files + /api proxy to the backend) ----
 FROM nginx:alpine AS runtime
 
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/frontend/oci/dist /usr/share/nginx/html
+COPY frontend/oci/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

@@ -44,7 +44,7 @@ jobs:
             target: prod
             build-args: ""
           - component: frontend
-            context: frontend/oci
+            context: .
             file: frontend/oci/Dockerfile
             target: runtime
             # Empty base URL = relative /api/... requests, served same-origin
