@@ -79,3 +79,4 @@ CLAUDE.md
 *.db-wal
 *.db-shm
 .gstack/
+/voice-agent/livekit.toml
