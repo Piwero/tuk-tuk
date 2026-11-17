@@ -1,0 +1,58 @@
+/* Undo toasts (issue #155). */
+@layer components {
+  .toast-stack {
+    position: fixed;
+    left: 50%;
+    bottom: var(--space-6);
+    transform: translateX(-50%);
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: var(--space-2);
+    pointer-events: none;
+  }
+
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--ink-900);
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-lg);
+    pointer-events: auto;
+  }
+
+  .toast-message {
+    font-size: var(--text-sm);
+  }
+
+  /* Undo (#155) and a confirmation's jump-to action (#191) sit in the same
+   slot and read the same; they stay separate selectors so either can be
+   restyled without the other. */
+  .toast-undo,
+  .toast-action {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--blue-300);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+
+  .toast-dismiss {
+    display: flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text-inverse);
+    opacity: 0.7;
+  }
+
+  .toast-dismiss:hover {
+    opacity: 1;
+  }
+}

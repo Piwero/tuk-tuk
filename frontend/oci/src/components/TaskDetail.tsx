@@ -381,22 +381,29 @@ export function TaskDetail({
         )}
         {dateDraft === null ? (
           <div className="date-actions">
-            <button type="button" onClick={() => void quickPick(localDayOf(new Date()))}>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => void quickPick(localDayOf(new Date()))}
+            >
               Today
             </button>
             <button
+              className="btn-secondary"
               type="button"
               onClick={() => void quickPick(addDays(localDayOf(new Date()), 1))}
             >
               Tomorrow
             </button>
             <button
+              className="btn-secondary"
               type="button"
               onClick={() => void quickPick(nextMonday(localDayOf(new Date())))}
             >
               Next Week
             </button>
             <button
+              className="btn-secondary"
               type="button"
               aria-label="Custom date"
               onClick={() => setDateDraft(draftFrom(task))}
@@ -404,7 +411,7 @@ export function TaskDetail({
               Custom…
             </button>
             {task.due_date !== null && (
-              <button type="button" onClick={() => void clearSchedule()}>
+              <button className="btn-secondary" type="button" onClick={() => void clearSchedule()}>
                 Clear date
               </button>
             )}
@@ -412,10 +419,10 @@ export function TaskDetail({
         ) : (
           <div className="date-editor-actions">
             <DateFieldset draft={dateDraft} onChange={setDateDraft} />
-            <button type="button" onClick={() => void saveDateDraft()}>
+            <button className="btn-primary" type="button" onClick={() => void saveDateDraft()}>
               Save date
             </button>
-            <button type="button" onClick={() => setDateDraft(null)}>
+            <button className="btn-quiet" type="button" onClick={() => setDateDraft(null)}>
               Cancel
             </button>
           </div>
@@ -484,10 +491,14 @@ export function TaskDetail({
                   <option value="days">days</option>
                 </select>
                 <span>before</span>
-                <button type="button" onClick={() => void addCustomReminder()}>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={() => void addCustomReminder()}
+                >
                   Add reminder
                 </button>
-                <button type="button" onClick={() => setOffsetDraft(null)}>
+                <button className="btn-quiet" type="button" onClick={() => setOffsetDraft(null)}>
                   Cancel
                 </button>
               </div>
@@ -515,7 +526,11 @@ export function TaskDetail({
         {descriptionDraft === null ? (
           <>
             <ReactMarkdown>{task.description}</ReactMarkdown>
-            <button type="button" onClick={() => setDescriptionDraft(task.description)}>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => setDescriptionDraft(task.description)}
+            >
               Edit description
             </button>
           </>
@@ -527,10 +542,10 @@ export function TaskDetail({
               rows={6}
               onChange={(event) => setDescriptionDraft(event.target.value)}
             />
-            <button type="button" onClick={() => void saveDescription()}>
+            <button className="btn-primary" type="button" onClick={() => void saveDescription()}>
               Save description
             </button>
-            <button type="button" onClick={() => setDescriptionDraft(null)}>
+            <button className="btn-quiet" type="button" onClick={() => setDescriptionDraft(null)}>
               Cancel
             </button>
           </>

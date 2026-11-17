@@ -84,6 +84,34 @@ Run `mise tasks` for the full list. Dependency changes are picked up
 automatically: `mise run dev` rebuilds images (`--build`) and re-seeds the
 frontend `node_modules` volume (`--renew-anon-volumes`).
 
+### Frontend stylesheets
+
+`frontend/oci/src/main.tsx` imports `index.css` before components. That entry
+stylesheet declares the cascade order **once**:
+`@layer tokens, base, components, overrides;`. Keep it first: layer order is
+fixed by the first declaration, not by selector specificity.
+
+- `tokens.css` is imported with `layer(tokens)`; both light and dark tokens
+  stay together. `base.css` is imported with `layer(base)` for global resets.
+- A component owns a sibling `ComponentName.css` and imports it with
+  `import "./ComponentName.css";`. Wrap its rules in `@layer components { … }`,
+  including media queries, states and reduced-motion rules. Copy
+  `components/ToastStack.tsx` / `ToastStack.css` as the worked example.
+- Keep existing selectors and token references when moving styles. Shared
+  styles belong to their shared primitive, not duplicated across consumers.
+- `overrides` is reserved for deliberate cross-component overrides. Do not
+  redeclare the layer-order list in individual files.
+- During the expand-contract migration (#435–#439), the remaining monolith
+  stays **unlayered** and therefore wins over layered rules. This preserves
+  existing precedence while components move; check for remaining selectors
+  targeting a moved component before relying on a layered override. Avoid
+  new unlayered rules. Remove the bridge only in the contract step.
+
+CSS-source guard tests read `index.css` / `tokens.css` from disk (jsdom has no
+layout). When moving rules those tests assert, update their input files to
+include the owning stylesheet; do not remove the assertions. Run the full
+frontend tests, lint, typecheck and build after each migration.
+
 ## Authentication
 
 tuk-tuk is a single-user app gated by one shared password

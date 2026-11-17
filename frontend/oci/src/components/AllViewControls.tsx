@@ -166,7 +166,7 @@ function FilterMenu({
         {count > 1 && (
           <button
             type="button"
-            className="filter-menu-clear-all"
+            className="filter-menu-clear-all btn-quiet"
             onClick={() => onFiltersUpdate(() => BLANK_FILTERS)}
           >
             Clear all

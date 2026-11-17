@@ -100,6 +100,7 @@ export function CompletedView({
                 )}
               </button>
               <button
+                className="btn-secondary"
                 type="button"
                 aria-label={`Delete ${row.task.title}`}
                 onClick={() => void remove(row.task)}

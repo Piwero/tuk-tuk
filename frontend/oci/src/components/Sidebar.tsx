@@ -1225,7 +1225,7 @@ export function Sidebar({
           ) : (
             <button
               type="button"
-              className="sidebar-add"
+              className="sidebar-add btn-quiet"
               aria-label="Add Tag"
               title="Add Tag"
               onClick={() => setEditor({ mode: "create-tag" })}
@@ -1279,7 +1279,7 @@ export function Sidebar({
       <div className="sidebar-footer">
         <button
           type="button"
-          className="sidebar-theme-toggle"
+          className="sidebar-theme-toggle btn-quiet"
           aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           aria-pressed={resolvedTheme === "dark"}
@@ -1301,7 +1301,7 @@ export function Sidebar({
         {onLogout !== undefined && (
           <button
             type="button"
-            className="sidebar-logout"
+            className="sidebar-logout btn-quiet"
             aria-label="Log out"
             title="Log out"
             onClick={onLogout}

@@ -1,33 +1,14 @@
-@import "./tokens.css";
+/* Cascade layers (#435). Declared once, here; the order is fixed by this
+ * statement, so index.css must be the first stylesheet main.tsx imports.
+ * Unlayered rules below still beat every layer: that is the expand-contract
+ * bridge while the monolith is migrated component by component. */
+@layer tokens, base, components, overrides;
 
-/* ── Base ────────────────────────────────────────────────────────── */
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--text-md);
-  line-height: var(--leading-normal);
-  color: var(--text-primary);
-  background: var(--surface-page);
-  -webkit-font-smoothing: antialiased;
-}
-
-::selection {
-  background: var(--blue-100);
-}
+@import "./fonts.css";
+@import "./tokens.css" layer(tokens);
+@import "./base.css" layer(base);
 
 /* ── Shared controls ─────────────────────────────────────────────── */
-
-button {
-  font-family: inherit;
-  font-size: var(--text-md);
-  color: inherit;
-  cursor: pointer;
-}
 
 button:focus-visible,
 input:focus-visible,
@@ -70,7 +51,7 @@ input[type="date"],
 input[type="time"],
 input[type="datetime-local"],
 input[type="number"] {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
 }
 
@@ -144,6 +125,86 @@ fieldset button:active,
 .key-result-actions button:active,
 .key-results > button:active {
   background: var(--ink-100);
+}
+
+/* Shared button styles (#433). Every button takes one: primary for the
+ * commit action, secondary for the rest, quiet for low-weight ones (Cancel,
+ * back links, menu items), and the Focus-plum primary. `button.btn-*` beats the
+ * classless `form button` default, and a later `.x button` surface rule
+ * still refines it (states sit in `:where()` so they don't outrank it).
+ * Focus-visible comes from the base `button` rule above. */
+button.btn-primary,
+button.btn-secondary,
+button.btn-quiet,
+button.btn-focus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+button.btn-primary {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+
+button.btn-primary:where(:hover:not(:disabled)) {
+  background: var(--accent-hover);
+}
+
+button.btn-secondary {
+  border-color: var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+
+button.btn-secondary:where(:hover:not(:disabled)) {
+  background: var(--ink-50);
+}
+
+button.btn-quiet {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+button.btn-quiet:where(:hover:not(:disabled)) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+button.btn-focus {
+  background: var(--focus-accent);
+  color: var(--text-inverse);
+}
+
+button.btn-focus:where(:hover:not(:disabled)) {
+  background: var(--plum-700);
+}
+
+button.btn-primary:where(:disabled),
+button.btn-secondary:where(:disabled),
+button.btn-quiet:where(:disabled),
+button.btn-focus:where(:disabled) {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Touch floor (#168): same gate as the Quick-Add dialog's. */
+@media (max-width: 720px), (hover: none), (pointer: coarse) {
+  button.btn-primary,
+  button.btn-secondary,
+  button.btn-quiet,
+  button.btn-focus {
+    min-height: var(--tap-target);
+  }
 }
 
 /* Disabled row actions (e.g. a Key Result that is already first or last and
@@ -224,6 +285,17 @@ main {
      panel) scrolls main alone, never the document. */
   min-height: 0;
   overflow-y: auto;
+  /* Pins the shortcut hint strip (issue #434): `.main-content` grows into
+     spare height, so under short content the strip sits at the viewport
+     foot; it never shrinks, so under long content the strip follows the
+     last row in flow and covers nothing. */
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1 0 auto;
+  min-width: 0;
 }
 
 /* The content column.
@@ -278,12 +350,12 @@ main {
   border-radius: var(--radius-xs);
   background: var(--surface-sunken);
   color: var(--text-secondary);
-  font-family: inherit;
+  font-family: var(--font-mono);
   font-size: var(--text-2xs);
   text-align: center;
 }
 
-@media (pointer: coarse) {
+@media (max-width: 720px), (pointer: coarse) {
   .shortcut-hints {
     display: none;
   }
@@ -639,7 +711,7 @@ button.folder-disclosure {
 
 .folder-count {
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -653,7 +725,7 @@ button.folder-disclosure {
   flex: none;
   margin-left: auto;
   padding-left: var(--space-2);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -1381,6 +1453,13 @@ button.create-menu-trigger {
     padding: 0 var(--space-2);
   }
 
+  /* Today and Next 7 Days say less in the chip (#431), so their date column
+   * narrows and gives the width back to the title. List, Search and completed
+   * rows carry no attribute and keep the full column. */
+  .tasks li.task-row[data-date-context] {
+    --task-col-date: var(--task-col-date-narrow);
+  }
+
   /* A view that wires no row actions gives the gutter back to the title. */
   .tasks li.task-row.with-actions {
     --task-row-actions-col: var(--task-col-actions);
@@ -1572,7 +1651,7 @@ button.create-menu-trigger {
   align-items: center;
   gap: 3px;
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-accent);
   white-space: nowrap;
@@ -1742,6 +1821,7 @@ li[data-overdue] .date-chip {
 }
 
 .quick-add-sigil-hint {
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
@@ -1871,7 +1951,7 @@ li[data-overdue] .date-chip {
 
 .check-progress {
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -2241,7 +2321,7 @@ li[data-overdue] .date-chip {
   align-items: center;
   gap: 2px;
   min-width: 0;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The narrow-width stand-in for a cell's full entry list (issue #169): just
@@ -2341,9 +2421,8 @@ li[data-overdue] .date-chip {
 }
 
 .calendar-timed-entry .entry-time {
-  font-family: var(--font-mono);
-  color: var(--text-accent);
   font-variant-numeric: tabular-nums;
+  color: var(--text-accent);
 }
 
 /* Events are read-only Google context: a dashed border and default cursor
@@ -2406,7 +2485,7 @@ li[data-overdue] .date-chip {
   border-radius: var(--radius-pill, 999px);
   background: var(--accent);
   color: var(--surface-card);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-caps);
@@ -2426,7 +2505,7 @@ li[data-overdue] .date-chip {
 }
 
 .week-day-header .day-date {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -2469,7 +2548,7 @@ li[data-overdue] .date-chip {
 .hour-gutter {
   width: 56px;
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-tertiary);
 }
@@ -2600,9 +2679,8 @@ li[data-overdue] .date-chip {
 }
 
 .time-block .block-time {
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
 }
 
 .calendar-body {
@@ -2981,7 +3059,7 @@ li[data-overdue] .date-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -3062,7 +3140,7 @@ li[data-overdue] .date-chip {
 }
 
 .habit-progress {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -3080,7 +3158,7 @@ li[data-overdue] .date-chip {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-full);
   background: var(--surface-card);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   transition: background var(--duration-fast) var(--ease-out);
 }
@@ -3188,7 +3266,7 @@ li[data-overdue] .date-chip {
 }
 
 .habit-month-label {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
 }
 
@@ -3219,7 +3297,7 @@ li[data-overdue] .date-chip {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xs);
   background: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-secondary);
   transition: background var(--duration-fast) var(--ease-out);
@@ -3707,7 +3785,7 @@ li[data-overdue] .date-chip {
 }
 
 .focus-duration {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
   font-size: var(--text-sm);
 }
@@ -3824,7 +3902,6 @@ li[data-overdue] .date-chip {
 }
 
 .focus-chart-value {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   white-space: nowrap;
@@ -4000,7 +4077,7 @@ select.task-detail-breadcrumb:focus-visible {
 
 .task-dates .date-label {
   margin: 0;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
 }
 
@@ -4039,6 +4116,10 @@ select.task-detail-breadcrumb:focus-visible {
   display: grid;
   gap: var(--space-2);
   font-size: var(--text-md);
+}
+
+.task-description code {
+  font-family: var(--font-mono);
 }
 
 .task-description textarea {
@@ -4118,7 +4199,7 @@ select.task-detail-breadcrumb:focus-visible {
 .standup-date-picker input[type="date"] {
   height: var(--control-height);
   padding: 0 10px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
 }
 
@@ -4201,7 +4282,7 @@ select.task-detail-breadcrumb:focus-visible {
 }
 
 .standup-history-short {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -4305,7 +4386,7 @@ select.task-detail-breadcrumb:focus-visible {
 }
 
 .standup-goal-score-value {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
   color: var(--accent);
@@ -4342,7 +4423,7 @@ select.task-detail-breadcrumb:focus-visible {
 }
 
 .standup-goal-kr-value {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
@@ -4432,7 +4513,7 @@ select.task-detail-breadcrumb:focus-visible {
   padding: 0 6px;
   background: var(--surface-sunken);
   border-radius: var(--radius-full);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
@@ -4799,64 +4880,6 @@ select.task-detail-breadcrumb:focus-visible {
 
 .modal:focus {
   outline: none;
-}
-
-/* ── Undo toasts (issue #155) ────────────────────────────────────── */
-
-.toast-stack {
-  position: fixed;
-  left: 50%;
-  bottom: var(--space-6);
-  transform: translateX(-50%);
-  z-index: var(--z-toast);
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: center;
-  gap: var(--space-2);
-  pointer-events: none;
-}
-
-.toast {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--ink-900);
-  color: var(--text-inverse);
-  box-shadow: var(--shadow-lg);
-  pointer-events: auto;
-}
-
-.toast-message {
-  font-size: var(--text-sm);
-}
-
-/* Undo (#155) and a confirmation's jump-to action (#191) sit in the same
-   slot and read the same; they stay separate selectors so either can be
-   restyled without the other. */
-.toast-undo,
-.toast-action {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--blue-300);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-}
-
-.toast-dismiss {
-  display: flex;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--text-inverse);
-  opacity: 0.7;
-}
-
-.toast-dismiss:hover {
-  opacity: 1;
 }
 
 /* ── Event detail popover ────────────────────────────────────────── */
@@ -6659,7 +6682,7 @@ a.button:hover {
 }
 
 .bulk-action-count {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
@@ -6753,7 +6776,7 @@ a.button:hover {
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--text-accent);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
 }
@@ -6860,13 +6883,13 @@ a.button:hover {
   color: var(--accent);
 }
 
-/* A window and a Score are tabular: mono, so digits line up down the list. */
+/* A window and a Score use tabular figures, so digits line up down the list. */
 .goal-window,
 .goal-score,
 .goal-final-score,
 .key-result-progress,
 .key-result-readonly {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }

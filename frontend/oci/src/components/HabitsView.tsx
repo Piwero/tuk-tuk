@@ -321,7 +321,11 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
           onCancel={() => setEditor(null)}
         />
       ) : (
-        <button type="button" onClick={() => setEditor({ mode: "create" })}>
+        <button
+          className="btn-secondary"
+          type="button"
+          onClick={() => setEditor({ mode: "create" })}
+        >
           Add Habit
         </button>
       )}

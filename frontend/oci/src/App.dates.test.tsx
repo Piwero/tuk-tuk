@@ -243,3 +243,58 @@ describe("Task dates in list views", () => {
     expect(titles).toEqual(["Open details for Ancient", "Open details for Recent"]);
   });
 });
+
+describe("context-relative dates per view (issue #431)", () => {
+  async function openSmart(name: string): Promise<void> {
+    const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+    fireEvent.click(await within(nav).findByRole("button", { name }));
+  }
+
+  function chipText(title: string): string {
+    return rowFor(title).querySelector(".date-chip")?.textContent ?? "";
+  }
+
+  const seed = (): Parameters<typeof installFakeApi>[0] => ({
+    tasks: [
+      fakeTask("Timed today", {
+        due_date: new Date(2026, 6, 3, 14, 0).toISOString(),
+        is_all_day: false,
+      }),
+      fakeTask("Yesterday's", { due_date: "2026-07-02T00:00:00Z", is_all_day: true }),
+      fakeTask("Monday's", { due_date: "2026-07-06T00:00:00Z", is_all_day: true }),
+    ],
+  });
+
+  it("Today shows the time alone and 'Yesterday' for yesterday's overdue Task", async () => {
+    installFakeApi(seed());
+    render(<App />);
+    await openSmart("Today");
+    await screen.findByRole("button", { name: "Open details for Timed today" });
+
+    expect(chipText("Timed today")).toBe("14:00");
+    expect(chipText("Yesterday's")).toBe("Yesterday");
+    expect(within(rowFor("Yesterday's")).getByLabelText("Overdue: Jul 2")).toBeInTheDocument();
+  });
+
+  it("Next 7 Days shows weekday names", async () => {
+    installFakeApi(seed());
+    render(<App />);
+    await openSmart("Next 7 Days");
+    await screen.findByRole("button", { name: "Open details for Monday's" });
+
+    expect(chipText("Monday's")).toBe("Mon");
+    expect(chipText("Timed today")).toBe("Fri, 14:00");
+    expect(within(rowFor("Monday's")).getByLabelText("Due Jul 6")).toBeInTheDocument();
+  });
+
+  it("a List keeps absolute dates", async () => {
+    installFakeApi(seed());
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    await screen.findByRole("button", { name: "Open details for Monday's" });
+
+    expect(chipText("Monday's")).toBe("Jul 6");
+    expect(chipText("Timed today")).toBe("Jul 3, 14:00");
+    expect(chipText("Yesterday's")).toBe("Jul 2");
+  });
+});
