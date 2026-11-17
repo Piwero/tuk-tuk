@@ -175,7 +175,7 @@ describe("multi-select and bulk actions", () => {
     expect(screen.getByRole("toolbar", { name: "Bulk actions" })).toBeInTheDocument();
 
     fireEvent.click(
-      within(screen.getByRole("navigation", { name: "Smart Lists" })).getByRole("button", {
+      within(screen.getByRole("complementary", { name: "" })).getByRole("button", {
         name: "All",
       }),
     );

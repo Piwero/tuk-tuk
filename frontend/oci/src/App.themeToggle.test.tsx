@@ -23,6 +23,7 @@ describe("Dark mode toggle in the nav bar", () => {
     await screen.findByRole("heading", { name: "All" });
 
     const sidebar = screen.getByRole("complementary");
+    await user.click(screen.getByRole("button", { name: "App menu" }));
     const toggle = within(sidebar).getByRole("button", { name: "Switch to dark mode" });
     expect(toggle).toHaveAttribute("aria-pressed", "false");
 
@@ -46,10 +47,13 @@ describe("Dark mode toggle in the nav bar", () => {
     render(<App />);
     await screen.findByRole("heading", { name: "All" });
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(screen.getByRole("link", { name: "Settings" }));
     await user.click(screen.getByRole("radio", { name: "Dark" }));
 
     const sidebar = screen.getByRole("complementary");
+    await user.click(screen.getByRole("button", { name: "App menu" }));
     expect(
       within(sidebar).getByRole("button", { name: "Switch to light mode" }),
     ).toBeInTheDocument();

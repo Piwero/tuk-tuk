@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 async function openSmart(name: string): Promise<void> {
-  const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+  const nav = await screen.findByRole("complementary", { name: "" });
   // Smart lists load via a separate async fetch; wait for the button first.
   fireEvent.click(await within(nav).findByRole("button", { name }));
 }
@@ -26,15 +26,22 @@ describe("Smart Lists", () => {
     installFakeApi();
     render(<App />);
 
-    const smart = await screen.findByRole("navigation", { name: "Smart Lists" });
+    const views = await screen.findByRole("navigation", { name: "Views" });
     expect(
-      within(smart)
+      within(views)
         .getAllByRole("button")
-        .map((button) => button.textContent),
-    ).toEqual(["Today", "Next 7 Days", "All"]);
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["Today", "Next 7 Days"]);
+    expect(within(views).getByRole("button", { name: "Today" })).not.toHaveAttribute(
+      "aria-current",
+    );
 
     const lists = await screen.findByRole("navigation", { name: "Lists" });
-    expect(smart.compareDocumentPosition(lists)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(within(lists).getByRole("button", { name: "All" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(lists).toContainElement(within(lists).getByRole("button", { name: "All" }));
   });
 
   it("Today queries the computed view with the local day and hides Quick-Add", async () => {

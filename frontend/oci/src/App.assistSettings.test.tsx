@@ -20,6 +20,8 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByLabelText("Ollama base URL")).toHaveValue("http://localhost:11434");
@@ -30,6 +32,8 @@ describe("Assist settings (ADR 0005)", () => {
     installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(await screen.findByLabelText("Ollama base URL"), "http://localhost:11434");
@@ -50,6 +54,8 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("button", { name: "Test connection" }));
 
@@ -67,6 +73,8 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("button", { name: "Test connection" }));
 
@@ -81,6 +89,8 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     const modelInput = await screen.findByLabelText("Model");
     await user.type(modelInput, "-edited");
@@ -92,6 +102,8 @@ describe("Assist settings (ADR 0005)", () => {
     installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByLabelText("Ollama base URL");
@@ -106,6 +118,8 @@ describe("Assist settings (ADR 0005)", () => {
     });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("button", { name: "Remove" }));
@@ -124,6 +138,8 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     const select = await screen.findByLabelText("Model");
@@ -141,6 +157,8 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     const select = await screen.findByLabelText("Model");
@@ -154,6 +172,8 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect((await screen.findByLabelText("Model")).tagName).toBe("INPUT");
@@ -163,6 +183,8 @@ describe("Assist settings (ADR 0005)", () => {
     installFakeApi({ assistInstalledModels: ["llama3:8b", "qwen3:14b"] });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(await screen.findByLabelText("Ollama base URL"), "http://localhost:11434");
@@ -179,6 +201,8 @@ describe("Assist settings (ADR 0005)", () => {
     installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByLabelText("Ollama base URL");

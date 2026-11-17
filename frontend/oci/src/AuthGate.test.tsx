@@ -147,6 +147,7 @@ describe("AuthGate", () => {
     render(<AuthGate />);
     expect(await screen.findByText("Buy milk")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
     await user.click(await screen.findByLabelText("Log out"));
 
     expect(await screen.findByLabelText("Password")).toBeInTheDocument();

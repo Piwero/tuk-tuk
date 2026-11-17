@@ -18,6 +18,8 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(
@@ -33,6 +35,8 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Google Calendar" })).toBeInTheDocument();
@@ -43,6 +47,8 @@ describe("Google Calendar gate", () => {
     installFakeApi({ googleConfigured: true });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
@@ -73,6 +79,8 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByText("work@example.com")).toBeInTheDocument();
@@ -95,6 +103,8 @@ describe("Google Calendar gate", () => {
     });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByText("work@example.com");
@@ -154,6 +164,8 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByText("work@example.com"));
 
@@ -186,6 +198,8 @@ describe("Google Calendar gate", () => {
     });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByText("work@example.com"));
@@ -231,6 +245,8 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByText("work@example.com"));
     await screen.findByText("Work");
@@ -274,6 +290,8 @@ describe("Google Calendar gate", () => {
     });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByText("work@example.com"));
@@ -324,6 +342,8 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByText("work@example.com");
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
@@ -364,6 +384,8 @@ describe("Appearance (issue #193)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
@@ -379,6 +401,8 @@ describe("Appearance (issue #193)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByRole("radio", { name: "Dark" })).toBeChecked();
@@ -391,6 +415,8 @@ describe("Appearance (issue #193)", () => {
     const user = userEvent.setup();
     const first = render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("radio", { name: "Dark" }));
 
@@ -399,6 +425,7 @@ describe("Appearance (issue #193)", () => {
     first.unmount();
 
     render(<App />);
+    await user.click(screen.getByRole("button", { name: "App menu" }));
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     expect(await screen.findByRole("radio", { name: "Dark" })).toBeChecked();
   });
@@ -409,6 +436,8 @@ describe("Active hours (issue #210)", () => {
     installFakeApi({ googleConfigured: false });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
@@ -423,6 +452,8 @@ describe("Active hours (issue #210)", () => {
     const api = installFakeApi({ googleConfigured: false });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     const section = await screen.findByRole("region", { name: "Active hours" });
@@ -444,6 +475,8 @@ describe("Active hours (issue #210)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     const section = await screen.findByRole("region", { name: "Active hours" });
 
@@ -460,6 +493,8 @@ describe("About section", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     // Nothing sets VITE_APP_VERSION in the test suite, so it falls back to "dev".
@@ -472,6 +507,8 @@ describe("Google API credentials (issue #117)", () => {
     const state = installFakeApi({ googleConfigured: false });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Client ID"), "a-client-id");
@@ -498,6 +535,8 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByLabelText("Client ID")).toHaveValue("existing-client-id");
@@ -513,6 +552,8 @@ describe("Google API credentials (issue #117)", () => {
     });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     const clientIdField = await screen.findByLabelText("Client ID");
@@ -548,6 +589,8 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("button", { name: "Replace it" }));
     await user.type(screen.getByLabelText("Client secret"), "new-client-secret");
@@ -574,6 +617,8 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByText("me@example.com");
     await user.click(screen.getByRole("button", { name: "Remove Google integration" }));
@@ -592,6 +637,8 @@ describe("Change password (issue #116)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Security" })).toBeInTheDocument();
@@ -604,6 +651,8 @@ describe("Change password (issue #116)", () => {
     const state = installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
@@ -623,6 +672,8 @@ describe("Change password (issue #116)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), "wrong-password");
     await user.type(screen.getByLabelText("New password"), "a-new-password");
@@ -637,6 +688,8 @@ describe("Change password (issue #116)", () => {
     const state = installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
@@ -653,6 +706,8 @@ describe("Change password (issue #116)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByText(/12 characters/i)).toBeInTheDocument();
@@ -662,6 +717,8 @@ describe("Change password (issue #116)", () => {
     const state = installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
@@ -685,6 +742,8 @@ describe("Change password (issue #116)", () => {
     installFakeApi({ passwordChangeLocked: true });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
@@ -713,6 +772,8 @@ describe("Per-account failure handling (issue #109)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/needs to be reconnected/i);
@@ -735,6 +796,8 @@ describe("Per-account failure handling (issue #109)", () => {
     });
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByText("me@example.com");

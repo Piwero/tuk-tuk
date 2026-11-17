@@ -425,7 +425,9 @@ describe("voice writes: visible views refresh", () => {
     await call("create_task", { title: "buy milk" });
     expect(await open("buy milk")).toBeInTheDocument();
     const lists = await screen.findByRole("navigation", { name: "Lists" });
-    expect(await within(lists).findByText("1")).toBeInTheDocument();
+    expect(within(lists).getByRole("link", { name: "Inbox" })).toHaveAccessibleDescription(
+      "1 open task",
+    );
   });
 
   it("a rescheduled Task moves on the Calendar", async () => {

@@ -143,7 +143,7 @@ it("cancels a held turn on dismissal and hides on navigation without disconnecti
   await user.click(screen.getByRole("button", { name: "Open voice overlay" }));
   panel = screen.getByRole("region", { name: "Voice overlay" });
   await user.click(
-    within(screen.getByRole("navigation", { name: "Smart Lists" })).getByRole("button", {
+    within(screen.getByRole("complementary", { name: "" })).getByRole("button", {
       name: "All",
     }),
   );

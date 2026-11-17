@@ -246,7 +246,7 @@ describe("Task dates in list views", () => {
 
 describe("context-relative dates per view (issue #431)", () => {
   async function openSmart(name: string): Promise<void> {
-    const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+    const nav = await screen.findByRole("complementary", { name: "" });
     fireEvent.click(await within(nav).findByRole("button", { name }));
   }
 
