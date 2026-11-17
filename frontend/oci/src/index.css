@@ -1381,6 +1381,13 @@ button.create-menu-trigger {
     padding: 0 var(--space-2);
   }
 
+  /* Today and Next 7 Days say less in the chip (#431), so their date column
+   * narrows and gives the width back to the title. List, Search and completed
+   * rows carry no attribute and keep the full column. */
+  .tasks li.task-row[data-date-context] {
+    --task-col-date: var(--task-col-date-narrow);
+  }
+
   /* A view that wires no row actions gives the gutter back to the title. */
   .tasks li.task-row.with-actions {
     --task-row-actions-col: var(--task-col-actions);

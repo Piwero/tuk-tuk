@@ -12,7 +12,7 @@ import {
   type TaskList,
   type TaskPatch,
 } from "../api";
-import { allDaySchedule } from "../dates";
+import { allDaySchedule, type ScheduleContext } from "../dates";
 import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
@@ -43,6 +43,8 @@ interface TaskListViewProps {
   viewKey: string;
   groupBy: GroupBy;
   sortBy: SortBy;
+  /** How much of its date each row's chip says (#431); absolute by default. */
+  dateContext?: ScheduleContext;
   onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
   onSectionsChanged: (update: (current: Section[]) => Section[]) => void;
@@ -63,6 +65,7 @@ export function TaskListView({
   viewKey,
   groupBy,
   sortBy,
+  dateContext,
   onChanged,
   onSelect,
   onSectionsChanged,
@@ -374,6 +377,7 @@ export function TaskListView({
         completed={task.completed || completion.isPending(task.id) || bulkPending.has(task.id)}
         list={taskList}
         showDate
+        dateContext={dateContext}
         showTags
         showCheckProgress
         selectable

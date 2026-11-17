@@ -75,6 +75,91 @@ describe("formatSchedule", () => {
   });
 });
 
+describe("formatSchedule in a view context", () => {
+  // Friday 2026-07-03, local noon (TZ=UTC suite-wide).
+  const now = new Date(2026, 6, 3, 12, 0);
+  const allDay = (day: string): Parameters<typeof formatSchedule>[0] => ({
+    start_date: null,
+    due_date: `${day}T00:00:00Z`,
+    is_all_day: true,
+  });
+  const timed = (
+    due: string,
+    start: string | null = null,
+  ): Parameters<typeof formatSchedule>[0] => ({
+    start_date: start,
+    due_date: due,
+    is_all_day: false,
+  });
+
+  it.each([
+    ["all-day today says nothing", allDay("2026-07-03"), ""],
+    ["timed today shows its time", timed("2026-07-03T14:00:00Z"), "14:00"],
+    [
+      "timed range today shows both ends",
+      timed("2026-07-03T15:30:00Z", "2026-07-03T14:00:00Z"),
+      "14:00–15:30",
+    ],
+    ["first minute of today is today", timed("2026-07-03T00:00:00Z"), "00:00"],
+    ["last minute of yesterday is yesterday", timed("2026-07-02T23:59:00Z"), "Yesterday"],
+    ["all-day yesterday", allDay("2026-07-02"), "Yesterday"],
+    ["two days late is a weekday", allDay("2026-07-01"), "Wed"],
+    ["six days late is a weekday", allDay("2026-06-27"), "Sat"],
+    [
+      "a full week late is absolute (a weekday would read as today)",
+      allDay("2026-06-26"),
+      "Jun 26",
+    ],
+    ["a future date is a bare day", allDay("2026-07-04"), "Jul 4"],
+    ["a timed Task a week late drops its time", timed("2026-06-26T14:00:00Z"), "Jun 26"],
+    ["unscheduled has no label", { start_date: null, due_date: null, is_all_day: true }, null],
+  ])("today: %s", (_name, task, expected) => {
+    expect(formatSchedule(task, "today", now)).toBe(expected);
+  });
+
+  it.each([
+    ["all-day today is its weekday", allDay("2026-07-03"), "Fri"],
+    ["all-day tomorrow", allDay("2026-07-04"), "Sat"],
+    ["day six ahead is the last weekday name", allDay("2026-07-09"), "Thu"],
+    ["day seven ahead is absolute (a weekday would read as today)", allDay("2026-07-10"), "Jul 10"],
+    ["overdue is absolute (a weekday would read as upcoming)", allDay("2026-07-02"), "Jul 2"],
+    ["timed keeps its time after the weekday", timed("2026-07-06T09:00:00Z"), "Mon, 09:00"],
+    [
+      "timed range keeps both ends",
+      timed("2026-07-06T10:30:00Z", "2026-07-06T09:00:00Z"),
+      "Mon, 09:00–10:30",
+    ],
+    ["unscheduled has no label", { start_date: null, due_date: null, is_all_day: true }, null],
+  ])("week: %s", (_name, task, expected) => {
+    expect(formatSchedule(task, "week", now)).toBe(expected);
+  });
+
+  it("keeps a multi-day all-day range absolute in every context", () => {
+    const range = {
+      start_date: "2026-07-01T00:00:00Z",
+      due_date: "2026-07-03T00:00:00Z",
+      is_all_day: true,
+    };
+    expect(formatSchedule(range, "today", now)).toBe("Jul 1 – Jul 3");
+    expect(formatSchedule(range, "week", now)).toBe("Jul 1 – Jul 3");
+  });
+
+  it("reads day boundaries off the clock passed in", () => {
+    const lateNight = new Date(2026, 6, 3, 23, 59);
+    const justAfter = new Date(2026, 6, 4, 0, 0);
+    expect(formatSchedule(allDay("2026-07-03"), "today", lateNight)).toBe("");
+    expect(formatSchedule(allDay("2026-07-03"), "today", justAfter)).toBe("Yesterday");
+    expect(formatSchedule(allDay("2026-07-10"), "week", lateNight)).toBe("Jul 10");
+    expect(formatSchedule(allDay("2026-07-10"), "week", justAfter)).toBe("Fri");
+  });
+
+  it("absolute is the default and matches the original labels", () => {
+    expect(formatSchedule(allDay("2026-07-03"))).toBe("Jul 3");
+    expect(formatSchedule(allDay("2026-07-03"), "absolute", now)).toBe("Jul 3");
+    expect(formatSchedule(timed("2026-07-03T14:00:00Z"), "absolute", now)).toBe("Jul 3, 14:00");
+  });
+});
+
 describe("taskZonedDate", () => {
   it("reads a non-zero UTC offset (Asia/Tokyo, UTC+9, no DST)", () => {
     const date = taskZonedDate({ time_zone: "Asia/Tokyo" }, "2026-07-10T13:00:00Z");
