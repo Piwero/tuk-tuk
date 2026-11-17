@@ -205,6 +205,17 @@ main {
      panel) scrolls main alone, never the document. */
   min-height: 0;
   overflow-y: auto;
+  /* Pins the shortcut hint strip (issue #434): `.main-content` grows into
+     spare height, so under short content the strip sits at the viewport
+     foot; it never shrinks, so under long content the strip follows the
+     last row in flow and covers nothing. */
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1 0 auto;
+  min-width: 0;
 }
 
 /* The content column.
@@ -264,7 +275,7 @@ main {
   text-align: center;
 }
 
-@media (pointer: coarse) {
+@media (max-width: 720px), (pointer: coarse) {
   .shortcut-hints {
     display: none;
   }
