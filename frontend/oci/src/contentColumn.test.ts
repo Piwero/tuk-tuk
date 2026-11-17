@@ -77,6 +77,9 @@ describe("content column (issue #196)", () => {
     expect(content).toMatch(/flex:\s*1 0 auto/);
     const strip = /\.shortcut-hints\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
     expect(strip).not.toMatch(/position:\s*(fixed|sticky|absolute)/);
+    expect(css).toMatch(
+      /@media \(max-width: 720px\), \(pointer: coarse\)\s*\{\s*\.shortcut-hints\s*\{\s*display:\s*none/,
+    );
   });
 
   it("never caps `.tasks`, so the aligned-row container query keys off the real width", () => {

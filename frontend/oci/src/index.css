@@ -294,7 +294,7 @@ main {
   text-align: center;
 }
 
-@media (pointer: coarse) {
+@media (max-width: 720px), (pointer: coarse) {
   .shortcut-hints {
     display: none;
   }
