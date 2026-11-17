@@ -1,3 +1,4 @@
+import "./VoiceOverlay.css";
 import { useEffect, useRef, useState } from "react";
 
 import { isTypingContext } from "../shortcuts";

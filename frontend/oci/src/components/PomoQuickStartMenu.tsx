@@ -1,3 +1,5 @@
+import "./PomoQuickStartMenu.css";
+
 import { useEffect, useRef, useState } from "react";
 
 import { fetchTimers, type Task, type Timer } from "../api";

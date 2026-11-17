@@ -1,3 +1,4 @@
+import "./VoiceView.css";
 import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
 
 import { useVoice } from "../voice/VoiceProvider";

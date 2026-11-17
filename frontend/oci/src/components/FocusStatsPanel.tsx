@@ -1,3 +1,4 @@
+import "./FocusStatsPanel.css";
 import { useCallback, useEffect, useState } from "react";
 
 import {

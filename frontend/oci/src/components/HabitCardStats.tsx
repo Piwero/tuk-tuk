@@ -1,3 +1,5 @@
+import "./HabitHistory.css";
+import "./HabitCardStats.css";
 import { type Habit, type HabitStats } from "../api";
 import { shortDayLabel } from "../dates";
 import { heatLevel, stripDays } from "../habitStats";

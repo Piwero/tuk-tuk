@@ -1,3 +1,4 @@
+import "./HabitForm.css";
 import { useState } from "react";
 
 import { type Habit, type HabitType } from "../api";

@@ -1,0 +1,70 @@
+@layer components {
+  /* One menu (History, Edit, Archive, Delete) behind a kebab trigger,
+ * replacing four permanent buttons. The trigger and items are real
+ * buttons, so the menu is reachable by keyboard and under a coarse
+ * pointer where there is no hover. */
+  .habit-actions-menu {
+    position: relative;
+    flex: none;
+  }
+  .habit-actions-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .habit-actions-trigger:hover,
+  .habit-actions-trigger[aria-expanded="true"] {
+    background: var(--surface-hover);
+    border-color: var(--border-default);
+  }
+  .habit-actions-list {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    right: 0;
+    z-index: var(--z-popover);
+    min-width: 160px;
+    margin: 0;
+    padding: var(--space-1);
+    list-style: none;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+  }
+  .habit-actions-list button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-1) var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: var(--text-sm);
+    text-align: left;
+  }
+  .habit-actions-list button:hover {
+    background: var(--surface-hover);
+  }
+  .habit-actions-list .habit-actions-danger {
+    color: var(--text-danger);
+  }
+  @media (hover: none), (pointer: coarse) {
+    .habit-actions-trigger {
+      width: var(--tap-target);
+      height: var(--tap-target);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .habit-actions-list button {
+      min-height: var(--tap-target);
+    }
+  }
+}

@@ -1,0 +1,121 @@
+@layer components {
+  /* Each day in the strip is a button — tapping it checks that day in — but
+   it still reads as the same 12px square as the heatmap's. The affordance
+   is the cursor and a hover ring outside the square, so it can't be read as
+   the inset ring that marks today. */
+  .habit-strip button.heatmap-day {
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+    transition: outline-color var(--duration-fast) var(--ease-out);
+    outline: 2px solid transparent;
+    outline-offset: 1px;
+  }
+  .habit-strip button.heatmap-day:hover {
+    outline-color: var(--ink-400);
+  }
+  @media (hover: none), (pointer: coarse) {
+    .habit-strip button.heatmap-day {
+      box-sizing: content-box;
+      padding: calc((var(--tap-target) - 12px) / 2) var(--space-1);
+      background-clip: content-box;
+    }
+  }
+  .habit-history {
+    flex-basis: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border-subtle);
+    margin-top: var(--space-2);
+  }
+  .habit-streak {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .habit-month-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+  .habit-month-label {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-xs);
+  }
+  .habit-month-nav button {
+    height: 24px;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: none;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .habit-month-nav button:hover {
+    background: var(--surface-hover);
+  }
+  .habit-month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 32px);
+    gap: 3px;
+    margin-top: var(--space-1);
+  }
+  .grid-day {
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: none;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+  .grid-day:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+  .grid-day[aria-pressed="true"] {
+    background: var(--heat-1);
+    border-color: var(--green-100);
+  }
+  .grid-day.complete {
+    background: var(--heat-2);
+    border-color: var(--green-300);
+    color: var(--green-700);
+  }
+  .grid-day:disabled {
+    color: var(--ink-300);
+    cursor: default;
+  }
+  .heatmap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    max-width: 640px;
+  }
+  .heatmap-day {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+  .heatmap-day.level-0 {
+    background: var(--heat-0);
+  }
+  .heatmap-day.level-1 {
+    background: var(--heat-1);
+  }
+  .heatmap-day.level-2 {
+    background: var(--heat-2);
+  }
+  .heatmap-day.level-3 {
+    background: var(--heat-3);
+  }
+  .heatmap-day.level-4 {
+    background: var(--heat-4);
+  }
+}
