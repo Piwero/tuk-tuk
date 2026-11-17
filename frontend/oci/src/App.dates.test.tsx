@@ -290,7 +290,7 @@ describe("context-relative dates per view (issue #431)", () => {
   it("a List keeps absolute dates", async () => {
     installFakeApi(seed());
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Monday's" });
 
     expect(chipText("Monday's")).toBe("Jul 6");
