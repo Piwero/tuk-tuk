@@ -195,6 +195,9 @@
      edge, so two same-titled Tasks due on different days read as
      duplicates. */
   --task-col-date: 156px;
+  /* The Today and Next 7 Days rows (#431): their labels are a time, a weekday
+     or "Wed, 14:00–15:30" (16 chars). The absolute contexts keep 156px. */
+  --task-col-date-narrow: 120px;
   --task-col-actions: 68px; /* reserved, so hover never reflows the row */
   --mobile-tab-bar-height: 56px; /* the mobile bottom tab bar (issue #170) */
   --mobile-quick-add-size: 56px; /* the mobile Quick-Add button (issue #287) */
