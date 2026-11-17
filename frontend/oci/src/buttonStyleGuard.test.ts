@@ -8,14 +8,15 @@ import { describe, expect, it } from "vitest";
 // or the Focus-plum primary (#433) — so none renders with the browser's
 // default look. jsdom applies no CSS, so this reads the source: every
 // `<button>` must name a shared style class, or a bespoke class that
-// index.css actually paints (a `background`/`border` rule).
+// a source stylesheet actually paints (a `background`/`border` rule).
 
 const SHARED = ["btn-primary", "btn-secondary", "btn-quiet", "btn-focus"];
 
-const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8").replace(
-  /\/\*[\s\S]*?\*\//g,
-  "",
-);
+const css = (readdirSync(join(process.cwd(), "src"), { recursive: true }) as string[])
+  .filter((name) => name.endsWith(".css"))
+  .map((name) => readFileSync(join(process.cwd(), "src", name), "utf8"))
+  .join("\n")
+  .replace(/\/\*[\s\S]*?\*\//g, "");
 const tokensCss = readFileSync(join(process.cwd(), "src/tokens.css"), "utf8");
 
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
