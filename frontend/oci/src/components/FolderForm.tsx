@@ -25,8 +25,10 @@ export function FolderForm({ initialName, onSubmit, onCancel }: FolderFormProps)
         Folder name
         <input value={name} onChange={(event) => setName(event.target.value)} />
       </label>
-      <button type="submit">Save</button>
-      <button type="button" onClick={onCancel}>
+      <button className="btn-primary" type="submit">
+        Save
+      </button>
+      <button className="btn-quiet" type="button" onClick={onCancel}>
         Cancel
       </button>
     </form>

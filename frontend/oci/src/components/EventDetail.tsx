@@ -83,7 +83,7 @@ export function EventDetail({ event, onConverted }: EventDetailProps): JSX.Eleme
         </a>
       )}
       <div className="event-detail-actions">
-        <button type="button" onClick={() => setConverting(true)}>
+        <button className="btn-secondary" type="button" onClick={() => setConverting(true)}>
           Convert to task
         </button>
       </div>
@@ -139,7 +139,7 @@ function ConvertPreview({ event, onCancel, onConverted }: ConvertPreviewProps): 
         </div>
       )}
       <div className="event-convert-actions">
-        <button type="button" onClick={onCancel}>
+        <button className="btn-quiet" type="button" onClick={onCancel}>
           Cancel
         </button>
         <button type="button" className="event-convert-confirm" onClick={() => void confirm()}>
