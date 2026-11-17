@@ -70,6 +70,7 @@ export function HabitActionsMenu({
         <ul role="menu" aria-label={`Actions for ${habit.name}`} className="habit-actions-list">
           <li role="none">
             <button
+              className="btn-quiet"
               type="button"
               role="menuitem"
               aria-label={`History ${habit.name}`}
@@ -81,6 +82,7 @@ export function HabitActionsMenu({
           </li>
           <li role="none">
             <button
+              className="btn-quiet"
               type="button"
               role="menuitem"
               aria-label={`Edit ${habit.name}`}
@@ -92,6 +94,7 @@ export function HabitActionsMenu({
           </li>
           <li role="none">
             <button
+              className="btn-quiet"
               type="button"
               role="menuitem"
               aria-label={habit.is_archived ? `Unarchive ${habit.name}` : `Archive ${habit.name}`}
@@ -105,7 +108,7 @@ export function HabitActionsMenu({
             <button
               type="button"
               role="menuitem"
-              className="habit-actions-danger"
+              className="habit-actions-danger btn-quiet"
               aria-label={`Delete habit ${habit.name}`}
               onClick={() => choose(onDelete)}
             >

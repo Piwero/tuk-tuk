@@ -9,7 +9,7 @@ const taskPosts = (requests: RecordedRequest[]): unknown[] =>
   requests.filter((r) => r.method === "POST" && r.url === "/api/v1/tasks").map((r) => r.body);
 
 async function openInbox(): Promise<void> {
-  await userEvent.setup().click(await screen.findByRole("button", { name: "Inbox" }));
+  await userEvent.setup().click(await screen.findByRole("link", { name: "Inbox" }));
 }
 
 describe("Quick-Add sigil hints (issue #197)", () => {

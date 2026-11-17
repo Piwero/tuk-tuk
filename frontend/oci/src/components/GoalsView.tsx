@@ -128,8 +128,10 @@ function GoalForm({ initial, onSubmit, onCancel }: GoalFormProps): JSX.Element {
       </label>
       <p className="goal-form-date-hint">Blank uses the current quarter.</p>
       <div className="goal-form-actions">
-        <button type="submit">Save</button>
-        <button type="button" onClick={onCancel}>
+        <button className="btn-primary" type="submit">
+          Save
+        </button>
+        <button className="btn-quiet" type="button" onClick={onCancel}>
           Cancel
         </button>
       </div>
@@ -266,7 +268,7 @@ function KeyResultRow({
         <>
           <button
             type="button"
-            className="key-result-tasks-toggle"
+            className="key-result-tasks-toggle btn-quiet"
             aria-expanded={showTasks}
             onClick={() => setShowTasks((current) => !current)}
           >
@@ -429,14 +431,16 @@ function KeyResultsPanel({
             </label>
           )}
           <div className="key-result-form-actions">
-            <button type="submit">Add key result</button>
-            <button type="button" onClick={() => setAdding(false)}>
+            <button className="btn-primary" type="submit">
+              Add key result
+            </button>
+            <button className="btn-quiet" type="button" onClick={() => setAdding(false)}>
               Cancel
             </button>
           </div>
         </form>
       ) : (
-        <button type="button" onClick={() => setAdding(true)}>
+        <button className="btn-secondary" type="button" onClick={() => setAdding(true)}>
           Add key result
         </button>
       )}
@@ -566,6 +570,7 @@ function GoalCard({
           <>
             <Hint hintKey="focused-goal">
               <button
+                className="btn-secondary"
                 type="button"
                 aria-pressed={goal.is_focused}
                 aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
@@ -576,18 +581,33 @@ function GoalCard({
               </button>
             </Hint>
             <Hint hintKey="abandon" destructive>
-              <button type="button" aria-label={`Abandon ${goal.title}`} onClick={onAbandon}>
+              <button
+                className="btn-secondary"
+                type="button"
+                aria-label={`Abandon ${goal.title}`}
+                onClick={onAbandon}
+              >
                 <Icon name="x" size={16} />
                 Abandon
               </button>
             </Hint>
           </>
         )}
-        <button type="button" aria-label={`Edit ${goal.title}`} onClick={onEdit}>
+        <button
+          className="btn-secondary"
+          type="button"
+          aria-label={`Edit ${goal.title}`}
+          onClick={onEdit}
+        >
           <Icon name="pencil" size={16} />
           Edit
         </button>
-        <button type="button" aria-label={`Delete goal ${goal.title}`} onClick={onDelete}>
+        <button
+          className="btn-secondary"
+          type="button"
+          aria-label={`Delete goal ${goal.title}`}
+          onClick={onDelete}
+        >
           <Icon name="trash-2" size={16} />
           Delete
         </button>
@@ -829,7 +849,11 @@ export function GoalsView(): JSX.Element {
       {editor?.mode === "create" ? (
         <GoalForm onSubmit={(values) => handleCreate(values)} onCancel={() => setEditor(null)} />
       ) : (
-        <button type="button" className="goals-add" onClick={() => setEditor({ mode: "create" })}>
+        <button
+          type="button"
+          className="goals-add btn-secondary"
+          onClick={() => setEditor({ mode: "create" })}
+        >
           <Icon name="plus" size={16} />
           Add Goal
         </button>

@@ -151,7 +151,7 @@ describe("Completed view", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Open task" });
 
     fireEvent.click(screen.getByRole("button", { name: "Completed" }));
@@ -229,7 +229,7 @@ describe("Completed view", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     fireEvent.click(await screen.findByRole("button", { name: "Completed" }));
     await screen.findByRole("button", { name: "Open details for Done late" });
 

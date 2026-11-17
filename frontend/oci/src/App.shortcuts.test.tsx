@@ -14,7 +14,7 @@ afterEach(() => {
 async function openInbox(): Promise<HTMLElement> {
   const user = userEvent.setup();
   render(<App />);
-  const inbox = await screen.findByRole("button", { name: "Inbox" });
+  const inbox = await screen.findByRole("link", { name: "Inbox" });
   await user.click(inbox);
   await screen.findByRole("combobox", { name: "Add a task" });
   return inbox;
@@ -75,5 +75,19 @@ describe("global keyboard shortcut layer", () => {
     expect(within(strip).getByText("Quick add")).toBeInTheDocument();
     expect(within(strip).getByText("Search")).toBeInTheDocument();
     expect(within(strip).getByText("N")).toBeInTheDocument();
+  });
+
+  it("keeps the hint strip in its own row at the foot of main (issue #434)", async () => {
+    installFakeApi();
+    await openInbox();
+
+    const main = screen.getByRole("main");
+    const strip = screen.getByLabelText("Keyboard shortcuts");
+    // Two grid cells: everything else in one content cell, the strip last.
+    expect(main.children).toHaveLength(2);
+    expect(main.lastElementChild).toBe(strip);
+    expect(main.firstElementChild).toContainElement(
+      screen.getByRole("combobox", { name: "Add a task" }),
+    );
   });
 });

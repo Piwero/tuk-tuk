@@ -53,7 +53,7 @@ describe("command palette — capture a Task", () => {
   it("creates a Task with the keyboard alone and shows it without a refetch", async () => {
     const api = await seed();
     const user = userEvent.setup();
-    fireEvent.click(await screen.findByRole("button", { name: "Errands" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Errands" }));
 
     await enterCapture(user, "Buy milk");
     await user.keyboard("{Enter}");
@@ -67,7 +67,7 @@ describe("command palette — capture a Task", () => {
   it("resolves an @day token into a schedule and strips it from the title (ADR 0011 reversed)", async () => {
     const api = await seed();
     const user = userEvent.setup();
-    fireEvent.click(await screen.findByRole("button", { name: "Errands" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Errands" }));
 
     await enterCapture(user, "Buy milk @tomorrow");
     const preview = screen.getByRole("group", { name: "New task" });
@@ -92,7 +92,7 @@ describe("command palette — capture a Task", () => {
   it("opens the @date dropdown on a bare @ and picks a day with the keyboard", async () => {
     const api = await seed();
     const user = userEvent.setup();
-    fireEvent.click(await screen.findByRole("button", { name: "Errands" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Errands" }));
 
     const input = await enterCapture(user, "Water plants @");
     await screen.findByRole("option", { name: "Today" });

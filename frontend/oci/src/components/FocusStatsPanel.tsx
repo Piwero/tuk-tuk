@@ -152,7 +152,7 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
 
   return (
     <div className="focus-stats-view">
-      <button type="button" className="focus-back-link" onClick={onBack}>
+      <button type="button" className="focus-back-link btn-quiet" onClick={onBack}>
         <Icon name="chevron-left" size={16} />
         Back to timer
       </button>
@@ -272,7 +272,11 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
             onCancel={() => setEditor(null)}
           />
         ) : (
-          <button type="button" onClick={() => setEditor({ mode: "add" })}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => setEditor({ mode: "add" })}
+          >
             Add session
           </button>
         )}

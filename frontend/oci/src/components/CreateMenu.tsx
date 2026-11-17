@@ -56,7 +56,12 @@ export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): JSX.Ele
       {open && (
         <ul role="menu" aria-label="Create" className="create-menu-list">
           <li role="none">
-            <button type="button" role="menuitem" onClick={() => choose(onNewList)}>
+            <button
+              className="btn-quiet"
+              type="button"
+              role="menuitem"
+              onClick={() => choose(onNewList)}
+            >
               New list
             </button>
           </li>
@@ -64,7 +69,7 @@ export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): JSX.Ele
             <button
               type="button"
               role="menuitem"
-              className="create-menu-secondary"
+              className="create-menu-secondary btn-quiet"
               onClick={() => choose(onNewFolder)}
             >
               New folder

@@ -37,7 +37,7 @@ describe("All view: filter and sort controls", () => {
   it("offers a Filters button, Group by and Sort by in All; no bare filter combobox", async () => {
     installFakeApi();
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
 
     // Inbox (a plain List view) has Group by / Sort by but no filters at all.
     await screen.findByRole("combobox", { name: "Add a task" });

@@ -22,7 +22,7 @@ function tick(ms: number): void {
 
 /** Opens the Inbox list and returns its task rows in visible order. */
 async function openInboxRows(): Promise<HTMLElement[]> {
-  fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+  fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
   await screen.findByRole("combobox", { name: "Add a task" });
   const list = screen.getByRole("list", { name: "Tasks" });
   return within(list).getAllByRole("listitem");

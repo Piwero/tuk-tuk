@@ -174,20 +174,24 @@ export function RepeatFieldset({ task, onTaskChanged }: RepeatFieldsetProps): JS
               times
             </label>
           )}
-          <button type="button" onClick={() => void saveDraft()}>
+          <button className="btn-primary" type="button" onClick={() => void saveDraft()}>
             Save repeat
           </button>
-          <button type="button" onClick={() => setDraft(null)}>
+          <button className="btn-quiet" type="button" onClick={() => setDraft(null)}>
             Cancel
           </button>
         </div>
       ) : task.recurrence !== null ? (
         <div className="repeat-summary">
           <p>{recurrenceLabel(task.recurrence)}</p>
-          <button type="button" onClick={() => setDraft(repeatDraftFrom(task.recurrence))}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => setDraft(repeatDraftFrom(task.recurrence))}
+          >
             Edit repeat
           </button>
-          <button type="button" onClick={() => void setRecurrence(null)}>
+          <button className="btn-secondary" type="button" onClick={() => void setRecurrence(null)}>
             Remove repeat
           </button>
         </div>

@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 async function openActions(listName: string, taskTitle: string): Promise<HTMLElement> {
-  fireEvent.click(await screen.findByRole("button", { name: listName }));
+  fireEvent.click(await screen.findByRole("link", { name: listName }));
   fireEvent.click(await screen.findByRole("button", { name: `Actions for ${taskTitle}` }));
   return screen.findByRole("dialog", { name: `Actions for ${taskTitle}` });
 }

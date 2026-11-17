@@ -1,3 +1,5 @@
+import "./CalendarView.css";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -1175,6 +1177,7 @@ export function CalendarView({
           />
           <Hint hintKey="calendar-today">
             <button
+              className="btn-secondary"
               type="button"
               aria-label="Go to today"
               onClick={() => setAnchor(localDayOf(new Date()))}
@@ -1191,6 +1194,7 @@ export function CalendarView({
         <div className="calendar-modes">
           {MODES.map((candidate) => (
             <button
+              className="btn-secondary"
               key={candidate}
               type="button"
               aria-pressed={mode === candidate}
@@ -1292,8 +1296,10 @@ export function CalendarView({
               </div>
             )}
             <div className="calendar-draft-actions">
-              <button type="submit">Add</button>
-              <button type="button" onClick={() => resetDraft()}>
+              <button className="btn-primary" type="submit">
+                Add
+              </button>
+              <button className="btn-quiet" type="button" onClick={() => resetDraft()}>
                 Cancel
               </button>
             </div>
