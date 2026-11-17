@@ -1,5 +1,6 @@
 import { type UndoToastEntry } from "../undoQueue";
 import { IconButton } from "./IconButton";
+import "./ToastStack.css";
 
 interface ToastStackProps {
   entries: UndoToastEntry[];
