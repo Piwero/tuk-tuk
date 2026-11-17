@@ -1,3 +1,5 @@
+import "./CreateMenu.css";
+
 import { useEffect, useRef, useState } from "react";
 
 import { IconButton } from "./IconButton";

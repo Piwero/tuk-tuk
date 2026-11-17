@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import process from "node:process";
+import { readStylesheets } from "./test/stylesheets";
 import { describe, expect, it } from "vitest";
 
 /** `.app` is a three-column grid (sidebar / main / detail panel), so every
@@ -19,7 +17,7 @@ import { describe, expect, it } from "vitest";
  * jsdom applies no stylesheet, so this asserts against the CSS source — the
  * convention contentColumn.test.ts and App.mobileChrome.test.tsx use. */
 
-const css: string = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+const css: string = readStylesheets();
 
 /** Ranges of every `@media` block: its query plus the body's span. */
 function mediaBlocks(): { query: string; start: number; end: number }[] {

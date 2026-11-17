@@ -1,0 +1,805 @@
+@layer components {
+  /* ── Sidebar ─────────────────────────────────────────────────────── */
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--surface-sunken);
+    border-right: 1px solid var(--border-subtle);
+    padding: 14px 10px;
+    /* The sidebar itself doesn't scroll (issue #159) — `.sidebar-scroll` below
+     is the scroll region, so Settings/Log out in `.sidebar-footer` stay
+     anchored at the foot instead of scrolling away with the list tree. */
+    overflow: hidden;
+  }
+
+  /* Wraps everything above the footer (nav, search, smart lists, the list
+   tree, tags, archived) — its own scroll region, sized to whatever space
+   is left once `.sidebar-footer` takes its own height (issue #159). */
+
+  .sidebar-scroll {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* A thin, always-visible scrollbar rather than the OS's overlay-on-hover
+     default — the only signal that Lists/Tags below the fold exist at all
+     (issue #250). `auto` already hides it entirely once content fits. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-default) transparent;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: 3px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* The brand lockup: the mark, then the wordmark. The mark is decorative
+   (Logo.tsx) — the tooltip and the text both live on this row. */
+
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px 10px var(--space-3);
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: var(--weight-bold);
+    letter-spacing: -0.01em;
+  }
+
+  /* The wordmark, not `.sidebar-brand`, owns the truncation: once the brand is
+   a flex row, a bare text node is an anonymous flex item and `text-overflow`
+   on the container no longer reaches it. */
+
+  .sidebar-brand-name {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* Feature nav: Tasks, Calendar, Habits, Stand-up, Focus, Search (+ Assistant
+   when available). A vertical list of labelled rows — readable, not guessed
+   from a glyph (issue #194). Stacking removed the width limit that once
+   forced an icon-only row (issue #160). Collapsed, the label steps aside
+   (see the rail rules) and the accessible name is kept on aria-label/title.
+   The active item is told apart by an inset accent bar + weight, not colour
+   alone. */
+
+  .top-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 0 0 10px;
+  }
+
+  .sidebar .top-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: var(--control-height);
+    padding: 0 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--text-md);
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .sidebar .top-nav-item:hover {
+    background: var(--surface-hover);
+  }
+
+  .sidebar .top-nav-item.selected,
+  .sidebar .top-nav-item.selected:hover {
+    background: var(--surface-selected);
+    color: var(--text-accent);
+    font-weight: var(--weight-semibold);
+    /* Non-colour cue (issue #194): an inset bar on the leading edge, visible
+     in the rail too where the label is gone. */
+    box-shadow: inset 3px 0 0 0 var(--text-accent);
+  }
+
+  .sidebar-search input {
+    width: 100%;
+    height: 30px;
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-3);
+  }
+
+  .sidebar ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .smart-lists {
+    display: grid;
+    gap: 2px;
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .sidebar button,
+  .sidebar a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: var(--control-height);
+    padding: 0 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font-size: var(--text-md);
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .sidebar .list-button .icon,
+  .sidebar .sidebar-add .icon {
+    color: var(--text-secondary);
+  }
+
+  .sidebar .list-button.selected .icon {
+    color: var(--text-accent);
+  }
+
+  .sidebar button:hover,
+  .sidebar a:hover {
+    background: var(--surface-hover);
+  }
+
+  .list-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .list-row .list-button,
+  .smart-lists .list-button,
+  .views-nav .list-button {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  /* The List/Tag name button and the Folder name button each grew a hint
+ * popover wrapper (#264) — the wrapper needs to fill the row the button
+ * itself used to, or the button's own `flex: 1` above has nothing to grow
+ * into. Scoped away from the disclosure wrapper (#270), which must stay
+ * a fixed 20px rather than stretching with the name. */
+
+  .list-row > .icon-button-wrap,
+  .folder-row > .icon-button-wrap:not(:has(> .folder-disclosure)) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .folder-row > .icon-button-wrap:has(> .folder-disclosure) {
+    flex: none;
+  }
+
+  .list-button > span:not(.color-dot):not(.list-emoji) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .list-button.selected {
+    background: var(--surface-selected);
+    color: var(--text-accent);
+    font-weight: var(--weight-semibold);
+  }
+
+  .list-button.selected:hover {
+    background: var(--surface-selected);
+  }
+
+  .list-emoji {
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .list-row:hover .row-actions,
+  .folder-row:hover .row-actions {
+    width: auto;
+    overflow: visible;
+    visibility: visible;
+  }
+
+  .folder-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    margin-top: var(--space-2);
+    padding: 0 10px;
+  }
+
+  .folder-row > .icon {
+    flex: none;
+    color: var(--text-secondary);
+  }
+
+  /* `button.folder-disclosure`, not `.folder-disclosure`: needs to match
+ * `.sidebar button`'s specificity (class+type) to actually override its
+ * width:100% — a bare class selector loses that fight silently. */
+
+  button.folder-disclosure {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    flex: none;
+    color: var(--text-secondary);
+  }
+
+  .folder-row.drag-over {
+    background: var(--surface-selected);
+    outline: 2px solid var(--accent-border);
+    outline-offset: -2px;
+  }
+
+  .folder-name.selected {
+    background: var(--surface-selected);
+    color: var(--text-accent);
+    font-weight: var(--weight-semibold);
+  }
+
+  .folder-name.selected:hover {
+    background: var(--surface-selected);
+  }
+
+  .folder-empty-hint {
+    margin: 0 0 0 18px;
+    padding: var(--space-1) var(--space-2) var(--space-2) var(--space-3);
+    border-left: 1px solid var(--border-subtle);
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+
+  /* Folder names are user content, not a section heading: sentence case,
+ * primary text color, medium weight — the uppercase treatment stays
+ * reserved for genuine static headings (Tags, Archived). */
+
+  .folder-name {
+    flex: 1;
+    width: auto;
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-count {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+
+  /* Open-Task count on a Smart List / Inbox / List row (issue #195). Trailing,
+ * right-aligned inside the flex button, tabular like every other count; it is
+ * aria-hidden, with the spoken form carried by a `.visually-hidden` sibling
+ * wired to the control through aria-describedby. A zero count renders no
+ * element at all — never a literal "0". */
+
+  .nav-count {
+    flex: none;
+    margin-left: auto;
+    padding-left: var(--space-2);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+
+  .list-button.selected .nav-count {
+    color: var(--text-accent);
+  }
+
+  .lists-nav h2,
+  .tags-nav h2,
+  .archived h2 {
+    margin: 0;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* `.sidebar .folder-lists`, not `.folder-lists`: needs to match
+ * `.sidebar ul`'s specificity to actually override its margin/padding
+ * reset — a bare class selector loses that fight silently, same trap as
+ * button.folder-disclosure above. */
+
+  .sidebar .folder-lists {
+    margin-left: 18px;
+    padding-left: var(--space-3);
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .sidebar-footer {
+    flex: none;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-default);
+  }
+
+  .sidebar .sidebar-logout .icon,
+  .sidebar .sidebar-theme-toggle .icon {
+    color: var(--text-secondary);
+  }
+
+  .lists-nav-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .lists-nav h2 {
+    padding: 0 10px var(--space-1);
+  }
+
+  .tags-nav {
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-default);
+  }
+
+  .tags-nav h2 {
+    padding: 0 10px var(--space-1);
+  }
+
+  /* A wrapped cloud of chips (issue #194): Tags no longer take a full row
+   each. Each chip is its own inline pill that wraps to the next line. */
+
+  .tags-nav .tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    padding: 0 6px;
+  }
+
+  .tags-nav .tag-chip {
+    display: inline-flex;
+    width: auto;
+  }
+
+  .tags-nav .tag-chip .list-row {
+    width: auto;
+  }
+
+  .tags-nav .tag-chip .list-button {
+    width: auto;
+    height: auto;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+
+  .tags-nav .tag-chip .list-button.selected {
+    border-color: var(--text-accent);
+  }
+
+  /* Collapsed rail: the chip cloud falls back to a simple stacked column of
+   glyphs, like every other rail row. */
+
+  .sidebar.collapsed .tags-nav .tag-cloud {
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .sidebar.collapsed .tags-nav .tag-chip .list-button {
+    width: 100%;
+    justify-content: center;
+    border: none;
+    padding: 0;
+  }
+
+  .archived {
+    margin-top: var(--space-4);
+  }
+
+  .archived h2 {
+    padding: 0 10px var(--space-1);
+  }
+
+  .archived .list-button {
+    color: var(--text-tertiary);
+  }
+
+  .archived-list-folder {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    background: var(--surface-hover);
+    color: var(--text-tertiary);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .archived-habits h2 {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  /* The sidebar's primary action, sitting under the search box. Inherits the
+   sidebar button's box and left alignment so it lines up with the Lists and
+   Smart Lists below it — only the filled accent sets it apart. Scoped under
+   .sidebar to outrank `.sidebar button`'s transparent background. */
+
+  .sidebar .quick-add-trigger {
+    margin-bottom: var(--space-4);
+    background: var(--accent-strong);
+    font-weight: var(--weight-semibold);
+    color: var(--text-inverse);
+  }
+
+  .sidebar .quick-add-trigger:hover {
+    background: var(--accent-strong-hover);
+  }
+
+  .sidebar .quick-add-trigger .icon {
+    color: var(--text-inverse);
+  }
+
+  /* ── Collapsed sidebar (icon rail) ───────────────────────────────── */
+
+  .sidebar-top {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .sidebar-top .sidebar-brand {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Specificity has to beat `.sidebar button` (width: 100%, transparent
+   background) — matched here the same way `.sidebar .sidebar-collapse` does.
+   `margin-left` gives the pill its own breathing room from the brand rather
+   than relying entirely on `.sidebar-top`'s flex-driven gap, so it never
+   reads as crowding the brand even at a squeezed width (#162). (`.sidebar-
+   brand`'s own gap is a different one — it spaces the mark from the
+   wordmark inside the lockup.) */
+
+  .sidebar .focus-nav-badge {
+    display: flex;
+    flex: none;
+    width: auto;
+    align-items: center;
+    gap: 4px;
+    margin-left: var(--space-2);
+    padding: 3px 7px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-inverse);
+    background: var(--focus-accent);
+  }
+
+  .sidebar .focus-nav-badge:hover {
+    background: var(--plum-700);
+  }
+
+  .sidebar .focus-nav-badge.paused {
+    background: var(--text-tertiary);
+  }
+
+  /* On a break: still the Focus identity, but the softer tint marks it as not
+   real focus time. */
+
+  .sidebar .focus-nav-badge.break {
+    background: var(--focus-soft);
+    color: var(--focus-accent);
+  }
+
+  .sidebar .focus-nav-badge.finished {
+    background: var(--success);
+  }
+
+  .sidebar .sidebar-collapse {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+  }
+
+  .sidebar .sidebar-collapse:hover {
+    color: var(--text-primary);
+  }
+
+  /* The rail: every row shrinks to its glyph, and the labels step aside. */
+
+  .sidebar.collapsed {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+    align-items: center;
+  }
+
+  .sidebar.collapsed .nav-label,
+  .sidebar.collapsed .nav-count,
+  .sidebar.collapsed .sidebar-brand-name,
+  .sidebar.collapsed .focus-nav-badge,
+  .sidebar.collapsed .row-actions,
+  .sidebar.collapsed .folder-row,
+  .sidebar.collapsed .lists-nav h2,
+  .sidebar.collapsed .tags-nav h2,
+  .sidebar.collapsed .archived h2 {
+    display: none;
+  }
+
+  .sidebar.collapsed button {
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  .sidebar.collapsed .top-nav {
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 0 10px;
+    width: 100%;
+  }
+
+  /* In the rail the label is gone, so the icon centres in a full-width row
+ * (this also catches the anchor items, which `.sidebar.collapsed button`
+ * above does not). The inset accent bar on `.selected` stays visible. */
+
+  .sidebar.collapsed .top-nav .top-nav-item {
+    flex: none;
+    width: 100%;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  /* The rail keeps the brand, but only the mark of it: the wordmark steps
+   aside with every other label, and the 56px rail (40px inside its padding)
+   has no room for a 21px mark beside a 28px toggle, so the two stack. The
+   version tooltip stays on the brand, so hovering the mark still reports it.
+   `flex: none` undoes `.sidebar-top .sidebar-brand`'s `flex: 1`, which in a
+   column would stretch the brand down the rail instead of across it. */
+
+  .sidebar.collapsed .sidebar-top {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .sidebar.collapsed .sidebar-brand {
+    flex: none;
+    padding: 2px 0 var(--space-2);
+  }
+
+  /* A List with no color or emoji still needs something to click. */
+
+  .list-initial {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+
+  @media (hover: none), (pointer: coarse) {
+    button.folder-disclosure {
+      width: var(--tap-target);
+      height: var(--tap-target);
+    }
+
+    .sidebar button,
+    .sidebar a {
+      min-height: var(--tap-target);
+    }
+
+    .sidebar .top-nav-item {
+      height: var(--tap-target);
+    }
+  }
+
+  /* `.sidebar button` (specificity 0,1,1) otherwise beats a bare
+   `.drawer-close` (0,1,0) and forces it visible at every width — same
+   trap `.sidebar .sidebar-collapse` above already sidesteps. */
+
+  .sidebar .drawer-close {
+    display: none; /* desktop has no drawer to close (issue #170) */
+  }
+
+  /* IconButton wraps the close control in a span (#270) — the button's own
+ * display:none can't hide its wrapper, so the wrapper hides too. */
+
+  .sidebar-top > .icon-button-wrap:has(> .drawer-close) {
+    display: none;
+  }
+
+  @media (max-width: 720px) {
+    /* Off-canvas: full width of the sidebar, whatever the collapsed choice —
+     a phone drawer has the room for labels. */
+    .sidebar,
+    .sidebar.collapsed {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: calc(var(--z-modal) - 1);
+      width: var(--sidebar-width);
+      padding: 14px 10px;
+      align-items: stretch;
+      transform: translateX(-100%);
+      transition: transform var(--duration-base) var(--ease-out);
+    }
+
+    .app.drawer-open .sidebar {
+      transform: translateX(0);
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Inside the drawer the rail rules are off: it is the full sidebar. Each
+     element is restored to the display it has when expanded — `revert` would
+     drop them to the UA default and break the flex rows. */
+    .sidebar.collapsed .nav-label {
+      display: inline;
+    }
+
+    .sidebar.collapsed .nav-count {
+      display: inline;
+    }
+
+    /* The drawer shows the whole lockup, not the rail's lone mark: the
+     wordmark comes back, the brand row un-stacks, and the brand takes its
+     expanded flex and padding again. `block` would not do for
+     `.sidebar-brand-name` alone — it must be a flex item beside the mark for
+     its ellipsis to work at a squeezed width. */
+    .sidebar.collapsed .sidebar-top {
+      flex-direction: row;
+    }
+
+    .sidebar.collapsed .sidebar-brand {
+      display: flex;
+      flex: 1;
+      padding: 2px 10px var(--space-3);
+    }
+
+    .sidebar.collapsed .sidebar-brand-name {
+      display: block;
+    }
+
+    .sidebar.collapsed .lists-nav h2,
+    .sidebar.collapsed .tags-nav h2,
+    .sidebar.collapsed .archived h2 {
+      display: block;
+    }
+
+    .sidebar.collapsed .focus-nav-badge {
+      display: flex;
+    }
+
+    .sidebar.collapsed .row-actions,
+    .sidebar.collapsed .folder-row {
+      display: flex;
+    }
+
+    .sidebar.collapsed button {
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 0 10px;
+    }
+
+    /* The drawer is the full sidebar, not the rail — the feature nav is the
+   * vertical labelled list again (issue #194), not the icon rail. */
+    .sidebar.collapsed .top-nav {
+      flex-direction: column;
+    }
+
+    .sidebar.collapsed .top-nav .top-nav-item {
+      flex: none;
+      width: 100%;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 0 10px;
+    }
+
+    /* The drawer is the full sidebar: Tags are the wrapped chip cloud again,
+   * not the rail's stacked glyphs (issue #194). */
+    .sidebar.collapsed .tags-nav .tag-cloud {
+      flex-direction: row;
+      flex-wrap: wrap;
+      padding: 0 6px;
+    }
+
+    .sidebar.collapsed .tags-nav .tag-chip .list-button {
+      width: auto;
+      justify-content: flex-start;
+      border: 1px solid var(--border-default);
+      padding: 3px 10px;
+    }
+
+    .sidebar.collapsed .tags-nav .tag-chip .list-button.selected {
+      border-color: var(--text-accent);
+    }
+
+    .sidebar .sidebar-collapse {
+      display: none; /* the header's drawer toggle owns this on mobile */
+    }
+
+    /* The drawer's own close control (issue #170) — sits beside the wordmark,
+     opposite the collapse toggle it replaces at this width. Scoped as
+     `.sidebar .drawer-close`, matching `.sidebar .sidebar-collapse` above,
+     so its own width/flex still beat `.sidebar button`'s `width: 100%`.
+     IconButton wraps the button in a span (#270) — the wrapper is the
+     row's flex item now, so it carries the auto margin pinning the
+     control to the row's far end. */
+    .sidebar-top > .icon-button-wrap:has(> .drawer-close) {
+      margin-left: auto;
+    }
+    .sidebar .drawer-close {
+      display: inline-flex;
+      flex: none;
+      align-items: center;
+      justify-content: center;
+      width: var(--tap-target);
+      height: var(--tap-target);
+      padding: 0;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-secondary);
+    }
+
+    /* IconButton wraps the close control in a span (#270) — the mobile rule
+   * above shows the button again, so the wrapper shows with it. */
+    .sidebar-top > .icon-button-wrap:has(> .drawer-close) {
+      display: inline-flex;
+      flex: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sidebar .drawer-close:hover {
+      background: var(--surface-hover);
+    }
+  }
+}

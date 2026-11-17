@@ -39,8 +39,20 @@ describe("stylesheet layers", () => {
     expect(css).toContain('@import "./base.css" layer(base);');
   });
 
-  it("has at least one per-component stylesheet as the pattern to copy", () => {
-    expect(componentSheets.length).toBeGreaterThan(0);
+  it("has owning stylesheets for Tasks, sidebar and Quick-Add (#436)", () => {
+    expect(componentSheets).toEqual(
+      expect.arrayContaining([
+        "TaskRow.css",
+        "TaskListView.css",
+        "TaskDetail.css",
+        "KanbanView.css",
+        "Sidebar.css",
+        "CommandPalette.css",
+        "QuickAdd.css",
+        "TokenInput.css",
+        "QuickAddDialog.css",
+      ]),
+    );
   });
 
   it.each(componentSheets)("%s is layered and imported by its component", (sheet) => {

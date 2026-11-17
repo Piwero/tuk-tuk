@@ -1,3 +1,4 @@
+import { readStylesheets } from "./test/stylesheets";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -24,7 +25,7 @@ import { describe, expect, it } from "vitest";
  * touch-capable laptop/tablet reporting `pointer: fine` gets the same floor
  * per the ticket's scope note. */
 
-const css: string = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+const css: string = readStylesheets();
 const tokensCss: string = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
 
 const TAP_TARGET = 44;

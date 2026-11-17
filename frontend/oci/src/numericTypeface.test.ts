@@ -1,18 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import process from "node:process";
+import { readStylesheets } from "./test/stylesheets";
 
 /** Numeric metadata is set in the body face with tabular figures; monospace
  * is kept only for things the user types: Quick-Add sigil hints, keyboard
  * shortcut caps and code in Markdown (issue #432). jsdom applies no
  * stylesheet, so the claim is checked against the CSS source. */
 
-const css = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8").replace(
-  /\/\*[\s\S]*?\*\//g,
-  "",
-);
+const css = readStylesheets().replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Innermost `selector { body }` rules; media-query wrappers fall away. */
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector = "", body = ""]) => ({
