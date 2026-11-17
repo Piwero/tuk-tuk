@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { pinCalendarClock } from "./test/calendar";
-import { fakeList, INBOX, installFakeApi } from "./test/fakeApi";
+import { fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 
 pinCalendarClock();
 
@@ -51,13 +51,13 @@ describe("Direct load of a static view's URL", () => {
     expect(window.location.pathname).toBe("/assistant");
   });
 
-  it("falls back from /assistant to All when the Assistant is unconfigured", async () => {
+  it("falls back from /assistant to Today when the Assistant is unconfigured", async () => {
     installFakeApi({ assistantAvailable: false });
     window.history.replaceState(null, "", "/assistant");
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "All" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 
   it("opens Focus directly at /focus, with no task pre-selected", async () => {
@@ -150,14 +150,41 @@ describe("Direct load of a static view's URL", () => {
     expect(window.location.pathname).toBe("/search");
   });
 
-  it("redirects an unrecognized path to / and falls back to All", async () => {
+  it("redirects an unrecognized path to / and falls back to Today", async () => {
     installFakeApi({ tasks: [] });
     window.history.replaceState(null, "", "/foobar");
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "All" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/all");
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/today");
+  });
+
+  it("opens Today at the bare root URL and marks it current in navigation", async () => {
+    const api = installFakeApi({
+      tasks: [
+        fakeTask("Due today", { due_date: "2026-07-03T00:00:00Z", is_all_day: true }),
+        fakeTask("Someday"),
+      ],
+    });
+    window.history.replaceState(null, "", "/");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Open details for Due today" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open details for Someday" })).toBeNull();
+    const smart = screen.getByRole("navigation", { name: "Smart Lists" });
+    expect(within(smart).getByRole("button", { name: "Today" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(smart).getByRole("button", { name: "All" })).not.toHaveAttribute("aria-current");
+    const urls = api.requests.filter((r) => r.method === "GET").map((r) => r.url);
+    expect(urls).toContain("/api/v1/tasks?view=today&today=2026-07-03");
+    expect(urls.some((url) => url.startsWith("/api/v1/tasks?view=all"))).toBe(false);
   });
 
   it("opens Today directly at /today", async () => {
@@ -180,14 +207,25 @@ describe("Direct load of a static view's URL", () => {
     expect(window.location.pathname).toBe("/next-7-days");
   });
 
-  it("opens All directly at /all, and / opens All by default", async () => {
-    installFakeApi();
+  it("opens All directly at /all", async () => {
+    const api = installFakeApi({ tasks: [fakeTask("Someday")] });
     window.history.replaceState(null, "", "/all");
 
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "All" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Open details for Someday" }),
+    ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/all");
+    expect(
+      within(screen.getByRole("navigation", { name: "Smart Lists" })).getByRole("button", {
+        name: "All",
+      }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      api.requests.some((r) => r.method === "GET" && r.url.startsWith("/api/v1/tasks?view=all")),
+    ).toBe(true);
   });
 });
 
