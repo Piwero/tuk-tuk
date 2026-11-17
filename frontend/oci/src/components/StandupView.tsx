@@ -21,6 +21,7 @@ import {
 } from "../api";
 import { localDayOf, browserTimeZone, shortDayLabel, weekdayRecordLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
+import { useLongPressReveal } from "../longPressReveal";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { IconButton } from "./IconButton";
 import { Icon, type IconName } from "./Icon";
@@ -319,37 +320,14 @@ export function StandupView(): JSX.Element {
                   </form>
                 </li>
               ) : (
-                <li
+                <BulletRow
                   key={bullet.id}
-                  className="standup-bullet"
-                  draggable
-                  onDragStart={(event) =>
-                    startDrag(event, { kind: "standup-bullet", id: bullet.id })
-                  }
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const payload = readDragPayload(event);
-                    if (payload?.kind === "standup-bullet") {
-                      void moveBulletBefore(payload.id, bullet);
-                    }
-                  }}
-                >
-                  <span className="standup-bullet-text">{bullet.text}</span>
-                  <div className="standup-bullet-actions">
-                    <IconButton
-                      icon="pencil"
-                      label={`Edit ${label} bullet`}
-                      onClick={() => setBulletEditor({ id: bullet.id, text: bullet.text })}
-                    />
-                    <IconButton
-                      icon="x"
-                      label={`Delete ${label} bullet`}
-                      onClick={() => void removeBullet(bullet)}
-                    />
-                  </div>
-                </li>
+                  bullet={bullet}
+                  label={label}
+                  onMoveBefore={(id) => void moveBulletBefore(id, bullet)}
+                  onEdit={() => setBulletEditor({ id: bullet.id, text: bullet.text })}
+                  onDelete={() => void removeBullet(bullet)}
+                />
               ),
             )
           )}
@@ -503,5 +481,51 @@ export function StandupView(): JSX.Element {
         {SECTIONS.map(({ key, label, icon }) => renderSection(key, label, icon))}
       </div>
     </div>
+  );
+}
+
+/** A Stand-up bullet at rest (#429): its text spans the whole column while
+ * Edit/Delete overlay the trailing edge on hover, keyboard focus or a touch
+ * long-press (the same gesture Task rows and Goal cards use). */
+function BulletRow({
+  bullet,
+  label,
+  onMoveBefore,
+  onEdit,
+  onDelete,
+}: {
+  bullet: StandupBullet;
+  label: string;
+  onMoveBefore: (draggedId: number) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}): JSX.Element {
+  const reveal = useLongPressReveal();
+
+  return (
+    <li
+      className="standup-bullet"
+      draggable
+      data-actions-open={reveal.dataActionsOpen}
+      onTouchStart={reveal.onTouchStart}
+      onTouchEnd={reveal.onTouchEnd}
+      onTouchMove={reveal.onTouchMove}
+      onTouchCancel={reveal.onTouchCancel}
+      onClick={reveal.onClick}
+      onDragStart={(event) => startDrag(event, { kind: "standup-bullet", id: bullet.id })}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const payload = readDragPayload(event);
+        if (payload?.kind === "standup-bullet") onMoveBefore(payload.id);
+      }}
+    >
+      <span className="standup-bullet-text">{bullet.text}</span>
+      <div className="standup-bullet-actions">
+        <IconButton icon="pencil" label={`Edit ${label} bullet`} onClick={onEdit} />
+        <IconButton icon="x" label={`Delete ${label} bullet`} onClick={onDelete} />
+      </div>
+    </li>
   );
 }
