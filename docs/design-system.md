@@ -11,12 +11,13 @@ and color reserved for meaning. Long working sessions should feel restful.
 
 ## Where things live
 
-| File | Purpose |
-| --- | --- |
-| `frontend/src/tokens.css` | All design tokens (colors, type scale, spacing, radii, elevation, motion) |
-| `frontend/src/index.css` | Component styles, written entirely against the tokens |
-| `frontend/src/components/Icon.tsx` | The Lucide icon subset — the single swap point for the icon set |
-| `frontend/index.html` | Webfont loading (Google Fonts) and the app title |
+| File                               | Purpose                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| `frontend/src/tokens.css`          | All design tokens (colors, type scale, spacing, radii, elevation, motion) |
+| `frontend/src/index.css`           | Component styles, written entirely against the tokens                     |
+| `frontend/src/components/Icon.tsx` | The Lucide icon subset — the single swap point for the icon set           |
+| `frontend/src/fonts.css`           | Self-hosted webfont `@font-face` rules; files in `frontend/src/fonts/`    |
+| `frontend/index.html`              | The app title and icons                                                   |
 
 Never hard-code a color, size, or shadow in component styles — use the
 `--*` custom properties from `tokens.css`. If a value you need is missing,
@@ -60,20 +61,20 @@ add a token first.
     clock (inside a static progress dial), the linked Task and the
     pause/finish/cancel decisions sit together in one bordered `.focus-stage`
     card, centred in a single column; presets and statistics sit in a quiet
-    `--surface-sunken` card *below* it, and step aside while a session runs.
+    `--surface-sunken` card _below_ it, and step aside while a session runs.
     The stage is one column, not a stage plus a side rail: a rail pulled the
     clock off the screen's optical centre and squeezed the stage's own
     controls into a narrower column than they needed.
     The dial's box is reserved even while idle, so pressing Start changes
-    what the ring *says*, never where anything sits — the idle ring is
+    what the ring _says_, never where anything sits — the idle ring is
     `--border-subtle` (a frame), a running one is plum, and a paused one
     drops to `--text-tertiary` along with the clock.
     A `.focus-phase` caps label above the clock names which of the five
     states the stage is in (Pomo / Stopwatch / Focusing / Paused / On a
     break / Break up next): the dial alone cannot say "paused", and without
     it idle and running read as the same screen.
-    In the action row, *filled plum is reserved for the one action that
-    commits* — Start, Finish, Start break; Pause/Resume/Skip are outlines,
+    In the action row, _filled plum is reserved for the one action that
+    commits_ — Start, Finish, Start break; Pause/Resume/Skip are outlines,
     so the row never shows two equal plum buttons meaning different things.
     Cancel is quieter still: borderless, on its own line below the row, with
     "Records nothing" beside it as an `aria-describedby` sibling — the
@@ -112,15 +113,16 @@ Two rules carry across the inversion unchanged:
 - **Overdue** stays the only red on a task row.
 
 One ramp deliberately inverts: the **Habit heat ramp** (`--heat-0…4`). On a
-dark ground "more" reads as *brighter*, so the ramp climbs from a dim empty
+dark ground "more" reads as _brighter_, so the ramp climbs from a dim empty
 cell to a bright green rather than darkening. No other ramp changes meaning.
 
 ## Typography
 
-Three faces, loaded from Google Fonts in `index.html`:
+Three faces, bundled with the frontend (`src/fonts.css`, variable woff2 split by
+unicode-range) and served by the instance itself — no third-party font host:
 
-| Face | Token | Used for |
-| --- | --- | --- |
+| Face                | Token            | Used for                                                           |
+| ------------------- | ---------------- | ------------------------------------------------------------------ |
 | Bricolage Grotesque | `--font-display` | Screen titles (26px), big numbers (focus clock 56px), the wordmark |
 | Instrument Sans | `--font-body` | All UI text; 14px default. Dates, counts, durations, Streaks and Scores add `font-variant-numeric: tabular-nums` so digits align |
 | JetBrains Mono | `--font-mono` | Only things you type: Quick-Add sigil hints, keyboard shortcut caps, code in Markdown |
@@ -159,14 +161,14 @@ full-bleed `--blue-600` (`#4772fa`) tile with a white mark, centred by
 `transform="translate(24 24) scale(S) translate(-23.75 -24)"` inside a
 `viewBox="0 0 48 48"`:
 
-| Asset | Size | `S` | Mark width |
-| --- | --- | --- | --- |
-| `icons/icon-512.png` | 512 | `0.807` | ~58% |
-| `icons/icon-192.png` | 192 | `0.807` | ~58% |
-| `icons/apple-touch-icon.png` | 180 | `0.807` | ~58% |
-| `icons/favicon-32x32.png` | 32 | `1.0` | ~72% |
-| `icons/favicon-16x16.png` | 16 | `1.0` | ~72% |
-| `favicon.ico` | 16 + 32 + 48 | `1.0` | ~72% |
+| Asset                        | Size         | `S`     | Mark width |
+| ---------------------------- | ------------ | ------- | ---------- |
+| `icons/icon-512.png`         | 512          | `0.807` | ~58%       |
+| `icons/icon-192.png`         | 192          | `0.807` | ~58%       |
+| `icons/apple-touch-icon.png` | 180          | `0.807` | ~58%       |
+| `icons/favicon-32x32.png`    | 32           | `1.0`   | ~72%       |
+| `icons/favicon-16x16.png`    | 16           | `1.0`   | ~72%       |
+| `favicon.ico`                | 16 + 32 + 48 | `1.0`   | ~72%       |
 
 App icons sit back from the edge at 58%; favicons keep the natural 72%,
 which is the extra mass 16px needs to stay readable. Render each tile at
@@ -194,10 +196,10 @@ cannot reach, and the rail needs something to hide that isn't the mark.
 - Layout constants: sidebar `--sidebar-width` 248px, detail panel
   `--detail-width` 360px, content column `--content-max` 720px, rows
   `--row-height` 40px, controls `--control-height` 34px.
-- **What the reading measure applies to.** `--content-max` is a *prose*
+- **What the reading measure applies to.** `--content-max` is a _prose_
   measure: it keeps running text at a comfortable line length. Settings,
   Stand-up, Habits and Focus opt into it. The task list, Search results and
-  the Kanban board do *not* — they are dense, columnar surfaces that read
+  the Kanban board do _not_ — they are dense, columnar surfaces that read
   better edge to edge, so they fill the full width of the content area at
   any window width (issue #196), and the task list's own chrome (the title
   bar, the QuickAdd bar, the view controls) fills with them. Calendar was
@@ -210,7 +212,7 @@ cannot reach, and the rail needs something to hide that isn't the mark.
   tags, `--task-col-list` 104px, `--task-col-date` 88px, and
   `--task-col-actions` 68px. Every cell renders whether or not it has
   content, so the columns line up down the list and the title is the only
-  thing that truncates. The actions track is *reserved*, so hovering a row
+  thing that truncates. The actions track is _reserved_, so hovering a row
   never shuffles its own metadata sideways.
   The switch is a **container query** on `.tasks` (`tasklist`, min-width
   620px), not a media query: below that the row falls back to the wrapped

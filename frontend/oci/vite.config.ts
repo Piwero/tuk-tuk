@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  // Never inline fonts as data: URIs; the CSP is `font-src 'self'`.
+  build: { assetsInlineLimit: (file) => (file.endsWith(".woff2") ? false : undefined) },
   server: {
     port: 5900,
     host: true,

@@ -10,12 +10,12 @@ data:
         root /usr/share/nginx/html;
         index index.html;
 
-        # Same-origin default; Google Fonts (styles + fonts) by name; same-origin
-        # API via the proxy below. The Google Calendar OAuth flow is a top-level
+        # Same-origin default, fonts included (self-hosted); same-origin API via
+        # the proxy below. The Google Calendar OAuth flow is a top-level
         # navigation to accounts.google.com, not a frame or fetch, so CSP doesn't
         # need (and can't usefully) name it here. LiveKit Cloud needs HTTPS and WSS
         # for voice session validation and signalling.
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -24,6 +24,13 @@ data:
             proxy_pass http://backend:8900/api/;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
+        }
+
+        # Vite fingerprints bundled fonts, so a year-long cache is safe. `expires`
+        # (not add_header) keeps the server-level security headers inherited.
+        location ~* \.woff2$ {
+            try_files $uri =404;
+            expires 1y;
         }
 
         location / {
