@@ -26,7 +26,7 @@ import { HINT_REGISTRY } from "../hintRegistry";
 import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { folderOpenCount, openCountLabel } from "../openCounts";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
-import { pathForStaticView } from "../routes";
+import { pathForContainer, pathForStaticView } from "../routes";
 import { useHoverHint } from "../useHoverHint";
 import { APP_VERSION } from "../version";
 import { CreateMenu } from "./CreateMenu";
@@ -194,8 +194,9 @@ function ListButton({
   const describedBy = joinIds(openCount > 0 && countId, list.is_inbox && open && inboxHintId);
   return (
     <span className="icon-button-wrap">
-      <button
-        type="button"
+      <a
+        href={pathForContainer({ kind: "list", id: list.id, mode: list.view_mode })}
+        aria-current={selected ? "page" : undefined}
         className={selected ? "list-button selected" : "list-button"}
         // Only on the rail: expanded, the name comes from the label itself —
         // emoji included, which is the name the rest of the app expects.
@@ -204,7 +205,7 @@ function ListButton({
         // Always set, not just when collapsed — expanded names can still be
         // truncated by ellipsis, and the native tooltip is the fallback.
         title={list.name}
-        onClick={() => onSelect(list.id)}
+        onClick={(event) => handleNavAnchorClick(event, () => onSelect(list.id))}
         {...handlers}
       >
         {list.is_inbox ? (
@@ -224,7 +225,7 @@ function ListButton({
             {openCount}
           </span>
         )}
-      </button>
+      </a>
       {openCount > 0 && (
         <span id={countId} className="visually-hidden">
           {openCountLabel(openCount)}
@@ -317,16 +318,17 @@ function FolderNameButton({
   const { open, handlers } = useHoverHint();
   return (
     <span className="icon-button-wrap">
-      <button
-        type="button"
+      <a
+        href={pathForContainer({ kind: "folder", id: folder.id })}
+        aria-current={selected ? "page" : undefined}
         className={selected ? "folder-name selected" : "folder-name"}
         aria-describedby={openCount > 0 ? `folder-open-count-${folder.id}` : undefined}
         title={folder.name}
-        onClick={() => onSelect(folder.id)}
+        onClick={(event) => handleNavAnchorClick(event, () => onSelect(folder.id))}
         {...handlers}
       >
         {folder.name}
-      </button>
+      </a>
       {collapsed && open && (
         <span role="tooltip" className="icon-button-hint">
           {folder.name}
@@ -350,12 +352,13 @@ function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): JSX.
   const { open, handlers } = useHoverHint();
   return (
     <span className="icon-button-wrap">
-      <button
-        type="button"
+      <a
+        href={pathForContainer({ kind: "tag", id: tag.id })}
+        aria-current={selected ? "page" : undefined}
         className={selected ? "list-button selected" : "list-button"}
         aria-label={tag.name}
         title={tag.name}
-        onClick={() => onSelect(tag.id)}
+        onClick={(event) => handleNavAnchorClick(event, () => onSelect(tag.id))}
         {...handlers}
       >
         {tag.color !== null ? (
@@ -364,7 +367,7 @@ function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): JSX.
           collapsed && <span className="list-initial">{tag.name.slice(0, 1)}</span>
         )}
         <span className="nav-label">{tag.name}</span>
-      </button>
+      </a>
       {collapsed && open && (
         <span role="tooltip" className="icon-button-hint">
           {tag.name}
@@ -386,7 +389,8 @@ function handleNavAnchorClick(
     event.button !== 0 ||
     event.metaKey ||
     event.ctrlKey ||
-    event.shiftKey
+    event.shiftKey ||
+    event.altKey
   ) {
     return;
   }
@@ -1223,7 +1227,7 @@ export function Sidebar({
           ) : (
             <button
               type="button"
-              className="sidebar-add"
+              className="sidebar-add btn-quiet"
               aria-label="Add Tag"
               title="Add Tag"
               onClick={() => setEditor({ mode: "create-tag" })}
@@ -1277,7 +1281,7 @@ export function Sidebar({
       <div className="sidebar-footer">
         <button
           type="button"
-          className="sidebar-theme-toggle"
+          className="sidebar-theme-toggle btn-quiet"
           aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           aria-pressed={resolvedTheme === "dark"}
@@ -1299,7 +1303,7 @@ export function Sidebar({
         {onLogout !== undefined && (
           <button
             type="button"
-            className="sidebar-logout"
+            className="sidebar-logout btn-quiet"
             aria-label="Log out"
             title="Log out"
             onClick={onLogout}

@@ -32,7 +32,7 @@ describe("Collapsing the sidebar", () => {
 
     // The rail keeps every destination reachable, by icon alone.
     expect(within(sidebar).queryByRole("search")).not.toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Errands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Errands" })).toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Quick add" })).toBeInTheDocument();
 
     await user.click(within(sidebar).getByRole("button", { name: "Expand sidebar" }));
@@ -54,10 +54,10 @@ describe("Collapsing the sidebar", () => {
     const sidebar = screen.getByRole("complementary");
     await user.click(within(sidebar).getByRole("button", { name: "Collapse sidebar" }));
 
-    expect(within(sidebar).getByRole("button", { name: "Errands" })).toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Reports" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Errands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Reports" })).toBeInTheDocument();
     expect(within(sidebar).getByTitle("Work")).toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Urgent" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Urgent" })).toBeInTheDocument();
   });
 
   // #264: `title` alone only ever reveals on mouse hover — a keyboard user
@@ -124,7 +124,7 @@ describe("Collapsing the sidebar", () => {
 
     // Picking a destination gets the drawer out of the way.
     const sidebar = screen.getByRole("complementary");
-    await user.click(within(sidebar).getByRole("button", { name: "Errands" }));
+    await user.click(within(sidebar).getByRole("link", { name: "Errands" }));
 
     expect(await screen.findByRole("heading", { name: "Errands" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(

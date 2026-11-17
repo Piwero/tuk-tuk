@@ -15,7 +15,7 @@ describe("Quick-Add prose date hint (issue #259)", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "dentist tuesday 3pm remind me the day before{Enter}");
@@ -29,7 +29,7 @@ describe("Quick-Add prose date hint (issue #259)", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "call the dentist tomorrow{Enter}");
@@ -42,7 +42,7 @@ describe("Quick-Add prose date hint (issue #259)", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "buy milk #errand{Enter}");
@@ -56,7 +56,7 @@ describe("Quick-Add prose date hint (issue #259)", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "buy milk{Enter}");
@@ -71,7 +71,7 @@ describe("Quick-Add prose date hint (issue #259)", () => {
     installFakeApi();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "dentist @tomorrow{Enter}");

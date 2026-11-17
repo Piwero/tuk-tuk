@@ -49,8 +49,10 @@ export function TagForm({ initial, onSubmit, onCancel }: TagFormProps): JSX.Elem
         <input type="color" value={color} onChange={(event) => setColor(event.target.value)} />
       </label>
       {error !== null && <p role="alert">{error}</p>}
-      <button type="submit">Save</button>
-      <button type="button" onClick={onCancel}>
+      <button className="btn-primary" type="submit">
+        Save
+      </button>
+      <button className="btn-quiet" type="button" onClick={onCancel}>
         Cancel
       </button>
     </form>

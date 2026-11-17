@@ -20,14 +20,14 @@ describe("Tags in the sidebar", () => {
     render(<App />);
 
     const nav = await screen.findByRole("navigation", { name: "Tags" });
-    expect(within(nav).getByRole("button", { name: "work" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "work" })).toBeInTheDocument();
 
     await user.click(within(nav).getByRole("button", { name: "Add Tag" }));
     await user.type(screen.getByLabelText("Tag name"), "errand");
     fireEvent.change(screen.getByLabelText("Tag color"), { target: { value: "#00c853" } });
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await within(nav).findByRole("button", { name: "errand" })).toBeInTheDocument();
+    expect(await within(nav).findByRole("link", { name: "errand" })).toBeInTheDocument();
     const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tags");
     expect(post?.body).toEqual({ name: "errand", color: "#00c853" });
   });
@@ -45,7 +45,7 @@ describe("Tags in the sidebar", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent('A tag named "work" already exists');
     expect(screen.getByLabelText("Tag name")).toBeInTheDocument(); // form stays open
-    expect(within(nav).getAllByRole("button", { name: "work" })).toHaveLength(1);
+    expect(within(nav).getAllByRole("link", { name: "work" })).toHaveLength(1);
   });
 
   it("clicking a Tag shows its tasks from every List", async () => {
@@ -64,7 +64,7 @@ describe("Tags in the sidebar", () => {
     await screen.findByText("Water plants");
 
     const tagsNav = screen.getByRole("navigation", { name: "Tags" });
-    await user.click(within(tagsNav).getByRole("button", { name: "work" }));
+    await user.click(within(tagsNav).getByRole("link", { name: "work" }));
 
     expect(await screen.findByRole("heading", { name: "#work" })).toBeInTheDocument();
     expect(screen.getByText("Email boss")).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe("Tags on a task", () => {
     render(<App />);
 
     const tagsNav = await screen.findByRole("navigation", { name: "Tags" });
-    await user.click(within(tagsNav).getByRole("button", { name: "work" }));
+    await user.click(within(tagsNav).getByRole("link", { name: "work" }));
     await screen.findByRole("heading", { name: "#work" });
     await user.click(screen.getByRole("button", { name: "Open details for Write report" }));
     const panel = await screen.findByRole("complementary", { name: "Task details" });
@@ -147,7 +147,7 @@ describe("Tags on a task", () => {
     await user.type(input, "work");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await within(tagsNav).findByRole("button", { name: "work" })).toBeInTheDocument();
+    expect(await within(tagsNav).findByRole("link", { name: "work" })).toBeInTheDocument();
     const row = screen.getByRole("button", { name: "Open details for Write report" }).closest("li");
     if (!(row instanceof HTMLElement)) {
       throw new Error("task row not found");

@@ -452,16 +452,28 @@ export function QuickAddDialog({
       <fieldset className="quick-add-dates">
         <legend>Date</legend>
         <div className="date-actions">
-          <button type="button" onClick={() => pickDay(localDayOf(new Date()))}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => pickDay(localDayOf(new Date()))}
+          >
             Today
           </button>
-          <button type="button" onClick={() => pickDay(addDays(localDayOf(new Date()), 1))}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => pickDay(addDays(localDayOf(new Date()), 1))}
+          >
             Tomorrow
           </button>
-          <button type="button" onClick={() => pickDay(nextMonday(localDayOf(new Date())))}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => pickDay(nextMonday(localDayOf(new Date())))}
+          >
             Next Week
           </button>
-          <button type="button" onClick={() => changeDate(emptyDraft())}>
+          <button className="btn-secondary" type="button" onClick={() => changeDate(emptyDraft())}>
             Clear date
           </button>
         </div>
@@ -517,10 +529,12 @@ export function QuickAddDialog({
         </label>
       </fieldset>
       <div className="quick-add-dialog-actions">
-        <button type="button" onClick={onClose}>
+        <button className="btn-quiet" type="button" onClick={onClose}>
           Cancel
         </button>
-        <button type="submit">Add task</button>
+        <button className="btn-primary" type="submit">
+          Add task
+        </button>
       </div>
     </form>
   );

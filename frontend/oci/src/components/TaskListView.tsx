@@ -520,7 +520,9 @@ export function TaskListView({
               Due date
               <input type="date" name="day" aria-label="Due date" required />
             </label>
-            <button type="submit">Reschedule</button>
+            <button className="btn-primary" type="submit">
+              Reschedule
+            </button>
           </form>
         </Modal>
       )}
@@ -551,7 +553,9 @@ export function TaskListView({
                   ))}
               </select>
             </label>
-            <button type="submit">Move</button>
+            <button className="btn-primary" type="submit">
+              Move
+            </button>
           </form>
         </Modal>
       )}
@@ -580,7 +584,9 @@ export function TaskListView({
                 ))}
               </select>
             </label>
-            <button type="submit">Add Tag</button>
+            <button className="btn-primary" type="submit">
+              Add Tag
+            </button>
           </form>
         </Modal>
       )}

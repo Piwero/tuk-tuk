@@ -31,7 +31,7 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -72,7 +72,7 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -105,7 +105,7 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -125,7 +125,7 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
     const api = installFakeApi({ assistAvailable: true });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "call mom{Enter}");
@@ -139,7 +139,7 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
     const api = installFakeApi({ assistAvailable: true, assistParseFails: true });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -155,7 +155,7 @@ describe("Assisted Capture (ADR 0005, issue #43)", () => {
     const api = installFakeApi({ assistAvailable: false });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "call mom{Enter}");
@@ -184,7 +184,7 @@ describe("Assisted Capture recurrence and reminders (issue #44)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -222,7 +222,7 @@ describe("Assisted Capture recurrence and reminders (issue #44)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -261,7 +261,7 @@ describe("Assisted Capture recurrence and reminders (issue #44)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -300,7 +300,7 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -341,7 +341,7 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "buy milk{Enter}");
@@ -373,7 +373,7 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -420,7 +420,7 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -456,7 +456,7 @@ describe("Assisted Capture list/tag/priority matching (issue #45)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -499,7 +499,7 @@ describe("Assisted Capture per-chip removal (issue #47)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -533,7 +533,7 @@ describe("Assisted Capture per-chip removal (issue #47)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -573,7 +573,7 @@ describe("Assisted Capture per-chip removal (issue #47)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -608,7 +608,7 @@ describe("Assisted Capture per-chip removal (issue #47)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -647,7 +647,7 @@ describe("Assisted Capture per-chip removal (issue #47)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -685,7 +685,7 @@ describe("Assisted Capture per-chip removal (issue #47)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");
@@ -741,7 +741,7 @@ describe("Assisted Capture per-chip removal (issue #47)", () => {
     });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await screen.findByLabelText("Assist available");

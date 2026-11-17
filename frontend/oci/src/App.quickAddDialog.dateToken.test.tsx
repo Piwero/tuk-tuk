@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 async function openDialog(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
-  await user.click(await screen.findByRole("button", { name: "Inbox" }));
+  await user.click(await screen.findByRole("link", { name: "Inbox" }));
   await user.click(screen.getByRole("button", { name: "Quick add" }));
   return screen.findByRole("dialog", { name: "Quick add" });
 }

@@ -120,6 +120,77 @@
   .key-results > button:active {
     background: var(--ink-100);
   }
+  button.btn-primary,
+  button.btn-secondary,
+  button.btn-quiet,
+  button.btn-focus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  button.btn-primary {
+    background: var(--accent);
+    color: var(--text-inverse);
+  }
+
+  button.btn-primary:where(:hover:not(:disabled)) {
+    background: var(--accent-hover);
+  }
+
+  button.btn-secondary {
+    border-color: var(--border-default);
+    background: var(--surface-card);
+    color: var(--text-primary);
+  }
+
+  button.btn-secondary:where(:hover:not(:disabled)) {
+    background: var(--ink-50);
+  }
+
+  button.btn-quiet {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  button.btn-quiet:where(:hover:not(:disabled)) {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  button.btn-focus {
+    background: var(--focus-accent);
+    color: var(--text-inverse);
+  }
+
+  button.btn-focus:where(:hover:not(:disabled)) {
+    background: var(--plum-700);
+  }
+
+  button.btn-primary:where(:disabled),
+  button.btn-secondary:where(:disabled),
+  button.btn-quiet:where(:disabled),
+  button.btn-focus:where(:disabled) {
+    opacity: 0.45;
+    cursor: default;
+  }
+  @media (max-width: 720px), (hover: none), (pointer: coarse) {
+    button.btn-primary,
+    button.btn-secondary,
+    button.btn-quiet,
+    button.btn-focus {
+      min-height: var(--tap-target);
+    }
+  }
   .key-result-actions button:disabled {
     opacity: 0.45;
     cursor: default;
@@ -336,6 +407,17 @@ main {
      panel) scrolls main alone, never the document. */
   min-height: 0;
   overflow-y: auto;
+  /* Pins the shortcut hint strip (issue #434): `.main-content` grows into
+     spare height, so under short content the strip sits at the viewport
+     foot; it never shrinks, so under long content the strip follows the
+     last row in flow and covers nothing. */
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1 0 auto;
+  min-width: 0;
 }
 
 /* The content column.
@@ -395,7 +477,7 @@ main {
   text-align: center;
 }
 
-@media (pointer: coarse) {
+@media (max-width: 720px), (pointer: coarse) {
   .shortcut-hints {
     display: none;
   }

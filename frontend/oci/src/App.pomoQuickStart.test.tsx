@@ -203,7 +203,7 @@ describe("Pomo quick-start menu", () => {
 
     // Back to the List view.
     const listsNav = await screen.findByRole("navigation", { name: "Lists" });
-    fireEvent.click(within(listsNav).getByRole("button", { name: "Inbox" }));
+    fireEvent.click(within(listsNav).getByRole("link", { name: "Inbox" }));
 
     const row = await screen.findByRole("button", { name: "Open details for Write report" });
     fireEvent.contextMenu(row.closest("li") as HTMLElement);
@@ -236,7 +236,7 @@ describe("Pomo quick-start menu", () => {
     await screen.findByRole("heading", { name: "Focus" });
 
     const listsNav = await screen.findByRole("navigation", { name: "Lists" });
-    fireEvent.click(within(listsNav).getByRole("button", { name: "Inbox" }));
+    fireEvent.click(within(listsNav).getByRole("link", { name: "Inbox" }));
 
     const row = await screen.findByRole("button", { name: "Open details for Write report" });
     fireEvent.contextMenu(row.closest("li") as HTMLElement);

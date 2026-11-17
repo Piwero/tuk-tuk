@@ -62,6 +62,23 @@ describe("content column (issue #196)", () => {
     expect(strip).not.toMatch(/max-width:\s*var\(--content-max\)/);
   });
 
+  it("pins the shortcut hint strip to the foot of main, after the content (issue #434)", () => {
+    // `main` is a flex column: the content wrapper grows into the spare
+    // height (never shrinks), so under short content the strip sits at the
+    // viewport foot; under long content it stays in flow after the last row
+    // and covers nothing.
+    const main = /(?:^|\n)main\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
+    expect(main).toMatch(/display:\s*flex/);
+    expect(main).toMatch(/flex-direction:\s*column/);
+    const content = /\.main-content\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
+    expect(content).toMatch(/flex:\s*1 0 auto/);
+    const strip = /\.shortcut-hints\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
+    expect(strip).not.toMatch(/position:\s*(fixed|sticky|absolute)/);
+    expect(css).toMatch(
+      /@media \(max-width: 720px\), \(pointer: coarse\)\s*\{\s*\.shortcut-hints\s*\{\s*display:\s*none/,
+    );
+  });
+
   it("never caps `.tasks`, so the aligned-row container query keys off the real width", () => {
     // The aligned single-line row is a container query on `.tasks` with a
     // 620px floor; the wrapped fallback still stands below that. Widening
