@@ -41,7 +41,7 @@ describe("global keyboard shortcut layer", () => {
 
     fireEvent.keyDown(document.body, { key: "/" });
 
-    expect(screen.getByRole("searchbox", { name: "Quick search" })).toHaveFocus();
+    expect(screen.getByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
   });
 
   it("does not fire while a text field has focus", async () => {
@@ -64,7 +64,7 @@ describe("global keyboard shortcut layer", () => {
     // A second shortcut while the dialog owns focus must be ignored.
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "/" });
 
-    expect(screen.getByRole("searchbox", { name: "Quick search" })).not.toHaveFocus();
+    expect(screen.getByRole("button", { name: "Quick search" })).not.toHaveFocus();
   });
 
   it("lists the registered shortcuts in the hint strip", async () => {

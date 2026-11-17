@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -24,7 +24,8 @@ describe("App shell layout", () => {
     installFakeApi();
     render(<App onLogout={() => {}} />);
 
-    const settingsLink = await screen.findByRole("link", { name: "Settings" });
+    const settingsLink = await screen.findByRole("button", { name: "App menu" });
+    fireEvent.click(settingsLink);
     const sidebar = settingsLink.closest(".sidebar");
     expect(sidebar).not.toBeNull();
     const scrollRegion = sidebar?.querySelector(".sidebar-scroll");

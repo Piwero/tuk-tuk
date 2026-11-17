@@ -271,7 +271,7 @@ describe("Direct load of a static view's URL", () => {
       await screen.findByRole("button", { name: "Open details for Due today" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open details for Someday" })).toBeNull();
-    const smart = screen.getByRole("navigation", { name: "Smart Lists" });
+    const smart = screen.getByRole("complementary", { name: "" });
     expect(within(smart).getByRole("button", { name: "Today" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -314,7 +314,7 @@ describe("Direct load of a static view's URL", () => {
     ).toBeInTheDocument();
     expect(window.location.pathname).toBe("/all");
     expect(
-      within(screen.getByRole("navigation", { name: "Smart Lists" })).getByRole("button", {
+      within(screen.getByRole("complementary", { name: "" })).getByRole("button", {
         name: "All",
       }),
     ).toHaveAttribute("aria-current", "page");
@@ -384,6 +384,7 @@ describe("History push/replace while navigating in the app", () => {
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Habits" }));
     await screen.findByRole("heading", { name: "Habits" });
+    await user.click(screen.getByRole("button", { name: "App menu" }));
     await user.click(screen.getByRole("link", { name: "Settings" }));
     await screen.findByRole("heading", { name: "Settings" });
 

@@ -14,6 +14,7 @@ afterEach(() => {
 async function openDatabaseSettings(): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
   render(<App />);
+  await user.click(screen.getByRole("button", { name: "App menu" }));
   await user.click(await screen.findByRole("link", { name: "Settings" }));
   await screen.findByRole("heading", { name: "Database" });
   return user;

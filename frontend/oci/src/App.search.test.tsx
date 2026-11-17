@@ -26,8 +26,8 @@ function tick(ms: number): void {
 async function openSearch(): Promise<HTMLElement> {
   const heading = screen.queryByRole("heading", { name: "Search" });
   if (heading === null) {
-    const nav = await screen.findByRole("navigation", { name: "Views" });
-    fireEvent.click(within(nav).getByRole("link", { name: "Search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Quick search" }));
+    fireEvent.click(await screen.findByRole("option", { name: /Search/ }));
     await screen.findByRole("heading", { name: "Search" });
   }
   return screen.findByRole("searchbox", { name: "Search tasks" });
@@ -321,35 +321,15 @@ describe("Search", () => {
     expect(screen.queryByText(/type to search/i)).not.toBeInTheDocument();
   });
 
-  it("highlights Search in the sidebar nav while on /search", async () => {
+  it("keeps Search reachable by URL without a redundant nav entry", async () => {
     installFakeApi();
+    window.history.replaceState(null, "", "/search");
     render(<App />);
-
-    const nav = await screen.findByRole("navigation", { name: "Views" });
-    fireEvent.click(within(nav).getByRole("link", { name: "Search" }));
-    await screen.findByRole("heading", { name: "Search" });
-
-    expect(within(nav).getByRole("link", { name: "Search" })).toHaveClass("selected");
-  });
-
-  it("keeps the sidebar's own field untouched while Search stays open, but clears it once you navigate away", async () => {
-    installFakeApi({ tasks: [fakeTask("Buy groceries")] });
-    render(<App />);
-
-    const sidebarBox = await screen.findByRole("searchbox", { name: "Quick search" });
-    fireEvent.change(sidebarBox, { target: { value: "groceries" } });
-    fireEvent.submit(sidebarBox);
-    await screen.findByRole("heading", { name: "Search" });
-
-    // Arriving at Search (even via this field's own submit) doesn't wipe it.
-    expect(screen.getByRole("searchbox", { name: "Quick search" })).toHaveValue("groceries");
-
-    const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
-    fireEvent.click(within(nav).getByRole("button", { name: "All" }));
-    await screen.findByRole("heading", { name: "All" });
-
-    // Search is no longer the active view — the field no longer implies
-    // it's filtering "All".
-    expect(screen.getByRole("searchbox", { name: "Quick search" })).toHaveValue("");
+    expect(await screen.findByRole("heading", { name: "Search" })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("navigation", { name: "Views" })).queryByRole("link", {
+        name: "Search",
+      }),
+    ).not.toBeInTheDocument();
   });
 });

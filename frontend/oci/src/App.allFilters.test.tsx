@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 async function openAll(): Promise<void> {
-  const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+  const nav = await screen.findByRole("complementary", { name: "" });
   fireEvent.click(await within(nav).findByRole("button", { name: "All" }));
   await screen.findByRole("heading", { name: "All" });
 }
@@ -63,7 +63,7 @@ describe("All view: filter and sort controls", () => {
     installFakeApi();
     render(<App />);
 
-    const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+    const nav = await screen.findByRole("complementary", { name: "" });
     for (const name of ["Today", "Next 7 Days"]) {
       fireEvent.click(await within(nav).findByRole("button", { name }));
       await screen.findByRole("heading", { name });
@@ -91,7 +91,7 @@ describe("All view: filter and sort controls", () => {
     });
     render(<App />);
 
-    const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+    const nav = await screen.findByRole("complementary", { name: "" });
     fireEvent.click(await within(nav).findByRole("button", { name: "Today" }));
     expect(
       await screen.findByRole("button", { name: "Open details for Due low" }),
