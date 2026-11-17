@@ -1,3 +1,4 @@
+import "./MobileTabBar.css";
 import { Icon, type IconName } from "./Icon";
 
 interface MobileTabBarProps {

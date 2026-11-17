@@ -1,0 +1,9 @@
+@layer components {
+  /* The brand mark (Logo.tsx). It paints with `currentColor`, so this one rule
+   is what makes it accent in both themes — every surface that shows it wants
+   the accent, so none of them restate the colour. */
+  .logo {
+    flex: none;
+    color: var(--accent);
+  }
+}

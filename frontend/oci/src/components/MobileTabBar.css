@@ -1,0 +1,39 @@
+@layer components {
+  /* Mobile-only bottom tab bar and Task detail sheet (issue #170): hidden on
+   desktop, where the sidebar's top nav and the grid-column detail panel
+   already cover this ground. */
+  .mobile-tab-bar {
+    display: none;
+  }
+  @media (max-width: 720px) {
+    .mobile-tab-bar {
+      display: flex;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: calc(var(--z-modal) - 4);
+      height: var(--mobile-tab-bar-height);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      background: var(--surface-raised);
+      border-top: 1px solid var(--border-default);
+    }
+
+    .mobile-tab-item {
+      display: flex;
+      flex: 1 1 0;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      border: none;
+      background: transparent;
+      font-size: var(--text-xs);
+      color: var(--text-secondary);
+    }
+
+    .mobile-tab-item.selected {
+      color: var(--text-accent);
+    }
+  }
+}

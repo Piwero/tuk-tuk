@@ -1,0 +1,20 @@
+@layer components {
+  /* Button reset only — typography (uppercase, tracking, weight) comes from
+ * the enclosing .group-header h2, same rule every other group label uses
+ * (e.g. Section headers), so a List name heading here matches them exactly
+ * rather than duplicating their declarations. */
+  .folder-view-list-link {
+    padding: 0;
+    height: auto;
+    width: auto;
+    border: none;
+    background: transparent;
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+  }
+  .folder-view-list-link:hover {
+    text-decoration: underline;
+  }
+}

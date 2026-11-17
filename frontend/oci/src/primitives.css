@@ -1,0 +1,375 @@
+@layer components {
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  input:not([type="checkbox"]):not([type="color"]),
+  select,
+  textarea {
+    height: var(--control-height);
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: var(--text-md);
+    color: var(--text-primary);
+    background: var(--surface-card);
+    transition:
+      border-color var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out);
+  }
+
+  input:not([type="checkbox"]):not([type="color"]):focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="number"] {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-sm);
+  }
+
+  textarea {
+    height: auto;
+    padding: 8px 10px;
+    line-height: var(--leading-normal);
+    resize: vertical;
+  }
+
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 28px;
+    background: var(--surface-card)
+      url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%23565e6a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>')
+      no-repeat right 10px center;
+    cursor: pointer;
+  }
+
+  form button,
+  fieldset button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  form button:hover,
+  fieldset button:hover {
+    background: var(--ink-50);
+  }
+
+  form button:active,
+  fieldset button:active {
+    background: var(--ink-100);
+  }
+
+  button.btn-primary,
+  button.btn-secondary,
+  button.btn-quiet,
+  button.btn-focus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  button.btn-primary {
+    background: var(--accent);
+    color: var(--text-inverse);
+  }
+
+  button.btn-primary:where(:hover:not(:disabled)) {
+    background: var(--accent-hover);
+  }
+
+  button.btn-secondary {
+    border-color: var(--border-default);
+    background: var(--surface-card);
+    color: var(--text-primary);
+  }
+
+  button.btn-secondary:where(:hover:not(:disabled)) {
+    background: var(--ink-50);
+  }
+
+  button.btn-quiet {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  button.btn-quiet:where(:hover:not(:disabled)) {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  button.btn-focus {
+    background: var(--focus-accent);
+    color: var(--text-inverse);
+  }
+
+  button.btn-focus:where(:hover:not(:disabled)) {
+    background: var(--plum-700);
+  }
+
+  button.btn-primary:where(:disabled),
+  button.btn-secondary:where(:disabled),
+  button.btn-quiet:where(:disabled),
+  button.btn-focus:where(:disabled) {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  @media (max-width: 720px), (hover: none), (pointer: coarse) {
+    button.btn-primary,
+    button.btn-secondary,
+    button.btn-quiet,
+    button.btn-focus {
+      min-height: var(--tap-target);
+    }
+  }
+
+  input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    /* Sized through a local property, not a literal, so the Calendar's dense
+     variant (.entry-check) only has to rebind --checkbox-size — it never
+     restates the border, radius or glyph, and this stays the one rule that
+     draws a checkbox. */
+    --checkbox-size: var(--checkbox-standard);
+    width: var(--checkbox-size);
+    height: var(--checkbox-size);
+    margin: 0;
+    padding: 0;
+    flex: none;
+    border: 2px solid var(--border-strong);
+    border-radius: 5px;
+    /* The tick glyph scales with the box rather than being a second literal. */
+    background: transparent no-repeat center / calc(var(--checkbox-size) - 8px);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out);
+  }
+
+  input[type="checkbox"]:checked {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>');
+  }
+
+  .color-dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: var(--radius-full);
+  }
+
+  .row-actions {
+    display: flex;
+    gap: 2px;
+    width: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  .row-actions:focus-within {
+    width: auto;
+    overflow: visible;
+    visibility: visible;
+  }
+
+  .row-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .row-actions button:hover {
+    background: var(--surface-hover);
+  }
+
+  .row-actions button.row-action-danger:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .completed {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+  }
+
+  .date-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-xs);
+    color: var(--text-accent);
+    white-space: nowrap;
+  }
+
+  .date-chip.overdue,
+  .date-label.overdue {
+    color: var(--text-danger);
+  }
+
+  .date-chip.today {
+    font-weight: var(--weight-medium);
+  }
+
+  li[data-overdue] .date-chip {
+    font-weight: var(--weight-semibold);
+  }
+
+  .date-chip .icon {
+    flex: none;
+  }
+
+  .tag-chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .list-chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: var(--text-secondary);
+    background: var(--surface-hover);
+    white-space: nowrap;
+  }
+
+  .icon-field {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-height);
+    height: var(--control-height);
+    padding: 0;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    color: var(--text-tertiary);
+    font-size: var(--text-lg);
+    line-height: 1;
+  }
+
+  .icon-field:hover {
+    border-color: var(--border-strong);
+  }
+
+  @media (hover: none), (pointer: coarse) {
+    .row-actions {
+      width: auto;
+      overflow: visible;
+      visibility: visible;
+    }
+    .row-actions button {
+      width: var(--tap-target);
+      height: var(--tap-target);
+    }
+  }
+
+  /* Filled accent link-button — used for the Google "Connect"/"Reconnect"
+   round trips, which are full-page navigations rather than form submits. */
+
+  a.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--control-height);
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--text-inverse);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    text-decoration: none;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  a.button:hover {
+    background: var(--accent-hover);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}

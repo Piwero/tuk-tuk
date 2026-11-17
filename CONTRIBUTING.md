@@ -101,14 +101,15 @@ fixed by the first declaration, not by selector specificity.
   styles belong to their shared primitive, not duplicated across consumers.
 - `overrides` is reserved for deliberate cross-component overrides. Do not
   redeclare the layer-order list in individual files.
-- During the expand-contract migration (#435–#439), the remaining monolith
-  stays **unlayered** and therefore wins over layered rules. This preserves
-  existing precedence while components move; check for remaining selectors
-  targeting a moved component before relying on a layered override. Avoid
-  new unlayered rules. Remove the bridge only in the contract step.
+- `index.css` contains only layer declarations and imports. Shared native
+  controls, button variants and utility classes live in `primitives.css`,
+  imported by that entry in `components`. No unlayered application rules.
+- Shell styles live in `App.css`; authentication styles in `AuthGate.css`.
+  Self-hosted `fonts.css` loads directly from `main.tsx` after `index.css`.
 
-CSS-source guard tests read `index.css` / `tokens.css` from disk (jsdom has no
-layout). When moving rules those tests assert, update their input files to
+CSS-source guard tests read owning stylesheets through
+`frontend/oci/src/test/stylesheets.ts` and read `tokens.css` separately (jsdom
+has no layout). When moving rules those tests assert, update their input files to
 include the owning stylesheet; do not remove the assertions. Run the full
 frontend tests, lint, typecheck and build after each migration.
 

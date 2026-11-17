@@ -1,0 +1,275 @@
+@layer components {
+  .app {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr;
+    /* The shell is pinned to the viewport — it never scrolls as a document.
+     Sidebar, main and the detail panel each own their own scroll region
+     below (issue #159), so losing your place in one never carries the
+     nav or the other panes off-screen. */
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app.with-detail {
+    grid-template-columns: var(--sidebar-width) 1fr var(--detail-width);
+  }
+
+  /* Collapsed: the sidebar narrows to an icon rail and the width goes to main. */
+
+  .app.sidebar-collapsed {
+    grid-template-columns: var(--sidebar-rail) 1fr;
+  }
+
+  .app.sidebar-collapsed.with-detail {
+    grid-template-columns: var(--sidebar-rail) 1fr var(--detail-width);
+  }
+
+  main {
+    padding: var(--space-6) var(--space-8);
+    min-width: 0;
+    /* Its own scroll region (issue #159): the grid track's height is fixed by
+     `.app`, and `min-height: 0` lets main shrink to it instead of growing
+     past it — expanding content (e.g. the description editor's detail
+     panel) scrolls main alone, never the document. */
+    min-height: 0;
+    overflow-y: auto;
+    /* Pins the shortcut hint strip (issue #434): `.main-content` grows into
+     spare height, so under short content the strip sits at the viewport
+     foot; it never shrinks, so under long content the strip follows the
+     last row in flow and covers nothing. */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .main-content {
+    flex: 1 0 auto;
+    min-width: 0;
+  }
+
+  .main-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .main-header h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+  }
+
+  .breadcrumb-folder {
+    padding: 0;
+    width: auto;
+    height: auto;
+    border: none;
+    background: transparent;
+    font: inherit;
+    color: var(--text-secondary);
+  }
+
+  .breadcrumb-folder:hover {
+    color: var(--text-accent);
+    text-decoration: underline;
+  }
+
+  .view-toggle,
+  .completed-toggle,
+  .hide-completed-toggle {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .view-toggle:hover,
+  .completed-toggle:hover,
+  .hide-completed-toggle:hover {
+    background: var(--ink-50);
+  }
+
+  .hide-completed-toggle[aria-pressed="true"] {
+    background: var(--ink-50);
+    color: var(--text-primary);
+  }
+
+  .completed-toggle {
+    margin-left: auto;
+  }
+
+  .main-chrome > form input {
+    width: 100%;
+    height: 42px;
+    padding: 0 14px;
+    font-size: var(--text-lg);
+  }
+
+  .view-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-top: var(--space-3);
+  }
+
+  /* All's single control row (#281): Group by / Sort by never wrap to a
+ * second row — only the filter chips wrap, inside the space the shrinkable
+ * trigger row is given. */
+
+  .view-controls:has(.filter-menu) {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+
+  .view-controls + .view-controls {
+    margin-top: var(--space-2);
+  }
+
+  .view-controls label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .view-controls select {
+    height: 28px;
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 720px) {
+    .view-toggle,
+    .completed-toggle,
+    .hide-completed-toggle,
+    .view-controls select {
+      min-height: var(--tap-target);
+    }
+    .view-controls,
+    .view-controls:has(.filter-menu) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-3);
+      align-items: end;
+    }
+
+    .view-controls .filter-menu-trigger-row,
+    .view-controls > .hint {
+      grid-column: 1 / -1;
+    }
+
+    .view-controls .hint-wrap {
+      display: flex;
+      min-width: 0;
+    }
+
+    .view-controls label {
+      flex: 1;
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-1);
+      min-width: 0;
+    }
+
+    .view-controls select {
+      width: 100%;
+    }
+
+    /* Text buttons centre their label in the taller box rather than leaving
+   * it riding at the top. */
+    .breadcrumb-folder {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--tap-target);
+    }
+  }
+
+  .drawer-toggle {
+    display: none;
+  }
+
+  /* IconButton wraps the toggle in a span (#270) — the wrapper is the
+ * header's flex item now, so it inherits the hide/show alongside the
+ * button it wraps. */
+
+  .main-header > .icon-button-wrap:has(> .drawer-toggle) {
+    display: none;
+    flex: none;
+  }
+
+  @media (max-width: 720px) {
+    .app,
+    .app.with-detail,
+    .app.sidebar-collapsed,
+    .app.sidebar-collapsed.with-detail {
+      grid-template-columns: 1fr;
+    }
+
+    .drawer-scrim {
+      position: fixed;
+      inset: 0;
+      z-index: calc(var(--z-modal) - 2);
+      background: var(--scrim);
+    }
+
+    .drawer-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      /* 44x44 hit area with the same 18px glyph (#168) — the icon itself
+       doesn't grow, only the button's own box. */
+      width: var(--tap-target);
+      height: var(--tap-target);
+      flex: none;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+    }
+
+    .drawer-toggle:hover {
+      background: var(--surface-hover);
+    }
+
+    .main-header > .icon-button-wrap:has(> .drawer-toggle) {
+      display: inline-flex;
+      flex: none;
+    }
+
+    /* Sticky chrome (#290): `main` is the scroll region (see the base
+     `main` rule), and the chrome used to scroll away with it after one
+     swipe on a full list. Pinning the one wrapper keeps the title, the
+     Quick-Add bar and the filter controls on screen together — one sticky
+     element rather than three stacked siblings, so no offsets to keep in
+     lockstep. `z-index: 1` is enough to sit above the list content that
+     scrolls beneath it, and stays well under the drawer/scrim (`calc(var
+     (--z-modal) - 1)` / `- 2`) and the tab bar (`calc(var(--z-modal) -
+     4)`), so none of those get covered. */
+    .main-chrome {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--surface-page);
+    }
+
+    /* Bottom padding leaves room at the foot of the scroll region so the last
+     row of a scrolled list is never hidden behind the fixed tab bar and the
+     Quick-Add button docked above it (issue #170, #287). */
+    main {
+      padding: var(--space-4);
+      padding-bottom: calc(
+        var(--mobile-tab-bar-height) + var(--mobile-quick-add-size) + var(--space-4) * 2
+      );
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import "./SearchView.css";
 import { useEffect, useRef, useState } from "react";
 
 import {

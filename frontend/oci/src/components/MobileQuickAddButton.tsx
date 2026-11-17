@@ -1,3 +1,4 @@
+import "./MobileQuickAddButton.css";
 import { IconButton } from "./IconButton";
 
 interface MobileQuickAddButtonProps {

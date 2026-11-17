@@ -1,3 +1,4 @@
+import "./Hint.css";
 import { cloneElement, isValidElement, useId, useRef } from "react";
 
 import { HINT_REGISTRY, type HintKey } from "../hintRegistry";

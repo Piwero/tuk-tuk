@@ -1,3 +1,4 @@
+import "./FolderView.css";
 import { updateTask, type Folder, type Task, type TaskList } from "../api";
 import { formatSchedule, isOverdue } from "../dates";
 import { sortTasks, type SortBy } from "../grouping";

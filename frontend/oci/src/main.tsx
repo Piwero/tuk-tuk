@@ -1,6 +1,7 @@
 // First: index.css declares the cascade-layer order, which only holds if it
 // loads before any component stylesheet (#435).
 import "./index.css";
+import "./fonts.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
