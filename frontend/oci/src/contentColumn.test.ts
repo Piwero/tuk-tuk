@@ -58,7 +58,7 @@ describe("content column (issue #196)", () => {
     // height (never shrinks), so under short content the strip sits at the
     // viewport foot; under long content it stays in flow after the last row
     // and covers nothing.
-    const main = /(?:^|\n)main\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
+    const main = /(?:^|\n)\s*main\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
     expect(main).toMatch(/display:\s*flex/);
     expect(main).toMatch(/flex-direction:\s*column/);
     const content = /\.main-content\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";

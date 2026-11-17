@@ -1,0 +1,31 @@
+@layer components {
+  .clear-completed {
+    margin-bottom: var(--space-3);
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    color: var(--text-danger);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .clear-completed:hover {
+    background: var(--danger-soft);
+  }
+
+  /* Completed history: plain rows, no controls. */
+
+  .completed-history .occurrence {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    color: var(--text-secondary);
+  }
+
+  .completed-history .repeat-glyph {
+    color: var(--text-accent);
+  }
+}

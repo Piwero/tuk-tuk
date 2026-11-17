@@ -1,3 +1,4 @@
+import "./Logo.css";
 interface LogoProps {
   /** 21px sidebar brand (beside the 17px wordmark), 32px auth screen. */
   size?: number;

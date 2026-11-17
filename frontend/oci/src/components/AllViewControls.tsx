@@ -1,3 +1,4 @@
+import "./AllViewControls.css";
 import { useEffect, useRef, useState } from "react";
 
 import { type AllFilters, type Priority, type Tag, type TaskList } from "../api";

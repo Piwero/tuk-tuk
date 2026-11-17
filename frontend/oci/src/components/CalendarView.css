@@ -890,4 +890,98 @@
   .unscheduled-card:hover {
     background: var(--surface-hover);
   }
+
+  .calendar-nav-buttons,
+  .calendar-modes {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .calendar-nav-buttons button,
+  .calendar-modes button {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .calendar-nav-buttons button:hover,
+  .calendar-modes button:hover {
+    background: var(--ink-50);
+  }
+
+  .month-cell:hover .month-cell-head button,
+  .month-cell-head button:focus-visible {
+    visibility: visible;
+  }
+
+  /* Events are read-only Google context: a dashed border and default cursor
+ * mark them as visually distinct from a draggable Task at a glance. */
+
+  .calendar-banner[data-kind="event"],
+  .calendar-timed-entry[data-kind="event"] {
+    border-left-style: dashed;
+    cursor: default;
+  }
+
+  .week-day-header[data-today] .day-name,
+  .week-day-header[data-today] .day-date {
+    color: var(--accent);
+    font-weight: var(--weight-semibold);
+  }
+
+  .week-day-header .day-name,
+  .week-day-header .day-date {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hour-label,
+  .hour-cell {
+    /* Height is set inline per-hour from the calendar time axis (#210): a
+     uniform 48px with Active hours off, 96px / 24px inside / outside the
+     band when it's on. Positioned so it layers over the off-hours tint. */
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+  }
+
+  .calendar-body > .month-grid,
+  .calendar-body > .time-grid {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* The grip affordance: a short bar that appears when the block is hovered
+ * or the handle is keyboard-focused. */
+
+  .time-block:hover .resize-handle::after,
+  .time-block[data-resizing] .resize-handle::after,
+  .resize-handle:focus-visible::after {
+    opacity: 0.6;
+  }
+
+  @media (max-width: 720px) {
+    .week-header-gutter,
+    .hour-gutter {
+      width: 40px;
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+ * Calendar Entries coloured by List + the Unscheduled rail (#203).   *
+ * ------------------------------------------------------------------ */
+
+  .calendar-banner[data-list-color],
+  .calendar-timed-entry[data-list-color] {
+    border-left-color: var(--entry-color);
+  }
 }

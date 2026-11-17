@@ -1,0 +1,95 @@
+@layer components {
+  /* The All view's collapsed filter control (#281): one row that never wraps
+ * on narrow screens (button + chips shrink to wrap internally instead),
+ * with the popover positioned off the trigger like CreateMenu's. */
+  .filter-menu {
+    display: contents;
+  }
+  .filter-menu-trigger-row {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  .filter-menu-button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 28px;
+    padding: 0 var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    background: var(--surface-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
+  .filter-menu-popover {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    z-index: var(--z-popover);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    min-width: 260px;
+    padding: var(--space-3);
+    background: var(--surface-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+  }
+  .filter-chip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 28px;
+    padding: 0 var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    background: var(--surface-sunken);
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
+  .filter-chip button {
+    display: flex;
+    align-items: center;
+    color: inherit;
+  }
+  .filter-menu-clear-all {
+    height: 28px;
+    padding: 0 var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    text-decoration: underline;
+    white-space: nowrap;
+  }
+  @media (max-width: 720px) {
+    /* Text buttons centre their label in the taller box rather than leaving
+   * it riding at the top. */
+    .filter-menu-button,
+    .filter-menu-clear-all {
+      min-height: var(--tap-target);
+    }
+
+    .filter-menu-clear-all {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .filter-chip {
+      min-height: var(--tap-target);
+    }
+
+    /* The chip grows with its remove control: a 44px button inside the base
+   * 28px chip would overflow it. Square hit area like `.modal-close` —
+   * the 12px glyph is untouched. */
+    .filter-chip button {
+      min-width: var(--tap-target);
+      min-height: var(--tap-target);
+    }
+  }
+}

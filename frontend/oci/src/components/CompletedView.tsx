@@ -1,3 +1,4 @@
+import "./CompletedView.css";
 import {
   deleteCompletedTasks,
   deleteTask,

@@ -1,3 +1,4 @@
+import "./IconPicker.css";
 import { Modal } from "./Modal";
 
 export interface PickerIcon {

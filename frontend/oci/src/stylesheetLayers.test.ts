@@ -20,6 +20,7 @@ const ORDER = "@layer tokens, base, components, overrides;";
 const componentSheets = readdirSync(join(SRC, "components")).filter((name) =>
   name.endsWith(".css"),
 );
+const ownedSheets = ["App.css", "AuthGate.css", ...componentSheets.map((n) => `components/${n}`)];
 
 describe("stylesheet layers", () => {
   it("declares the layer order once, first, in the entry stylesheet", () => {
@@ -31,6 +32,15 @@ describe("stylesheet layers", () => {
   it("imports the entry stylesheet before any component", () => {
     const firstImport = /^import .*$/m.exec(read("main.tsx"));
     expect(firstImport?.[0]).toBe('import "./index.css";');
+  });
+
+  it("keeps the entry declarative and loads self-hosted fonts from main (#439)", () => {
+    expect(
+      stripComments(read("index.css"))
+        .replace(/@(?:layer|import)[^;]+;/g, "")
+        .trim(),
+    ).toBe("");
+    expect(read("main.tsx")).toContain('import "./fonts.css";');
   });
 
   it("puts tokens and base styles in their layers", () => {
@@ -73,9 +83,12 @@ describe("stylesheet layers", () => {
     }
   });
 
-  it.each(componentSheets)("%s is layered and imported by its component", (sheet) => {
-    expect(stripComments(read(`components/${sheet}`))).toMatch(/^@layer components \{[\s\S]*\}$/);
+  it.each([...ownedSheets, "primitives.css"])("%s contains only layered rules", (sheet) => {
+    expect(stripComments(read(sheet))).toMatch(/^@layer components \{[\s\S]*\}$/);
+  });
+
+  it.each(ownedSheets)("%s is imported by its owner", (sheet) => {
     const component = sheet.replace(/\.css$/, ".tsx");
-    expect(read(`components/${component}`)).toContain(`import "./${sheet}";`);
+    expect(read(component)).toContain(`import "./${sheet.split("/").pop()}";`);
   });
 });

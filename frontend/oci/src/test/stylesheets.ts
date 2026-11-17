@@ -6,7 +6,9 @@ import process from "node:process";
 export function readStylesheets(): string {
   const src = resolve(process.cwd(), "src");
   return [
-    "index.css",
+    "primitives.css",
+    "App.css",
+    "AuthGate.css",
     ...readdirSync(join(src, "components"))
       .filter((name) => name.endsWith(".css"))
       .sort()
