@@ -360,7 +360,7 @@ describe("due date chip is not clipped (issue #257)", () => {
   });
 
   it("sizes the aligned grid's date column to fit the widest chip", () => {
-    // ~7px per monospace char (--text-xs, --font-mono) is a conservative
+    // ~7px per tabular-figure char at --text-xs is a conservative
     // floor; a narrower column would clip the chip's leading characters.
     const minWidth = widestSchedule!.length * 7;
     const match = /--task-col-date:\s*(\d+)px/.exec(tokensCss);
