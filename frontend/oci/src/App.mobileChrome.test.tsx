@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import process from "node:process";
+import { readStylesheets } from "./test/stylesheets";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +13,7 @@ import { installFakeApi } from "./test/fakeApi";
 // convention as tapTargetGuard.test.ts and contentColumn.test.ts — while the
 // DOM half renders the real App.
 
-const css: string = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+const css: string = readStylesheets();
 
 /** Ranges of every `@media` block: its query plus the body's span. */
 function mediaBlocks(): { query: string; start: number; end: number }[] {

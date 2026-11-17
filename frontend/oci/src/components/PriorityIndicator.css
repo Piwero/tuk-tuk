@@ -1,0 +1,23 @@
+@layer components {
+  /* Priority (#166): a signal-bar glyph per level — one/two/three bars for
+ * Low/Medium/High — so the levels read apart by shape, not hue. Color only
+ * reinforces weight (lighter → darker as priority rises); never red, which
+ * stays reserved for "overdue" elsewhere on the row. None renders no
+ * indicator (PriorityIndicator returns null), so no rule is needed for it.
+ * Kanban cards (.kanban-card is TaskRow's own `<li>`, restyled — see
+ * TaskRow's `className` prop, #165) render the same `.priority-indicator`
+ * for free since they share TaskRow's markup. */
+  .priority-indicator {
+    display: inline-flex;
+    flex: none;
+  }
+  .priority-indicator[data-priority="low"] {
+    color: var(--priority-low);
+  }
+  .priority-indicator[data-priority="medium"] {
+    color: var(--priority-medium);
+  }
+  .priority-indicator[data-priority="high"] {
+    color: var(--priority-high);
+  }
+}

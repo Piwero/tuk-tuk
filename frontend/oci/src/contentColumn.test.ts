@@ -1,8 +1,5 @@
+import { readStylesheets } from "./test/stylesheets";
 import { describe, expect, it } from "vitest";
-
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import process from "node:process";
 
 /** Which views fill the content area and which keep the shared reading
  * measure is a pure CSS decision (issue #196). jsdom applies no stylesheet
@@ -11,7 +8,7 @@ import process from "node:process";
  * list, Search, Kanban) fill the width; the prose surfaces (Settings,
  * Stand-up) stay on `--content-max`. */
 
-const css: string = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+const css: string = readStylesheets();
 
 /** The selector list of the first rule whose body is `max-width:
  * var(--content-max)` — the App-layout content-column rule. */

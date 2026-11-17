@@ -1,3 +1,5 @@
+import "./TaskRow.css";
+
 import { type Task, type TaskList } from "../api";
 import { formatSchedule, isDueToday, isOverdue, isSettled, type ScheduleContext } from "../dates";
 import { useLongPressReveal } from "../longPressReveal";

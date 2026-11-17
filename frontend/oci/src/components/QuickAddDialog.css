@@ -1,0 +1,113 @@
+@layer components {
+  .quick-add-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .quick-add-dialog > label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .quick-add-dialog fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .quick-add-dialog legend {
+    padding: 0 var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .quick-add-dialog .date-actions,
+  .quick-add-dialog .date-editor,
+  .quick-add-dialog .quick-add-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+  }
+
+  .quick-add-dialog .quick-add-tags label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
+  }
+
+  .quick-add-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .quick-add-dialog-actions button[type="submit"] {
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    font-weight: var(--weight-medium);
+    color: var(--text-inverse);
+  }
+
+  .quick-add-dialog-actions button[type="submit"]:hover {
+    background: var(--accent-hover);
+  }
+
+  @media (max-width: 720px), (hover: none), (pointer: coarse) {
+    /* `min-height`, not `height`, so a control that already needs more room
+     (a wrapped token input) keeps it. Beats `.token-input input`'s fixed
+     `calc(--control-height - 4px)` for the title field the same way. */
+    .quick-add-dialog input:not([type="checkbox"]),
+    .quick-add-dialog select,
+    .quick-add-dialog .date-actions button,
+    .quick-add-dialog-actions button {
+      min-height: var(--tap-target);
+    }
+
+    /* The Assist recurrence / reminder chips' remove buttons (ADR 0005) are
+     `.token-chip button`s — 12px glyph, zero padding. Square hit area like
+     `.modal-close`, glyph untouched: removing the wrong one silently drops
+     a reminder from the Task being filed. */
+    .quick-add-dialog .quick-add-assist-chips button {
+      min-width: var(--tap-target);
+      min-height: var(--tap-target);
+    }
+
+    /* The suggestion dropdown's rows are the only touch path to a `#tag` /
+     `~list` / `!priority` / `@date` pick — a 27px row in a list of them is
+     a mis-pick waiting to happen. */
+    .quick-add-dialog .token-input-dropdown li {
+      display: flex;
+      align-items: center;
+      min-height: var(--tap-target);
+    }
+
+    /* Checkbox hit areas grow through the wrapping label's padding — the
+     visible 18px box is untouched, per the convention `.tasks label` set
+     (#168). Matched by what the label *wraps*, not by where it sits, so the
+     tag checkboxes and the Date fieldset's All-day are both covered while
+     the "New tag" text label — already sized through its input above —
+     isn't padded for nothing. */
+    .quick-add-dialog label:has(> input[type="checkbox"]) {
+      padding: calc((var(--tap-target) - 18px) / 2);
+    }
+
+    /* Submit sat ~3px from Cancel at the same height: a thumb aimed at one
+     could file or discard the Task at random. Pushing them to opposite ends
+     of the row puts the whole dialog's width between them, so a touch
+     centred on either cannot reach the other. */
+    .quick-add-dialog-actions {
+      justify-content: space-between;
+    }
+  }
+}

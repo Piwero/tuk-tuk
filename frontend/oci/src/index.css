@@ -7,167 +7,298 @@
 @import "./fonts.css";
 @import "./tokens.css" layer(tokens);
 @import "./base.css" layer(base);
+@layer components {
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
 
-/* ── Shared controls ─────────────────────────────────────────────── */
+  input:not([type="checkbox"]):not([type="color"]),
+  select,
+  textarea {
+    height: var(--control-height);
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: var(--text-md);
+    color: var(--text-primary);
+    background: var(--surface-card);
+    transition:
+      border-color var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out);
+  }
 
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
+  input:not([type="checkbox"]):not([type="color"]):focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+  }
 
-input:not([type="checkbox"]):not([type="color"]),
-select,
-textarea {
-  height: var(--control-height);
-  padding: 0 10px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: var(--text-md);
-  color: var(--text-primary);
-  background: var(--surface-card);
-  transition:
-    border-color var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out);
-}
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-tertiary);
+  }
 
-input:not([type="checkbox"]):not([type="color"]):focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
-}
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="number"] {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-sm);
+  }
 
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-tertiary);
-}
+  textarea {
+    height: auto;
+    padding: 8px 10px;
+    line-height: var(--leading-normal);
+    resize: vertical;
+  }
 
-input[type="date"],
-input[type="time"],
-input[type="datetime-local"],
-input[type="number"] {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-sm);
-}
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 28px;
+    background: var(--surface-card)
+      url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%23565e6a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>')
+      no-repeat right 10px center;
+    cursor: pointer;
+  }
+  form button,
+  fieldset button,
+  .habits-view > button,
+  .other-habits > button,
+  .focus-timers > button,
+  .focus-timers-footer .hint-wrap > button,
+  .focus-history > button,
+  .focus-view > button,
+  .goals-view > button,
+  .goals-view .goal-actions button,
+  .key-result-actions button,
+  .key-results > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
 
-textarea {
-  height: auto;
-  padding: 8px 10px;
-  line-height: var(--leading-normal);
-  resize: vertical;
-}
+  form button:hover,
+  fieldset button:hover,
+  .habits-view > button:hover,
+  .other-habits > button:hover,
+  .focus-timers > button:hover,
+  .focus-timers-footer .hint-wrap > button:hover,
+  .focus-history > button:hover,
+  .focus-view > button:hover,
+  .goals-view > button:hover,
+  .goals-view .goal-actions button:hover,
+  .key-result-actions button:hover,
+  .key-results > button:hover {
+    background: var(--ink-50);
+  }
 
-select {
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 28px;
-  background: var(--surface-card)
-    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%23565e6a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>')
-    no-repeat right 10px center;
-  cursor: pointer;
-}
+  form button:active,
+  fieldset button:active,
+  .goals-view > button:active,
+  .goals-view .goal-actions button:active,
+  .key-result-actions button:active,
+  .key-results > button:active {
+    background: var(--ink-100);
+  }
+  .key-result-actions button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
 
-/* Secondary buttons: the default for classless form and section actions. */
-form button,
-fieldset button,
-.habits-view > button,
-.other-habits > button,
-.focus-timers > button,
-.focus-timers-footer .hint-wrap > button,
-.focus-history > button,
-.focus-view > button,
-.task-description > button,
-.goals-view > button,
-.goals-view .goal-actions button,
-.key-result-actions button,
-.key-results > button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-form button:hover,
-fieldset button:hover,
-.habits-view > button:hover,
-.other-habits > button:hover,
-.focus-timers > button:hover,
-.focus-timers-footer .hint-wrap > button:hover,
-.focus-history > button:hover,
-.focus-view > button:hover,
-.task-description > button:hover,
-.goals-view > button:hover,
-.goals-view .goal-actions button:hover,
-.key-result-actions button:hover,
-.key-results > button:hover {
-  background: var(--ink-50);
-}
-
-form button:active,
-fieldset button:active,
-.goals-view > button:active,
-.goals-view .goal-actions button:active,
-.key-result-actions button:active,
-.key-results > button:active {
-  background: var(--ink-100);
-}
-
-/* Disabled row actions (e.g. a Key Result that is already first or last and
- * has nowhere to move) read as inert while keeping their row layout. */
-.key-result-actions button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.key-result-actions button:disabled:hover {
-  background: var(--surface-card);
-}
-
-/* The task checkbox. Priority no longer colors it (#166) — Priority now
-   reads as a shape/glyph via .priority-indicator instead, so one checkbox
-   style serves every level. */
-input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  /* Sized through a local property, not a literal, so the Calendar's dense
+  .key-result-actions button:disabled:hover {
+    background: var(--surface-card);
+  }
+  input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    /* Sized through a local property, not a literal, so the Calendar's dense
      variant (.entry-check) only has to rebind --checkbox-size — it never
      restates the border, radius or glyph, and this stays the one rule that
      draws a checkbox. */
-  --checkbox-size: var(--checkbox-standard);
-  width: var(--checkbox-size);
-  height: var(--checkbox-size);
-  margin: 0;
-  padding: 0;
-  flex: none;
-  border: 2px solid var(--border-strong);
-  border-radius: 5px;
-  /* The tick glyph scales with the box rather than being a second literal. */
-  background: transparent no-repeat center / calc(var(--checkbox-size) - 8px);
-  cursor: pointer;
-  transition:
-    background-color var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
-}
+    --checkbox-size: var(--checkbox-standard);
+    width: var(--checkbox-size);
+    height: var(--checkbox-size);
+    margin: 0;
+    padding: 0;
+    flex: none;
+    border: 2px solid var(--border-strong);
+    border-radius: 5px;
+    /* The tick glyph scales with the box rather than being a second literal. */
+    background: transparent no-repeat center / calc(var(--checkbox-size) - 8px);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out);
+  }
 
-input[type="checkbox"]:checked {
-  border-color: var(--accent);
-  background-color: var(--accent);
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>');
+  input[type="checkbox"]:checked {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>');
+  }
+
+  .color-dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: var(--radius-full);
+  }
+  .row-actions {
+    display: flex;
+    gap: 2px;
+    width: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  .row-actions:focus-within {
+    width: auto;
+    overflow: visible;
+    visibility: visible;
+  }
+
+  .row-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .row-actions button:hover {
+    background: var(--surface-hover);
+  }
+  .row-actions button.row-action-danger:hover {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .completed {
+    text-decoration: line-through;
+    color: var(--text-tertiary);
+  }
+
+  .date-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-xs);
+    color: var(--text-accent);
+    white-space: nowrap;
+  }
+
+  .date-chip.overdue,
+  .date-label.overdue {
+    color: var(--text-danger);
+  }
+  .date-chip.today {
+    font-weight: var(--weight-medium);
+  }
+
+  li[data-overdue] .date-chip {
+    font-weight: var(--weight-semibold);
+  }
+  .date-chip .icon {
+    flex: none;
+  }
+
+  .tag-chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .list-chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: var(--text-secondary);
+    background: var(--surface-hover);
+    white-space: nowrap;
+  }
+  .icon-field {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-height);
+    height: var(--control-height);
+    padding: 0;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    color: var(--text-tertiary);
+    font-size: var(--text-lg);
+    line-height: 1;
+  }
+
+  .icon-field:hover {
+    border-color: var(--border-strong);
+  }
+  @media (hover: none), (pointer: coarse) {
+    .row-actions {
+      width: auto;
+      overflow: visible;
+      visibility: visible;
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .row-actions button {
+      width: var(--tap-target);
+      height: var(--tap-target);
+    }
+  }
 }
 
 /* ── App layout ──────────────────────────────────────────────────── */
@@ -270,50 +401,6 @@ main {
   }
 }
 
-/* ── Sidebar ─────────────────────────────────────────────────────── */
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--surface-sunken);
-  border-right: 1px solid var(--border-subtle);
-  padding: 14px 10px;
-  /* The sidebar itself doesn't scroll (issue #159) — `.sidebar-scroll` below
-     is the scroll region, so Settings/Log out in `.sidebar-footer` stay
-     anchored at the foot instead of scrolling away with the list tree. */
-  overflow: hidden;
-}
-
-/* Wraps everything above the footer (nav, search, smart lists, the list
-   tree, tags, archived) — its own scroll region, sized to whatever space
-   is left once `.sidebar-footer` takes its own height (issue #159). */
-.sidebar-scroll {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  /* A thin, always-visible scrollbar rather than the OS's overlay-on-hover
-     default — the only signal that Lists/Tags below the fold exist at all
-     (issue #250). `auto` already hides it entirely once content fits. */
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-default) transparent;
-}
-
-.sidebar-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.sidebar-scroll::-webkit-scrollbar-thumb {
-  background: var(--border-default);
-  border-radius: 3px;
-}
-
-.sidebar-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
 .icon {
   flex: none;
 }
@@ -324,600 +411,6 @@ main {
 .logo {
   flex: none;
   color: var(--accent);
-}
-
-/* The brand lockup: the mark, then the wordmark. The mark is decorative
-   (Logo.tsx) — the tooltip and the text both live on this row. */
-.sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 2px 10px var(--space-3);
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: var(--weight-bold);
-  letter-spacing: -0.01em;
-}
-
-/* The wordmark, not `.sidebar-brand`, owns the truncation: once the brand is
-   a flex row, a bare text node is an anonymous flex item and `text-overflow`
-   on the container no longer reaches it. */
-.sidebar-brand-name {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* Feature nav: Tasks, Calendar, Habits, Stand-up, Focus, Search (+ Assistant
-   when available). A vertical list of labelled rows — readable, not guessed
-   from a glyph (issue #194). Stacking removed the width limit that once
-   forced an icon-only row (issue #160). Collapsed, the label steps aside
-   (see the rail rules) and the accessible name is kept on aria-label/title.
-   The active item is told apart by an inset accent bar + weight, not colour
-   alone. */
-.top-nav {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  padding: 0 0 10px;
-}
-
-.sidebar .top-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  height: var(--control-height);
-  padding: 0 10px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--text-md);
-  text-align: left;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.sidebar .top-nav-item:hover {
-  background: var(--surface-hover);
-}
-
-.sidebar .top-nav-item.selected,
-.sidebar .top-nav-item.selected:hover {
-  background: var(--surface-selected);
-  color: var(--text-accent);
-  font-weight: var(--weight-semibold);
-  /* Non-colour cue (issue #194): an inset bar on the leading edge, visible
-     in the rail too where the label is gone. */
-  box-shadow: inset 3px 0 0 0 var(--text-accent);
-}
-
-.sidebar-search input {
-  width: 100%;
-  height: 30px;
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-3);
-}
-
-.sidebar ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.smart-lists {
-  display: grid;
-  gap: 2px;
-  margin-bottom: var(--space-3);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.sidebar button,
-.sidebar a {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  height: var(--control-height);
-  padding: 0 10px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
-  font-size: var(--text-md);
-  text-align: left;
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.sidebar .list-button .icon,
-.sidebar .sidebar-add .icon {
-  color: var(--text-secondary);
-}
-
-.sidebar .list-button.selected .icon {
-  color: var(--text-accent);
-}
-
-.sidebar button:hover,
-.sidebar a:hover {
-  background: var(--surface-hover);
-}
-
-.list-row {
-  display: flex;
-  align-items: center;
-}
-
-.list-row .list-button,
-.smart-lists .list-button,
-.views-nav .list-button {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-/* The List/Tag name button and the Folder name button each grew a hint
- * popover wrapper (#264) — the wrapper needs to fill the row the button
- * itself used to, or the button's own `flex: 1` above has nothing to grow
- * into. Scoped away from the disclosure wrapper (#270), which must stay
- * a fixed 20px rather than stretching with the name. */
-.list-row > .icon-button-wrap,
-.folder-row > .icon-button-wrap:not(:has(> .folder-disclosure)) {
-  flex: 1;
-  min-width: 0;
-}
-
-.folder-row > .icon-button-wrap:has(> .folder-disclosure) {
-  flex: none;
-}
-
-.list-button > span:not(.color-dot):not(.list-emoji) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.list-button.selected {
-  background: var(--surface-selected);
-  color: var(--text-accent);
-  font-weight: var(--weight-semibold);
-}
-
-.list-button.selected:hover {
-  background: var(--surface-selected);
-}
-
-.list-emoji {
-  font-size: 15px;
-  line-height: 1;
-}
-
-.color-dot {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: var(--radius-full);
-}
-
-/* Collapsed to zero width at rest — not just `visibility: hidden` — so the
- * hidden action buttons stop reserving ~90px that the List/Folder name
- * needs for its own ellipsis truncation to kick in at a sane width. */
-.row-actions {
-  display: flex;
-  gap: 2px;
-  width: 0;
-  overflow: hidden;
-  visibility: hidden;
-}
-
-.list-row:hover .row-actions,
-.folder-row:hover .row-actions,
-.row-actions:focus-within {
-  width: auto;
-  overflow: visible;
-  visibility: visible;
-}
-
-.row-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.row-actions button:hover {
-  background: var(--surface-hover);
-}
-
-/* A List delete destroys every Task inside it; a Folder delete only
- * ungroups its Lists. The danger tint gives that difference in
- * consequence a difference in weight, on top of the heavier trash icon. */
-.row-actions button.row-action-danger:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.folder-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  margin-top: var(--space-2);
-  padding: 0 10px;
-}
-
-.folder-row > .icon {
-  flex: none;
-  color: var(--text-secondary);
-}
-
-/* `button.folder-disclosure`, not `.folder-disclosure`: needs to match
- * `.sidebar button`'s specificity (class+type) to actually override its
- * width:100% — a bare class selector loses that fight silently. */
-button.folder-disclosure {
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  flex: none;
-  color: var(--text-secondary);
-}
-
-.folder-row.drag-over {
-  background: var(--surface-selected);
-  outline: 2px solid var(--accent-border);
-  outline-offset: -2px;
-}
-
-.folder-name.selected {
-  background: var(--surface-selected);
-  color: var(--text-accent);
-  font-weight: var(--weight-semibold);
-}
-
-.folder-name.selected:hover {
-  background: var(--surface-selected);
-}
-
-.folder-empty-hint {
-  margin: 0 0 0 18px;
-  padding: var(--space-1) var(--space-2) var(--space-2) var(--space-3);
-  border-left: 1px solid var(--border-subtle);
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-/* Folder names are user content, not a section heading: sentence case,
- * primary text color, medium weight — the uppercase treatment stays
- * reserved for genuine static headings (Tags, Archived). */
-button.folder-name {
-  flex: 1;
-  width: auto;
-  margin: 0;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.folder-count {
-  flex: none;
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-/* Open-Task count on a Smart List / Inbox / List row (issue #195). Trailing,
- * right-aligned inside the flex button, tabular like every other count; it is
- * aria-hidden, with the spoken form carried by a `.visually-hidden` sibling
- * wired to the control through aria-describedby. A zero count renders no
- * element at all — never a literal "0". */
-.nav-count {
-  flex: none;
-  margin-left: auto;
-  padding-left: var(--space-2);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.list-button.selected .nav-count {
-  color: var(--text-accent);
-}
-
-/* Off-screen but in the accessibility tree — the spoken open-Task count
- * (issue #195). Standard clip technique; used only for the count so far. */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.lists-nav h2,
-.tags-nav h2,
-.archived h2 {
-  margin: 0;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* `.sidebar .folder-lists`, not `.folder-lists`: needs to match
- * `.sidebar ul`'s specificity to actually override its margin/padding
- * reset — a bare class selector loses that fight silently, same trap as
- * button.folder-disclosure above. */
-.sidebar .folder-lists {
-  margin-left: 18px;
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border-subtle);
-}
-
-.sidebar-footer {
-  flex: none;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-default);
-}
-
-.sidebar .sidebar-logout .icon,
-.sidebar .sidebar-theme-toggle .icon {
-  color: var(--text-secondary);
-}
-
-.list-form {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-2) 10px;
-}
-
-.list-form label {
-  display: grid;
-  gap: 2px;
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-.list-form input {
-  width: 100%;
-}
-
-.list-form input[type="color"] {
-  height: var(--control-height);
-  padding: 2px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
-  cursor: pointer;
-}
-
-.lists-nav-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.lists-nav h2 {
-  padding: 0 10px var(--space-1);
-}
-
-.create-menu {
-  position: relative;
-}
-
-/* `button.create-menu-trigger`: needs `.sidebar button`'s specificity
- * (class+type) to actually override its width/height — see
- * button.folder-disclosure for the same trap. */
-button.create-menu-trigger {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  color: var(--text-secondary);
-}
-
-.create-menu-list {
-  position: absolute;
-  top: calc(100% + var(--space-1));
-  right: 0;
-  z-index: var(--z-popover);
-  min-width: 160px;
-  margin: 0;
-  padding: var(--space-1);
-  list-style: none;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-}
-
-.create-menu-list button {
-  width: 100%;
-}
-
-.create-menu-secondary {
-  color: var(--text-secondary);
-}
-
-.pomo-quick-start-menu {
-  z-index: var(--z-popover);
-  min-width: 200px;
-  padding: var(--space-2);
-  background: var(--surface-raised);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-}
-
-.pomo-quick-start-menu ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.pomo-quick-start-menu .pomo-timer-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--control-height);
-  padding: var(--space-2) var(--space-3);
-  background: var(--focus-accent);
-  color: var(--text-inverse);
-  border: none;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--duration-md) var(--ease-out);
-}
-
-.pomo-quick-start-menu .pomo-timer-button:hover {
-  background: color-mix(in srgb, var(--focus-accent) 90%, black);
-}
-
-.pomo-quick-start-menu .pomo-timer-button:active {
-  transform: scale(0.98);
-}
-
-.pomo-quick-start-menu .pomo-timer-button:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.pomo-quick-start-menu form {
-  padding: var(--space-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.pomo-quick-start-menu input {
-  width: 100%;
-  height: var(--control-height);
-  padding: 0 var(--space-3);
-  background: var(--surface-page);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  transition: border-color var(--duration-md) var(--ease-out);
-}
-
-.pomo-quick-start-menu input:focus {
-  outline: none;
-  border-color: var(--focus-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-accent) 20%, transparent);
-}
-
-.tags-nav {
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-default);
-}
-
-.tags-nav h2 {
-  padding: 0 10px var(--space-1);
-}
-
-/* A wrapped cloud of chips (issue #194): Tags no longer take a full row
-   each. Each chip is its own inline pill that wraps to the next line. */
-.tags-nav .tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: 0 6px;
-}
-
-.tags-nav .tag-chip {
-  display: inline-flex;
-  width: auto;
-}
-
-.tags-nav .tag-chip .list-row {
-  width: auto;
-}
-
-.tags-nav .tag-chip .list-button {
-  width: auto;
-  height: auto;
-  gap: 6px;
-  padding: 3px 10px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-}
-
-.tags-nav .tag-chip .list-button.selected {
-  border-color: var(--text-accent);
-}
-
-/* Collapsed rail: the chip cloud falls back to a simple stacked column of
-   glyphs, like every other rail row. */
-.sidebar.collapsed .tags-nav .tag-cloud {
-  flex-direction: column;
-  padding: 0;
-}
-
-.sidebar.collapsed .tags-nav .tag-chip .list-button {
-  width: 100%;
-  justify-content: center;
-  border: none;
-  padding: 0;
-}
-
-.archived {
-  margin-top: var(--space-4);
-}
-
-.archived h2 {
-  padding: 0 10px var(--space-1);
-}
-
-.archived .list-button {
-  color: var(--text-tertiary);
-}
-
-.archived-list-folder {
-  flex-shrink: 0;
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
-  background: var(--surface-hover);
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  white-space: nowrap;
 }
 
 /* ── Main header ─────────────────────────────────────────────────── */
@@ -1104,38 +597,6 @@ button.create-menu-trigger {
   white-space: nowrap;
 }
 
-/* ── Task groups & rows ──────────────────────────────────────────── */
-
-.task-group {
-  margin-top: var(--space-2);
-}
-
-.group-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-  padding: 0 var(--space-2) var(--space-1);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.group-header h2 {
-  margin: 0;
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.group-header .row-actions {
-  visibility: hidden;
-}
-
-.group-header:hover .row-actions {
-  visibility: visible;
-}
-
 /* Button reset only — typography (uppercase, tracking, weight) comes from
  * the enclosing .group-header h2, same rule every other group label uses
  * (e.g. Section headers), so a List name heading here matches them exactly
@@ -1156,22 +617,6 @@ button.create-menu-trigger {
   text-decoration: underline;
 }
 
-.add-section {
-  margin-top: var(--space-4);
-  height: 28px;
-  padding: 0 10px;
-  border: 1px dashed var(--border-default);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.add-section:hover {
-  background: var(--surface-hover);
-}
-
 .clear-completed {
   margin-bottom: var(--space-3);
   height: 28px;
@@ -1187,263 +632,6 @@ button.create-menu-trigger {
 
 .clear-completed:hover {
   background: var(--danger-soft);
-}
-
-.tasks {
-  list-style: none;
-  margin: var(--space-2) 0 0;
-  padding: 0;
-}
-
-.task-group .tasks {
-  margin-top: 0;
-}
-
-.tasks li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: var(--row-height);
-  padding: 0 var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.tasks li:hover {
-  background: var(--ink-25);
-}
-
-.tasks label {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-}
-
-/* TaskRow narrow fallback (#157): title and metadata share one line whenever
- * they fit. Neither is given `flex-grow`, so the browser's flex line-breaking
- * places the metadata on a wrapped second line — rather than shrinking the
- * title toward nothing — the moment the pair's natural (un-truncated) widths
- * stop fitting the row.
- *
- * This is what a phone, and a desktop window narrow enough that the detail
- * panel has eaten the list's width, still get. Once the list is wide enough
- * to align columns honestly, the container query below takes over. */
-.tasks li.task-row {
-  flex-wrap: wrap;
-  /* Asymmetric on purpose: column-gap matches the base .tasks li rhythm for
-   * the shared-line case; row-gap stays tight for the wrapped two-line case. */
-  column-gap: var(--space-3);
-  row-gap: var(--space-1);
-  padding: var(--space-2);
-}
-
-.task-row-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.task-row-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-/* Holds the title and its Check Item counter together. `flex: 1` is what
- * `.task-title` itself used to carry as a direct child of the head line —
- * it keeps the wrapped fallback and the Kanban card behaving as before, and
- * is ignored outright once the row is a grid. */
-.task-row-main {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.task-row-priority {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-}
-
-/* The checkbox is a fixed 18px control, so it must never be the thing that
- * gives way when a long title overflows its line. Stated on .task-row rather
- * than .tasks because the Kanban card is this same row outside that list. */
-.task-row label {
-  display: flex;
-  flex: none;
-  align-items: center;
-  cursor: pointer;
-}
-
-.task-row-tags {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: 0;
-  overflow: hidden;
-}
-
-.task-row-list,
-.task-row-date {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-/* Below the 620px container floor the row is a wrapping flex line, not the
- * grid: `.task-row-date` would otherwise shrink toward nothing under
- * pressure (min-width: 0 above lets it), squeezing the chip's text rather
- * than wrapping it whole. `flex: none` holds it to its content's natural
- * width, so `.task-row-meta`'s `flex-wrap` sends the whole chip to a new
- * line instead — the "wrapped second line" degrade issue #257 asks for. */
-.tasks li.task-row .task-row-date {
-  flex: none;
-}
-
-/* Wherever the row is *not* a grid — the wrapped fallback and the Kanban
- * card — a cell with nothing in it must take no space at all, or its flex
- * gap shows up as a hole. The grid re-enables them below, where an empty
- * cell is exactly what holds its column open. */
-.task-row-head > :empty,
-.task-row-meta > :empty {
-  display: none;
-}
-
-.tasks li.task-row:hover .row-actions,
-.tasks li.task-row:focus-within .row-actions,
-.tasks li.task-row .row-actions:focus-within {
-  width: auto;
-  overflow: visible;
-  visibility: visible;
-}
-
-/* The list is the query container, not `main`: containment on `main` would
- * also make it the containing block for anything absolutely positioned
- * inside it. A `<ul>` of rows has nothing that escapes. */
-.tasks {
-  container-type: inline-size;
-  container-name: tasklist;
-}
-
-/* ── The aligned task row ────────────────────────────────────────────
- * Seven fixed tracks either side of a flexing title, so priority, tags,
- * List, due date and actions land at the same x on every row: a long list
- * reads down each column instead of zig-zagging, and the title is the only
- * thing that ever truncates. The actions track is *reserved* rather than
- * revealed, so hovering a row no longer shuffles its own metadata sideways.
- *
- * The 620px floor is the width below which the fixed tracks would leave the
- * title too little to be worth reading; under it the wrapped fallback above
- * stands. Querying the list rather than the viewport is what makes that
- * true with the detail panel open, too. */
-@container tasklist (min-width: 620px) {
-  .tasks li.task-row {
-    display: grid;
-    grid-template-columns:
-      auto
-      var(--task-col-priority)
-      minmax(0, 1fr)
-      minmax(0, auto)
-      var(--task-col-list)
-      var(--task-col-date)
-      var(--task-row-actions-col, 0px);
-    align-items: center;
-    column-gap: var(--space-3);
-    row-gap: 0;
-    height: var(--task-row-height);
-    min-height: var(--task-row-height);
-    padding: 0 var(--space-2);
-  }
-
-  /* Today and Next 7 Days say less in the chip (#431), so their date column
-   * narrows and gives the width back to the title. List, Search and completed
-   * rows carry no attribute and keep the full column. */
-  .tasks li.task-row[data-date-context] {
-    --task-col-date: var(--task-col-date-narrow);
-  }
-
-  /* A view that wires no row actions gives the gutter back to the title. */
-  .tasks li.task-row.with-actions {
-    --task-row-actions-col: var(--task-col-actions);
-  }
-
-  /* The two grouping wrappers stop drawing a box so their children become
-   * the row's own grid items. Selector matching is unaffected, and neither
-   * carries a role, so nothing is lost from the accessibility tree. */
-  .tasks li.task-row > .task-row-head,
-  .tasks li.task-row > .task-row-meta {
-    display: contents;
-  }
-
-  /* Every cell holds its track, empty or not — that is the whole point. */
-  .tasks li.task-row .task-row-head > :empty,
-  .tasks li.task-row .task-row-meta > :empty {
-    display: flex;
-  }
-
-  /* Metadata reads right-aligned against the row's edge, so the List and
-   * due-date columns form clean rules down the list. */
-  .tasks li.task-row .task-row-tags,
-  .tasks li.task-row .task-row-list,
-  .tasks li.task-row .task-row-date {
-    justify-content: flex-end;
-  }
-
-  .tasks li.task-row .row-actions {
-    justify-content: flex-end;
-    /* The track already holds the space; only the buttons come and go. */
-    width: auto;
-    overflow: visible;
-  }
-}
-
-.description-indicator {
-  display: inline-flex;
-  flex: none;
-  color: var(--text-tertiary);
-}
-
-/* A repeating Task's glyph in the title line (#258) — a non-colour carrier
- * so several occurrences of the same commitment don't read as the app
- * having duplicated the user's data. Same accent as the Completed view's
- * own repeat glyph (.completed-history .repeat-glyph), so the two surfaces
- * agree on what "repeats" looks like. */
-.repeat-indicator {
-  display: inline-flex;
-  flex: none;
-  color: var(--text-accent);
-}
-
-/* Priority (#166): a signal-bar glyph per level — one/two/three bars for
- * Low/Medium/High — so the levels read apart by shape, not hue. Color only
- * reinforces weight (lighter → darker as priority rises); never red, which
- * stays reserved for "overdue" elsewhere on the row. None renders no
- * indicator (PriorityIndicator returns null), so no rule is needed for it.
- * Kanban cards (.kanban-card is TaskRow's own `<li>`, restyled — see
- * TaskRow's `className` prop, #165) render the same `.priority-indicator`
- * for free since they share TaskRow's markup. */
-.priority-indicator {
-  display: inline-flex;
-  flex: none;
-}
-
-.priority-indicator[data-priority="low"] {
-  color: var(--priority-low);
-}
-
-.priority-indicator[data-priority="medium"] {
-  color: var(--priority-medium);
-}
-
-.priority-indicator[data-priority="high"] {
-  color: var(--priority-high);
 }
 
 /* Contextual help (#261): a hover/focus-triggered popover that never
@@ -1493,474 +681,6 @@ button.create-menu-trigger {
   .habit-strip-day-hint {
     animation: none;
   }
-}
-
-.task-title {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-  font-size: var(--text-md);
-}
-
-.task-title > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.completed {
-  text-decoration: line-through;
-  color: var(--text-tertiary);
-}
-
-/* The matched substring in a Search result's title (issue #167). */
-.task-title mark {
-  background: var(--amber-100);
-  color: inherit;
-  border-radius: 2px;
-}
-
-/* Row actions (Focus, Delete) reveal on hover. */
-.tasks li > button:not(.task-title) {
-  padding: 2px 6px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  visibility: hidden;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.tasks li:hover > button:not(.task-title),
-.tasks li > button:not(.task-title):focus-visible {
-  visibility: visible;
-}
-
-.tasks li > button:not(.task-title):hover {
-  background: var(--surface-hover);
-}
-
-.tasks li > button[aria-label^="Delete"]:hover {
-  background: var(--danger-soft);
-  color: var(--text-danger);
-}
-
-/* ── Chips & metadata ────────────────────────────────────────────── */
-
-.date-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  flex: none;
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-xs);
-  color: var(--text-accent);
-  white-space: nowrap;
-}
-
-.date-chip.overdue,
-.date-label.overdue {
-  color: var(--text-danger);
-}
-
-/* Weight, not just hue, tells "today" and "overdue" apart from a plain
- * future date (#258) — it survives desaturation and colour-blindness where
- * the accent/red distinction alone did not. Overdue goes one step further
- * (li[data-overdue] below) and adds the triangle glyph, so overdue is never
- * only "today, but bolder". */
-.date-chip.today {
-  font-weight: var(--weight-medium);
-}
-
-li[data-overdue] .date-chip {
-  font-weight: var(--weight-semibold);
-}
-
-/* The overdue glyph — aria-hidden, since the state is already spoken via
- * the chip's accessible name (TaskRow's dateAccessibleName). */
-.date-chip .icon {
-  flex: none;
-}
-
-.tag-chip {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 8px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.list-chip {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 8px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  color: var(--text-secondary);
-  background: var(--surface-hover);
-  white-space: nowrap;
-}
-
-/* ── A task row's own chips ──────────────────────────────────────────
- * Scoped to .task-row (so both the List row and the Kanban card get them)
- * and no wider: Quick-Add's token chips, the Folder view's flat rows and
- * the Completed view keep the outlined pill they were drawn for. */
-
-/* Three or four outlined pills on one line was most of the line-work on a
- * row. A tint plus a darkened ink of the Tag's own colour carries the same
- * identity with none of it. Both are mixed from --chip-color, set inline
- * from the Tag (TaskRow.chipColor), so the curated 12-swatch palette
- * doesn't have to grow a hand-picked second entry per colour. */
-.task-row .tag-chip {
-  padding: 1px 6px;
-  border-color: transparent;
-  border-radius: var(--radius-xs);
-  font-weight: var(--weight-medium);
-  background: color-mix(in oklab, var(--chip-color, var(--ink-400)) 14%, var(--white));
-  color: color-mix(in oklab, var(--chip-color, var(--ink-500)) 62%, var(--ink-900));
-}
-
-/* The List is context, not a badge: the 10px dot that already identifies a
- * List in the sidebar (or the List's own emoji) and its name, in the same
- * secondary ink as the rest of the row's metadata. */
-.task-row .list-chip {
-  gap: 6px;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.task-row .list-emoji {
-  font-size: var(--text-sm);
-}
-
-.task-row .list-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The accent was on every dated row, which made it mean nothing. It now
- * marks today alone; every other date is secondary ink, and overdue keeps
- * the red it has always owned (li[data-overdue] above adds the weight). */
-.task-row .date-chip {
-  color: var(--text-secondary);
-}
-
-.task-row .date-chip.today {
-  color: var(--text-accent);
-}
-
-.task-row .date-chip.overdue {
-  color: var(--text-danger);
-}
-
-/* A settled date is ordinary secondary text with no accent and no glyph —
- * quieter than "future". The row still carries data-overdue (sorting,
- * grouping and the spoken "Overdue:" prefix are untouched); only the visual
- * alarm goes, so this undoes the weight li[data-overdue] adds above. */
-.task-row .date-chip.settled {
-  color: var(--text-secondary);
-  font-weight: var(--weight-regular);
-}
-
-/* ── Token input (Quick-Add bar) ─────────────────────────────────── */
-
-.token-input {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
-}
-
-.token-input:focus-within {
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
-}
-
-.token-input input {
-  flex: 1;
-  min-width: 120px;
-  height: calc(var(--control-height) - 4px);
-  border: none;
-}
-
-.token-input input:focus {
-  box-shadow: none;
-}
-
-/* Decorative ghost hints for the inline Quick-Add bar's sigils (issue #197)
- * — discoverable at rest, dimmed once the field has content so they never
- * compete with typed text. Not controls: aria-hidden, never focusable. */
-.quick-add-sigil-hints {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: var(--space-2);
-  padding-right: var(--space-1);
-  opacity: 1;
-  transition: opacity var(--duration-fast) var(--ease-out);
-}
-
-.quick-add-sigil-hints[data-has-content="true"] {
-  opacity: 0.35;
-}
-
-.quick-add-sigil-hint {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-/* Quick-Add's Assist affordance (ADR 0005) — a flex item alongside the
- * input/chips, not an overlay, so it never overlaps typed text or the
- * suggestion dropdown. */
-.quick-add-assist-affordance {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--accent);
-  padding-right: var(--space-1);
-}
-
-/* The busy indicator (issue #43) covers the ~1-2s Assisted Capture parse —
- * a slow, gentle pulse, not a spin: the design system's motion rules keep
- * nothing bouncing or looping fast. */
-.quick-add-assist-busy {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--accent);
-  padding-right: var(--space-1);
-  animation: quick-add-assist-pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes quick-add-assist-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-
-/* Assisted Capture's confirmation beat (ADR 0005; issue #43): the proposed
- * draft's ghost chips replace the input for one beat — Enter confirms,
- * Escape (or the dismiss button) discards and saves the task as typed. */
-.quick-add-assist-draft {
-  gap: var(--space-2);
-}
-
-.quick-add-assist-hint {
-  flex: 1;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-.quick-add-assist-discard {
-  display: inline-flex;
-  flex-shrink: 0;
-  padding: 2px;
-  border: none;
-  background: none;
-  color: var(--text-tertiary);
-}
-
-.quick-add-assist-discard:hover {
-  color: var(--text-danger);
-}
-
-/* Assisted Capture's recurrence / reminder chips in the Quick add dialog
- * (ADR 0005): the dialog has no control for either, so a resolved phrase
- * shows here as a removable chip below the date inputs. */
-.quick-add-assist-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.token-input-chips {
-  display: contents;
-}
-
-.token-chip button {
-  display: inline-flex;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text-tertiary);
-}
-
-/* IconButton wraps the chip's remove button in a span (#270) — the wrapper
- * is the chip's flex item now, so it carries the separating margin the
- * button itself used to. */
-.token-chip .icon-button-wrap {
-  margin-left: var(--space-1);
-}
-
-.token-chip button:hover {
-  color: var(--text-danger);
-}
-
-.token-input-dropdown {
-  position: absolute;
-  top: calc(100% + var(--space-1));
-  left: 0;
-  z-index: var(--z-popover);
-  min-width: var(--popover-min-width);
-  max-height: var(--popover-max-height);
-  margin: 0;
-  padding: var(--space-1);
-  overflow-y: auto;
-  list-style: none;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-}
-
-.token-input-dropdown li {
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.token-input-dropdown li:hover,
-.token-input-dropdown li.active {
-  background: var(--surface-selected);
-}
-
-.check-progress {
-  flex: none;
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-/* ── Kanban ──────────────────────────────────────────────────────── */
-
-.kanban {
-  display: flex;
-  gap: var(--space-4);
-  align-items: flex-start;
-  margin-top: var(--space-4);
-  overflow-x: auto;
-}
-
-.kanban-column {
-  flex: 0 0 260px;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-md);
-  padding: var(--space-2);
-}
-
-.kanban-column h2 {
-  margin: 0 0 var(--space-2);
-  padding: 0 var(--space-1);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.kanban-column ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  min-height: var(--space-6);
-  display: grid;
-  gap: var(--space-2);
-}
-
-.kanban-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  /* A grid item's automatic minimum is its min-content width, and the title
-   * span is `white-space: nowrap` — so without this a long title widened the
-   * card past the column's own `flex: 0 0 260px`, and the column with it.
-   * The title ellipsises inside the card instead. */
-  min-width: 0;
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
-  cursor: grab;
-  transition: border-color var(--duration-fast) var(--ease-out);
-}
-
-.kanban-card:hover {
-  border-color: var(--border-strong);
-}
-
-.kanban-card:active {
-  cursor: grabbing;
-  box-shadow: var(--shadow-drag);
-}
-
-/* The card gives its head line to `.task-row-main`, not to `.task-title`
- * directly: the title shares that line with the Check Item counter, and a
- * `width: 100%` title would push the counter off the end of it. */
-.kanban-card .task-row-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.kanban-card .task-title {
-  flex-wrap: wrap;
-  row-gap: var(--space-1);
-  line-height: var(--leading-snug);
-}
-
-.kanban-column form {
-  margin-top: var(--space-2);
-}
-
-/* `form input`, not a bare `input`: the column's add-a-card field is the only
- * input this was written for, but the bare selector also matched every card's
- * completion checkbox — same specificity as `input[type="checkbox"]` and
- * later in the file, so it won, stretching the checkbox to `width: 100%` and
- * `height: 28px`. */
-.kanban-column form input {
-  width: 100%;
-  height: 28px;
-  border-style: dashed;
-  background: transparent;
-  font-size: var(--text-sm);
-}
-
-.kanban-column form input:focus {
-  border-style: solid;
-  background: var(--surface-card);
 }
 
 /* ── Calendar ────────────────────────────────────────────────────── */
@@ -2558,18 +1278,6 @@ li[data-overdue] .date-chip {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
-
-/* The title is first and never wraps, so a 30-minute block still shows it
- * on one line without clipping (#198); a tight block clips the time below
- * it instead. How Entries are fully drawn is a later slice.
- *
- * `flex: 0 0 auto` is what makes that true. The block is a fixed-height
- * flex column, so at 30 minutes its two children (a 16px title and a 16px
- * time) want 32px inside a 20px content box — with the default
- * `flex-shrink: 1` the browser squashes BOTH, and the title collapsed to
- * under 4px of clipped glyph tops. Refusing to shrink keeps the title at
- * its full line and pushes the time past `overflow: hidden` instead,
- * which is the intended sacrifice. */
 /* Checkbox and title share the block's first line, so the checkbox costs no
  * vertical room — a 30-minute block is already tight (see the flex-shrink
  * note above) and could not afford a row of its own. */
@@ -2715,10 +1423,6 @@ li[data-overdue] .date-chip {
   border-radius: 50%;
   background: var(--danger);
 }
-
-/* ── Search ──────────────────────────────────────────────────────── */
-
-/* Results share the List view's row markup (.tasks li) — see TaskRow. */
 
 /* The page's own query field (issue #167) — distinct from the sidebar's
    quick-jump field, and reachable on mobile where the sidebar is off-canvas. */
@@ -3076,8 +1780,7 @@ li[data-overdue] .date-chip {
   background: var(--surface-hover);
 }
 
-.other-habits h2,
-.archived-habits h2 {
+.other-habits h2 {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-caps);
@@ -3264,8 +1967,6 @@ li[data-overdue] .date-chip {
 .heatmap-day.level-4 {
   background: var(--heat-4);
 }
-
-/* ── Focus ───────────────────────────────────────────────────────── */
 
 /* The stage is the screen. Presets and statistics stack under it rather than
    beside it: a 240px rail next to a centred 220px dial pushed the clock off
@@ -3823,254 +2524,10 @@ li[data-overdue] .date-chip {
   color: var(--text-secondary);
 }
 
-/* ── Task detail panel ───────────────────────────────────────────── */
-
-.task-detail {
-  border-left: 1px solid var(--border-default);
-  background: var(--surface-raised);
-  padding: var(--space-6) var(--space-4);
-  display: grid;
-  gap: var(--space-4);
-  align-content: start;
-  /* Its own scroll region (issue #159): expanding the description editor
-     grows this panel's content, not the document — `min-height: 0` lets it
-     shrink to its grid track instead of stretching `.app` past the
-     viewport. */
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* The sheet's drag handle and mobile backdrop (issue #170) — both hidden on
-   desktop, where the panel is a plain grid-column sibling, not an overlay. */
-.task-detail-handle {
-  display: none;
-}
-
-.task-detail-backdrop {
-  display: none;
-}
-
-.task-detail-header {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.task-detail-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-
-.task-detail-breadcrumb {
-  margin: 0;
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-select.task-detail-breadcrumb {
-  align-self: flex-start;
-  max-width: 100%;
-  padding: 2px 4px;
-  margin-left: -4px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-}
-
-select.task-detail-breadcrumb:hover,
-select.task-detail-breadcrumb:focus-visible {
-  border-color: var(--border-default);
-}
-
-.task-detail-header form {
-  flex: 1;
-}
-
-.task-detail-header input {
-  width: 100%;
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-}
-
-.task-detail-header button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.task-detail-header button:hover {
-  background: var(--surface-hover);
-}
-
-.task-priority {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.task-priority select {
-  height: 28px;
-  font-size: var(--text-sm);
-}
-
-.task-dates,
-.task-reminders,
-.task-repeat,
-.task-tags {
-  display: grid;
-  gap: var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  margin: 0;
-  font-size: var(--text-sm);
-}
-
-.task-dates legend,
-.task-reminders legend,
-.task-repeat legend,
-.task-tags legend {
-  padding: 0 var(--space-1);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.task-reminders ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: var(--space-1);
-}
-
-.task-reminders li {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.task-reminders .offset-editor {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.task-reminders input[type="number"] {
-  width: 72px;
-}
-
-.task-dates .date-actions,
-.task-dates .date-editor,
-.task-dates .date-editor-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.task-dates .date-label {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-sm);
-}
-
-.task-repeat .repeat-editor,
-.task-repeat .repeat-summary,
-.task-repeat .repeat-weekdays {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.task-repeat .repeat-summary p {
-  margin: 0;
-}
-
-.task-repeat input[type="number"] {
-  width: 72px;
-}
-
-.task-tags label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-md);
-  cursor: pointer;
-}
-
 .hint {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-}
-
-.task-description {
-  display: grid;
-  gap: var(--space-2);
-  font-size: var(--text-md);
-}
-
-.task-description code {
-  font-family: var(--font-mono);
-}
-
-.task-description textarea {
-  width: 100%;
-}
-
-.task-description button {
-  justify-self: start;
-}
-
-.check-items ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.check-items li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 32px;
-  padding: 2px 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.check-items li:hover .row-actions {
-  visibility: visible;
-}
-
-.check-items li .row-actions {
-  margin-left: auto;
-}
-
-.check-items input[type="text"],
-.check-items form input:not([type="checkbox"]) {
-  width: 100%;
-  height: 28px;
-  font-size: var(--text-sm);
-}
-
-.check-items form {
-  margin-top: var(--space-2);
 }
 
 /* ── Stand-up ─────────────────────────────────────────────────────── */
@@ -4865,36 +3322,8 @@ select.task-detail-breadcrumb:focus-visible {
   background: var(--accent-hover);
 }
 
-/* ── Icon picker ─────────────────────────────────────────────────── */
-
 /* The icon field: a square showing the current emoji, or a placeholder glyph
    when unset. Opens the picker. */
-.icon-field {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-height);
-  height: var(--control-height);
-  padding: 0;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
-  color: var(--text-tertiary);
-  font-size: var(--text-lg);
-  line-height: 1;
-}
-
-.icon-field:hover {
-  border-color: var(--border-strong);
-}
-
-/* The List form pairs the free-text emoji input with the picker button. */
-.list-form .emoji-field {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: var(--space-2);
-}
 
 .icon-picker {
   max-height: 50vh;
@@ -4969,89 +3398,6 @@ select.task-detail-breadcrumb:focus-visible {
   color: var(--text-primary);
 }
 
-/* The sidebar's primary action, sitting under the search box. Inherits the
-   sidebar button's box and left alignment so it lines up with the Lists and
-   Smart Lists below it — only the filled accent sets it apart. Scoped under
-   .sidebar to outrank `.sidebar button`'s transparent background. */
-.sidebar .quick-add-trigger {
-  margin-bottom: var(--space-4);
-  background: var(--accent-strong);
-  font-weight: var(--weight-semibold);
-  color: var(--text-inverse);
-}
-
-.sidebar .quick-add-trigger:hover {
-  background: var(--accent-strong-hover);
-}
-
-.sidebar .quick-add-trigger .icon {
-  color: var(--text-inverse);
-}
-
-.quick-add-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.quick-add-dialog > label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.quick-add-dialog fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-
-.quick-add-dialog legend {
-  padding: 0 var(--space-1);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.quick-add-dialog .date-actions,
-.quick-add-dialog .date-editor,
-.quick-add-dialog .quick-add-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.quick-add-dialog .quick-add-tags label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-sm);
-}
-
-.quick-add-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-
-.quick-add-dialog-actions button[type="submit"] {
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  font-weight: var(--weight-medium);
-  color: var(--text-inverse);
-}
-
-.quick-add-dialog-actions button[type="submit"]:hover {
-  background: var(--accent-hover);
-}
-
 /* ── Modal & Quick-Add dialog on touch (issue #288) ───────────────────
  * Every control in the Quick-Add dialog sat under the 44px floor — the
  * title field, both selects, the date shortcuts, the checkboxes, the Assist
@@ -5092,52 +3438,6 @@ select.task-detail-breadcrumb:focus-visible {
     width: var(--tap-target);
     height: var(--tap-target);
     padding: 0;
-  }
-
-  /* `min-height`, not `height`, so a control that already needs more room
-     (a wrapped token input) keeps it. Beats `.token-input input`'s fixed
-     `calc(--control-height - 4px)` for the title field the same way. */
-  .quick-add-dialog input:not([type="checkbox"]),
-  .quick-add-dialog select,
-  .quick-add-dialog .date-actions button,
-  .quick-add-dialog-actions button {
-    min-height: var(--tap-target);
-  }
-
-  /* The Assist recurrence / reminder chips' remove buttons (ADR 0005) are
-     `.token-chip button`s — 12px glyph, zero padding. Square hit area like
-     `.modal-close`, glyph untouched: removing the wrong one silently drops
-     a reminder from the Task being filed. */
-  .quick-add-dialog .quick-add-assist-chips button {
-    min-width: var(--tap-target);
-    min-height: var(--tap-target);
-  }
-
-  /* The suggestion dropdown's rows are the only touch path to a `#tag` /
-     `~list` / `!priority` / `@date` pick — a 27px row in a list of them is
-     a mis-pick waiting to happen. */
-  .quick-add-dialog .token-input-dropdown li {
-    display: flex;
-    align-items: center;
-    min-height: var(--tap-target);
-  }
-
-  /* Checkbox hit areas grow through the wrapping label's padding — the
-     visible 18px box is untouched, per the convention `.tasks label` set
-     (#168). Matched by what the label *wraps*, not by where it sits, so the
-     tag checkboxes and the Date fieldset's All-day are both covered while
-     the "New tag" text label — already sized through its input above —
-     isn't padded for nothing. */
-  .quick-add-dialog label:has(> input[type="checkbox"]) {
-    padding: calc((var(--tap-target) - 18px) / 2);
-  }
-
-  /* Submit sat ~3px from Cancel at the same height: a thumb aimed at one
-     could file or discard the Task at random. Pushing them to opposite ends
-     of the row puts the whole dialog's width between them, so a touch
-     centred on either cannot reach the other. */
-  .quick-add-dialog-actions {
-    justify-content: space-between;
   }
 }
 
@@ -5180,30 +3480,6 @@ select.task-detail-breadcrumb:focus-visible {
     min-width: var(--tap-target);
     min-height: var(--tap-target);
   }
-
-  /* The Kanban card is auto-height, so its checkbox label takes the same
-   * padding outright — there is no fixed row to bleed out of. */
-  .kanban-card label {
-    padding: 13px;
-  }
-
-  /* The title claims the row height that already exists — but only where
-   * the row wraps. Below the 620px container floor the head line is
-   * already 44px tall (the padded checkbox label), so a 44px title moves
-   * neither the text nor the row. Where the row is still the fixed 36px
-   * grid, a 44px title would bleed into the rows above and below instead
-   * of claiming anything, so that band keeps its desktop sizing. Scoped
-   * with the exact complement of the grid's own query, so the two can
-   * never disagree about which layout is live. */
-  @container tasklist (not (min-width: 620px)) {
-    .tasks label {
-      padding: 13px;
-    }
-
-    .task-title {
-      min-height: var(--tap-target);
-    }
-  }
 }
 
 /* ── View controls on a phone ────────────────────────────────────────
@@ -5245,146 +3521,6 @@ select.task-detail-breadcrumb:focus-visible {
   }
 }
 
-/* ── Collapsed sidebar (icon rail) ───────────────────────────────── */
-
-.sidebar-top {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.sidebar-top .sidebar-brand {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Specificity has to beat `.sidebar button` (width: 100%, transparent
-   background) — matched here the same way `.sidebar .sidebar-collapse` does.
-   `margin-left` gives the pill its own breathing room from the brand rather
-   than relying entirely on `.sidebar-top`'s flex-driven gap, so it never
-   reads as crowding the brand even at a squeezed width (#162). (`.sidebar-
-   brand`'s own gap is a different one — it spaces the mark from the
-   wordmark inside the lockup.) */
-.sidebar .focus-nav-badge {
-  display: flex;
-  flex: none;
-  width: auto;
-  align-items: center;
-  gap: 4px;
-  margin-left: var(--space-2);
-  padding: 3px 7px;
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-inverse);
-  background: var(--focus-accent);
-}
-
-.sidebar .focus-nav-badge:hover {
-  background: var(--plum-700);
-}
-
-.sidebar .focus-nav-badge.paused {
-  background: var(--text-tertiary);
-}
-
-/* On a break: still the Focus identity, but the softer tint marks it as not
-   real focus time. */
-.sidebar .focus-nav-badge.break {
-  background: var(--focus-soft);
-  color: var(--focus-accent);
-}
-
-.sidebar .focus-nav-badge.finished {
-  background: var(--success);
-}
-
-.sidebar .sidebar-collapse {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
-}
-
-.sidebar .sidebar-collapse:hover {
-  color: var(--text-primary);
-}
-
-/* The rail: every row shrinks to its glyph, and the labels step aside. */
-.sidebar.collapsed {
-  padding-left: var(--space-2);
-  padding-right: var(--space-2);
-  align-items: center;
-}
-
-.sidebar.collapsed .nav-label,
-.sidebar.collapsed .nav-count,
-.sidebar.collapsed .sidebar-brand-name,
-.sidebar.collapsed .focus-nav-badge,
-.sidebar.collapsed .row-actions,
-.sidebar.collapsed .folder-row,
-.sidebar.collapsed .lists-nav h2,
-.sidebar.collapsed .tags-nav h2,
-.sidebar.collapsed .archived h2 {
-  display: none;
-}
-
-.sidebar.collapsed button {
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-}
-
-.sidebar.collapsed .top-nav {
-  flex-direction: column;
-  gap: 2px;
-  padding: 0 0 10px;
-  width: 100%;
-}
-
-/* In the rail the label is gone, so the icon centres in a full-width row
- * (this also catches the anchor items, which `.sidebar.collapsed button`
- * above does not). The inset accent bar on `.selected` stays visible. */
-.sidebar.collapsed .top-nav .top-nav-item {
-  flex: none;
-  width: 100%;
-  justify-content: center;
-  gap: 0;
-  padding: 0;
-}
-
-/* The rail keeps the brand, but only the mark of it: the wordmark steps
-   aside with every other label, and the 56px rail (40px inside its padding)
-   has no room for a 21px mark beside a 28px toggle, so the two stack. The
-   version tooltip stays on the brand, so hovering the mark still reports it.
-   `flex: none` undoes `.sidebar-top .sidebar-brand`'s `flex: 1`, which in a
-   column would stretch the brand down the rail instead of across it. */
-.sidebar.collapsed .sidebar-top {
-  flex-direction: column;
-  justify-content: center;
-}
-
-.sidebar.collapsed .sidebar-brand {
-  flex: none;
-  padding: 2px 0 var(--space-2);
-}
-
-/* A List with no color or emoji still needs something to click. */
-.list-initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
-
 /* ── Touch targets (issue #168) ──────────────────────────────────────
    Hover-reveal and 28px/18px controls assume a mouse. Under a coarse
    pointer (or a device that reports no hover capability at all — some
@@ -5395,60 +3531,6 @@ select.task-detail-breadcrumb:focus-visible {
    Nothing here changes on a real hover-capable pointer device — the
    existing hover-reveal rules elsewhere in this file are untouched. */
 @media (hover: none), (pointer: coarse) {
-  /* The task/subtask checkbox: visually still an 18x18 box (styled on
-     the input itself), but its wrapping label's tappable area grows via
-     padding so the box people tap dozens of times a day isn't the
-     smallest thing on the screen. Kanban cards (.kanban-card is
-     TaskRow's own `<li>`, restyled, #165) get the same treatment — their
-     checkbox is met just as often as a List row's. */
-  .tasks label,
-  .kanban-card label {
-    padding: 13px;
-  }
-
-  /* List/Folder/Tag row actions (Edit, Archive, Delete, the Folder's New
-     list/Rename/Delete, the archived List's Unarchive…) never appeared at
-     all on touch before, since they only ever left `:hover`. They're not
-     singularly destructive the way a Task delete is — Edit/Archive/New
-     sit right beside Delete in the same group — so touch just gets them
-     reachable outright rather than gated behind a gesture; List and
-     Folder delete already ask for confirmation before anything is sent. */
-  .row-actions {
-    width: auto;
-    overflow: visible;
-    visibility: visible;
-  }
-
-  .row-actions button {
-    width: var(--tap-target);
-    height: var(--tap-target);
-  }
-
-  button.folder-disclosure {
-    width: var(--tap-target);
-    height: var(--tap-target);
-  }
-
-  /* A Task row's own actions (Focus, Delete) are different: Delete has no
-     confirmation dialog, relying instead on the undo toast (#155), and
-     used to sit permanently exposed at 19px tall beside every title —
-     a stray tap destroyed a Task. On touch they go back to hidden at
-     rest and open only behind a deliberate long-press (`data-actions-
-     open`, set by TaskRow) or keyboard focus — never permanently
-     rendered next to the title. */
-  .tasks li.task-row .row-actions {
-    width: 0;
-    overflow: hidden;
-    visibility: hidden;
-  }
-
-  .tasks li.task-row[data-actions-open="true"] .row-actions,
-  .tasks li.task-row .row-actions:focus-within {
-    width: auto;
-    overflow: visible;
-    visibility: visible;
-  }
-
   /* A Goal card's actions (Focus, Abandon, Edit, Delete) adopt the same
      long-press gesture as a Task row (#168, #245, #248): de-emphasised at
      rest (#247) isn't enough on touch, since there's no hover to bring them
@@ -5478,31 +3560,12 @@ select.task-detail-breadcrumb:focus-visible {
     width: var(--tap-target);
     height: var(--tap-target);
   }
-
-  /* The Folder view's flat row layout (no Delete, only Focus — see
-     FolderView.tsx) isn't destructive, so it's simply made reachable and
-     correctly sized rather than gated. */
-  .tasks li > button:not(.task-title) {
-    visibility: visible;
-    min-width: var(--tap-target);
-    min-height: var(--tap-target);
-    padding: 10px 14px;
-  }
-
-  .sidebar button,
-  .sidebar a {
-    min-height: var(--tap-target);
-  }
-
-  .sidebar .top-nav-item {
-    height: var(--tap-target);
-  }
 }
 
 /* ── Mobile: the sidebar becomes an off-canvas drawer ────────────── */
 
 .drawer-toggle {
-  display: none; /* desktop keeps the sidebar in the grid */
+  display: none;
 }
 
 /* IconButton wraps the toggle in a span (#270) — the wrapper is the
@@ -5511,19 +3574,6 @@ select.task-detail-breadcrumb:focus-visible {
 .main-header > .icon-button-wrap:has(> .drawer-toggle) {
   display: none;
   flex: none;
-}
-
-/* `.sidebar button` (specificity 0,1,1) otherwise beats a bare
-   `.drawer-close` (0,1,0) and forces it visible at every width — same
-   trap `.sidebar .sidebar-collapse` above already sidesteps. */
-.sidebar .drawer-close {
-  display: none; /* desktop has no drawer to close (issue #170) */
-}
-
-/* IconButton wraps the close control in a span (#270) — the button's own
- * display:none can't hide its wrapper, so the wrapper hides too. */
-.sidebar-top > .icon-button-wrap:has(> .drawer-close) {
-  display: none;
 }
 
 /* Mobile-only bottom tab bar and Task detail sheet (issue #170): hidden on
@@ -5557,152 +3607,6 @@ select.task-detail-breadcrumb:focus-visible {
   .app.sidebar-collapsed,
   .app.sidebar-collapsed.with-detail {
     grid-template-columns: 1fr;
-  }
-
-  /* Off-canvas: full width of the sidebar, whatever the collapsed choice —
-     a phone drawer has the room for labels. */
-  .sidebar,
-  .sidebar.collapsed {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    z-index: calc(var(--z-modal) - 1);
-    width: var(--sidebar-width);
-    padding: 14px 10px;
-    align-items: stretch;
-    transform: translateX(-100%);
-    transition: transform var(--duration-base) var(--ease-out);
-  }
-
-  .app.drawer-open .sidebar {
-    transform: translateX(0);
-    box-shadow: var(--shadow-lg);
-  }
-
-  /* Inside the drawer the rail rules are off: it is the full sidebar. Each
-     element is restored to the display it has when expanded — `revert` would
-     drop them to the UA default and break the flex rows. */
-  .sidebar.collapsed .nav-label {
-    display: inline;
-  }
-
-  .sidebar.collapsed .nav-count {
-    display: inline;
-  }
-
-  /* The drawer shows the whole lockup, not the rail's lone mark: the
-     wordmark comes back, the brand row un-stacks, and the brand takes its
-     expanded flex and padding again. `block` would not do for
-     `.sidebar-brand-name` alone — it must be a flex item beside the mark for
-     its ellipsis to work at a squeezed width. */
-  .sidebar.collapsed .sidebar-top {
-    flex-direction: row;
-  }
-
-  .sidebar.collapsed .sidebar-brand {
-    display: flex;
-    flex: 1;
-    padding: 2px 10px var(--space-3);
-  }
-
-  .sidebar.collapsed .sidebar-brand-name {
-    display: block;
-  }
-
-  .sidebar.collapsed .lists-nav h2,
-  .sidebar.collapsed .tags-nav h2,
-  .sidebar.collapsed .archived h2 {
-    display: block;
-  }
-
-  .sidebar.collapsed .focus-nav-badge {
-    display: flex;
-  }
-
-  .sidebar.collapsed .row-actions,
-  .sidebar.collapsed .folder-row {
-    display: flex;
-  }
-
-  .sidebar.collapsed button {
-    justify-content: flex-start;
-    gap: 10px;
-    padding: 0 10px;
-  }
-
-  /* The drawer is the full sidebar, not the rail — the feature nav is the
-   * vertical labelled list again (issue #194), not the icon rail. */
-  .sidebar.collapsed .top-nav {
-    flex-direction: column;
-  }
-
-  .sidebar.collapsed .top-nav .top-nav-item {
-    flex: none;
-    width: 100%;
-    justify-content: flex-start;
-    gap: 10px;
-    padding: 0 10px;
-  }
-
-  /* The drawer is the full sidebar: Tags are the wrapped chip cloud again,
-   * not the rail's stacked glyphs (issue #194). */
-  .sidebar.collapsed .tags-nav .tag-cloud {
-    flex-direction: row;
-    flex-wrap: wrap;
-    padding: 0 6px;
-  }
-
-  .sidebar.collapsed .tags-nav .tag-chip .list-button {
-    width: auto;
-    justify-content: flex-start;
-    border: 1px solid var(--border-default);
-    padding: 3px 10px;
-  }
-
-  .sidebar.collapsed .tags-nav .tag-chip .list-button.selected {
-    border-color: var(--text-accent);
-  }
-
-  .sidebar .sidebar-collapse {
-    display: none; /* the header's drawer toggle owns this on mobile */
-  }
-
-  /* The drawer's own close control (issue #170) — sits beside the wordmark,
-     opposite the collapse toggle it replaces at this width. Scoped as
-     `.sidebar .drawer-close`, matching `.sidebar .sidebar-collapse` above,
-     so its own width/flex still beat `.sidebar button`'s `width: 100%`.
-     IconButton wraps the button in a span (#270) — the wrapper is the
-     row's flex item now, so it carries the auto margin pinning the
-     control to the row's far end. */
-  .sidebar-top > .icon-button-wrap:has(> .drawer-close) {
-    margin-left: auto;
-  }
-  .sidebar .drawer-close {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: var(--tap-target);
-    height: var(--tap-target);
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-  }
-
-  /* IconButton wraps the close control in a span (#270) — the mobile rule
-   * above shows the button again, so the wrapper shows with it. */
-  .sidebar-top > .icon-button-wrap:has(> .drawer-close) {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .sidebar .drawer-close:hover {
-    background: var(--surface-hover);
   }
 
   .drawer-scrim {
@@ -5791,13 +3695,6 @@ select.task-detail-breadcrumb:focus-visible {
       var(--mobile-tab-bar-height) + var(--mobile-quick-add-size) + var(--space-4) * 2
     );
   }
-
-  /* ── Mobile Quick-Add button (issue #287) ───────────────────────────
-   * Docked above the tab bar, within thumb reach — the drawer's Quick-Add
-   * trigger is otherwise the only path to Task creation on a phone, and
-   * it's hidden off-canvas until the drawer opens. Stacking sits between
-   * the tab bar (z-modal - 4) and the drawer scrim (z-modal - 2), so it
-   * never competes with either. */
   /* The wrapper shows again with the button it wraps (see the desktop rule
      that hides both). `display: contents` keeps the fixed-position button
      the thing that's laid out, not the span around it. */
@@ -5833,58 +3730,9 @@ select.task-detail-breadcrumb:focus-visible {
     }
   }
 
-  /* The detail panel has no third column to sit in: it becomes a
-     dismissible sheet (issue #170) — a peek of backdrop stays visible above
-     it so it reads as having opened over the current screen, not replaced
-     it, and the handle up top signals it can be dragged away. */
-  .task-detail {
-    position: fixed;
-    top: 8vh;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: var(--z-modal);
-    width: auto;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    box-shadow: var(--shadow-lg);
-    overflow-y: auto;
-    animation: task-detail-sheet-in var(--duration-base) var(--ease-out);
-  }
-
-  .task-detail-handle {
-    display: block;
-    width: 40px;
-    height: 4px;
-    margin: 0 auto var(--space-3);
-    border-radius: var(--radius-full);
-    background: var(--border-default);
-  }
-
-  .task-detail-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: calc(var(--z-modal) - 1);
-    background: var(--scrim);
-  }
-
-  @keyframes task-detail-sheet-in {
-    from {
-      transform: translateY(100%);
-    }
-    to {
-      transform: translateY(0);
-    }
-  }
-
   .modal-backdrop {
     padding: var(--space-4) var(--space-2);
   }
-
-  /* ── Calendar: phone layout (issue #169) ──────────────────────────
-   * Month defaults away to Day at this width (CalendarView.tsx), but the
-   * grid still has to stay legible for a user who picks Month deliberately
-   * — and Week's headers still have to fit without overlapping. */
 
   /* Title, prev/today/next, mode switch, refresh and the Unscheduled
    * toggle no longer fit one unbroken row at 390px — let the toolbar wrap
@@ -6432,226 +4280,6 @@ a.button:hover {
 }
 
 /* ------------------------------------------------------------------ *
- * Command palette (issue #201) — the cmd/ctrl+K jump overlay.        *
- * ------------------------------------------------------------------ */
-.command-palette-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 12vh var(--space-4) var(--space-4);
-  background: var(--scrim);
-}
-
-.command-palette {
-  width: min(560px, 100%);
-  max-height: 60vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-page);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-
-.command-palette-scope {
-  flex: none;
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.command-palette-input {
-  flex: none;
-  height: 48px;
-  padding: 0 var(--space-4);
-  border: none;
-  border-bottom: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-primary);
-  font-family: var(--font-body);
-  font-size: var(--text-md);
-}
-
-.command-palette-input:focus {
-  outline: none;
-}
-
-/* Jump mode's field is a TokenInput (issue #204 follow-up) — render it flush
-   with the palette header rather than as a bordered box. */
-.command-palette > .token-input {
-  border: none;
-  border-radius: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: var(--space-2) var(--space-3);
-  background: transparent;
-}
-
-.command-palette > .token-input:focus-within {
-  box-shadow: none;
-  border-bottom-color: var(--border-subtle);
-}
-
-.command-palette-results {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-2);
-}
-
-.command-palette-heading {
-  padding: var(--space-2) var(--space-2) var(--space-1);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-}
-
-.command-palette-option {
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.command-palette-option.active {
-  background: var(--surface-selected);
-  color: var(--text-accent);
-  font-weight: var(--weight-medium);
-}
-
-.command-palette-empty {
-  padding: var(--space-4) var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-}
-
-/* Palette Task capture (issue #204). */
-.command-palette-capture {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-}
-
-.command-palette-capture-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.command-palette-chip-unmatched {
-  opacity: 0.6;
-  border-style: dashed;
-}
-
-.command-palette-capture-commit {
-  align-self: flex-start;
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
-  background: var(--surface-raised);
-  cursor: pointer;
-}
-
-.command-palette-capture-commit:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* ------------------------------------------------------------------ *
- * Multi-select bulk action bar (issue #202).                         *
- * ------------------------------------------------------------------ */
-.bulk-action-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  padding: var(--space-2) var(--space-3);
-  margin-bottom: var(--space-2);
-  background: var(--surface-selected);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-}
-
-.bulk-action-count {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  color: var(--text-primary);
-}
-
-.bulk-action-bar button {
-  height: var(--control-height);
-  padding: 0 var(--space-3);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  background: var(--surface-page);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.bulk-action-bar button:hover {
-  background: var(--surface-hover);
-}
-
-.bulk-action-bar .row-action-danger {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-
-.bulk-action-clear {
-  padding: 0 var(--space-2) !important;
-}
-
-/* IconButton wraps the bar's clear button in a span (#270) — the wrapper
- * is the bar's flex item now, so it carries the auto margin. The text
- * buttons keep their own rules untouched. */
-.bulk-action-bar > .icon-button-wrap:has(> .bulk-action-clear) {
-  margin-left: auto;
-}
-
-.tasks li.task-row[data-selected] {
-  background: var(--surface-selected);
-}
-
-.tasks li.task-row[data-selected] .task-title {
-  font-weight: var(--weight-semibold);
-  color: var(--text-accent);
-}
-
-.bulk-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-}
-
-.bulk-dialog label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  font-size: var(--text-sm);
-}
-
-/* ------------------------------------------------------------------ *
  * Calendar Entries coloured by List + the Unscheduled rail (#203).   *
  * ------------------------------------------------------------------ */
 .calendar-banner[data-list-color],
@@ -6712,8 +4340,6 @@ a.button:hover {
 .unscheduled-card:hover {
   background: var(--surface-hover);
 }
-
-/* ── Goals ───────────────────────────────────────────────────────── */
 
 /* Goals is prose, not a dense columnar surface — it opts into the reading
  * measure, like Stand-up and Habits. */

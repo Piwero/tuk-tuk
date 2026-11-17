@@ -1,3 +1,4 @@
+import { readStylesheets } from "../test/stylesheets";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -338,7 +339,7 @@ describe("due date chip is not clipped (issue #257)", () => {
   // itself, the same approach contentColumn.test.ts uses for its own
   // container-query claim.
   const tokensCss = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
-  const indexCss = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+  const indexCss = readStylesheets();
 
   // A dated, timed Task with distinct start/end times is the widest shape
   // formatSchedule produces: "Aug 27, 07:00–08:00".
@@ -372,7 +373,7 @@ describe("due date chip is not clipped (issue #257)", () => {
   it("never clips the date cell with overflow: hidden", () => {
     // A right-justified, width-constrained cell with overflow: hidden crops
     // from the *front* — exactly the "ug 27" bug this issue reports.
-    const rule = /\.task-row-list,\s*\n\.task-row-date\s*\{[^}]*\}/.exec(indexCss);
+    const rule = /\.task-row-list,\s*\.task-row-date\s*\{[^}]*\}/.exec(indexCss);
     expect(rule, ".task-row-date rule not found").not.toBeNull();
     expect((rule as RegExpExecArray)[0]).not.toMatch(/overflow:\s*hidden/);
   });
@@ -411,7 +412,7 @@ describe("settled date reads as ordinary text, light and dark (issue #280)", () 
   // Same approach as the #257 block above: jsdom applies no stylesheet, so
   // the claim is checked against the CSS source itself.
   const tokensCss = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
-  const indexCss = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+  const indexCss = readStylesheets();
 
   it("styles the settled chip only through semantic tokens", () => {
     // No hard-coded colour: the rule points at the secondary ink, which
@@ -658,7 +659,7 @@ describe("context-relative date chip (issue #431)", () => {
 
   describe("date column width", () => {
     const tokensCss = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
-    const indexCss = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+    const indexCss = readStylesheets();
 
     it("narrows only in the today and week contexts, to fit their widest label", () => {
       const narrow = /--task-col-date-narrow:\s*(\d+)px/.exec(tokensCss);

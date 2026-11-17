@@ -1,3 +1,5 @@
+import "./BulkActionBar.css";
+
 import { IconButton } from "./IconButton";
 
 interface BulkActionBarProps {

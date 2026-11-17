@@ -1,3 +1,5 @@
+import "./TaskDetail.css";
+
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
