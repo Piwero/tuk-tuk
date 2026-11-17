@@ -357,10 +357,34 @@ export function weekdayRecordLabel(dayIso: string): string {
  * the same wall-clock convention when no explicit timezone applies. */
 type Scheduled = Pick<Task, "start_date" | "due_date" | "is_all_day">;
 
-/** A compact human label: "Jul 6", "Jul 6 – Jul 8", "Jul 10, 14:00–15:30". */
-export function formatSchedule(task: Scheduled): string | null {
+/** Where a date is rendered, which decides what it can leave unsaid:
+ * - "today": the view already says "today", so a timed Task shows only its
+ *   time, an all-day Task nothing, and lateness within the last week reads
+ *   "Yesterday" or a weekday.
+ * - "week": the next seven days read as weekday names.
+ * - "absolute": the full "Jul 6" form (List, Search, completed views). */
+export type ScheduleContext = "today" | "week" | "absolute";
+
+const WEEK_DAYS = 7;
+
+/** A compact human label: "Jul 6", "Jul 6 – Jul 8", "Jul 10, 14:00–15:30" —
+ * shortened per `context`. In "today" an all-day Task due today yields "" (no
+ * chip text), null still means unscheduled. Day maths reads the same
+ * `dueDay` as the Smart Lists; a full week out or late falls back to the
+ * absolute form, since a weekday name would read as the wrong day. */
+export function formatSchedule(
+  task: Scheduled,
+  context: ScheduleContext = "absolute",
+  now: Date = new Date(),
+): string | null {
   if (task.due_date === null) {
     return null;
+  }
+  if (context !== "absolute") {
+    const label = contextLabel(task, task.due_date, context, now);
+    if (label !== null) {
+      return label;
+    }
   }
   if (task.is_all_day) {
     const due = task.due_date.slice(0, 10);
@@ -374,4 +398,42 @@ export function formatSchedule(task: Scheduled): string | null {
     return formatDate(due, "dateTime");
   }
   return `${formatDate(due, "short")}, ${formatDate(new Date(task.start_date), "time")}–${formatDate(due, "time")}`;
+}
+
+/** The shortened label for a context, or null when the date is outside the
+ * context's window (or a multi-day range) and the absolute form applies. */
+function contextLabel(
+  task: Scheduled,
+  dueIso: string,
+  context: "today" | "week",
+  now: Date,
+): string | null {
+  const start = task.start_date?.slice(0, 10) ?? null;
+  if (task.is_all_day && start !== null && start !== dueIso.slice(0, 10)) {
+    return null;
+  }
+  const day = task.is_all_day ? dueIso.slice(0, 10) : localDayOf(new Date(dueIso));
+  const ahead = diffDays(day, localDayOf(now));
+  const due = task.is_all_day ? fromDayIso(day) : new Date(dueIso);
+  const times = task.is_all_day
+    ? ""
+    : task.start_date === null
+      ? formatDate(due, "time")
+      : `${formatDate(new Date(task.start_date), "time")}–${formatDate(due, "time")}`;
+  if (context === "today") {
+    if (ahead === 0) {
+      return times;
+    }
+    if (ahead === -1) {
+      return "Yesterday";
+    }
+    // Older (or, defensively, later) days drop the time: a bare day keeps
+    // the narrowed today column wide enough.
+    return ahead < 0 && ahead > -WEEK_DAYS ? formatDate(due, "weekday") : shortDayLabel(day);
+  }
+  if (ahead < 0 || ahead >= WEEK_DAYS) {
+    return null;
+  }
+  const weekday = formatDate(due, "weekday");
+  return times === "" ? weekday : `${weekday}, ${times}`;
 }

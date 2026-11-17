@@ -1,5 +1,5 @@
 import { type Task, type TaskList } from "../api";
-import { formatSchedule, isDueToday, isOverdue, isSettled } from "../dates";
+import { formatSchedule, isDueToday, isOverdue, isSettled, type ScheduleContext } from "../dates";
 import { useLongPressReveal } from "../longPressReveal";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
@@ -54,6 +54,11 @@ export interface TaskRowProps {
    * inferred from context (#157 — a Task looked like a different object
    * depending on where it was rendered). */
   showDate: boolean;
+  /** Where the row is shown, which decides how much of the date the chip
+   * says (#431): "today" and "week" drop what the view already states. The
+   * chip's accessible name and title always carry the full date. Defaults to
+   * "absolute" — List, Search, Kanban and completed views. */
+  dateContext?: ScheduleContext;
   showTags: boolean;
   showCheckProgress: boolean;
   /** Whether a long-overdue date settles into ordinary text (#280).
@@ -110,6 +115,7 @@ export function TaskRow({
   className,
   list,
   showDate,
+  dateContext = "absolute",
   showTags,
   showCheckProgress,
   settlesOverdue = true,
@@ -135,7 +141,9 @@ export function TaskRow({
   const hasDescription = task.description.trim() !== "";
   const repeats = task.recurrence !== null;
   const checkItemsDone = task.check_items.filter((item) => item.done).length;
+  // The full date feeds the accessible name; the visible chip may be shorter.
   const schedule = formatSchedule(task);
+  const visibleSchedule = formatSchedule(task, dateContext);
   const hasActions = onDelete !== undefined || onOpenActions !== undefined;
 
   // Today's date reads in the accent, everything else in the secondary ink —
@@ -198,6 +206,7 @@ export function TaskRow({
       className={rowClassName}
       data-priority={task.priority}
       data-overdue={overdue || undefined}
+      data-date-context={dateContext === "absolute" ? undefined : dateContext}
       data-actions-open={reveal.dataActionsOpen}
       data-selected={selected || undefined}
       aria-selected={selectable ? Boolean(selected) : undefined}
@@ -307,7 +316,7 @@ export function TaskRow({
               aria-label={dateAccessibleName ?? undefined}
             >
               {dateState === "overdue" && <Icon name="alert-triangle" size={12} />}
-              <span aria-hidden="true">{schedule}</span>
+              <span aria-hidden="true">{visibleSchedule}</span>
             </span>
           )}
         </span>

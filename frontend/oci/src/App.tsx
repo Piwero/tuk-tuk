@@ -1471,6 +1471,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                   viewKey={viewKey}
                   groupBy={groupBy}
                   sortBy={sortBy}
+                  dateContext={
+                    smartView === "today" ? "today" : smartView === "next7" ? "week" : "absolute"
+                  }
                   onChanged={smartView !== null ? changeTasksAndRecompute : changeTasks}
                   onSelect={setSelectedTaskId}
                   onSectionsChanged={setSections}
