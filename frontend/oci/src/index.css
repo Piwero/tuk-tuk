@@ -4511,6 +4511,7 @@ select.task-detail-breadcrumb:focus-visible {
 }
 
 .standup-bullet {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
@@ -4537,16 +4538,29 @@ select.task-detail-breadcrumb:focus-visible {
   word-break: break-word;
 }
 
+/* Out of flow (#429): the text spans the column and the actions overlay
+   the trailing edge only when revealed, so revealing never reflows the
+   text. Opacity (not visibility) keeps the buttons keyboard-focusable;
+   pointer-events stops the invisible buttons swallowing taps at rest. */
 .standup-bullet-actions {
+  position: absolute;
+  top: 50%;
+  right: var(--space-1);
+  transform: translateY(-50%);
   display: flex;
   gap: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .standup-bullet:hover .standup-bullet-actions,
-.standup-bullet:focus-within .standup-bullet-actions {
+.standup-bullet:focus-within .standup-bullet-actions,
+.standup-bullet[data-actions-open="true"] .standup-bullet-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .standup-bullet.editing {
@@ -5525,6 +5539,12 @@ select.task-detail-breadcrumb:focus-visible {
     min-width: var(--tap-target);
     min-height: var(--tap-target);
     padding: 10px 14px;
+  }
+
+  /* Stand-up bullet actions open on long-press (#429); sized to the floor. */
+  .standup-bullet-actions button {
+    width: var(--tap-target);
+    height: var(--tap-target);
   }
 
   /* The Folder view's flat row layout (no Delete, only Focus — see
