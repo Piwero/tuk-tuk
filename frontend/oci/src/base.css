@@ -1,0 +1,27 @@
+/* ── Base ────────────────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--blue-100);
+}
+
+/* Bare-element button reset. */
+button {
+  font-family: inherit;
+  font-size: var(--text-md);
+  color: inherit;
+  cursor: pointer;
+}

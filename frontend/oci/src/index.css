@@ -1,34 +1,14 @@
+/* Cascade layers (#435). Declared once, here; the order is fixed by this
+ * statement, so index.css must be the first stylesheet main.tsx imports.
+ * Unlayered rules below still beat every layer: that is the expand-contract
+ * bridge while the monolith is migrated component by component. */
+@layer tokens, base, components, overrides;
+
 @import "./fonts.css";
-@import "./tokens.css";
-
-/* ── Base ────────────────────────────────────────────────────────── */
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--text-md);
-  line-height: var(--leading-normal);
-  color: var(--text-primary);
-  background: var(--surface-page);
-  -webkit-font-smoothing: antialiased;
-}
-
-::selection {
-  background: var(--blue-100);
-}
+@import "./tokens.css" layer(tokens);
+@import "./base.css" layer(base);
 
 /* ── Shared controls ─────────────────────────────────────────────── */
-
-button {
-  font-family: inherit;
-  font-size: var(--text-md);
-  color: inherit;
-  cursor: pointer;
-}
 
 button:focus-visible,
 input:focus-visible,
@@ -4809,64 +4789,6 @@ select.task-detail-breadcrumb:focus-visible {
 
 .modal:focus {
   outline: none;
-}
-
-/* ── Undo toasts (issue #155) ────────────────────────────────────── */
-
-.toast-stack {
-  position: fixed;
-  left: 50%;
-  bottom: var(--space-6);
-  transform: translateX(-50%);
-  z-index: var(--z-toast);
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: center;
-  gap: var(--space-2);
-  pointer-events: none;
-}
-
-.toast {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--ink-900);
-  color: var(--text-inverse);
-  box-shadow: var(--shadow-lg);
-  pointer-events: auto;
-}
-
-.toast-message {
-  font-size: var(--text-sm);
-}
-
-/* Undo (#155) and a confirmation's jump-to action (#191) sit in the same
-   slot and read the same; they stay separate selectors so either can be
-   restyled without the other. */
-.toast-undo,
-.toast-action {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--blue-300);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-}
-
-.toast-dismiss {
-  display: flex;
-  align-items: center;
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--text-inverse);
-  opacity: 0.7;
-}
-
-.toast-dismiss:hover {
-  opacity: 1;
 }
 
 /* ── Event detail popover ────────────────────────────────────────── */
