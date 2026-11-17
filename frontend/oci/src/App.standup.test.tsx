@@ -1,5 +1,9 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import process from "node:process";
 
 import { App } from "./App";
 import {
@@ -563,5 +567,39 @@ describe("Stand-up settings toggle", () => {
     // (still-pending) settings fetch and pass for the wrong reason.
     await within(nav).findByRole("link", { name: "Focus" });
     expect(within(nav).queryByRole("link", { name: "Stand-up" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Stand-up bullet actions overlay the row (issue #429)", () => {
+  // jsdom applies no stylesheet, so the layout claim is checked against the
+  // CSS source, as contentColumn.test.ts does.
+  const css = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+  const rule = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = new RegExp(`(^|\\n)${escaped}\\s*\\{[^}]*\\}`).exec(css);
+    expect(match, `${selector} rule not found`).not.toBeNull();
+    return (match as RegExpExecArray)[0];
+  };
+
+  it("takes the actions out of flow so the text spans the column", () => {
+    expect(rule(".standup-bullet")).toMatch(/position:\s*relative/);
+    expect(rule(".standup-bullet-actions")).toMatch(/position:\s*absolute/);
+  });
+
+  it("opens the actions on a touch long-press", async () => {
+    installFakeApi();
+    render(<App />);
+    await openStandup();
+    await addBullet("Today", "Hold me");
+
+    const row = within(screen.getByRole("list", { name: "Today bullets" }))
+      .getByText("Hold me")
+      .closest("li") as HTMLElement;
+    expect(row).not.toHaveAttribute("data-actions-open");
+    fireEvent.touchStart(row);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(row).toHaveAttribute("data-actions-open", "true");
   });
 });
