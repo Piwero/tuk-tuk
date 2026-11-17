@@ -1,0 +1,28 @@
+@layer components {
+  .voice-visualizer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .voice-visualizer-still {
+    border-radius: var(--radius-full);
+    background: #4772fa;
+    opacity: 0.85;
+  }
+
+  .voice-visualizer-still[data-size="sm"] {
+    width: 64px;
+    height: 64px;
+  }
+
+  .voice-visualizer-still[data-size="md"] {
+    width: 128px;
+    height: 128px;
+  }
+
+  .voice-visualizer-still[data-size="lg"] {
+    width: 192px;
+    height: 192px;
+  }
+}

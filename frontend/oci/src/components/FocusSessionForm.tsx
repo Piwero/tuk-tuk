@@ -1,3 +1,4 @@
+import "./TimerForm.css";
 import { useState } from "react";
 
 import { type FocusMode, type FocusSession, type Habit, type Task } from "../api";

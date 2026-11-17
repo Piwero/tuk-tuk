@@ -9,10 +9,16 @@ import process from "node:process";
  * shortcut caps and code in Markdown (issue #432). jsdom applies no
  * stylesheet, so the claim is checked against the CSS source. */
 
-const css = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8").replace(
-  /\/\*[\s\S]*?\*\//g,
-  "",
-);
+const css = [
+  "index.css",
+  "components/HabitCardStats.css",
+  "components/HabitsView.css",
+  "components/GoalsView.css",
+  "components/FocusStatsPanel.css",
+]
+  .map((file) => readFileSync(resolve(process.cwd(), "src", file), "utf8"))
+  .join("\n")
+  .replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Innermost `selector { body }` rules; media-query wrappers fall away. */
 const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector = "", body = ""]) => ({

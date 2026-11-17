@@ -1,3 +1,4 @@
+import "./HabitHistory.css";
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchHabitStats, putCheckIn, removeCheckIn, type Habit, type HabitStats } from "../api";

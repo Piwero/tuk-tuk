@@ -1,3 +1,4 @@
+import "./GoalsView.css";
 import { useCallback, useEffect, useState } from "react";
 
 import {
