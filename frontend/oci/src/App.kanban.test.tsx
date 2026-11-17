@@ -18,7 +18,7 @@ async function openList(name: string): Promise<void> {
   const user = userEvent.setup();
   const nav = await screen.findByRole("navigation", { name: "Lists" });
   // Custom lists load via a separate async fetch; wait for the button first.
-  await user.click(await within(nav).findByRole("button", { name }));
+  await user.click(await within(nav).findByRole("link", { name }));
 }
 
 describe("Kanban view", () => {
@@ -300,7 +300,7 @@ describe("Kanban cards: completing honours undo (#155) and recurrence (ADR 0003)
     // fake timers active, userEvent's internal delays need to be told to
     // advance them, which isn't worth wiring up for one click.
     const nav = await screen.findByRole("navigation", { name: "Lists" });
-    fireEvent.click(await within(nav).findByRole("button", { name }));
+    fireEvent.click(await within(nav).findByRole("link", { name }));
     await screen.findByRole("region", { name: "Kanban board" });
   }
 

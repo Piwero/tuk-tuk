@@ -38,7 +38,7 @@ describe("Task dates in list views", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Late" });
 
     expect(rowFor("Late")).toHaveAttribute("data-overdue", "true");
@@ -65,7 +65,7 @@ describe("Task dates in list views", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Ancient" });
 
     // The date is still shown and still announced as overdue — only the
@@ -93,7 +93,7 @@ describe("Task dates in list views", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Timed ancient" });
 
     const timedChip = within(rowFor("Timed ancient")).getByLabelText(/Overdue:/);
@@ -122,7 +122,7 @@ describe("Task dates in list views", () => {
     const nav = await screen.findByRole("navigation", { name: "Lists" });
     // Custom lists load via a separate async fetch, so wait for the Board list
     // button to render before clicking it (a bare getByRole races that fetch).
-    fireEvent.click(await within(nav).findByRole("button", { name: "Board" }));
+    fireEvent.click(await within(nav).findByRole("link", { name: "Board" }));
     const card = (
       await screen.findByRole("button", { name: "Open details for Late card" })
     ).closest("li");
@@ -144,7 +144,7 @@ describe("Task dates in list views", () => {
     render(<App />);
 
     const nav = await screen.findByRole("navigation", { name: "Lists" });
-    fireEvent.click(await within(nav).findByRole("button", { name: "Board" }));
+    fireEvent.click(await within(nav).findByRole("link", { name: "Board" }));
     await screen.findByRole("button", { name: "Open details for Ancient card" });
 
     // Same Task settles in the List view (see the test above), but the

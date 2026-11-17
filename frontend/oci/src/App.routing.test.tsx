@@ -1,15 +1,110 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { pinCalendarClock } from "./test/calendar";
-import { fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
+import { fakeFolder, fakeList, fakeTag, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 
 pinCalendarClock();
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("List, Tag and Folder URLs", () => {
+  it.each(["lists", "tags", "folders"])(
+    "redirects a missing %s bookmark to Today with a notice",
+    async (kind) => {
+      installFakeApi();
+      window.history.replaceState(null, "", `/${kind}/99999`);
+      render(<App />);
+      await screen.findByRole("heading", { name: "Today" });
+      expect(
+        await screen.findByText("That List, Tag or Folder no longer exists."),
+      ).toBeInTheDocument();
+      expect(window.location.pathname).toBe("/today");
+    },
+  );
+
+  it.each(["kanban", "completed"])("restores a List's %s mode from its URL", async (mode) => {
+    const list = fakeList("Project");
+    installFakeApi({
+      lists: [INBOX, list],
+      tasks: [fakeTask("Finished", { list_id: list.id, completed: true })],
+    });
+    const path = `/lists/${list.id}/${mode}`;
+    window.history.replaceState(null, "", path);
+    render(<App />);
+    await screen.findByRole("heading", { name: "Project" });
+    expect(
+      await screen.findByRole("button", {
+        name: mode === "kanban" ? "Switch to list view" : "Open tasks",
+      }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe(path);
+  });
+
+  it("links destinations and restores views and List modes with Back and Forward", async () => {
+    const list = fakeList("Project");
+    const tag = fakeTag("Work");
+    const folder = fakeFolder("Archive");
+    installFakeApi({ lists: [INBOX, list], tags: [tag], folders: [folder] });
+    const user = userEvent.setup();
+    render(<App />);
+    const link = await screen.findByRole("link", { name: "Project" });
+    expect(link).toHaveAttribute("href", `/lists/${list.id}`);
+    expect(fireEvent.click(link, { ctrlKey: true })).toBe(true);
+    expect(window.location.pathname).toBe("/all");
+    await user.click(link);
+    await user.click(await screen.findByRole("button", { name: "Switch to kanban view" }));
+    await waitFor(() => expect(window.location.pathname).toBe(`/lists/${list.id}/kanban`));
+    await user.click(screen.getByRole("button", { name: "Completed" }));
+    await waitFor(() => expect(window.location.pathname).toBe(`/lists/${list.id}/completed`));
+    const tagLink = screen.getByRole("link", { name: "Work" });
+    expect(tagLink).toHaveAttribute("href", `/tags/${tag.id}`);
+    await user.click(tagLink);
+    await screen.findByRole("heading", { name: "#Work" });
+    const folderLink = screen.getByRole("link", { name: "Archive" });
+    expect(folderLink).toHaveAttribute("href", `/folders/${folder.id}`);
+    await user.click(folderLink);
+    await screen.findByRole("heading", { name: "Archive" });
+    window.history.back();
+    await screen.findByRole("heading", { name: "#Work" });
+    window.history.back();
+    await screen.findByRole("button", { name: "Open tasks" });
+    expect(window.location.pathname).toBe(`/lists/${list.id}/completed`);
+    window.history.back();
+    await screen.findByRole("button", { name: "Switch to list view" });
+    window.history.back();
+    await screen.findByRole("button", { name: "Switch to kanban view" });
+    window.history.forward();
+    await screen.findByRole("button", { name: "Switch to list view" });
+    expect(window.location.pathname).toBe(`/lists/${list.id}/kanban`);
+  });
+
+  it.each(["list", "tag", "folder"] as const)(
+    "opens a %s URL after data loads without replacing it",
+    async (kind) => {
+      const list = fakeList("Project");
+      const tag = fakeTag("Project");
+      const folder = fakeFolder("Project");
+      const id = { list, tag, folder }[kind].id;
+      installFakeApi({ lists: [INBOX, list], tags: [tag], folders: [folder] });
+      const path = `/${kind}s/${id}`;
+      window.history.replaceState(null, "", path);
+      const push = vi.spyOn(window.history, "pushState");
+      render(<App />);
+      expect(
+        await screen.findByRole("heading", {
+          name: kind === "tag" ? "#Project" : "Project",
+          level: 1,
+        }),
+      ).toBeInTheDocument();
+      expect(window.location.pathname).toBe(path);
+      expect(push).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("Direct load of a static view's URL", () => {
@@ -25,7 +120,7 @@ describe("Direct load of a static view's URL", () => {
 
   it("does not push a duplicate history entry for the URL that loaded the page", async () => {
     installFakeApi();
-    window.history.replaceState(null, "", "/before");
+    window.history.replaceState(null, "", "/habits");
     window.history.pushState(null, "", "/standup");
     const pushSpy = vi.spyOn(window.history, "pushState");
 
@@ -35,7 +130,7 @@ describe("Direct load of a static view's URL", () => {
     expect(pushSpy).not.toHaveBeenCalled();
 
     window.history.back();
-    await waitFor(() => expect(window.location.pathname).toBe("/before"));
+    await waitFor(() => expect(window.location.pathname).toBe("/habits"));
   });
 
   it("opens the Assistant directly at /assistant once its probe answers", async () => {
@@ -243,7 +338,7 @@ describe("History push/replace while navigating in the app", () => {
     expect(window.location.pathname).toBe("/habits");
   });
 
-  it("replaces the URL back to / when navigating away to a List, without pushing", async () => {
+  it("pushes a List URL when navigating away from a static view", async () => {
     const groceries = fakeList("Groceries");
     installFakeApi({ lists: [INBOX, groceries] });
     const user = userEvent.setup();
@@ -255,10 +350,10 @@ describe("History push/replace while navigating in the app", () => {
     await screen.findByRole("heading", { name: "Habits" });
     expect(window.location.pathname).toBe("/habits");
 
-    await user.click(screen.getByRole("button", { name: "Groceries" }));
+    await user.click(screen.getByRole("link", { name: "Groceries" }));
 
     await screen.findByRole("heading", { name: "Groceries" });
-    expect(window.location.pathname).toBe("/");
+    expect(window.location.pathname).toBe(`/lists/${groceries.id}`);
   });
 
   it("pushes /focus/stats from the timer screen, and Back returns to /focus", async () => {

@@ -14,7 +14,7 @@ afterEach(() => {
 async function openInbox(): Promise<HTMLElement> {
   const user = userEvent.setup();
   render(<App />);
-  const inbox = await screen.findByRole("button", { name: "Inbox" });
+  const inbox = await screen.findByRole("link", { name: "Inbox" });
   await user.click(inbox);
   await screen.findByRole("combobox", { name: "Add a task" });
   return inbox;

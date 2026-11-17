@@ -1,9 +1,7 @@
 import type { CalendarMode } from "./calendar";
 import type { SmartView } from "./api";
 
-/** URL routing for the app's static, URL-addressable views (issue #143).
- * List/Tag/Folder views stay in-memory only — they're not represented here
- * and never get a path. Smart views (Today/Next 7 Days/All) do get one. */
+/** URL routing for static views and user-created containers. */
 export type StaticViewKind =
   | "standup"
   | "assistant"
@@ -45,6 +43,25 @@ const SMART_VIEW_PATHS: Record<SmartView, string> = {
   next7: "/next-7-days",
   all: "/all",
 };
+
+export type ContainerRoute =
+  | { kind: "list"; id: number; mode?: "list" | "kanban" | "completed" }
+  | { kind: "tag" | "folder"; id: number };
+
+export function pathForContainer(view: ContainerRoute): string {
+  const suffix = view.kind === "list" && view.mode && view.mode !== "list" ? `/${view.mode}` : "";
+  return `/${view.kind}s/${view.id}${suffix}`;
+}
+
+export function containerForPath(pathname: string): ContainerRoute | null {
+  const match = /^\/(lists|tags|folders)\/([1-9]\d*)(?:\/(kanban|completed))?$/.exec(pathname);
+  if (!match || !Number.isSafeInteger(Number(match[2]))) return null;
+  const id = Number(match[2]);
+  if (match[1] === "lists")
+    return { kind: "list", id, mode: (match[3] ?? "list") as "list" | "kanban" | "completed" };
+  if (match[3]) return null;
+  return { kind: match[1] === "tags" ? "tag" : "folder", id };
+}
 
 export function pathForStaticView(kind: StaticViewKind): string {
   return STATIC_VIEW_PATHS[kind];
