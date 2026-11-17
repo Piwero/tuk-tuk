@@ -50,7 +50,7 @@ input[type="date"],
 input[type="time"],
 input[type="datetime-local"],
 input[type="number"] {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
 }
 
@@ -258,7 +258,7 @@ main {
   border-radius: var(--radius-xs);
   background: var(--surface-sunken);
   color: var(--text-secondary);
-  font-family: inherit;
+  font-family: var(--font-mono);
   font-size: var(--text-2xs);
   text-align: center;
 }
@@ -619,7 +619,7 @@ button.folder-name {
 
 .folder-count {
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -633,7 +633,7 @@ button.folder-name {
   flex: none;
   margin-left: auto;
   padding-left: var(--space-2);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -1559,7 +1559,7 @@ button.create-menu-trigger {
   align-items: center;
   gap: 3px;
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-accent);
   white-space: nowrap;
@@ -1729,6 +1729,7 @@ li[data-overdue] .date-chip {
 }
 
 .quick-add-sigil-hint {
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
@@ -1858,7 +1859,7 @@ li[data-overdue] .date-chip {
 
 .check-progress {
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -2228,7 +2229,7 @@ li[data-overdue] .date-chip {
   align-items: center;
   gap: 2px;
   min-width: 0;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The narrow-width stand-in for a cell's full entry list (issue #169): just
@@ -2328,9 +2329,8 @@ li[data-overdue] .date-chip {
 }
 
 .calendar-timed-entry .entry-time {
-  font-family: var(--font-mono);
-  color: var(--text-accent);
   font-variant-numeric: tabular-nums;
+  color: var(--text-accent);
 }
 
 /* Events are read-only Google context: a dashed border and default cursor
@@ -2393,7 +2393,7 @@ li[data-overdue] .date-chip {
   border-radius: var(--radius-pill, 999px);
   background: var(--accent);
   color: var(--surface-card);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-caps);
@@ -2413,7 +2413,7 @@ li[data-overdue] .date-chip {
 }
 
 .week-day-header .day-date {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -2456,7 +2456,7 @@ li[data-overdue] .date-chip {
 .hour-gutter {
   width: 56px;
   flex: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-tertiary);
 }
@@ -2587,9 +2587,8 @@ li[data-overdue] .date-chip {
 }
 
 .time-block .block-time {
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
 }
 
 .calendar-body {
@@ -2968,7 +2967,7 @@ li[data-overdue] .date-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -3049,7 +3048,7 @@ li[data-overdue] .date-chip {
 }
 
 .habit-progress {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -3067,7 +3066,7 @@ li[data-overdue] .date-chip {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-full);
   background: var(--surface-card);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   transition: background var(--duration-fast) var(--ease-out);
 }
@@ -3175,7 +3174,7 @@ li[data-overdue] .date-chip {
 }
 
 .habit-month-label {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
 }
 
@@ -3206,7 +3205,7 @@ li[data-overdue] .date-chip {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xs);
   background: none;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-secondary);
   transition: background var(--duration-fast) var(--ease-out);
@@ -3694,7 +3693,7 @@ li[data-overdue] .date-chip {
 }
 
 .focus-duration {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
   font-size: var(--text-sm);
 }
@@ -3811,7 +3810,6 @@ li[data-overdue] .date-chip {
 }
 
 .focus-chart-value {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   white-space: nowrap;
@@ -3987,7 +3985,7 @@ select.task-detail-breadcrumb:focus-visible {
 
 .task-dates .date-label {
   margin: 0;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
 }
 
@@ -4026,6 +4024,10 @@ select.task-detail-breadcrumb:focus-visible {
   display: grid;
   gap: var(--space-2);
   font-size: var(--text-md);
+}
+
+.task-description code {
+  font-family: var(--font-mono);
 }
 
 .task-description textarea {
@@ -4105,7 +4107,7 @@ select.task-detail-breadcrumb:focus-visible {
 .standup-date-picker input[type="date"] {
   height: var(--control-height);
   padding: 0 10px;
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
 }
 
@@ -4188,7 +4190,7 @@ select.task-detail-breadcrumb:focus-visible {
 }
 
 .standup-history-short {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -4292,7 +4294,7 @@ select.task-detail-breadcrumb:focus-visible {
 }
 
 .standup-goal-score-value {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
   color: var(--accent);
@@ -4329,7 +4331,7 @@ select.task-detail-breadcrumb:focus-visible {
 }
 
 .standup-goal-kr-value {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
 }
@@ -4419,7 +4421,7 @@ select.task-detail-breadcrumb:focus-visible {
   padding: 0 6px;
   background: var(--surface-sunken);
   border-radius: var(--radius-full);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   color: var(--text-secondary);
@@ -6588,7 +6590,7 @@ a.button:hover {
 }
 
 .bulk-action-count {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   color: var(--text-primary);
@@ -6682,7 +6684,7 @@ a.button:hover {
   border-radius: var(--radius-full);
   background: var(--accent-soft);
   color: var(--text-accent);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
 }
@@ -6789,13 +6791,13 @@ a.button:hover {
   color: var(--accent);
 }
 
-/* A window and a Score are tabular: mono, so digits line up down the list. */
+/* A window and a Score use tabular figures, so digits line up down the list. */
 .goal-window,
 .goal-score,
 .goal-final-score,
 .key-result-progress,
 .key-result-readonly {
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }

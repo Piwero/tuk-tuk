@@ -122,8 +122,8 @@ Three faces, loaded from Google Fonts in `index.html`:
 | Face | Token | Used for |
 | --- | --- | --- |
 | Bricolage Grotesque | `--font-display` | Screen titles (26px), big numbers (focus clock 56px), the wordmark |
-| Instrument Sans | `--font-body` | All UI text; 14px default |
-| JetBrains Mono | `--font-mono` | Timers, date chips, counts — anything tabular |
+| Instrument Sans | `--font-body` | All UI text; 14px default. Dates, counts, durations, Streaks and Scores add `font-variant-numeric: tabular-nums` so digits align |
+| JetBrains Mono | `--font-mono` | Only things you type: Quick-Add sigil hints, keyboard shortcut caps, code in Markdown |
 
 Uppercase 12px labels with `--tracking-caps` head sections, folders, and
 sidebar groups. The wordmark is "Tuk Tuk" in Bricolage Grotesque,
