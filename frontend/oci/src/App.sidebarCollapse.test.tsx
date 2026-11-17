@@ -31,7 +31,7 @@ describe("Collapsing the sidebar", () => {
     await user.click(within(sidebar).getByRole("button", { name: "Collapse sidebar" }));
 
     // The rail keeps every destination reachable, by icon alone.
-    expect(within(sidebar).queryByRole("search")).not.toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Quick search" })).toBeInTheDocument();
     expect(within(sidebar).getByRole("link", { name: "Errands" })).toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Quick add" })).toBeInTheDocument();
 
@@ -188,6 +188,6 @@ describe("Collapsing the sidebar", () => {
     render(<App />);
 
     expect(await screen.findByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
-    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quick search" })).toBeInTheDocument();
   });
 });

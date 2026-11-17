@@ -1140,7 +1140,10 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     >
       <FocusRunProvider>
         <ShortcutsProvider>
-          <ShellShortcuts onQuickAdd={() => setQuickAddOpen(true)} />
+          <ShellShortcuts
+            onQuickAdd={() => setQuickAddOpen(true)}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
           <VoiceOverlay available={voiceAvailable} navigation={view} />
           {(paletteOpen || paletteTask !== null) && (
             <TaskPalette
@@ -1209,7 +1212,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               focusSelected={focusSelected}
               focusEnabled={sectionSettings.focus}
               settingsSelected={settingsSelected}
-              searchSelected={searchSelected}
               onSelect={(listId) => switchView({ kind: "list", id: listId })}
               onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
               onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
@@ -1228,10 +1230,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               onToggleTheme={toggleTheme}
               onCloseDrawer={() => setDrawerOpen(false)}
               onLogout={onLogout}
-              onSearch={(query) =>
-                switchView({ kind: "search", search: { ...BLANK_SEARCH_STATE, query } })
-              }
-              onOpenSearch={() => switchView({ kind: "search", search: BLANK_SEARCH_STATE })}
+              onOpenPalette={() => setPaletteOpen(true)}
               onListsChanged={setLists}
               onFoldersChanged={setFolders}
               onTagCreated={(tag) => setTags((current) => [...current, tag])}
@@ -1663,17 +1662,19 @@ function TaskPalette({
  * slice is deliberate — the command palette, row navigation and per-Task
  * verbs are separate slices that register against this layer rather than
  * adding their own listeners. */
-function ShellShortcuts({ onQuickAdd }: { onQuickAdd: () => void }): null {
+function ShellShortcuts({
+  onQuickAdd,
+  onOpenPalette,
+}: {
+  onQuickAdd: () => void;
+  onOpenPalette: () => void;
+}): null {
   useRegisterShortcut({ key: "n", label: "N", description: "Quick add", run: onQuickAdd });
   useRegisterShortcut({
     key: "/",
     label: "/",
     description: "Search",
-    run: () => {
-      const field = document.querySelector<HTMLInputElement>(".sidebar-search input");
-      field?.focus();
-      field?.select();
-    },
+    run: onOpenPalette,
   });
   return null;
 }

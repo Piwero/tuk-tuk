@@ -34,7 +34,7 @@ describe("Task detail sheet dismissal (issue #170)", () => {
     // "All" spans every List — opening a Task from there is the clearest
     // case where the sheet must say which List it actually belongs to,
     // since that's no longer implied by whatever view is behind it.
-    const smartNav = await screen.findByRole("navigation", { name: "Smart Lists" });
+    const smartNav = await screen.findByRole("complementary", { name: "" });
     await userEvent.setup().click(within(smartNav).getByRole("button", { name: "All" }));
     await screen.findByRole("heading", { name: "All" });
 

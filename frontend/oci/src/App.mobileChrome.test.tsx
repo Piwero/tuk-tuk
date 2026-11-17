@@ -72,7 +72,7 @@ afterEach(() => {
 });
 
 async function openAll(): Promise<void> {
-  const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+  const nav = await screen.findByRole("complementary", { name: "" });
   fireEvent.click(await within(nav).findByRole("button", { name: "All" }));
   await screen.findByRole("heading", { name: "All" });
 }

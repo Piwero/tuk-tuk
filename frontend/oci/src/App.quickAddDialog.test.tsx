@@ -205,7 +205,7 @@ describe("Quick add dialog", () => {
     const api = installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+    const nav = await screen.findByRole("complementary", { name: "" });
     await user.click(within(nav).getByRole("button", { name: "Today" }));
     await screen.findByRole("heading", { name: "Today" });
 

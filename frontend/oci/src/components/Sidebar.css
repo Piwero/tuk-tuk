@@ -11,7 +11,7 @@
     /* The sidebar itself doesn't scroll (issue #159) — `.sidebar-scroll` below
      is the scroll region, so Settings/Log out in `.sidebar-footer` stay
      anchored at the foot instead of scrolling away with the list tree. */
-    overflow: hidden;
+    overflow: visible;
   }
 
   /* Wraps everything above the footer (nav, search, smart lists, the list
@@ -117,11 +117,11 @@
     box-shadow: inset 3px 0 0 0 var(--text-accent);
   }
 
-  .sidebar-search input {
-    width: 100%;
-    height: 30px;
-    font-size: var(--text-sm);
+  .sidebar-search {
     margin-bottom: var(--space-3);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
   }
 
   .sidebar ul {
@@ -801,5 +801,30 @@
     .sidebar .drawer-close:hover {
       background: var(--surface-hover);
     }
+  }
+  .sidebar-app-menu {
+    position: relative;
+  }
+
+  .sidebar-app-menu-actions {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    min-width: 180px;
+    width: 100%;
+    padding: var(--space-2);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-md);
+    z-index: 10;
+  }
+
+  .sidebar.collapsed .sidebar-app-menu-actions .nav-label {
+    display: inline;
+  }
+
+  .sidebar.collapsed .sidebar-app-menu-actions button {
+    justify-content: flex-start;
   }
 }

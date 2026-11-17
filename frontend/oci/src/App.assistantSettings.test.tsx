@@ -21,6 +21,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByLabelText("Base URL")).toHaveValue("https://api.openai.com/v1");
@@ -33,6 +35,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(await screen.findByText(/An API key is already saved/)).toBeInTheDocument();
@@ -43,6 +47,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(await screen.findByLabelText("Base URL"), "https://api.openai.com/v1");
@@ -67,6 +73,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("button", { name: "Test Assistant connection" }));
 
@@ -83,6 +91,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("button", { name: "Test Assistant connection" }));
 
@@ -98,6 +108,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(await screen.findByLabelText("Assistant model"), "-edited");
 
@@ -108,6 +120,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await screen.findByLabelText("Base URL");
@@ -127,6 +141,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.click(await screen.findByRole("button", { name: "Remove Assistant configuration" }));
 
@@ -143,6 +159,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole("button", { name: "App menu" }));
+
     await user.click(await screen.findByRole("link", { name: "Settings" }));
 
     expect(
@@ -155,7 +173,7 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     installFakeApi({});
     render(<App />);
 
-    await screen.findByRole("link", { name: "Settings" });
+    await screen.findByRole("button", { name: "App menu" });
     expect(screen.queryByRole("link", { name: "Assistant" })).not.toBeInTheDocument();
   });
 
@@ -175,6 +193,8 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     installFakeApi({});
     const user = userEvent.setup();
     render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "App menu" }));
 
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     await user.type(await screen.findByLabelText("API key"), "sk-secret");

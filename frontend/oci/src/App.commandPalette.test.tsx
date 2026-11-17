@@ -82,7 +82,7 @@ describe("command palette", () => {
   it("closes on Escape and restores focus to the opener", async () => {
     await seed();
     const nav = await screen.findByRole("navigation", { name: "Views" });
-    const tasksNav = within(nav).getByRole("button", { name: "Tasks" });
+    const tasksNav = within(nav).getByRole("button", { name: "Today" });
     tasksNav.focus();
 
     openPalette();
