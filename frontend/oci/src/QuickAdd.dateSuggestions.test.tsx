@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 async function openBar(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
-  await user.click(await screen.findByRole("button", { name: "Inbox" }));
+  await user.click(await screen.findByRole("link", { name: "Inbox" }));
   return screen.findByRole("combobox", { name: "Add a task" });
 }
 

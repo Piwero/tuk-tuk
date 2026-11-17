@@ -697,7 +697,7 @@ button.folder-disclosure {
 /* Folder names are user content, not a section heading: sentence case,
  * primary text color, medium weight — the uppercase treatment stays
  * reserved for genuine static headings (Tags, Archived). */
-button.folder-name {
+.folder-name {
   flex: 1;
   width: auto;
   margin: 0;

@@ -9,7 +9,10 @@ import { fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
 /** The open-Task count shown on a sidebar item, or 0 when nothing is shown
  * (a zero count renders no element at all — issue #195). */
 function sidebarCount(name: string): number {
-  const button = screen.getByRole("button", { name });
+  const button = screen.getByRole(
+    ["Today", "Next 7 Days", "All"].includes(name) ? "button" : "link",
+    { name },
+  );
   const badge =
     button.querySelector(".nav-count") ??
     closestOrThrow(button, ".list-row, .folder-row").querySelector(".folder-count");
@@ -29,14 +32,14 @@ describe("Sidebar open-Task counts (issue #195)", () => {
       ],
     });
     render(<App />);
-    await screen.findByRole("button", { name: "Inbox" });
+    await screen.findByRole("link", { name: "Inbox" });
 
     expect(sidebarCount("Inbox")).toBe(2);
     expect(sidebarCount("Errands")).toBe(1); // the completed one does not count
     expect(sidebarCount("Empty")).toBe(0);
     expect(sidebarCount("All")).toBe(3);
     // Zero shows nothing, not "0".
-    expect(within(screen.getByRole("button", { name: "Empty" })).queryByText("0")).toBeNull();
+    expect(within(screen.getByRole("link", { name: "Empty" })).queryByText("0")).toBeNull();
   });
 
   it("folds the count into the item's accessible description", async () => {
@@ -44,7 +47,7 @@ describe("Sidebar open-Task counts (issue #195)", () => {
     render(<App />);
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Inbox" })).toHaveAccessibleDescription(
+      expect(screen.getByRole("link", { name: "Inbox" })).toHaveAccessibleDescription(
         "2 open tasks",
       ),
     );
@@ -55,7 +58,7 @@ describe("Sidebar open-Task counts (issue #195)", () => {
     installFakeApi({ tasks: [fakeTask("Water plants"), fakeTask("Buy milk")] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     expect(sidebarCount("Inbox")).toBe(2);
 
     await user.click(await screen.findByRole("checkbox", { name: "Complete Water plants" }));
@@ -69,7 +72,7 @@ describe("Sidebar open-Task counts (issue #195)", () => {
     installFakeApi({ tasks: [fakeTask("Water plants")] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     expect(sidebarCount("Inbox")).toBe(1);
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
@@ -84,7 +87,7 @@ describe("Sidebar open-Task counts (issue #195)", () => {
     installFakeApi({ lists: [INBOX, errands], tasks: [fakeTask("Buy milk")] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByText("Buy milk");
     expect(sidebarCount("Inbox")).toBe(1);
     expect(sidebarCount("Errands")).toBe(0);
@@ -92,7 +95,7 @@ describe("Sidebar open-Task counts (issue #195)", () => {
     const dataTransfer = fakeDataTransfer();
     const taskRow = closestOrThrow(screen.getByText("Buy milk"), "li");
     fireEvent.dragStart(taskRow, { dataTransfer });
-    fireEvent.drop(closestOrThrow(screen.getByRole("button", { name: "Errands" }), ".list-row"), {
+    fireEvent.drop(closestOrThrow(screen.getByRole("link", { name: "Errands" }), ".list-row"), {
       dataTransfer,
     });
 
@@ -104,7 +107,7 @@ describe("Sidebar open-Task counts (issue #195)", () => {
     installFakeApi({ tasks: [fakeTask("Old chore"), fakeTask("Keep me")] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     expect(sidebarCount("Inbox")).toBe(2);
 
     await user.click(await screen.findByRole("button", { name: "Delete Old chore" }));

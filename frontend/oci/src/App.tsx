@@ -47,6 +47,8 @@ import {
 } from "./layoutPrefs";
 import {
   calendarModeForPath,
+  containerForPath,
+  pathForContainer,
   pathForCalendarMode,
   pathForSmartView,
   pathForStaticView,
@@ -98,7 +100,7 @@ import { ToastStack } from "./components/ToastStack";
  * Habits / Focus screens (which fetch their own data), or Search results. A
  * focus view may carry the Task to start a Pomo against. */
 type View =
-  | { kind: "list"; id: number }
+  | { kind: "list"; id: number; mode?: "list" | "kanban" | "completed" }
   | { kind: "tag"; id: number }
   | { kind: "folder"; id: number }
   | { kind: "smart"; view: SmartView }
@@ -206,10 +208,18 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // pre-update view and incorrectly clobber lastSyncedKindRef (issue #143).
   const [view, setView] = useState<View>(() => {
     const kind = staticViewKindForPath(window.location.pathname);
-    return kind !== null ? viewForStaticKind(kind, window.location.pathname) : null;
+    return (
+      containerForPath(window.location.pathname) ??
+      (kind !== null ? viewForStaticKind(kind, window.location.pathname) : null)
+    );
   });
   // The completed view of the current List (or of All): computed, newest first.
-  const [completedMode, setCompletedMode] = useState(false);
+  const [completedMode, setCompletedMode] = useState(() => {
+    const route = containerForPath(window.location.pathname);
+    return route?.kind === "list" && route.mode === "completed";
+  });
+  const [containersLoaded, setContainersLoaded] = useState(false);
+  const [missingViewNotice, setMissingViewNotice] = useState(false);
   // Hides completed Tasks from List/Tag/Folder views instead of showing them
   // struck-through inline — a display preference (see layoutPrefs), not a
   // fetch filter: the completed Tasks stay loaded, just off-screen, so
@@ -337,8 +347,10 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // marks a view change driven by Back/Forward rather than by the user
   // navigating within the app — that must never itself push or replace
   // history, since the browser already positioned it there.
-  const lastSyncedKindRef = useRef<StaticViewKind | null>(
-    staticViewKindForPath(window.location.pathname),
+  const lastSyncedKindRef = useRef<string | null>(
+    containerForPath(window.location.pathname)
+      ? window.location.pathname
+      : staticViewKindForPath(window.location.pathname),
   );
   const suppressNextSyncRef = useRef(false);
 
@@ -348,6 +360,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   useEffect(() => {
     if (
       staticViewKindForPath(window.location.pathname) === null &&
+      containerForPath(window.location.pathname) === null &&
       window.location.pathname !== "/"
     ) {
       window.history.replaceState(null, "", "/");
@@ -360,21 +373,23 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     function onPopState(): void {
       const kind = staticViewKindForPath(window.location.pathname);
       suppressNextSyncRef.current = true;
-      setCompletedMode(false);
+      const route = containerForPath(window.location.pathname);
+      setCompletedMode(route?.kind === "list" && route.mode === "completed");
       setDrawerOpen(false);
-      setView(kind !== null ? viewForStaticKind(kind, window.location.pathname) : null);
+      setView(route ?? (kind !== null ? viewForStaticKind(kind, window.location.pathname) : null));
     }
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // Keeps the address bar in sync with `view`: pushes a new entry on
-  // navigating into a (different) static view, replaces back to "/" on
-  // navigating away to a List/Tag/Folder/Smart view, and does neither for a
-  // change within the same static view (e.g. editing Search's filters) or
-  // one that came from the URL itself (handled above).
+  // Container destinations and List modes each get a history entry.
+  // Search edits stay within their view; Back/Forward never pushes.
   useEffect(() => {
-    const kind = staticViewKindOf(view);
+    const containerPath =
+      view && (view.kind === "list" || view.kind === "tag" || view.kind === "folder")
+        ? pathForContainer(view)
+        : null;
+    const kind = containerPath ?? staticViewKindOf(view);
     if (suppressNextSyncRef.current) {
       suppressNextSyncRef.current = false;
       lastSyncedKindRef.current = kind;
@@ -384,16 +399,22 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       return;
     }
     lastSyncedKindRef.current = kind;
-    if (kind === "calendar" && view?.kind === "calendar") {
+    if (containerPath !== null) {
+      window.history.pushState(null, "", containerPath);
+    } else if (kind === "calendar" && view?.kind === "calendar") {
       window.history.pushState(null, "", pathForCalendarMode(view.mode));
     } else if (kind === "smart" && view?.kind === "smart") {
-      window.history.pushState(null, "", pathForSmartView(view.view));
+      window.history[missingViewNotice ? "replaceState" : "pushState"](
+        null,
+        "",
+        pathForSmartView(view.view),
+      );
     } else if (kind !== null) {
-      window.history.pushState(null, "", pathForStaticView(kind));
+      window.history.pushState(null, "", pathForStaticView(kind as StaticViewKind));
     } else if (window.location.pathname !== "/") {
       window.history.replaceState(null, "", "/");
     }
-  }, [view]);
+  }, [view, missingViewNotice]);
 
   // Keeps /calendar/<mode> in sync with the mode picker: a `replaceState`
   // (never a push) since switching Month/Week/Day is a within-view toggle,
@@ -431,6 +452,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
         setFolders(folderPage.items);
         setTags(tagPage.items);
         setOpenTasks(openTaskPage.items);
+        setContainersLoaded(true);
       },
     );
   }, []);
@@ -466,8 +488,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Keep a valid view: default to All, and fall back to it when the viewed
-  // list or tag disappears (e.g. it was deleted).
+  // Wait for container data before treating a deep link as stale.
   useEffect(() => {
     if (view?.kind === "standup" && !standupEnabled) {
       // The feature was turned off (or already was, on load) while this
@@ -515,13 +536,27 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     if (view?.kind === "folder" && folders.some((folder) => folder.id === view.id)) {
       return;
     }
+    if (view && (view.kind === "list" || view.kind === "tag" || view.kind === "folder")) {
+      if (!containersLoaded) return;
+      setMissingViewNotice(true);
+    }
     const next: View = { kind: "smart", view: "today" };
     setCompletedMode(false);
     // Guard against a stale closure: a view switch may land between this
     // effect's render and it running (e.g. the user clicks Calendar just as
     // the lists load). Never stomp a view that changed in the meantime.
     setView((current) => (current === view ? next : current));
-  }, [lists, tags, folders, view, standupEnabled, sectionSettings, assistantStatus, voiceStatus]);
+  }, [
+    lists,
+    tags,
+    folders,
+    view,
+    standupEnabled,
+    sectionSettings,
+    assistantStatus,
+    voiceStatus,
+    containersLoaded,
+  ]);
 
   /** Fetch what the current view shows. Smart Lists and the completed view are
    * computed queries, so edits re-run this rather than patching local state. */
@@ -590,7 +625,17 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   }, [view, loadTasks]);
 
   const selectedList =
-    view?.kind === "list" ? (lists.find((list) => list.id === view.id) ?? null) : null;
+    view?.kind === "list"
+      ? (() => {
+          const list = lists.find((list) => list.id === view.id);
+          return list
+            ? {
+                ...list,
+                view_mode: view.mode === "kanban" ? ("kanban" as const) : ("list" as const),
+              }
+            : null;
+        })()
+      : null;
   const selectedTag =
     view?.kind === "tag" ? (tags.find((tag) => tag.id === view.id) ?? null) : null;
   const selectedFolder =
@@ -632,6 +677,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // a pending undo isn't lost when its view unmounts.
   const toasts = useUndoQueue();
   const clearToasts = toasts.clearAll;
+  const notify = toasts.notify;
 
   // No toast outlives the screen it was raised on: a stale "Added to Errands"
   // on a screen the user has already left is noise, and its "Show Task" would
@@ -640,6 +686,13 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   useEffect(() => {
     clearToasts();
   }, [viewKey, clearToasts]);
+
+  useEffect(() => {
+    if (missingViewNotice && view?.kind === "smart" && view.view === "today") {
+      notify("That List, Tag or Folder no longer exists.");
+      setMissingViewNotice(false);
+    }
+  }, [missingViewNotice, view, notify]);
 
   useEffect(() => {
     applyThemePreference(themePreference);
@@ -667,7 +720,14 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   function switchView(next: View): void {
     setCompletedMode(false);
     setDrawerOpen(false);
-    setView(next);
+    setView(
+      next?.kind === "list"
+        ? {
+            ...next,
+            mode: next.mode ?? lists.find((list) => list.id === next.id)?.view_mode ?? "list",
+          }
+        : next,
+    );
   }
 
   /** Keeps `view.mode` (and so /calendar/<mode> — see the sync effect above)
@@ -901,6 +961,11 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       view_mode: list.view_mode === "kanban" ? "list" : "kanban",
     });
     setLists((current) => current.map((l) => (l.id === updated.id ? updated : l)));
+    setView((current) =>
+      current?.kind === "list" && current.id === list.id
+        ? { ...current, mode: updated.view_mode }
+        : current,
+    );
   }
 
   function applyTagDeletion(tagId: number): void {
@@ -1285,7 +1350,16 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                       <button
                         type="button"
                         className="completed-toggle"
-                        onClick={() => setCompletedMode((current) => !current)}
+                        onClick={() => {
+                          setCompletedMode(!completedMode);
+                          if (view?.kind === "list")
+                            setView({
+                              ...view,
+                              mode: completedMode
+                                ? (lists.find((list) => list.id === view.id)?.view_mode ?? "list")
+                                : "completed",
+                            });
+                        }}
                       >
                         {completedMode ? "Open tasks" : "Completed"}
                       </button>

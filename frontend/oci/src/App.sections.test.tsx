@@ -19,7 +19,7 @@ async function openList(name: string): Promise<void> {
   const user = userEvent.setup();
   const nav = await screen.findByRole("navigation", { name: "Lists" });
   // Custom lists load via a separate async fetch; wait for the button first.
-  await user.click(await within(nav).findByRole("button", { name }));
+  await user.click(await within(nav).findByRole("link", { name }));
 }
 
 describe("Sections in the list view", () => {

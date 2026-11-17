@@ -273,7 +273,7 @@ describe("voice writes: complete, priority, list", () => {
     const task = fakeTask("laundry");
     const { api, call } = await startVoice({ tasks: [task] });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     await open("laundry");
     await call("get_task", { task_id: task.id });
     const result = await call("complete_task", { task_id: task.id });
@@ -421,7 +421,7 @@ describe("voice writes: visible views refresh", () => {
   it("a created Task appears in the open List view, the sidebar count and nothing else needs a reload", async () => {
     const { call } = await startVoice();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     await call("create_task", { title: "buy milk" });
     expect(await open("buy milk")).toBeInTheDocument();
     const lists = await screen.findByRole("navigation", { name: "Lists" });

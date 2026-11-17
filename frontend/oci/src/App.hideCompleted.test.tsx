@@ -21,7 +21,7 @@ describe("Hide completed", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Open task" });
     expect(screen.getByRole("button", { name: "Open details for Done" })).toBeInTheDocument();
 
@@ -39,7 +39,7 @@ describe("Hide completed", () => {
       tasks: [fakeTask("Done", { completed: true, completed_at: "2026-07-02T10:00:00Z" })],
     });
     const first = render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     fireEvent.click(await screen.findByRole("button", { name: "Hide completed" }));
     await waitFor(() =>
       expect(
@@ -49,7 +49,7 @@ describe("Hide completed", () => {
     first.unmount();
 
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
 
     expect(await screen.findByRole("button", { name: "Show completed" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open details for Done" })).not.toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("Hide completed", () => {
       tags: [tag],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "urgent" }));
+    fireEvent.click(await screen.findByRole("link", { name: "urgent" }));
     await screen.findByRole("button", { name: "Open details for Open task" });
 
     fireEvent.click(screen.getByRole("button", { name: "Hide completed" }));

@@ -22,7 +22,7 @@ describe("Confirming a created Task", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     await quickAdd(user, "Review UX report");
 
@@ -61,7 +61,7 @@ describe("Confirming a created Task", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     await quickAdd(user, "Review UX report");
 
@@ -74,7 +74,7 @@ describe("Confirming a created Task", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     await quickAdd(user, "Review UX report");
 
@@ -88,7 +88,7 @@ describe("Confirming a created Task", () => {
       installFakeApi({ tasks: [fakeTask("Old chore")] });
       return render(<App />);
     })();
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByText("Old chore");
 
     fireEvent.click(screen.getByRole("button", { name: "Delete Old chore" }));
@@ -101,7 +101,7 @@ describe("Confirming a created Task", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const inline = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(inline, "Water the plants{Enter}");
@@ -115,7 +115,7 @@ describe("Confirming a created Task", () => {
     installFakeApi({ lists: [INBOX, board], sections: [backlog] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Board" }));
+    await user.click(await screen.findByRole("link", { name: "Board" }));
 
     const draft = await screen.findByRole("textbox", { name: "Add a task to Backlog" });
     await user.type(draft, "Draft the brief{Enter}");
@@ -127,7 +127,7 @@ describe("Confirming a created Task", () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     await quickAdd(user, "Review UX report");
     await screen.findByRole("status");
 
@@ -144,7 +144,7 @@ describe("Confirming a created Task", () => {
     const api = installFakeApi({ tasks: [fakeTask("Old chore")] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByText("Old chore");
 
     await user.click(screen.getByRole("button", { name: "Delete Old chore" }));

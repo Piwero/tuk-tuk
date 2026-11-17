@@ -43,7 +43,7 @@ describe("command palette", () => {
   it("opens even from a focused text field", async () => {
     const user = userEvent.setup();
     await seed();
-    fireEvent.click(await screen.findByRole("button", { name: "Errands" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Errands" }));
     const field = await screen.findByRole("combobox", { name: "Add a task" });
     await user.click(field);
     expect(field).toHaveFocus();
