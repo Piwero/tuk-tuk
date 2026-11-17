@@ -138,7 +138,7 @@ function SetupScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
             {error}
           </p>
         )}
-        <button type="submit" disabled={pending}>
+        <button className="btn-primary" type="submit" disabled={pending}>
           {pending ? "Setting up…" : "Set password"}
         </button>
       </form>
@@ -194,7 +194,7 @@ function PasswordScreen({ onSuccess }: { onSuccess: () => void }): JSX.Element {
             {error}
           </p>
         )}
-        <button type="submit" disabled={pending}>
+        <button className="btn-primary" type="submit" disabled={pending}>
           {pending ? "Checking…" : "Unlock"}
         </button>
       </form>

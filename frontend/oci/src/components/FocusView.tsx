@@ -240,7 +240,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                 {`Nice work. Time for ${pendingBreak.long ? "a long break" : "a break"} (${formatClock(clockMs)}).`}
               </p>
               <div className="focus-actions">
-                <button type="button" onClick={startBreak}>
+                <button className="btn-focus" type="button" onClick={startBreak}>
                   {`Start ${pendingBreak.long ? "long break" : "break"}`}
                 </button>
                 <button type="button" className="focus-secondary" onClick={skipBreak}>
@@ -322,7 +322,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
               <div className="focus-actions">
                 <button
                   type="button"
-                  className="focus-primary"
+                  className="focus-primary btn-focus"
                   onClick={start}
                   disabled={mode === "pomo" && Number(pomoMinutes) < 1}
                 >
@@ -347,7 +347,11 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                     Skip break
                   </button>
                 ) : (
-                  <button type="button" className="focus-primary" onClick={() => void finish()}>
+                  <button
+                    type="button"
+                    className="focus-primary btn-focus"
+                    onClick={() => void finish()}
+                  >
                     Finish
                   </button>
                 )}
@@ -405,6 +409,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                   <li key={timer.id} className="focus-timer-preset">
                     <Hint hintKey="start-timer">
                       <button
+                        className="btn-secondary"
                         type="button"
                         aria-label={`Start timer ${timer.name}`}
                         disabled={running !== null}
@@ -441,7 +446,11 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                  do *around* a session, not part of starting one. */
               <div className="focus-timers-footer">
                 <Hint hintKey="add-timer">
-                  <button type="button" onClick={() => setTimerEditor({ mode: "add" })}>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() => setTimerEditor({ mode: "add" })}
+                  >
                     <Icon name="plus" size={16} />
                     Add Timer
                   </button>
