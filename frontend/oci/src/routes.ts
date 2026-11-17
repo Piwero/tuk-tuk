@@ -38,8 +38,8 @@ const CALENDAR_MODE_PATHS: Record<CalendarMode, string> = {
   day: "/calendar/day",
 };
 
-/** The Smart Lists' per-view URLs. `/` (the app's root) is kept working as
- * an alias for All, so it stays the view a bare landing resolves to. */
+/** The Smart Lists' per-view URLs. `/` (the app's root) is an alias for
+ * Today, so a bare landing opens the user's day (#428). */
 const SMART_VIEW_PATHS: Record<SmartView, string> = {
   today: "/today",
   next7: "/next-7-days",
@@ -59,11 +59,11 @@ export function pathForSmartView(view: SmartView): string {
 }
 
 /** Reads the Smart view out of a `/today`, `/next-7-days`, or `/all` path,
- * defaulting to All for the bare `/` alias. Returns null for any other
+ * defaulting to Today for the bare `/` alias. Returns null for any other
  * path. */
 export function smartViewForPath(pathname: string): SmartView | null {
   if (pathname === "/") {
-    return "all";
+    return "today";
   }
   const match = (Object.keys(SMART_VIEW_PATHS) as SmartView[]).find(
     (view) => SMART_VIEW_PATHS[view] === pathname,
