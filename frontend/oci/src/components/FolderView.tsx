@@ -75,6 +75,7 @@ export function FolderView({
           ))}
         </button>
         <button
+          className="btn-secondary"
           type="button"
           aria-label={`Start Focus for ${task.title}`}
           onClick={() => onStartFocus(task)}

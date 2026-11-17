@@ -41,6 +41,7 @@ export function IconPicker({
             <div className="icon-picker-grid">
               {group.icons.map((icon) => (
                 <button
+                  className="btn-secondary"
                   key={icon.emoji}
                   type="button"
                   aria-label={icon.name}
