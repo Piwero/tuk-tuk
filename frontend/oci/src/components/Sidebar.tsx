@@ -271,6 +271,7 @@ function SmartListButton({
         type="button"
         className={selected ? "list-button selected" : "list-button"}
         aria-label={SMART_LABELS[view]}
+        aria-current={selected ? "page" : undefined}
         aria-describedby={describedBy}
         title={SMART_LABELS[view]}
         onClick={() => onSelect(view)}

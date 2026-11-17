@@ -161,7 +161,7 @@ function staticViewKindOf(view: View): StaticViewKind | null {
  * pre-selection, since neither a query nor a task can be encoded in these
  * URLs (issue #143). The Calendar's mode and the Smart List shown are the
  * exceptions — both read straight off the path (`/calendar/week`, `/today`,
- * etc.), defaulting to Day and All respectively. */
+ * etc.), defaulting to Day and Today respectively. */
 function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
   switch (kind) {
     case "search":
@@ -169,7 +169,7 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
     case "calendar":
       return { kind: "calendar", mode: calendarModeForPath(pathname) ?? "day" };
     case "smart":
-      return { kind: "smart", view: smartViewForPath(pathname) ?? "all" };
+      return { kind: "smart", view: smartViewForPath(pathname) ?? "today" };
     case "goals":
       return { kind: "goals" };
     case "habits":
@@ -515,7 +515,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     if (view?.kind === "folder" && folders.some((folder) => folder.id === view.id)) {
       return;
     }
-    const next: View = { kind: "smart", view: "all" };
+    const next: View = { kind: "smart", view: "today" };
     setCompletedMode(false);
     // Guard against a stale closure: a view switch may land between this
     // effect's render and it running (e.g. the user clicks Calendar just as
