@@ -573,10 +573,10 @@ describe("Stand-up settings toggle", () => {
 describe("Stand-up bullet actions overlay the row (issue #429)", () => {
   // jsdom applies no stylesheet, so the layout claim is checked against the
   // CSS source, as contentColumn.test.ts does.
-  const css = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+  const css = readFileSync(resolve(process.cwd(), "src/components/StandupView.css"), "utf8");
   const rule = (selector: string): string => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = new RegExp(`(^|\\n)${escaped}\\s*\\{[^}]*\\}`).exec(css);
+    const match = new RegExp(`(^|\\n)\\s*${escaped}\\s*\\{[^}]*\\}`).exec(css);
     expect(match, `${selector} rule not found`).not.toBeNull();
     return (match as RegExpExecArray)[0];
   };

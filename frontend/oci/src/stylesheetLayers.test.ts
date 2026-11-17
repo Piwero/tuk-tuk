@@ -55,6 +55,24 @@ describe("stylesheet layers", () => {
     );
   });
 
+  it("gives migrated views their own stylesheet (#438)", () => {
+    for (const component of [
+      "FocusView",
+      "FocusStatsPanel",
+      "HabitsView",
+      "GoalsView",
+      "StandupView",
+      "SettingsView",
+      "AssistantView",
+      "AssistantPage",
+      "VoiceView",
+      "VoiceVisualizer",
+      "VoiceOverlay",
+    ]) {
+      expect(componentSheets).toContain(`${component}.css`);
+    }
+  });
+
   it.each(componentSheets)("%s is layered and imported by its component", (sheet) => {
     expect(stripComments(read(`components/${sheet}`))).toMatch(/^@layer components \{[\s\S]*\}$/);
     const component = sheet.replace(/\.css$/, ".tsx");

@@ -1,0 +1,29 @@
+@layer components {
+  .assistant-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .assistant-tab {
+    min-height: var(--tap-target);
+    padding: 0 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: var(--weight-medium);
+  }
+
+  .assistant-tab[aria-selected="true"] {
+    color: var(--text-accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .assistant-unavailable {
+    margin: 16px 0;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+}

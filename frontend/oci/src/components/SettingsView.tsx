@@ -1,3 +1,5 @@
+import "./HabitForm.css";
+import "./SettingsView.css";
 import { useEffect, useRef, useState } from "react";
 
 import {

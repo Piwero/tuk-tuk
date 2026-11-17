@@ -1,3 +1,4 @@
+import "./VoiceVisualizer.css";
 import { useEffect, useState } from "react";
 
 import { AgentAudioVisualizerAura } from "./agents-ui/agent-audio-visualizer-aura";

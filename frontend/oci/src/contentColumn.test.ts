@@ -13,19 +13,10 @@ const css: string = readStylesheets();
 /** The selector list of the first rule whose body is `max-width:
  * var(--content-max)` — the App-layout content-column rule. */
 function measureSelectors(): string[] {
-  const declMatch = /max-width:\s*var\(--content-max\)/.exec(css);
-  expect(declMatch, "content-column declaration not found").not.toBeNull();
-  const declIndex = (declMatch as RegExpExecArray).index;
-  const before = css.slice(0, declIndex);
-  const braceIndex = before.lastIndexOf("{");
-  const prevRuleEnd = before.lastIndexOf("}");
-  const commentEnd = before.lastIndexOf("*/");
-  const selectorStart = Math.max(prevRuleEnd, commentEnd + 1) + 1;
-  return before
-    .slice(selectorStart, braceIndex)
-    .split(",")
-    .map((selector) => selector.trim())
-    .filter((selector) => selector.length > 0 && !selector.startsWith("/*"));
+  const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const measured = rules.filter((rule) => /max-width:\s*var\(--content-max\)/.test(rule[2] ?? ""));
+  expect(measured.length, "content-column declaration not found").toBeGreaterThan(0);
+  return measured.flatMap((rule) => (rule[1] ?? "").split(",").map((selector) => selector.trim()));
 }
 
 describe("content column (issue #196)", () => {

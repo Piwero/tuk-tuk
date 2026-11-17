@@ -1,3 +1,4 @@
+import "./AssistantPage.css";
 import { useState } from "react";
 
 import { AssistantView } from "./AssistantView";
