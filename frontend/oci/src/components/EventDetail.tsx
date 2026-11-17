@@ -1,3 +1,5 @@
+import "./EventDetail.css";
+
 import { useState } from "react";
 
 import { createTask, type Event, type Task } from "../api";

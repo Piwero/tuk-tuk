@@ -1,0 +1,75 @@
+@layer components {
+  /* ── Event detail popover ────────────────────────────────────────── */
+
+  .event-detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .event-detail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .event-detail-label {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+  }
+
+  .event-detail-attendees {
+    margin: 0;
+    padding-left: var(--space-4);
+  }
+
+  .event-detail-description {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  .event-detail-link {
+    align-self: flex-start;
+    color: var(--text-accent);
+  }
+
+  .event-detail-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .event-convert-intro {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  .event-convert-clamp {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--surface-sunken);
+    font-size: var(--text-sm);
+  }
+
+  .event-convert-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .event-convert-confirm {
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    font-weight: var(--weight-medium);
+    color: var(--text-inverse);
+  }
+
+  .event-convert-confirm:hover {
+    background: var(--accent-hover);
+  }
+}
