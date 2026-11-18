@@ -107,6 +107,33 @@
     overflow: visible;
     visibility: visible;
   }
+  /* Today's Schedule rows (#444) carry a leading start time and a trailing
+   * planned duration. Without their own tracks both fell onto lines of their
+   * own (#466). Narrow: time | head over meta | duration. */
+  .task-row-time,
+  .task-row-duration {
+    flex: none;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .tasks li.task-row:has(> .task-row-time) {
+    display: grid;
+    grid-template-columns: 3.25rem minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .tasks li.task-row:has(> .task-row-time) > .task-row-time {
+    grid-row: 1 / span 2;
+  }
+  .tasks li.task-row:has(> .task-row-time) > .task-row-head,
+  .tasks li.task-row:has(> .task-row-time) > .task-row-meta {
+    grid-column: 2;
+  }
+  .tasks li.task-row:has(> .task-row-time) > .task-row-duration {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
   @container tasklist (min-width: 620px) {
     .tasks li.task-row {
       display: grid;
@@ -124,6 +151,30 @@
       height: var(--task-row-height);
       min-height: var(--task-row-height);
       padding: 0 var(--space-2);
+    }
+
+    /* Schedule rows: a time track before and a duration track after. */
+    .tasks li.task-row:has(> .task-row-time) {
+      grid-template-columns:
+        3.25rem
+        auto
+        var(--task-col-priority)
+        minmax(0, 1fr)
+        minmax(0, auto)
+        var(--task-col-list)
+        var(--task-col-date)
+        var(--task-row-actions-col, 0px)
+        max-content;
+    }
+    .tasks li.task-row:has(> .task-row-time) > .task-row-time,
+    .tasks li.task-row:has(> .task-row-time) > .task-row-head,
+    .tasks li.task-row:has(> .task-row-time) > .task-row-meta,
+    .tasks li.task-row:has(> .task-row-time) > .task-row-duration {
+      grid-row: auto;
+      grid-column: auto;
+    }
+    .tasks li.task-row > .task-row-duration {
+      text-align: right;
     }
 
     /* Today and Next 7 Days say less in the chip (#431), so their date column
@@ -329,6 +380,16 @@
       flex-wrap: wrap;
       overflow: visible;
     }
+    /* The mockup puts a Schedule row's time in its second line, which the
+     * date chip already carries ("09:00–09:30"); the separate time and
+     * duration tracks would only take width from the title (#466). */
+    .tasks li.task-row:has(> .task-row-time) {
+      display: flex;
+    }
+    .tasks li.task-row > .task-row-time,
+    .tasks li.task-row > .task-row-duration {
+      display: none;
+    }
     .tasks li.task-row .list-name {
       position: absolute;
       width: 1px;
@@ -346,8 +407,12 @@
      rest and open only behind a deliberate long-press (`data-actions-
      open`, set by TaskRow) or keyboard focus — never permanently
      rendered next to the title. */
+    /* height too (#466): a hidden 44px actions box otherwise still
+     * stretched the phone row's meta line to 44px, so a row was ~93px
+     * and only about five fit on screen instead of eight. */
     .tasks li.task-row .row-actions {
       width: 0;
+      height: 0;
       overflow: hidden;
       visibility: hidden;
     }
@@ -355,6 +420,7 @@
     .tasks li.task-row[data-actions-open="true"] .row-actions,
     .tasks li.task-row .row-actions:focus-within {
       width: auto;
+      height: auto;
       overflow: visible;
       visibility: visible;
     }
