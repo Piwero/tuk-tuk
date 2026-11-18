@@ -1,5 +1,7 @@
 # See https://pre-commit.com for usage and config.
-# Run: pre-commit install (once) then hooks fire on every commit.
+# Run: pre-commit install (once) to install the pre-commit, commit-msg and
+# pre-push hooks (see default_install_hook_types).
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_language_version:
   python: python3.12
   node: "20.11.1"
@@ -117,43 +119,65 @@ repos:
         language: script
         pass_filenames: false
 
-  # ---- Pre-push: mirror CI's Test steps locally, so a red suite never
-  # reaches `main` only to be caught by CI five minutes later. ----
+  # ---- Pre-push: run every CI job locally (scripts/ci-local.sh), so a red
+  # suite never leaves the machine. Each hook fires only when the push touches
+  # the same paths that trigger its workflow. The pre-commit workflow's hooks
+  # are covered by `pre-commit run --all-files` below. ----
   - repo: local
     hooks:
-      - id: backend-pytest
-        name: backend pytest
-        entry: bash -c 'cd backend/oci && uv run pytest'
+      - id: ci-backend
+        name: backend-ci (ruff, mypy, pytest)
+        entry: scripts/ci-local.sh backend
         language: system
         pass_filenames: false
+        require_serial: true
         stages: [pre-push]
-      - id: cli-pytest
-        name: cli pytest
-        entry: bash -c 'cd cli/oci && uv run pytest'
+        files: ^(backend/oci/|\.github/workflows/backend-ci\.yml$|scripts/ci-local\.sh$)
+      - id: ci-cli
+        name: cli-ci (ruff, mypy, pytest)
+        entry: scripts/ci-local.sh cli
         language: system
         pass_filenames: false
+        require_serial: true
         stages: [pre-push]
-      - id: shared-pytest
-        name: shared pytest
-        entry: bash -c 'cd shared/oci && uv run pytest'
+        files: ^(cli/oci/|shared/oci/|\.github/workflows/cli-ci\.yml$|scripts/ci-local\.sh$)
+      - id: ci-shared
+        name: shared-ci (ruff, mypy, pytest)
+        entry: scripts/ci-local.sh shared
         language: system
         pass_filenames: false
+        require_serial: true
         stages: [pre-push]
-      - id: mcp-pytest
-        name: mcp pytest
-        entry: bash -c 'cd mcp/oci && uv run pytest'
+        files: ^(shared/oci/|\.github/workflows/shared-ci\.yml$|scripts/ci-local\.sh$)
+      - id: ci-mcp
+        name: mcp-ci (ruff, mypy, pytest)
+        entry: scripts/ci-local.sh mcp
         language: system
         pass_filenames: false
+        require_serial: true
         stages: [pre-push]
-      - id: voice-agent-pytest
-        name: voice-agent pytest
-        entry: bash -c 'cd voice-agent && uv run pytest'
+        files: ^(mcp/oci/|shared/oci/|shared/voice-tool-roster\.json$|\.github/workflows/mcp-ci\.yml$|scripts/ci-local\.sh$)
+      - id: ci-voice-agent
+        name: voice-agent-ci (ruff, mypy, pytest)
+        entry: scripts/ci-local.sh voice-agent
         language: system
         pass_filenames: false
+        require_serial: true
         stages: [pre-push]
-      - id: frontend-vitest
-        name: frontend vitest
-        entry: bash -c 'cd frontend/oci && npm test'
+        files: ^(voice-agent/|shared/voice-tool-roster\.json$|\.github/workflows/voice-agent-ci\.yml$|scripts/ci-local\.sh$)
+      - id: ci-frontend
+        name: frontend-ci (prettier, eslint, tsc, vitest, build)
+        entry: scripts/ci-local.sh frontend
         language: system
         pass_filenames: false
+        require_serial: true
+        stages: [pre-push]
+        files: ^(frontend/oci/|shared/voice-tool-roster\.json$|\.github/workflows/frontend-ci\.yml$|scripts/ci-local\.sh$)
+      - id: ci-pre-commit
+        name: pre-commit-ci (all hooks, all files)
+        entry: bash -c 'SKIP="${SKIP:+$SKIP,}ci-pre-commit" pre-commit run --all-files --hook-stage pre-commit'
+        language: system
+        pass_filenames: false
+        always_run: true
+        require_serial: true
         stages: [pre-push]
