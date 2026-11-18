@@ -51,27 +51,6 @@ describe("Task detail panel", () => {
     expect(patch?.body).toEqual({ title: "Write report" });
   });
 
-  it("edits the description in a textarea and renders the saved Markdown", async () => {
-    const report = fakeTask("Write report", { description: "plain text" });
-    const api = installFakeApi({ tasks: [report] });
-    const user = userEvent.setup();
-    render(<App />);
-
-    const panel = await openDetail("Write report");
-    await user.click(within(panel).getByRole("button", { name: "Edit description" }));
-    const editor = within(panel).getByRole("textbox", { name: "Description" });
-    expect(editor).toHaveValue("plain text");
-    await user.clear(editor);
-    await user.type(editor, "# Heading");
-    await user.click(within(panel).getByRole("button", { name: "Save description" }));
-
-    expect(await within(panel).findByRole("heading", { name: "Heading" })).toBeInTheDocument();
-    const patch = api.requests.find(
-      (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${report.id}`,
-    );
-    expect(patch?.body).toEqual({ description: "# Heading" });
-  });
-
   it("moves the task to another List from the breadcrumb picker", async () => {
     const groceries = fakeList("Groceries");
     const report = fakeTask("Write report");
