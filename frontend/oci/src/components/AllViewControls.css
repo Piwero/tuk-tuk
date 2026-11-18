@@ -78,5 +78,27 @@
     .view-menu-clear {
       min-height: var(--tap-target);
     }
+    /* On a phone the View menu is a bottom sheet (#460). */
+    .view-menu-popover {
+      position: fixed;
+      top: auto;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: var(--space-4);
+      padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      z-index: var(--z-modal);
+    }
+    .view-menu-popover select {
+      min-height: var(--tap-target);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .sort-drag-hint {
+      display: none;
+    }
   }
 }
