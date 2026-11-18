@@ -86,6 +86,32 @@ function dateBucket(task: Task, today: string): DateBucket {
   return day <= addDays(today, 7) ? "next7" : "later";
 }
 
+export function groupTodayTasks(tasks: Task[], sortBy: SortBy): TaskGroup[] {
+  const today = localDayOf(new Date());
+  return ["Overdue", "Schedule", "Anytime"]
+    .map((label) => ({
+      key: `today-${label}`,
+      label,
+      sectionId: undefined,
+      tasks: sortTasks(
+        tasks.filter((task) => {
+          const day = dueDay(task);
+          return label === "Overdue"
+            ? day !== null && day < today
+            : day === today && (label === "Anytime" ? task.is_all_day : !task.is_all_day);
+        }),
+        sortBy,
+      ).sort(
+        label === "Schedule" && sortBy === "custom"
+          ? (a, b) =>
+              new Date(a.start_date ?? a.due_date!).getTime() -
+                new Date(b.start_date ?? b.due_date!).getTime() || byOrder(a, b)
+          : () => 0,
+      ),
+    }))
+    .filter((group) => group.tasks.length > 0);
+}
+
 export function groupTasks(
   tasks: Task[],
   sections: Section[],

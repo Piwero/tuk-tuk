@@ -17,6 +17,8 @@ interface HabitCardStatsProps {
    * strip a picture rather than a control — an archived Habit is a record,
    * not something to still be checking in on. */
   onToggleDay: ((day: string) => void) | null;
+  /** False where the Streak is already shown beside the strip (the week grid). */
+  showStreak?: boolean;
 }
 
 /** A day cell's fill level plus its accessible status, read from the
@@ -53,6 +55,7 @@ export function HabitCardStats({
   stats,
   today,
   onToggleDay,
+  showStreak = true,
 }: HabitCardStatsProps): JSX.Element | null {
   if (stats === undefined) {
     return null;
@@ -62,12 +65,14 @@ export function HabitCardStats({
 
   return (
     <div className="habit-card-stats">
-      <Hint hintKey="streak">
-        <span className="habit-streak-count">
-          <Icon name="flame" size={14} />
-          Streak: {stats.streak}
-        </span>
-      </Hint>
+      {showStreak && (
+        <Hint hintKey="streak">
+          <span className="habit-streak-count">
+            <Icon name="flame" size={14} />
+            Streak: {stats.streak}
+          </span>
+        </Hint>
+      )}
       <div className="habit-strip" role="group" aria-label={`Recent days for ${habit.name}`}>
         {days.map((day) => {
           const { level, text } = dayStatus(habit, today, day, entries.get(day));
