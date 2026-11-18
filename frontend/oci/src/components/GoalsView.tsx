@@ -1,3 +1,4 @@
+import { EmptyState, LoadError, SkeletonRows } from "./TaskViewState";
 import "./GoalsView.css";
 import { useCallback, useEffect, useState } from "react";
 
@@ -728,13 +729,23 @@ export function GoalsView(): JSX.Element {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [editor, setEditor] = useState<Editor>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     const page = await fetchGoals();
     setGoals(page.items);
     setLoaded(true);
+    setLoadFailed(false);
   }, []);
+
+  const firstLoad = useCallback((): void => {
+    setLoadFailed(false);
+    setLoaded(false);
+    void load().catch(() => {
+      setLoadFailed(true);
+    });
+  }, [load]);
 
   /** Every mutation goes through here: a failure says so in the view rather
    * than rejecting into nothing. The 409 on writing an automatic Key Result's
@@ -751,11 +762,8 @@ export function GoalsView(): JSX.Element {
   );
 
   useEffect(() => {
-    void load().catch(() => {
-      setError("Couldn't load your goals.");
-      setLoaded(true);
-    });
-  }, [load]);
+    firstLoad();
+  }, [firstLoad]);
 
   useEffect(() => {
     void fetchHabits()
@@ -939,6 +947,23 @@ export function GoalsView(): JSX.Element {
   const abandoned = goals.filter((g) => g.status === "abandoned");
   const activeByWindow = groupByWindow(active);
 
+  if (loadFailed) {
+    return (
+      <div className="goals-view">
+        <LoadError what="goals" onRetry={firstLoad} />
+      </div>
+    );
+  }
+  if (!loaded) {
+    return (
+      <div className="goals-view">
+        <SkeletonRows label="Loading goals" />
+      </div>
+    );
+  }
+
+  const empty = goals.length === 0 && editor === null;
+
   return (
     <div className="goals-view">
       {error !== null && (
@@ -946,13 +971,14 @@ export function GoalsView(): JSX.Element {
           {error}
         </p>
       )}
-      {/* Gate on `loaded`, not on the array: an unloaded view is not an empty
-       * one, and flashing "add your first goal" at someone who has twelve is
-       * a lie the fetch corrects a moment later. */}
-      {loaded && goals.length === 0 && editor === null ? (
-        <p className="goals-empty-hint">
-          A Goal is a durable outcome with a window — add one to start tracking it.
-        </p>
+      {/* Only reached once loaded: an unloaded view is not an empty one. */}
+      {empty ? (
+        <EmptyState
+          title="No goals yet"
+          description="A Goal is a durable outcome with a window — add one to start tracking it."
+          actionLabel="Add Goal"
+          onAction={() => setEditor({ mode: "create" })}
+        />
       ) : (
         <>
           {activeByWindow.map(([window, windowGoals]) => (
@@ -984,14 +1010,16 @@ export function GoalsView(): JSX.Element {
       {editor?.mode === "create" ? (
         <GoalForm onSubmit={(values) => handleCreate(values)} onCancel={() => setEditor(null)} />
       ) : (
-        <button
-          type="button"
-          className="goals-add btn-secondary"
-          onClick={() => setEditor({ mode: "create" })}
-        >
-          <Icon name="plus" size={16} />
-          Add Goal
-        </button>
+        !empty && (
+          <button
+            type="button"
+            className="goals-add btn-secondary"
+            onClick={() => setEditor({ mode: "create" })}
+          >
+            <Icon name="plus" size={16} />
+            Add Goal
+          </button>
+        )
       )}
     </div>
   );

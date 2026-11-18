@@ -1,3 +1,4 @@
+import { EmptyState, LoadError, SkeletonRows } from "./TaskViewState";
 import "./FocusView.css";
 import { useCallback, useEffect, useId, useState } from "react";
 
@@ -111,12 +112,21 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
   const [editingBreaks, setEditingBreaks] = useState(false);
   const [editingLink, setEditingLink] = useState(false);
 
+  // The Timers read drives the view's loading/empty/error states (#442).
+  const [timersStatus, setTimersStatus] = useState<"loading" | "ready" | "error">("loading");
+
   const loadTimers = useCallback(async (): Promise<void> => {
     setTimers((await fetchTimers()).items);
+    setTimersStatus("ready");
   }, []);
 
+  const firstLoadTimers = useCallback((): void => {
+    setTimersStatus("loading");
+    void loadTimers().catch(() => setTimersStatus("error"));
+  }, [loadTimers]);
+
   useEffect(() => {
-    void loadTimers();
+    firstLoadTimers();
     void fetchOpenTasks().then((page) => setTasks(page.items));
     const today = localDayOf(new Date());
     void fetchSmartTasks("today", today, { listId: null, tagId: null, priority: null }).then(
@@ -126,7 +136,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
       setStatDays(stats.days),
     );
     void fetchHabits().then((page) => setHabits(page.items.filter((habit) => !habit.is_archived)));
-  }, [loadTimers]);
+  }, [firstLoadTimers]);
 
   const paused = running !== null && running.pauseStartedAtMs !== null;
   useRegisterShortcut({
@@ -378,64 +388,79 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                     )}
                   </>
                 )}
-                <ul aria-label="Timers" className="focus-timer-presets">
-                  {timers.map((timer) =>
-                    timerEditor?.mode === "edit" && timerEditor.id === timer.id ? (
-                      <li key={timer.id}>
-                        <TimerForm
-                          tasks={tasks}
-                          habits={habits}
-                          initial={timer}
-                          onSubmit={(values) => void handleEditTimer(timer, values)}
-                          onCancel={() => setTimerEditor(null)}
-                        />
-                      </li>
-                    ) : (
-                      <li key={timer.id} className="focus-timer-preset">
-                        <Hint hintKey="start-timer">
-                          <button
-                            className="btn-secondary"
-                            type="button"
-                            aria-label={`Start timer ${timer.name}`}
-                            onClick={() => startFromTimer(timer)}
-                          >
-                            {timer.name}
-                          </button>
-                        </Hint>
-                        <span className="row-actions">
-                          <IconButton
-                            icon="pencil"
-                            label={`Edit timer ${timer.name}`}
-                            onClick={() => setTimerEditor({ mode: "edit", id: timer.id })}
-                          />
-                          <IconButton
-                            icon="x"
-                            label={`Delete timer ${timer.name}`}
-                            onClick={() => void handleDeleteTimer(timer)}
-                          />
-                        </span>
-                      </li>
-                    ),
-                  )}
-                </ul>
-                {timerEditor?.mode === "add" ? (
-                  <TimerForm
-                    tasks={tasks}
-                    habits={habits}
-                    onSubmit={(values) => void handleAddTimer(values)}
-                    onCancel={() => setTimerEditor(null)}
+                {timersStatus === "loading" ? (
+                  <SkeletonRows label="Loading timers" count={2} />
+                ) : timersStatus === "error" ? (
+                  <LoadError what="timers" onRetry={firstLoadTimers} />
+                ) : timers.length === 0 && timerEditor === null ? (
+                  <EmptyState
+                    title="No timers yet"
+                    description="A Timer saves a mode, length and link so a session starts in one tap."
+                    actionLabel="Add Timer"
+                    onAction={() => setTimerEditor({ mode: "add" })}
                   />
                 ) : (
-                  <Hint hintKey="add-timer">
-                    <button
-                      className="btn-secondary"
-                      type="button"
-                      onClick={() => setTimerEditor({ mode: "add" })}
-                    >
-                      <Icon name="plus" size={16} />
-                      Add Timer
-                    </button>
-                  </Hint>
+                  <>
+                    <ul aria-label="Timers" className="focus-timer-presets">
+                      {timers.map((timer) =>
+                        timerEditor?.mode === "edit" && timerEditor.id === timer.id ? (
+                          <li key={timer.id}>
+                            <TimerForm
+                              tasks={tasks}
+                              habits={habits}
+                              initial={timer}
+                              onSubmit={(values) => void handleEditTimer(timer, values)}
+                              onCancel={() => setTimerEditor(null)}
+                            />
+                          </li>
+                        ) : (
+                          <li key={timer.id} className="focus-timer-preset">
+                            <Hint hintKey="start-timer">
+                              <button
+                                className="btn-secondary"
+                                type="button"
+                                aria-label={`Start timer ${timer.name}`}
+                                onClick={() => startFromTimer(timer)}
+                              >
+                                {timer.name}
+                              </button>
+                            </Hint>
+                            <span className="row-actions">
+                              <IconButton
+                                icon="pencil"
+                                label={`Edit timer ${timer.name}`}
+                                onClick={() => setTimerEditor({ mode: "edit", id: timer.id })}
+                              />
+                              <IconButton
+                                icon="x"
+                                label={`Delete timer ${timer.name}`}
+                                onClick={() => void handleDeleteTimer(timer)}
+                              />
+                            </span>
+                          </li>
+                        ),
+                      )}
+                    </ul>
+                    {timerEditor?.mode === "add" ? (
+                      <TimerForm
+                        tasks={tasks}
+                        habits={habits}
+                        onSubmit={(values) => void handleAddTimer(values)}
+                        onCancel={() => setTimerEditor(null)}
+                      />
+                    ) : (
+                      <Hint hintKey="add-timer">
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          onClick={() => setTimerEditor({ mode: "add" })}
+                        >
+                          <Icon name="plus" size={16} />
+                          Add Timer
+                        </button>
+                      </Hint>
+                    )}
+                  </>
                 )}
               </div>
               <div className="focus-actions">
