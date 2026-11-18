@@ -134,6 +134,24 @@ describe("formatSchedule in a view context", () => {
     expect(formatSchedule(task, "week", now)).toBe(expected);
   });
 
+  it.each([
+    [
+      "timed range today names the day",
+      timed("2026-07-03T11:30:00Z", "2026-07-03T10:00:00Z"),
+      "Today, 10:00–11:30",
+    ],
+    ["all-day today", allDay("2026-07-03"), "Today"],
+    ["all-day tomorrow", allDay("2026-07-04"), "Tomorrow"],
+    ["timed tomorrow", timed("2026-07-04T09:00:00Z"), "Tomorrow, 09:00"],
+    ["timed yesterday", timed("2026-07-02T09:00:00Z"), "Yesterday, 09:00"],
+    ["later this week is a weekday", allDay("2026-07-07"), "Tue"],
+    ["a week out is absolute", allDay("2026-07-10"), "Jul 10"],
+    ["two days late is absolute", allDay("2026-07-01"), "Jul 1"],
+    ["unscheduled has no label", { start_date: null, due_date: null, is_all_day: true }, null],
+  ])("detail: %s", (_name, task, expected) => {
+    expect(formatSchedule(task, "detail", now)).toBe(expected);
+  });
+
   it("keeps a multi-day all-day range absolute in every context", () => {
     const range = {
       start_date: "2026-07-01T00:00:00Z",

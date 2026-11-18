@@ -1,3 +1,4 @@
+import { EmptyState, LoadError, SkeletonRows } from "./TaskViewState";
 import "./HabitsView.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -47,10 +48,15 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
   const [statsByHabit, setStatsByHabit] = useState<Map<number, HabitStats>>(new Map());
   const today = localDayOf(new Date());
 
+  // "loading" until the first read lands, "error" when it fails (#442): an
+  // unloaded view is not an empty one.
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+
   const load = useCallback(async (): Promise<void> => {
     const [allPage, checkInPage] = await Promise.all([fetchHabits(), fetchCheckIns(today)]);
     setHabits(allPage.items);
     setCheckIns(checkInPage.items);
+    setStatus("ready");
     const statsEntries = await Promise.all(
       allPage.items.map(async (habit) => [habit.id, await habitStatsFor(habit, today)] as const),
     );
@@ -58,9 +64,17 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
   }, [today]);
 
   // `refreshToken` bumps when a Voice Assistant write lands (issue #370): re-read, as ever.
+  const loadOrFail = useCallback(async (): Promise<void> => {
+    try {
+      await load();
+    } catch {
+      setStatus((current) => (current === "ready" ? current : "error"));
+    }
+  }, [load]);
+
   useEffect(() => {
-    void load();
-  }, [load, refreshToken]);
+    void loadOrFail();
+  }, [loadOrFail, refreshToken]);
 
   const archived = habits.filter((habit) => habit.is_archived);
   const active = habits.filter((habit) => !habit.is_archived);
@@ -329,57 +343,83 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
   const weekStart = addDays(today, -((fromDayIso(today).getDay() + 6) % 7));
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
+  if (status === "loading") {
+    return (
+      <div className="habits-view">
+        <SkeletonRows label="Loading habits" />
+      </div>
+    );
+  }
+  if (status === "error") {
+    return (
+      <div className="habits-view">
+        <LoadError
+          what="habits"
+          onRetry={() => {
+            setStatus("loading");
+            void loadOrFail();
+          }}
+        />
+      </div>
+    );
+  }
+
+  const empty = habits.length === 0 && editor === null;
+
   return (
     <div className="habits-view">
-      {habits.length === 0 ? (
-        <p className="habits-empty-hint">
-          Habits are things you check in on daily or weekly — add one below to start tracking it.
-        </p>
-      ) : (
-        active.length > 0 && (
-          <>
-            <div className="habits-week-scroll">
-              <table className="habits-week-grid" aria-label="Habits this week">
-                <thead>
-                  <tr>
-                    <th scope="col" className="habits-week-corner">
-                      Habit
-                    </th>
-                    {weekDays.map((day) => (
-                      <th
-                        key={day}
-                        scope="col"
-                        aria-label={`${day === today ? "Today, " : ""}${weekdayLongLabel(day)}`}
-                        className={day === today ? "week-day today" : "week-day"}
-                      >
-                        <span aria-hidden="true">
-                          {formatDate(fromDayIso(day), "weekday")}
-                          <span className="week-day-num">{day.slice(8).replace(/^0/, "")}</span>
-                        </span>
+      {habits.length === 0
+        ? empty && (
+            <EmptyState
+              title="No habits yet"
+              description="Habits are things you check in on daily or weekly — add one to start tracking it."
+              actionLabel="Add Habit"
+              onAction={() => setEditor({ mode: "create" })}
+            />
+          )
+        : active.length > 0 && (
+            <>
+              <div className="habits-week-scroll">
+                <table className="habits-week-grid" aria-label="Habits this week">
+                  <thead>
+                    <tr>
+                      <th scope="col" className="habits-week-corner">
+                        Habit
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>{active.flatMap((habit) => renderRow(habit))}</tbody>
-              </table>
-            </div>
-            <section className="habits-long-history" aria-label="Recent days">
-              {active.map((habit) => (
-                <div key={habit.id} className="habit-long-history-row">
-                  <span className="habit-name">{habit.name}</span>
-                  <HabitCardStats
-                    habit={habit}
-                    stats={statsByHabit.get(habit.id)}
-                    today={today}
-                    onToggleDay={(day) => void toggleDay(habit, day)}
-                    showStreak={false}
-                  />
-                </div>
-              ))}
-            </section>
-          </>
-        )
-      )}
+                      {weekDays.map((day) => (
+                        <th
+                          key={day}
+                          scope="col"
+                          aria-label={`${day === today ? "Today, " : ""}${weekdayLongLabel(day)}`}
+                          className={day === today ? "week-day today" : "week-day"}
+                        >
+                          <span aria-hidden="true">
+                            {formatDate(fromDayIso(day), "weekday")}
+                            <span className="week-day-num">{day.slice(8).replace(/^0/, "")}</span>
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>{active.flatMap((habit) => renderRow(habit))}</tbody>
+                </table>
+              </div>
+              <section className="habits-long-history" aria-label="Recent days">
+                {active.map((habit) => (
+                  <div key={habit.id} className="habit-long-history-row">
+                    <span className="habit-name">{habit.name}</span>
+                    <HabitCardStats
+                      habit={habit}
+                      stats={statsByHabit.get(habit.id)}
+                      today={today}
+                      onToggleDay={(day) => void toggleDay(habit, day)}
+                      showStreak={false}
+                    />
+                  </div>
+                ))}
+              </section>
+            </>
+          )}
       {archived.length > 0 && (
         <section className="archived-habits">
           <h2>Archived</h2>
@@ -394,13 +434,15 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
           onCancel={() => setEditor(null)}
         />
       ) : (
-        <button
-          className="btn-secondary"
-          type="button"
-          onClick={() => setEditor({ mode: "create" })}
-        >
-          Add Habit
-        </button>
+        !empty && (
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => setEditor({ mode: "create" })}
+          >
+            Add Habit
+          </button>
+        )
       )}
     </div>
   );

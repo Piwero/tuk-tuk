@@ -1,6 +1,6 @@
 import "./DatePopover.css";
 
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { addDays, fromDayIso, localDayOf, nextMonday } from "../dates";
 import { Popover } from "./Popover";
@@ -65,21 +65,75 @@ export function DatePopover({
   id,
 }: DatePopoverProps): JSX.Element {
   const trigger = useRef<HTMLButtonElement>(null);
-  const grid = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+
+  return (
+    <span className={`date-popover ${className ?? ""}`.trim()}>
+      <button
+        type="button"
+        id={id}
+        ref={trigger}
+        className="date-popover-trigger btn-secondary"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => setOpen(!open)}
+      >
+        {value === "" ? "No date" : triggerFormat.format(fromDayIso(value))}
+      </button>
+      <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
+        <div className="date-popover-panel" role="dialog" aria-label={`Choose ${label}`}>
+          <DatePanel
+            value={value}
+            clearable={clearable}
+            onPick={(day) => {
+              onChange(day);
+              setOpen(false);
+            }}
+          >
+            {onTimeChange !== undefined && (
+              <label className="date-popover-time">
+                Time
+                <input
+                  type="time"
+                  value={time ?? ""}
+                  onChange={(event) => onTimeChange(event.target.value)}
+                />
+              </label>
+            )}
+          </DatePanel>
+        </div>
+      </Popover>
+    </span>
+  );
+}
+
+interface DatePanelProps {
+  /** YYYY-MM-DD, or "" for no date. */
+  value: string;
+  /** Called with the picked day, or "" for Clear. */
+  onPick: (day: string) => void;
+  clearable?: boolean;
+  /** Label of the "next Monday" quick pick. */
+  nextWeekLabel?: string;
+  /** Extra fields under the calendar, e.g. times. */
+  children?: ReactNode;
+}
+
+/** The popover body on its own — quick picks, Clear, and a keyboard month
+ * grid — so hosts with their own trigger (Task detail's Date row) reuse it.
+ * Plain values only: it never parses Quick-Add sigils. */
+export function DatePanel({
+  value,
+  onPick,
+  clearable = false,
+  nextWeekLabel = "Next Monday",
+  children,
+}: DatePanelProps): JSX.Element {
+  const grid = useRef<HTMLDivElement>(null);
   const today = localDayOf(new Date());
   const [focused, setFocused] = useState(value === "" ? today : value);
   const titleId = useId();
-
-  function show(): void {
-    setFocused(value === "" ? today : value);
-    setOpen(true);
-  }
-
-  function pick(day: string): void {
-    onChange(day);
-    setOpen(false);
-  }
 
   function moveTo(day: string): void {
     setFocused(day);
@@ -110,98 +164,73 @@ export function DatePopover({
   const quick: Array<[string, string]> = [
     ["Today", today],
     ["Tomorrow", addDays(today, 1)],
-    ["Next Monday", nextMonday(today)],
+    [nextWeekLabel, nextMonday(today)],
   ];
 
   return (
-    <span className={`date-popover ${className ?? ""}`.trim()}>
-      <button
-        type="button"
-        id={id}
-        ref={trigger}
-        className="date-popover-trigger btn-secondary"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={label}
-        onClick={() => (open ? setOpen(false) : show())}
-      >
-        {value === "" ? "No date" : triggerFormat.format(fromDayIso(value))}
-      </button>
-      <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
-        <div className="date-popover-panel" role="dialog" aria-label={`Choose ${label}`}>
-          <div className="date-popover-quick">
-            {quick.map(([name, day]) => (
-              <button type="button" className="btn-quiet" key={name} onClick={() => pick(day)}>
-                {name}
-              </button>
-            ))}
-            {clearable && (
-              <button type="button" className="btn-quiet" onClick={() => pick("")}>
-                Clear
-              </button>
-            )}
-          </div>
-          <div className="date-popover-nav">
-            <button
-              type="button"
-              className="btn-quiet"
-              aria-label="Previous month"
-              onClick={() => moveTo(addMonths(focused, -1))}
-            >
-              ‹
-            </button>
-            <span id={titleId} aria-live="polite">
-              {monthFormat.format(fromDayIso(focused))}
+    <>
+      <div className="date-popover-quick">
+        {quick.map(([name, day]) => (
+          <button type="button" className="btn-quiet" key={name} onClick={() => onPick(day)}>
+            {name}
+          </button>
+        ))}
+        {clearable && (
+          <button type="button" className="btn-quiet" onClick={() => onPick("")}>
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="date-popover-nav">
+        <button
+          type="button"
+          className="btn-quiet"
+          aria-label="Previous month"
+          onClick={() => moveTo(addMonths(focused, -1))}
+        >
+          ‹
+        </button>
+        <span id={titleId} aria-live="polite">
+          {monthFormat.format(fromDayIso(focused))}
+        </span>
+        <button
+          type="button"
+          className="btn-quiet"
+          aria-label="Next month"
+          onClick={() => moveTo(addMonths(focused, 1))}
+        >
+          ›
+        </button>
+      </div>
+      <div role="grid" aria-labelledby={titleId} ref={grid} onKeyDown={onGridKey}>
+        <div role="row" className="date-popover-row">
+          {WEEKDAYS.map((name) => (
+            <span role="columnheader" key={name}>
+              {name}
             </span>
-            <button
-              type="button"
-              className="btn-quiet"
-              aria-label="Next month"
-              onClick={() => moveTo(addMonths(focused, 1))}
-            >
-              ›
-            </button>
-          </div>
-          <div role="grid" aria-labelledby={titleId} ref={grid} onKeyDown={onGridKey}>
-            <div role="row" className="date-popover-row">
-              {WEEKDAYS.map((name) => (
-                <span role="columnheader" key={name}>
-                  {name}
-                </span>
-              ))}
-            </div>
-            {Array.from({ length: 6 }, (_, week) => (
-              <div role="row" className="date-popover-row" key={week}>
-                {days.slice(week * 7, week * 7 + 7).map((day) => (
-                  <span role="gridcell" key={day} aria-selected={day === value}>
-                    <button
-                      type="button"
-                      data-day={day}
-                      tabIndex={day === focused ? 0 : -1}
-                      aria-label={dayFormat.format(fromDayIso(day))}
-                      aria-current={day === today ? "date" : undefined}
-                      className={`date-popover-day${day.slice(0, 7) === month ? "" : " outside"}${day === value ? " selected" : ""}`}
-                      onClick={() => pick(day)}
-                    >
-                      {Number(day.slice(8))}
-                    </button>
-                  </span>
-                ))}
-              </div>
+          ))}
+        </div>
+        {Array.from({ length: 6 }, (_, week) => (
+          <div role="row" className="date-popover-row" key={week}>
+            {days.slice(week * 7, week * 7 + 7).map((day) => (
+              <span role="gridcell" key={day} aria-selected={day === value}>
+                <button
+                  type="button"
+                  data-day={day}
+                  tabIndex={day === focused ? 0 : -1}
+                  aria-label={dayFormat.format(fromDayIso(day))}
+                  aria-current={day === today ? "date" : undefined}
+                  className={`date-popover-day${day.slice(0, 7) === month ? "" : " outside"}${day === value ? " selected" : ""}`}
+                  onClick={() => onPick(day)}
+                >
+                  {Number(day.slice(8))}
+                </button>
+              </span>
             ))}
           </div>
-          {onTimeChange !== undefined && (
-            <label className="date-popover-time">
-              Time
-              <input
-                type="time"
-                value={time ?? ""}
-                onChange={(event) => onTimeChange(event.target.value)}
-              />
-            </label>
-          )}
-        </div>
-      </Popover>
-    </span>
+        ))}
+      </div>
+      {children}
+    </>
   );
 }
