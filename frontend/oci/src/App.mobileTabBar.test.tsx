@@ -181,7 +181,7 @@ describe("More sheet (issue #462)", () => {
     expect(within(tags).getByRole("button", { name: "urgent" })).toBeInTheDocument();
 
     await user.click(within(lists).getByRole("button", { name: "Reports" }));
-    await screen.findByRole("heading", { name: /Reports/ });
+    await screen.findByRole("heading", { level: 1, name: /Reports/ });
     expect(window.location.pathname).toBe(`/lists/${filed.id}`);
 
     const again = await openMore();
