@@ -57,8 +57,15 @@ describe("Goals", () => {
       expect(
         screen.getByText(
           (_, el) =>
-            el?.className === "goal-obstacle" &&
-            el.textContent === "Obstacle: Interruptions If interrupted, then I will close chat.",
+            el?.className === "goal-obstacle" && el.textContent === "Obstacle: Interruptions",
+        ),
+      ).toBeInTheDocument();
+      // #466: the If-Then Plan gets its own labelled line, never run on after the Obstacle.
+      expect(
+        screen.getByText(
+          (_, el) =>
+            el?.className === "goal-if-then" &&
+            el.textContent === "If-Then Plan: If interrupted, then I will close chat.",
         ),
       ).toBeInTheDocument();
       expect(screen.queryByText(/2026-07-/)).not.toBeInTheDocument();
