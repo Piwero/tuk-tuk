@@ -1,3 +1,4 @@
+import "./TagsRow.css";
 import { useId, useState, type KeyboardEvent } from "react";
 
 import { createTag, updateTask, type Tag, type Task } from "../api";

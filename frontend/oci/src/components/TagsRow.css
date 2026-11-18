@@ -1,0 +1,34 @@
+@layer components {
+  .tags-row-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+  .tags-row-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    font-size: var(--text-xs);
+  }
+  .tags-row-chip-remove {
+    padding: 0 2px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .tags-row-chip-remove:hover {
+    color: var(--text-primary);
+  }
+  @media (max-width: 720px) {
+    /* Meets the Task detail sheet's 44px touch floor (issue #456). */
+    .tags-row-chip-remove {
+      min-width: var(--tap-target);
+      min-height: var(--tap-target);
+    }
+  }
+}

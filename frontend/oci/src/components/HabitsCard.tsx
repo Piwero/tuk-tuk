@@ -1,3 +1,4 @@
+import "./HabitsCard.css";
 import { habitCheckInState } from "../todayHabits";
 import type { TodayHabits } from "../todayHabits";
 import { RailCard } from "./DayRail";

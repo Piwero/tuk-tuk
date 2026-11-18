@@ -1,3 +1,4 @@
+import "./FocusedGoalCard.css";
 import { useCallback } from "react";
 
 import { fetchFocusedGoal, type Goal } from "../api";

@@ -1,3 +1,4 @@
+import "./FocusCard.css";
 import { useCallback } from "react";
 
 import { localDayOf } from "../dates";

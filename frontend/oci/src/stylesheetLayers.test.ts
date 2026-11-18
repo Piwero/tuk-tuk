@@ -83,6 +83,20 @@ describe("stylesheet layers", () => {
     }
   });
 
+  it("gives Day rail cards and Task detail rows that style their own classes a sheet (#427)", () => {
+    for (const component of [
+      "FocusCard",
+      "HabitsCard",
+      "FocusedGoalCard",
+      "DateRow",
+      "ReminderRow",
+      "RepeatRow",
+      "TagsRow",
+    ]) {
+      expect(componentSheets).toContain(`${component}.css`);
+    }
+  });
+
   it.each([...ownedSheets, "primitives.css"])("%s contains only layered rules", (sheet) => {
     expect(stripComments(read(sheet))).toMatch(/^@layer components \{[\s\S]*\}$/);
   });
