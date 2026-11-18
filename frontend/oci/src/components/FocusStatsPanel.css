@@ -87,10 +87,20 @@
   .focus-back-link:hover {
     color: var(--focus-accent);
   }
-  .focus-stats h3 {
+  .focus-stats h3,
+  .focus-history h3 {
     margin: var(--space-3) 0 var(--space-1);
     font-size: var(--text-xs);
     color: var(--text-secondary);
+  }
+  .focus-stats-summary {
+    display: flex;
+    gap: var(--space-4);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  .focus-stats-summary p {
+    margin: var(--space-2) 0 0;
   }
   .focus-stats-range {
     display: flex;
