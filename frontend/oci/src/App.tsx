@@ -97,6 +97,8 @@ import { Sidebar } from "./components/Sidebar";
 import { DayRail } from "./components/DayRail";
 import { FocusCard } from "./components/FocusCard";
 import { HabitsCard } from "./components/HabitsCard";
+import { HabitStrip } from "./components/HabitStrip";
+import { useTodayHabits } from "./todayHabits";
 import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
@@ -796,6 +798,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   useEffect(() => {
     clearToasts();
   }, [viewKey, clearToasts]);
+  // One Check-in path for the rail's Habits card and the phone chip strip (#447, #461).
+  const todayHabits = useTodayHabits();
+  const showHabitStrip = smartView === "today" && !completedMode && sectionSettings.habits;
 
   useEffect(() => {
     if (missingViewNotice && view?.kind === "smart" && view.view === "today") {
@@ -1467,6 +1472,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                       </button>
                     )}
                   </div>
+                  {/* Full-width row under the header: only .view-controls takes the
+                  right-hand column of .main-chrome on a phone. */}
+                  {showHabitStrip && <HabitStrip habits={todayHabits} />}
                   {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
                     <>
                       <QuickAdd
@@ -1694,6 +1702,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     )}
                     {sectionSettings.habits && (
                       <HabitsCard
+                        habits={todayHabits}
                         habitsHref={pathForStaticView("habits")}
                         onOpenHabits={() => switchView({ kind: "habits" })}
                       />
