@@ -158,6 +158,35 @@
     font-size: var(--text-sm);
     color: var(--text-secondary);
   }
+  /* Score bar: accent fill with a thin marker where today falls in the window. */
+  .goal-score-track {
+    position: relative;
+    height: 4px;
+    margin-top: var(--space-1);
+    border-radius: var(--radius-full);
+    background: var(--border-subtle);
+  }
+  .goal-score-bar {
+    width: var(--goal-score-fill, 0%);
+    height: 100%;
+    border-radius: var(--radius-full);
+    background: var(--accent);
+  }
+  .goal-pace-marker {
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    left: var(--goal-pace, 0%);
+    width: 2px;
+    border-radius: var(--radius-full);
+    background: var(--text-secondary);
+    transform: translateX(-1px);
+  }
+  .goal-pace-verdict {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
   .goal-retro {
     display: flex;
     flex-direction: column;
