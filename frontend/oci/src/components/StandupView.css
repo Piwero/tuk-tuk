@@ -46,7 +46,7 @@
     align-items: center;
     gap: var(--space-2);
   }
-  .standup-date-picker input[type="date"] {
+  .standup-date-picker .date-popover-trigger {
     height: var(--control-height);
     padding: 0 10px;
     font-variant-numeric: tabular-nums;
@@ -527,7 +527,7 @@
     }
   }
   @media (max-width: 640px) {
-    .standup-date-picker input[type="date"] {
+    .standup-date-picker .date-popover-trigger {
       flex: 1;
     }
   }

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { pickDate } from "./test/pickDate";
 import { App } from "./App";
 import { fakeFocusSession, fakeHabit, fakeTask, installFakeApi } from "./test/fakeApi";
 
@@ -88,7 +89,7 @@ describe("Focus statistics", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Jun 10: 30 min")).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-06-01" } });
+    pickDate("From", "2026-06-01");
 
     expect(await screen.findByRole("listitem", { name: "Jun 10: 30 min" })).toBeInTheDocument();
     expect(
@@ -198,10 +199,10 @@ describe("Session history", () => {
     ).toBeTruthy();
     expect(screen.queryByText("outside range")).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-07-03" } });
+    pickDate("From", "2026-07-03");
     expect(screen.queryByRole("region", { name: "Jul 2" })).not.toBeInTheDocument();
     expect(await screen.findByText("Daily average: 30 min")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-07-02" } });
+    pickDate("To", "2026-07-02");
     expect(screen.queryByText(/Daily average:/)).not.toBeInTheDocument();
   });
 
@@ -219,12 +220,8 @@ describe("Session history", () => {
     await openFocusStats();
 
     fireEvent.click(screen.getByRole("button", { name: "Add session" }));
-    fireEvent.change(screen.getByLabelText("Started"), {
-      target: { value: "2026-07-02T09:00" },
-    });
-    fireEvent.change(screen.getByLabelText("Ended"), {
-      target: { value: "2026-07-02T09:45" },
-    });
+    fireEvent.change(screen.getByLabelText("Started"), { target: { value: "2026-07-02T09:00" } });
+    fireEvent.change(screen.getByLabelText("Ended"), { target: { value: "2026-07-02T09:45" } });
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "backfilled" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
