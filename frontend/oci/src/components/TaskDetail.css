@@ -47,40 +47,52 @@
     gap: var(--space-2);
     align-items: center;
   }
-  .task-detail-titles {
+  .task-detail-breadcrumb {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
     flex: 1;
     min-width: 0;
-  }
-  .task-detail-breadcrumb {
-    margin: 0;
     font-size: var(--text-xs);
     color: var(--text-secondary);
   }
-  select.task-detail-breadcrumb {
-    align-self: flex-start;
-    max-width: 100%;
-    padding: 2px 4px;
-    margin-left: -4px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    background: transparent;
+  /* Breadcrumb crumbs are bare values: no label column. */
+  .task-detail-breadcrumb .property-row {
+    display: flex;
+    min-height: 0;
   }
-  select.task-detail-breadcrumb:hover,
-  select.task-detail-breadcrumb:focus-visible {
-    border-color: var(--border-default);
+  .task-detail-breadcrumb .property-row-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
-  .task-detail-header form {
+  .task-detail-breadcrumb .property-row-trigger {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .task-detail-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .task-detail-title form {
     flex: 1;
   }
-  .task-detail-header input {
+  .task-detail-title input:not([type="checkbox"]) {
     width: 100%;
     font-size: var(--text-lg);
     font-weight: var(--weight-semibold);
+    border-color: transparent;
+    background: transparent;
   }
-  .task-detail-header button {
+  .task-detail-title input:not([type="checkbox"]):hover,
+  .task-detail-title input:not([type="checkbox"]):focus {
+    border-color: var(--border-default);
+  }
+  .task-detail-header > button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -93,23 +105,11 @@
     color: var(--text-secondary);
     transition: background var(--duration-fast) var(--ease-out);
   }
-  .task-detail-header button:hover {
+  .task-detail-header > button:hover {
     background: var(--surface-hover);
-  }
-  .task-priority {
-    display: flex;
-    gap: var(--space-2);
-    align-items: center;
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-  }
-  .task-priority select {
-    height: 28px;
-    font-size: var(--text-sm);
   }
   .task-dates,
   .task-reminders,
-  .task-repeat,
   .task-tags {
     display: grid;
     gap: var(--space-2);
@@ -121,7 +121,6 @@
   }
   .task-dates legend,
   .task-reminders legend,
-  .task-repeat legend,
   .task-tags legend {
     padding: 0 var(--space-1);
     font-size: var(--text-xs);
@@ -163,18 +162,14 @@
     font-variant-numeric: tabular-nums;
     font-size: var(--text-sm);
   }
-  .task-repeat .repeat-editor,
-  .task-repeat .repeat-summary,
-  .task-repeat .repeat-weekdays {
+  .repeat-editor,
+  .repeat-weekdays {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
     align-items: center;
   }
-  .task-repeat .repeat-summary p {
-    margin: 0;
-  }
-  .task-repeat input[type="number"] {
+  .repeat-editor input[type="number"] {
     width: 72px;
   }
   .task-tags label {

@@ -7,11 +7,13 @@ import {
   createCheckItem,
   deleteCheckItem,
   fetchGoals,
+  fetchSections,
   updateCheckItem,
   updateTask,
   type CheckItem,
   type Goal,
   type Priority,
+  type Section,
   type Tag,
   type Task,
   type TaskList,
@@ -35,7 +37,11 @@ import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "
 import { DateFieldset } from "./DateFieldset";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
-import { RepeatFieldset } from "./RepeatFieldset";
+import { PriorityIndicator } from "./PriorityIndicator";
+import { PropertyOptions, PropertyRow } from "./PropertyRow";
+import { RepeatRow } from "./RepeatRow";
+
+const PRIORITIES = Object.keys(PRIORITY_LABELS) as Priority[];
 
 /** A vertical drag past this many pixels on the handle counts as a
  * swipe-to-dismiss (issue #170) — short enough to feel responsive, long
@@ -81,9 +87,22 @@ export function TaskDetail({
   const [title, setTitle] = useState(task.title);
   const [goals, setGoals] = useState<Goal[]>([]);
 
+  const [sections, setSections] = useState<Section[]>([]);
+
   useEffect(() => {
     void fetchGoals().then((page) => setGoals(page.items));
   }, []);
+
+  useEffect(() => {
+    let live = true;
+    setSections([]);
+    void fetchSections(task.list_id).then((page) => {
+      if (live) setSections(page.items);
+    });
+    return () => {
+      live = false;
+    };
+  }, [task.list_id]);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
   const [dateDraft, setDateDraft] = useState<DateDraft | null>(null);
   const [offsetDraft, setOffsetDraft] = useState<{ amount: string; unit: OffsetUnit } | null>(null);
@@ -138,6 +157,29 @@ export function TaskDetail({
       return;
     }
     onTaskChanged(await updateTask(task.id, { list_id: listId }));
+  }
+
+  async function moveToSection(sectionId: number | null): Promise<void> {
+    if (sectionId === task.section_id) {
+      return;
+    }
+    onTaskChanged(await updateTask(task.id, { section_id: sectionId }));
+  }
+
+  async function savePriority(priority: Priority): Promise<void> {
+    if (priority !== task.priority) {
+      onTaskChanged(await updateTask(task.id, { priority }));
+    }
+  }
+
+  async function saveKeyResult(keyResultId: number | null): Promise<void> {
+    if (keyResultId !== task.key_result_id) {
+      onTaskChanged(await updateTask(task.id, { key_result_id: keyResultId }));
+    }
+  }
+
+  async function toggleCompleted(): Promise<void> {
+    onTaskChanged(await updateTask(task.id, { completed: !task.completed }));
   }
 
   async function toggleTag(tag: Tag): Promise<void> {
@@ -260,6 +302,10 @@ export function TaskDetail({
     }
   }
 
+  const keyResults = taskCountKeyResults(goals);
+  const attached = keyResults.find((kr) => kr.id === task.key_result_id);
+  const keyResultName = attached === undefined ? null : `${attached.goalTitle}: ${attached.name}`;
+
   function handleHandleTouchStart(event: React.TouchEvent): void {
     const y = event.touches[0]?.clientY ?? null;
     touchStartY.current = y;
@@ -302,78 +348,132 @@ export function TaskDetail({
         onTouchEnd={handleHandleTouchEnd}
       />
       <div className="task-detail-header">
-        <div className="task-detail-titles">
+        <nav className="task-detail-breadcrumb property-rows" aria-label="Breadcrumb">
           {lists.length > 0 ? (
-            <select
-              className="task-detail-breadcrumb"
-              aria-label="List for this task"
-              value={task.list_id}
-              onChange={(event) => void moveToList(Number(event.target.value))}
-            >
-              {lists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name}
-                </option>
-              ))}
-            </select>
+            <PropertyRow label="List" value={listName ?? ""}>
+              {(close) => (
+                <PropertyOptions
+                  label="List"
+                  options={lists.map((list) => ({ value: list.id, label: list.name }))}
+                  selected={task.list_id}
+                  onSelect={(listId) => {
+                    close();
+                    void moveToList(listId);
+                  }}
+                />
+              )}
+            </PropertyRow>
           ) : (
-            listName !== null && <p className="task-detail-breadcrumb">{listName}</p>
+            listName !== null && <span className="task-detail-crumb">{listName}</span>
           )}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void saveTitle();
-            }}
-          >
-            <input
-              aria-label="Task title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              onBlur={() => void saveTitle()}
-            />
-          </form>
-        </div>
+          {(sections.length > 0 || task.section_id !== null) && (
+            <>
+              <span className="task-detail-crumb-separator" aria-hidden="true">
+                /
+              </span>
+              <PropertyRow
+                label="Section"
+                quiet={task.section_id === null}
+                value={
+                  sections.find((section) => section.id === task.section_id)?.name ?? "No section"
+                }
+              >
+                {(close) => (
+                  <PropertyOptions<number | null>
+                    label="Section"
+                    options={[
+                      { value: null, label: "No section" },
+                      ...sections.map((section) => ({ value: section.id, label: section.name })),
+                    ]}
+                    selected={task.section_id}
+                    onSelect={(sectionId) => {
+                      close();
+                      void moveToSection(sectionId);
+                    }}
+                  />
+                )}
+              </PropertyRow>
+            </>
+          )}
+        </nav>
         <IconButton icon="x" label="Close details" onClick={onClose} />
       </div>
-      <label className="task-priority">
-        Priority
-        <select
-          value={task.priority}
-          onChange={(event) =>
-            void updateTask(task.id, { priority: event.target.value as Priority }).then(
-              onTaskChanged,
-            )
+      <div className="task-detail-title">
+        <input
+          type="checkbox"
+          aria-label="Task complete"
+          checked={task.completed}
+          onChange={() => void toggleCompleted()}
+        />
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveTitle();
+          }}
+        >
+          <input
+            aria-label="Task title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onBlur={() => void saveTitle()}
+          />
+        </form>
+      </div>
+      <div className="property-rows">
+        <PropertyRow
+          label="Priority"
+          quiet={task.priority === "none"}
+          value={
+            <>
+              <PriorityIndicator priority={task.priority} />
+              {PRIORITY_LABELS[task.priority]}
+            </>
           }
         >
-          {(Object.keys(PRIORITY_LABELS) as Priority[]).map((level) => (
-            <option key={level} value={level}>
-              {PRIORITY_LABELS[level]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="task-key-result">
-        Key Result
+          {(close) => (
+            <PropertyOptions
+              label="Priority"
+              options={PRIORITIES.map((level) => ({
+                value: level,
+                label: PRIORITY_LABELS[level],
+              }))}
+              selected={task.priority}
+              onSelect={(level) => {
+                close();
+                void savePriority(level);
+              }}
+            />
+          )}
+        </PropertyRow>
+        <RepeatRow task={task} onTaskChanged={onTaskChanged} />
         <Hint hintKey="key-result">
-          <select
-            aria-label="Key result"
-            value={task.key_result_id ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              void updateTask(task.id, {
-                key_result_id: value === "" ? null : Number(value),
-              }).then(onTaskChanged);
-            }}
-          >
-            <option value="">No Key Result</option>
-            {taskCountKeyResults(goals).map((kr) => (
-              <option key={kr.id} value={kr.id}>
-                {kr.goalTitle}: {kr.name}
-              </option>
-            ))}
-          </select>
+          <div className="property-row-hint">
+            <PropertyRow
+              label="Key Result"
+              quiet={task.key_result_id === null}
+              value={keyResultName ?? "No Key Result"}
+            >
+              {(close) => (
+                <PropertyOptions<number | null>
+                  label="Key Result"
+                  options={[
+                    { value: null, label: "No Key Result" },
+                    ...keyResults.map((kr) => ({
+                      value: kr.id,
+                      label: `${kr.goalTitle}: ${kr.name}`,
+                    })),
+                  ]}
+                  selected={task.key_result_id}
+                  onSelect={(keyResultId) => {
+                    close();
+                    void saveKeyResult(keyResultId);
+                  }}
+                />
+              )}
+            </PropertyRow>
+          </div>
         </Hint>
-      </label>
+      </div>
       <fieldset className="task-dates">
         <legend>Date</legend>
         {task.due_date !== null && dateDraft === null && (
@@ -508,7 +608,6 @@ export function TaskDetail({
           </>
         )}
       </fieldset>
-      <RepeatFieldset task={task} onTaskChanged={onTaskChanged} />
       <fieldset className="task-tags">
         <legend>Tags</legend>
         {allTags.length === 0 && <p className="hint">No tags yet — add one in the sidebar.</p>}

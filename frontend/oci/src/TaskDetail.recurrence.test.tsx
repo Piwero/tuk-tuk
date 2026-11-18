@@ -31,9 +31,12 @@ describe("Recurrence in the detail panel", () => {
     render(<App />);
 
     const panel = await openDetail("Workout");
-    await user.selectOptions(within(panel).getByRole("combobox", { name: "Repeat" }), "Every day");
+    await user.click(within(panel).getByRole("button", { name: /^Repeat/ }));
+    await user.click(within(panel).getByRole("menuitemradio", { name: "Every day" }));
 
-    expect(await within(panel).findByText("Every day")).toBeInTheDocument();
+    expect(
+      await within(panel).findByRole("button", { name: "Repeat Every day" }),
+    ).toBeInTheDocument();
     expect(lastTaskPatch(api.requests, workout.id)).toEqual({ recurrence: "FREQ=DAILY" });
   });
 
@@ -56,7 +59,8 @@ describe("Recurrence in the detail panel", () => {
     render(<App />);
 
     const panel = await openDetail("Review");
-    await user.selectOptions(within(panel).getByRole("combobox", { name: "Repeat" }), "Custom…");
+    await user.click(within(panel).getByRole("button", { name: /^Repeat/ }));
+    await user.click(within(panel).getByRole("menuitemradio", { name: "Custom…" }));
     await user.selectOptions(within(panel).getByRole("combobox", { name: "Frequency" }), "week");
     const interval = within(panel).getByRole("spinbutton", { name: "Repeat every" });
     await user.clear(interval);
@@ -89,7 +93,8 @@ describe("Recurrence in the detail panel", () => {
     render(<App />);
 
     const panel = await openDetail("Review");
-    await user.selectOptions(within(panel).getByRole("combobox", { name: "Repeat" }), "Custom…");
+    await user.click(within(panel).getByRole("button", { name: /^Repeat/ }));
+    await user.click(within(panel).getByRole("menuitemradio", { name: "Custom…" }));
     await user.selectOptions(within(panel).getByRole("combobox", { name: "Ends" }), "On a date");
     fireEvent.change(within(panel).getByLabelText("Ends on"), {
       target: { value: "2026-12-31" },
@@ -111,7 +116,8 @@ describe("Recurrence in the detail panel", () => {
     render(<App />);
 
     const panel = await openDetail("Review");
-    await user.click(within(panel).getByRole("button", { name: "Edit repeat" }));
+    await user.click(within(panel).getByRole("button", { name: /^Repeat/ }));
+    await user.click(within(panel).getByRole("menuitemradio", { name: "Custom…" }));
 
     expect(within(panel).getByRole("combobox", { name: "Frequency" })).toHaveValue("WEEKLY");
     expect(within(panel).getByRole("spinbutton", { name: "Repeat every" })).toHaveValue(2);
@@ -128,9 +134,12 @@ describe("Recurrence in the detail panel", () => {
     render(<App />);
 
     const panel = await openDetail("Review");
-    await user.click(within(panel).getByRole("button", { name: "Remove repeat" }));
+    await user.click(within(panel).getByRole("button", { name: /^Repeat/ }));
+    await user.click(within(panel).getByRole("menuitemradio", { name: "Doesn't repeat" }));
 
-    expect(await within(panel).findByRole("combobox", { name: "Repeat" })).toBeInTheDocument();
+    expect(
+      await within(panel).findByRole("button", { name: "Repeat Doesn't repeat" }),
+    ).toBeInTheDocument();
     expect(lastTaskPatch(api.requests, review.id)).toEqual({ recurrence: null });
   });
 
@@ -141,6 +150,6 @@ describe("Recurrence in the detail panel", () => {
     const panel = await openDetail("Someday");
 
     expect(within(panel).getByText("Set a date to make this Task repeat.")).toBeInTheDocument();
-    expect(within(panel).queryByRole("combobox", { name: "Repeat" })).not.toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /^Repeat/ })).toBeDisabled();
   });
 });
