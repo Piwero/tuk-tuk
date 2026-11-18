@@ -21,10 +21,10 @@ async function openAll(): Promise<void> {
   await screen.findByRole("heading", { name: "All" });
 }
 
-/** Opens the collapsed filter popover so its List/Tag/Priority controls are
- * reachable — All hides them behind one button at rest (#281). */
+/** Opens the View menu so its Filters, Group by and Sort by controls are
+ * reachable — Smart Lists hide them behind one button at rest (#445). */
 async function openFilters(): Promise<void> {
-  fireEvent.click(await screen.findByRole("button", { name: /^Filters/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /^View/ }));
 }
 
 function taskNames(): string[] {
@@ -34,43 +34,19 @@ function taskNames(): string[] {
 }
 
 describe("All view: filter and sort controls", () => {
-  it("offers a Filters button, Group by and Sort by in All; no bare filter combobox", async () => {
+  it("offers one View button in All, Today and Next 7 Days, and in a List", async () => {
     installFakeApi();
     render(<App />);
     fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
-
-    // Inbox (a plain List view) has Group by / Sort by but no filters at all.
     await screen.findByRole("combobox", { name: "Add a task" });
-    expect(screen.getByRole("combobox", { name: "Group by" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Sort by" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Filters/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View" })).toBeInTheDocument();
 
-    await openAll();
-    expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "List" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Tag" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Priority" })).not.toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Group by" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Sort by" })).toBeInTheDocument();
-
-    await openFilters();
-    expect(screen.getByRole("combobox", { name: "List" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Tag" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Priority" })).toBeInTheDocument();
-  });
-
-  it("Today and Next 7 Days offer the same Filters, Group by and Sort by as All", async () => {
-    installFakeApi();
-    render(<App />);
-
-    const nav = await screen.findByRole("complementary", { name: "" });
-    for (const name of ["Today", "Next 7 Days"]) {
+    for (const name of ["All", "Today", "Next 7 Days"]) {
+      const nav = await screen.findByRole("complementary", { name: "" });
       fireEvent.click(await within(nav).findByRole("button", { name }));
       await screen.findByRole("heading", { name });
-
-      expect(screen.getByRole("button", { name: "Filters" })).toBeInTheDocument();
-      expect(screen.getByRole("combobox", { name: "Group by" })).toBeInTheDocument();
-      expect(screen.getByRole("combobox", { name: "Sort by" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "View" })).toBeInTheDocument();
+      expect(screen.queryByRole("combobox", { name: "Priority" })).not.toBeInTheDocument();
     }
   });
 
@@ -197,6 +173,7 @@ describe("All view: filter and sort controls", () => {
 
     await openAll();
     await screen.findByRole("button", { name: "Open details for Low one" });
+    await openFilters();
     fireEvent.change(screen.getByRole("combobox", { name: "Sort by" }), {
       target: { value: "priority" },
     });
@@ -214,6 +191,7 @@ describe("All view: filter and sort controls", () => {
 
     await openAll();
     await screen.findByRole("button", { name: "Open details for High one" });
+    await openFilters();
     fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
       target: { value: "priority" },
     });
@@ -280,6 +258,7 @@ describe("All view: filter and sort controls", () => {
 
     await openAll();
     await screen.findByRole("button", { name: "Open details for Inbox task" });
+    await openFilters();
     fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
       target: { value: "list" },
     });

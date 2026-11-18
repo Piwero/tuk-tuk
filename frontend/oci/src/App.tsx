@@ -71,7 +71,7 @@ import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { useVoiceAvailable } from "./useVoiceAvailable";
 import { livekitProvider } from "./voice/livekit";
-import { AllViewControls } from "./components/AllViewControls";
+import { AllViewControls, ViewMenu } from "./components/AllViewControls";
 import { CalendarView } from "./components/CalendarView";
 import { CommandPalette, type TaskActionHandlers } from "./components/CommandPalette";
 import { CompletedView } from "./components/CompletedView";
@@ -81,7 +81,6 @@ import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
-import { Hint } from "./components/Hint";
 import { IconButton } from "./components/IconButton";
 import { AssistantPage } from "./components/AssistantPage";
 import { VoiceProvider } from "./voice/VoiceProvider";
@@ -96,7 +95,6 @@ import { SearchView, type SearchState } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutHints, ShortcutsProvider } from "./components/ShortcutLayer";
 import { Sidebar } from "./components/Sidebar";
-import { SortBySelect } from "./components/SortBySelect";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
@@ -144,6 +142,13 @@ const BLANK_SEARCH_STATE: SearchState = {
 
 /** No narrowing — Today/Next 7 Days always fetch with this, since only "All"
  * offers filter controls. */
+/** A List's group choices: it has real Sections, so "section" is offered by name. */
+const LIST_GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
+  { value: "section", label: "Section" },
+  { value: "date", label: "Date" },
+  { value: "priority", label: "Priority" },
+];
+
 const BLANK_ALL_FILTERS: AllFilters = { listId: null, tagId: null, priority: null };
 
 /** Which of the URL-addressable static views (if any) a View shows —
@@ -1401,22 +1406,15 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                         // handler already accounts for that, and confirms either way.
                         onCreated={addCreatedTask}
                       />
-                      <div className="view-controls">
-                        <Hint hintKey="group-by">
-                          <label>
-                            Group by
-                            <select
-                              value={groupBy}
-                              onChange={(event) => setGroupBy(event.target.value as GroupBy)}
-                            >
-                              <option value="section">Section</option>
-                              <option value="date">Date</option>
-                              <option value="priority">Priority</option>
-                            </select>
-                          </label>
-                        </Hint>
-                        <SortBySelect value={sortBy} onChange={setSortBy} />
-                      </div>
+                      <ViewMenu
+                        groupBy={groupBy}
+                        onGroupByChange={setGroupBy}
+                        groupOptions={LIST_GROUP_OPTIONS}
+                        sortBy={sortBy}
+                        onSortByChange={setSortBy}
+                        lists={lists}
+                        tags={tags}
+                      />
                     </>
                   )}
                   {smartView !== null && !completedMode && (

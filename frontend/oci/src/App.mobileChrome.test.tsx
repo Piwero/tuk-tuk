@@ -91,7 +91,7 @@ describe("mobile shell polish (issue #290)", () => {
     const controls = chrome?.querySelector(".view-controls");
     expect(controls).not.toBeNull();
     expect(
-      within(controls as HTMLElement).getByRole("button", { name: /^Filters/ }),
+      within(controls as HTMLElement).getByRole("button", { name: /^View/ }),
     ).toBeInTheDocument();
   });
 

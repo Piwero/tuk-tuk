@@ -107,6 +107,7 @@ it("replaces Today sections when Group by is not None", async () => {
   render(<App />);
   await openToday();
   expect(await screen.findByRole("heading", { name: "Anytime 2" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /^View/ }));
   fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
     target: { value: "priority" },
   });
