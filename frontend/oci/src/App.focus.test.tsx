@@ -35,6 +35,22 @@ function main(): ReturnType<typeof within> {
   return within(screen.getByRole("main"));
 }
 
+async function linkSelect(): Promise<HTMLElement> {
+  const existing = screen.queryByRole("combobox", { name: "Link" });
+  if (existing) return existing;
+  fireEvent.click(await screen.findByRole("button", { name: "Link Task or Habit" }));
+  return screen.getByRole("combobox", { name: "Link" });
+}
+
+// Lengths sit behind Custom and the break line; open whichever is needed.
+function lengthInput(name: string): HTMLElement {
+  const existing = screen.queryByRole("spinbutton", { name });
+  if (existing) return existing;
+  if (name === "Pomo minutes") fireEvent.click(screen.getByRole("button", { name: "Custom" }));
+  else fireEvent.click(screen.getByRole("button", { name: /^Break \d+ min/ }));
+  return screen.getByRole("spinbutton", { name });
+}
+
 function tick(ms: number): void {
   act(() => {
     vi.advanceTimersByTime(ms);
@@ -50,7 +66,7 @@ describe("Pomo timer", () => {
     // Default Pomo length: 25 minutes.
     expect(screen.getByText("25:00")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+    fireEvent.change(lengthInput("Pomo minutes"), {
       target: { value: "1" },
     });
     expect(screen.getByText("01:00")).toBeInTheDocument();
@@ -138,7 +154,7 @@ describe("Stage", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "Link" }), {
+    fireEvent.change(await linkSelect(), {
       target: { value: `task:${task.id}` },
     });
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -178,12 +194,10 @@ describe("Stage", () => {
     const phase = (): string | null =>
       screen.getByRole("main").querySelector(".focus-phase")?.textContent ?? null;
 
-    expect(phase()).toBe("Pomo");
-    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), {
-      target: { value: "stopwatch" },
-    });
+    expect(phase()).toBe("Pomo 1 of 4");
+    fireEvent.click(screen.getByRole("button", { name: "Stopwatch" }));
     expect(phase()).toBe("Stopwatch");
-    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), { target: { value: "pomo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Pomo" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     expect(phase()).toBe("Focusing");
@@ -219,13 +233,13 @@ describe("Distraction-free running view", () => {
     render(<App />);
     await openFocus();
 
-    expect(screen.getByRole("heading", { name: "Timers" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Mode" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Timers" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Mode" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
 
-    expect(screen.queryByRole("heading", { name: "Timers" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Mode" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Timers" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Mode" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Statistics" })).not.toBeInTheDocument();
     // The countdown is still the dominant element.
     expect(main().getByText("25:00")).toBeInTheDocument();
@@ -238,10 +252,10 @@ describe("Breaks", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+    fireEvent.change(lengthInput("Pomo minutes"), {
       target: { value: "1" },
     });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Break minutes" }), {
+    fireEvent.change(lengthInput("Break minutes"), {
       target: { value: "2" },
     });
 
@@ -280,10 +294,10 @@ describe("Breaks", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+    fireEvent.change(lengthInput("Pomo minutes"), {
       target: { value: "1" },
     });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Long break minutes" }), {
+    fireEvent.change(lengthInput("Long break minutes"), {
       target: { value: "20" },
     });
 
@@ -308,9 +322,7 @@ describe("Breaks", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), {
-      target: { value: "stopwatch" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Stopwatch" }));
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     tick(60_000);
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
@@ -327,9 +339,7 @@ describe("Stopwatch", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), {
-      target: { value: "stopwatch" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Stopwatch" }));
     expect(screen.getByText("00:00")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -357,7 +367,7 @@ describe("Linking", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "Link" }), {
+    fireEvent.change(await linkSelect(), {
       target: { value: `task:${task.id}` },
     });
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -375,7 +385,7 @@ describe("Linking", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "Link" }), {
+    fireEvent.change(await linkSelect(), {
       target: { value: `habit:${habit.id}` },
     });
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -416,7 +426,7 @@ describe("Run persistence", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "Link" }), {
+    fireEvent.change(await linkSelect(), {
       target: { value: `task:${task.id}` },
     });
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -453,9 +463,7 @@ describe("Run persistence", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Mode" }), {
-      target: { value: "stopwatch" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Stopwatch" }));
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     tick(90_000);
 
@@ -487,7 +495,7 @@ describe("Run persistence", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+    fireEvent.change(lengthInput("Pomo minutes"), {
       target: { value: "1" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
@@ -559,7 +567,7 @@ describe("Nav badge", () => {
     render(<App />);
     await openFocus();
 
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Pomo minutes" }), {
+    fireEvent.change(lengthInput("Pomo minutes"), {
       target: { value: "1" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
