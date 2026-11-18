@@ -81,13 +81,12 @@ import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
-import { IconButton } from "./components/IconButton";
 import { AssistantPage } from "./components/AssistantPage";
 import { VoiceProvider } from "./voice/VoiceProvider";
 import { VoiceOverlay } from "./components/VoiceOverlay";
 import { KanbanView } from "./components/KanbanView";
-import { MobileQuickAddButton } from "./components/MobileQuickAddButton";
 import { MobileTabBar } from "./components/MobileTabBar";
+import { MoreSheet } from "./components/MoreSheet";
 import { Modal } from "./components/Modal";
 import { QuickAdd } from "./components/QuickAdd";
 import { QuickAddDialog } from "./components/QuickAddDialog";
@@ -292,22 +291,20 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // state above. The resolved `data-theme` is (re)applied on every change,
   // and "system" keeps a live subscription to the OS setting.
   const [themePreference, setThemePreference] = useState<ThemePreference>(loadThemePreference);
-  // Mobile only: below the breakpoint the sidebar is off-canvas and this
-  // slides it over the content. Ignored by the desktop layout.
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Mobile only (#462): the More sheet that replaced the navigation drawer.
+  // Ignored by the desktop layout, where the tab bar is hidden.
+  const [moreOpen, setMoreOpen] = useState(false);
   // `<main>` is the app's real scroll region (`.app` itself is
-  // `overflow: hidden` — see index.css), so locking `document.body` would
-  // touch an element that was never scrolling in the first place. Locking
-  // `main`'s own overflow instead stops a drag over the drawer scrim from
-  // moving the list underneath, and — unlike a `position: fixed` body
-  // trick — needs no manual scroll-position restore on close, since
-  // `overflow: hidden` alone preserves `scrollTop`.
+  // `overflow: hidden`), so the sheet locks `main`'s own overflow to stop a
+  // drag over its scrim from moving the list underneath (#290); `overflow:
+  // hidden` alone preserves `scrollTop`.
   const mainRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const main = mainRef.current;
     if (main === null) return;
-    main.style.overflow = drawerOpen ? "hidden" : "";
-  }, [drawerOpen]);
+    main.style.overflow = moreOpen ? "hidden" : "";
+  }, [moreOpen]);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
   // Whether the Stand-up nav item/route is shown (issue #140) — fetched once
   // at load, defaulting to true so the nav item doesn't flash away on a slow
   // network before the real value arrives.
@@ -410,7 +407,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       suppressNextSyncRef.current = true;
       const route = containerForPath(window.location.pathname);
       setCompletedMode(route?.kind === "list" && route.mode === "completed");
-      setDrawerOpen(false);
+      setMoreOpen(false);
       setView(route ?? (kind !== null ? viewForStaticKind(kind, window.location.pathname) : null));
     }
     window.addEventListener("popstate", onPopState);
@@ -832,7 +829,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
 
   function switchView(next: View): void {
     setCompletedMode(false);
-    setDrawerOpen(false);
+    setMoreOpen(false);
     setView(
       next?.kind === "list"
         ? {
@@ -845,7 +842,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
 
   /** Keeps `view.mode` (and so /calendar/<mode> — see the sync effect above)
    * matching CalendarView's own internal mode state, without touching
-   * completedMode/drawerOpen the way a full switchView would. */
+   * completedMode/moreOpen the way a full switchView would. */
   const handleCalendarModeChange = useCallback((mode: CalendarMode): void => {
     setView((current) => (current?.kind === "calendar" ? { kind: "calendar", mode } : current));
   }, []);
@@ -1101,15 +1098,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   const focusSelected = view?.kind === "focus" || view?.kind === "focus-stats";
   const settingsSelected = view?.kind === "settings";
   const searchSelected = view?.kind === "search";
-  const tasksSelected =
-    !calendarSelected &&
-    !goalsSelected &&
-    !habitsSelected &&
-    !standupSelected &&
-    !assistantSelected &&
-    !focusSelected &&
-    !settingsSelected &&
-    !searchSelected;
 
   // The List the open Task belongs to, shown as a breadcrumb in the mobile
   // sheet (#170) — Task detail can be reached from any view (List, Tag,
@@ -1298,7 +1286,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               "app",
               selectedTask === null ? "" : "with-detail",
               sidebarCollapsed ? "sidebar-collapsed" : "",
-              drawerOpen ? "drawer-open" : "",
             ]
               .filter((name) => name !== "")
               .join(" ")}
@@ -1342,7 +1329,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               onToggleCollapsed={toggleSidebar}
               resolvedTheme={resolveThemePreference(themePreference)}
               onToggleTheme={toggleTheme}
-              onCloseDrawer={() => setDrawerOpen(false)}
               onLogout={onLogout}
               onOpenPalette={() => setPaletteOpen(true)}
               onListsChanged={setLists}
@@ -1359,27 +1345,12 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 );
               }}
             />
-            {drawerOpen && (
-              <div
-                className="drawer-scrim"
-                aria-hidden="true"
-                onClick={() => setDrawerOpen(false)}
-              />
-            )}
             <main ref={mainRef}>
               {/* One cell for the view, one for the hint strip: the cell grows
               into spare height so the strip sits at the foot (issue #434). */}
               <div className={showDayRail ? "main-content with-day-rail" : "main-content"}>
                 <div className="main-chrome">
                   <div className="main-header">
-                    <IconButton
-                      icon="menu"
-                      size={20}
-                      label="Show navigation"
-                      className="drawer-toggle"
-                      aria-expanded={drawerOpen}
-                      onClick={() => setDrawerOpen((current) => !current)}
-                    />
                     <h1>
                       {selectedList !== null ? (
                         // A List filed in a Folder shows "Folder / List" (#126): the
@@ -1742,19 +1713,56 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               <ShortcutHints />
             </main>
             <MobileTabBar
-              tasksSelected={tasksSelected}
+              todaySelected={smartView === "today"}
               calendarSelected={calendarSelected}
               calendarEnabled={sectionSettings.calendar}
               habitsSelected={habitsSelected}
               habitsEnabled={sectionSettings.habits}
-              focusSelected={focusSelected}
-              focusEnabled={sectionSettings.focus}
-              onSelectTasks={() => switchView({ kind: "smart", view: "today" })}
+              moreSelected={
+                view !== null && smartView !== "today" && !calendarSelected && !habitsSelected
+              }
+              moreOpen={moreOpen}
+              onSelectToday={() => switchView({ kind: "smart", view: "today" })}
               onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
+              onQuickAdd={() => {
+                setMoreOpen(false);
+                setQuickAddOpen(true);
+              }}
               onSelectHabits={() => switchView({ kind: "habits" })}
-              onSelectFocus={() => switchView({ kind: "focus" })}
+              onToggleMore={() => setMoreOpen((current) => !current)}
             />
-            <MobileQuickAddButton onClick={() => setQuickAddOpen(true)} />
+            {moreOpen && (
+              <MoreSheet
+                lists={lists}
+                folders={folders}
+                tags={tags}
+                selectedListId={view?.kind === "list" ? view.id : null}
+                selectedFolderId={view?.kind === "folder" ? view.id : null}
+                selectedTagId={view?.kind === "tag" ? view.id : null}
+                selectedSmart={smartView}
+                goalsEnabled={sectionSettings.goals}
+                goalsSelected={goalsSelected}
+                focusEnabled={sectionSettings.focus}
+                focusSelected={focusSelected}
+                standupEnabled={standupEnabled}
+                standupSelected={standupSelected}
+                assistantAvailable={assistantAvailable}
+                assistantSelected={assistantSelected}
+                searchSelected={searchSelected}
+                settingsSelected={settingsSelected}
+                onClose={closeMore}
+                onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
+                onSelectList={(listId) => switchView({ kind: "list", id: listId })}
+                onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
+                onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
+                onSelectGoals={() => switchView({ kind: "goals" })}
+                onSelectFocus={() => switchView({ kind: "focus" })}
+                onSelectStandup={() => switchView({ kind: "standup" })}
+                onSelectAssistant={() => switchView({ kind: "assistant" })}
+                onSelectSearch={() => switchView({ kind: "search", search: BLANK_SEARCH_STATE })}
+                onSelectSettings={() => switchView({ kind: "settings" })}
+              />
+            )}
             {selectedTask !== null && (
               <div className="task-detail-backdrop" aria-hidden="true" onClick={closeTaskDetail} />
             )}
@@ -1765,6 +1773,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 listName={selectedTaskListName}
                 lists={lists}
                 onTaskChanged={applyTaskChange}
+                onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onClose={closeTaskDetail}
               />
             )}

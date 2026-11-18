@@ -4,14 +4,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { App } from "./App";
 import { pinCalendarClock } from "./test/calendar";
-import { fakeList, INBOX, installFakeApi } from "./test/fakeApi";
+import { fakeFolder, fakeList, fakeTag, INBOX, installFakeApi } from "./test/fakeApi";
 
 /** jsdom applies no CSS, so the bottom tab bar's fixed positioning and the
- * @media (max-width: 720px) rule that shows it are not observable here
- * (same convention as App.sidebarCollapse.test.tsx's drawer tests) — these
- * tests instead pin down the tab bar's DOM structure and behavior: which
- * destinations it exposes, and that tapping one navigates and updates the
- * active state, exactly as the always-present sidebar top nav does. */
+ * @media (max-width: 720px) rule that shows it are not observable here —
+ * these tests pin down the tab bar's DOM structure and behaviour: which
+ * destinations it exposes, that tapping one navigates, and that More opens a
+ * sheet holding everything else (issue #462, replacing the drawer). */
 
 pinCalendarClock();
 
@@ -19,109 +18,199 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
-const TAB_NAMES = ["Tasks", "Calendar", "Habits", "Focus"];
+// Plain buttons throughout (#170), not anchors, and named so they never
+// collide with the sidebar's controls, which render at every width.
+const TAB_NAMES = ["Today tab", "Calendar", "Quick add task", "Habits", "More"];
 
-// Plain buttons throughout (not anchors, unlike the sidebar's top nav) —
-// this tab bar has no need for cmd/ctrl-click "open in new tab", and
-// staying button-only keeps its accessible names from colliding with the
-// sidebar's same-named links, which render at every width alongside it.
-function getTab(nav: HTMLElement, name: string): HTMLElement {
-  return within(nav).getByRole("button", { name });
+function tabBar(): HTMLElement {
+  return screen.getByRole("navigation", { name: "Primary" });
 }
 
-describe("Mobile bottom tab bar (issue #170)", () => {
-  it("exposes Tasks, Calendar, Habits, and Focus, with Tasks active by default", async () => {
+function getTab(name: string): HTMLElement {
+  return within(tabBar()).getByRole("button", { name });
+}
+
+async function ready(): Promise<void> {
+  await screen.findByRole("heading", { name: "All" });
+}
+
+describe("Mobile bottom tab bar (issues #170, #462)", () => {
+  it("holds Today, Calendar, a centre Quick-Add, Habits and More, in that order", async () => {
     installFakeApi();
     render(<App />);
-    await screen.findByRole("heading", { name: "All" });
+    await ready();
 
-    const nav = screen.getByRole("navigation", { name: "Primary" });
+    const names = within(tabBar())
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label") ?? button.textContent);
+    expect(names).toEqual(TAB_NAMES);
+    expect(within(tabBar()).queryByRole("link")).toBeNull();
+    // All lives under More's Lists tree, so More is the current tab.
+    expect(getTab("More")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("keeps tab names distinct from the sidebar's controls", async () => {
+    installFakeApi();
+    render(<App />);
+    await ready();
+
     for (const name of TAB_NAMES) {
-      expect(getTab(nav, name)).toBeInTheDocument();
-    }
-    expect(getTab(nav, "Tasks")).toHaveClass("selected");
-    for (const name of TAB_NAMES.filter((n) => n !== "Tasks")) {
-      expect(getTab(nav, name)).not.toHaveClass("selected");
+      expect(screen.getAllByRole("button", { name })).toHaveLength(1);
     }
   });
 
-  it("does not include Stand-up or Search — those stay drawer-only", async () => {
+  it("opens Quick-Add from the centre tab and has no floating button", async () => {
     installFakeApi();
-    render(<App />);
-    await screen.findByRole("heading", { name: "All" });
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await ready();
 
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(nav).queryByText("Stand-up")).not.toBeInTheDocument();
-    expect(within(nav).queryByText("Search")).not.toBeInTheDocument();
+    expect(container.querySelector(".mobile-quick-add")).toBeNull();
+    await user.click(getTab("Quick add task"));
+    expect(screen.getByRole("dialog", { name: "Quick add" })).toBeInTheDocument();
   });
 
-  it("navigates to Calendar and marks it active", async () => {
+  it("navigates to Calendar and Habits and back to Today", async () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("heading", { name: "All" });
+    await ready();
 
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    await user.click(getTab(nav, "Calendar"));
-
+    await user.click(getTab("Calendar"));
     await screen.findByRole("heading", { name: "Friday, July 3, 2026" }, { timeout: 10_000 });
     expect(window.location.pathname).toBe("/calendar/day");
-    expect(getTab(nav, "Calendar")).toHaveClass("selected");
-    expect(getTab(nav, "Tasks")).not.toHaveClass("selected");
-  });
+    expect(getTab("Calendar")).toHaveAttribute("aria-current", "page");
 
-  it("navigates to Habits and marks it active", async () => {
-    installFakeApi();
-    const user = userEvent.setup();
-    render(<App />);
-    await screen.findByRole("heading", { name: "All" });
-
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    await user.click(getTab(nav, "Habits"));
-
+    await user.click(getTab("Habits"));
     await screen.findByRole("heading", { name: "Habits" });
-    expect(getTab(nav, "Habits")).toHaveClass("selected");
-  });
+    expect(getTab("Habits")).toHaveAttribute("aria-current", "page");
 
-  it("navigates to Focus and marks it active", async () => {
-    installFakeApi();
-    const user = userEvent.setup();
-    render(<App />);
-    await screen.findByRole("heading", { name: "All" });
-
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    await user.click(getTab(nav, "Focus"));
-
-    await screen.findByRole("heading", { name: "Focus" });
-    expect(getTab(nav, "Focus")).toHaveClass("selected");
-  });
-
-  it("returns to Today from another destination via the Tasks tab", async () => {
-    installFakeApi();
-    const user = userEvent.setup();
-    render(<App />);
-    await screen.findByRole("heading", { name: "All" });
-
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    await user.click(getTab(nav, "Habits"));
-    await screen.findByRole("heading", { name: "Habits" });
-
-    await user.click(getTab(nav, "Tasks"));
-
+    await user.click(getTab("Today tab"));
     await screen.findByRole("heading", { name: "Today" });
-    expect(getTab(nav, "Tasks")).toHaveClass("selected");
+    expect(getTab("Today tab")).toHaveAttribute("aria-current", "page");
   });
 
-  it("shows no tab active while a List is selected from the drawer", async () => {
-    const errands = fakeList("Errands");
-    installFakeApi({ lists: [INBOX, errands] });
+  it("drops the tab of a feature disabled in Settings", async () => {
+    installFakeApi({
+      sectionSettings: {
+        calendar: false,
+        goals: true,
+        habits: false,
+        focus: true,
+        assistant: true,
+      },
+    });
     render(<App />);
-    await screen.findByRole("heading", { name: "All" });
+    await ready();
 
-    // Tasks lights up for any Smart List / List / Tag / Folder view (it's
-    // the "everything else" destination, same convention as the sidebar's
-    // own tasksSelected).
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(getTab(nav, "Tasks")).toHaveClass("selected");
+    expect(within(tabBar()).queryByRole("button", { name: "Calendar" })).toBeNull();
+    expect(within(tabBar()).queryByRole("button", { name: "Habits" })).toBeNull();
+    expect(getTab("More")).toBeInTheDocument();
+  });
+
+  it("has no navigation drawer toggle", async () => {
+    installFakeApi();
+    render(<App />);
+    await ready();
+
+    expect(screen.queryByRole("button", { name: "Show navigation" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close navigation" })).toBeNull();
+  });
+});
+
+describe("More sheet (issue #462)", () => {
+  async function openMore(): Promise<HTMLElement> {
+    const user = userEvent.setup();
+    await user.click(getTab("More"));
+    expect(getTab("More")).toHaveAttribute("aria-expanded", "true");
+    return screen.getByRole("dialog", { name: "More" });
+  }
+
+  it("reaches the remaining destinations", async () => {
+    installFakeApi({ assistantAvailable: true });
+    render(<App />);
+    await ready();
+
+    const sheet = await openMore();
+    for (const name of ["Goals", "Focus", "Stand-up", "Assistant", "Search", "Settings"]) {
+      expect(within(sheet).getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("navigates to a destination and closes", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await ready();
+
+    const sheet = await openMore();
+    await user.click(within(sheet).getByRole("button", { name: "Goals" }));
+
+    await screen.findByRole("heading", { name: "Goals" });
+    expect(screen.queryByRole("dialog", { name: "More" })).toBeNull();
+    expect(getTab("More")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("opens Search from the sheet", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await ready();
+
+    const sheet = await openMore();
+    await user.click(within(sheet).getByRole("button", { name: "Search" }));
+    expect(window.location.pathname).toBe("/search");
+  });
+
+  it("lists every List, Folder and Tag, and opens one", async () => {
+    const work = fakeFolder("Work");
+    const errands = fakeList("Errands");
+    const filed = fakeList("Reports", { folder_id: work.id });
+    const urgent = fakeTag("urgent");
+    installFakeApi({ lists: [INBOX, errands, filed], folders: [work], tags: [urgent] });
+    const user = userEvent.setup();
+    render(<App />);
+    await ready();
+
+    const sheet = await openMore();
+    const lists = within(sheet).getByRole("navigation", { name: "Lists" });
+    for (const name of ["Inbox", "Errands", "Work", "Reports"]) {
+      expect(await within(lists).findByRole("button", { name })).toBeInTheDocument();
+    }
+    const tags = within(sheet).getByRole("navigation", { name: "Tags" });
+    expect(within(tags).getByRole("button", { name: "urgent" })).toBeInTheDocument();
+
+    await user.click(within(lists).getByRole("button", { name: "Reports" }));
+    await screen.findByRole("heading", { level: 1, name: /Reports/ });
+    expect(window.location.pathname).toBe(`/lists/${filed.id}`);
+
+    const again = await openMore();
+    await user.click(
+      within(within(again).getByRole("navigation", { name: "Tags" })).getByRole("button", {
+        name: "urgent",
+      }),
+    );
+    expect(window.location.pathname).toBe(`/tags/${urgent.id}`);
+  });
+
+  it("leaves out destinations disabled in Settings", async () => {
+    installFakeApi({
+      standupEnabled: false,
+      sectionSettings: {
+        calendar: true,
+        goals: false,
+        habits: true,
+        focus: false,
+        assistant: false,
+      },
+    });
+    render(<App />);
+    await ready();
+
+    const sheet = await openMore();
+    for (const name of ["Goals", "Focus", "Stand-up", "Assistant"]) {
+      expect(within(sheet).queryByRole("button", { name })).toBeNull();
+    }
+    expect(within(sheet).getByRole("button", { name: "Settings" })).toBeInTheDocument();
   });
 });

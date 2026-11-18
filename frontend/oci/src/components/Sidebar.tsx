@@ -139,10 +139,6 @@ interface SidebarProps {
    * that flips it — the nav-bar shortcut for Settings › Appearance. */
   resolvedTheme: "light" | "dark";
   onToggleTheme: () => void;
-  /** Closes the off-canvas mobile drawer explicitly (issue #170) — until
-   * now the only way out was tapping the backdrop. Ignored by the desktop
-   * layout, where this button stays hidden. */
-  onCloseDrawer: () => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
@@ -485,7 +481,6 @@ export function Sidebar({
   onToggleCollapsed,
   resolvedTheme,
   onToggleTheme,
-  onCloseDrawer,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
@@ -885,16 +880,6 @@ export function Sidebar({
             label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!collapsed}
             onClick={onToggleCollapsed}
-          />
-          {/* Mobile only (hidden by CSS on desktop, issue #170): the drawer's
-              own close control, so dismissing it no longer requires hunting
-              for the backdrop. */}
-          <IconButton
-            icon="x"
-            size={18}
-            label="Close navigation"
-            className="drawer-close"
-            onClick={onCloseDrawer}
           />
         </div>
         <nav aria-label="Views" className="top-nav">

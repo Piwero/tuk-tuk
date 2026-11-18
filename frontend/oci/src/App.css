@@ -174,19 +174,6 @@
     }
   }
 
-  .drawer-toggle {
-    display: none;
-  }
-
-  /* IconButton wraps the toggle in a span (#270) — the wrapper is the
- * header's flex item now, so it inherits the hide/show alongside the
- * button it wraps. */
-
-  .main-header > .icon-button-wrap:has(> .drawer-toggle) {
-    display: none;
-    flex: none;
-  }
-
   @media (max-width: 720px) {
     .app,
     .app.with-detail,
@@ -195,33 +182,12 @@
       grid-template-columns: 1fr;
     }
 
+    /* Shared backdrop for narrow overlays (Calendar's Unscheduled sheet). */
     .drawer-scrim {
       position: fixed;
       inset: 0;
       z-index: calc(var(--z-modal) - 2);
       background: var(--scrim);
-    }
-
-    .drawer-toggle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      /* 44x44 hit area with the same 18px glyph (#168) — the icon itself
-       doesn't grow, only the button's own box. */
-      width: var(--tap-target);
-      height: var(--tap-target);
-      flex: none;
-      border-radius: var(--radius-sm);
-      color: var(--text-secondary);
-    }
-
-    .drawer-toggle:hover {
-      background: var(--surface-hover);
-    }
-
-    .main-header > .icon-button-wrap:has(> .drawer-toggle) {
-      display: inline-flex;
-      flex: none;
     }
 
     /* Sticky chrome (#290): `main` is the scroll region (see the base
@@ -230,24 +196,52 @@
      Quick-Add bar and the filter controls on screen together — one sticky
      element rather than three stacked siblings, so no offsets to keep in
      lockstep. `z-index: 1` is enough to sit above the list content that
-     scrolls beneath it, and stays well under the drawer/scrim (`calc(var
-     (--z-modal) - 1)` / `- 2`) and the tab bar (`calc(var(--z-modal) -
-     4)`), so none of those get covered. */
+     scrolls beneath it, and stays well under the More sheet and its scrim
+     (`calc(var(--z-modal) - 5)` / `- 6`) and the tab bar (`calc(var
+     (--z-modal) - 4)`), so none of those get covered. */
+    /* Compact header (#460): title and date line on the left, the View
+     * button beside them; Tasks start directly beneath. */
     .main-chrome {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      column-gap: var(--space-3);
       position: sticky;
       top: 0;
       z-index: 1;
       background: var(--surface-page);
     }
 
+    /* The sticky chrome is a stacking context, so while the View sheet is
+     * open the chrome itself must rise above the tab bar. */
+    .main-chrome:has(.view-menu-popover) {
+      z-index: var(--z-modal);
+    }
+    .main-chrome > * {
+      grid-column: 1 / -1;
+    }
+    .main-chrome > .main-header {
+      grid-column: 1;
+      flex-wrap: wrap;
+      row-gap: 0;
+      margin-bottom: var(--space-2);
+    }
+    .main-chrome > .main-header .today-summary {
+      flex-basis: 100%;
+      margin: 0;
+    }
+    .main-chrome > .view-controls {
+      grid-column: 2;
+      grid-row: 1;
+      margin: 0;
+    }
+
     /* Bottom padding leaves room at the foot of the scroll region so the last
-     row of a scrolled list is never hidden behind the fixed tab bar and the
-     Quick-Add button docked above it (issue #170, #287). */
+     row of a scrolled list is never hidden behind the fixed tab bar and its
+     raised centre Quick-Add (issues #170, #462). */
     main {
       padding: var(--space-4);
-      padding-bottom: calc(
-        var(--mobile-tab-bar-height) + var(--mobile-quick-add-size) + var(--space-4) * 2
-      );
+      padding-bottom: calc(var(--mobile-tab-bar-height) + var(--space-4) * 3);
     }
   }
 }

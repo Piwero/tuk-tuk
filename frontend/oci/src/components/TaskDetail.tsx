@@ -28,6 +28,7 @@ import { PriorityIndicator } from "./PriorityIndicator";
 import { PropertyOptions, PropertyRow } from "./PropertyRow";
 import { ReminderRow } from "./ReminderRow";
 import { RepeatRow } from "./RepeatRow";
+import { TagsRow } from "./TagsRow";
 
 const PRIORITIES = Object.keys(PRIORITY_LABELS) as Priority[];
 
@@ -50,6 +51,8 @@ interface TaskDetailProps {
    * haven't loaded — the breadcrumb falls back to plain text then. */
   lists: TaskList[];
   onTaskChanged: (task: Task) => void;
+  /** A Tag created from the Tags row, so the app-wide Tag list stays current. */
+  onTagCreated: (tag: Tag) => void;
   onClose: () => void;
 }
 
@@ -70,6 +73,7 @@ export function TaskDetail({
   listName,
   lists,
   onTaskChanged,
+  onTagCreated,
   onClose,
 }: TaskDetailProps): JSX.Element {
   const [title, setTitle] = useState(task.title);
@@ -164,14 +168,6 @@ export function TaskDetail({
 
   async function toggleCompleted(): Promise<void> {
     onTaskChanged(await updateTask(task.id, { completed: !task.completed }));
-  }
-
-  async function toggleTag(tag: Tag): Promise<void> {
-    const assigned = task.tags.some((t) => t.id === tag.id);
-    const tagIds = assigned
-      ? task.tags.filter((t) => t.id !== tag.id).map((t) => t.id)
-      : [...task.tags.map((t) => t.id), tag.id];
-    onTaskChanged(await updateTask(task.id, { tag_ids: tagIds }));
   }
 
   async function renameCheckItem(): Promise<void> {
@@ -382,6 +378,12 @@ export function TaskDetail({
           )}
         </PropertyRow>
         <RepeatRow task={task} onTaskChanged={onTaskChanged} />
+        <TagsRow
+          task={task}
+          allTags={allTags}
+          onTaskChanged={onTaskChanged}
+          onTagCreated={onTagCreated}
+        />
         <Hint hintKey="key-result">
           <div className="property-row-hint">
             <PropertyRow
@@ -412,21 +414,6 @@ export function TaskDetail({
         <DateRow task={task} onTaskChanged={onTaskChanged} />
         <ReminderRow task={task} onTaskChanged={onTaskChanged} />
       </div>
-      <fieldset className="task-tags">
-        <legend>Tags</legend>
-        {allTags.length === 0 && <p className="hint">No tags yet — add one in the sidebar.</p>}
-        {allTags.map((tag) => (
-          <label key={tag.id}>
-            <input
-              type="checkbox"
-              checked={task.tags.some((t) => t.id === tag.id)}
-              aria-label={`Tag ${tag.name}`}
-              onChange={() => void toggleTag(tag)}
-            />
-            {tag.name}
-          </label>
-        ))}
-      </fieldset>
       <div className="task-description">
         {descriptionDraft === null ? (
           <>
