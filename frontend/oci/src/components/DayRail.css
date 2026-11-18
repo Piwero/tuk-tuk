@@ -85,3 +85,13 @@
     color: var(--text-secondary);
   }
 }
+
+/* Focus card (#448). */
+@layer components {
+  .focus-card-total {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+}
