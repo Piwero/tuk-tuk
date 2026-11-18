@@ -303,6 +303,40 @@
         min-height: var(--tap-target);
       }
     }
+
+    /* Mobile two-line row (#460): the title line (held at the 44px floor by
+     * the title and checkbox label) over one line of time and Tags, with the
+     * List reduced to its colour dot. No vertical padding: the 44px title
+     * line is the row, so about eight fit on a phone. The 136px actions
+     * track (#449) is a grid-only reservation; at this width the row is the
+     * wrapping fallback, so it costs nothing here. */
+    .tasks li.task-row {
+      padding: 0 var(--space-2);
+      row-gap: 0;
+    }
+    .tasks li.task-row > .task-row-head {
+      flex: 1 1 100%;
+    }
+    .tasks li.task-row .task-row-meta {
+      flex-wrap: nowrap;
+      overflow: hidden;
+      padding: 0 0 var(--space-1) calc(var(--tap-target) + var(--space-3));
+      font-size: var(--text-xs);
+    }
+    /* Long-press opens the actions: let them wrap to their own line rather
+     * than be clipped by the one-line meta, keeping their 44px targets. */
+    .tasks li.task-row[data-actions-open="true"] .task-row-meta {
+      flex-wrap: wrap;
+      overflow: visible;
+    }
+    .tasks li.task-row .list-name {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
   }
   @media (hover: none), (pointer: coarse) {
     /* A Task row's own actions (Focus, Delete) are different: Delete has no

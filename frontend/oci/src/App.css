@@ -199,11 +199,41 @@
      scrolls beneath it, and stays well under the More sheet and its scrim
      (`calc(var(--z-modal) - 5)` / `- 6`) and the tab bar (`calc(var
      (--z-modal) - 4)`), so none of those get covered. */
+    /* Compact header (#460): title and date line on the left, the View
+     * button beside them; Tasks start directly beneath. */
     .main-chrome {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      column-gap: var(--space-3);
       position: sticky;
       top: 0;
       z-index: 1;
       background: var(--surface-page);
+    }
+
+    /* The sticky chrome is a stacking context, so while the View sheet is
+     * open the chrome itself must rise above the tab bar. */
+    .main-chrome:has(.view-menu-popover) {
+      z-index: var(--z-modal);
+    }
+    .main-chrome > * {
+      grid-column: 1 / -1;
+    }
+    .main-chrome > .main-header {
+      grid-column: 1;
+      flex-wrap: wrap;
+      row-gap: 0;
+      margin-bottom: var(--space-2);
+    }
+    .main-chrome > .main-header .today-summary {
+      flex-basis: 100%;
+      margin: 0;
+    }
+    .main-chrome > .view-controls {
+      grid-column: 2;
+      grid-row: 1;
+      margin: 0;
     }
 
     /* Bottom padding leaves room at the foot of the scroll region so the last
