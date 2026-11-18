@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 
+import { pickDate } from "./test/pickDate";
 import { App } from "./App";
 import {
   fakeGoal,
@@ -165,9 +166,7 @@ describe("Stand-up", () => {
     render(<App />);
     await openStandup();
 
-    fireEvent.change(screen.getByLabelText("Stand-up date"), {
-      target: { value: "2026-07-01" },
-    });
+    pickDate("Stand-up date", "2026-07-01");
 
     await waitFor(() => {
       expect(
@@ -175,9 +174,7 @@ describe("Stand-up", () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText("Stand-up date"), {
-      target: { value: "2026-06-15" },
-    });
+    pickDate("Stand-up date", "2026-06-15");
 
     await waitFor(() => {
       expect(screen.queryByText("Old work")).not.toBeInTheDocument();
@@ -601,5 +598,36 @@ describe("Stand-up bullet actions overlay the row (issue #429)", () => {
       vi.advanceTimersByTime(500);
     });
     expect(row).toHaveAttribute("data-actions-open", "true");
+  });
+});
+
+describe("Date popover", () => {
+  it("replaces native date inputs and is keyboard operable with labelled days", async () => {
+    installFakeApi({
+      standupEntries: [
+        fakeStandupEntry("2026-07-01", {
+          bullets: [{ id: 1, section: "today", text: "Old work", sort_order: 1024 }],
+        }),
+      ],
+    });
+    const { container } = render(<App />);
+    await openStandup();
+    expect(container.querySelector('input[type="date"]')).toBeNull();
+
+    const trigger = screen.getByRole("button", { name: "Stand-up date" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const today = screen.getByRole("button", { name: "Friday, July 3, 2026" });
+    expect(today).toHaveAttribute("aria-current", "date");
+    today.focus();
+    fireEvent.keyDown(today, { key: "ArrowUp" });
+    fireEvent.keyDown(today, { key: "ArrowLeft" });
+    const target = await screen.findByRole("button", { name: "Thursday, June 25, 2026" });
+    expect(target).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    pickDate("Stand-up date", "2026-07-01");
+    expect(await screen.findByText("Old work")).toBeInTheDocument();
   });
 });
