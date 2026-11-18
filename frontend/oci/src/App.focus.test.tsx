@@ -396,7 +396,7 @@ describe("Linking", () => {
     expect(api.focusSessions[0]?.habit_id).toBe(habit.id);
   });
 
-  it("starts a linked Pomo from the task row's Actions", async () => {
+  it("links a Pomo from the task row's Actions, started with Start", async () => {
     const task = fakeTask("Write report");
     const api = installFakeApi({ tasks: [task] });
     render(<App />);
@@ -404,10 +404,12 @@ describe("Linking", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Actions for Write report" }));
     const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
-    fireEvent.click(within(dialog).getByRole("option", { name: "Start Focus" }));
+    fireEvent.click(within(dialog).getByRole("option", { name: "Focus" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
-    // Already running against the task, no extra tap needed.
+    // Linked, but the clock waits for Start (#449).
+    expect(await main().findByRole("button", { name: "Linked: Write report" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
     expect(main().getByText("Write report", { selector: "strong" })).toBeInTheDocument();
 

@@ -85,6 +85,21 @@
   .task-row-meta > :empty {
     display: none;
   }
+  /* The plum Focus pill (#449): Focus keeps its own accent, so it reads
+   * apart from the neutral icon actions beside it. */
+  .tasks li.task-row .row-actions button.row-action-focus {
+    width: auto;
+    gap: 4px;
+    padding: 0 10px;
+    border-radius: var(--radius-full);
+    background: var(--focus-soft);
+    color: var(--focus-accent);
+    font-weight: 600;
+  }
+  .tasks li.task-row .row-actions button.row-action-focus:hover {
+    background: var(--focus-accent);
+    color: var(--text-inverse);
+  }
   .tasks li.task-row:hover .row-actions,
   .tasks li.task-row:focus-within .row-actions,
   .tasks li.task-row .row-actions:focus-within {
