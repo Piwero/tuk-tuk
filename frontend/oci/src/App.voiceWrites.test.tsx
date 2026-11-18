@@ -408,11 +408,11 @@ describe("voice writes: tags, check items, habits", () => {
     const { call } = await startVoice({ habits: [habit] });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await user.click(await screen.findByRole("link", { name: "Habits" }));
-    await screen.findByRole("button", { name: "Check in Meditate" });
+    await screen.findByRole("button", { name: "Meditate, Friday, Jul 3: not yet checked in" });
     await call("get_agenda");
     await call("check_in_habit", { habit_id: habit.id });
     expect(
-      await screen.findByRole("button", { name: "Undo check-in Meditate" }),
+      await screen.findByRole("button", { name: "Meditate, Friday, Jul 3: checked in" }),
     ).toBeInTheDocument();
   });
 });
