@@ -97,6 +97,7 @@ import { ShortcutHints, ShortcutsProvider } from "./components/ShortcutLayer";
 import { Sidebar } from "./components/Sidebar";
 import { DayRail } from "./components/DayRail";
 import { FocusCard } from "./components/FocusCard";
+import { HabitsCard } from "./components/HabitsCard";
 import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
@@ -700,7 +701,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   const viewKey = keyOfView(view);
   // The Day rail (#446) sits beside Today only, and only when a card is on.
   const showDayRail =
-    smartView === "today" && !completedMode && (sectionSettings.goals || sectionSettings.focus);
+    smartView === "today" &&
+    !completedMode &&
+    (sectionSettings.goals || sectionSettings.habits || sectionSettings.focus);
   useEffect(() => {
     clearToasts();
   }, [viewKey, clearToasts]);
@@ -1601,6 +1604,12 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                       <FocusedGoalCard
                         goalsHref={pathForStaticView("goals")}
                         onOpenGoals={() => switchView({ kind: "goals" })}
+                      />
+                    )}
+                    {sectionSettings.habits && (
+                      <HabitsCard
+                        habitsHref={pathForStaticView("habits")}
+                        onOpenHabits={() => switchView({ kind: "habits" })}
                       />
                     )}
                     {sectionSettings.focus && (
