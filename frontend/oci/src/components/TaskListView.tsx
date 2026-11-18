@@ -28,6 +28,7 @@ import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMov
 import { useTaskCompletion } from "../taskCompletion";
 import { useTaskSelection } from "../taskSelection";
 import { type UndoQueue } from "../undoQueue";
+import { DatePopover } from "./DatePopover";
 import { BulkActionBar } from "./BulkActionBar";
 import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
@@ -247,6 +248,8 @@ export function TaskListView({
         ),
     );
   }
+
+  const [rescheduleDay, setRescheduleDay] = useState("");
 
   function bulkReschedule(day: string): void {
     const patch = allDaySchedule(null, day);
@@ -546,15 +549,14 @@ export function TaskListView({
             className="bulk-dialog"
             onSubmit={(event) => {
               event.preventDefault();
-              const day = new FormData(event.currentTarget).get("day")?.toString() ?? "";
-              if (day !== "") {
-                bulkReschedule(day);
+              if (rescheduleDay !== "") {
+                bulkReschedule(rescheduleDay);
               }
             }}
           >
             <label>
               Due date
-              <input type="date" name="day" aria-label="Due date" required />
+              <DatePopover label="Due date" value={rescheduleDay} onChange={setRescheduleDay} />
             </label>
             <button className="btn-primary" type="submit">
               Reschedule

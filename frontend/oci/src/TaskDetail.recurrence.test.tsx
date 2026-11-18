@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { App } from "./App";
+import { pickDate } from "./test/pickDate";
 import { fakeTask, installFakeApi, type RecordedRequest } from "./test/fakeApi";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
@@ -96,9 +97,8 @@ describe("Recurrence in the detail panel", () => {
     await user.click(within(panel).getByRole("button", { name: /^Repeat/ }));
     await user.click(within(panel).getByRole("menuitemradio", { name: "Custom…" }));
     await user.selectOptions(within(panel).getByRole("combobox", { name: "Ends" }), "On a date");
-    fireEvent.change(within(panel).getByLabelText("Ends on"), {
-      target: { value: "2026-12-31" },
-    });
+    expect(panel.querySelector('input[type="date"]')).toBeNull();
+    pickDate("Ends on", "2026-12-31");
     await user.click(within(panel).getByRole("button", { name: "Save repeat" }));
 
     await waitFor(() =>

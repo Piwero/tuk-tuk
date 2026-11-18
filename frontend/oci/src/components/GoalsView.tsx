@@ -26,6 +26,7 @@ import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { goalPace } from "../goalPace";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { goalPaceDelta, goalPaceVerdict, goalWindowLabel, goalWindowRange } from "../goalWindow";
+import { DatePopover } from "./DatePopover";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
@@ -118,18 +119,20 @@ function GoalForm({ initial, onSubmit, onCancel }: GoalFormProps): JSX.Element {
       </label>
       <label>
         Start date
-        <input
-          type="date"
+        <DatePopover
+          label="Start date"
           value={values.start_date}
-          onChange={(event) => set("start_date", event.target.value)}
+          clearable
+          onChange={(day) => set("start_date", day)}
         />
       </label>
       <label>
         End date
-        <input
-          type="date"
+        <DatePopover
+          label="End date"
           value={values.end_date}
-          onChange={(event) => set("end_date", event.target.value)}
+          clearable
+          onChange={(day) => set("end_date", day)}
         />
       </label>
       <p className="goal-form-date-hint">Blank uses the current quarter.</p>
