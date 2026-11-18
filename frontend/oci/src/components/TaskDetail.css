@@ -172,13 +172,6 @@
   .repeat-editor input[type="number"] {
     width: 72px;
   }
-  .task-tags label {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--text-md);
-    cursor: pointer;
-  }
   .task-description {
     display: grid;
     gap: var(--space-2);
@@ -265,5 +258,30 @@
         transform: translateY(0);
       }
     }
+  }
+  .tags-row-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+  .tags-row-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface-hover);
+    color: var(--text-primary);
+    font-size: var(--text-xs);
+  }
+  .tags-row-chip-remove {
+    padding: 0 2px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .tags-row-chip-remove:hover {
+    color: var(--text-primary);
   }
 }

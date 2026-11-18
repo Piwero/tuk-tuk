@@ -1773,6 +1773,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 listName={selectedTaskListName}
                 lists={lists}
                 onTaskChanged={applyTaskChange}
+                onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onClose={closeTaskDetail}
               />
             )}

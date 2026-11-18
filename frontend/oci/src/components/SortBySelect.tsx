@@ -51,7 +51,7 @@ export function SortBySelect({ value, onChange }: SortBySelectProps): JSX.Elemen
         </label>
       </Hint>
       {value === "custom" && (
-        <span id={hintId} className="hint">
+        <span id={hintId} className="hint sort-drag-hint">
           {customHint}
         </span>
       )}
