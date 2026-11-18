@@ -102,6 +102,7 @@ import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
+import { EmptyState, LoadError, SkeletonRows } from "./components/TaskViewState";
 import { ToastStack } from "./components/ToastStack";
 
 /** What the main pane shows: one List, one Tag, one Folder (its Tasks across
@@ -127,6 +128,15 @@ type View =
 /** A stable identity for a View, for use as an effect dependency: two Views
  * with the same key show the same screen. Kept next to `View` so the encoding
  * moves with the type it encodes. */
+/** Where a Task view's load stands (#441). */
+type TaskLoadStatus = "loading" | "ready" | "error";
+
+/** What a Task view load asked for — a load only describes the view while
+ * this still matches. */
+function taskLoadKeyOf(view: View, completedMode: boolean, allFilters: AllFilters): string {
+  return JSON.stringify([view, completedMode, view?.kind === "smart" ? allFilters : null]);
+}
+
 function keyOfView(view: View): string {
   if (view === null) {
     return "";
@@ -253,6 +263,15 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // the converted Event disappears and the new Task appears immediately.
   const [calendarRefresh, setCalendarRefresh] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
+  // Whether the current Task view's Tasks have loaded (#441), keyed by what
+  // was asked for, so a view that hasn't loaded yet is never shown as empty
+  // and a background refresh of the same view doesn't flash placeholders.
+  const [taskLoad, setTaskLoad] = useState<{ key: string; status: TaskLoadStatus }>({
+    key: "",
+    status: "loading",
+  });
+  const taskLoadKeyRef = useRef("");
+  const taskLoadSeqRef = useRef(0);
   const tasksRef = useRef<Task[]>([]);
   tasksRef.current = tasks;
   // Every open Task across every List, held once and kept current as Tasks
@@ -590,34 +609,52 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     ) {
       return;
     }
-    if (completedMode) {
-      const scope = view.kind === "list" ? view.id : null;
-      const [completedPage, occurrencePage] = await Promise.all([
-        fetchCompletedTasks(scope),
-        fetchCompletedOccurrences(scope),
-      ]);
-      setTasks(completedPage.items);
-      setOccurrences(occurrencePage.items);
-    } else if (view.kind === "smart") {
-      setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()), allFilters)).items);
-    } else if (view.kind === "search") {
-      // An empty query shows nothing — without even asking the API.
-      setTasks(
-        view.search.query.trim() === ""
-          ? []
-          : (await fetchSearchTasks(view.search.query, view.search)).items,
-      );
-    } else if (view.kind === "list") {
-      setTasks((await fetchTasks(view.id)).items);
-    } else if (view.kind === "folder") {
-      // No endpoint spans multiple Lists — fetch each member List's Tasks
-      // and flatten. Archived Lists stay out of the Folder view, same as
-      // they stay out of the sidebar's Folder contents.
-      const members = lists.filter((list) => list.folder_id === view.id && !list.is_archived);
-      const pages = await Promise.all(members.map((list) => fetchTasks(list.id)));
-      setTasks(pages.flatMap((page) => page.items));
-    } else {
-      setTasks((await fetchTasksByTag(view.id)).items);
+    const key = taskLoadKeyOf(view, completedMode, allFilters);
+    const seq = ++taskLoadSeqRef.current;
+    if (taskLoadKeyRef.current !== key) {
+      taskLoadKeyRef.current = key;
+      setTaskLoad({ key, status: "loading" });
+    }
+    // Responses for a view the user has since left are dropped.
+    const current = (): boolean => seq === taskLoadSeqRef.current;
+    const setTasksIfCurrent = (next: Task[]): void => {
+      if (current()) setTasks(next);
+    };
+    try {
+      if (completedMode) {
+        const scope = view.kind === "list" ? view.id : null;
+        const [completedPage, occurrencePage] = await Promise.all([
+          fetchCompletedTasks(scope),
+          fetchCompletedOccurrences(scope),
+        ]);
+        setTasksIfCurrent(completedPage.items);
+        if (current()) setOccurrences(occurrencePage.items);
+      } else if (view.kind === "smart") {
+        setTasksIfCurrent(
+          (await fetchSmartTasks(view.view, localDayOf(new Date()), allFilters)).items,
+        );
+      } else if (view.kind === "search") {
+        // An empty query shows nothing — without even asking the API.
+        setTasksIfCurrent(
+          view.search.query.trim() === ""
+            ? []
+            : (await fetchSearchTasks(view.search.query, view.search)).items,
+        );
+      } else if (view.kind === "list") {
+        setTasksIfCurrent((await fetchTasks(view.id)).items);
+      } else if (view.kind === "folder") {
+        // No endpoint spans multiple Lists — fetch each member List's Tasks
+        // and flatten. Archived Lists stay out of the Folder view, same as
+        // they stay out of the sidebar's Folder contents.
+        const members = lists.filter((list) => list.folder_id === view.id && !list.is_archived);
+        const pages = await Promise.all(members.map((list) => fetchTasks(list.id)));
+        setTasksIfCurrent(pages.flatMap((page) => page.items));
+      } else {
+        setTasksIfCurrent((await fetchTasksByTag(view.id)).items);
+      }
+      if (current()) setTaskLoad({ key, status: "ready" });
+    } catch {
+      if (current()) setTaskLoad({ key, status: "error" });
     }
   }, [view, completedMode, lists, allFilters]);
 
@@ -686,6 +723,61 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   const showHideCompletedToggle =
     !completedMode && (selectedList !== null || selectedTag !== null || selectedFolder !== null);
   // The completed view exists per List and for All (not Today / Next 7 Days).
+  // The Task view's load state (#441). Not-yet-loaded reads as loading, so an
+  // unloaded view is never mistaken for an empty one.
+  const taskViewStatus: TaskLoadStatus =
+    taskLoad.key === taskLoadKeyOf(view, completedMode, allFilters) ? taskLoad.status : "loading";
+  const taskViewName =
+    selectedList !== null
+      ? selectedList.name
+      : selectedFolder !== null
+        ? selectedFolder.name
+        : selectedTag !== null
+          ? `#${selectedTag.name}`
+          : smartView !== null
+            ? SMART_LABELS[smartView]
+            : "tasks";
+  // A loaded view with nothing to show gets a real empty state. Kanban keeps
+  // its columns (they're where Tasks get added), a List with Sections keeps
+  // them, and the Completed view says its own nothing.
+  const emptyTaskView: { title: string; description: string } | null =
+    completedMode || visibleTasks.length > 0 || view?.kind === "search"
+      ? null
+      : selectedList !== null
+        ? selectedList.view_mode === "kanban" || sections.length > 0
+          ? null
+          : {
+              title: `${selectedList.name} is empty`,
+              description: `Tasks you add to ${selectedList.name} show up here.`,
+            }
+        : selectedTag !== null
+          ? {
+              title: `No tasks tagged ${selectedTag.name}`,
+              description: `Tag a Task with #${selectedTag.name} to collect it here.`,
+            }
+          : selectedFolder !== null
+            ? folderMembers.length === 0
+              ? null
+              : {
+                  title: `Nothing in ${selectedFolder.name}`,
+                  description: `Tasks in this folder’s lists show up here.`,
+                }
+            : smartView === "today"
+              ? {
+                  title: "Nothing due today",
+                  description: "Tasks due today, and anything overdue, show up here.",
+                }
+              : smartView === "next7"
+                ? {
+                    title: "Nothing in the next 7 days",
+                    description: "Tasks due this week show up here, day by day.",
+                  }
+                : smartView === "all"
+                  ? {
+                      title: "No open tasks",
+                      description: "Every open Task across your lists shows up here.",
+                    }
+                  : null;
   const hasCompletedView = selectedList !== null || smartView === "all";
 
   // One queue for the whole app: undo toasts for delete/complete (#155) and
@@ -1491,6 +1583,17 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     />
                   </Modal>
                 )}
+                {/* A loaded Task view with nothing in it (#441); List and
+                Folder views still render beneath it, keeping their Add
+                Section control and List headings. */}
+                {taskViewStatus === "ready" && emptyTaskView !== null && (
+                  <EmptyState
+                    title={emptyTaskView.title}
+                    description={emptyTaskView.description}
+                    actionLabel="New task"
+                    onAction={() => setQuickAddOpen(true)}
+                  />
+                )}
                 {view?.kind === "settings" ? (
                   <SettingsView
                     googleOAuthError={googleOAuthError}
@@ -1535,6 +1638,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 ) : view?.kind === "search" ? (
                   <SearchView
                     tasks={tasks}
+                    loadStatus={taskViewStatus}
+                    onRetry={() => void loadTasks()}
                     lists={lists}
                     tags={tags}
                     state={view.search}
@@ -1542,6 +1647,10 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     onChanged={changeTasksAndRecompute}
                     onSelect={setSelectedTaskId}
                   />
+                ) : taskViewStatus === "loading" ? (
+                  <SkeletonRows />
+                ) : taskViewStatus === "error" ? (
+                  <LoadError what={taskViewName} onRetry={() => void loadTasks()} />
                 ) : selectedFolder !== null ? (
                   <FolderView
                     folder={selectedFolder}
