@@ -1169,6 +1169,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
           {(paletteOpen || paletteTask !== null) && (
             <TaskPalette
               task={paletteTask ?? undefined}
+              focusEnabled={sectionSettings.focus}
               items={paletteItems}
               lists={lists}
               tags={tags}
@@ -1595,6 +1596,11 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     onSelect={setSelectedTaskId}
                     onSectionsChanged={setSections}
                     onOpenActions={setPaletteTask}
+                    onFocusTask={
+                      sectionSettings.focus
+                        ? (task) => switchView({ kind: "focus", task })
+                        : undefined
+                    }
                     toasts={toasts}
                   />
                 )}
@@ -1676,6 +1682,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
  * current without re-creating a component type per render. */
 function TaskPalette({
   task,
+  focusEnabled,
   items,
   lists,
   tags,
@@ -1687,6 +1694,7 @@ function TaskPalette({
   onClose,
 }: {
   task: Task | undefined;
+  focusEnabled: boolean;
   items: PaletteItem[];
   lists: TaskList[];
   tags: Tag[];
@@ -1706,6 +1714,7 @@ function TaskPalette({
     <CommandPalette
       items={items}
       task={task}
+      focusEnabled={focusEnabled}
       lists={lists}
       tags={tags}
       actions={actions}

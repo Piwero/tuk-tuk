@@ -28,14 +28,18 @@ export interface TaskVerb {
  * Task's "complete" is relabelled so it reads as advancing an occurrence
  * rather than closing the Task (ADR 0003). A non-null `pickerHeading` is what
  * marks a verb as value-taking. */
-export function taskVerbs(task: { recurrence: string | null }): TaskVerb[] {
-  return [
+export function taskVerbs(
+  task: { recurrence: string | null },
+  { focusEnabled = true }: { focusEnabled?: boolean } = {},
+): TaskVerb[] {
+  const verbs: TaskVerb[] = [
     {
       id: "complete",
       label: task.recurrence === null ? "Complete" : "Complete this occurrence",
       pickerHeading: null,
     },
-    { id: "focus", label: "Start Focus", pickerHeading: null },
+    // Opens Focus with the Task linked; the clock waits for Start (#449).
+    { id: "focus", label: "Focus", pickerHeading: null },
     { id: "pomo", label: "Start Pomo", pickerHeading: "Start which Pomo?" },
     { id: "reschedule", label: "Reschedule", pickerHeading: "Reschedule to…" },
     { id: "move", label: "Move to a List", pickerHeading: "Move to which List?" },
@@ -43,6 +47,7 @@ export function taskVerbs(task: { recurrence: string | null }): TaskVerb[] {
     { id: "repeat", label: "Set repeat", pickerHeading: "Repeat how often?" },
     { id: "delete", label: "Delete", pickerHeading: null },
   ];
+  return focusEnabled ? verbs : verbs.filter((verb) => verb.id !== "focus");
 }
 
 export interface PaletteItem {
