@@ -691,3 +691,21 @@ describe("Today Habit chip strip is operable on touch (issue #461)", () => {
     expect(declaredValue(".habit-strip", "display", DESKTOP)).toBe("none");
   });
 });
+
+/** The Task detail bottom sheet (#456). Fixed list so deleting the sizing fails. */
+const TASK_SHEET_CONTROLS = [
+  ".task-detail-header > button",
+  ".task-detail-footer .overflow-menu-trigger",
+  ".task-detail-footer .btn-focus",
+  ".reminder-add",
+  ".tags-row-chip-remove",
+  ".property-row-trigger",
+  ".property-option",
+];
+
+describe("Task detail sheet is operable on touch (issue #456)", () => {
+  it("meets the 44px floor for the sheet's controls", () => {
+    const offenders = findOffenders(TASK_SHEET_CONTROLS);
+    expect(offenders, offenderMessage("the Task detail sheet", offenders)).toEqual([]);
+  });
+});

@@ -57,6 +57,9 @@ interface TaskDetailProps {
   /** A Tag created from the Tags row, so the app-wide Tag list stays current. */
   onTagCreated: (tag: Tag) => void;
   onClose: () => void;
+  /** Presented as a modal bottom sheet (phones): focus moves in and is
+   * trapped, Escape closes, and focus returns to the opener on close. */
+  sheet?: boolean;
   /** Opens Focus with this Task linked, clock idle. Absent when Focus is
    * turned off, which hides the button. */
   onStartFocus?: (task: Task) => void;
@@ -83,6 +86,7 @@ export function TaskDetail({
   onTaskChanged,
   onTagCreated,
   onClose,
+  sheet = false,
   onStartFocus,
   onDelete,
 }: TaskDetailProps): JSX.Element {
@@ -302,8 +306,72 @@ export function TaskDetail({
     touchLastY.current = null;
   }
 
+  const panel = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const surface = panel.current;
+    if (!sheet || surface === null) {
+      return;
+    }
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const openerLabel = `Open details for ${task.title}`;
+    surface.focus({ preventScroll: true });
+    function keydown(event: KeyboardEvent): void {
+      if (surface === null) return;
+      if (event.key === "Escape") {
+        // A popover or menu inside the sheet takes this Escape first.
+        if (event.defaultPrevented || surface.querySelector('[aria-expanded="true"]') !== null) {
+          return;
+        }
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [
+        ...surface.querySelectorAll<HTMLElement>(
+          'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        ),
+      ];
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first === undefined || last === undefined) {
+        event.preventDefault();
+        return;
+      }
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === surface)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (!surface.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      const target =
+        opener !== null && opener.isConnected
+          ? opener
+          : document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(openerLabel)}"]`);
+      target?.focus({ preventScroll: true });
+    };
+    // task.title is read only for the fallback label at open time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet]);
+
   return (
-    <aside className="task-detail" aria-label="Task details">
+    <aside
+      className="task-detail"
+      aria-label="Task details"
+      ref={panel}
+      tabIndex={sheet ? -1 : undefined}
+    >
       {/* Mobile only (hidden by CSS on desktop): the sheet's drag handle —
           both the visible affordance and the swipe-to-dismiss target
           (issue #170). Decorative, so it's kept out of the a11y tree; the
