@@ -3,9 +3,15 @@ import "./TaskViewState.css";
 /** Placeholder rows while a Task view loads (#441): each sits at the Task
  * row's own height, so the view doesn't jump when the real rows arrive, and
  * the region is announced as busy rather than as an empty view. */
-export function SkeletonRows({ count = 5 }: { count?: number }): JSX.Element {
+export function SkeletonRows({
+  count = 5,
+  label = "Loading tasks",
+}: {
+  count?: number;
+  label?: string;
+}): JSX.Element {
   return (
-    <div role="status" aria-label="Loading tasks" aria-busy="true" className="skeleton-rows">
+    <div role="status" aria-label={label} aria-busy="true" className="skeleton-rows">
       {Array.from({ length: count }, (_, index) => (
         <div key={index} className="skeleton-row" aria-hidden="true">
           <span className="skeleton-check" />

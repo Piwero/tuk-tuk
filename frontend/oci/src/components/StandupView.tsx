@@ -1,3 +1,4 @@
+import { EmptyState, LoadError, SkeletonRows } from "./TaskViewState";
 import { DatePopover } from "./DatePopover";
 import "./StandupView.css";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -78,22 +79,29 @@ export function StandupView(): JSX.Element {
     }
   }, []);
 
+  // The selected day's entry drives the loading/empty/error states (#442).
+  const [entryStatus, setEntryStatus] = useState<"loading" | "ready" | "error">("loading");
+
   const loadEntry = useCallback(async (date: string): Promise<void> => {
+    setEntryStatus("loading");
     try {
       const loaded = await fetchStandupEntry(date);
       if (selectedDateRef.current !== date) {
         return;
       }
       setEntry(loaded);
+      setEntryStatus("ready");
     } catch (error) {
-      if (error instanceof ApiError && error.code === "not_found") {
-        if (selectedDateRef.current !== date) {
-          return;
-        }
-        setEntry(null);
+      if (selectedDateRef.current !== date) {
         return;
       }
-      throw error;
+      if (error instanceof ApiError && error.code === "not_found") {
+        setEntry(null);
+        setEntryStatus("ready");
+        return;
+      }
+      setEntry(null);
+      setEntryStatus("error");
     }
   }, []);
 
@@ -343,6 +351,7 @@ export function StandupView(): JSX.Element {
           className="standup-add-form"
         >
           <input
+            id={`standup-add-${section}`}
             aria-label={`Add a ${label} bullet`}
             placeholder={`Add to ${label}…`}
             value={drafts[section]}
@@ -477,9 +486,25 @@ export function StandupView(): JSX.Element {
         </div>
       )}
 
-      <div className="standup-sections">
-        {SECTIONS.map(({ key, label, icon }) => renderSection(key, label, icon))}
-      </div>
+      {entryStatus === "loading" ? (
+        <SkeletonRows label="Loading stand-up" count={3} />
+      ) : entryStatus === "error" ? (
+        <LoadError what="this stand-up" onRetry={() => void loadEntry(selectedDate)} />
+      ) : (
+        <>
+          {(entry === null || entry.bullets.length === 0) && (
+            <EmptyState
+              title="No stand-up for this day yet"
+              description="A Stand-up is what you did yesterday, what you'll do today and what's blocking you."
+              actionLabel="Add a bullet"
+              onAction={() => document.getElementById("standup-add-yesterday")?.focus()}
+            />
+          )}
+          <div className="standup-sections">
+            {SECTIONS.map(({ key, label, icon }) => renderSection(key, label, icon))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

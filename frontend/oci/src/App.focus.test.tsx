@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeHabit, fakeTask, installFakeApi } from "./test/fakeApi";
+import { fakeHabit, fakeTask, fakeTimer, installFakeApi } from "./test/fakeApi";
 
 // All tests pin the clock to Friday 2026-07-03, local noon, so timers and
 // "today" are deterministic in any timezone.
@@ -229,11 +229,11 @@ describe("Stage", () => {
 
 describe("Distraction-free running view", () => {
   it("hides the Timers presets and config while a session runs", async () => {
-    installFakeApi();
+    installFakeApi({ timers: [fakeTimer("Deep work")] });
     render(<App />);
     await openFocus();
 
-    expect(screen.getByRole("list", { name: "Timers" })).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "Timers" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Mode" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
