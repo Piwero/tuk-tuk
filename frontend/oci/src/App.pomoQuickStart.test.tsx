@@ -177,14 +177,18 @@ describe("Pomo quick-start menu", () => {
     render(<App />);
     const row = await screen.findByRole("button", { name: "Open details for Write report" });
 
-    fireEvent.contextMenu(row.closest("li") as HTMLElement);
-    await screen.findByRole("menu", { name: "Start Focus for Write report" });
+    const li = row.closest("li") as HTMLElement;
+    li.focus();
+    fireEvent.contextMenu(li);
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
+    expect(within(menu).getAllByRole("menuitem")[0]).toHaveFocus();
 
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(
       screen.queryByRole("menu", { name: "Start Focus for Write report" }),
     ).not.toBeInTheDocument();
+    expect(li).toHaveFocus();
   });
 
   it("confirms before finishing a running session and starting the new one", async () => {

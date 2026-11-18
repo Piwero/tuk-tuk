@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { pickDate } from "./test/pickDate";
 import { fakeList, fakeTask, installFakeApi, INBOX } from "./test/fakeApi";
 
 beforeEach(() => {
@@ -164,6 +165,26 @@ describe("multi-select and bulk actions", () => {
     await waitFor(() => {
       expect(api.tasks.find((t) => t.title === "A")?.list_id).toBe(12);
       expect(api.tasks.find((t) => t.title === "B")?.list_id).toBe(12);
+    });
+  });
+
+  it("reschedules a selection with the shared date picker", async () => {
+    const api = installFakeApi({ tasks: [fakeTask("A"), fakeTask("B")] });
+    render(<App />);
+    await openInboxRows();
+
+    mark("A");
+    mark("B", true);
+    fireEvent.click(screen.getByRole("button", { name: "Reschedule" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reschedule selected Tasks" });
+    expect(dialog.querySelector('input[type="date"]')).toBeNull();
+    pickDate("Due date", "2026-07-10");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reschedule" }));
+    tick(6_000);
+
+    await waitFor(() => {
+      expect(api.tasks.find((t) => t.title === "A")?.due_date).toContain("2026-07-10");
+      expect(api.tasks.find((t) => t.title === "B")?.due_date).toContain("2026-07-10");
     });
   });
 

@@ -1,28 +1,12 @@
 import "./AllViewControls.css";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { type AllFilters, type Priority, type Tag, type TaskList } from "../api";
 import { PRIORITY_LABELS, type GroupBy, type SortBy } from "../grouping";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
+import { Popover } from "./Popover";
 import { SortBySelect } from "./SortBySelect";
-
-interface AllViewControlsProps {
-  filters: AllFilters;
-  /** Takes an updater rather than the next value: each control changes one
-   * field and leaves the rest of the filter state alone. */
-  onFiltersUpdate: (update: (current: AllFilters) => AllFilters) => void;
-  // ponytail: groupBy/sortBy stay four flat props rather than one bundled
-  // "arrangement" type — they're separate state in the app root and this is
-  // the only caller, so a type here would be one more indirection for no
-  // reader's benefit. Bundle them when a second view needs the same pair.
-  groupBy: GroupBy;
-  onGroupByChange: (groupBy: GroupBy) => void;
-  sortBy: SortBy;
-  onSortByChange: (sortBy: SortBy) => void;
-  lists: TaskList[];
-  tags: Tag[];
-}
 
 /** One "narrow the list by X" select: a label, an "Any" escape hatch meaning
  * no filter, and the choices. Shared by List, Tag and Priority so the three
@@ -103,31 +87,7 @@ export function ViewMenu({
   tags,
 }: ViewMenuProps): JSX.Element {
   const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    function onPointerDown(event: MouseEvent): void {
-      if (root.current !== null && !root.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === "Escape") {
-        setOpen(false);
-        trigger.current?.focus();
-      }
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
 
   const count = filters === undefined ? 0 : appliedCount(filters);
   const label =
@@ -135,7 +95,7 @@ export function ViewMenu({
 
   return (
     <div className="view-controls">
-      <div className="view-menu" ref={root}>
+      <div className="view-menu">
         <button
           type="button"
           ref={trigger}
@@ -153,7 +113,7 @@ export function ViewMenu({
             </span>
           )}
         </button>
-        {open && (
+        <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
           <div role="dialog" aria-label="View" className="view-menu-popover">
             {filters !== undefined && onFiltersUpdate !== undefined && (
               <fieldset className="view-menu-filters">
@@ -207,7 +167,7 @@ export function ViewMenu({
             </Hint>
             <SortBySelect value={sortBy} onChange={onSortByChange} />
           </div>
-        )}
+        </Popover>
       </div>
     </div>
   );
@@ -215,14 +175,9 @@ export function ViewMenu({
 
 /** Smart Lists' group choices: "section" reads as "None" — Smart Lists have
  * no Sections of their own, so grouping by one is really no grouping. */
-const SMART_GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
+export const SMART_GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
   { value: "section", label: "None" },
   { value: "date", label: "Date" },
   { value: "priority", label: "Priority" },
   { value: "list", label: "List" },
 ];
-
-/** The Smart List View menu: Filters plus Group by and Sort by. */
-export function AllViewControls(props: AllViewControlsProps): JSX.Element {
-  return <ViewMenu {...props} groupOptions={SMART_GROUP_OPTIONS} />;
-}

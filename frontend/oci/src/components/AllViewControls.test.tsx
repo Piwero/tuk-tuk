@@ -4,19 +4,20 @@ import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type AllFilters, type Tag, type TaskList } from "../api";
-import { AllViewControls } from "./AllViewControls";
+import { SMART_GROUP_OPTIONS, ViewMenu } from "./AllViewControls";
 import { _resetHintSessionForTests } from "./Hint";
 
 const BLANK: AllFilters = { listId: null, tagId: null, priority: null };
 const LISTS = [{ id: 1, name: "Errands" }] as TaskList[];
 const TAGS = [{ id: 7, name: "urgent" }] as Tag[];
 
-function renderControls(overrides: Partial<React.ComponentProps<typeof AllViewControls>> = {}): {
+function renderControls(overrides: Partial<React.ComponentProps<typeof ViewMenu>> = {}): {
   onFiltersUpdate: ReturnType<typeof vi.fn>;
 } {
   const onFiltersUpdate = vi.fn();
   render(
-    <AllViewControls
+    <ViewMenu
+      groupOptions={SMART_GROUP_OPTIONS}
       filters={BLANK}
       onFiltersUpdate={onFiltersUpdate}
       groupBy="section"
@@ -40,7 +41,8 @@ function renderUnderState(initial: AllFilters): { current: AllFilters } {
     const [filters, setFilters] = useState(initial);
     seen.current = filters;
     return (
-      <AllViewControls
+      <ViewMenu
+        groupOptions={SMART_GROUP_OPTIONS}
         filters={filters}
         onFiltersUpdate={setFilters}
         groupBy="section"

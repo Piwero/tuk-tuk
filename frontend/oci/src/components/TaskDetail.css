@@ -88,99 +88,6 @@
   .task-detail-header > button:hover {
     background: var(--surface-hover);
   }
-  .task-tags {
-    display: grid;
-    gap: var(--space-2);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    padding: var(--space-3);
-    margin: 0;
-    font-size: var(--text-sm);
-  }
-  .task-tags legend {
-    padding: 0 var(--space-1);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-caps);
-    text-transform: uppercase;
-    color: var(--text-secondary);
-  }
-  /* Date and Reminder rows (#453). */
-  .date-row.overdue .property-row-trigger {
-    color: var(--text-danger);
-  }
-  .date-row-times {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    font-size: var(--text-sm);
-  }
-  .date-row-times label {
-    display: grid;
-    gap: 2px;
-  }
-  .reminder-row-value {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-    align-items: center;
-  }
-  .reminder-row-empty {
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-  }
-  .reminder-chips {
-    display: contents;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .reminder-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 0 2px 0 var(--space-2);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    font-size: var(--text-xs);
-    font-variant-numeric: tabular-nums;
-  }
-  .reminder-chip button,
-  .reminder-add {
-    display: inline-grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-  }
-  .reminder-chip button:hover,
-  .reminder-add:hover {
-    background: var(--surface-hover);
-  }
-  .reminder-custom {
-    display: flex;
-    gap: var(--space-2);
-    align-items: center;
-    font-size: var(--text-sm);
-  }
-  .reminder-custom input[type="number"] {
-    width: 72px;
-  }
-  .repeat-editor,
-  .repeat-weekdays {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    align-items: center;
-  }
-  .repeat-editor input[type="number"] {
-    width: 72px;
-  }
   .task-description {
     display: grid;
     gap: var(--space-2);
@@ -291,6 +198,11 @@
       overflow-y: auto;
       animation: task-detail-sheet-in var(--duration-base) var(--ease-out);
     }
+    @media (prefers-reduced-motion: reduce) {
+      .task-detail {
+        animation: none;
+      }
+    }
 
     .task-detail-handle {
       display: block;
@@ -318,31 +230,6 @@
       }
     }
   }
-  .tags-row-chips {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-  }
-  .tags-row-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 0 var(--space-2);
-    border-radius: var(--radius-sm);
-    background: var(--surface-hover);
-    color: var(--text-primary);
-    font-size: var(--text-xs);
-  }
-  .tags-row-chip-remove {
-    padding: 0 2px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-  }
-  .tags-row-chip-remove:hover {
-    color: var(--text-primary);
-  }
 }
 @layer components {
   @media (max-width: 720px) {
@@ -350,9 +237,6 @@
     .task-detail-header > button,
     .task-detail-footer .overflow-menu-trigger,
     .task-detail-footer .btn-focus,
-    .reminder-chip button,
-    .reminder-add,
-    .tags-row-chip-remove,
     .check-items li .row-actions button {
       min-width: var(--tap-target);
       min-height: var(--tap-target);

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { pickDate } from "./test/pickDate";
 import { fakeDataTransfer } from "./test/dnd";
 import { fakeGoal, fakeHabit, fakeKeyResult, fakeTask, installFakeApi } from "./test/fakeApi";
 
@@ -193,10 +194,9 @@ describe("Goals", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add Goal" }));
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Six weeks" } });
-    fireEvent.change(screen.getByLabelText("Start date"), {
-      target: { value: "2026-01-01" },
-    });
-    fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-02-15" } });
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+    pickDate("Start date", "2026-01-01");
+    pickDate("End date", "2026-02-15");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -213,8 +213,24 @@ describe("Goals", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add Goal" }));
 
     expect(screen.getByText(/blank uses the current quarter/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Start date")).not.toBeRequired();
-    expect(screen.getByLabelText("End date")).not.toBeRequired();
+    expect(screen.getByRole("button", { name: "Start date" })).toHaveTextContent("No date");
+    expect(screen.getByRole("button", { name: "End date" })).toHaveTextContent("No date");
+  });
+
+  it("closes a Goal's actions menu on Escape, returning focus to its trigger", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    const trigger = await screen.findByRole("button", { name: "Actions for Ship v2" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const menu = await screen.findByRole("menu", { name: "Actions for Ship v2" });
+    expect(within(menu).getAllByRole("menuitem")[0]).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("menu", { name: "Actions for Ship v2" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it("edits a Goal in place", async () => {

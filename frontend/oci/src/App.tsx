@@ -71,7 +71,7 @@ import { useUndoQueue } from "./undoQueue";
 import { useAssistantAvailable } from "./useAssistantAvailable";
 import { useVoiceAvailable } from "./useVoiceAvailable";
 import { livekitProvider } from "./voice/livekit";
-import { AllViewControls, ViewMenu } from "./components/AllViewControls";
+import { SMART_GROUP_OPTIONS, ViewMenu } from "./components/AllViewControls";
 import { CalendarView } from "./components/CalendarView";
 import { CommandPalette, type TaskActionHandlers } from "./components/CommandPalette";
 import { CompletedView } from "./components/CompletedView";
@@ -1550,7 +1550,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     </>
                   )}
                   {smartView !== null && !completedMode && (
-                    <AllViewControls
+                    <ViewMenu
+                      groupOptions={SMART_GROUP_OPTIONS}
                       filters={allFilters}
                       onFiltersUpdate={setAllFilters}
                       groupBy={groupBy}

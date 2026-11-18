@@ -8,8 +8,6 @@ import {
   fetchCheckIns,
   fetchHabits,
   fetchHabitStats,
-  putCheckIn,
-  removeCheckIn,
   updateHabit,
   type CheckIn,
   type Habit,
@@ -18,7 +16,8 @@ import {
 } from "../api";
 import { addDays, formatDate, fromDayIso, localDayOf, shortDayLabel } from "../dates";
 import { habitDueOn, habitFrequencyLabel } from "../habitFrequency";
-import { heatLevel, nextCheckIn, stripDays } from "../habitStats";
+import { tapCheckIn } from "../habitCheckIn";
+import { heatLevel, stripDays } from "../habitStats";
 import { HabitActionsMenu } from "./HabitActionsMenu";
 import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
@@ -134,16 +133,13 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
    * gesture as checking today in, so it needs no separate screen. */
   async function toggleDay(habit: Habit, day: string): Promise<void> {
     await writeDay(habit, day, async () => {
-      const next = nextCheckIn(habit, valueOn(habit, day));
-      if (next.clear) {
-        await removeCheckIn(habit.id, day);
-        if (day === today) {
-          setCheckIns((current) => current.filter((checkIn) => checkIn.habit_id !== habit.id));
-        }
+      const saved = await tapCheckIn(habit, day, valueOn(habit, day));
+      if (day !== today) {
         return;
       }
-      const saved = await putCheckIn(habit.id, day, next.value);
-      if (day === today) {
+      if (saved === null) {
+        setCheckIns((current) => current.filter((checkIn) => checkIn.habit_id !== habit.id));
+      } else {
         applyCheckIn(saved);
       }
     });

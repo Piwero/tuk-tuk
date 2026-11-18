@@ -1,3 +1,4 @@
+import "./RepeatRow.css";
 import { useEffect, useState } from "react";
 
 import { updateTask, type Task } from "../api";
@@ -12,6 +13,7 @@ import {
   type Weekday,
 } from "../recurrence";
 
+import { DatePopover } from "./DatePopover";
 import { PropertyOptions, PropertyRow } from "./PropertyRow";
 
 const CUSTOM = "custom";
@@ -183,11 +185,10 @@ export function RepeatRow({ task, onTaskChanged }: RepeatRowProps): JSX.Element 
             {draft.endKind === "until" && (
               <label>
                 Ends on
-                <input
-                  type="date"
-                  aria-label="Ends on"
+                <DatePopover
+                  label="Ends on"
                   value={draft.untilDay}
-                  onChange={(event) => setDraft({ ...draft, untilDay: event.target.value })}
+                  onChange={(day) => setDraft({ ...draft, untilDay: day })}
                 />
               </label>
             )}

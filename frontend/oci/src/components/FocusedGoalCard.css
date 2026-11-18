@@ -1,0 +1,14 @@
+@layer components {
+  .focused-goal-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+  }
+  .focused-goal-score {
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+  }
+}

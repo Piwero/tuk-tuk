@@ -165,6 +165,20 @@ describe("Session history", () => {
     expect(rows[1]).toHaveTextContent("morning");
   });
 
+  it("heads each day's group with that day's total", async () => {
+    installFakeApi({
+      focusSessions: [
+        fakeFocusSession({ started_at: "2026-07-03T08:00:00Z", ended_at: "2026-07-03T08:25:00Z" }),
+        fakeFocusSession({ started_at: "2026-07-03T10:00:00Z", ended_at: "2026-07-03T10:30:00Z" }),
+      ],
+    });
+    render(<App />);
+    await openFocusStats();
+
+    const day = await screen.findByRole("region", { name: "Jul 3" });
+    expect(within(day).getByText("Total 55 min")).toBeInTheDocument();
+  });
+
   it("groups sessions by local start day, newest first, within the selected range", async () => {
     installFakeApi({
       focusSessions: [

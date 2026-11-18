@@ -227,6 +227,25 @@ describe("Stage", () => {
   });
 });
 
+describe("Focus totals beside the stage", () => {
+  it("refreshes Today's total after a Focus Session is recorded", async () => {
+    installFakeApi();
+    render(<App />);
+    await openFocus();
+    const totals = within(screen.getByRole("region", { name: "Focus totals" }));
+    expect((await totals.findAllByText("0 min", { selector: "dd" })).length).toBe(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(25 * 60_000);
+    fireEvent.click(await screen.findByRole("button", { name: "Skip" }));
+
+    const after = within(await screen.findByRole("region", { name: "Focus totals" }));
+    await waitFor(() =>
+      expect(after.getAllByText("25 min", { selector: "dd" }).length).toBeGreaterThan(0),
+    );
+  });
+});
+
 describe("Distraction-free running view", () => {
   it("hides the Timers presets and config while a session runs", async () => {
     installFakeApi({ timers: [fakeTimer("Deep work")] });

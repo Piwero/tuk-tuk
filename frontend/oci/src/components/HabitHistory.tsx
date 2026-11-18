@@ -1,9 +1,10 @@
 import "./HabitHistory.css";
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchHabitStats, putCheckIn, removeCheckIn, type Habit, type HabitStats } from "../api";
+import { fetchHabitStats, type Habit, type HabitStats } from "../api";
+import { tapCheckIn } from "../habitCheckIn";
 import { formatDate, localDayOf } from "../dates";
-import { heatLevel, nextCheckIn } from "../habitStats";
+import { heatLevel } from "../habitStats";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
 
@@ -43,10 +44,9 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Eleme
   const valueOf = (day: string): number => entries.get(day)?.value ?? 0;
 
   /** Backfill (or edit) a day's Check-in, on the same rule as the card's
-   * recent-days strip (see nextCheckIn). */
+   * recent-days strip (see tapCheckIn). */
   async function tapDay(day: string): Promise<void> {
-    const next = nextCheckIn(habit, valueOf(day));
-    await (next.clear ? removeCheckIn(habit.id, day) : putCheckIn(habit.id, day, next.value));
+    await tapCheckIn(habit, day, valueOf(day));
     await load();
     onChanged();
   }

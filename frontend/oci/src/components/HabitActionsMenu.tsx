@@ -1,9 +1,10 @@
 import "./HabitActionsMenu.css";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { type Habit } from "../api";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
+import { Popover } from "./Popover";
 
 export interface HabitActionsMenuProps {
   habit: Habit;
@@ -17,7 +18,7 @@ export interface HabitActionsMenuProps {
  * Delete fold behind one kebab trigger rather than four permanent buttons.
  * The trigger and every item are real <button>s, so the whole menu is
  * reachable by keyboard and under a coarse pointer where there is no hover.
- * Mirrors CreateMenu's dismiss handling (outside pointer-down, Escape). */
+ * Dismissal and focus return come from the shared Popover. */
 export function HabitActionsMenu({
   habit,
   onHistory,
@@ -26,29 +27,7 @@ export function HabitActionsMenu({
   onDelete,
 }: HabitActionsMenuProps): JSX.Element {
   const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    function onPointerDown(event: MouseEvent): void {
-      if (root.current !== null && !root.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   function choose(action: () => void): void {
     setOpen(false);
@@ -56,7 +35,7 @@ export function HabitActionsMenu({
   }
 
   return (
-    <div className="habit-actions-menu" ref={root}>
+    <div className="habit-actions-menu">
       <IconButton
         icon="more-vertical"
         size={16}
@@ -64,9 +43,10 @@ export function HabitActionsMenu({
         label={`Actions for ${habit.name}`}
         aria-haspopup="menu"
         aria-expanded={open}
+        buttonRef={trigger}
         onClick={() => setOpen((current) => !current)}
       />
-      {open && (
+      <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
         <ul role="menu" aria-label={`Actions for ${habit.name}`} className="habit-actions-list">
           <li role="none">
             <button
@@ -117,7 +97,7 @@ export function HabitActionsMenu({
             </button>
           </li>
         </ul>
-      )}
+      </Popover>
     </div>
   );
 }

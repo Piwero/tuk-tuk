@@ -145,20 +145,29 @@ describe("acting on a Task from the command palette", () => {
 
     fireEvent.click(within(dialog).getByRole("option", { name: "Start Pomo" }));
 
-    expect(await within(dialog).findByRole("option", { name: "Deep Work 50" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("option", { name: "Quick 15" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("option", { name: "Custom…" })).toBeInTheDocument();
-
-    // Picker order: Deep Work 50 (0), Quick 15 (1), Custom… (2).
-    fireEvent.keyDown(dialog, { key: "ArrowDown" });
-    fireEvent.keyDown(dialog, { key: "Enter" });
-
+    // Wait for the whole picker (Timers load asynchronously) before moving.
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Focus timer running, 15:00 left" }),
-      ).toBeInTheDocument(),
+        within(dialog)
+          .getAllByRole("option")
+          .map((o) => o.textContent),
+      ).toEqual(["Deep Work 50", "Quick 15", "Custom…"]),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 15:00 left" }));
+    const quick = within(dialog).getByRole("option", { name: "Quick 15" });
+
+    fireEvent.keyDown(dialog, { key: "ArrowDown" });
+    await waitFor(() =>
+      expect(
+        dialog.querySelector("[aria-activedescendant]")?.getAttribute("aria-activedescendant"),
+      ).toBe(quick.id),
+    );
+    fireEvent.keyDown(dialog, { key: "Enter" });
+
+    // The clock may tick between start and assertion: 15:00 or 14:5x.
+    const badge = await screen.findByRole("button", {
+      name: /^Focus timer running, (15:00|14:\d\d) left$/,
+    });
+    fireEvent.click(badge);
     // A running stage states its link as text, not as an inert select.
     expect(await within(screen.getByRole("main")).findByText(/Focusing on/)).toHaveTextContent(
       task.title,
@@ -172,14 +181,13 @@ describe("acting on a Task from the command palette", () => {
 
     fireEvent.click(within(dialog).getByRole("option", { name: "Start Pomo" }));
 
-    expect(within(dialog).getByRole("option", { name: "Focus: 25min" })).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("option", { name: "Focus: 25min" }));
+    fireEvent.click(await within(dialog).findByRole("option", { name: "Focus: 25min" }));
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Focus timer running, 25:00 left" }),
-      ).toBeInTheDocument(),
-    );
+    expect(
+      await screen.findByRole("button", {
+        name: /^Focus timer running, (25:00|24:\d\d) left$/,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("Custom… lands on the Focus view, where a one-off length is adjustable", async () => {

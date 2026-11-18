@@ -5,7 +5,6 @@ import { useCallback, useEffect, useId, useState } from "react";
 import {
   createTimer,
   deleteTimer,
-  fetchFocusStats,
   fetchHabits,
   fetchOpenTasks,
   fetchSmartTasks,
@@ -18,9 +17,9 @@ import {
   type Timer,
   type TimerCreateInput,
 } from "../api";
-import { addDays, browserTimeZone, localDayOf, shortDayLabel } from "../dates";
+import { addDays, localDayOf, shortDayLabel } from "../dates";
 import { linkOf, type FocusLink } from "../focusLink";
-import { formatFocusTotal } from "../focusTotals";
+import { formatFocusTotal, loadFocusDays, pomoOfCycle } from "../focusTotals";
 import { useRegisterShortcut } from "../shortcuts";
 import { useFocusRun } from "../focusRunContext";
 import { Hint } from "./Hint";
@@ -37,13 +36,6 @@ function formatClock(ms: number): string {
 }
 
 /** The last seven days ending today, with each day's focus seconds. */
-function lastSevenDays(today: string, days: FocusDayTotal[]): FocusDayTotal[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const date = addDays(today, i - 6);
-    return { date, seconds: days.find((day) => day.date === date)?.seconds ?? 0 };
-  });
-}
-
 /** The name of the Task or Habit a run is linked to, for the stage. */
 function linkLabel(link: FocusLink, tasks: Task[], habits: Habit[]): string | null {
   if (link.startsWith("task:")) {
@@ -74,6 +66,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
   // configuration and the Timers presets.
   const {
     pomoStreak,
+    sessionsRecorded,
     running,
     pendingBreak,
     elapsedMs,
@@ -132,11 +125,14 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
     void fetchSmartTasks("today", today, { listId: null, tagId: null, priority: null }).then(
       (page) => setTodayTasks(page.items.filter((task) => !task.completed)),
     );
-    void fetchFocusStats(addDays(today, -6), today, browserTimeZone()).then((stats) =>
-      setStatDays(stats.days),
-    );
     void fetchHabits().then((page) => setHabits(page.items.filter((habit) => !habit.is_archived)));
   }, [firstLoadTimers]);
+
+  // Last 7 days of totals for the aside; a newly recorded session refreshes them.
+  useEffect(() => {
+    const today = localDayOf(new Date());
+    void loadFocusDays(addDays(today, -6), today).then(setStatDays);
+  }, [sessionsRecorded]);
 
   const paused = running !== null && running.pauseStartedAtMs !== null;
   useRegisterShortcut({
@@ -222,11 +218,10 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
   const stageTask = running !== null ? linkLabel(running.link, knownTasks, habits) : null;
   const linkedName = linkLabel(link, knownTasks, habits);
   const today = localDayOf(new Date());
-  const strip = statDays === null ? null : lastSevenDays(today, statDays);
+  const strip = statDays;
   const mondayOffset = (new Date().getDay() + 6) % 7;
   const weekStart = addDays(today, -mondayOffset);
 
-  const nextPomo = (pomoStreak % 4) + 1;
   // One line above the clock saying which of the five states the stage is
   // in. The dial alone can't say "paused" or "break" — and without it the
   // idle screen and a running one look like the same screen (#162).
@@ -235,7 +230,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
       ? "Break up next"
       : running === null
         ? mode === "pomo"
-          ? `Pomo ${nextPomo} of 4`
+          ? pomoOfCycle(pomoStreak)
           : "Stopwatch"
         : paused
           ? "Paused"

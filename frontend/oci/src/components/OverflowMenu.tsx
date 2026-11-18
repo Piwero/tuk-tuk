@@ -1,8 +1,9 @@
 import "./OverflowMenu.css";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Icon, type IconName } from "./Icon";
 import { IconButton } from "./IconButton";
+import { Popover } from "./Popover";
 
 export interface OverflowMenuItem {
   /** Visible text. */
@@ -17,8 +18,8 @@ export interface OverflowMenuItem {
 
 /** A kebab trigger that opens a short menu of actions. The trigger and every
  * item are real <button>s, so it works by keyboard and under a coarse pointer
- * where there is no hover, with no long-press to discover. Dismisses on an
- * outside pointer-down and on Escape, like HabitActionsMenu. */
+ * where there is no hover, with no long-press to discover. Dismissal (outside
+ * pointer-down, Escape) and focus return come from the shared Popover. */
 export function OverflowMenu({
   label,
   items,
@@ -29,32 +30,10 @@ export function OverflowMenu({
   className?: string;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    function onPointerDown(event: MouseEvent): void {
-      if (root.current !== null && !root.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className={className ? `overflow-menu ${className}` : "overflow-menu"} ref={root}>
+    <div className={className ? `overflow-menu ${className}` : "overflow-menu"}>
       <IconButton
         icon="more-vertical"
         size={16}
@@ -62,9 +41,10 @@ export function OverflowMenu({
         label={label}
         aria-haspopup="menu"
         aria-expanded={open}
+        buttonRef={trigger}
         onClick={() => setOpen((current) => !current)}
       />
-      {open && (
+      <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
         <ul role="menu" aria-label={label} className="overflow-menu-list">
           {items.map((item) => (
             <li role="none" key={item.text}>
@@ -85,7 +65,7 @@ export function OverflowMenu({
             </li>
           ))}
         </ul>
-      )}
+      </Popover>
     </div>
   );
 }

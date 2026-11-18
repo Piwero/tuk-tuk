@@ -28,6 +28,7 @@ import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMov
 import { useTaskCompletion } from "../taskCompletion";
 import { useTaskSelection } from "../taskSelection";
 import { type UndoQueue } from "../undoQueue";
+import { DatePopover } from "./DatePopover";
 import { BulkActionBar } from "./BulkActionBar";
 import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
@@ -106,6 +107,7 @@ export function TaskListView({
   const [quickStart, setQuickStart] = useState<{
     task: Task;
     position: { x: number; y: number };
+    origin: HTMLElement;
   } | null>(null);
 
   // Delete and complete are both undoable (#155): the toast holds the action
@@ -247,6 +249,8 @@ export function TaskListView({
         ),
     );
   }
+
+  const [rescheduleDay, setRescheduleDay] = useState("");
 
   function bulkReschedule(day: string): void {
     const patch = allDaySchedule(null, day);
@@ -433,7 +437,11 @@ export function TaskListView({
         onDrop={(event) => handleDropOnTaskRow(event, task)}
         onContextMenu={(event) => {
           event.preventDefault();
-          setQuickStart({ task, position: { x: event.clientX, y: event.clientY } });
+          setQuickStart({
+            task,
+            position: { x: event.clientX, y: event.clientY },
+            origin: event.currentTarget,
+          });
         }}
       />
     );
@@ -546,15 +554,14 @@ export function TaskListView({
             className="bulk-dialog"
             onSubmit={(event) => {
               event.preventDefault();
-              const day = new FormData(event.currentTarget).get("day")?.toString() ?? "";
-              if (day !== "") {
-                bulkReschedule(day);
+              if (rescheduleDay !== "") {
+                bulkReschedule(rescheduleDay);
               }
             }}
           >
             <label>
               Due date
-              <input type="date" name="day" aria-label="Due date" required />
+              <DatePopover label="Due date" value={rescheduleDay} onChange={setRescheduleDay} />
             </label>
             <button className="btn-primary" type="submit">
               Reschedule
@@ -648,6 +655,7 @@ export function TaskListView({
           <PomoQuickStartMenu
             task={quickStart.task}
             position={quickStart.position}
+            origin={quickStart.origin}
             onClose={() => setQuickStart(null)}
           />
         )}

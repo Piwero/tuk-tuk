@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 
-import { fetchCheckIns, fetchHabits, fetchHabitStats, putCheckIn, removeCheckIn } from "./api";
+import { fetchCheckIns, fetchHabits, fetchHabitStats } from "./api";
 import type { Habit } from "./api";
 import { localDayOf } from "./dates";
 import { habitDueOn } from "./habitFrequency";
-import { nextCheckIn } from "./habitStats";
+import { tapCheckIn } from "./habitCheckIn";
 
 export interface TodayHabit {
   habit: Habit;
@@ -46,9 +46,7 @@ export function useTodayHabits(): TodayHabits {
       if (pending.current.has(habit.id)) return;
       pending.current.add(habit.id);
       try {
-        const next = nextCheckIn(habit, value);
-        if (next.clear) await removeCheckIn(habit.id, today);
-        else await putCheckIn(habit.id, today, next.value);
+        await tapCheckIn(habit, today, value);
         setVersion((n) => n + 1);
       } catch {
         // Leave things as they were; the tap can be repeated.

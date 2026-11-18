@@ -108,6 +108,7 @@ describe("Sidebar structure", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu", { name: "Create" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it("shows a Folder's open-Task count — the sum of its Lists — and nothing when zero", async () => {
