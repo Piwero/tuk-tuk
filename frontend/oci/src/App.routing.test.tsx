@@ -162,7 +162,7 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
-    expect(await screen.findByRole("combobox", { name: "Link" })).toHaveValue("");
+    expect(await screen.findByRole("button", { name: "Link Task or Habit" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/focus");
   });
 
