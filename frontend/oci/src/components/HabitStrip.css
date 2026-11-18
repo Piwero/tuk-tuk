@@ -1,0 +1,49 @@
+/* Today's Habit chip strip (#461): phone only, full width under the Today
+ * header. Chips never wrap; the strip itself scrolls sideways so the page
+ * doesn't. */
+@layer components {
+  .habit-strip {
+    display: none;
+  }
+
+  @media (max-width: 720px) {
+    .habit-strip {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: var(--space-2);
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      margin: 0 0 var(--space-3);
+      padding: 0;
+      list-style: none;
+    }
+
+    .habit-strip > li {
+      flex: none;
+    }
+
+    .habit-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: var(--tap-target);
+      padding: 0 var(--space-3);
+      border: 1px solid var(--border-subtle);
+      border-radius: 999px;
+      background: var(--surface-raised);
+      color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .habit-chip[aria-pressed="true"] {
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+    }
+
+    .habit-chip-progress {
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+}
