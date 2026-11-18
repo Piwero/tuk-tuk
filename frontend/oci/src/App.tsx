@@ -96,6 +96,7 @@ import { SettingsView } from "./components/SettingsView";
 import { ShortcutHints, ShortcutsProvider } from "./components/ShortcutLayer";
 import { Sidebar } from "./components/Sidebar";
 import { DayRail } from "./components/DayRail";
+import { FocusCard } from "./components/FocusCard";
 import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
@@ -698,7 +699,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // undo their navigation. Anything still pending commits on the way out.
   const viewKey = keyOfView(view);
   // The Day rail (#446) sits beside Today only, and only when a card is on.
-  const showDayRail = smartView === "today" && !completedMode && sectionSettings.goals;
+  const showDayRail =
+    smartView === "today" && !completedMode && (sectionSettings.goals || sectionSettings.focus);
   useEffect(() => {
     clearToasts();
   }, [viewKey, clearToasts]);
@@ -1599,6 +1601,12 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                       <FocusedGoalCard
                         goalsHref={pathForStaticView("goals")}
                         onOpenGoals={() => switchView({ kind: "goals" })}
+                      />
+                    )}
+                    {sectionSettings.focus && (
+                      <FocusCard
+                        focusHref={pathForStaticView("focus")}
+                        onOpenFocus={() => switchView({ kind: "focus" })}
                       />
                     )}
                   </DayRail>
