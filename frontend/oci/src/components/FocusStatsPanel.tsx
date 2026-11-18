@@ -263,16 +263,21 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
       </section>
       <section className="focus-history">
         <h2>Sessions</h2>
-        {days.map((day) => (
-          <section key={day} aria-label={shortDayLabel(day)}>
-            <h3>{shortDayLabel(day)}</h3>
-            <ul aria-label={`Focus Sessions on ${shortDayLabel(day)}`}>
-              {rangeSessions
-                .filter((session) => localDayOf(new Date(session.started_at)) === day)
-                .map((session) => renderSession(session))}
-            </ul>
-          </section>
-        ))}
+        {days.map((day) => {
+          const onDay = rangeSessions.filter(
+            (session) => localDayOf(new Date(session.started_at)) === day,
+          );
+          const daySeconds = onDay.reduce((sum, session) => sum + session.duration_seconds, 0);
+          return (
+            <section key={day} aria-label={shortDayLabel(day)}>
+              <h3>{shortDayLabel(day)}</h3>
+              <p className="focus-history-day-total">Total {minutes(daySeconds)}</p>
+              <ul aria-label={`Focus Sessions on ${shortDayLabel(day)}`}>
+                {onDay.map((session) => renderSession(session))}
+              </ul>
+            </section>
+          );
+        })}
         {sessions.length === 0 && editor === null && (
           <p className="focus-history-empty">No Focus Sessions recorded yet.</p>
         )}
