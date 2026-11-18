@@ -48,6 +48,8 @@ export interface PendingBreak {
 }
 
 interface FocusRunContextValue {
+  /** Pomos finished in the current streak; the 4th offers the long break. */
+  pomoStreak: number;
   running: RunningSession | null;
   /** A run finished since the last dismissal — the nav badge keeps
    * announcing it until the user looks or starts another run. */
@@ -96,6 +98,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
   // Not persisted: a reload resets the streak, which is a fair trade for not
   // adding another moving part to the stored run.
   const pomoStreak = useRef(0);
+  const [streak, setStreak] = useState(0);
   const finishing = useRef(false);
 
   // The run survives every mount: every change is written through to
@@ -168,6 +171,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
       playFocusRunEndSound(running.phase);
       if (running.mode === "pomo") {
         pomoStreak.current += 1;
+        setStreak(pomoStreak.current);
         setPendingBreak({
           shortMs: running.breakMs,
           longMs: running.longBreakMs,
@@ -267,6 +271,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Ele
   return (
     <FocusRunContext.Provider
       value={{
+        pomoStreak: streak,
         running,
         justFinished,
         pendingBreak,
