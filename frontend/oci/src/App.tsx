@@ -96,6 +96,8 @@ import { SearchView, type SearchState } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutHints, ShortcutsProvider } from "./components/ShortcutLayer";
 import { Sidebar } from "./components/Sidebar";
+import { DayRail } from "./components/DayRail";
+import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { SortBySelect } from "./components/SortBySelect";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
@@ -690,6 +692,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // on a screen the user has already left is noise, and its "Show Task" would
   // undo their navigation. Anything still pending commits on the way out.
   const viewKey = keyOfView(view);
+  // The Day rail (#446) sits beside Today only, and only when a card is on.
+  const showDayRail = smartView === "today" && !completedMode && sectionSettings.goals;
   useEffect(() => {
     clearToasts();
   }, [viewKey, clearToasts]);
@@ -1262,7 +1266,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
             <main ref={mainRef}>
               {/* One cell for the view, one for the hint strip: the cell grows
               into spare height so the strip sits at the foot (issue #434). */}
-              <div className="main-content">
+              <div className={showDayRail ? "main-content with-day-rail" : "main-content"}>
                 <div className="main-chrome">
                   <div className="main-header">
                     <IconButton
@@ -1590,6 +1594,16 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     onOpenActions={setPaletteTask}
                     toasts={toasts}
                   />
+                )}
+                {showDayRail && (
+                  <DayRail>
+                    {sectionSettings.goals && (
+                      <FocusedGoalCard
+                        goalsHref={pathForStaticView("goals")}
+                        onOpenGoals={() => switchView({ kind: "goals" })}
+                      />
+                    )}
+                  </DayRail>
                 )}
               </div>
               {/* The shortcut hint strip lives at the foot of main; it reads
