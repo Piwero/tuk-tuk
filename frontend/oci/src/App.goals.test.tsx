@@ -217,6 +217,22 @@ describe("Goals", () => {
     expect(screen.getByRole("button", { name: "End date" })).toHaveTextContent("No date");
   });
 
+  it("closes a Goal's actions menu on Escape, returning focus to its trigger", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    const trigger = await screen.findByRole("button", { name: "Actions for Ship v2" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const menu = await screen.findByRole("menu", { name: "Actions for Ship v2" });
+    expect(within(menu).getAllByRole("menuitem")[0]).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("menu", { name: "Actions for Ship v2" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it("edits a Goal in place", async () => {
     const api = installFakeApi({ goals: [fakeGoal("Ship v2")] });
     render(<App />);

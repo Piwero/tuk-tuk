@@ -9,6 +9,9 @@ interface PopoverProps {
   children: ReactNode;
   /** Editable comboboxes keep DOM focus in their input and use aria-activedescendant. */
   focusOnOpen?: boolean;
+  /** Viewport point to anchor at instead of the trigger (e.g. a right-click's
+   * cursor). The trigger still receives focus back and counts as "inside". */
+  anchorPoint?: { x: number; y: number };
 }
 
 const focusableSelector =
@@ -22,6 +25,7 @@ export function Popover({
   onClose,
   children,
   focusOnOpen = true,
+  anchorPoint,
 }: PopoverProps): JSX.Element | null {
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
@@ -33,7 +37,10 @@ export function Popover({
     const trigger = triggerRef.current;
     const surface = panel.current;
     function place(): void {
-      const anchor = trigger.getBoundingClientRect();
+      const anchor =
+        anchorPoint === undefined
+          ? trigger.getBoundingClientRect()
+          : { top: anchorPoint.y, bottom: anchorPoint.y, left: anchorPoint.x };
       const bounds = surface.getBoundingClientRect();
       const gap = 4;
       const below = window.innerHeight - anchor.bottom - gap;
@@ -84,6 +91,7 @@ export function Popover({
         trigger.focus({ preventScroll: true });
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the point is read once per open
   }, [open, triggerRef, focusOnOpen]);
 
   if (!open) return null;

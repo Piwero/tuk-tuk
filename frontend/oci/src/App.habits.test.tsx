@@ -688,6 +688,7 @@ describe("Managing Habits", () => {
     await waitFor(() =>
       expect(screen.queryByRole("menu", { name: "Actions for Meditate" })).not.toBeInTheDocument(),
     );
+    expect(trigger).toHaveFocus();
   });
 
   it("opens History from the actions menu", async () => {

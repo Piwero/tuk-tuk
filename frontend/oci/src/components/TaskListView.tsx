@@ -107,6 +107,7 @@ export function TaskListView({
   const [quickStart, setQuickStart] = useState<{
     task: Task;
     position: { x: number; y: number };
+    origin: HTMLElement;
   } | null>(null);
 
   // Delete and complete are both undoable (#155): the toast holds the action
@@ -436,7 +437,11 @@ export function TaskListView({
         onDrop={(event) => handleDropOnTaskRow(event, task)}
         onContextMenu={(event) => {
           event.preventDefault();
-          setQuickStart({ task, position: { x: event.clientX, y: event.clientY } });
+          setQuickStart({
+            task,
+            position: { x: event.clientX, y: event.clientY },
+            origin: event.currentTarget,
+          });
         }}
       />
     );
@@ -650,6 +655,7 @@ export function TaskListView({
           <PomoQuickStartMenu
             task={quickStart.task}
             position={quickStart.position}
+            origin={quickStart.origin}
             onClose={() => setQuickStart(null)}
           />
         )}

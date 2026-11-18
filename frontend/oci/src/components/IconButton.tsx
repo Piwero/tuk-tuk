@@ -24,6 +24,8 @@ interface IconButtonProps {
    * is set — Archive-grade controls keep explaining themselves even after
    * being read once (#261). No-op without `descriptionKey`. */
   destructive?: boolean;
+  /** Ref to the underlying <button>, e.g. to anchor a Popover to it. */
+  buttonRef?: React.Ref<HTMLButtonElement>;
 }
 
 /** A button whose only content is a glyph. Owns the whole contract: the
@@ -41,11 +43,13 @@ export function IconButton({
   descriptionKey,
   destructive,
   disabled,
+  buttonRef,
   ...rest
 }: IconButtonProps): JSX.Element {
   const { open, handlers } = useHoverHint();
   const button = (
     <button
+      ref={buttonRef}
       type={type}
       className={className}
       aria-label={label}
