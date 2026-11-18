@@ -203,4 +203,112 @@
     text-transform: uppercase;
     color: var(--text-secondary);
   }
+
+  /* ── Week grid: a row per Habit, a column per day (Mon–Sun) ───────── */
+  .habits-week-scroll {
+    overflow-x: auto;
+    margin: 0 0 var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+  }
+  .habits-week-grid {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .habits-week-grid th,
+  .habits-week-grid td {
+    padding: var(--space-2);
+    text-align: center;
+    border-bottom: 1px solid var(--border-subtle, var(--border-default));
+  }
+  .habits-week-grid tr:last-child > * {
+    border-bottom: none;
+  }
+  .habits-week-grid .habit-row-head,
+  .habits-week-corner {
+    text-align: left;
+    font-weight: var(--weight-medium);
+    min-width: 180px;
+  }
+  .habits-week-corner,
+  .week-day {
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+  }
+  .week-day-num {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+  .week-day.today .week-day-num {
+    color: var(--accent, var(--success));
+    font-weight: var(--weight-semibold);
+  }
+  .habit-name {
+    display: block;
+    font-size: var(--text-sm);
+  }
+  .habit-streak-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+  }
+  /* Cells: state is carried by fill + mark + outline, not hue alone. */
+  .habits-week-grid .habit-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+  }
+  .habit-cell.state-done {
+    color: var(--white);
+  }
+  .habit-cell.state-open-today {
+    border: 2px solid var(--border-strong);
+  }
+  .habit-cell.state-missed {
+    border: 1px dashed var(--border-strong);
+  }
+  .habits-week-grid .habit-cell.state-not-scheduled {
+    background: transparent;
+    border-color: var(--border-default);
+    opacity: 0.5;
+  }
+  .habits-week-grid .habit-cell.state-future {
+    background: transparent;
+    border: 1px dotted var(--border-default);
+  }
+  .habit-cell.today {
+    box-shadow:
+      0 0 0 2px var(--surface-card),
+      0 0 0 3px var(--text-secondary);
+  }
+  .habits-long-history {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+  }
+  .habit-long-history-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .habit-long-history-row > .habit-name {
+    flex: none;
+    width: 140px;
+    color: var(--text-secondary);
+  }
 }
