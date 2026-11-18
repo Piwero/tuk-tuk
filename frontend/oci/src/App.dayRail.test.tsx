@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeGoal, fakeKeyResult, fakeTask, installFakeApi } from "./test/fakeApi";
+import { fakeGoal, fakeHabit, fakeKeyResult, fakeTask, installFakeApi } from "./test/fakeApi";
 
 /* jsdom applies no stylesheet, so the width threshold (a container query in
  * DayRail.css) is not observable here: these tests pin what the rail holds. */
@@ -111,5 +111,100 @@ describe("Day rail", () => {
     await waitFor(() =>
       expect(api.requests.filter((r) => r.url === FOCUSED_GOAL_URL)).toHaveLength(1),
     );
+  });
+});
+
+describe("Day rail Habits card", () => {
+  async function card() {
+    return screen.findByRole("region", { name: "Habits" });
+  }
+
+  it("lists only Habits scheduled today with done count, and checks in", async () => {
+    const api = installFakeApi({
+      habits: [
+        fakeHabit("Meditate"),
+        fakeHabit("Water", { type: "numeric", target: 3, step: 1, unit: "glasses" }),
+        // 2026-07-03 is a Friday.
+        fakeHabit("Monday only", { frequency: "FREQ=WEEKLY;BYDAY=MO" }),
+        fakeHabit("Old", { is_archived: true }),
+      ],
+    });
+    render(<App />);
+    await openToday();
+    const c = await card();
+    expect(await within(c).findByText("0 of 2 done")).toBeInTheDocument();
+    expect(within(c).queryByText("Monday only")).not.toBeInTheDocument();
+    expect(within(c).queryByText("Old")).not.toBeInTheDocument();
+
+    fireEvent.click(within(c).getByRole("button", { name: "Check in Meditate" }));
+    expect(await within(c).findByText("1 of 2 done")).toBeInTheDocument();
+    expect(within(c).getByText("Streak: 1")).toBeInTheDocument();
+    fireEvent.click(within(c).getByRole("button", { name: "Add 1 to Water" }));
+    expect(await within(c).findByText("1/3 glasses")).toBeInTheDocument();
+    const puts = api.requests.filter((r) => r.method === "PUT");
+    expect(puts.map((r) => [r.url, r.body])).toEqual([
+      [expect.stringMatching(/\/check-ins\/2026-07-03$/), { value: 1 }],
+      [expect.stringMatching(/\/check-ins\/2026-07-03$/), { value: 1 }],
+    ]);
+  });
+
+  it("links to Habits", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate")] });
+    render(<App />);
+    await openToday();
+    fireEvent.click(await within(await card()).findByRole("link", { name: "Open Habits" }));
+    expect(await screen.findByRole("heading", { name: "Habits" })).toBeInTheDocument();
+  });
+
+  it("is hidden when Habits is disabled, even with Goals on", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Meditate")],
+      sectionSettings: { calendar: true, goals: true, habits: false, focus: true, assistant: true },
+    });
+    render(<App />);
+    await openToday();
+    await screen.findByRole("region", { name: "Focused goal" });
+    expect(screen.queryByRole("region", { name: "Habits" })).not.toBeInTheDocument();
+    expect(api.requests.some((r) => r.url.startsWith("/api/v1/check-ins"))).toBe(false);
+  });
+
+  it("shows the rail with only Habits when Goals is disabled", async () => {
+    installFakeApi({
+      habits: [fakeHabit("Meditate")],
+      sectionSettings: { calendar: true, goals: false, habits: true, focus: true, assistant: true },
+    });
+    render(<App />);
+    await openToday();
+    expect(await card()).toBeInTheDocument();
+  });
+
+  it("fails in isolation with its own retry", async () => {
+    installFakeApi({
+      habits: [fakeHabit("Meditate")],
+      goals: [fakeGoal("Ship", { is_focused: true })],
+    });
+    const realFetch = globalThis.fetch;
+    let fail = true;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      if (fail && String(input).includes("/api/v1/check-ins")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: { code: "internal_error", message: "boom" } }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      return realFetch(input, init);
+    });
+    render(<App />);
+    await openToday();
+    const c = await card();
+    const retry = await within(c).findByRole("button", { name: "Retry" });
+    expect(
+      await within(await screen.findByRole("region", { name: "Focused goal" })).findByText("Ship"),
+    ).toBeInTheDocument();
+    fail = false;
+    fireEvent.click(retry);
+    expect(await within(c).findByText("0 of 1 done")).toBeInTheDocument();
   });
 });

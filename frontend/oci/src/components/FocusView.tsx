@@ -1,5 +1,5 @@
 import "./FocusView.css";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 
 import {
   createTimer,
@@ -19,6 +19,7 @@ import {
 } from "../api";
 import { addDays, browserTimeZone, localDayOf, shortDayLabel } from "../dates";
 import { linkOf, type FocusLink } from "../focusLink";
+import { formatFocusTotal } from "../focusTotals";
 import { useRegisterShortcut } from "../shortcuts";
 import { useFocusRun } from "../focusRunContext";
 import { Hint } from "./Hint";
@@ -32,13 +33,6 @@ function formatClock(ms: number): string {
   const minutes = String(Math.floor(total / 60)).padStart(2, "0");
   const seconds = String(total % 60).padStart(2, "0");
   return `${minutes}:${seconds}`;
-}
-
-/** "45 min", "1 h 45 min". */
-function formatTotal(seconds: number): string {
-  const total = Math.round(seconds / 60);
-  const hours = Math.floor(total / 60);
-  return hours > 0 ? `${hours} h ${total % 60} min` : `${total} min`;
 }
 
 /** The last seven days ending today, with each day's focus seconds. */
@@ -61,7 +55,8 @@ function linkLabel(link: FocusLink, tasks: Task[], habits: Habit[]): string | nu
 }
 
 interface FocusViewProps {
-  /** Start a Pomo against this Task immediately (the task row's shortcut). */
+  /** Link this Task on arrival — a row's or palette's Focus action (#449).
+   * The clock waits for Start. */
   initialTask?: Task | null;
   /** Jumps to the statistics + history screen (its own route — #162). */
   onOpenStats: () => void;
@@ -195,20 +190,6 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
     await deleteTimer(timer.id);
     await loadTimers();
   }
-
-  // Start a Pomo against the passed task immediately — the task row's
-  // shortcut. A restored run wins: it is real recorded focus time, so the
-  // shortcut must not silently discard it.
-  const autostart = useRef(initialTask);
-  useEffect(() => {
-    if (autostart.current !== null) {
-      autostart.current = null;
-      if (running === null) {
-        start();
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const clockMs =
     pendingBreak !== null
@@ -583,14 +564,14 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             <dl>
               <div>
                 <dt>Today</dt>
-                <dd>{strip === null ? "…" : formatTotal(strip[6]?.seconds ?? 0)}</dd>
+                <dd>{strip === null ? "…" : formatFocusTotal(strip[6]?.seconds ?? 0)}</dd>
               </div>
               <div>
                 <dt>This week</dt>
                 <dd>
                   {strip === null
                     ? "…"
-                    : formatTotal(
+                    : formatFocusTotal(
                         strip
                           .filter((day) => day.date >= weekStart)
                           .reduce((sum, day) => sum + day.seconds, 0),

@@ -139,7 +139,7 @@ describe("Pomo quick-start menu", () => {
     expect(await stageLink()).toHaveTextContent(task.title);
   });
 
-  it("Start Focus stays reachable from Actions", async () => {
+  it("Focus stays reachable from Actions", async () => {
     const task = fakeTask("Write report");
     installFakeApi({ tasks: [task] });
     render(<App />);
@@ -147,9 +147,10 @@ describe("Pomo quick-start menu", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Actions for Write report" }));
     const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
-    fireEvent.click(within(dialog).getByRole("option", { name: "Start Focus" }));
+    fireEvent.click(within(dialog).getByRole("option", { name: "Focus" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
     expect(await stageLink()).toHaveTextContent(task.title);
   });
@@ -193,12 +194,13 @@ describe("Pomo quick-start menu", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App />);
 
-    // Start a run against the other task via Actions' Start Focus verb.
+    // Start a run against the other task via Actions' Focus verb, then Start.
     await screen.findByRole("button", { name: `Actions for ${otherTask.title}` });
     fireEvent.click(screen.getByRole("button", { name: `Actions for ${otherTask.title}` }));
     const actions = await screen.findByRole("dialog", { name: `Actions for ${otherTask.title}` });
-    fireEvent.click(within(actions).getByRole("option", { name: "Start Focus" }));
+    fireEvent.click(within(actions).getByRole("option", { name: "Focus" }));
     await screen.findByRole("heading", { name: "Focus" });
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
     tick(60_000);
 
     // Back to the List view.
@@ -232,8 +234,9 @@ describe("Pomo quick-start menu", () => {
     await screen.findByRole("button", { name: `Actions for ${otherTask.title}` });
     fireEvent.click(screen.getByRole("button", { name: `Actions for ${otherTask.title}` }));
     const actions = await screen.findByRole("dialog", { name: `Actions for ${otherTask.title}` });
-    fireEvent.click(within(actions).getByRole("option", { name: "Start Focus" }));
+    fireEvent.click(within(actions).getByRole("option", { name: "Focus" }));
     await screen.findByRole("heading", { name: "Focus" });
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
 
     const listsNav = await screen.findByRole("navigation", { name: "Lists" });
     fireEvent.click(within(listsNav).getByRole("link", { name: "Inbox" }));
