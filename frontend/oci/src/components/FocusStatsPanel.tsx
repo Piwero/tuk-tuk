@@ -1,3 +1,4 @@
+import { DatePopover } from "./DatePopover";
 import "./FocusStatsPanel.css";
 import { useCallback, useEffect, useState } from "react";
 
@@ -204,24 +205,14 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
       <section className="focus-stats">
         <h2>Statistics</h2>
         <div className="focus-stats-range">
-          <label>
+          <span className="focus-stats-range-field">
             From
-            <input
-              type="date"
-              aria-label="From"
-              value={start}
-              onChange={(event) => setStart(event.target.value)}
-            />
-          </label>
-          <label>
+            <DatePopover label="From" value={start} onChange={setStart} />
+          </span>
+          <span className="focus-stats-range-field">
             To
-            <input
-              type="date"
-              aria-label="To"
-              value={end}
-              onChange={(event) => setEnd(event.target.value)}
-            />
-          </label>
+            <DatePopover label="To" value={end} onChange={setEnd} />
+          </span>
         </div>
         {stats !== null && rangeDays > 0 && (
           <div className="focus-stats-summary">
