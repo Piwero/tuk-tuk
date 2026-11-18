@@ -679,6 +679,18 @@ describe("tab bar and More sheet are operable on touch (issue #462)", () => {
   });
 });
 
+describe("phone Today rows stay compact (issue #466)", () => {
+  it("collapses the hidden row actions in height too, so they never stretch the row", () => {
+    expect(declaredValue(".tasks li.task-row .row-actions", "height")).toBe("0");
+  });
+
+  it("drops the Schedule time and duration tracks on the phone", () => {
+    expect(declaredValue(".tasks li.task-row > .task-row-time", "display")).toBe("none");
+    expect(declaredValue(".tasks li.task-row > .task-row-duration", "display")).toBe("none");
+    expect(declaredValue(".tasks li.task-row > .task-row-time", "display", DESKTOP)).toBeNull();
+  });
+});
+
 describe("Today Habit chip strip is operable on touch (issue #461)", () => {
   it("meets the 44px floor for every chip", () => {
     const offenders = findOffenders([".habit-chip"]);
@@ -686,9 +698,16 @@ describe("Today Habit chip strip is operable on touch (issue #461)", () => {
   });
 
   it("scrolls sideways inside the strip, never the page", () => {
-    expect(declaredValue(".habit-strip", "overflow-x")).toBe("auto");
-    expect(declaredValue(".habit-strip", "flex-wrap")).toBe("nowrap");
-    expect(declaredValue(".habit-strip", "display", DESKTOP)).toBe("none");
+    expect(declaredValue(".today-habit-strip", "overflow-x")).toBe("auto");
+    expect(declaredValue(".today-habit-strip", "flex-wrap")).toBe("nowrap");
+    expect(declaredValue(".today-habit-strip", "display", DESKTOP)).toBe("none");
+  });
+
+  // #466: the chip strip once shared `.habit-strip` with the Habits card's
+  // recent-days heat strip, and its desktop `display: none` hid that strip.
+  it("never hides the Habits card heat strip", () => {
+    expect(declaredValue(".habit-strip", "display", DESKTOP)).not.toBe("none");
+    expect(declaredValue(".habit-strip", "display")).not.toBe("none");
   });
 });
 

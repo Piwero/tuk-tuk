@@ -10,7 +10,7 @@ export function HabitStrip({ habits }: { habits: TodayHabits }) {
   const { state } = useRailLoad(habits.load);
   if (state.status !== "ready" || state.data.length === 0) return null;
   return (
-    <ul className="habit-strip" aria-label="Today's Habits">
+    <ul className="today-habit-strip" aria-label="Today's Habits">
       {state.data.map((item) => {
         const { complete, label, progress } = habitCheckInState(item);
         return (

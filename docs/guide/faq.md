@@ -27,6 +27,9 @@ Your phone must be able to reach the computer running Tuk Tuk. See
 
 ![Tuk Tuk on a phone](../assets/screenshots/mobile-today.png)
 
+On a phone, Today shows a strip of today's Habits under the header, and the
+**More** tab opens Lists, Folders and Tags.
+
 **Does it work offline?**
 No. The page needs to reach the server.
 

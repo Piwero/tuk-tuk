@@ -684,10 +684,9 @@ function GoalCard({
       {goal.obstacle !== null && (
         <p className="goal-obstacle">
           <strong>Obstacle:</strong> {goal.obstacle}
-          {goal.if_then_plan !== null && <> {goal.if_then_plan}</>}
         </p>
       )}
-      {goal.obstacle === null && goal.if_then_plan !== null && (
+      {goal.if_then_plan !== null && (
         <p className="goal-if-then">
           <strong>If-Then Plan:</strong> {goal.if_then_plan}
         </p>

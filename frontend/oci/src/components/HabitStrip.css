@@ -2,12 +2,12 @@
  * header. Chips never wrap; the strip itself scrolls sideways so the page
  * doesn't. */
 @layer components {
-  .habit-strip {
+  .today-habit-strip {
     display: none;
   }
 
   @media (max-width: 720px) {
-    .habit-strip {
+    .today-habit-strip {
       display: flex;
       flex-wrap: nowrap;
       gap: var(--space-2);
@@ -19,7 +19,7 @@
       list-style: none;
     }
 
-    .habit-strip > li {
+    .today-habit-strip > li {
       flex: none;
     }
 
