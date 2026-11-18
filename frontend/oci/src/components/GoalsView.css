@@ -1,8 +1,6 @@
 @layer components {
   /* Secondary buttons: the default for classless form and section actions. */
   .goals-view > button,
-  .goals-view .goal-actions button,
-  .key-result-actions button,
   .key-results > button {
     display: inline-flex;
     align-items: center;
@@ -20,52 +18,12 @@
     transition: background var(--duration-fast) var(--ease-out);
   }
   .goals-view > button:hover,
-  .goals-view .goal-actions button:hover,
-  .key-result-actions button:hover,
   .key-results > button:hover {
     background: var(--ink-50);
   }
   .goals-view > button:active,
-  .goals-view .goal-actions button:active,
-  .key-result-actions button:active,
   .key-results > button:active {
     background: var(--ink-100);
-  }
-  /* Disabled row actions (e.g. a Key Result that is already first or last and
- * has nowhere to move) read as inert while keeping their row layout. */
-  .key-result-actions button:disabled {
-    opacity: 0.45;
-    cursor: default;
-  }
-  .key-result-actions button:disabled:hover {
-    background: var(--surface-card);
-  }
-  @media (hover: none), (pointer: coarse) {
-    /* A Goal card's actions (Focus, Abandon, Edit, Delete) adopt the same
-     long-press gesture as a Task row (#168, #245, #248): de-emphasised at
-     rest (#247) isn't enough on touch, since there's no hover to bring them
-     to full prominence — a plain tap must not reveal Delete either, so it
-     stays behind the deliberate long-press (`data-actions-open`, set by
-     GoalCard) or keyboard focus, sized to the tap-target floor so Delete
-     can't be hit when Edit was meant. */
-    .goals-view .goal-actions {
-      opacity: 0;
-      visibility: hidden;
-    }
-  }
-  @media (hover: none), (pointer: coarse) {
-    .goals-view .goal[data-actions-open="true"] .goal-actions,
-    .goals-view .goal-actions:focus-within {
-      opacity: 1;
-      visibility: visible;
-    }
-  }
-  @media (hover: none), (pointer: coarse) {
-    .goals-view .goal-actions button {
-      min-width: var(--tap-target);
-      min-height: var(--tap-target);
-      padding: 10px 14px;
-    }
   }
   /* ── Goals ───────────────────────────────────────────────────────── */
   /* Goals is prose, not a dense columnar surface — it opts into the reading
@@ -140,7 +98,7 @@
   .goal-window,
   .goal-score,
   .goal-final-score,
-  .key-result-progress,
+  .key-result-value,
   .key-result-readonly {
     font-variant-numeric: tabular-nums;
     font-size: var(--text-xs);
@@ -196,26 +154,18 @@
     letter-spacing: var(--tracking-caps);
     color: var(--text-tertiary);
   }
-  /* Row actions rest de-emphasised, not hidden (issue #247): a newly made
- * Goal must show that Focus/Abandon/Edit/Delete exist, so someone who
- * never thinks to hover isn't left concluding the app can't do those
- * things. Full prominence still needs hover or focus-within, matching the
- * hover-reveal convention elsewhere (Task rows, group headers, month
- * cells) — this only changes the resting opacity, not the mechanism, and
- * `visibility: hidden` is dropped because it pulls buttons out of the
- * accessibility tree and off the hit-test path. */
-  .goals-view .goal-actions {
+  /* The card header: title on the left, the overflow menu (Focus/Unfocus,
+ * Abandon, Edit, Delete) on the right — one trigger, visible at rest on
+ * every pointer, instead of a hover- or long-press-revealed button row. */
+  .goal-header {
     display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
     gap: var(--space-2);
-    opacity: 0.45;
-    transition: opacity var(--duration-base) var(--ease-out);
   }
-  .goals-view .goal:hover .goal-actions,
-  .goals-view .goal:focus-within .goal-actions {
-    opacity: 1;
+  .goal-header h3 {
+    margin: 0;
   }
-  .goals-view .goal-actions button,
-  .key-result-actions button,
   .goals-add {
     display: inline-flex;
     align-items: center;
@@ -239,7 +189,7 @@
   }
   .key-result-row {
     display: grid;
-    grid-template-columns: 1fr auto 72px auto auto auto;
+    grid-template-columns: minmax(0, 1fr) 72px auto auto auto;
     align-items: center;
     gap: var(--space-2);
   }
@@ -261,7 +211,17 @@
     border-radius: var(--radius-full);
     background: var(--accent);
   }
-  .key-result-row input {
+  .key-result {
+    cursor: grab;
+  }
+  .key-result-value {
+    white-space: nowrap;
+    padding: 0 var(--space-1);
+    border: 0;
+    background: transparent;
+    cursor: text;
+  }
+  .key-result-value-input {
     width: 80px;
   }
   .key-result-source,
@@ -269,10 +229,6 @@
     margin: 0;
     font-size: var(--text-xs);
     color: var(--text-tertiary);
-  }
-  .key-result-actions {
-    display: flex;
-    gap: var(--space-1);
   }
   .key-result-tasks-toggle {
     align-self: flex-start;

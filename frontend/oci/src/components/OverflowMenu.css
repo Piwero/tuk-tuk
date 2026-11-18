@@ -1,0 +1,76 @@
+@layer components {
+  /* One menu behind a kebab trigger,
+ * replacing four permanent buttons. The trigger and items are real
+ * buttons, so the menu is reachable by keyboard and under a coarse
+ * pointer where there is no hover. */
+  .overflow-menu {
+    position: relative;
+    flex: none;
+  }
+  .overflow-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .overflow-menu-trigger:hover,
+  .overflow-menu-trigger[aria-expanded="true"] {
+    background: var(--surface-hover);
+    border-color: var(--border-default);
+  }
+  .overflow-menu-list {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    right: 0;
+    z-index: var(--z-popover);
+    min-width: 160px;
+    margin: 0;
+    padding: var(--space-1);
+    list-style: none;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+  }
+  .overflow-menu-list button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-1) var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: var(--text-sm);
+    text-align: left;
+  }
+  .overflow-menu-list button:hover {
+    background: var(--surface-hover);
+  }
+  .overflow-menu-list .overflow-menu-danger {
+    color: var(--text-danger);
+  }
+  @media (hover: none), (pointer: coarse) {
+    .overflow-menu-trigger {
+      width: var(--tap-target);
+      height: var(--tap-target);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .overflow-menu-list button {
+      min-height: var(--tap-target);
+    }
+  }
+}
+@layer components {
+  .overflow-menu-list button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}

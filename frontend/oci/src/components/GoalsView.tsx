@@ -21,12 +21,14 @@ import {
   type Task,
 } from "../api";
 import { localDayOf } from "../dates";
+import { endDrag, readDragPayload, startDrag } from "../dnd";
 import { goalPace } from "../goalPace";
+import { appendOrder, planInsertBefore } from "../ordering";
 import { goalPaceDelta, goalPaceVerdict, goalWindowLabel, goalWindowRange } from "../goalWindow";
-import { useLongPressReveal } from "../longPressReveal";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
+import { type OverflowMenuItem, OverflowMenu } from "./OverflowMenu";
 
 interface GoalFormValues {
   title: string;
@@ -168,15 +170,76 @@ const SOURCE_NOTE: Record<KeyResultSource, string> = {
   task_count: "From completed Tasks",
 };
 
-/** One Key Result row: name, progress, its value, and the controls that
- * reorder or remove it. A "task_count" row can expand to show the Tasks its
- * count is made of, so the number can be checked rather than trusted. */
+/** A number shown as text until clicked, then typed over in place. Blur or
+ * Enter commits through one write path (issue #246); Escape abandons. */
+function ClickToType({
+  value,
+  label,
+  editing,
+  onEditingChange,
+  onCommit,
+  children,
+}: {
+  value: number;
+  label: string;
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
+  onCommit: (value: number) => void;
+  children?: React.ReactNode;
+}): JSX.Element {
+  if (!editing) {
+    return children === undefined ? (
+      <></>
+    ) : (
+      <button
+        type="button"
+        className="key-result-value btn-quiet"
+        aria-label={`Edit ${label}`}
+        onClick={() => onEditingChange(true)}
+      >
+        {children}
+      </button>
+    );
+  }
+  return (
+    <input
+      aria-label={label}
+      className="key-result-value-input"
+      type="number"
+      autoFocus
+      defaultValue={value}
+      onBlur={(event) => {
+        onEditingChange(false);
+        const next = Number(event.target.value);
+        if (event.target.value !== "" && next !== value) {
+          onCommit(next);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        } else if (event.key === "Escape") {
+          event.currentTarget.value = String(value);
+          event.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
+
+/** One Key Result row, read-only at rest: name, a bar and 'current of
+ * target'. A manual one adds a single stepper and a click-to-type value; an
+ * automatic one names its source instead. Reorder (also by dragging the row),
+ * target edits and delete live in the row's overflow menu. A "task_count" row
+ * can expand to show the Tasks its count is made of, so the number can be
+ * checked rather than trusted. */
 function KeyResultRow({
   keyResult: kr,
   isFirst,
   isLast,
   onUpdate,
   onMove,
+  onDropBefore,
   onDelete,
 }: {
   keyResult: KeyResult;
@@ -184,11 +247,16 @@ function KeyResultRow({
   isLast: boolean;
   onUpdate: (keyResultId: number, patch: KeyResultPatch) => void;
   onMove: (keyResultId: number, direction: -1 | 1) => void;
+  onDropBefore: (keyResultId: number, beforeId: number) => void;
   onDelete: (keyResultId: number) => void;
 }): JSX.Element {
   const [showTasks, setShowTasks] = useState(false);
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [editingCurrent, setEditingCurrent] = useState(false);
+  const [editingTarget, setEditingTarget] = useState(false);
   const percent = Math.round(kr.ratio * 100);
+  const manual = kr.source === "manual";
+  const amount = `${kr.current_value} of ${kr.target_value}`;
 
   useEffect(() => {
     if (!showTasks) {
@@ -198,75 +266,96 @@ function KeyResultRow({
   }, [showTasks, kr.id, kr.current_value]);
 
   return (
-    <li className="key-result">
+    <li
+      className="key-result"
+      draggable
+      onDragStart={(event) => startDrag(event, { kind: "key-result", id: kr.id })}
+      onDragEnd={endDrag}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        const payload = readDragPayload(event);
+        if (payload?.kind === "key-result" && payload.id !== kr.id) {
+          onDropBefore(payload.id, kr.id);
+        }
+      }}
+    >
       <div className="key-result-row">
         <span className="key-result-name">{kr.name}</span>
-        <span className="key-result-progress" aria-label={`${kr.name} progress`}>
-          {percent}%
-        </span>
         <span
           className="key-result-meter"
-          aria-hidden="true"
+          role="progressbar"
+          aria-label={`${kr.name} progress`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
           style={{ ["--kr-fill" as string]: `${Math.min(100, percent)}%` }}
         />
-        {kr.source === "manual" ? (
-          <input
-            aria-label={`${kr.name} current value`}
-            type="number"
-            defaultValue={kr.current_value}
-            onBlur={(event) => onUpdate(kr.id, { current_value: Number(event.target.value) })}
-            onKeyDown={(event) => {
-              // Enter commits through the same blur handler above — one
-              // write path, not two (issue #246).
-              if (event.key === "Enter") {
-                event.currentTarget.blur();
-              }
-            }}
+        {editingTarget ? (
+          <ClickToType
+            value={kr.target_value}
+            label={`${kr.name} target value`}
+            editing
+            onEditingChange={setEditingTarget}
+            onCommit={(value) => onUpdate(kr.id, { target_value: value })}
+          />
+        ) : manual ? (
+          <ClickToType
+            value={kr.current_value}
+            label={`${kr.name} current value`}
+            editing={editingCurrent}
+            onEditingChange={setEditingCurrent}
+            onCommit={(value) => onUpdate(kr.id, { current_value: value })}
+          >
+            {amount}
+          </ClickToType>
+        ) : (
+          <span className="key-result-readonly">{amount}</span>
+        )}
+        {manual ? (
+          <IconButton
+            icon="plus"
+            size={14}
+            className="key-result-step"
+            label={`Add 1 to ${kr.name}`}
+            onClick={() => onUpdate(kr.id, { current_value: kr.current_value + 1 })}
           />
         ) : (
-          <span
-            aria-label={`${kr.name} current value`}
-            className="key-result-readonly"
-            title={SOURCE_NOTE[kr.source]}
-          >
-            {kr.current_value}
-          </span>
+          <span className="key-result-source">{SOURCE_NOTE[kr.source]}</span>
         )}
-        <input
-          aria-label={`${kr.name} target value`}
-          className="key-result-target"
-          type="number"
-          defaultValue={kr.target_value}
-          onBlur={(event) => onUpdate(kr.id, { target_value: Number(event.target.value) })}
-          onKeyDown={(event) => {
-            // Enter commits through the same blur handler above — one write
-            // path, not two (issue #246).
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-            }
-          }}
+        <OverflowMenu
+          label={`Actions for key result ${kr.name}`}
+          items={[
+            {
+              text: "Move up",
+              label: `Move key result ${kr.name} up`,
+              icon: "chevron-up",
+              disabled: isFirst,
+              onSelect: () => onMove(kr.id, -1),
+            },
+            {
+              text: "Move down",
+              label: `Move key result ${kr.name} down`,
+              icon: "chevron-down",
+              disabled: isLast,
+              onSelect: () => onMove(kr.id, 1),
+            },
+            {
+              text: "Edit target",
+              label: `Edit ${kr.name} target value`,
+              icon: "pencil",
+              onSelect: () => setEditingTarget(true),
+            },
+            {
+              text: "Delete",
+              label: `Delete key result ${kr.name}`,
+              icon: "trash-2",
+              danger: true,
+              onSelect: () => onDelete(kr.id),
+            },
+          ]}
         />
-        <div className="key-result-actions">
-          <IconButton
-            icon="chevron-up"
-            label={`Move key result ${kr.name} up`}
-            disabled={isFirst}
-            onClick={() => onMove(kr.id, -1)}
-          />
-          <IconButton
-            icon="chevron-down"
-            label={`Move key result ${kr.name} down`}
-            disabled={isLast}
-            onClick={() => onMove(kr.id, 1)}
-          />
-          <IconButton
-            icon="x"
-            label={`Delete key result ${kr.name}`}
-            onClick={() => onDelete(kr.id)}
-          />
-        </div>
       </div>
-      {kr.source !== "manual" && <p className="key-result-source">{SOURCE_NOTE[kr.source]}</p>}
       {kr.source === "task_count" && (
         <>
           <button
@@ -342,16 +431,17 @@ function GoalScore({ goal }: { goal: Goal }): JSX.Element {
   );
 }
 
-/** A Goal's Key Results: list with progress, add form, and per-row edit /
- * reorder / delete. Automatic sources (habit_checkins, task_count) render
- * their value read-only (ADR 0012) — only "manual" Key Results get an
- * editable value; the target is editable on every Key Result. */
+/** A Goal's Key Results: read-only rows, an add form, and per-row actions.
+ * Automatic sources (habit_checkins, task_count) never take a typed value
+ * (ADR 0012) — only "manual" Key Results get the stepper and click-to-type;
+ * the target is editable on every Key Result from its menu. */
 function KeyResultsPanel({
   goal,
   habits,
   onCreate,
   onUpdate,
   onMove,
+  onDropBefore,
   onDelete,
 }: {
   goal: Goal;
@@ -359,6 +449,7 @@ function KeyResultsPanel({
   onCreate: (values: KeyResultFormValues) => void;
   onUpdate: (keyResultId: number, patch: KeyResultPatch) => void;
   onMove: (keyResultId: number, direction: -1 | 1) => void;
+  onDropBefore: (keyResultId: number, beforeId: number) => void;
   onDelete: (keyResultId: number) => void;
 }): JSX.Element {
   const [adding, setAdding] = useState(false);
@@ -381,6 +472,7 @@ function KeyResultsPanel({
                 isLast={index === goal.key_results.length - 1}
                 onUpdate={onUpdate}
                 onMove={onMove}
+                onDropBefore={onDropBefore}
                 onDelete={onDelete}
               />
             ))}
@@ -517,18 +609,17 @@ function toCreateInput(values: GoalFormValues): GoalCreateInput {
   };
 }
 
-/** A Goal card, at rest and revealed. On touch, Focus/Abandon/Edit/Delete
- * stay behind the same long-press gesture as a Task row (#168, #245): a
- * plain tap never opens them and a touch move (a scroll) cancels the
- * press, so an unreachable-on-touch action group never becomes an
- * accidentally-triggered one. Hover and focus-within reveal them too
- * (#247), unchanged by this. */
+/** A Goal card. Focus/Unfocus, Abandon, Edit and Delete sit in one overflow
+ * menu in the card's header (#464): reachable by keyboard and by a plain tap
+ * on touch, replacing the long-press reveal (#248) — the menu itself is the
+ * guard against an accidental Delete. */
 function GoalCard({
   goal,
   habits,
   onCreateKeyResult,
   onUpdateKeyResult,
   onMoveKeyResult,
+  onDropKeyResult,
   onDeleteKeyResult,
   onRetro,
   onToggleFocus,
@@ -541,6 +632,7 @@ function GoalCard({
   onCreateKeyResult: (values: KeyResultFormValues) => void;
   onUpdateKeyResult: (keyResultId: number, patch: KeyResultPatch) => void;
   onMoveKeyResult: (keyResultId: number, direction: -1 | 1) => void;
+  onDropKeyResult: (keyResultId: number, beforeId: number) => void;
   onDeleteKeyResult: (keyResultId: number) => void;
   onRetro: (retro: string) => void;
   onToggleFocus: () => void;
@@ -548,22 +640,42 @@ function GoalCard({
   onEdit: () => void;
   onDelete: () => void;
 }): JSX.Element {
-  const reveal = useLongPressReveal();
+  const actions: OverflowMenuItem[] = [];
+  if (goal.status === "active") {
+    actions.push(
+      {
+        text: goal.is_focused ? "Unfocus" : "Focus",
+        label: goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`,
+        icon: "target",
+        onSelect: onToggleFocus,
+      },
+      { text: "Abandon", label: `Abandon ${goal.title}`, icon: "x", onSelect: onAbandon },
+    );
+  }
+  actions.push(
+    { text: "Edit", label: `Edit ${goal.title}`, icon: "pencil", onSelect: onEdit },
+    {
+      text: "Delete",
+      label: `Delete goal ${goal.title}`,
+      icon: "trash-2",
+      danger: true,
+      onSelect: onDelete,
+    },
+  );
 
   return (
-    <li
-      className={goal.is_focused ? "goal goal-focused" : "goal"}
-      data-actions-open={reveal.dataActionsOpen}
-      onTouchStart={reveal.onTouchStart}
-      onTouchEnd={reveal.onTouchEnd}
-      onTouchMove={reveal.onTouchMove}
-      onTouchCancel={reveal.onTouchCancel}
-      onClick={reveal.onClick}
-    >
-      <h3>
-        {goal.title}
-        {goal.is_focused && <span className="goal-focused-badge">Focused</span>}
-      </h3>
+    <li className={goal.is_focused ? "goal goal-focused" : "goal"}>
+      <div className="goal-header">
+        <h3>
+          {goal.title}
+          {goal.is_focused && <span className="goal-focused-badge">Focused</span>}
+        </h3>
+        <OverflowMenu
+          label={`Actions for ${goal.title}`}
+          items={actions}
+          className="goal-actions"
+        />
+      </div>
       {goal.description !== "" && <p>{goal.description}</p>}
       <p className="goal-window">
         {goalWindowLabel(goal.start_date, goal.end_date, localDayOf(new Date()))}
@@ -586,6 +698,7 @@ function GoalCard({
         onCreate={onCreateKeyResult}
         onUpdate={onUpdateKeyResult}
         onMove={onMoveKeyResult}
+        onDropBefore={onDropKeyResult}
         onDelete={onDeleteKeyResult}
       />
       {goal.status === "closed" && goal.final_score !== null && (
@@ -602,53 +715,6 @@ function GoalCard({
           />
         </label>
       )}
-      <div className="goal-actions">
-        {goal.status === "active" && (
-          <>
-            <Hint hintKey="focused-goal">
-              <button
-                className="btn-secondary"
-                type="button"
-                aria-pressed={goal.is_focused}
-                aria-label={goal.is_focused ? `Unfocus ${goal.title}` : `Focus ${goal.title}`}
-                onClick={onToggleFocus}
-              >
-                <Icon name="target" size={16} />
-                {goal.is_focused ? "Unfocus" : "Focus"}
-              </button>
-            </Hint>
-            <Hint hintKey="abandon" destructive>
-              <button
-                className="btn-secondary"
-                type="button"
-                aria-label={`Abandon ${goal.title}`}
-                onClick={onAbandon}
-              >
-                <Icon name="x" size={16} />
-                Abandon
-              </button>
-            </Hint>
-          </>
-        )}
-        <button
-          className="btn-secondary"
-          type="button"
-          aria-label={`Edit ${goal.title}`}
-          onClick={onEdit}
-        >
-          <Icon name="pencil" size={16} />
-          Edit
-        </button>
-        <button
-          className="btn-secondary"
-          type="button"
-          aria-label={`Delete goal ${goal.title}`}
-          onClick={onDelete}
-        >
-          <Icon name="trash-2" size={16} />
-          Delete
-        </button>
-      </div>
     </li>
   );
 }
@@ -720,23 +786,52 @@ export function GoalsView(): JSX.Element {
     });
   }
 
-  /** Reorder by swapping sort_order with the neighbour in the direction of
-   * travel — the list is already served in sort_order, so a swap is the whole
-   * move. */
-  function handleMoveKeyResult(goal: Goal, keyResultId: number, direction: -1 | 1): void {
-    const index = goal.key_results.findIndex((kr) => kr.id === keyResultId);
-    const neighbour = goal.key_results[index + direction];
-    const moving = goal.key_results[index];
-    if (neighbour === undefined || moving === undefined) {
+  /** Moves a Key Result before another (or to the end, `beforeId` null) with
+   * one sparse sort_order write, renumbering only when the gap runs out. */
+  function handleDropKeyResult(goal: Goal, keyResultId: number, beforeId: number | null): void {
+    const moving = goal.key_results.find((kr) => kr.id === keyResultId);
+    if (moving === undefined) {
       return;
     }
+    const siblings = goal.key_results.filter((kr) => kr.id !== keyResultId);
+    const plan =
+      beforeId === null
+        ? { kind: "single" as const, sort_order: appendOrder(siblings) }
+        : planInsertBefore(siblings, moving, beforeId);
     run(async () => {
-      await updateKeyResult(goal.id, moving.id, { sort_order: neighbour.sort_order });
-      const updated = await updateKeyResult(goal.id, neighbour.id, {
-        sort_order: moving.sort_order,
-      });
-      setGoals((current) => current.map((g) => (g.id === updated.id ? updated : g)));
+      let updated: Goal | null = null;
+      if (plan.kind === "single") {
+        updated = await updateKeyResult(goal.id, moving.id, { sort_order: plan.sort_order });
+      } else {
+        for (const { row, sort_order } of plan.rows) {
+          updated = await updateKeyResult(goal.id, row.id, { sort_order });
+        }
+      }
+      const next = updated;
+      if (next !== null) {
+        setGoals((current) => current.map((g) => (g.id === next.id ? next : g)));
+      }
     });
+  }
+
+  /** The keyboard path for the same reorder: up drops before the previous
+   * row, down drops before the row after next (or at the end). */
+  function handleMoveKeyResult(goal: Goal, keyResultId: number, direction: -1 | 1): void {
+    const index = goal.key_results.findIndex((kr) => kr.id === keyResultId);
+    if (index === -1) {
+      return;
+    }
+    if (direction === -1) {
+      const previous = goal.key_results[index - 1];
+      if (previous !== undefined) {
+        handleDropKeyResult(goal, keyResultId, previous.id);
+      }
+      return;
+    }
+    if (index + 1 >= goal.key_results.length) {
+      return;
+    }
+    handleDropKeyResult(goal, keyResultId, goal.key_results[index + 2]?.id ?? null);
   }
 
   function handleDeleteKeyResult(goal: Goal, keyResultId: number): void {
@@ -825,6 +920,9 @@ export function GoalsView(): JSX.Element {
         onUpdateKeyResult={(keyResultId, patch) => handleUpdateKeyResult(goal, keyResultId, patch)}
         onMoveKeyResult={(keyResultId, direction) =>
           handleMoveKeyResult(goal, keyResultId, direction)
+        }
+        onDropKeyResult={(keyResultId, beforeId) =>
+          handleDropKeyResult(goal, keyResultId, beforeId)
         }
         onDeleteKeyResult={(keyResultId) => handleDeleteKeyResult(goal, keyResultId)}
         onRetro={(retro) => handleRetro(goal, retro)}
