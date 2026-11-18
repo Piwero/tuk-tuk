@@ -5,7 +5,7 @@ Spec: #427. Mockups: `today`, `mobile-today`, `task-detail`, `focus`,
 clock 2026-11-03 09:41) through Playwright at 1440×900 (desktop) and
 390×844 (phone, touch), in light and dark, and with
 `prefers-reduced-motion: reduce`. Checks were made by DOM and computed-style
-measurement wherever possible; screenshots were compared to the mockups by eye.
+measurement. **The retaken screenshots were not compared to the mockups by eye**: no image tooling was available to downscale them, so pixel-level fidelity still needs a human look.
 
 Refreshed screenshots: `docs/assets/screenshots/{today,mobile-today,task-detail,focus,goals,habits}.png`.
 
@@ -13,12 +13,12 @@ Refreshed screenshots: `docs/assets/screenshots/{today,mobile-today,task-detail,
 
 | Screen | Light desktop | Dark desktop | Light phone | Dark phone | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Today | ✓ | ✓ | ✓ | ✓ | Schedule rows fixed (see below); day rail measured |
-| Task detail | ✓ | ✓ | ✓ (sheet) | ✓ (sheet) | Sheet motion covered by the global reduced-motion rule (not separately measured) |
-| Focus | ✓ | ✓ | ✓ | ✓ | No change needed |
-| Goals | ✓ | ✓ | ✓ | ✓ | Obstacle / If-Then Plan fixed |
-| Habits | ✓ | ✓ | ✓ | ✓ | Heat strip restored |
-| More sheet | – | – | ✓ | ✓ | Reduced motion: `animation: none`, `transition: 0s` |
+| Today | ✓ | ✓ | ✓ | – | Schedule rows fixed (see below); day rail measured |
+| Task detail | ✓ | ✓ | ✓ (sheet) | – | Sheet reduced motion **not measured** (only the More sheet was) |
+| Focus | ✓ | ✓ | ✓ | – | No change needed |
+| Goals | ✓ | ✓ | ✓ | – | Obstacle / If-Then Plan fixed |
+| Habits | ✓ | ✓ | ✓ | – | Heat strip restored |
+| More sheet | – | – | ✓ | – | Reduced motion: `animation: none`, `transition: 0s` |
 
 ## Measured risks
 
@@ -60,3 +60,9 @@ Refreshed screenshots: `docs/assets/screenshots/{today,mobile-today,task-detail,
   them anchors is a cheap follow-up if long-press "open in new tab" is wanted.
 - **Mockup illustration details** (placeholder avatars, sample copy, exact sample
   data) differ from the seeded data; not product differences.
+
+## Not done
+
+- Dark-phone screenshots (marked `–` above).
+- Reduced-motion check of the Task detail sheet and of popovers.
+- Eye comparison of the retaken screenshots against the mockups.
