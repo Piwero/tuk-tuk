@@ -61,6 +61,8 @@ export interface TaskRowProps {
    * chip's accessible name and title always carry the full date. Defaults to
    * "absolute" — List, Search, Kanban and completed views. */
   dateContext?: ScheduleContext;
+  leadingTime?: string;
+  trailingDuration?: string | null;
   showTags: boolean;
   showCheckProgress: boolean;
   /** Whether a long-overdue date settles into ordinary text (#280).
@@ -118,6 +120,8 @@ export function TaskRow({
   list,
   showDate,
   dateContext = "absolute",
+  leadingTime,
+  trailingDuration,
   showTags,
   showCheckProgress,
   settlesOverdue = true,
@@ -226,6 +230,11 @@ export function TaskRow({
       onTouchCancel={reveal.onTouchCancel}
       onClick={reveal.onClick}
     >
+      {leadingTime !== undefined && (
+        <span className="task-row-time" aria-label={`Starts at ${leadingTime}`}>
+          {leadingTime}
+        </span>
+      )}
       <div className="task-row-head">
         {selectable && selected && <span className="visually-hidden">{task.title} selected</span>}
         <label>
@@ -342,6 +351,11 @@ export function TaskRow({
           </span>
         )}
       </div>
+      {trailingDuration != null && (
+        <span className="task-row-duration" aria-label={`${trailingDuration} planned`}>
+          {trailingDuration}
+        </span>
+      )}
     </li>
   );
 }

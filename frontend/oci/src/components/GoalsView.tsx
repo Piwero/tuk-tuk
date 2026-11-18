@@ -20,6 +20,9 @@ import {
   type KeyResultSource,
   type Task,
 } from "../api";
+import { localDayOf } from "../dates";
+import { goalPace } from "../goalPace";
+import { goalPaceDelta, goalPaceVerdict, goalWindowLabel, goalWindowRange } from "../goalWindow";
 import { useLongPressReveal } from "../longPressReveal";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
@@ -293,6 +296,52 @@ function KeyResultRow({
   );
 }
 
+/** Score on a bar; while the Goal is active a marker shows where today falls
+ * in the window and a verdict states how far ahead of or behind pace it is.
+ * An unmeasured Goal (no Key Results) and a settled one carry no pace (ADR 0012). */
+function GoalScore({ goal }: { goal: Goal }): JSX.Element {
+  const today = localDayOf(new Date());
+  const delta =
+    goal.status === "active"
+      ? goalPaceDelta(goal.score, goal.start_date, goal.end_date, today)
+      : null;
+  const verdict = goalPaceVerdict(delta);
+  return (
+    <div className="goal-score-block">
+      {goal.score === null ? (
+        <p className="goal-score-unmeasured">No Key Results yet — unmeasured.</p>
+      ) : (
+        <Hint hintKey="score">
+          <div className="goal-score" tabIndex={0}>
+            <p>Score: {Math.round(goal.score * 100)}%</p>
+            <div className="goal-score-track">
+              <div
+                className="goal-score-bar"
+                role="progressbar"
+                aria-label={`${goal.title} Score`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(goal.score * 100)}
+                style={{ ["--goal-score-fill" as string]: `${Math.round(goal.score * 100)}%` }}
+              />
+              {delta !== null && (
+                <span
+                  className="goal-pace-marker"
+                  aria-label={`Today's pace: ${Math.round((goalPace(goal.start_date, goal.end_date, today) ?? 0) * 100)}%`}
+                  style={{
+                    ["--goal-pace" as string]: `${(goalPace(goal.start_date, goal.end_date, today) ?? 0) * 100}%`,
+                  }}
+                />
+              )}
+            </div>
+            {verdict !== null && <p className="goal-pace-verdict">{verdict}</p>}
+          </div>
+        </Hint>
+      )}
+    </div>
+  );
+}
+
 /** A Goal's Key Results: list with progress, add form, and per-row edit /
  * reorder / delete. Automatic sources (habit_checkins, task_count) render
  * their value read-only (ADR 0012) — only "manual" Key Results get an
@@ -321,15 +370,6 @@ function KeyResultsPanel({
 
   return (
     <div className="key-results" aria-label={`${goal.title} key results`}>
-      {goal.score !== null ? (
-        <Hint hintKey="score">
-          <p className="goal-score" tabIndex={0}>
-            Score: {Math.round(goal.score * 100)}%
-          </p>
-        </Hint>
-      ) : (
-        <p className="goal-score-unmeasured">No Key Results yet — unmeasured.</p>
-      )}
       {goal.key_results.length > 0 && (
         <Hint hintKey="key-result">
           <ul aria-label="Key results" tabIndex={0}>
@@ -455,10 +495,7 @@ function KeyResultsPanel({
 function groupByWindow(goals: Goal[]): [string, Goal[]][] {
   const groups = new Map<string, Goal[]>();
   for (const goal of goals) {
-    const key =
-      goal.start_date === null || goal.end_date === null
-        ? "No window"
-        : `${goal.start_date} – ${goal.end_date}`;
+    const key = goalWindowRange(goal.start_date, goal.end_date);
     const group = groups.get(key);
     if (group) {
       group.push(goal);
@@ -529,20 +566,20 @@ function GoalCard({
       </h3>
       {goal.description !== "" && <p>{goal.description}</p>}
       <p className="goal-window">
-        {goal.start_date === null || goal.end_date === null
-          ? "No window"
-          : `${goal.start_date} – ${goal.end_date}`}
+        {goalWindowLabel(goal.start_date, goal.end_date, localDayOf(new Date()))}
       </p>
       {goal.obstacle !== null && (
         <p className="goal-obstacle">
           <strong>Obstacle:</strong> {goal.obstacle}
+          {goal.if_then_plan !== null && <> {goal.if_then_plan}</>}
         </p>
       )}
-      {goal.if_then_plan !== null && (
+      {goal.obstacle === null && goal.if_then_plan !== null && (
         <p className="goal-if-then">
           <strong>If-Then Plan:</strong> {goal.if_then_plan}
         </p>
       )}
+      <GoalScore goal={goal} />
       <KeyResultsPanel
         goal={goal}
         habits={habits}
