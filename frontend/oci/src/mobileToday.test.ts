@@ -74,5 +74,8 @@ describe("mobile Today header (#460)", () => {
     const body = rule(mobile, /\.view-menu-popover/);
     expect(body).toMatch(/position:\s*fixed/);
     expect(body).toMatch(/bottom:\s*0/);
+    expect(rule(mobile, /\.main-chrome:has\(\.view-menu-popover\)/)).toMatch(
+      /z-index:\s*var\(--z-modal\)/,
+    );
   });
 });

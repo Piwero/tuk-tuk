@@ -280,7 +280,7 @@ describe("The Folder view", () => {
     if (main === null) {
       throw new Error("main not found");
     }
-    await user.click(within(main).getByRole("button", { name: "Backend" }));
+    await user.click(await within(main).findByRole("button", { name: "Backend" }));
 
     // The List belongs to Work, so its own header now shows the breadcrumb.
     const heading = await screen.findByRole("heading", { level: 1 });

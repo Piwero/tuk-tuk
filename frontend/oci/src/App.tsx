@@ -81,13 +81,12 @@ import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
-import { IconButton } from "./components/IconButton";
 import { AssistantPage } from "./components/AssistantPage";
 import { VoiceProvider } from "./voice/VoiceProvider";
 import { VoiceOverlay } from "./components/VoiceOverlay";
 import { KanbanView } from "./components/KanbanView";
-import { MobileQuickAddButton } from "./components/MobileQuickAddButton";
 import { MobileTabBar } from "./components/MobileTabBar";
+import { MoreSheet } from "./components/MoreSheet";
 import { Modal } from "./components/Modal";
 import { QuickAdd } from "./components/QuickAdd";
 import { QuickAddDialog } from "./components/QuickAddDialog";
@@ -102,6 +101,7 @@ import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
+import { EmptyState, LoadError, SkeletonRows } from "./components/TaskViewState";
 import { ToastStack } from "./components/ToastStack";
 
 /** What the main pane shows: one List, one Tag, one Folder (its Tasks across
@@ -127,6 +127,15 @@ type View =
 /** A stable identity for a View, for use as an effect dependency: two Views
  * with the same key show the same screen. Kept next to `View` so the encoding
  * moves with the type it encodes. */
+/** Where a Task view's load stands (#441). */
+type TaskLoadStatus = "loading" | "ready" | "error";
+
+/** What a Task view load asked for — a load only describes the view while
+ * this still matches. */
+function taskLoadKeyOf(view: View, completedMode: boolean, allFilters: AllFilters): string {
+  return JSON.stringify([view, completedMode, view?.kind === "smart" ? allFilters : null]);
+}
+
 function keyOfView(view: View): string {
   if (view === null) {
     return "";
@@ -253,6 +262,15 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // the converted Event disappears and the new Task appears immediately.
   const [calendarRefresh, setCalendarRefresh] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
+  // Whether the current Task view's Tasks have loaded (#441), keyed by what
+  // was asked for, so a view that hasn't loaded yet is never shown as empty
+  // and a background refresh of the same view doesn't flash placeholders.
+  const [taskLoad, setTaskLoad] = useState<{ key: string; status: TaskLoadStatus }>({
+    key: "",
+    status: "loading",
+  });
+  const taskLoadKeyRef = useRef("");
+  const taskLoadSeqRef = useRef(0);
   const tasksRef = useRef<Task[]>([]);
   tasksRef.current = tasks;
   // Every open Task across every List, held once and kept current as Tasks
@@ -273,22 +291,20 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // state above. The resolved `data-theme` is (re)applied on every change,
   // and "system" keeps a live subscription to the OS setting.
   const [themePreference, setThemePreference] = useState<ThemePreference>(loadThemePreference);
-  // Mobile only: below the breakpoint the sidebar is off-canvas and this
-  // slides it over the content. Ignored by the desktop layout.
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Mobile only (#462): the More sheet that replaced the navigation drawer.
+  // Ignored by the desktop layout, where the tab bar is hidden.
+  const [moreOpen, setMoreOpen] = useState(false);
   // `<main>` is the app's real scroll region (`.app` itself is
-  // `overflow: hidden` — see index.css), so locking `document.body` would
-  // touch an element that was never scrolling in the first place. Locking
-  // `main`'s own overflow instead stops a drag over the drawer scrim from
-  // moving the list underneath, and — unlike a `position: fixed` body
-  // trick — needs no manual scroll-position restore on close, since
-  // `overflow: hidden` alone preserves `scrollTop`.
+  // `overflow: hidden`), so the sheet locks `main`'s own overflow to stop a
+  // drag over its scrim from moving the list underneath (#290); `overflow:
+  // hidden` alone preserves `scrollTop`.
   const mainRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const main = mainRef.current;
     if (main === null) return;
-    main.style.overflow = drawerOpen ? "hidden" : "";
-  }, [drawerOpen]);
+    main.style.overflow = moreOpen ? "hidden" : "";
+  }, [moreOpen]);
+  const closeMore = useCallback(() => setMoreOpen(false), []);
   // Whether the Stand-up nav item/route is shown (issue #140) — fetched once
   // at load, defaulting to true so the nav item doesn't flash away on a slow
   // network before the real value arrives.
@@ -391,7 +407,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       suppressNextSyncRef.current = true;
       const route = containerForPath(window.location.pathname);
       setCompletedMode(route?.kind === "list" && route.mode === "completed");
-      setDrawerOpen(false);
+      setMoreOpen(false);
       setView(route ?? (kind !== null ? viewForStaticKind(kind, window.location.pathname) : null));
     }
     window.addEventListener("popstate", onPopState);
@@ -590,34 +606,52 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     ) {
       return;
     }
-    if (completedMode) {
-      const scope = view.kind === "list" ? view.id : null;
-      const [completedPage, occurrencePage] = await Promise.all([
-        fetchCompletedTasks(scope),
-        fetchCompletedOccurrences(scope),
-      ]);
-      setTasks(completedPage.items);
-      setOccurrences(occurrencePage.items);
-    } else if (view.kind === "smart") {
-      setTasks((await fetchSmartTasks(view.view, localDayOf(new Date()), allFilters)).items);
-    } else if (view.kind === "search") {
-      // An empty query shows nothing — without even asking the API.
-      setTasks(
-        view.search.query.trim() === ""
-          ? []
-          : (await fetchSearchTasks(view.search.query, view.search)).items,
-      );
-    } else if (view.kind === "list") {
-      setTasks((await fetchTasks(view.id)).items);
-    } else if (view.kind === "folder") {
-      // No endpoint spans multiple Lists — fetch each member List's Tasks
-      // and flatten. Archived Lists stay out of the Folder view, same as
-      // they stay out of the sidebar's Folder contents.
-      const members = lists.filter((list) => list.folder_id === view.id && !list.is_archived);
-      const pages = await Promise.all(members.map((list) => fetchTasks(list.id)));
-      setTasks(pages.flatMap((page) => page.items));
-    } else {
-      setTasks((await fetchTasksByTag(view.id)).items);
+    const key = taskLoadKeyOf(view, completedMode, allFilters);
+    const seq = ++taskLoadSeqRef.current;
+    if (taskLoadKeyRef.current !== key) {
+      taskLoadKeyRef.current = key;
+      setTaskLoad({ key, status: "loading" });
+    }
+    // Responses for a view the user has since left are dropped.
+    const current = (): boolean => seq === taskLoadSeqRef.current;
+    const setTasksIfCurrent = (next: Task[]): void => {
+      if (current()) setTasks(next);
+    };
+    try {
+      if (completedMode) {
+        const scope = view.kind === "list" ? view.id : null;
+        const [completedPage, occurrencePage] = await Promise.all([
+          fetchCompletedTasks(scope),
+          fetchCompletedOccurrences(scope),
+        ]);
+        setTasksIfCurrent(completedPage.items);
+        if (current()) setOccurrences(occurrencePage.items);
+      } else if (view.kind === "smart") {
+        setTasksIfCurrent(
+          (await fetchSmartTasks(view.view, localDayOf(new Date()), allFilters)).items,
+        );
+      } else if (view.kind === "search") {
+        // An empty query shows nothing — without even asking the API.
+        setTasksIfCurrent(
+          view.search.query.trim() === ""
+            ? []
+            : (await fetchSearchTasks(view.search.query, view.search)).items,
+        );
+      } else if (view.kind === "list") {
+        setTasksIfCurrent((await fetchTasks(view.id)).items);
+      } else if (view.kind === "folder") {
+        // No endpoint spans multiple Lists — fetch each member List's Tasks
+        // and flatten. Archived Lists stay out of the Folder view, same as
+        // they stay out of the sidebar's Folder contents.
+        const members = lists.filter((list) => list.folder_id === view.id && !list.is_archived);
+        const pages = await Promise.all(members.map((list) => fetchTasks(list.id)));
+        setTasksIfCurrent(pages.flatMap((page) => page.items));
+      } else {
+        setTasksIfCurrent((await fetchTasksByTag(view.id)).items);
+      }
+      if (current()) setTaskLoad({ key, status: "ready" });
+    } catch {
+      if (current()) setTaskLoad({ key, status: "error" });
     }
   }, [view, completedMode, lists, allFilters]);
 
@@ -686,6 +720,61 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   const showHideCompletedToggle =
     !completedMode && (selectedList !== null || selectedTag !== null || selectedFolder !== null);
   // The completed view exists per List and for All (not Today / Next 7 Days).
+  // The Task view's load state (#441). Not-yet-loaded reads as loading, so an
+  // unloaded view is never mistaken for an empty one.
+  const taskViewStatus: TaskLoadStatus =
+    taskLoad.key === taskLoadKeyOf(view, completedMode, allFilters) ? taskLoad.status : "loading";
+  const taskViewName =
+    selectedList !== null
+      ? selectedList.name
+      : selectedFolder !== null
+        ? selectedFolder.name
+        : selectedTag !== null
+          ? `#${selectedTag.name}`
+          : smartView !== null
+            ? SMART_LABELS[smartView]
+            : "tasks";
+  // A loaded view with nothing to show gets a real empty state. Kanban keeps
+  // its columns (they're where Tasks get added), a List with Sections keeps
+  // them, and the Completed view says its own nothing.
+  const emptyTaskView: { title: string; description: string } | null =
+    completedMode || visibleTasks.length > 0 || view?.kind === "search"
+      ? null
+      : selectedList !== null
+        ? selectedList.view_mode === "kanban" || sections.length > 0
+          ? null
+          : {
+              title: `${selectedList.name} is empty`,
+              description: `Tasks you add to ${selectedList.name} show up here.`,
+            }
+        : selectedTag !== null
+          ? {
+              title: `No tasks tagged ${selectedTag.name}`,
+              description: `Tag a Task with #${selectedTag.name} to collect it here.`,
+            }
+          : selectedFolder !== null
+            ? folderMembers.length === 0
+              ? null
+              : {
+                  title: `Nothing in ${selectedFolder.name}`,
+                  description: `Tasks in this folder’s lists show up here.`,
+                }
+            : smartView === "today"
+              ? {
+                  title: "Nothing due today",
+                  description: "Tasks due today, and anything overdue, show up here.",
+                }
+              : smartView === "next7"
+                ? {
+                    title: "Nothing in the next 7 days",
+                    description: "Tasks due this week show up here, day by day.",
+                  }
+                : smartView === "all"
+                  ? {
+                      title: "No open tasks",
+                      description: "Every open Task across your lists shows up here.",
+                    }
+                  : null;
   const hasCompletedView = selectedList !== null || smartView === "all";
 
   // One queue for the whole app: undo toasts for delete/complete (#155) and
@@ -740,7 +829,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
 
   function switchView(next: View): void {
     setCompletedMode(false);
-    setDrawerOpen(false);
+    setMoreOpen(false);
     setView(
       next?.kind === "list"
         ? {
@@ -753,7 +842,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
 
   /** Keeps `view.mode` (and so /calendar/<mode> — see the sync effect above)
    * matching CalendarView's own internal mode state, without touching
-   * completedMode/drawerOpen the way a full switchView would. */
+   * completedMode/moreOpen the way a full switchView would. */
   const handleCalendarModeChange = useCallback((mode: CalendarMode): void => {
     setView((current) => (current?.kind === "calendar" ? { kind: "calendar", mode } : current));
   }, []);
@@ -1009,15 +1098,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   const focusSelected = view?.kind === "focus" || view?.kind === "focus-stats";
   const settingsSelected = view?.kind === "settings";
   const searchSelected = view?.kind === "search";
-  const tasksSelected =
-    !calendarSelected &&
-    !goalsSelected &&
-    !habitsSelected &&
-    !standupSelected &&
-    !assistantSelected &&
-    !focusSelected &&
-    !settingsSelected &&
-    !searchSelected;
 
   // The List the open Task belongs to, shown as a breadcrumb in the mobile
   // sheet (#170) — Task detail can be reached from any view (List, Tag,
@@ -1206,7 +1286,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               "app",
               selectedTask === null ? "" : "with-detail",
               sidebarCollapsed ? "sidebar-collapsed" : "",
-              drawerOpen ? "drawer-open" : "",
             ]
               .filter((name) => name !== "")
               .join(" ")}
@@ -1250,7 +1329,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               onToggleCollapsed={toggleSidebar}
               resolvedTheme={resolveThemePreference(themePreference)}
               onToggleTheme={toggleTheme}
-              onCloseDrawer={() => setDrawerOpen(false)}
               onLogout={onLogout}
               onOpenPalette={() => setPaletteOpen(true)}
               onListsChanged={setLists}
@@ -1267,27 +1345,12 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 );
               }}
             />
-            {drawerOpen && (
-              <div
-                className="drawer-scrim"
-                aria-hidden="true"
-                onClick={() => setDrawerOpen(false)}
-              />
-            )}
             <main ref={mainRef}>
               {/* One cell for the view, one for the hint strip: the cell grows
               into spare height so the strip sits at the foot (issue #434). */}
               <div className={showDayRail ? "main-content with-day-rail" : "main-content"}>
                 <div className="main-chrome">
                   <div className="main-header">
-                    <IconButton
-                      icon="menu"
-                      size={20}
-                      label="Show navigation"
-                      className="drawer-toggle"
-                      aria-expanded={drawerOpen}
-                      onClick={() => setDrawerOpen((current) => !current)}
-                    />
                     <h1>
                       {selectedList !== null ? (
                         // A List filed in a Folder shows "Folder / List" (#126): the
@@ -1491,6 +1554,17 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     />
                   </Modal>
                 )}
+                {/* A loaded Task view with nothing in it (#441); List and
+                Folder views still render beneath it, keeping their Add
+                Section control and List headings. */}
+                {taskViewStatus === "ready" && emptyTaskView !== null && (
+                  <EmptyState
+                    title={emptyTaskView.title}
+                    description={emptyTaskView.description}
+                    actionLabel="New task"
+                    onAction={() => setQuickAddOpen(true)}
+                  />
+                )}
                 {view?.kind === "settings" ? (
                   <SettingsView
                     googleOAuthError={googleOAuthError}
@@ -1535,6 +1609,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 ) : view?.kind === "search" ? (
                   <SearchView
                     tasks={tasks}
+                    loadStatus={taskViewStatus}
+                    onRetry={() => void loadTasks()}
                     lists={lists}
                     tags={tags}
                     state={view.search}
@@ -1542,6 +1618,10 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     onChanged={changeTasksAndRecompute}
                     onSelect={setSelectedTaskId}
                   />
+                ) : taskViewStatus === "loading" ? (
+                  <SkeletonRows />
+                ) : taskViewStatus === "error" ? (
+                  <LoadError what={taskViewName} onRetry={() => void loadTasks()} />
                 ) : selectedFolder !== null ? (
                   <FolderView
                     folder={selectedFolder}
@@ -1633,19 +1713,56 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               <ShortcutHints />
             </main>
             <MobileTabBar
-              tasksSelected={tasksSelected}
+              todaySelected={smartView === "today"}
               calendarSelected={calendarSelected}
               calendarEnabled={sectionSettings.calendar}
               habitsSelected={habitsSelected}
               habitsEnabled={sectionSettings.habits}
-              focusSelected={focusSelected}
-              focusEnabled={sectionSettings.focus}
-              onSelectTasks={() => switchView({ kind: "smart", view: "today" })}
+              moreSelected={
+                view !== null && smartView !== "today" && !calendarSelected && !habitsSelected
+              }
+              moreOpen={moreOpen}
+              onSelectToday={() => switchView({ kind: "smart", view: "today" })}
               onSelectCalendar={() => switchView({ kind: "calendar", mode: "day" })}
+              onQuickAdd={() => {
+                setMoreOpen(false);
+                setQuickAddOpen(true);
+              }}
               onSelectHabits={() => switchView({ kind: "habits" })}
-              onSelectFocus={() => switchView({ kind: "focus" })}
+              onToggleMore={() => setMoreOpen((current) => !current)}
             />
-            <MobileQuickAddButton onClick={() => setQuickAddOpen(true)} />
+            {moreOpen && (
+              <MoreSheet
+                lists={lists}
+                folders={folders}
+                tags={tags}
+                selectedListId={view?.kind === "list" ? view.id : null}
+                selectedFolderId={view?.kind === "folder" ? view.id : null}
+                selectedTagId={view?.kind === "tag" ? view.id : null}
+                selectedSmart={smartView}
+                goalsEnabled={sectionSettings.goals}
+                goalsSelected={goalsSelected}
+                focusEnabled={sectionSettings.focus}
+                focusSelected={focusSelected}
+                standupEnabled={standupEnabled}
+                standupSelected={standupSelected}
+                assistantAvailable={assistantAvailable}
+                assistantSelected={assistantSelected}
+                searchSelected={searchSelected}
+                settingsSelected={settingsSelected}
+                onClose={closeMore}
+                onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
+                onSelectList={(listId) => switchView({ kind: "list", id: listId })}
+                onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
+                onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
+                onSelectGoals={() => switchView({ kind: "goals" })}
+                onSelectFocus={() => switchView({ kind: "focus" })}
+                onSelectStandup={() => switchView({ kind: "standup" })}
+                onSelectAssistant={() => switchView({ kind: "assistant" })}
+                onSelectSearch={() => switchView({ kind: "search", search: BLANK_SEARCH_STATE })}
+                onSelectSettings={() => switchView({ kind: "settings" })}
+              />
+            )}
             {selectedTask !== null && (
               <div className="task-detail-backdrop" aria-hidden="true" onClick={closeTaskDetail} />
             )}
