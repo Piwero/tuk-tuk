@@ -11,6 +11,89 @@ async function openGoals(): Promise<void> {
 }
 
 describe("Goals", () => {
+  it("shows readable window, days left, Score and today's pace with the plan", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 6, 3, 12));
+    const api = installFakeApi({
+      goals: [
+        fakeGoal("Ship", {
+          start_date: "2026-07-01",
+          end_date: "2026-07-05",
+          is_focused: true,
+          obstacle: "Interruptions",
+          if_then_plan: "If interrupted, then I will close chat.",
+          key_results: [fakeKeyResult(1, "Build", { target_value: 100, current_value: 25 })],
+        }),
+      ],
+    });
+    try {
+      render(<App />);
+      await openGoals();
+      expect(
+        await screen.findByText("Jul 1, 2026 – Jul 5, 2026 · 2 days left"),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("progressbar", { name: "Ship Score" })).toHaveAttribute(
+        "aria-valuenow",
+        "25",
+      );
+      expect(screen.getByLabelText("Today's pace: 50%")).toBeInTheDocument();
+      expect(screen.getByText("25 percentage points behind pace")).toBeInTheDocument();
+      expect(screen.getByText("Focused")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          (_, el) =>
+            el?.className === "goal-obstacle" &&
+            el.textContent === "Obstacle: Interruptions If interrupted, then I will close chat.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/2026-07-/)).not.toBeInTheDocument();
+      expect(api.requests.some((r) => r.method === "GET" && r.url === "/api/v1/goals")).toBe(true);
+      expect(api.requests.filter((r) => r.method !== "GET")).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("shows an unmeasured Goal with no pace verdict", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 6, 3, 12));
+    installFakeApi({
+      goals: [fakeGoal("Ship", { start_date: "2026-07-01", end_date: "2026-07-05" })],
+    });
+    try {
+      render(<App />);
+      await openGoals();
+      expect(await screen.findByText("No Key Results yet — unmeasured.")).toBeInTheDocument();
+      expect(screen.queryByRole("progressbar", { name: "Ship Score" })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Today's pace/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/pace/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows a settled Goal's final score with no pace marker", async () => {
+    installFakeApi({
+      goals: [
+        fakeGoal("Ship", {
+          status: "closed",
+          final_score: 0.75,
+          start_date: "2026-01-01",
+          end_date: "2026-03-31",
+          key_results: [fakeKeyResult(1, "Build", { target_value: 100, current_value: 75 })],
+        }),
+      ],
+    });
+    render(<App />);
+    await openGoals();
+    expect(await screen.findByText("Final score: 75%")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Ship Score" })).toHaveAttribute(
+      "aria-valuenow",
+      "75",
+    );
+    expect(screen.queryByLabelText(/Today's pace/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ahead of pace|behind pace|On pace/)).not.toBeInTheDocument();
+  });
+
   it("opens from the sidebar and lists Goals", async () => {
     const api = installFakeApi();
     render(<App />);
@@ -373,8 +456,8 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    const q1Section = await screen.findByRole("region", { name: "2099-01-01 – 2099-03-31" });
-    const q2Section = await screen.findByRole("region", { name: "2099-04-01 – 2099-06-30" });
+    const q1Section = await screen.findByRole("region", { name: "Jan 1, 2099 – Mar 31, 2099" });
+    const q2Section = await screen.findByRole("region", { name: "Apr 1, 2099 – Jun 30, 2099" });
     expect(within(q1Section).getByText("Ship v1")).toBeInTheDocument();
     expect(within(q2Section).getByText("Ship v2")).toBeInTheDocument();
   });
