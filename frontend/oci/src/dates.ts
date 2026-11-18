@@ -87,7 +87,7 @@ export function zonedTime(iso: string, timeZone: string | null): string {
       timeZone: timeZone ?? undefined,
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
     zonedTimeFormats.set(key, format);
   }
@@ -335,7 +335,7 @@ const FORMATTERS: { [S in Exclude<DateStyle, "dateTime">]: Intl.DateTimeFormat }
     month: "2-digit",
     year: "2-digit",
   }),
-  time: new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+  time: new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
 };
 
 /** A Date rendered in a named style — the app's one formatting function. */

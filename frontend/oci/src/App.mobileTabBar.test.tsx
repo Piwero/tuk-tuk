@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -103,8 +103,12 @@ describe("Mobile bottom tab bar (issues #170, #462)", () => {
     render(<App />);
     await ready();
 
-    expect(within(tabBar()).queryByRole("button", { name: "Calendar" })).toBeNull();
-    expect(within(tabBar()).queryByRole("button", { name: "Habits" })).toBeNull();
+    // Section settings load independently of the task list, so wait for
+    // them to apply rather than asserting on the first render.
+    await waitFor(() => {
+      expect(within(tabBar()).queryByRole("button", { name: "Calendar" })).toBeNull();
+      expect(within(tabBar()).queryByRole("button", { name: "Habits" })).toBeNull();
+    });
     expect(getTab("More")).toBeInTheDocument();
   });
 
