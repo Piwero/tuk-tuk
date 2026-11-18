@@ -289,27 +289,30 @@ const NON_INTERACTIVE_EXACT = new Set([
   ".modal-header",
   ".modal-header h2",
   ".modal-header > .icon-button-wrap",
-  ".filter-menu",
-  ".filter-menu-trigger-row",
-  ".filter-menu-popover",
+  ".view-menu",
+  ".view-menu-popover",
+  ".view-menu-popover label",
+  ".view-menu-filters",
+  ".view-menu-filters legend",
+  ".view-menu-count",
 ]);
 
 /** The main header renders a couple of its own controls (breadcrumb, view
  * toggle, completed toggle) as top-level, unscoped classnames rather than
  * under a `.main-header-` prefix or a `.main-header X` descendant selector
- * — so, unlike Modal (`.modal-*`) and the filter menu (`.filter-menu-*`),
+ * — so, unlike Modal (`.modal-*`) and the View menu (`.view-menu-*`),
  * they can't be discovered generically from the CSS text alone and are
  * listed by hand, the same way the production touch-target block below
  * enumerates its own concrete selectors rather than deriving containment. */
 const MAIN_HEADER_ANCHORS = [".view-toggle", ".completed-toggle", ".breadcrumb-folder"];
 
 /** Every selector on the three surfaces #286 calls out — main header,
- * filter row (`.view-controls`, plus its own `.filter-menu-*`/filter chip
+ * filter row (`.view-controls`, plus its own `.view-menu-*`
  * children), and any Modal — that denotes a real interactive control. */
 /** A state pseudo (`:hover`, `:focus`…) tacked onto an already-counted base
  * selector names the same control, not a second one — skip it so the
  * offender list reports one entry per control, not one per rule. */
-const STATE_PSEUDO = /:(hover|focus|focus-visible|active|disabled)(\([^)]*\))?$/;
+const STATE_PSEUDO = /(:(hover|focus|focus-visible|active|disabled)(\([^)]*\))?|\.is-filtered)$/;
 
 function mobileSurfaceControls(): string[] {
   const found = new Set<string>();
@@ -318,9 +321,9 @@ function mobileSurfaceControls(): string[] {
       if (NON_INTERACTIVE_EXACT.has(selector) || STATE_PSEUDO.test(selector)) continue;
 
       const isModalFamily = /^\.modal(?:[.\-:]|$)/.test(selector);
-      const isFilterMenuFamily = /^\.filter-menu(?:[.\-:]|$)/.test(selector);
+      const isViewMenuFamily = /^\.view-menu(?:[.\-:]|$)/.test(selector);
       const isAnchor = MAIN_HEADER_ANCHORS.includes(selector);
-      if (isModalFamily || isFilterMenuFamily || isAnchor) {
+      if (isModalFamily || isViewMenuFamily || isAnchor) {
         found.add(selector);
         continue;
       }
@@ -549,7 +552,7 @@ describe("tap-target floor on mobile task-listing surfaces (issue #286)", () => 
       ".view-toggle",
       ".completed-toggle",
       ".view-controls select",
-      ".filter-menu-button",
+      ".view-menu-button",
     ]) {
       const size = declaredSize(selector, GRID_BAND);
       expect(size, `${selector} loses the floor in the grid band`).toBeGreaterThanOrEqual(

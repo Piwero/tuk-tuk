@@ -164,6 +164,7 @@ describe("Task dates in list views", () => {
     render(<App />);
     await screen.findByRole("button", { name: "Open details for No date" });
 
+    fireEvent.click(screen.getByRole("button", { name: /^View/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Sort by" }), {
       target: { value: "date" },
     });
@@ -192,6 +193,7 @@ describe("Task dates in list views", () => {
     render(<App />);
     await screen.findByRole("button", { name: "Open details for Slipped" });
 
+    fireEvent.click(screen.getByRole("button", { name: /^View/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
       target: { value: "date" },
     });
@@ -222,6 +224,7 @@ describe("Task dates in list views", () => {
     render(<App />);
     await screen.findByRole("button", { name: "Open details for Ancient" });
 
+    fireEvent.click(screen.getByRole("button", { name: /^View/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
       target: { value: "date" },
     });
