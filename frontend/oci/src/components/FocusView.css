@@ -389,4 +389,152 @@
     width: 24px;
     height: 24px;
   }
+  /* Mode switch, length presets and Timers presets: wrapping button rows. */
+  .focus-mode,
+  .focus-presets,
+  .focus-timer-presets {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .focus-timer-preset {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+  .focus-mode [aria-pressed="true"],
+  .focus-presets [aria-pressed="true"] {
+    border-color: var(--focus-accent);
+    background: var(--focus-soft);
+    color: var(--focus-accent);
+  }
+  /* The linked Task or Habit, a headline under the clock; its popover
+   swaps or clears the link. */
+  .focus-headline {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .focus-headline-button {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+  }
+  .focus-link-popover {
+    position: absolute;
+    top: 100%;
+    z-index: 10;
+    display: flex;
+    align-items: end;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-md);
+  }
+  /* Side panel: today's Tasks and the totals. */
+  .focus-today,
+  .focus-totals {
+    padding: var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    background: var(--surface-card);
+  }
+  .focus-today h3 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+  .focus-today-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .focus-today-task {
+    width: 100%;
+    min-height: 32px;
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    text-align: left;
+  }
+  .focus-today-task:hover {
+    background: var(--ink-50);
+  }
+  .focus-today-task[aria-pressed="true"] {
+    border-color: var(--focus-accent);
+    background: var(--focus-soft);
+    color: var(--focus-accent);
+    font-weight: var(--weight-semibold);
+  }
+  .focus-empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+  }
+  .focus-totals dl {
+    display: flex;
+    gap: var(--space-6);
+    margin: 0 0 var(--space-3);
+  }
+  .focus-totals dt {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+  }
+  .focus-totals dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+  }
+  .focus-strip {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    align-items: end;
+    gap: var(--space-1);
+    height: 48px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .focus-strip li {
+    display: flex;
+    align-items: flex-end;
+    height: 100%;
+    border-radius: var(--radius-sm);
+    background: var(--ink-50);
+  }
+  .focus-strip li[aria-current="date"] {
+    outline: 2px solid var(--focus-accent);
+    outline-offset: 1px;
+  }
+  .focus-strip-bar {
+    width: 100%;
+    border-radius: var(--radius-sm);
+    background: var(--focus-accent);
+  }
+  /* Wide windows use the width: the stage and the side panel sit side by
+   side. Narrow ones keep the single column, the panel stacked below. */
+  @media (min-width: 1024px) {
+    .focus-view {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      align-items: start;
+      max-width: none;
+    }
+  }
 }

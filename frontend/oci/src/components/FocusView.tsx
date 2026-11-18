@@ -4,16 +4,20 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   createTimer,
   deleteTimer,
+  fetchFocusStats,
   fetchHabits,
   fetchOpenTasks,
+  fetchSmartTasks,
   fetchTimers,
   updateTimer,
+  type FocusDayTotal,
   type FocusMode,
   type Habit,
   type Task,
   type Timer,
   type TimerCreateInput,
 } from "../api";
+import { addDays, browserTimeZone, localDayOf, shortDayLabel } from "../dates";
 import { linkOf, type FocusLink } from "../focusLink";
 import { useRegisterShortcut } from "../shortcuts";
 import { useFocusRun } from "../focusRunContext";
@@ -28,6 +32,21 @@ function formatClock(ms: number): string {
   const minutes = String(Math.floor(total / 60)).padStart(2, "0");
   const seconds = String(total % 60).padStart(2, "0");
   return `${minutes}:${seconds}`;
+}
+
+/** "45 min", "1 h 45 min". */
+function formatTotal(seconds: number): string {
+  const total = Math.round(seconds / 60);
+  const hours = Math.floor(total / 60);
+  return hours > 0 ? `${hours} h ${total % 60} min` : `${total} min`;
+}
+
+/** The last seven days ending today, with each day's focus seconds. */
+function lastSevenDays(today: string, days: FocusDayTotal[]): FocusDayTotal[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(today, i - 6);
+    return { date, seconds: days.find((day) => day.date === date)?.seconds ?? 0 };
+  });
 }
 
 /** The name of the Task or Habit a run is linked to, for the stage. */
@@ -86,6 +105,8 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
   );
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [todayTasks, setTodayTasks] = useState<Task[]>([]);
+  const [statDays, setStatDays] = useState<FocusDayTotal[] | null>(null);
   const [timers, setTimers] = useState<Timer[]>([]);
   const [timerEditor, setTimerEditor] = useState<
     { mode: "add" } | { mode: "edit"; id: number } | null
@@ -102,6 +123,13 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
   useEffect(() => {
     void loadTimers();
     void fetchOpenTasks().then((page) => setTasks(page.items));
+    const today = localDayOf(new Date());
+    void fetchSmartTasks("today", today, { listId: null, tagId: null, priority: null }).then(
+      (page) => setTodayTasks(page.items.filter((task) => !task.completed)),
+    );
+    void fetchFocusStats(addDays(today, -6), today, browserTimeZone()).then((stats) =>
+      setStatDays(stats.days),
+    );
     void fetchHabits().then((page) => setHabits(page.items.filter((habit) => !habit.is_archived)));
   }, [loadTimers]);
 
@@ -198,7 +226,14 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
       ? Math.min(1, Math.max(0, elapsedMs / running.pomoMs))
       : 0;
   const showDial = running !== null && running.mode === "pomo";
-  const stageTask = running !== null ? linkLabel(running.link, tasks, habits) : null;
+  // Today's Tasks may not all be in the open-Tasks page; look in both.
+  const knownTasks = [...tasks, ...todayTasks.filter((t) => !tasks.some((o) => o.id === t.id))];
+  const stageTask = running !== null ? linkLabel(running.link, knownTasks, habits) : null;
+  const linkedName = linkLabel(link, knownTasks, habits);
+  const today = localDayOf(new Date());
+  const strip = statDays === null ? null : lastSevenDays(today, statDays);
+  const mondayOffset = (new Date().getDay() + 6) % 7;
+  const weekStart = addDays(today, -mondayOffset);
 
   const nextPomo = (pomoStreak % 4) + 1;
   // One line above the clock saying which of the five states the stage is
@@ -247,6 +282,45 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
           )}
           <p className="focus-clock">{formatClock(clockMs)}</p>
         </div>
+        {running === null && pendingBreak === null && (
+          <div className="focus-headline">
+            <button
+              className="btn-quiet focus-headline-button"
+              type="button"
+              aria-expanded={editingLink}
+              aria-label={linkedName !== null ? `Linked: ${linkedName}` : undefined}
+              onClick={() => setEditingLink(!editingLink)}
+            >
+              {linkedName ?? "Link Task or Habit"}
+            </button>
+            {editingLink && (
+              <div className="focus-link-popover">
+                <Hint hintKey="focus-link">
+                  <LinkSelect
+                    label="Link"
+                    className="focus-field"
+                    tasks={knownTasks}
+                    habits={habits}
+                    value={link}
+                    onChange={setLink}
+                  />
+                </Hint>
+                {link !== "" && (
+                  <button
+                    className="btn-quiet"
+                    type="button"
+                    onClick={() => {
+                      setLink("");
+                      setEditingLink(false);
+                    }}
+                  >
+                    Clear link
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {stageTask !== null && (
           <p className="focus-stage-task">
             Focusing on <strong>{stageTask}</strong>
@@ -382,26 +456,6 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                     </button>
                   </Hint>
                 )}
-                <button
-                  className="btn-quiet"
-                  type="button"
-                  aria-expanded={editingLink}
-                  onClick={() => setEditingLink(!editingLink)}
-                >
-                  {linkLabel(link, tasks, habits) ?? "Link Task or Habit"}
-                </button>
-                {editingLink && (
-                  <Hint hintKey="focus-link">
-                    <LinkSelect
-                      label="Link"
-                      className="focus-field"
-                      tasks={tasks}
-                      habits={habits}
-                      value={link}
-                      onChange={setLink}
-                    />
-                  </Hint>
-                )}
               </div>
               <div className="focus-actions">
                 <button
@@ -504,6 +558,66 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
           aside entirely while a session runs or a break is offered. */}
       {running === null && pendingBreak === null && (
         <aside className="focus-aside">
+          <section className="focus-today">
+            <h3>Today</h3>
+            {todayTasks.length === 0 ? (
+              <p className="focus-empty">Nothing due today.</p>
+            ) : (
+              <ul className="focus-today-tasks" aria-label="Today's Tasks">
+                {todayTasks.map((task) => (
+                  <li key={task.id}>
+                    <button
+                      type="button"
+                      className="focus-today-task"
+                      aria-pressed={link === `task:${task.id}`}
+                      onClick={() => setLink(`task:${task.id}`)}
+                    >
+                      {task.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section className="focus-totals" aria-label="Focus totals">
+            <dl>
+              <div>
+                <dt>Today</dt>
+                <dd>{strip === null ? "…" : formatTotal(strip[6]?.seconds ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>This week</dt>
+                <dd>
+                  {strip === null
+                    ? "…"
+                    : formatTotal(
+                        strip
+                          .filter((day) => day.date >= weekStart)
+                          .reduce((sum, day) => sum + day.seconds, 0),
+                      )}
+                </dd>
+              </div>
+            </dl>
+            {strip !== null && (
+              <ul className="focus-strip" aria-label="Last 7 days">
+                {(() => {
+                  const max = Math.max(1, ...strip.map((day) => day.seconds));
+                  return strip.map((day) => (
+                    <li
+                      key={day.date}
+                      aria-label={`${shortDayLabel(day.date)}: ${Math.round(day.seconds / 60)} min`}
+                      aria-current={day.date === today ? "date" : undefined}
+                    >
+                      <span
+                        className="focus-strip-bar"
+                        style={{ height: `${Math.round((day.seconds / max) * 100)}%` }}
+                      />
+                    </li>
+                  ));
+                })()}
+              </ul>
+            )}
+          </section>
           <a
             href="/focus/stats"
             className="focus-stats-link"
