@@ -32,9 +32,15 @@ import {
   type TaskPatch,
 } from "./api";
 import { type CalendarMode } from "./calendar";
-import { clearedSchedule, localDayOf, rescheduledToDay } from "./dates";
+import {
+  clearedSchedule,
+  durationMinutes,
+  formatDate,
+  localDayOf,
+  rescheduledToDay,
+} from "./dates";
 import { FocusRunProvider, useStartPomo } from "./focusRunContext";
-import { type GroupBy, type SortBy } from "./grouping";
+import { groupTodayTasks, type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
   loadHideCompleted,
@@ -1316,6 +1322,24 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                         "tuk-tuk"
                       )}
                     </h1>
+                    {smartView === "today" &&
+                      !completedMode &&
+                      (() => {
+                        const open = visibleTasks.filter((task) => !task.completed);
+                        const minutes =
+                          groupTodayTasks(open, "custom")
+                            .find((group) => group.key === "today-Schedule")
+                            ?.tasks.reduce((sum, task) => sum + (durationMinutes(task) ?? 0), 0) ??
+                          0;
+                        return (
+                          <p className="today-summary">
+                            {formatDate(new Date(), "weekdayLong")} · {open.length} open Tasks
+                            {minutes > 0
+                              ? ` · ${Math.floor(minutes / 60)}h ${minutes % 60}m planned`
+                              : ""}
+                          </p>
+                        );
+                      })()}
                     {selectedList !== null && !completedMode && (
                       <button
                         type="button"
@@ -1550,6 +1574,13 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     viewKey={viewKey}
                     groupBy={groupBy}
                     sortBy={sortBy}
+                    todaySections={smartView === "today" && groupBy === "section"}
+                    scheduleTimeline={
+                      smartView === "today" &&
+                      groupBy === "section" &&
+                      sortBy !== "title" &&
+                      sortBy !== "priority"
+                    }
                     dateContext={
                       smartView === "today" ? "today" : smartView === "next7" ? "week" : "absolute"
                     }

@@ -437,3 +437,24 @@ function contextLabel(
   const weekday = formatDate(due, "weekday");
   return times === "" ? weekday : `${weekday}, ${times}`;
 }
+
+export function durationMinutes(task: Pick<Task, "start_date" | "due_date">): number | null {
+  return task.start_date === null || task.due_date === null
+    ? null
+    : Math.max(
+        0,
+        Math.round(
+          (new Date(task.due_date).getTime() - new Date(task.start_date).getTime()) / 60000,
+        ),
+      );
+}
+
+export function formatDuration(task: Pick<Task, "start_date" | "due_date">): string | null {
+  const minutes = durationMinutes(task);
+  if (minutes === null) return null;
+  return minutes % 60 === 0
+    ? `${minutes / 60}h`
+    : minutes < 60
+      ? `${minutes}m`
+      : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
