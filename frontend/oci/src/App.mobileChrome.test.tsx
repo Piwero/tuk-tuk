@@ -7,8 +7,8 @@ import { App } from "./App";
 import { installFakeApi } from "./test/fakeApi";
 
 // Mobile shell polish (issue #290): the title plus its filter controls pin
-// while the list scrolls, the drawer locks the scroll behind it, and the
-// drawer's close control meets the touch floor. jsdom applies no stylesheet,
+// while the list scrolls, and the More sheet (#462, which replaced the
+// drawer) locks the scroll behind it. jsdom applies no stylesheet,
 // so the CSS half is asserted against the source text directly — the same
 // convention as tapTargetGuard.test.ts and contentColumn.test.ts — while the
 // DOM half renders the real App.
@@ -56,11 +56,6 @@ function selectorRules(pattern: RegExp): { body: string; mobile: boolean }[] {
 /** Bodies of every `.main-chrome` rule, each tagged mobile or not. */
 function chromeRules(): { body: string; mobile: boolean }[] {
   return selectorRules(/\.main-chrome\s*\{([^{}]*)\}/);
-}
-
-/** Bodies of every `.sidebar .drawer-close` rule, each tagged mobile or not. */
-function drawerCloseRules(): { body: string; mobile: boolean }[] {
-  return selectorRules(/\.sidebar\s+\.drawer-close\s*\{([^{}]*)\}/);
 }
 
 beforeEach(() => {
@@ -113,31 +108,22 @@ describe("mobile shell polish (issue #290)", () => {
     expect(outside).toEqual([]);
   });
 
-  it("stacks the drawer and scrim above the pinned chrome", () => {
+  it("stacks the More sheet and tab bar above the pinned chrome", () => {
     const sticky = chromeRules().find((rule) => /position:\s*sticky/.test(rule.body));
     const zIndex = /z-index:\s*([\d.]+)/.exec(sticky?.body ?? "")?.[1];
     expect(zIndex, "pinned chrome declares no numeric z-index").not.toBeUndefined();
-    // Drawer, scrim, tab bar and Quick-Add all sit on `calc(var(--z-modal)
-    // - n)` (≥ 96): the chrome must stay well under every one of them.
+    // Sheet, scrim and tab bar all sit on `calc(var(--z-modal) - n)`
+    // (≥ 94): the chrome must stay well under every one of them.
     expect(parseFloat(zIndex as string)).toBeLessThan(90);
-    for (const selector of [".drawer-scrim", ".mobile-tab-bar", ".mobile-quick-add"]) {
+    for (const selector of [".more-sheet", ".more-sheet-scrim", ".mobile-tab-bar"]) {
       expect(css).toMatch(new RegExp(`${selector.replace(/\./g, "\\.")}[^{]*\\{[^}]*z-index:`));
-    }
-  });
-
-  it("sizes the drawer's close control to the touch floor at mobile widths", () => {
-    const mobile = drawerCloseRules().filter((rule) => rule.mobile);
-    expect(mobile.length).toBeGreaterThan(0);
-    for (const rule of mobile) {
-      expect(rule.body).toMatch(/width:\s*var\(--tap-target\)/);
-      expect(rule.body).toMatch(/height:\s*var\(--tap-target\)/);
     }
   });
 
   it("keeps the Quick-Add dialog outside the pinned chrome's stacking context", async () => {
     // `.main-chrome` is `position: sticky` with a z-index, so it forms a
     // stacking context: a Modal rendered inside it could never rise above
-    // the drawer/scrim no matter its own z-index. The dialog must stay a
+    // the More sheet no matter its own z-index. The dialog must stay a
     // sibling of the chrome, not a child.
     installFakeApi();
     const user = userEvent.setup();
@@ -149,7 +135,7 @@ describe("mobile shell polish (issue #290)", () => {
     expect(dialog.closest(".main-chrome")).toBeNull();
   });
 
-  it("preserves the list's scroll position across the drawer scroll lock", async () => {
+  it("preserves the list's scroll position across the More sheet scroll lock", async () => {
     installFakeApi();
     const user = userEvent.setup();
     render(<App />);
@@ -158,11 +144,10 @@ describe("mobile shell polish (issue #290)", () => {
     const main = screen.getByRole("main");
     main.scrollTop = 123;
 
-    await user.click(screen.getByRole("button", { name: "Show navigation" }));
+    await user.click(screen.getByRole("button", { name: "More" }));
     expect(main.style.overflow).toBe("hidden");
 
-    const sidebar = screen.getByRole("complementary");
-    await user.click(within(sidebar).getByRole("button", { name: "Close navigation" }));
+    await user.click(screen.getByRole("button", { name: "More" }));
     expect(main.style.overflow).toBe("");
     expect(main.scrollTop).toBe(123);
   });
