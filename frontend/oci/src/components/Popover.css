@@ -1,0 +1,16 @@
+@layer components {
+  .popover {
+    position: fixed;
+    z-index: var(--z-popover);
+    min-width: min(var(--popover-min-width), calc(100vw - 8px));
+    max-width: calc(100vw - 8px);
+    max-height: calc(100dvh - 8px);
+    overflow: auto;
+    padding: var(--space-1);
+    background: var(--surface-raised);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    /* No entrance motion at all, so reduced-motion users see the same. */
+  }
+}

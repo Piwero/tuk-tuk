@@ -156,6 +156,27 @@ describe("Quick-Add # suggestion dropdown", () => {
     );
   });
 
+  it("dismisses suggestions with Escape or outside click and reopens when typing", async () => {
+    installFakeApi({ tags: [fakeTag("Books"), fakeTag("Boat")] });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "read #b");
+    expect(input).toHaveFocus();
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    expect(screen.getByRole("option", { name: "Books" })).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{Escape}{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue("read #b");
+    await user.type(input, "o");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.click(screen.getByRole("heading", { name: "Inbox" }));
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(input).toHaveValue("read #bo");
+  });
+
   it("removing a chip drops that tag from the created task", async () => {
     const books = fakeTag("Books");
     const api = installFakeApi({ tags: [books] });
