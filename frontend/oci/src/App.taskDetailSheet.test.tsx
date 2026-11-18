@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { fakeList, fakeTask, INBOX, installFakeApi } from "./test/fakeApi";
@@ -127,5 +127,83 @@ describe("Task detail sheet dismissal (issue #170)", () => {
     // Also confirm we're genuinely back at the prior view, not somewhere else.
     expect(panel).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "All" })).toBeInTheDocument();
+  });
+});
+
+/** Phone width is simulated through `innerWidth` (jsdom has no matchMedia),
+ * the same way App.calendarNarrow.test.tsx does it. */
+function setViewportWidth(width: number): void {
+  Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
+}
+
+describe("Task detail as a bottom sheet on phones (issue #456)", () => {
+  beforeEach(() => setViewportWidth(390));
+  afterEach(() => setViewportWidth(1024));
+
+  it("closes on Escape and returns focus to the Task", async () => {
+    installFakeApi({ tasks: [fakeTask("Write report")] });
+    const user = userEvent.setup();
+    render(<App />);
+    const opener = await screen.findByRole("button", { name: "Open details for Write report" });
+    await user.click(opener);
+    const panel = await screen.findByRole("complementary", { name: "Task details" });
+    await waitFor(() => expect(panel).toContainElement(document.activeElement as HTMLElement));
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("complementary", { name: "Task details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open details for Write report" })).toHaveFocus();
+  });
+
+  it("closes an open property popover on Escape before the sheet", async () => {
+    installFakeApi({ tasks: [fakeTask("Write report")] });
+    const user = userEvent.setup();
+    render(<App />);
+    const panel = await openDetail("Write report");
+    await user.click(within(panel).getByRole("button", { name: /^Priority/ }));
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("complementary", { name: "Task details" })).toBeInTheDocument();
+  });
+
+  it("closes on the back button without leaving the current view", async () => {
+    installFakeApi({ tasks: [fakeTask("Write report")] });
+    render(<App />);
+    await openDetail("Write report");
+    const heading = screen.getByRole("heading", { level: 1 }).textContent;
+
+    window.history.back();
+
+    await waitFor(() =>
+      expect(screen.queryByRole("complementary", { name: "Task details" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(heading);
+  });
+
+  it("traps Tab focus inside the sheet while open", async () => {
+    installFakeApi({ tasks: [fakeTask("Write report")] });
+    const user = userEvent.setup();
+    render(<App />);
+    const panel = await openDetail("Write report");
+    const first = panel.querySelector<HTMLElement>("button, input, [tabindex='0']") as HTMLElement;
+    const more = within(panel).getByRole("button", { name: "More task actions" });
+
+    more.focus();
+    await user.tab();
+    expect(panel).toContainElement(document.activeElement as HTMLElement);
+    expect(first).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(more).toHaveFocus();
+  });
+
+  it("keeps every property row and the footer inside the sheet", async () => {
+    installFakeApi({ tasks: [fakeTask("Write report")] });
+    render(<App />);
+    const panel = await openDetail("Write report");
+    for (const name of [/^Priority/, /^Repeat/, /^Tags/, /^Date/]) {
+      expect(within(panel).getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(within(panel).getByRole("button", { name: "Start focus" })).toBeInTheDocument();
+    expect(within(panel).getByRole("list", { name: "Check items" })).toBeInTheDocument();
   });
 });

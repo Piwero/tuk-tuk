@@ -224,6 +224,24 @@ interface AppProps {
   onLogout?: () => void;
 }
 
+/** True at/below the phone breakpoint (720px, same as the stylesheet), live. */
+function useNarrowViewport(): boolean {
+  const [narrow, setNarrow] = useState(() => window.innerWidth <= 720);
+  useEffect(() => {
+    if (typeof window.matchMedia === "function") {
+      const query = window.matchMedia("(max-width: 720px)");
+      setNarrow(query.matches);
+      const onChange = (event: MediaQueryListEvent): void => setNarrow(event.matches);
+      query.addEventListener("change", onChange);
+      return () => query.removeEventListener("change", onChange);
+    }
+    const onResize = (): void => setNarrow(window.innerWidth <= 720);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return narrow;
+}
+
 export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}): JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -405,6 +423,16 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // everything else, which the Inbox-fallback effect resolves from there).
   useEffect(() => {
     function onPopState(): void {
+      if (ignoreNextPopRef.current) {
+        ignoreNextPopRef.current = false;
+        return;
+      }
+      if (sheetEntryRef.current) {
+        sheetEntryRef.current = false;
+        setSelectedTaskId(null);
+        setCalendarTask(null);
+        return;
+      }
       const kind = staticViewKindForPath(window.location.pathname);
       suppressNextSyncRef.current = true;
       const route = containerForPath(window.location.pathname);
@@ -857,6 +885,29 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
    * three ways out behave identically. Never touches `view`: the detail is
    * an overlay on top of whatever was already showing, so main's scroll
    * position is untouched by opening or closing it. */
+  const narrowViewport = useNarrowViewport();
+  const sheetOpen = narrowViewport && selectedTaskId !== null;
+  // The sheet owns one history entry so the phone's back button dismisses it.
+  const sheetEntryRef = useRef(false);
+  const ignoreNextPopRef = useRef(false);
+  useEffect(() => {
+    if (!sheetOpen) {
+      return;
+    }
+    window.history.pushState({ taskSheet: true }, "");
+    sheetEntryRef.current = true;
+    return () => {
+      if (sheetEntryRef.current) {
+        sheetEntryRef.current = false;
+        const state = window.history.state as { taskSheet?: boolean } | null;
+        if (state?.taskSheet === true) {
+          ignoreNextPopRef.current = true;
+          window.history.back();
+        }
+      }
+    };
+  }, [sheetOpen]);
+
   function closeTaskDetail(): void {
     setSelectedTaskId(null);
     setCalendarTask(null);
@@ -1784,6 +1835,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 onTaskChanged={applyTaskChange}
                 onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onClose={closeTaskDetail}
+                sheet={narrowViewport}
                 onStartFocus={
                   sectionSettings.focus
                     ? (task) => {

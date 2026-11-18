@@ -344,3 +344,31 @@
     color: var(--text-primary);
   }
 }
+@layer components {
+  @media (max-width: 720px) {
+    /* Every control in the sheet meets the 44px touch floor (issue #456). */
+    .task-detail-header > button,
+    .task-detail-footer .overflow-menu-trigger,
+    .task-detail-footer .btn-focus,
+    .reminder-chip button,
+    .reminder-add,
+    .tags-row-chip-remove,
+    .check-items li .row-actions button {
+      min-width: var(--tap-target);
+      min-height: var(--tap-target);
+    }
+    .task-detail-title input:not([type="checkbox"]),
+    .check-items form input:not([type="checkbox"]) {
+      min-height: var(--tap-target);
+    }
+    .check-items li {
+      min-height: var(--tap-target);
+    }
+    .task-detail-footer {
+      position: sticky;
+      bottom: 0;
+      padding-bottom: env(safe-area-inset-bottom);
+      background: var(--surface-raised);
+    }
+  }
+}
