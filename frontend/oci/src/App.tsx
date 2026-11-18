@@ -95,6 +95,8 @@ import { SettingsView } from "./components/SettingsView";
 import { ShortcutHints, ShortcutsProvider } from "./components/ShortcutLayer";
 import { Sidebar } from "./components/Sidebar";
 import { DayRail } from "./components/DayRail";
+import { FocusCard } from "./components/FocusCard";
+import { HabitsCard } from "./components/HabitsCard";
 import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
 import { TaskDetail } from "./components/TaskDetail";
@@ -695,7 +697,10 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // undo their navigation. Anything still pending commits on the way out.
   const viewKey = keyOfView(view);
   // The Day rail (#446) sits beside Today only, and only when a card is on.
-  const showDayRail = smartView === "today" && !completedMode && sectionSettings.goals;
+  const showDayRail =
+    smartView === "today" &&
+    !completedMode &&
+    (sectionSettings.goals || sectionSettings.habits || sectionSettings.focus);
   useEffect(() => {
     clearToasts();
   }, [viewKey, clearToasts]);
@@ -1152,6 +1157,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
           {(paletteOpen || paletteTask !== null) && (
             <TaskPalette
               task={paletteTask ?? undefined}
+              focusEnabled={sectionSettings.focus}
               items={paletteItems}
               lists={lists}
               tags={tags}
@@ -1561,6 +1567,11 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     onSelect={setSelectedTaskId}
                     onSectionsChanged={setSections}
                     onOpenActions={setPaletteTask}
+                    onFocusTask={
+                      sectionSettings.focus
+                        ? (task) => switchView({ kind: "focus", task })
+                        : undefined
+                    }
                     toasts={toasts}
                   />
                 )}
@@ -1570,6 +1581,18 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                       <FocusedGoalCard
                         goalsHref={pathForStaticView("goals")}
                         onOpenGoals={() => switchView({ kind: "goals" })}
+                      />
+                    )}
+                    {sectionSettings.habits && (
+                      <HabitsCard
+                        habitsHref={pathForStaticView("habits")}
+                        onOpenHabits={() => switchView({ kind: "habits" })}
+                      />
+                    )}
+                    {sectionSettings.focus && (
+                      <FocusCard
+                        focusHref={pathForStaticView("focus")}
+                        onOpenFocus={() => switchView({ kind: "focus" })}
                       />
                     )}
                   </DayRail>
@@ -1667,6 +1690,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
  * current without re-creating a component type per render. */
 function TaskPalette({
   task,
+  focusEnabled,
   items,
   lists,
   tags,
@@ -1678,6 +1702,7 @@ function TaskPalette({
   onClose,
 }: {
   task: Task | undefined;
+  focusEnabled: boolean;
   items: PaletteItem[];
   lists: TaskList[];
   tags: Tag[];
@@ -1697,6 +1722,7 @@ function TaskPalette({
     <CommandPalette
       items={items}
       task={task}
+      focusEnabled={focusEnabled}
       lists={lists}
       tags={tags}
       actions={actions}

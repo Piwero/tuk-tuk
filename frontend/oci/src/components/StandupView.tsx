@@ -1,3 +1,4 @@
+import { DatePopover } from "./DatePopover";
 import "./StandupView.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -362,15 +363,13 @@ export function StandupView(): JSX.Element {
         </div>
         <div className="standup-header-right">
           <div className="standup-date-picker">
-            <label htmlFor="standup-date" className="visually-hidden">
-              Stand-up date
-            </label>
-            <input
+            <DatePopover
               id="standup-date"
-              type="date"
+              label="Stand-up date"
               value={selectedDate}
-              onChange={(event) => {
-                setSelectedDate(event.target.value);
+              onChange={(day) => {
+                if (day === "") return;
+                setSelectedDate(day);
                 setHistoryOpen(false);
               }}
             />

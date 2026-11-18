@@ -192,10 +192,10 @@ describe("acting on a Task from the command palette", () => {
     fireEvent.click(within(dialog).getByRole("option", { name: "Custom…" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
-    // A running stage states its link as text, not as an inert select.
-    expect(await within(screen.getByRole("main")).findByText(/Focusing on/)).toHaveTextContent(
-      task.title,
-    );
+    // Linked and idle: the length is still the user's to set (#449).
+    const main = within(screen.getByRole("main"));
+    expect(await main.findByRole("button", { name: `Linked: ${task.title}` })).toBeInTheDocument();
+    expect(main.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 
   it("steps back from a picker to the verb list on Escape", async () => {

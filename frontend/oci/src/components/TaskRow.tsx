@@ -83,6 +83,9 @@ export interface TaskRowProps {
    * verb set the hover actions only sample. Keyboard-reachable like every
    * other row action. */
   onOpenActions?: (task: Task) => void;
+  /** Opens Focus with this Task linked, without starting the clock (#449).
+   * Left unset where Focus is disabled in Settings, which drops the action. */
+  onFocus?: (task: Task) => void;
   draggable?: boolean;
   onDragStart?: (event: React.DragEvent<HTMLLIElement>) => void;
   onDragEnd?: (event: React.DragEvent<HTMLLIElement>) => void;
@@ -130,6 +133,7 @@ export function TaskRow({
   onSelect,
   onDelete,
   onOpenActions,
+  onFocus,
   draggable,
   onDragStart,
   onDragEnd,
@@ -150,7 +154,7 @@ export function TaskRow({
   // The full date feeds the accessible name; the visible chip may be shorter.
   const schedule = formatSchedule(task);
   const visibleSchedule = formatSchedule(task, dateContext);
-  const hasActions = onDelete !== undefined || onOpenActions !== undefined;
+  const hasActions = onDelete !== undefined || onOpenActions !== undefined || onFocus !== undefined;
 
   // Today's date reads in the accent, everything else in the secondary ink —
   // the accent used to be on every dated row, which made it mean nothing.
@@ -333,6 +337,18 @@ export function TaskRow({
         </span>
         {hasActions && (
           <span className="row-actions">
+            {onFocus !== undefined && (
+              <button
+                type="button"
+                className="row-action-focus"
+                aria-label={`Focus on ${task.title}`}
+                title={`Focus on ${task.title}`}
+                onClick={() => onFocus(task)}
+              >
+                <Icon name="target" size={14} />
+                Focus
+              </button>
+            )}
             {onOpenActions !== undefined && (
               <IconButton
                 icon="list-checks"
