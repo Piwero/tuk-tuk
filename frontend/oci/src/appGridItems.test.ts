@@ -3,16 +3,12 @@ import { describe, expect, it } from "vitest";
 
 /** `.app` is a three-column grid (sidebar / main / detail panel), so every
  * element rendered as its direct child is a grid item. The mobile-only
- * controls — the tab bar and the Quick-Add button — are hidden on desktop
+ * controls — the tab bar and its More sheet — are hidden on desktop
  * with `display: none` precisely so they claim no track.
  *
- * IconButton wraps its button in a `<span class="icon-button-wrap">` (#270),
- * and a button's own `display: none` cannot hide its wrapper. The wrapper
- * therefore stayed a visible grid item at desktop width: it took the third
- * track, pushing the Task detail panel onto a second implicit row where it
- * sat under the sidebar, invisible — clicking a Task appeared to do nothing.
- * The same rule that hides `.mobile-quick-add` must hide its wrapper, the
- * same way `.drawer-toggle` and `.drawer-close` already do.
+ * (An earlier floating Quick-Add was wrapped in IconButton's span, which
+ * stayed a visible grid item on desktop and pushed the Task detail panel
+ * onto a second row — #462 folded it into the tab bar instead.)
  *
  * jsdom applies no stylesheet, so this asserts against the CSS source — the
  * convention contentColumn.test.ts and App.mobileChrome.test.tsx use. */
@@ -61,28 +57,11 @@ function hidesAtDesktop(pattern: RegExp): boolean {
 }
 
 describe("`.app` grid items (mobile controls must not claim a track)", () => {
-  it("hides the mobile Quick-Add button on desktop", () => {
-    expect(hidesAtDesktop(/\.mobile-quick-add\s*\{([^{}]*)\}/)).toBe(true);
+  it("hides the More sheet and its scrim on desktop", () => {
+    expect(hidesAtDesktop(/\.more-sheet,\s*\.more-sheet-scrim\s*\{([^{}]*)\}/)).toBe(true);
   });
 
-  it("hides the IconButton wrapper around it too, so it takes no grid track", () => {
-    expect(
-      hidesAtDesktop(/\.icon-button-wrap:has\(>\s*\.mobile-quick-add\)\s*\{([^{}]*)\}/),
-      "`.icon-button-wrap` wrapping `.mobile-quick-add` is still a visible `.app` grid item on desktop",
-    ).toBe(true);
-  });
-
-  it("shows the wrapper again at mobile widths, where the button is shown", () => {
-    const mobile = rules(/\.icon-button-wrap:has\(>\s*\.mobile-quick-add\)\s*\{([^{}]*)\}/).filter(
-      (rule) => rule.conditional,
-    );
-    expect(mobile.length).toBeGreaterThan(0);
-    for (const rule of mobile) {
-      expect(rule.body).not.toMatch(/display:\s*none/);
-    }
-  });
-
-  it("hides the mobile tab bar on desktop (the same trap, already handled)", () => {
+  it("hides the mobile tab bar on desktop", () => {
     expect(hidesAtDesktop(/\.mobile-tab-bar\s*\{([^{}]*)\}/)).toBe(true);
   });
 });

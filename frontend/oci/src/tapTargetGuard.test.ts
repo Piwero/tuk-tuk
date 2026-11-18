@@ -667,3 +667,14 @@ describe("Quick-Add dialog is operable on touch (issue #288)", () => {
     expect(declaredValue(".modal", "overflow-y", DESKTOP)).toBeNull();
   });
 });
+
+/** The tab bar and its More sheet (#462). A fixed list for the same reason
+ * as QUICK_ADD_CONTROLS: deleting the sizing must fail the guard. */
+const TAB_BAR_CONTROLS = [".mobile-tab-item", ".mobile-tab-quick-add", ".more-sheet-row"];
+
+describe("tab bar and More sheet are operable on touch (issue #462)", () => {
+  it("meets the 44px floor for every tab and every More row", () => {
+    const offenders = findOffenders(TAB_BAR_CONTROLS);
+    expect(offenders, offenderMessage("the tab bar / More sheet", offenders)).toEqual([]);
+  });
+});
