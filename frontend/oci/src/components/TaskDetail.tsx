@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import {
   createCheckItem,
   deleteCheckItem,
+  fetchFocusSessions,
   fetchGoals,
   fetchSections,
   updateCheckItem,
@@ -20,10 +21,12 @@ import {
 } from "../api";
 import { readDragPayload, startDrag } from "../dnd";
 import { PRIORITY_LABELS } from "../grouping";
+import { formatFocusTotal } from "../focusTotals";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { DateRow } from "./DateRow";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
+import { OverflowMenu } from "./OverflowMenu";
 import { PriorityIndicator } from "./PriorityIndicator";
 import { PropertyOptions, PropertyRow } from "./PropertyRow";
 import { ReminderRow } from "./ReminderRow";
@@ -54,6 +57,11 @@ interface TaskDetailProps {
   /** A Tag created from the Tags row, so the app-wide Tag list stays current. */
   onTagCreated: (tag: Tag) => void;
   onClose: () => void;
+  /** Opens Focus with this Task linked, clock idle. Absent when Focus is
+   * turned off, which hides the button. */
+  onStartFocus?: (task: Task) => void;
+  /** Deletes the Task (with undo); the caller closes the detail. */
+  onDelete: (task: Task) => void;
 }
 
 /** The `task_count` Key Results across every Goal — the picker's options.
@@ -75,6 +83,8 @@ export function TaskDetail({
   onTaskChanged,
   onTagCreated,
   onClose,
+  onStartFocus,
+  onDelete,
 }: TaskDetailProps): JSX.Element {
   const [title, setTitle] = useState(task.title);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -96,6 +106,29 @@ export function TaskDetail({
     };
   }, [task.list_id]);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
+  const [focusedSeconds, setFocusedSeconds] = useState<number | null>(null);
+
+  // Time already focused on this Task: the sum of its linked Focus Sessions.
+  const focusEnabled = onStartFocus !== undefined;
+  useEffect(() => {
+    if (!focusEnabled) {
+      return;
+    }
+    let live = true;
+    setFocusedSeconds(null);
+    void fetchFocusSessions().then((page) => {
+      if (live) {
+        setFocusedSeconds(
+          page.items
+            .filter((session) => session.task_id === task.id)
+            .reduce((sum, session) => sum + session.duration_seconds, 0),
+        );
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [task.id, focusEnabled]);
   const [newItemTitle, setNewItemTitle] = useState("");
   const [itemEditor, setItemEditor] = useState<{ id: number; title: string } | null>(null);
   // Tracks a drag on the mobile sheet's handle (issue #170) — desktop never
@@ -123,8 +156,11 @@ export function TaskDetail({
     if (descriptionDraft === null) {
       return;
     }
-    onTaskChanged(await updateTask(task.id, { description: descriptionDraft }));
+    const draft = descriptionDraft;
     setDescriptionDraft(null);
+    if (draft !== task.description) {
+      onTaskChanged(await updateTask(task.id, { description: draft }));
+    }
   }
 
   async function addCheckItem(): Promise<void> {
@@ -416,34 +452,66 @@ export function TaskDetail({
       </div>
       <div className="task-description">
         {descriptionDraft === null ? (
-          <>
-            <ReactMarkdown>{task.description}</ReactMarkdown>
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => setDescriptionDraft(task.description)}
-            >
-              Edit description
-            </button>
-          </>
+          // Click (or Enter) to edit in place; the rendered Markdown stays
+          // the resting state, so links inside it still work.
+          <div
+            className="task-description-view"
+            role="button"
+            tabIndex={0}
+            aria-label="Description"
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest("a") === null) {
+                setDescriptionDraft(task.description);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && event.target === event.currentTarget) {
+                event.preventDefault();
+                setDescriptionDraft(task.description);
+              }
+            }}
+          >
+            {task.description.trim() === "" ? (
+              <p className="task-description-placeholder">Add a description…</p>
+            ) : (
+              <ReactMarkdown>{task.description}</ReactMarkdown>
+            )}
+          </div>
         ) : (
-          <>
-            <textarea
-              aria-label="Description"
-              value={descriptionDraft}
-              rows={6}
-              onChange={(event) => setDescriptionDraft(event.target.value)}
-            />
-            <button className="btn-primary" type="button" onClick={() => void saveDescription()}>
-              Save description
-            </button>
-            <button className="btn-quiet" type="button" onClick={() => setDescriptionDraft(null)}>
-              Cancel
-            </button>
-          </>
+          <textarea
+            aria-label="Description"
+            value={descriptionDraft}
+            rows={6}
+            autoFocus
+            onChange={(event) => setDescriptionDraft(event.target.value)}
+            onBlur={() => void saveDescription()}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                // Discard, and keep Escape from closing the detail too.
+                event.preventDefault();
+                event.stopPropagation();
+                event.nativeEvent.stopImmediatePropagation();
+                setDescriptionDraft(null);
+              }
+            }}
+          />
         )}
       </div>
-      <section className="check-items">
+      <section className="check-items" aria-label="Check items section">
+        {task.check_items.length > 0 && (
+          <div className="check-items-progress">
+            <span>
+              {task.check_items.filter((item) => item.done).length} of {task.check_items.length}
+            </span>
+            <progress
+              aria-label="Check items progress"
+              value={task.check_items.filter((item) => item.done).length}
+              max={task.check_items.length}
+              aria-valuenow={task.check_items.filter((item) => item.done).length}
+              aria-valuemax={task.check_items.length}
+            />
+          </div>
+        )}
         <ul
           aria-label="Check items"
           onDragOver={(event) => event.preventDefault()}
@@ -511,6 +579,30 @@ export function TaskDetail({
           />
         </form>
       </section>
+      <div className="task-detail-footer">
+        {onStartFocus !== undefined && (
+          <button type="button" className="btn-focus" onClick={() => onStartFocus(task)}>
+            Start focus
+            {focusedSeconds !== null && focusedSeconds > 0 && (
+              <span className="task-detail-focused">
+                {" · "}
+                {formatFocusTotal(focusedSeconds)} focused
+              </span>
+            )}
+          </button>
+        )}
+        <OverflowMenu
+          label="More task actions"
+          items={[
+            {
+              text: "Delete task",
+              icon: "trash-2",
+              danger: true,
+              onSelect: () => onDelete(task),
+            },
+          ]}
+        />
+      </div>
     </aside>
   );
 }

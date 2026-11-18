@@ -1784,6 +1784,18 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 onTaskChanged={applyTaskChange}
                 onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onClose={closeTaskDetail}
+                onStartFocus={
+                  sectionSettings.focus
+                    ? (task) => {
+                        closeTaskDetail();
+                        switchView({ kind: "focus", task });
+                      }
+                    : undefined
+                }
+                onDelete={(task) => {
+                  closeTaskDetail();
+                  deleteTaskWithUndo(task);
+                }}
               />
             )}
             {selectedEvent !== null && (
