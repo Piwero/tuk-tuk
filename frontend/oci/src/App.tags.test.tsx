@@ -78,39 +78,119 @@ describe("Tags in the sidebar", () => {
 });
 
 describe("Tags on a task", () => {
-  it("assigns and removes Tags from the detail panel, with chips on the row", async () => {
+  async function openTags(): Promise<HTMLElement> {
+    const user = userEvent.setup();
+    const panel = await screen.findByRole("complementary", { name: "Task details" });
+    await user.click(within(panel).getByRole("button", { name: /^Tags/ }));
+    return within(panel).getByRole("dialog", { name: "Tags" });
+  }
+
+  function taskRow(title: string): HTMLElement {
+    const row = screen.getByRole("button", { name: `Open details for ${title}` }).closest("li");
+    if (!(row instanceof HTMLElement)) throw new Error("task row not found");
+    return row;
+  }
+
+  it("shows only the Task's own Tags as chips, with no checkbox list", async () => {
     const work = fakeTag("work");
     const errand = fakeTag("errand");
-    const report = fakeTask("Write report");
-    const api = installFakeApi({ tags: [work, errand], tasks: [report] });
+    installFakeApi({ tags: [work, errand], tasks: [fakeTask("Write report", { tags: [work] })] });
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(await screen.findByRole("button", { name: "Open details for Write report" }));
     const panel = await screen.findByRole("complementary", { name: "Task details" });
-    const workToggle = within(panel).getByRole("checkbox", { name: "Tag work" });
-    expect(workToggle).not.toBeChecked();
 
-    await user.click(workToggle);
+    expect(within(panel).queryAllByRole("checkbox", { name: /^Tag / })).toHaveLength(0);
+    const trigger = within(panel).getByRole("button", { name: /^Tags/ });
+    expect(within(trigger).getByText("work")).toBeInTheDocument();
+    expect(within(trigger).queryByText("errand")).not.toBeInTheDocument();
+  });
 
-    const row = screen.getByRole("button", { name: "Open details for Write report" }).closest("li");
-    if (!(row instanceof HTMLElement)) {
-      throw new Error("task row not found");
-    }
-    expect(await within(row).findByText("work")).toBeInTheDocument();
-    let patch = api.requests.filter((r) => r.method === "PATCH").pop();
+  it("narrows suggestions by prefix and tags the Task with the pick", async () => {
+    const work = fakeTag("work");
+    const errand = fakeTag("errand");
+    const workshop = fakeTag("Workshop");
+    const report = fakeTask("Write report");
+    const api = installFakeApi({ tags: [work, errand, workshop], tasks: [report] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Open details for Write report" }));
+
+    const editor = await openTags();
+    await user.type(within(editor).getByRole("combobox", { name: "Add a tag" }), "wo");
+
+    const listbox = within(editor).getByRole("listbox", { name: "Tag suggestions" });
+    expect(
+      within(listbox)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["work", "Workshop", "Create “wo”"]);
+
+    await user.click(within(listbox).getByRole("option", { name: "work" }));
+
+    expect(await within(taskRow("Write report")).findByText("work")).toBeInTheDocument();
+    const patch = api.requests.filter((r) => r.method === "PATCH").pop();
     expect(patch?.body).toEqual({ tag_ids: [work.id] });
+  });
 
-    await user.click(within(panel).getByRole("checkbox", { name: "Tag errand" }));
+  it("does not suggest Tags the Task already has", async () => {
+    const work = fakeTag("work");
+    const workshop = fakeTag("workshop");
+    installFakeApi({ tags: [work, workshop], tasks: [fakeTask("Write report", { tags: [work] })] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Open details for Write report" }));
 
-    expect(await within(row).findByText("errand")).toBeInTheDocument();
-    patch = api.requests.filter((r) => r.method === "PATCH").pop();
-    expect(patch?.body).toEqual({ tag_ids: [work.id, errand.id] });
+    const editor = await openTags();
+    await user.type(within(editor).getByRole("combobox", { name: "Add a tag" }), "work");
 
-    await user.click(within(panel).getByRole("checkbox", { name: "Tag work" }));
+    const listbox = within(editor).getByRole("listbox", { name: "Tag suggestions" });
+    expect(
+      within(listbox)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["workshop"]);
+  });
 
-    await waitFor(() => expect(within(row).queryByText("work")).not.toBeInTheDocument());
-    patch = api.requests.filter((r) => r.method === "PATCH").pop();
+  it("creates a Tag that does not exist and applies it", async () => {
+    const report = fakeTask("Write report");
+    const api = installFakeApi({ tags: [], tasks: [report] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Open details for Write report" }));
+
+    const editor = await openTags();
+    await user.type(within(editor).getByRole("combobox", { name: "Add a tag" }), "urgent{Enter}");
+
+    expect(await within(taskRow("Write report")).findByText("urgent")).toBeInTheDocument();
+    const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/tags");
+    expect(post?.body).toEqual({ name: "urgent" });
+    const created = api.tags.find((t) => t.name === "urgent");
+    const patch = api.requests.filter((r) => r.method === "PATCH").pop();
+    expect(patch?.body).toEqual({ tag_ids: [created?.id] });
+    const tagsNav = screen.getByRole("navigation", { name: "Tags" });
+    expect(within(tagsNav).getByRole("link", { name: "urgent" })).toBeInTheDocument();
+  });
+
+  it("removing a chip untags the Task", async () => {
+    const work = fakeTag("work");
+    const errand = fakeTag("errand");
+    const api = installFakeApi({
+      tags: [work, errand],
+      tasks: [fakeTask("Write report", { tags: [work, errand] })],
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Open details for Write report" }));
+
+    const editor = await openTags();
+    await user.click(within(editor).getByRole("button", { name: "Remove tag work" }));
+
+    await waitFor(() =>
+      expect(within(taskRow("Write report")).queryByText("work")).not.toBeInTheDocument(),
+    );
+    const patch = api.requests.filter((r) => r.method === "PATCH").pop();
     expect(patch?.body).toEqual({ tag_ids: [errand.id] });
   });
 
@@ -125,9 +205,9 @@ describe("Tags on a task", () => {
     await user.click(within(tagsNav).getByRole("link", { name: "work" }));
     await screen.findByRole("heading", { name: "#work" });
     await user.click(screen.getByRole("button", { name: "Open details for Write report" }));
-    const panel = await screen.findByRole("complementary", { name: "Task details" });
 
-    await user.click(within(panel).getByRole("checkbox", { name: "Tag work" }));
+    const editor = await openTags();
+    await user.click(within(editor).getByRole("button", { name: "Remove tag work" }));
 
     await waitFor(() => expect(screen.queryByText("Write report")).not.toBeInTheDocument());
   });
