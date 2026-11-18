@@ -35,7 +35,7 @@ describe("Day rail: Focus card", () => {
     await openToday();
     const card = await focusCard();
     expect(await card.findByText("1 h 15 min")).toBeInTheDocument();
-    expect(card.getByText("0 of 4 Pomos")).toBeInTheDocument();
+    expect(card.getByText("Pomo 1 of 4")).toBeInTheDocument();
     expect(api.requests.some((r) => r.method === "GET" && r.url === STATS_URL)).toBe(true);
 
     fireEvent.click(card.getByRole("link", { name: "Open Focus" }));
@@ -56,7 +56,7 @@ describe("Day rail: Focus card", () => {
       vi.advanceTimersByTime(25 * 60_000);
     });
     expect(await card.findByText("25 min")).toBeInTheDocument();
-    expect(card.getByText("1 of 4 Pomos")).toBeInTheDocument();
+    expect(card.getByText("Pomo 2 of 4")).toBeInTheDocument();
   });
 
   it("is hidden when Focus is disabled", async () => {

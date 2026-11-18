@@ -6,7 +6,6 @@ import {
   createFocusSession,
   deleteFocusSession,
   fetchFocusSessions,
-  fetchFocusStats,
   fetchHabits,
   fetchOpenTasks,
   updateFocusSession,
@@ -15,8 +14,9 @@ import {
   type Habit,
   type Task,
 } from "../api";
-import { addDays, browserTimeZone, diffDays, localDayOf, shortDayLabel } from "../dates";
+import { addDays, diffDays, localDayOf, shortDayLabel } from "../dates";
 import { linkFields } from "../focusLink";
+import { loadFocusStats } from "../focusTotals";
 import { FocusSessionForm, type FocusSessionFormValues } from "./FocusSessionForm";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
@@ -96,7 +96,7 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
     if (start === "" || end === "" || start > end) {
       return;
     }
-    setStats(await fetchFocusStats(start, end, browserTimeZone()));
+    setStats(await loadFocusStats(start, end));
   }, [start, end]);
 
   const loadSessions = useCallback(async (): Promise<void> => {
