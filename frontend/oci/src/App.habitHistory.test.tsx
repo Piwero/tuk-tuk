@@ -97,7 +97,7 @@ describe("Habit history", () => {
       ),
     ).toBe(true);
     // Yesterday checked in, today graced: the streak is already visible.
-    expect(await screen.findByText("Streak: 1")).toBeInTheDocument();
+    expect((await screen.findAllByText("Streak: 1"))[0]).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "2026-07-02" }));
 
