@@ -678,3 +678,16 @@ describe("tab bar and More sheet are operable on touch (issue #462)", () => {
     expect(offenders, offenderMessage("the tab bar / More sheet", offenders)).toEqual([]);
   });
 });
+
+describe("Today Habit chip strip is operable on touch (issue #461)", () => {
+  it("meets the 44px floor for every chip", () => {
+    const offenders = findOffenders([".habit-chip"]);
+    expect(offenders, offenderMessage("the Habit chip strip", offenders)).toEqual([]);
+  });
+
+  it("scrolls sideways inside the strip, never the page", () => {
+    expect(declaredValue(".habit-strip", "overflow-x")).toBe("auto");
+    expect(declaredValue(".habit-strip", "flex-wrap")).toBe("nowrap");
+    expect(declaredValue(".habit-strip", "display", DESKTOP)).toBe("none");
+  });
+});
