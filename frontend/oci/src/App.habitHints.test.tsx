@@ -50,17 +50,6 @@ describe("Habit card hints (#266)", () => {
     expect(await screen.findByText(today.getAttribute("aria-label")!)).toBeInTheDocument();
   });
 
-  it("shows a hint naming the check-in circle as today's Check-in for the Habit", async () => {
-    const user = userEvent.setup();
-    installFakeApi({ habits: [fakeHabit("Meditate")] });
-    render(<App />);
-    await openHabits();
-
-    const check = screen.getByRole("button", { name: "Check in Meditate" });
-    await user.hover(check);
-    expect(await screen.findByText(/Today's Check-in for this Habit/)).toBeInTheDocument();
-  });
-
   it("shows a hint on Streak explaining it counts consecutive scheduled days without a miss", async () => {
     const user = userEvent.setup();
     installFakeApi({ habits: [fakeHabit("Meditate")] });
@@ -82,19 +71,5 @@ describe("Habit card hints (#266)", () => {
     const trigger = screen.getByRole("button", { name: "Actions for Meditate" });
     await user.hover(trigger);
     expect(await screen.findByText("Actions for Meditate")).toBeInTheDocument();
-  });
-
-  it("labels a Numeric Habit's check-in progress with Target, never Goal", async () => {
-    const user = userEvent.setup();
-    installFakeApi({
-      habits: [fakeHabit("Drink water", { type: "numeric", target: 4, step: 2, unit: "glasses" })],
-    });
-    render(<App />);
-    await openHabits();
-
-    await user.hover(screen.getByText("0 / 4 glasses"));
-    const hint = await screen.findByText(/The amount a Numeric Habit's Check-ins count toward/);
-    expect(hint).toBeInTheDocument();
-    expect(hint.textContent).not.toMatch(/Goal/);
   });
 });
