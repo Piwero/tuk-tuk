@@ -300,11 +300,20 @@ export function dueInstant(task: Task): number | null {
  * - "weekdayLong": "Monday" (history row label)
  * - "short": "Jul 6" (compact day label)
  * - "shortEuro": "10/08/26" (history row label)
+ * - "date": "Jul 6, 2026" (Goal window, where the year matters)
  * - "time": "14:00" (24-hour wall clock)
  * - "dateTime": "Jul 10, 14:00" — "short" and "time" composed
  */
 export type DateStyle =
-  "full" | "month" | "weekday" | "weekdayLong" | "short" | "shortEuro" | "time" | "dateTime";
+  | "full"
+  | "month"
+  | "weekday"
+  | "weekdayLong"
+  | "short"
+  | "shortEuro"
+  | "date"
+  | "time"
+  | "dateTime";
 
 // Fixed locales, deterministic output: en-US for month/weekday names, en-GB
 // for the numeric day/month/year order "shortEuro" wants — consistent with
@@ -319,6 +328,7 @@ const FORMATTERS: { [S in Exclude<DateStyle, "dateTime">]: Intl.DateTimeFormat }
   month: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }),
   weekday: new Intl.DateTimeFormat("en-US", { weekday: "short" }),
   weekdayLong: new Intl.DateTimeFormat("en-US", { weekday: "long" }),
+  date: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }),
   short: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }),
   shortEuro: new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
@@ -436,4 +446,25 @@ function contextLabel(
   }
   const weekday = formatDate(due, "weekday");
   return times === "" ? weekday : `${weekday}, ${times}`;
+}
+
+export function durationMinutes(task: Pick<Task, "start_date" | "due_date">): number | null {
+  return task.start_date === null || task.due_date === null
+    ? null
+    : Math.max(
+        0,
+        Math.round(
+          (new Date(task.due_date).getTime() - new Date(task.start_date).getTime()) / 60000,
+        ),
+      );
+}
+
+export function formatDuration(task: Pick<Task, "start_date" | "due_date">): string | null {
+  const minutes = durationMinutes(task);
+  if (minutes === null) return null;
+  return minutes % 60 === 0
+    ? `${minutes / 60}h`
+    : minutes < 60
+      ? `${minutes}m`
+      : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
