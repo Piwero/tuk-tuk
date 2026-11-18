@@ -372,8 +372,11 @@ type Scheduled = Pick<Task, "start_date" | "due_date" | "is_all_day">;
  *   time, an all-day Task nothing, and lateness within the last week reads
  *   "Yesterday" or a weekday.
  * - "week": the next seven days read as weekday names.
+ * - "detail": Task detail's Date row names the day relative to today
+ *   ("Today, 10:00–11:30", "Tomorrow", "Yesterday"), the rest of the coming
+ *   week by weekday, and anything else absolutely.
  * - "absolute": the full "Jul 6" form (List, Search, completed views). */
-export type ScheduleContext = "today" | "week" | "absolute";
+export type ScheduleContext = "today" | "week" | "detail" | "absolute";
 
 const WEEK_DAYS = 7;
 
@@ -415,7 +418,7 @@ export function formatSchedule(
 function contextLabel(
   task: Scheduled,
   dueIso: string,
-  context: "today" | "week",
+  context: "today" | "week" | "detail",
   now: Date,
 ): string | null {
   const start = task.start_date?.slice(0, 10) ?? null;
@@ -430,6 +433,15 @@ function contextLabel(
     : task.start_date === null
       ? formatDate(due, "time")
       : `${formatDate(new Date(task.start_date), "time")}–${formatDate(due, "time")}`;
+  if (context === "detail") {
+    const named =
+      ahead === 0 ? "Today" : ahead === 1 ? "Tomorrow" : ahead === -1 ? "Yesterday" : null;
+    const day = named ?? (ahead > 1 && ahead < WEEK_DAYS ? formatDate(due, "weekday") : null);
+    if (day === null) {
+      return null;
+    }
+    return times === "" ? day : `${day}, ${times}`;
+  }
   if (context === "today") {
     if (ahead === 0) {
       return times;

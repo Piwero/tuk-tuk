@@ -108,8 +108,6 @@
   .task-detail-header > button:hover {
     background: var(--surface-hover);
   }
-  .task-dates,
-  .task-reminders,
   .task-tags {
     display: grid;
     gap: var(--space-2);
@@ -119,8 +117,6 @@
     margin: 0;
     font-size: var(--text-sm);
   }
-  .task-dates legend,
-  .task-reminders legend,
   .task-tags legend {
     padding: 0 var(--space-1);
     font-size: var(--text-xs);
@@ -129,38 +125,71 @@
     text-transform: uppercase;
     color: var(--text-secondary);
   }
-  .task-reminders ul {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: grid;
-    gap: var(--space-1);
+  /* Date and Reminder rows (#453). */
+  .date-row.overdue .property-row-trigger {
+    color: var(--text-danger);
   }
-  .task-reminders li {
-    display: flex;
-    gap: var(--space-2);
-    align-items: center;
-  }
-  .task-reminders .offset-editor {
-    display: flex;
-    gap: var(--space-2);
-    align-items: center;
-  }
-  .task-reminders input[type="number"] {
-    width: 72px;
-  }
-  .task-dates .date-actions,
-  .task-dates .date-editor,
-  .task-dates .date-editor-actions {
+  .date-row-times {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+  .date-row-times label {
+    display: grid;
+    gap: 2px;
+  }
+  .reminder-row-value {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
     align-items: center;
   }
-  .task-dates .date-label {
-    margin: 0;
-    font-variant-numeric: tabular-nums;
+  .reminder-row-empty {
     font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .reminder-chips {
+    display: contents;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .reminder-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 2px 0 var(--space-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  .reminder-chip button,
+  .reminder-add {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .reminder-chip button:hover,
+  .reminder-add:hover {
+    background: var(--surface-hover);
+  }
+  .reminder-custom {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    font-size: var(--text-sm);
+  }
+  .reminder-custom input[type="number"] {
+    width: 72px;
   }
   .repeat-editor,
   .repeat-weekdays {

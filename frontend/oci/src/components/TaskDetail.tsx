@@ -18,27 +18,15 @@ import {
   type Task,
   type TaskList,
 } from "../api";
-import {
-  addDays,
-  allDaySchedule,
-  clearedSchedule,
-  draftFrom,
-  formatSchedule,
-  isOverdue,
-  localDayOf,
-  nextMonday,
-  scheduleFromDraft,
-  type DateDraft,
-} from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { PRIORITY_LABELS } from "../grouping";
 import { appendOrder, planInsertBefore } from "../ordering";
-import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
-import { DateFieldset } from "./DateFieldset";
+import { DateRow } from "./DateRow";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
 import { PriorityIndicator } from "./PriorityIndicator";
 import { PropertyOptions, PropertyRow } from "./PropertyRow";
+import { ReminderRow } from "./ReminderRow";
 import { RepeatRow } from "./RepeatRow";
 
 const PRIORITIES = Object.keys(PRIORITY_LABELS) as Priority[];
@@ -104,8 +92,6 @@ export function TaskDetail({
     };
   }, [task.list_id]);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
-  const [dateDraft, setDateDraft] = useState<DateDraft | null>(null);
-  const [offsetDraft, setOffsetDraft] = useState<{ amount: string; unit: OffsetUnit } | null>(null);
   const [newItemTitle, setNewItemTitle] = useState("");
   const [itemEditor, setItemEditor] = useState<{ id: number; title: string } | null>(null);
   // Tracks a drag on the mobile sheet's handle (issue #170) — desktop never
@@ -118,8 +104,6 @@ export function TaskDetail({
   useEffect(() => {
     setTitle(task.title);
     setDescriptionDraft(null);
-    setDateDraft(null);
-    setOffsetDraft(null);
   }, [task.id, task.title]);
 
   async function saveTitle(): Promise<void> {
@@ -188,54 +172,6 @@ export function TaskDetail({
       ? task.tags.filter((t) => t.id !== tag.id).map((t) => t.id)
       : [...task.tags.map((t) => t.id), tag.id];
     onTaskChanged(await updateTask(task.id, { tag_ids: tagIds }));
-  }
-
-  async function quickPick(dueDay: string): Promise<void> {
-    onTaskChanged(await updateTask(task.id, allDaySchedule(null, dueDay)));
-    setDateDraft(null);
-  }
-
-  async function clearSchedule(): Promise<void> {
-    onTaskChanged(await updateTask(task.id, clearedSchedule()));
-    setDateDraft(null);
-  }
-
-  async function addReminder(offset: string): Promise<void> {
-    if (!task.reminders.includes(offset)) {
-      onTaskChanged(await updateTask(task.id, { reminders: [...task.reminders, offset] }));
-    }
-    setOffsetDraft(null);
-  }
-
-  async function removeReminder(offset: string): Promise<void> {
-    onTaskChanged(
-      await updateTask(task.id, {
-        reminders: task.reminders.filter((existing) => existing !== offset),
-      }),
-    );
-  }
-
-  async function addCustomReminder(): Promise<void> {
-    if (offsetDraft === null) {
-      return;
-    }
-    const amount = Number(offsetDraft.amount);
-    if (!Number.isInteger(amount) || amount < 0) {
-      return;
-    }
-    await addReminder(customOffset(amount, offsetDraft.unit));
-  }
-
-  async function saveDateDraft(): Promise<void> {
-    if (dateDraft === null) {
-      return;
-    }
-    const schedule = scheduleFromDraft(dateDraft);
-    if (schedule === null) {
-      return;
-    }
-    onTaskChanged(await updateTask(task.id, schedule));
-    setDateDraft(null);
   }
 
   async function renameCheckItem(): Promise<void> {
@@ -473,141 +409,9 @@ export function TaskDetail({
             </PropertyRow>
           </div>
         </Hint>
+        <DateRow task={task} onTaskChanged={onTaskChanged} />
+        <ReminderRow task={task} onTaskChanged={onTaskChanged} />
       </div>
-      <fieldset className="task-dates">
-        <legend>Date</legend>
-        {task.due_date !== null && dateDraft === null && (
-          <p className={isOverdue(task) ? "date-label overdue" : "date-label"}>
-            {formatSchedule(task)}
-          </p>
-        )}
-        {dateDraft === null ? (
-          <div className="date-actions">
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => void quickPick(localDayOf(new Date()))}
-            >
-              Today
-            </button>
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => void quickPick(addDays(localDayOf(new Date()), 1))}
-            >
-              Tomorrow
-            </button>
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => void quickPick(nextMonday(localDayOf(new Date())))}
-            >
-              Next Week
-            </button>
-            <button
-              className="btn-secondary"
-              type="button"
-              aria-label="Custom date"
-              onClick={() => setDateDraft(draftFrom(task))}
-            >
-              Custom…
-            </button>
-            {task.due_date !== null && (
-              <button className="btn-secondary" type="button" onClick={() => void clearSchedule()}>
-                Clear date
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="date-editor-actions">
-            <DateFieldset draft={dateDraft} onChange={setDateDraft} />
-            <button className="btn-primary" type="button" onClick={() => void saveDateDraft()}>
-              Save date
-            </button>
-            <button className="btn-quiet" type="button" onClick={() => setDateDraft(null)}>
-              Cancel
-            </button>
-          </div>
-        )}
-      </fieldset>
-      <fieldset className="task-reminders">
-        <legend>Reminders</legend>
-        {task.due_date === null ? (
-          <p className="hint">Set a date to add Reminders.</p>
-        ) : (
-          <>
-            {task.reminders.length > 0 && (
-              <ul aria-label="Reminders">
-                {task.reminders.map((offset) => (
-                  <li key={offset}>
-                    {reminderLabel(offset)}
-                    <IconButton
-                      icon="x"
-                      label={`Remove reminder ${reminderLabel(offset)}`}
-                      onClick={() => void removeReminder(offset)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-            <select
-              aria-label="Add a reminder"
-              value=""
-              onChange={(event) => {
-                const choice = event.target.value;
-                if (choice === "custom") {
-                  setOffsetDraft({ amount: "1", unit: "hours" });
-                } else if (choice !== "") {
-                  void addReminder(choice);
-                }
-              }}
-            >
-              <option value="">Add a reminder…</option>
-              {REMINDER_PRESETS.map((preset) => (
-                <option key={preset.offset} value={preset.offset}>
-                  {preset.label}
-                </option>
-              ))}
-              <option value="custom">Custom…</option>
-            </select>
-            {offsetDraft !== null && (
-              <div className="offset-editor">
-                <input
-                  type="number"
-                  min={0}
-                  aria-label="Offset amount"
-                  value={offsetDraft.amount}
-                  onChange={(event) =>
-                    setOffsetDraft({ ...offsetDraft, amount: event.target.value })
-                  }
-                />
-                <select
-                  aria-label="Offset unit"
-                  value={offsetDraft.unit}
-                  onChange={(event) =>
-                    setOffsetDraft({ ...offsetDraft, unit: event.target.value as OffsetUnit })
-                  }
-                >
-                  <option value="minutes">minutes</option>
-                  <option value="hours">hours</option>
-                  <option value="days">days</option>
-                </select>
-                <span>before</span>
-                <button
-                  className="btn-primary"
-                  type="button"
-                  onClick={() => void addCustomReminder()}
-                >
-                  Add reminder
-                </button>
-                <button className="btn-quiet" type="button" onClick={() => setOffsetDraft(null)}>
-                  Cancel
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </fieldset>
       <fieldset className="task-tags">
         <legend>Tags</legend>
         {allTags.length === 0 && <p className="hint">No tags yet — add one in the sidebar.</p>}
