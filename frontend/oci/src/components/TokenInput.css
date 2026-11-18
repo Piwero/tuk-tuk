@@ -54,20 +54,12 @@
   }
 
   .token-input-dropdown {
-    position: absolute;
-    top: calc(100% + var(--space-1));
-    left: 0;
-    z-index: var(--z-popover);
     min-width: var(--popover-min-width);
     max-height: var(--popover-max-height);
-    margin: 0;
+    margin: calc(var(--space-1) * -1);
     padding: var(--space-1);
     overflow-y: auto;
     list-style: none;
-    background: var(--surface-raised);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
   }
 
   .token-input-dropdown li {
