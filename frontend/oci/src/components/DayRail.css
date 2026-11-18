@@ -84,4 +84,37 @@
     font-variant-numeric: tabular-nums;
     color: var(--text-secondary);
   }
+
+  .rail-habits {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .rail-habit {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+
+  .rail-habit-check {
+    min-width: var(--tap-target, 44px);
+    min-height: var(--tap-target, 44px);
+  }
+
+  .rail-habit-name {
+    flex: 1;
+  }
+
+  .rail-habit-progress,
+  .rail-habit-streak {
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+  }
 }
