@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +15,13 @@ async function openTaskDetail(title: string): Promise<void> {
   await screen.findByRole("complementary", { name: "Task details" });
 }
 
+/** Opens the Key Result row's popover and returns its menu. */
+async function openPicker(): Promise<HTMLElement> {
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("button", { name: /^Key Result/ }));
+  return screen.getByRole("menu", { name: "Key Result" });
+}
+
 describe("Task-sourced Key Results (issue #236)", () => {
   it("attaches a Task to a Key Result from the Task form", async () => {
     const goal = fakeGoal("Ship v2");
@@ -23,8 +30,10 @@ describe("Task-sourced Key Results (issue #236)", () => {
     render(<App />);
     await openTaskDetail("Write code");
 
-    const picker = await screen.findByLabelText("Key result");
-    fireEvent.change(picker, { target: { value: String(goal.key_results[0]!.id) } });
+    const picker = await openPicker();
+    await userEvent.click(
+      within(picker).getByRole("menuitemradio", { name: "Ship v2: Tasks done" }),
+    );
 
     await waitFor(() => {
       expect(api.tasks.find((t) => t.title === "Write code")?.key_result_id).toBe(
@@ -40,7 +49,7 @@ describe("Task-sourced Key Results (issue #236)", () => {
     render(<App />);
     await openTaskDetail("Write code");
 
-    const picker = await screen.findByLabelText("Key result");
+    const picker = await openPicker();
     expect(picker).toHaveTextContent("Ship v2: Tasks done");
   });
 
@@ -53,9 +62,14 @@ describe("Task-sourced Key Results (issue #236)", () => {
     render(<App />);
     await openTaskDetail("Write code");
 
-    const picker = await screen.findByLabelText("Key result");
-    expect(picker).toHaveValue(String(kr.id));
-    fireEvent.change(picker, { target: { value: "" } });
+    expect(
+      await screen.findByRole("button", { name: "Key Result Ship v2: Tasks done" }),
+    ).toBeInTheDocument();
+    const picker = await openPicker();
+    expect(
+      within(picker).getByRole("menuitemradio", { name: "Ship v2: Tasks done" }),
+    ).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(within(picker).getByRole("menuitemradio", { name: "No Key Result" }));
 
     await waitFor(() => {
       expect(api.tasks.find((t) => t.title === "Write code")?.key_result_id).toBeNull();
@@ -72,7 +86,7 @@ describe("Task-sourced Key Results (issue #236)", () => {
     render(<App />);
     await openTaskDetail("Write code");
 
-    const picker = await screen.findByLabelText("Key result");
+    const picker = await openPicker();
     expect(picker).not.toHaveTextContent("Manual KR");
     expect(picker).toHaveTextContent("Countable");
   });
