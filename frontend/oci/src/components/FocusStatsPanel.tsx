@@ -14,7 +14,7 @@ import {
   type Habit,
   type Task,
 } from "../api";
-import { addDays, browserTimeZone, localDayOf, shortDayLabel } from "../dates";
+import { addDays, browserTimeZone, diffDays, localDayOf, shortDayLabel } from "../dates";
 import { linkFields } from "../focusLink";
 import { FocusSessionForm, type FocusSessionFormValues } from "./FocusSessionForm";
 import { Icon } from "./Icon";
@@ -76,7 +76,9 @@ interface FocusStatsViewProps {
 /** The Focus statistics + history screen: totals by day and Monday-started
  * week, and per-Task / per-Habit breakdowns over a selectable inclusive day
  * range (the last 7 days by default), each rendered as a chart with its own
- * empty state — plus the full session history, where a past session can be
+ * empty state — plus the session history for that same range, grouped by local
+ * start day (matching the statistics), newest day first, where a past session
+ * can be
  * added retroactively, edited, or deleted (#162). Split out from the Focus
  * timer screen so the running clock never has to share space with this. */
 export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
@@ -109,6 +111,16 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
     void fetchOpenTasks().then((page) => setTasks(page.items));
     void fetchHabits().then((page) => setHabits(page.items.filter((habit) => !habit.is_archived)));
   }, [loadSessions]);
+
+  const rangeDays = start !== "" && end !== "" && start <= end ? diffDays(end, start) + 1 : 0;
+  const totalSeconds = (stats?.days ?? []).reduce((total, day) => total + day.seconds, 0);
+  const rangeSessions = sessions.filter((session) => {
+    const day = localDayOf(new Date(session.started_at));
+    return day >= start && day <= end;
+  });
+  const days = [
+    ...new Set(rangeSessions.map((session) => localDayOf(new Date(session.started_at)))),
+  ];
 
   const linkName = (session: FocusSession): string | null => {
     if (session.task_id !== null) {
@@ -150,6 +162,39 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
     await Promise.all([loadSessions(), loadStats()]);
   }
 
+  function renderSession(session: FocusSession): JSX.Element {
+    if (editor?.mode === "edit" && editor.id === session.id) {
+      return (
+        <li key={session.id}>
+          <FocusSessionForm
+            tasks={tasks}
+            habits={habits}
+            initial={session}
+            onSubmit={(values) => void handleEdit(session, values)}
+            onCancel={() => setEditor(null)}
+          />
+        </li>
+      );
+    }
+    const linked = linkName(session);
+    return (
+      <li key={session.id} className="focus-session">
+        <span className="focus-mode">{session.mode}</span>
+        <span className="focus-duration">{Math.round(session.duration_seconds / 60)} min</span>
+        {linked !== null && <span className="focus-link">{linked}</span>}
+        {session.note !== "" && <span className="focus-note">{session.note}</span>}
+        <span className="row-actions">
+          <IconButton
+            icon="pencil"
+            label="Edit session"
+            onClick={() => setEditor({ mode: "edit", id: session.id })}
+          />
+          <IconButton icon="x" label="Delete session" onClick={() => void handleDelete(session)} />
+        </span>
+      </li>
+    );
+  }
+
   return (
     <div className="focus-stats-view">
       <button type="button" className="focus-back-link btn-quiet" onClick={onBack}>
@@ -178,6 +223,12 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
             />
           </label>
         </div>
+        {stats !== null && rangeDays > 0 && (
+          <div className="focus-stats-summary">
+            <p>Total: {minutes(totalSeconds)}</p>
+            <p>Daily average: {minutes(totalSeconds / rangeDays)}</p>
+          </div>
+        )}
         <h3>By day</h3>
         <BarChart
           ariaLabel="Daily focus"
@@ -221,46 +272,16 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
       </section>
       <section className="focus-history">
         <h2>Sessions</h2>
-        <ul aria-label="Focus Sessions">
-          {sessions.map((session) => {
-            if (editor?.mode === "edit" && editor.id === session.id) {
-              return (
-                <li key={session.id}>
-                  <FocusSessionForm
-                    tasks={tasks}
-                    habits={habits}
-                    initial={session}
-                    onSubmit={(values) => void handleEdit(session, values)}
-                    onCancel={() => setEditor(null)}
-                  />
-                </li>
-              );
-            }
-            const linked = linkName(session);
-            return (
-              <li key={session.id} className="focus-session">
-                <span className="focus-mode">{session.mode}</span>
-                <span className="focus-duration">
-                  {Math.round(session.duration_seconds / 60)} min
-                </span>
-                {linked !== null && <span className="focus-link">{linked}</span>}
-                {session.note !== "" && <span className="focus-note">{session.note}</span>}
-                <span className="row-actions">
-                  <IconButton
-                    icon="pencil"
-                    label="Edit session"
-                    onClick={() => setEditor({ mode: "edit", id: session.id })}
-                  />
-                  <IconButton
-                    icon="x"
-                    label="Delete session"
-                    onClick={() => void handleDelete(session)}
-                  />
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        {days.map((day) => (
+          <section key={day} aria-label={shortDayLabel(day)}>
+            <h3>{shortDayLabel(day)}</h3>
+            <ul aria-label={`Focus Sessions on ${shortDayLabel(day)}`}>
+              {rangeSessions
+                .filter((session) => localDayOf(new Date(session.started_at)) === day)
+                .map((session) => renderSession(session))}
+            </ul>
+          </section>
+        ))}
         {sessions.length === 0 && editor === null && (
           <p className="focus-history-empty">No Focus Sessions recorded yet.</p>
         )}
