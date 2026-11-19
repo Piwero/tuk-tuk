@@ -224,14 +224,14 @@ describe("Direct load of a static view's URL", () => {
     expect(window.location.pathname).toBe("/habits");
   });
 
-  it("opens Settings directly at /settings", async () => {
+  it("opens Settings directly at /settings/account", async () => {
     installFakeApi();
-    window.history.replaceState(null, "", "/settings");
+    window.history.replaceState(null, "", "/settings/account");
 
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/settings");
+    expect(window.location.pathname).toBe("/settings/account");
   });
 
   it("opens a blank Search directly at /search", async () => {

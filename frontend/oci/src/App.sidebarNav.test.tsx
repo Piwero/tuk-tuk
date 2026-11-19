@@ -53,7 +53,10 @@ describe("Sidebar navigation (#451)", () => {
     render(<App onLogout={() => undefined} />);
     expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("App menu"));
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "/settings/account",
+    );
     expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Switch to .* mode/ })).toBeInTheDocument();
   });

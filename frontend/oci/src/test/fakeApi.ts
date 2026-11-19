@@ -440,11 +440,56 @@ export const FAKE_ADMIN: FakeUser = {
 const MAX_USERNAME_LENGTH = 64;
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+$/;
 
-// All a User may reach while a forced step is pending (app.middleware).
-const FORCED_STEP_PATHS = new Set([
-  "/api/v1/auth/me",
-  "/api/v1/auth/complete",
-  "/api/v1/auth/logout",
+/** What `GET /auth/me` returns for `account` (the CurrentUser shape). */
+function currentUserRecord(account: FakeUser): Record<string, unknown> {
+  return {
+    id: account.id,
+    username: account.username,
+    email: account.email,
+    is_admin: account.is_admin,
+    must_change_password: account.must_change_password,
+    must_complete_profile: account.must_complete_profile,
+  };
+}
+
+/** The backend's per-field 409 (app.users.ensure_identity_free) when a User
+ * other than `except` already holds `username` or `email`, ignoring case. */
+function identityConflict(
+  users: FakeUser[],
+  except: FakeUser | null,
+  username: string | undefined,
+  email: string | undefined,
+): Response | null {
+  const others = users.filter((candidate) => candidate !== except);
+  if (
+    username !== undefined &&
+    others.some((other) => other.username.toLowerCase() === username.toLowerCase())
+  ) {
+    return new Response(
+      JSON.stringify({
+        error: { code: "username_taken", message: "That username is already taken" },
+      }),
+      { status: 409, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  if (
+    email !== undefined &&
+    others.some((other) => other.email?.toLowerCase() === email.toLowerCase())
+  ) {
+    return new Response(
+      JSON.stringify({ error: { code: "email_taken", message: "That email is already in use" } }),
+      { status: 409, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  return null;
+}
+
+// All a User may reach while a forced step is pending (app.middleware),
+// matched on method and path: reading /me is open, editing it is not.
+const FORCED_STEP_ROUTES = new Set([
+  "GET /api/v1/auth/me",
+  "POST /api/v1/auth/complete",
+  "POST /api/v1/auth/logout",
 ]);
 
 // Mirrors the backend's MIN_PASSWORD_LENGTH (auth router, issue #338), so
@@ -1184,7 +1229,7 @@ export function installFakeApi({
       }
       // 403, not 401: the session is valid, just not usable until the step
       // is done — so the frontend's log-out-on-401 listener leaves it be.
-      if (!FORCED_STEP_PATHS.has(url.pathname)) {
+      if (!FORCED_STEP_ROUTES.has(`${method} ${url.pathname}`)) {
         if (account.must_complete_profile) {
           return json(
             {
@@ -1210,15 +1255,35 @@ export function installFakeApi({
       }
     }
     if (method === "GET" && url.pathname === "/api/v1/auth/me") {
+      return json(currentUserRecord(sessionUser() as FakeUser));
+    }
+    if (method === "PATCH" && url.pathname === "/api/v1/auth/me") {
+      // The signed-in User's own profile edit (#474): only the fields sent
+      // change, under the same rules as account creation.
       const account = sessionUser() as FakeUser;
-      return json({
-        id: account.id,
-        username: account.username,
-        email: account.email,
-        is_admin: account.is_admin,
-        must_change_password: account.must_change_password,
-        must_complete_profile: account.must_complete_profile,
-      });
+      const input = body as { username?: string; email?: string };
+      const username = input.username?.trim();
+      if (username !== undefined && (username === "" || username.length > MAX_USERNAME_LENGTH)) {
+        return unprocessable(
+          "invalid_username",
+          `Username must be 1 to ${MAX_USERNAME_LENGTH} characters`,
+        );
+      }
+      const email = input.email?.trim();
+      if (email !== undefined && !EMAIL_PATTERN.test(email)) {
+        return unprocessable("invalid_email", "Enter a valid email address");
+      }
+      const conflict = identityConflict(state.users, account, username, email);
+      if (conflict !== null) {
+        return conflict;
+      }
+      if (username !== undefined) {
+        account.username = username;
+      }
+      if (email !== undefined) {
+        account.email = email;
+      }
+      return json(currentUserRecord(account));
     }
     if (method === "GET" && url.pathname === "/api/v1/auth/session") {
       return new Response(null, { status: 204 });
