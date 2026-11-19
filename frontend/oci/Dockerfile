@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Base: node + deps (shared by dev and build) ----
-FROM node:20-alpine AS base
+FROM node:26-alpine AS base
 WORKDIR /app/frontend/oci
 
 COPY frontend/oci/package*.json ./
