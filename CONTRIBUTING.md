@@ -191,12 +191,12 @@ The app refuses to start without `APP_MASTER_KEY` set.
 ### Pre-v2 env import
 
 If `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `ASSIST_*` are still set in
-`.env`, the first boot with no `settings` row imports them. If
-`AUTH_PASSWORD_HASH` is set while no User can log in yet, it becomes user #1's
-password (creating user #1, username `admin`, if the database has none) and
-the setup screen is skipped; that User completes their profile on first
-login. Each import happens at most once; after that, the database is
-authoritative. `mise run backend:hash-password` still
+`.env`, the first User created (by `/setup`, or by the import below) starts
+with them in their own settings. If `AUTH_PASSWORD_HASH` is set while no User
+can log in yet, it becomes user #1's password (creating user #1, username
+`admin`, if the database has none) and the setup screen is skipped; that User
+completes their profile on first login. Each import happens at most once;
+after that, the database is authoritative. `mise run backend:hash-password` still
 generates an `AUTH_PASSWORD_HASH` value for this path.
 
 ### In production

@@ -8,7 +8,13 @@ from httpx import Response
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import FakeClock, app_settings_row, create_user_row, run_sql
+from tests.conftest import (
+    FakeClock,
+    app_settings_row,
+    create_user_row,
+    run_sql,
+    user_settings_row,
+)
 
 SETUP = {"username": "ana", "email": "ana@example.com", "password": "a-new-password"}
 
@@ -238,7 +244,7 @@ class TestUpgradeImport:
 
         assert [row[1] for row in users(database_url)] == ["ana"]
 
-    def test_google_credentials_are_imported_on_first_boot(
+    def test_google_credentials_are_imported_onto_the_first_admin(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:
         with fresh_client(
@@ -247,7 +253,8 @@ class TestUpgradeImport:
             google_client_id="a-client-id",
             google_client_secret="a-client-secret",
         ) as client:
-            row = app_settings_row(client.app)  # type: ignore[arg-type]
+            setup(client)
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
 
         assert row.google_client_id == "a-client-id"
         assert row.encrypted_google_client_secret is not None
@@ -262,12 +269,13 @@ class TestUpgradeImport:
         with fresh_client(
             database_url, fake_clock, google_client_id="a-client-id", google_client_secret=None
         ) as client:
-            row = app_settings_row(client.app)  # type: ignore[arg-type]
+            setup(client)
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
 
         assert row.google_client_id is None
         assert row.encrypted_google_client_secret is None
 
-    def test_assist_settings_are_imported_on_first_boot(
+    def test_assist_settings_are_imported_onto_the_first_admin(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:
         with fresh_client(
@@ -276,7 +284,8 @@ class TestUpgradeImport:
             assist_ollama_base_url="http://localhost:11434",
             assist_model="qwen3:14b",
         ) as client:
-            row = app_settings_row(client.app)  # type: ignore[arg-type]
+            setup(client)
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
 
         assert row.assist_ollama_base_url == "http://localhost:11434"
         assert row.assist_model == "qwen3:14b"
@@ -293,10 +302,24 @@ class TestUpgradeImport:
             assist_ollama_base_url="http://localhost:11434",
             assist_model=None,
         ) as client:
-            row = app_settings_row(client.app)  # type: ignore[arg-type]
+            setup(client)
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
 
         assert row.assist_ollama_base_url == "http://localhost:11434"
         assert row.assist_model is None
+
+    def test_the_imported_user_1_takes_the_integration_env_import(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with fresh_client(
+            database_url,
+            fake_clock,
+            auth_password_hash="an-imported-hash",
+            assist_ollama_base_url="http://localhost:11434",
+        ) as client:
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
+
+        assert row.assist_ollama_base_url == "http://localhost:11434"
 
 
 class TestEncryptionAtRest:
@@ -308,10 +331,10 @@ class TestEncryptionAtRest:
             fake_clock,
             google_client_id="a-client-id",
             google_client_secret="a-very-secret-client-secret",
-        ):
-            pass
+        ) as client:
+            setup(client)
 
-        [row] = run_sql(database_url, "SELECT encrypted_google_client_secret FROM settings")
+        [row] = run_sql(database_url, "SELECT encrypted_google_client_secret FROM user_settings")
         assert "a-very-secret-client-secret" not in row[0]
 
 

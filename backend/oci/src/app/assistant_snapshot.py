@@ -42,14 +42,14 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.app_settings import google_configured, require_app_settings
 from app.calendar_source import CalendarSource, CalendarSourceError
 from app.config import Settings
 from app.crypto import decrypt_credential
 from app.event_cache import EventCache
-from app.models import GoogleAccount, GoogleCalendar, Habit, Tag, Task, TaskList
+from app.models import GoogleAccount, GoogleCalendar, Habit, Tag, Task, TaskList, UserSettings
 from app.routers.v1.tasks import in_smart_view
 from app.schemas import Priority
+from app.user_settings import google_configured, google_oauth_client
 
 
 class WeekSnapshotTask(BaseModel):
@@ -108,6 +108,7 @@ async def _week_tasks(session: AsyncSession, local_date: date) -> list[WeekSnaps
 async def _today_events(
     session: AsyncSession,
     request_settings: Settings,
+    user_settings: UserSettings,
     calendar_source: CalendarSource,
     event_cache: EventCache,
     local_date: date,
@@ -120,9 +121,10 @@ async def _today_events(
     Google itself filters Events by the window it's given, so getting that
     window wrong in `time_zone` would silently leak yesterday's or
     tomorrow's evening Events into "today"."""
-    app_settings = await require_app_settings(session)
-    if not google_configured(app_settings) or request_settings.app_master_key is None:
+    if not google_configured(user_settings) or request_settings.app_master_key is None:
         return []
+    oauth_client = google_oauth_client(user_settings, master_key=request_settings.app_master_key)
+    owner_id = user_settings.user_id
     calendars = list(
         await session.scalars(
             select(GoogleCalendar).where(GoogleCalendar.enabled).order_by(GoogleCalendar.id)
@@ -156,9 +158,9 @@ async def _today_events(
             refresh_token = decrypt_credential(
                 account.encrypted_refresh_token, key=request_settings.app_master_key
             )
-            access_token = (await calendar_source.refresh(refresh_token)).access_token
+            access_token = (await calendar_source.refresh(oauth_client, refresh_token)).access_token
             for calendar in account_calendars:
-                cached = event_cache.get(calendar.google_calendar_id, time_min, time_max)
+                cached = event_cache.get(owner_id, calendar.google_calendar_id, time_min, time_max)
                 if cached is None:
                     entries = await calendar_source.list_events(
                         access_token,
@@ -166,7 +168,9 @@ async def _today_events(
                         time_min=time_min,
                         time_max=time_max,
                     )
-                    event_cache.set(calendar.google_calendar_id, time_min, time_max, entries)
+                    event_cache.set(
+                        owner_id, calendar.google_calendar_id, time_min, time_max, entries
+                    )
                 else:
                     entries = cached
                 events.extend(
@@ -190,6 +194,7 @@ async def build_week_snapshot(
     session: AsyncSession,
     *,
     settings: Settings,
+    user_settings: UserSettings,
     calendar_source: CalendarSource,
     event_cache: EventCache,
     local_date: date,
@@ -200,7 +205,7 @@ async def build_week_snapshot(
     snapshot (ADR 0007)."""
     tasks = await _week_tasks(session, local_date)
     events = await _today_events(
-        session, settings, calendar_source, event_cache, local_date, time_zone
+        session, settings, user_settings, calendar_source, event_cache, local_date, time_zone
     )
     list_names = [
         row.name

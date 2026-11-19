@@ -19,6 +19,7 @@ from app.errors import APIError
 from app.login_throttle import LoginThrottle
 from app.models import User
 from app.session import Clock, delete_session_cookie, set_session_cookie
+from app.user_settings import user_settings_from_env
 from app.users import create_user, find_user_by_login, install_has_password, set_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -202,8 +203,12 @@ async def setup(
 
     seeded = await session.scalar(select(User).order_by(User.id).limit(1))
     if seeded is None:
+        # The first Admin also takes the one-time integration env import
+        # (ADR 0008), as user #1 did when the lifespan created it.
         user = await create_user(
-            session, username=username, email=email, password_hash=password_hash, is_admin=True
+            session,
+            User(username=username, email=email, password_hash=password_hash, is_admin=True),
+            user_settings_from_env(request.app.state.settings),
         )
     else:
         await _ensure_identity_free(session, username, email, except_user=seeded)
