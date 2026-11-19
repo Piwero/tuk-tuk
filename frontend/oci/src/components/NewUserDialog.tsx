@@ -1,47 +1,38 @@
 import { useEffect, useRef, useState } from "react";
 
-import { type AdminUser, ApiError, createAdminUser } from "../api";
-import { EMAIL_PATTERN, MAX_USERNAME_LENGTH } from "../auth/rules";
+import { type AdminUser, createAdminUser } from "../api";
+import { identityProblem, identityRejection, type IdentityField } from "../auth/rules";
 import { generateTemporaryPassword } from "../auth/temporaryPassword";
 import { Modal } from "./Modal";
 import { OneTimePassword } from "./OneTimePassword";
 
-type Field = "username" | "email";
+type Field = IdentityField;
 /** Per field, plus `form` for a failure that belongs to no field. */
 type FieldErrors = Partial<Record<Field | "form", string>>;
 
-const USERNAME_RULE = `Enter a username of 1 to ${MAX_USERNAME_LENGTH} characters.`;
-const EMAIL_RULE = "Enter a valid email address.";
 const EMAIL_HINT = "Kept for password resets later. tuk-tuk sends no email.";
 
 /** Caught before any request, every field at once; the server's checks are
  * the backstop. */
 function validate(username: string, email: string): FieldErrors {
   const errors: FieldErrors = {};
-  if (username === "" || username.length > MAX_USERNAME_LENGTH) {
-    errors.username = USERNAME_RULE;
-  }
-  if (!EMAIL_PATTERN.test(email)) {
-    errors.email = EMAIL_RULE;
+  for (const [field, value] of [
+    ["username", username],
+    ["email", email],
+  ] as const) {
+    const problem = identityProblem(field, value);
+    if (problem !== null) {
+      errors[field] = problem;
+    }
   }
   return errors;
 }
 
 /** The server's rejection, on the field it names (#412's per-field codes). */
 function rejection(err: unknown): { field: Field | "form"; message: string } {
-  if (err instanceof ApiError) {
-    switch (err.code) {
-      case "username_taken":
-        return { field: "username", message: "That username is already taken." };
-      case "invalid_username":
-        return { field: "username", message: USERNAME_RULE };
-      case "email_taken":
-        return { field: "email", message: "That email is already in use." };
-      case "invalid_email":
-        return { field: "email", message: EMAIL_RULE };
-    }
-  }
-  return { field: "form", message: "Couldn’t create the user. Try again." };
+  return (
+    identityRejection(err) ?? { field: "form", message: "Couldn’t create the user. Try again." }
+  );
 }
 
 type Stage =

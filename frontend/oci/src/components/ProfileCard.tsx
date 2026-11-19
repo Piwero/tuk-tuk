@@ -1,38 +1,14 @@
 import { useRef, useState } from "react";
 
-import { ApiError, updateProfile, type CurrentUser } from "../api";
-import { EMAIL_PATTERN, MAX_USERNAME_LENGTH } from "../auth/rules";
+import { updateProfile, type CurrentUser } from "../api";
+import { identityProblem, identityRejection, type IdentityField } from "../auth/rules";
 import { PasswordRow } from "./PasswordRow";
 
-type ProfileFieldName = "username" | "email";
-
-const USERNAME_RULE = `Username must be 1 to ${MAX_USERNAME_LENGTH} characters.`;
-const EMAIL_RULE = "Enter a valid email address.";
-
-/** The client-side check, mirroring the server's, so an obviously bad value
- * never costs a request. */
-function invalidReason(field: ProfileFieldName, value: string): string | null {
-  if (field === "username") {
-    return value === "" || value.length > MAX_USERNAME_LENGTH ? USERNAME_RULE : null;
-  }
-  return EMAIL_PATTERN.test(value) ? null : EMAIL_RULE;
-}
+type ProfileFieldName = IdentityField;
 
 /** The server's rejection, worded for the field it names. */
 function rejectionMessage(err: unknown): string {
-  if (err instanceof ApiError) {
-    switch (err.code) {
-      case "username_taken":
-        return "That username is already taken.";
-      case "email_taken":
-        return "That email is already in use.";
-      case "invalid_username":
-        return USERNAME_RULE;
-      case "invalid_email":
-        return EMAIL_RULE;
-    }
-  }
-  return "Something went wrong. Try again.";
+  return identityRejection(err)?.message ?? "Something went wrong. Try again.";
 }
 
 interface ProfileFieldProps {
@@ -67,7 +43,7 @@ function ProfileField({ field, label, saved, onSaved }: ProfileFieldProps): JSX.
     }
     const next = value.trim();
     setSuccess(false);
-    const reason = invalidReason(field, next);
+    const reason = identityProblem(field, next);
     if (reason !== null) {
       fail(reason);
       return;

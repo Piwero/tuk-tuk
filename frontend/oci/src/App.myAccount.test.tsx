@@ -198,7 +198,7 @@ describe("Profile", () => {
   );
 
   it.each([
-    ["Username", "   ", "Username must be 1 to 64 characters."],
+    ["Username", "   ", "Enter a username of 1 to 64 characters."],
     ["Email", "not-an-email", "Enter a valid email address."],
   ])(
     "catches an invalid %s on its field without asking the server",

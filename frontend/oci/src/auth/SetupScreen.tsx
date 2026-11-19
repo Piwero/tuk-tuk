@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ApiError, setup } from "../api";
 import { AuthBrand } from "./AuthBrand";
-import { EMAIL_PATTERN, MAX_USERNAME_LENGTH, MIN_PASSWORD_LENGTH } from "./rules";
+import { identityProblem, identityRejection, MIN_PASSWORD_LENGTH } from "./rules";
 
 type Field = "username" | "email" | "password";
 
@@ -14,15 +14,14 @@ interface FieldError {
 /** Caught client-side, in field order, before any request: the server's
  * validation is the backstop, not the only check. */
 function validate(username: string, email: string, password: string): FieldError | null {
-  const name = username.trim();
-  if (name === "" || name.length > MAX_USERNAME_LENGTH) {
-    return {
-      field: "username",
-      message: `Enter a username of 1 to ${MAX_USERNAME_LENGTH} characters.`,
-    };
-  }
-  if (!EMAIL_PATTERN.test(email.trim())) {
-    return { field: "email", message: "Enter a valid email address." };
+  for (const [field, value] of [
+    ["username", username],
+    ["email", email],
+  ] as const) {
+    const problem = identityProblem(field, value.trim());
+    if (problem !== null) {
+      return { field, message: problem };
+    }
   }
   if (password.length < MIN_PASSWORD_LENGTH) {
     return {
@@ -33,15 +32,18 @@ function validate(username: string, email: string, password: string): FieldError
   return null;
 }
 
-/** The backend's per-field codes (auth router, ADR 0018), so a server-side
- * rejection marks the same field a client-side one would. */
-const FIELD_FOR_CODE: Record<string, Field> = {
-  invalid_username: "username",
-  username_taken: "username",
-  invalid_email: "email",
-  email_taken: "email",
-  invalid_password: "password",
-};
+/** The server's rejection, on the field a client-side check would mark
+ * (the auth router's per-field codes, ADR 0018). */
+function rejection(err: unknown): FieldError {
+  const identity = identityRejection(err);
+  if (identity !== null) {
+    return identity;
+  }
+  if (err instanceof ApiError) {
+    return { field: err.code === "invalid_password" ? "password" : null, message: err.message };
+  }
+  return { field: null, message: "Something went wrong. Try again." };
+}
 
 const ERROR_ID = "auth-gate-setup-error";
 const PASSWORD_HINT_ID = "auth-gate-setup-password-hint";
@@ -124,11 +126,7 @@ export function SetupScreen({
                 return;
               }
               setPending(false);
-              fail(
-                err instanceof ApiError
-                  ? { field: FIELD_FOR_CODE[err.code] ?? null, message: err.message }
-                  : { field: null, message: "Something went wrong. Try again." },
-              );
+              fail(rejection(err));
             });
         }}
       >

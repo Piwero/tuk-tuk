@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ApiError, completeStep } from "../api";
 import { NewPasswordFields } from "./NewPasswordFields";
-import { EMAIL_PATTERN, MAX_USERNAME_LENGTH, newPasswordReady } from "./rules";
+import { identityProblem, identityRejection, newPasswordReady } from "./rules";
 
 type Field = "username" | "email" | "newPassword";
 
@@ -13,31 +13,26 @@ interface Failure {
   message: string;
 }
 
-/** The backend's per-field codes for this step (auth router, ADR 0018), so
- * a rejection marks the field it is about. */
+/** The backend's other per-field codes for this step (auth router, ADR
+ * 0018), so a rejection marks the field it is about. A refused username or
+ * email is worded by the shared rules instead. */
 const FIELD_FOR_CODE: Record<string, Field> = {
   profile_required: "username",
-  invalid_username: "username",
-  username_taken: "username",
-  invalid_email: "email",
-  email_taken: "email",
   invalid_password: "newPassword",
-  password_unchanged: "newPassword",
 };
 
 /** Caught client-side, in field order, before any request; the password
  * rules are held by the checklist and the button. The server's validation
  * is the backstop. */
 function validate(username: string, email: string): Failure | null {
-  const name = username.trim();
-  if (name === "" || name.length > MAX_USERNAME_LENGTH) {
-    return {
-      field: "username",
-      message: `Enter a username of 1 to ${MAX_USERNAME_LENGTH} characters.`,
-    };
-  }
-  if (!EMAIL_PATTERN.test(email.trim())) {
-    return { field: "email", message: "Enter a valid email address." };
+  for (const [field, value] of [
+    ["username", username],
+    ["email", email],
+  ] as const) {
+    const problem = identityProblem(field, value.trim());
+    if (problem !== null) {
+      return { field, message: problem };
+    }
   }
   return null;
 }
@@ -48,6 +43,10 @@ function failureFor(err: unknown): Failure {
       field: "newPassword",
       message: "Choose a password different from your current password.",
     };
+  }
+  const identity = identityRejection(err);
+  if (identity !== null) {
+    return identity;
   }
   if (err instanceof ApiError && err.code in FIELD_FOR_CODE) {
     return { field: FIELD_FOR_CODE[err.code] ?? null, message: err.message };
