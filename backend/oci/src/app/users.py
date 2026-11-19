@@ -2,15 +2,33 @@
 with, naming the User a request acts as, finding one to log in, and the
 password and session-epoch rules every auth path shares."""
 
+import re
+
 from fastapi import Request
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.errors import APIError
 from app.models import TaskList, User, UserSettings
 
 INBOX_NAME = "Inbox"
 # The username migration 0035 gives the seeded user #1.
 SEED_USERNAME = "admin"
+
+# Lives here, next to the rules every password-setting path shares (issue
+# #338), not in Settings: making this operator-configurable would let a
+# deployment set it to 1, which is the state this constant exists to
+# remove. Enforced only where a password is set (setup, forced step, change,
+# an Admin's create or reset) — never at login, so a password set before
+# this minimum existed keeps logging in until its owner changes it.
+MIN_PASSWORD_LENGTH = 12
+
+MAX_USERNAME_LENGTH = 64
+
+# Deliberately loose: one "@" with something either side and no spaces.
+# Nothing is sent to the address yet (ADR 0018), so this catches typos like
+# a missing "@", not deliverability.
+_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+$")
 
 
 def current_user_id(request: Request) -> int:
@@ -33,6 +51,11 @@ async def create_user(
     creates a user (`/setup`, the one-time env import, an Admin's create)
     goes through here, so no user ever exists without either. Flushes; the
     caller commits.
+
+    A system code path (ADR 0018): it writes rows owned by the new User
+    whoever the request acts as (nobody yet, during `/setup` and the env
+    import; an Admin, for the admin API), so the global owner filter
+    (issue #411) must exempt it.
     """
     session.add(user)
     await session.flush()
@@ -106,3 +129,39 @@ async def import_env_password(
             user_settings,
         )
     await session.commit()
+
+
+def check_new_password(password: str) -> None:
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise APIError(
+            422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
+
+
+def clean_username(username: str) -> str:
+    username = username.strip()
+    if not username or len(username) > MAX_USERNAME_LENGTH:
+        raise APIError(
+            422, "invalid_username", f"Username must be 1 to {MAX_USERNAME_LENGTH} characters"
+        )
+    return username
+
+
+def clean_email(email: str) -> str:
+    email = email.strip()
+    if not _EMAIL_PATTERN.match(email):
+        raise APIError(422, "invalid_email", "Enter a valid email address")
+    return email
+
+
+async def ensure_identity_free(
+    session: AsyncSession, username: str, email: str, *, except_user: User | None = None
+) -> None:
+    """409 when another User already holds `username` or `email` (both
+    citext, so case is ignored), reported per field: `username_taken` or
+    `email_taken`."""
+    others = select(User).where(User.id != except_user.id) if except_user else select(User)
+    if await session.scalar(others.where(User.username == username)) is not None:
+        raise APIError(409, "username_taken", "That username is already taken")
+    if await session.scalar(others.where(User.email == email)) is not None:
+        raise APIError(409, "email_taken", "That email is already in use")

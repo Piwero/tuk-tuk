@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.db import SessionDep
+from app.errors import APIError
 from app.models import User
 from app.users import current_user_id
 
@@ -24,3 +25,13 @@ async def get_current_user(
 
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+async def require_admin(user: CurrentUserDep) -> User:
+    """The signed-in User, provided they are an Admin; 403 otherwise."""
+    if not user.is_admin:
+        raise APIError(403, "admin_required", "Only an admin can manage accounts")
+    return user
+
+
+AdminDep = Annotated[User, Depends(require_admin)]

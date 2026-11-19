@@ -20,6 +20,7 @@ from app.event_cache import EventCache
 from app.google_adapter import GoogleCalendarSource
 from app.middleware import SessionAuthMiddleware
 from app.routers.v1 import (
+    admin_users,
     assist,
     assistant,
     auth,
@@ -106,6 +107,7 @@ def create_app(
         allow_headers=["*"],
     )
     register_error_handlers(app)
+    app.include_router(admin_users.router)
     app.include_router(assist.router)
     app.include_router(assistant.router)
     app.include_router(auth.router)
