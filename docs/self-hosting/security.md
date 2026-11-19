@@ -57,7 +57,7 @@ Each server serves one User, and the Admin deploys one on that User's request
   namespace's secrets or the 1Password item can act as that User through the
   API, but can't sign in to the web app, change their password, create more
   tokens or use admin pages. Changing the password doesn't affect the pod.
-  Revoking the token in **Settings** cuts it off at once.
+  Revoking the token in **Settings → My account → API tokens** cuts it off at once.
 - A bearer-token holder can read that User's tasks and use the write tools, but not delete.
 
 ## Forgotten password

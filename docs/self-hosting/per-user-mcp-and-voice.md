@@ -22,7 +22,7 @@ with `-<user>` added to every name.
 
 ### What the User does
 
-1. In Tuk Tuk, open **Settings** and create an API token, named for example `MCP server`.
+1. In Tuk Tuk, open **Settings → My account → API tokens** and create a token, named for example `MCP server`.
    It is shown once.
 2. Send it to you the way you share passwords (a 1Password share link, for example). Never by
    chat or email.
@@ -136,7 +136,7 @@ with `-<user>` added to every name.
   once: every call answers that the account is disabled.
 - **Remove it:** delete the `mcp-<user>` Flux Kustomization (with `prune: true`, Flux deletes
   everything it created), then the 1Password item. Ask the User to revoke the API token in
-  **Settings**. That alone already cuts the server off.
+  **Settings → My account → API tokens**. That alone already cuts the server off.
 
 ## Voice agent for a User
 

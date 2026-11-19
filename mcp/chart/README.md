@@ -46,12 +46,12 @@ name, loaded with `envFrom`.
 
 | Field              | Value                                                                                   |
 | ------------------ | --------------------------------------------------------------------------------------- |
-| `TUK_API_TOKEN`    | The User's API token (`tuk_pat_...`), created by that User in **Settings**. The pod sends it as `Authorization: Bearer`. |
+| `TUK_API_TOKEN`    | The User's API token (`tuk_pat_...`), created by that User in **Settings → My account → API tokens**. The pod sends it as `Authorization: Bearer`. |
 | `MCP_BEARER_TOKEN` | At least 32 characters, e.g. `openssl rand -hex 32`. Shorter and the pod refuses to start. |
 
 Both tokens come only from this Secret, never from the ConfigMap. The pod
 never holds a password: changing the User's password does not affect it.
-Revoking the API token in **Settings** cuts the pod off at once; the User then
+Revoking the API token in **Settings → My account → API tokens** cuts the pod off at once; the User then
 creates a new token and the admin updates `TUK_API_TOKEN`.
 
 ## Notes
