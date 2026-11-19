@@ -55,7 +55,8 @@ from app.calendar_source import (  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.db import DatabaseUrl, run_migrations  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.models import AppSettings  # noqa: E402
+from app.models import AppSettings, User  # noqa: E402
+from app.users import require_seed_user  # noqa: E402
 
 
 def app_settings_row(app: FastAPI) -> AppSettings:
@@ -72,6 +73,18 @@ def app_settings_row(app: FastAPI) -> AppSettings:
             row = await get_app_settings(session)
             assert row is not None
             return row
+
+    return asyncio.run(_fetch())
+
+
+def seed_user_row(app: FastAPI) -> User:
+    """Synchronously fetches user #1 for a test's app, the user whose
+    login lockout every login attempt counts against (issue #408)."""
+    session_factory = app.state.session_factory
+
+    async def _fetch() -> User:
+        async with session_factory() as session:
+            return await require_seed_user(session)
 
     return asyncio.run(_fetch())
 

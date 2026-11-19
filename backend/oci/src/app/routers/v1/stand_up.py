@@ -17,7 +17,7 @@ from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.goal_read import build_goal_read
 from app.models import (
-    DEFAULT_OWNER,
+    SEED_USER_ID,
     CompletedOccurrence,
     Goal,
     StandupBullet,
@@ -43,7 +43,7 @@ router = APIRouter(prefix="/api/v1/stand-up", tags=["stand-up"])
 
 async def get_entry_by_date(day: date, session: SessionDep) -> StandupEntry | None:
     result = await session.execute(
-        select(StandupEntry).where(StandupEntry.date == day, StandupEntry.owner == DEFAULT_OWNER)
+        select(StandupEntry).where(StandupEntry.date == day, StandupEntry.owner_id == SEED_USER_ID)
     )
     return result.scalar_one_or_none()
 
@@ -224,7 +224,7 @@ async def read_entries(
     offset: int = Query(default=0, ge=0),
 ) -> Page[StandupEntrySummary]:
     """The history list — only dates with an actual persisted Entry, newest first."""
-    query = select(StandupEntry).where(StandupEntry.owner == DEFAULT_OWNER)
+    query = select(StandupEntry).where(StandupEntry.owner_id == SEED_USER_ID)
     total = await session.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = await session.scalars(
         query.order_by(StandupEntry.date.desc()).limit(limit).offset(offset)

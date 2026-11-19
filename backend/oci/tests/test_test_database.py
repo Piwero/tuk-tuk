@@ -16,13 +16,14 @@ def test_each_test_database_is_postgres_at_the_migration_head(database_url: str)
 @pytest.mark.parametrize("attempt", [1, 2])
 def test_writes_never_leak_between_tests(database_url: str, attempt: int) -> None:
     """Run twice: if the two runs shared a database, the second would see
-    the first's tag."""
-    assert run_sql(database_url, "SELECT id FROM tags WHERE name = %s", ("leak-check",)) == []
+    the first's user."""
+    query = "SELECT id FROM users WHERE username = %s"
+    assert run_sql(database_url, query, ("leak-check",)) == []
 
     run_sql(
         database_url,
-        "INSERT INTO tags (name, owner, created_at) VALUES (%s, %s, now())",
-        ("leak-check", "local"),
+        "INSERT INTO users (username, email) VALUES (%s, %s)",
+        ("leak-check", "leak-check@example.com"),
     )
 
-    assert len(run_sql(database_url, "SELECT id FROM tags WHERE name = %s", ("leak-check",))) == 1
+    assert len(run_sql(database_url, query, ("leak-check",))) == 1

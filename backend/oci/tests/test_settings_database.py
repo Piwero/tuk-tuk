@@ -124,8 +124,12 @@ class TestProbeSuccess:
         just `settings`."""
         run_sql(
             database_url,
-            "INSERT INTO lists (id, name, is_inbox, sort_order, owner, created_at) "
-            "VALUES (1, 'Pre-existing', false, 0, 'local', now())",
+            "INSERT INTO users (id, username, must_complete_profile) VALUES (1, 'admin', true)",
+        )
+        run_sql(
+            database_url,
+            "INSERT INTO lists (id, name, is_inbox, sort_order, owner_id, created_at) "
+            "VALUES (1, 'Pre-existing', false, 0, 1, now())",
         )
 
         result = probe_connection(database_url)

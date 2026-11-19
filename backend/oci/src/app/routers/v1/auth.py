@@ -14,8 +14,9 @@ from app.auth import password_hasher
 from app.db import SessionDep
 from app.errors import APIError
 from app.login_throttle import LoginThrottle
-from app.models import AppSettings
+from app.models import User
 from app.session import Clock, delete_session_cookie, set_session_cookie
+from app.users import require_seed_user, set_install_password
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -32,13 +33,13 @@ MIN_PASSWORD_LENGTH = 12
 LOCKOUT_THRESHOLD = 5
 
 
-def _locked_retry_after(app_settings: AppSettings, now: datetime) -> int | None:
-    """Seconds until `app_settings.login_locked_until`, or None if not
+def _locked_retry_after(user: User, now: datetime) -> int | None:
+    """Seconds until `user.login_locked_until`, or None if not
     currently locked (null, or in the past). Normalized to UTC before
     comparing against `now` (also UTC, from app.session.Clock) — a no-op
     for PostgreSQL's aware `timestamptz`, kept as a guard against any
     naive value."""
-    locked_until = app_settings.login_locked_until
+    locked_until = user.login_locked_until
     if locked_until is None:
         return None
     if locked_until.tzinfo is None:
@@ -58,21 +59,21 @@ def _too_many_attempts(retry_after: int) -> APIError:
 
 
 async def _record_failure(
-    session: AsyncSession, app_settings: AppSettings, clock: Clock, base_seconds: float
+    session: AsyncSession, user: User, clock: Clock, base_seconds: float
 ) -> None:
-    app_settings.login_failed_attempts += 1
-    if app_settings.login_failed_attempts >= LOCKOUT_THRESHOLD:
-        app_settings.login_locked_until = LoginThrottle.lock_until(
-            failure_count=app_settings.login_failed_attempts,
+    user.login_failed_attempts += 1
+    if user.login_failed_attempts >= LOCKOUT_THRESHOLD:
+        user.login_locked_until = LoginThrottle.lock_until(
+            failure_count=user.login_failed_attempts,
             now=clock(),
             base_seconds=base_seconds,
         )
     await session.commit()
 
 
-async def _record_success(session: AsyncSession, app_settings: AppSettings) -> None:
-    app_settings.login_failed_attempts = 0
-    app_settings.login_locked_until = None
+async def _record_success(session: AsyncSession, user: User) -> None:
+    user.login_failed_attempts = 0
+    user.login_locked_until = None
     await session.commit()
 
 
@@ -112,7 +113,8 @@ async def setup(
             422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
         )
 
-    app_settings.password_hash = password_hasher.hash(payload.password)
+    user = await require_seed_user(session)
+    set_install_password(app_settings, user, password_hasher.hash(payload.password))
     await session.commit()
 
     set_session_cookie(
@@ -135,18 +137,21 @@ async def login(
     app_settings = await get_app_settings(session)
     if app_settings is None or app_settings.password_hash is None:
         raise APIError(404, "not_found", "Setup has not been completed")
+    # The lockout is per user (issue #408); until per-user login (issue
+    # #410), every login attempt is user #1's.
+    user = await require_seed_user(session)
 
-    retry_after = _locked_retry_after(app_settings, clock())
+    retry_after = _locked_retry_after(user, clock())
     if retry_after is not None:
         raise _too_many_attempts(retry_after)
 
     try:
         password_hasher.verify(app_settings.password_hash, payload.password)
     except VerifyMismatchError:
-        await _record_failure(session, app_settings, clock, settings.auth_login_delay_seconds)
+        await _record_failure(session, user, clock, settings.auth_login_delay_seconds)
         raise APIError(401, "invalid_credentials", "Incorrect password") from None
 
-    await _record_success(session, app_settings)
+    await _record_success(session, user)
     set_session_cookie(response, app_settings.session_key, settings, clock)
 
 
@@ -173,28 +178,29 @@ async def change_password(
 
     app_settings = await require_app_settings(session)
     assert app_settings.password_hash is not None  # a session exists only once one is set
+    user = await require_seed_user(session)
 
-    retry_after = _locked_retry_after(app_settings, clock())
+    retry_after = _locked_retry_after(user, clock())
     if retry_after is not None:
         raise _too_many_attempts(retry_after)
 
     try:
         password_hasher.verify(app_settings.password_hash, payload.current_password)
     except VerifyMismatchError:
-        await _record_failure(session, app_settings, clock, settings.auth_login_delay_seconds)
+        await _record_failure(session, user, clock, settings.auth_login_delay_seconds)
         raise APIError(400, "invalid_current_password", "Current password is incorrect") from None
 
     # The current password was correct, so this resets the lockout
     # regardless of what happens next — an empty new password shouldn't
     # leave a prior bad-guess streak counted against a later, valid attempt.
-    await _record_success(session, app_settings)
+    await _record_success(session, user)
 
     if len(payload.new_password) < MIN_PASSWORD_LENGTH:
         raise APIError(
             422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
         )
 
-    app_settings.password_hash = password_hasher.hash(payload.new_password)
+    set_install_password(app_settings, user, password_hasher.hash(payload.new_password))
     app_settings.session_key = secrets.token_urlsafe(32)
     await session.commit()
 

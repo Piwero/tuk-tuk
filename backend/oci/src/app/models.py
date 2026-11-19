@@ -1,4 +1,5 @@
-"""SQLAlchemy models. Vocabulary per CONTEXT.md; owner column per ADR 0002."""
+"""SQLAlchemy models. Vocabulary per GLOSSARY.md; every owned row carries an
+`owner_id` (issue #408)."""
 
 from datetime import UTC, date, datetime
 
@@ -11,16 +12,23 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     String,
     Table,
     Text,
     UniqueConstraint,
+    func,
+    text,
 )
+from sqlalchemy.dialects.postgresql import CITEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
-DEFAULT_OWNER = "local"
+# User #1: the admin an existing single-user install's data was migrated to
+# (migration 0035), and the user a fresh install creates on boot. Until
+# per-user login lands, every request acts as this user.
+SEED_USER_ID = 1
 
 # Sparse gap between consecutive sort_order values, so a drag-reorder
 # writes one row (the moved one) instead of renumbering all siblings.
@@ -29,6 +37,56 @@ SORT_GAP = 1024
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+class User(Base):
+    """A person with their own login and their own data (issue #405).
+
+    `email` is nullable only while `must_complete_profile` is set: the
+    seeded user #1 has none until its profile is completed. The login
+    lockout lives here, per user (moved off `settings`, issue #408):
+    persisted so it survives a pod restart (issue #333/#339), but correct
+    across restarts only, NOT across replicas: two pods would race on
+    read-then-write, so `replicas: 1` stays load-bearing.
+    `login_locked_until` null means not locked; see app.login_throttle.
+    """
+
+    __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "email IS NOT NULL OR must_complete_profile",
+            name="users_email_until_profile_complete",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(CITEXT, unique=True)
+    email: Mapped[str | None] = mapped_column(CITEXT, unique=True, default=None)
+    password_hash: Mapped[str | None] = mapped_column(Text, default=None)
+    is_admin: Mapped[bool] = mapped_column(default=False)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    session_epoch: Mapped[int] = mapped_column(default=0)
+    must_change_password: Mapped[bool] = mapped_column(default=False)
+    must_complete_profile: Mapped[bool] = mapped_column(default=False)
+    login_failed_attempts: Mapped[int] = mapped_column(default=0)
+    login_locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class OwnedMixin:
+    """Every owned table, children included, carries its own `owner_id`, so
+    isolating one user's rows never depends on a join (issue #405).
+
+    New rows default to user #1 for now; the global owner filter (issue
+    #411) replaces that default with the current user.
+    """
+
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, default=SEED_USER_ID)
 
 
 class AppSettings(Base):
@@ -94,26 +152,13 @@ class AppSettings(Base):
     active_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     active_hours_start: Mapped[str] = mapped_column(String(5), default="09:00")
     active_hours_end: Mapped[str] = mapped_column(String(5), default="17:00")
-    # Login lockout (ADR 0005, issue #333/#339): persisted so the lockout
-    # survives a pod restart — Flux image automation restarts the pod on
-    # every release, and an in-memory counter would hand an attacker a free
-    # reset each time. Persisting here makes the lockout correct across
-    # restarts, NOT across replicas: two pods would still race on
-    # read-then-write with no advisory lock. `replicas: 1` stays
-    # load-bearing for this reason, same as it already was for the
-    # in-memory version — these columns are one more reason not to raise it.
-    # `login_locked_until` null means not locked; see app.login_throttle.
-    login_failed_attempts: Mapped[int] = mapped_column(default=0)
-    login_locked_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), default=None
-    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
 
-class Folder(Base):
+class Folder(OwnedMixin, Base):
     """A Folder — a user-created grouping of Lists in the sidebar."""
 
     __tablename__ = "folders"
@@ -121,16 +166,21 @@ class Folder(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     lists: Mapped[list["TaskList"]] = relationship(back_populates="folder")
 
 
-class TaskList(Base):
+class TaskList(OwnedMixin, Base):
     """A List — a user-created container of tasks. The Inbox is the built-in one."""
 
     __tablename__ = "lists"
+    # One Inbox per user.
+    __table_args__ = (
+        Index(
+            "uq_lists_owner_id_inbox", "owner_id", unique=True, postgresql_where=text("is_inbox")
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
@@ -143,7 +193,6 @@ class TaskList(Base):
     folder_id: Mapped[int | None] = mapped_column(
         ForeignKey("folders.id"), index=True, default=None
     )
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     folder: Mapped[Folder | None] = relationship(back_populates="lists")
@@ -160,19 +209,23 @@ task_tags = Table(
 )
 
 
-class Tag(Base):
+class Tag(OwnedMixin, Base):
     """A Tag — a first-class label (name + color) applied to any number of Tasks."""
 
     __tablename__ = "tags"
+    # A user's Tag names are unique ignoring case: "Work" and "work" would
+    # read as the same Tag in the sidebar.
+    __table_args__ = (
+        Index("uq_tags_owner_id_lower_name", "owner_id", func.lower(text("name")), unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
     color: Mapped[str | None] = mapped_column(String(32), default=None)
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class Section(Base):
+class Section(OwnedMixin, Base):
     """A Section — a named, ordered sub-group inside a List (also a Kanban column)."""
 
     __tablename__ = "sections"
@@ -181,11 +234,10 @@ class Section(Base):
     list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
     name: Mapped[str] = mapped_column(String(255))
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class Task(Base):
+class Task(OwnedMixin, Base):
     __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -216,7 +268,6 @@ class Task(Base):
         ForeignKey("sections.id"), index=True, default=None
     )
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     # Provenance of a Task converted from a Google Event (issue #111): which
     # Event it came from, remembered here since Google access is read-only
@@ -254,11 +305,11 @@ class Task(Base):
     )
 
 
-class CheckItem(Base):
+class CheckItem(OwnedMixin, Base):
     """A Check Item — one line in a Task's checklist; not a Task itself.
 
-    Composition under a Task (not a root entity), so no owner column —
-    ownership flows through the parent Task.
+    Composition under a Task (not a root entity); it still carries its own
+    `owner_id` (OwnedMixin), always the parent Task's.
     """
 
     __tablename__ = "check_items"
@@ -273,13 +324,13 @@ class CheckItem(Base):
     task: Mapped[Task] = relationship(back_populates="check_items")
 
 
-class CompletedOccurrence(Base):
+class CompletedOccurrence(OwnedMixin, Base):
     """A Completed Occurrence — the history record written when one occurrence
     of a recurring Task is completed (the Task itself stays open with its date
     advanced). The completed view and statistics read these.
 
-    History under a Task (deleted with it), so no owner column — ownership
-    flows through the parent Task.
+    History under a Task (deleted with it); it still carries its own
+    `owner_id` (OwnedMixin), always the parent Task's.
     """
 
     __tablename__ = "completed_occurrences"
@@ -292,7 +343,7 @@ class CompletedOccurrence(Base):
     is_all_day: Mapped[bool] = mapped_column(default=False)
 
 
-class Habit(Base):
+class Habit(OwnedMixin, Base):
     """A Habit — a recurring practice tracked by Check-ins rather than
     completion: Boolean (done / not done) or Numeric (an amount toward a
     Target). Not to be confused with a Goal, which is its own entity.
@@ -317,7 +368,6 @@ class Habit(Base):
     # Archived Habits leave the today screen but keep their whole Check-in
     # history; unarchiving restores them.
     is_archived: Mapped[bool] = mapped_column(default=False)
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     check_ins: Mapped[list["CheckIn"]] = relationship(
@@ -325,13 +375,13 @@ class Habit(Base):
     )
 
 
-class CheckIn(Base):
+class CheckIn(OwnedMixin, Base):
     """A Check-in — one day's progress on a Habit: a date stamp and, for
     Numeric habits, the accumulated value. Keyed by (habit, date) and
     upserted, so re-taps and backfill corrections are idempotent.
 
-    Composition under a Habit (deleted with it), so no owner column —
-    ownership flows through the parent Habit.
+    Composition under a Habit (deleted with it); it still carries its own
+    `owner_id` (OwnedMixin), always the parent Habit's.
     """
 
     __tablename__ = "check_ins"
@@ -347,7 +397,7 @@ class CheckIn(Base):
     habit: Mapped[Habit] = relationship(back_populates="check_ins")
 
 
-class Goal(Base):
+class Goal(OwnedMixin, Base):
     """A Goal — a durable outcome with a window (ADR 0012). OKR spine (title
     is the Wish, description the Outcome) with WOOP's obstacle/if_then_plan
     on top, both nullable so a Goal is creatable in seconds. Goals do not
@@ -370,7 +420,6 @@ class Goal(Base):
     is_focused: Mapped[bool] = mapped_column(default=False)
     final_score: Mapped[float | None] = mapped_column(default=None)
     retro: Mapped[str | None] = mapped_column(Text, default=None)
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     # Key Results always travel with their Goal (composition), so load them
@@ -383,7 +432,7 @@ class Goal(Base):
     )
 
 
-class KeyResult(Base):
+class KeyResult(OwnedMixin, Base):
     """A Key Result — one measurable number belonging to a Goal (ADR 0012).
     `source` is "manual" (typed in, `current_value` is a stored column),
     "habit_checkins" (summed from the linked Habit's Check-ins inside the
@@ -392,8 +441,8 @@ class KeyResult(Base):
     only meaningful/writable for "manual" — automatic sources reject writes
     to it with a 409 and compute the value in the read path instead.
 
-    Composition under a Goal (deleted with it), so no owner column —
-    ownership flows through the parent Goal.
+    Composition under a Goal (deleted with it); it still carries its own
+    `owner_id` (OwnedMixin), always the parent Goal's.
     """
 
     __tablename__ = "key_results"
@@ -417,7 +466,7 @@ class KeyResult(Base):
     goal: Mapped[Goal] = relationship(back_populates="key_results")
 
 
-class FocusSession(Base):
+class FocusSession(OwnedMixin, Base):
     """A Focus Session — one persisted period of focused work, Pomo or
     Stopwatch, optionally linked to a Task or Habit for statistics. Timers
     tick client-side; this row records the finished (or retroactively
@@ -437,11 +486,10 @@ class FocusSession(Base):
     # Wall-clock seconds spent paused: recorded focus time stays honest.
     pause_seconds: Mapped[int] = mapped_column(default=0)
     note: Mapped[str] = mapped_column(Text, default="")
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class GoogleAccount(Base):
+class GoogleAccount(OwnedMixin, Base):
     """A Google Account — a connected Google identity (issue #105): the
     Google-side account id, its email, and its refresh credential encrypted
     at rest (app.crypto, keyed by APP_MASTER_KEY). `connection_state` is
@@ -449,14 +497,15 @@ class GoogleAccount(Base):
     only ever writes "connected" — the latter is set once event/calendar
     reads can fail terminally, in a later ticket.
 
-    No owner column: this app has exactly one owner, and a Google Account
-    is itself a login credential, not owned data.
+    Owned like any other row: each user connects their own Google
+    Accounts, and the same Google identity may be connected by two users.
     """
 
     __tablename__ = "google_accounts"
+    __table_args__ = (UniqueConstraint("owner_id", "google_account_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    google_account_id: Mapped[str] = mapped_column(String(255), unique=True)
+    google_account_id: Mapped[str] = mapped_column(String(255))
     email: Mapped[str] = mapped_column(String(320))
     encrypted_refresh_token: Mapped[str] = mapped_column(Text)
     connection_state: Mapped[str] = mapped_column(String(16), default="connected")
@@ -470,7 +519,7 @@ class GoogleAccount(Base):
     )
 
 
-class GoogleCalendar(Base):
+class GoogleCalendar(OwnedMixin, Base):
     """A Google Calendar exposed by a connected Google Account (issue #106)
     — one of possibly several a single account offers (primary, secondary,
     shared, holiday/birthday feeds). `enabled` controls whether its Events
@@ -498,7 +547,7 @@ class GoogleCalendar(Base):
     account: Mapped[GoogleAccount] = relationship(back_populates="calendars")
 
 
-class StandupEntry(Base):
+class StandupEntry(OwnedMixin, Base):
     """A Stand-up Entry — one calendar date's daily stand-up: Yesterday /
     Today / Blockers Bullets, plus a Sprint-goal snapshot column (populated
     with an empty placeholder for now; the real Sprint Goal field lands in a
@@ -508,12 +557,11 @@ class StandupEntry(Base):
     """
 
     __tablename__ = "standup_entries"
-    __table_args__ = (UniqueConstraint("date", "owner"),)
+    __table_args__ = (UniqueConstraint("date", "owner_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     date: Mapped[date] = mapped_column(Date, index=True)
     sprint_goal_snapshot: Mapped[str] = mapped_column(Text, default="")
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     bullets: Mapped[list["StandupBullet"]] = relationship(
@@ -524,13 +572,13 @@ class StandupEntry(Base):
     )
 
 
-class StandupBullet(Base):
+class StandupBullet(OwnedMixin, Base):
     """One bullet within a Stand-up Entry's Yesterday / Today / Blockers
     section (`section` discriminator). Each section orders independently via
     its own sparse `sort_order`.
 
-    Composition under a StandupEntry (deleted with it), so no owner column —
-    ownership flows through the parent Entry.
+    Composition under a StandupEntry (deleted with it); it still carries
+    its own `owner_id` (OwnedMixin), always the parent Entry's.
     """
 
     __tablename__ = "standup_bullets"
@@ -545,7 +593,7 @@ class StandupBullet(Base):
     entry: Mapped[StandupEntry] = relationship(back_populates="bullets")
 
 
-class Timer(Base):
+class Timer(OwnedMixin, Base):
     """A Timer — a saved Focus Session preset (name + mode + duration,
     optionally pre-linked to a Task or Habit) for recurring scenarios like
     "Reading 30m". The tap that starts it is client-side; this row is the
@@ -563,5 +611,4 @@ class Timer(Base):
     # linked row clears the link; the preset stays.
     task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), index=True, default=None)
     habit_id: Mapped[int | None] = mapped_column(ForeignKey("habits.id"), index=True, default=None)
-    owner: Mapped[str] = mapped_column(String(64), default=DEFAULT_OWNER)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -45,6 +45,7 @@ from app.routers.v1 import (
 )
 from app.routers.v1 import settings as settings_router
 from app.session import Clock, real_clock
+from app.users import ensure_seed_user
 
 INBOX_NAME = "Inbox"
 
@@ -85,6 +86,7 @@ def create_app(
         app.state.session_factory = session_factory
         async with session_factory() as session:
             settings_row = await bootstrap_app_settings(session, app_settings)
+            await ensure_seed_user(session, settings_row)
             if (
                 google_configured(settings_row)
                 and settings_row.google_client_id is not None

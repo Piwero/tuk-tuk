@@ -10,7 +10,7 @@ from app.config import Settings
 from app.login_throttle import LoginThrottle
 from app.main import create_app
 from app.session import issue_session_token, verify_session_token
-from tests.conftest import TEST_PASSWORD, FakeClock, app_settings_row
+from tests.conftest import TEST_PASSWORD, FakeClock, app_settings_row, seed_user_row
 
 
 class TestLogin:
@@ -145,7 +145,7 @@ class TestLockout:
         )
         assert success.status_code == 204
 
-        row = app_settings_row(unauthenticated_client.app)  # type: ignore[arg-type]
+        row = seed_user_row(unauthenticated_client.app)  # type: ignore[arg-type]
         assert row.login_failed_attempts == 0
         assert row.login_locked_until is None
 
