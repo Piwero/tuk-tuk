@@ -33,14 +33,16 @@ class TestDatabaseStatus:
 
         assert response.status_code == 401
 
-    def test_reports_sqlite_for_the_default_test_setup(self, client: TestClient) -> None:
+    def test_reports_the_postgres_server_the_app_is_connected_to(
+        self, client: TestClient, database_url: str
+    ) -> None:
         response = client.get("/api/v1/settings/database")
 
         assert response.status_code == 200
         body = response.json()
-        assert body["engine"] == "sqlite"
-        assert body["host"] is None
-        assert body["database"] is None
+        assert body["engine"] == "postgresql"
+        assert body["host"] is not None
+        assert body["database"] == database_url.rsplit("/", 1)[1]
 
 
 class TestConnectionProbe:

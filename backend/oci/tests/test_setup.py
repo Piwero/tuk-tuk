@@ -2,13 +2,11 @@
 `.env` upgrade-import path (ADR 0008, issue #115).
 """
 
-import sqlite3
-
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import FakeClock, app_settings_row
+from tests.conftest import FakeClock, app_settings_row, run_sql
 
 
 def fresh_client(database_url: str, fake_clock: FakeClock) -> TestClient:
@@ -231,11 +229,5 @@ class TestEncryptionAtRest:
         with TestClient(create_app(settings, clock=fake_clock)):
             pass
 
-        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-        row = (
-            sqlite3.connect(db_path)
-            .execute("SELECT encrypted_google_client_secret FROM settings")
-            .fetchone()
-        )
-        assert row is not None
+        [row] = run_sql(database_url, "SELECT encrypted_google_client_secret FROM settings")
         assert "a-very-secret-client-secret" not in row[0]
