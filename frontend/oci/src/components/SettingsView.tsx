@@ -61,6 +61,7 @@ import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
 import { Hint } from "./Hint";
 import { ProfileCard } from "./ProfileCard";
+import { UsersPanel } from "./UsersPanel";
 
 interface MyAccountPanelProps {
   /** Set when the browser just landed back from a Google consent round
@@ -1113,7 +1114,9 @@ export function SettingsView({
     reportUser.current?.(next);
   }, []);
 
-  useEffect(() => {
+  // Re-read on every tab switch too, so a role removed since the last one
+  // takes the Users tab away on the next navigation (#477).
+  const refreshUser = useCallback((): (() => void) => {
     let cancelled = false;
     void fetchCurrentUser().then((fetched) => {
       if (!cancelled) {
@@ -1123,7 +1126,8 @@ export function SettingsView({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setUser]);
+  useEffect(() => refreshUser(), [tab, refreshUser]);
 
   const isAdmin = user?.is_admin === true;
   useEffect(() => {
@@ -1158,11 +1162,7 @@ export function SettingsView({
       {tab === "account" ? (
         <MyAccountPanel {...accountProps} user={user} onUserChange={setUser} />
       ) : (
-        isAdmin && (
-          <section aria-label="Users" className="settings-section">
-            <p className="settings-hint">Account management is coming soon.</p>
-          </section>
-        )
+        isAdmin && user !== null && <UsersPanel currentUser={user} onAccessLost={refreshUser} />
       )}
     </div>
   );

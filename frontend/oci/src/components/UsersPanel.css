@@ -1,0 +1,171 @@
+@layer components {
+  /* Settings › Users (#477): the Admin's table of accounts. On a phone the
+   table becomes a list: name and email over role and status. */
+  .users-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+  .users-head h2 {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+  }
+  .users-boundary {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .users-table {
+    width: 100%;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    background: var(--surface-card);
+  }
+  .users-table thead th {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-default);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    text-align: left;
+  }
+  .users-row > th,
+  .users-row > td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+    font-weight: var(--weight-regular);
+    text-align: left;
+    vertical-align: middle;
+  }
+  .users-row:last-child > th,
+  .users-row:last-child > td {
+    border-bottom: 0;
+  }
+  .users-who {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .users-identity {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+  .users-name {
+    color: var(--text-primary);
+    font-weight: var(--weight-semibold);
+  }
+  .users-you {
+    margin-left: var(--space-1);
+    color: var(--text-tertiary);
+    font-weight: var(--weight-regular);
+  }
+  .users-email {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    text-overflow: ellipsis;
+  }
+  .users-cell-role {
+    color: var(--text-secondary);
+  }
+  .users-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+  }
+  .users-status[data-status="active"] {
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+  }
+  .users-status[data-status="active"]::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: var(--success);
+  }
+  .users-status[data-status="pending"] {
+    background: var(--warning-soft);
+    color: var(--text-primary);
+  }
+  .users-status[data-status="disabled"] {
+    background: var(--surface-sunken);
+    color: var(--text-tertiary);
+  }
+  /* Disabled accounts are greyed (and listed last). */
+  .users-row[data-status="disabled"] .users-name,
+  .users-row[data-status="disabled"] .users-email,
+  .users-row[data-status="disabled"] .users-cell-role {
+    color: var(--text-tertiary);
+  }
+  .users-row[data-status="disabled"] .user-avatar {
+    background: var(--ink-300);
+  }
+  .users-cell-actions {
+    width: 1%;
+    text-align: right;
+  }
+
+  @media (max-width: 720px) {
+    .users-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+    .users-table tbody {
+      display: block;
+    }
+    .users-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      grid-template-areas:
+        "user user actions"
+        "role status status";
+      align-items: center;
+      column-gap: var(--space-3);
+      row-gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .users-row:last-child {
+      border-bottom: 0;
+    }
+    .users-row > th,
+    .users-row > td {
+      display: block;
+      padding: 0;
+      border-bottom: 0;
+    }
+    .users-row > .users-cell-user {
+      grid-area: user;
+      min-width: 0;
+    }
+    .users-row > .users-cell-role {
+      grid-area: role;
+      /* Line up under the name, past the avatar. */
+      padding-left: calc(32px + var(--space-3));
+    }
+    .users-row > .users-cell-status {
+      grid-area: status;
+    }
+    .users-row > .users-cell-actions {
+      grid-area: actions;
+      width: auto;
+    }
+  }
+}
