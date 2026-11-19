@@ -72,6 +72,17 @@ def _forced_step(user: User) -> Response | None:
     return None
 
 
+def _sets_session_cookie(response: Response) -> bool:
+    """Whether the route already issued (or cleared) this device's session
+    cookie, e.g. after a password change bumped the epoch. The rolling
+    reissue must then stand aside: its copy carries the epoch loaded
+    before the route ran and, sent last, would log this device out."""
+    prefix = f"{SESSION_COOKIE_NAME}=".encode()
+    return any(
+        name == b"set-cookie" and value.startswith(prefix) for name, value in response.raw_headers
+    )
+
+
 class SessionAuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, settings: Settings, clock: Clock) -> None:
         super().__init__(app)
@@ -118,7 +129,9 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
 
         request.state.user_id = user.id
         response = await call_next(request)
-        if needs_reissue(claims.issued_at, self._settings, self._clock):
+        if needs_reissue(
+            claims.issued_at, self._settings, self._clock
+        ) and not _sets_session_cookie(response):
             set_session_cookie(
                 response,
                 app_settings.session_key,

@@ -135,6 +135,8 @@ class MeResponse(BaseModel):
     is_admin: bool
     must_change_password: bool
     must_complete_profile: bool
+    # Only on the User's own record: the admin list never carries it.
+    password_changed_at: datetime
 
 
 class ProfileUpdate(BaseModel):
@@ -152,6 +154,7 @@ def _me(user: User) -> MeResponse:
         is_admin=user.is_admin,
         must_change_password=user.must_change_password,
         must_complete_profile=user.must_complete_profile,
+        password_changed_at=user.password_changed_at,
     )
 
 
@@ -184,7 +187,13 @@ async def setup(
         # (ADR 0008), as user #1 did when the lifespan created it.
         user = await create_user(
             session,
-            User(username=username, email=email, password_hash=password_hash, is_admin=True),
+            User(
+                username=username,
+                email=email,
+                password_hash=password_hash,
+                is_admin=True,
+                password_changed_at=request.app.state.clock(),
+            ),
             user_settings_from_env(request.app.state.settings),
         )
     else:
@@ -192,7 +201,7 @@ async def setup(
         user = seeded
         user.username, user.email, user.is_admin = username, email, True
         user.must_complete_profile = user.must_change_password = False
-        set_password(user, password_hash)
+        set_password(user, password_hash, now=request.app.state.clock())
     await session.commit()
 
     _sign_in(request, response, app_settings.session_key, user)
@@ -300,7 +309,7 @@ async def complete(
         user.username, user.email = username, email
 
     user.must_complete_profile = user.must_change_password = False
-    set_password(user, password_hasher.hash(payload.new_password))
+    set_password(user, password_hasher.hash(payload.new_password), now=request.app.state.clock())
     await session.commit()
 
     app_settings = await require_app_settings(session)
@@ -341,7 +350,7 @@ async def change_password(
     await _record_success(session, user)
 
     check_new_password(payload.new_password)
-    set_password(user, password_hasher.hash(payload.new_password))
+    set_password(user, password_hasher.hash(payload.new_password), now=clock())
     await session.commit()
 
     app_settings = await require_app_settings(session)

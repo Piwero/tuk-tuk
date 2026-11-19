@@ -3,6 +3,7 @@ with, naming the User a request acts as, finding one to log in, and the
 password and session-epoch rules every auth path shares."""
 
 import re
+from datetime import datetime
 
 from fastapi import Request
 from sqlalchemy import exists, or_, select
@@ -91,11 +92,13 @@ async def first_admin(session: AsyncSession) -> User | None:
     return user
 
 
-def set_password(user: User, password_hash: str) -> None:
-    """Sets a new password and bumps the session epoch, which logs out
-    every session the User already has (ADR 0018). The caller reissues
-    the cookie of the session making the change, if it should stay in."""
+def set_password(user: User, password_hash: str, *, now: datetime) -> None:
+    """Sets a new password, records `now` as when it changed (issue #475)
+    and bumps the session epoch, which logs out every session the User
+    already has (ADR 0018). The caller reissues the cookie of the session
+    making the change, if it should stay in."""
     user.password_hash = password_hash
+    user.password_changed_at = now
     user.session_epoch += 1
 
 
