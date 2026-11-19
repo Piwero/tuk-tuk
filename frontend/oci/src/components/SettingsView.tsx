@@ -61,6 +61,7 @@ import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
 import { Hint } from "./Hint";
 import { ProfileCard } from "./ProfileCard";
+import { ApiTokensCard } from "./ApiTokensCard";
 import { UsersPanel } from "./UsersPanel";
 
 interface MyAccountPanelProps {
@@ -1304,6 +1305,7 @@ function MyAccountPanel({
     <>
       <nav aria-label="Settings sections" className="settings-toc">
         <a href="#settings-profile">Profile</a>
+        <a href="#settings-api-tokens">API tokens</a>
         <a href="#settings-appearance">Appearance</a>
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
@@ -1351,6 +1353,7 @@ function MyAccountPanel({
         <a href="#settings-about">About</a>
       </nav>
       {user !== null && <ProfileCard user={user} onUserChange={onUserChange} />}
+      <ApiTokensCard />
       <section aria-label="Personalize" className="settings-group">
         <h2 className="settings-group-title">Personalize</h2>
         <section aria-label="Appearance" id="settings-appearance" className="settings-section">

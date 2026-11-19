@@ -317,6 +317,8 @@ export interface FakeApiState {
   users: FakeUser[];
   /** Whose session the cookie carries while `loggedIn`. */
   sessionUserId: number;
+  /** Every user's API tokens (#413), revoked ones included. */
+  apiTokens: FakeApiToken[];
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
@@ -451,6 +453,67 @@ export const FAKE_ADMIN: FakeUser = {
   password_changed_at: DEFAULT_PASSWORD_CHANGED_AT,
   last_active_at: null,
 };
+
+/** An API token (#413). The backend stores only the value's hash; the fake
+ * keeps the value so a test can look for it on screen. */
+export interface FakeApiToken {
+  id: number;
+  owner_id: number;
+  name: string;
+  /** `tuk_pat_<owner id>_` plus the secret's first 8 hex characters. */
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  /** Set by DELETE; a revoked token is never listed again. */
+  revoked_at: string | null;
+  token: string;
+}
+
+let nextApiTokenId = 1;
+
+/** A token value in the backend's format: `tuk_pat_<user id>_<64 hex>`. */
+function mintTokenValue(ownerId: number, id: number): string {
+  const secret = Array.from({ length: 8 }, (_, i) =>
+    ((id * 2654435761 + i * 40503) >>> 0).toString(16).padStart(8, "0"),
+  ).join("");
+  return `tuk_pat_${ownerId}_${secret}`;
+}
+
+/** A live, never-used token owned by `ownerId` for
+ * `installFakeApi({ apiTokens })`. */
+export function fakeApiToken(
+  ownerId: number,
+  name: string,
+  overrides: Partial<FakeApiToken> = {},
+): FakeApiToken {
+  const id = nextApiTokenId++;
+  const token = mintTokenValue(ownerId, id);
+  return {
+    id,
+    owner_id: ownerId,
+    name,
+    prefix: token.slice(0, `tuk_pat_${ownerId}_`.length + 8),
+    created_at: "2026-01-01T00:00:00Z",
+    last_used_at: null,
+    revoked_at: null,
+    token,
+    ...overrides,
+  };
+}
+
+/** What the token endpoints return for `token`: never its value. */
+function apiTokenRecord(token: FakeApiToken): Record<string, unknown> {
+  return {
+    id: token.id,
+    name: token.name,
+    prefix: token.prefix,
+    created_at: token.created_at,
+    last_used_at: token.last_used_at,
+  };
+}
+
+// Mirrors the backend's token name rule (app.routers.v1.api_tokens, #413).
+const MAX_TOKEN_NAME_LENGTH = 100;
 
 /** Mirrors the backend's LAST_ACTIVE_WRITE_INTERVAL (app.middleware, #478). */
 const LAST_ACTIVE_WRITE_INTERVAL_MS = 5 * 60_000;
@@ -850,6 +913,7 @@ export function installFakeApi({
   loggedIn = true,
   users = [FAKE_ADMIN],
   sessionUserId,
+  apiTokens = [],
   loginLocked = false,
   passwordChangeLocked = false,
   googleConfigured = false,
@@ -907,6 +971,8 @@ export function installFakeApi({
   users?: FakeUser[];
   /** Whose session `loggedIn` starts with; defaults to the first user. */
   sessionUserId?: number;
+  /** API tokens of any user (#413); see `fakeApiToken`. */
+  apiTokens?: FakeApiToken[];
   /** Mutate directly (or seed true) to simulate a persisted lockout
    * (issue #339) — the fake login route then answers 429 regardless of
    * the submitted password. */
@@ -1010,6 +1076,7 @@ export function installFakeApi({
     loggedIn,
     users: users.map((account) => ({ ...account })),
     sessionUserId: sessionUserId ?? users[0]?.id ?? 0,
+    apiTokens: apiTokens.map((token) => ({ ...token })),
     loginLocked,
     passwordChangeLocked,
     googleConfigured,
@@ -1094,6 +1161,52 @@ export function installFakeApi({
   /** The account this browser's session belongs to, if it has one. */
   const sessionUser = (): FakeUser | undefined =>
     state.loggedIn ? state.users.find((account) => account.id === state.sessionUserId) : undefined;
+
+  /** The signed-in User's API tokens (#413), mirrored: list (live ones,
+   * newest first), create (the value in this response only) and revoke (404
+   * for an unknown, another user's or an already revoked token). Null for a
+   * path it doesn't own. Runs after the session middleware. */
+  const apiTokensRoute = (method: string, url: URL, body: unknown): Response | null => {
+    const owner = sessionUser() as FakeUser;
+    if (method === "GET" && url.pathname === "/api/v1/auth/me/tokens") {
+      const limit = Number(url.searchParams.get("limit") ?? "50");
+      const offset = Number(url.searchParams.get("offset") ?? "0");
+      const live = state.apiTokens
+        .filter((token) => token.owner_id === owner.id && token.revoked_at === null)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
+      return json({
+        items: live.slice(offset, offset + limit).map(apiTokenRecord),
+        total: live.length,
+        limit,
+        offset,
+      });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/me/tokens") {
+      const name = ((body as { name?: unknown }).name ?? "").toString().trim();
+      if (name === "" || name.length > MAX_TOKEN_NAME_LENGTH) {
+        return unprocessable(
+          "invalid_token_name",
+          `Token name must be 1 to ${MAX_TOKEN_NAME_LENGTH} characters`,
+        );
+      }
+      const created = fakeApiToken(owner.id, name, { created_at: new Date().toISOString() });
+      state.apiTokens.push(created);
+      return json({ ...apiTokenRecord(created), token: created.token }, 201);
+    }
+    const match = /^\/api\/v1\/auth\/me\/tokens\/(\d+)$/.exec(url.pathname);
+    if (method === "DELETE" && match !== null) {
+      const target = state.apiTokens.find(
+        (token) =>
+          token.id === Number(match[1]) && token.owner_id === owner.id && token.revoked_at === null,
+      );
+      if (target === undefined) {
+        return notFound(`API token ${match[1]} not found`);
+      }
+      target.revoked_at = new Date().toISOString();
+      return new Response(null, { status: 204 });
+    }
+    return null;
+  };
 
   /** The admin users API (#412), mirrored: list, create, update (with the
    * last-admin guard) and reset password. Null for a path it doesn't own.
@@ -1447,6 +1560,15 @@ export function installFakeApi({
         account.email = email;
       }
       return json(currentUserRecord(account));
+    }
+    if (
+      url.pathname === "/api/v1/auth/me/tokens" ||
+      url.pathname.startsWith("/api/v1/auth/me/tokens/")
+    ) {
+      const tokenResponse = apiTokensRoute(method, url, body);
+      if (tokenResponse !== null) {
+        return tokenResponse;
+      }
     }
     if (url.pathname.startsWith("/api/v1/admin/")) {
       // Admin account management (#412). The admin-users store is
