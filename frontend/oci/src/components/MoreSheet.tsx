@@ -1,9 +1,11 @@
 import "./MoreSheet.css";
 import { useEffect, useRef } from "react";
 
-import type { Folder, SmartView, Tag, TaskList } from "../api";
+import type { CurrentUser, Folder, SmartView, Tag, TaskList } from "../api";
 import { byName, byOrder } from "../ordering";
+import type { SettingsTab } from "../routes";
 import { Icon, type IconName } from "./Icon";
+import { AccountSummary } from "./UserMenu";
 
 interface MoreSheetProps {
   lists: TaskList[];
@@ -22,7 +24,13 @@ interface MoreSheetProps {
   assistantAvailable: boolean;
   assistantSelected: boolean;
   searchSelected: boolean;
-  settingsSelected: boolean;
+  /** The open Settings tab, or null outside Settings. */
+  settingsTab: SettingsTab | null;
+  /** Who is signed in; the account entries head the sheet once known. */
+  user: CurrentUser | null;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
+  onLogout?: () => void;
   onClose: () => void;
   onSelectSmart: (view: SmartView) => void;
   onSelectList: (id: number) => void;
@@ -33,7 +41,7 @@ interface MoreSheetProps {
   onSelectStandup: () => void;
   onSelectAssistant: () => void;
   onSelectSearch: () => void;
-  onSelectSettings: () => void;
+  onSelectSettingsTab: (tab: SettingsTab) => void;
 }
 
 interface RowProps {
@@ -107,6 +115,46 @@ export function MoreSheet(props: MoreSheetProps): JSX.Element {
       <div className="more-sheet" role="dialog" aria-label="More" tabIndex={-1} ref={panel}>
         <div className="more-sheet-handle" aria-hidden="true" />
         <div className="more-sheet-scroll">
+          {props.user !== null && (
+            // The user menu's entries (#473): on a phone there is no top bar,
+            // so they head this sheet instead.
+            <section aria-label="Account" className="more-sheet-account">
+              <AccountSummary user={props.user} />
+              <Row
+                icon="settings"
+                label="My account"
+                selected={props.settingsTab === "account"}
+                onClick={pick(() => props.onSelectSettingsTab("account"))}
+              />
+              {props.user.is_admin && (
+                <Row
+                  icon="users"
+                  label="Users"
+                  selected={props.settingsTab === "users"}
+                  onClick={pick(() => props.onSelectSettingsTab("users"))}
+                />
+              )}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={props.darkMode}
+                className="more-sheet-row"
+                onClick={props.onToggleDarkMode}
+              >
+                <Icon name="moon" size={18} />
+                <span>Dark mode</span>
+                <span className="user-switch" aria-hidden="true" />
+              </button>
+              {props.onLogout !== undefined && (
+                <Row
+                  icon="log-out"
+                  label="Log out"
+                  selected={false}
+                  onClick={pick(props.onLogout)}
+                />
+              )}
+            </section>
+          )}
           <nav aria-label="More destinations">
             {props.goalsEnabled && (
               <Row
@@ -145,12 +193,6 @@ export function MoreSheet(props: MoreSheetProps): JSX.Element {
               label="Search"
               selected={props.searchSelected}
               onClick={pick(props.onSelectSearch)}
-            />
-            <Row
-              icon="settings"
-              label="Settings"
-              selected={props.settingsSelected}
-              onClick={pick(props.onSelectSettings)}
             />
           </nav>
           <nav aria-label="Lists" className="more-sheet-tree">

@@ -9,3 +9,10 @@ export const MAX_USERNAME_LENGTH = 64;
 
 /** Deliberately loose, like the backend's: something@something. */
 export const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+$/;
+
+/** Whether a new password and its confirmation pass both rules a forced
+ * step's checklist shows. "Both entries match" is unmet while the
+ * confirmation is empty. */
+export function newPasswordReady(newPassword: string, confirmation: string): boolean {
+  return newPassword.length >= MIN_PASSWORD_LENGTH && confirmation === newPassword;
+}

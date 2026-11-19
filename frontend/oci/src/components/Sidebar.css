@@ -9,14 +9,13 @@
     border-right: 1px solid var(--border-subtle);
     padding: 14px 10px;
     /* The sidebar itself doesn't scroll (issue #159) — `.sidebar-scroll` below
-     is the scroll region, so Settings/Log out in `.sidebar-footer` stay
-     anchored at the foot instead of scrolling away with the list tree. */
+     is the scroll region. */
     overflow: visible;
   }
 
-  /* Wraps everything above the footer (nav, search, smart lists, the list
-   tree, tags, archived) — its own scroll region, sized to whatever space
-   is left once `.sidebar-footer` takes its own height (issue #159). */
+  /* Wraps the nav, search, smart lists, the list tree, tags and archived —
+   its own scroll region (issue #159). Dark mode, Settings and Log out moved
+   to the top-right user menu (#473). */
 
   .sidebar-scroll {
     display: flex;
@@ -347,17 +346,6 @@
     border-left: 1px solid var(--border-subtle);
   }
 
-  .sidebar-footer {
-    flex: none;
-    padding-top: var(--space-3);
-    border-top: 1px solid var(--border-default);
-  }
-
-  .sidebar .sidebar-logout .icon,
-  .sidebar .sidebar-theme-toggle .icon {
-    color: var(--text-secondary);
-  }
-
   .lists-nav-heading {
     display: flex;
     align-items: center;
@@ -647,30 +635,5 @@
     .sidebar.collapsed {
       display: none;
     }
-  }
-  .sidebar-app-menu {
-    position: relative;
-  }
-
-  .sidebar-app-menu-actions {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    min-width: 180px;
-    width: 100%;
-    padding: var(--space-2);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-sm);
-    background: var(--surface-card);
-    box-shadow: var(--shadow-md);
-    z-index: 10;
-  }
-
-  .sidebar.collapsed .sidebar-app-menu-actions .nav-label {
-    display: inline;
-  }
-
-  .sidebar.collapsed .sidebar-app-menu-actions button {
-    justify-content: flex-start;
   }
 }

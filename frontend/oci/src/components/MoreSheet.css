@@ -58,6 +58,12 @@
       list-style: none;
     }
 
+    .more-sheet-account {
+      padding-bottom: var(--space-2);
+      margin-bottom: var(--space-2);
+      border-bottom: 1px solid var(--border-default);
+    }
+
     .more-sheet-folder-lists {
       padding-left: var(--space-5);
     }

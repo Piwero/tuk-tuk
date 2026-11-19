@@ -1,6 +1,6 @@
 import "./HabitForm.css";
 import "./SettingsView.css";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -82,6 +82,9 @@ interface SettingsViewProps extends Omit<MyAccountPanelProps, "user" | "onUserCh
   tab: SettingsTab;
   /** Shows another tab; `replace` for a redirect rather than a move. */
   onTabChange: (tab: SettingsTab, options?: { replace?: boolean }) => void;
+  /** Hears every fresh copy of the account record (the read on mount and
+   * each profile save), so the user menu names the account as it is now. */
+  onUserChange?: (user: CurrentUser) => void;
 }
 
 const THEME_OPTIONS: readonly { value: ThemePreference; label: string }[] = [
@@ -1099,9 +1102,16 @@ function DatabaseSettingsForm(): JSX.Element {
 export function SettingsView({
   tab,
   onTabChange,
+  onUserChange,
   ...accountProps
 }: SettingsViewProps): JSX.Element {
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [user, setStoredUser] = useState<CurrentUser | null>(null);
+  const reportUser = useRef(onUserChange);
+  reportUser.current = onUserChange;
+  const setUser = useCallback((next: CurrentUser): void => {
+    setStoredUser(next);
+    reportUser.current?.(next);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
