@@ -1,9 +1,10 @@
 import "./UserMenu.css";
-import { type KeyboardEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import type { CurrentUser } from "../api";
 import type { SettingsTab } from "../routes";
 import { Icon } from "./Icon";
+import { moveMenuFocus } from "./menuFocus";
 import { Popover } from "./Popover";
 
 /** The account's initial, the only avatar there is (#468: no uploads). */
@@ -30,28 +31,6 @@ export function AccountSummary({ user }: { user: CurrentUser }): JSX.Element {
       </div>
     </div>
   );
-}
-
-/** Arrow keys move between entries (wrapping), Home and End jump to the
- * ends; Escape and focus return are the shared Popover's. */
-function moveFocus(event: KeyboardEvent<HTMLElement>): void {
-  const items = Array.from(
-    event.currentTarget.querySelectorAll<HTMLElement>("[role=menuitem], [role=menuitemcheckbox]"),
-  );
-  const index = items.findIndex((item) => item === document.activeElement);
-  const target =
-    event.key === "ArrowDown"
-      ? (index + 1) % items.length
-      : event.key === "ArrowUp"
-        ? (index - 1 + items.length) % items.length
-        : event.key === "Home"
-          ? 0
-          : event.key === "End"
-            ? items.length - 1
-            : null;
-  if (target === null) return;
-  event.preventDefault();
-  items[target]?.focus();
 }
 
 /** The top-right avatar and its menu (#473): one menu for the account,
@@ -94,7 +73,12 @@ export function UserMenu({
       </button>
       <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
         <AccountSummary user={user} />
-        <ul role="menu" aria-label="Account menu" className="user-menu-list" onKeyDown={moveFocus}>
+        <ul
+          role="menu"
+          aria-label="Account menu"
+          className="user-menu-list"
+          onKeyDown={moveMenuFocus}
+        >
           <li role="none">
             <button
               type="button"
