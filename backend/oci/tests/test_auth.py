@@ -343,6 +343,82 @@ class TestMe:
         assert unauthenticated_client.get("/api/v1/auth/me").status_code == 401
 
 
+def update_profile(client: TestClient, **fields: str) -> Response:
+    return client.patch("/api/v1/auth/me", json=fields)
+
+
+class TestUpdateProfile:
+    """The signed-in User edits their own username and email (issue #474),
+    one field at a time, under the same rules as account creation."""
+
+    def test_changes_the_username_and_returns_the_account_record(self, client: TestClient) -> None:
+        response = update_profile(client, username="ines")
+
+        assert response.status_code == 200
+        assert response.json()["username"] == "ines"
+        assert response.json()["email"] == TEST_EMAIL
+        assert client.get("/api/v1/auth/me").json()["username"] == "ines"
+
+    def test_changes_only_the_email_when_only_the_email_is_sent(self, client: TestClient) -> None:
+        response = update_profile(client, email="  ines@example.org ")
+
+        assert response.status_code == 200
+        me = client.get("/api/v1/auth/me").json()
+        assert (me["username"], me["email"]) == (TEST_USERNAME, "ines@example.org")
+
+    def test_the_new_username_logs_in_and_this_session_stays(self, client: TestClient) -> None:
+        update_profile(client, username="ines")
+
+        assert client.get("/api/v1/tasks").status_code == 200
+        client.cookies.clear()
+        assert login(client, "ines", TEST_PASSWORD).status_code == 204
+
+    def test_keeping_ones_own_values_in_another_case_is_not_a_conflict(
+        self, client: TestClient
+    ) -> None:
+        response = update_profile(client, username=TEST_USERNAME.upper(), email=TEST_EMAIL)
+
+        assert response.status_code == 200
+
+    @pytest.mark.parametrize(
+        ("fields", "code"),
+        [
+            ({"username": "BEA"}, "username_taken"),
+            ({"email": "Bea@Example.com"}, "email_taken"),
+        ],
+    )
+    def test_a_value_another_user_holds_is_reported_on_its_field(
+        self, client: TestClient, fields: dict[str, str], code: str
+    ) -> None:
+        create_user_row(client, "bea", "bea@example.com")
+
+        response = update_profile(client, **fields)
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == code
+        me = client.get("/api/v1/auth/me").json()
+        assert (me["username"], me["email"]) == (TEST_USERNAME, TEST_EMAIL)
+
+    @pytest.mark.parametrize(
+        ("fields", "code"),
+        [
+            ({"username": "   "}, "invalid_username"),
+            ({"username": "x" * 65}, "invalid_username"),
+            ({"email": "not-an-email"}, "invalid_email"),
+        ],
+    )
+    def test_an_invalid_value_is_rejected(
+        self, client: TestClient, fields: dict[str, str], code: str
+    ) -> None:
+        response = update_profile(client, **fields)
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == code
+
+    def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
+        assert update_profile(unauthenticated_client, username="ines").status_code == 401
+
+
 class TestEnforcement:
     def test_health_is_reachable_without_a_session(
         self, unauthenticated_client: TestClient
@@ -425,12 +501,13 @@ class TestForcedStepGate:
             ("POST", "/api/v1/auth/password"),
             ("GET", "/api/v1/settings"),
             ("GET", "/openapi.json"),
+            ("PATCH", "/api/v1/auth/me"),
         ],
     )
     def test_a_pending_password_change_blocks_everything_else(
         self, temporary_password_client: TestClient, method: str, path: str
     ) -> None:
-        response = temporary_password_client.request(method, path)
+        response = temporary_password_client.request(method, path, json={"username": "cy"})
 
         assert response.status_code == 403
         assert response.json()["error"]["code"] == "password_change_required"
