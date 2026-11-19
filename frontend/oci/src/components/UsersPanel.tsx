@@ -8,11 +8,13 @@ import {
   type CurrentUser,
   fetchAdminUsers,
   type Page,
+  resetAdminUserPassword,
   updateAdminUser,
 } from "../api";
 import { formatLastActive } from "../dates";
 import { LoadError, SkeletonRows } from "./TaskViewState";
 import { NewUserDialog } from "./NewUserDialog";
+import { ResetPasswordDialog } from "./ResetPasswordDialog";
 import { LAST_ADMIN_REASON, UserActionsMenu } from "./UserActionsMenu";
 import { Avatar } from "./UserMenu";
 
@@ -149,6 +151,8 @@ export function UsersPanel({
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [creating, setCreating] = useState(false);
+  /** The account whose password is being reset, and whether it has been. */
+  const [resetting, setResetting] = useState<{ account: AdminUser; reset: boolean } | null>(null);
   /** What the last action on a row failed to do, by account id. */
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const onAccessLostRef = useRef(onAccessLost);
@@ -188,12 +192,16 @@ export function UsersPanel({
   /** Sends one row's change. On success the list is re-read quietly (no
    * skeleton) so every row, and the last-admin guard, shows what the server
    * now holds; on failure the row stays as it was and says what failed. */
-  function changeAccount(account: AdminUser, change: AdminUserChange): void {
+  function clearRowError(id: number): void {
     setRowErrors((errors) => {
       const others = { ...errors };
-      delete others[account.id];
+      delete others[id];
       return others;
     });
+  }
+
+  function changeAccount(account: AdminUser, change: AdminUserChange): void {
+    clearRowError(account.id);
     updateAdminUser(account.id, change).then(
       (updated) =>
         fetchAdminUsers().then(
@@ -223,6 +231,29 @@ export function UsersPanel({
       (error: unknown) =>
         setRowErrors((errors) => ({ ...errors, [account.id]: failure(account, change, error) })),
     );
+  }
+
+  /** Sends one account's new temporary password. On failure the row says so
+   * and stays as it was. The list is re-read once the dialog closes, not
+   * before: resetting your own password ends this session, and the re-read
+   * would leave for sign-in while the password is still on screen. */
+  function resetPassword(account: AdminUser, password: string): Promise<void> {
+    clearRowError(account.id);
+    return resetAdminUserPassword(account.id, password).then(
+      () => setResetting({ account, reset: true }),
+      (error: unknown) => {
+        setRowErrors((errors) => ({
+          ...errors,
+          [account.id]: `Couldn’t reset ${account.username}’s password. Try again.`,
+        }));
+        throw error;
+      },
+    );
+  }
+
+  function closeReset(): void {
+    if (resetting?.reset === true) rereadQuietly();
+    setResetting(null);
   }
 
   return (
@@ -273,6 +304,7 @@ export function UsersPanel({
                       isSelf={account.id === currentUser.id}
                       isLastAdmin={isLastActiveAdmin(account, list.page.items)}
                       onChange={(change) => changeAccount(account, change)}
+                      onResetPassword={() => setResetting({ account, reset: false })}
                     />
                   }
                 />
@@ -281,6 +313,14 @@ export function UsersPanel({
           </table>
           {creating && (
             <NewUserDialog onClose={() => setCreating(false)} onCreated={rereadQuietly} />
+          )}
+          {resetting !== null && (
+            <ResetPasswordDialog
+              account={resetting.account}
+              isSelf={resetting.account.id === currentUser.id}
+              onReset={(password) => resetPassword(resetting.account, password)}
+              onClose={closeReset}
+            />
           )}
         </>
       )}
