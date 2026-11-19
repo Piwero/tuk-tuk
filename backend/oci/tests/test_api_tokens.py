@@ -121,21 +121,24 @@ class TestAuthenticating:
         assert response.status_code == 401
 
 
+def bea_with_token(client: TestClient) -> tuple[int, str]:
+    """A second User, Bea, with a token of hers; `client` is left signed
+    in as the admin."""
+    bea = create_user_row(client, "bea", "bea@example.com")
+    client.cookies.clear()
+    log_in(client, "bea", TEST_PASSWORD)
+    token = create_token(client)["token"]
+    client.cookies.clear()
+    log_in(client)
+    return bea.id, token
+
+
 class TestUserChecks:
     """The same checks as the session cookie (an active User with no
     forced step pending), but not the session epoch."""
 
-    def bea_token(self, client: TestClient) -> tuple[int, str]:
-        bea = create_user_row(client, "bea", "bea@example.com")
-        client.cookies.clear()
-        log_in(client, "bea", TEST_PASSWORD)
-        token = create_token(client)["token"]
-        client.cookies.clear()
-        log_in(client)  # back to the admin
-        return bea.id, token
-
     def test_a_disabled_users_token_gets_401_account_disabled(self, client: TestClient) -> None:
-        bea_id, token = self.bea_token(client)
+        bea_id, token = bea_with_token(client)
         client.patch(f"/api/v1/admin/users/{bea_id}", json={"is_active": False})
 
         response = as_token(client, token, "GET", "/api/v1/tasks")
@@ -144,7 +147,7 @@ class TestUserChecks:
         assert response.json()["error"]["code"] == "account_disabled"
 
     def test_a_forced_step_blocks_the_token_until_it_is_completed(self, client: TestClient) -> None:
-        bea_id, token = self.bea_token(client)
+        bea_id, token = bea_with_token(client)
         new_password = "a-brand-new-password"
         client.post(
             f"/api/v1/admin/users/{bea_id}/reset-password", json={"temp_password": "temporary-pw-1"}
@@ -252,6 +255,37 @@ class TestLastUsed:
         as_token(client, token, "POST", TOKENS, json={"name": "replacement"})
 
         assert self.listed(client) is None
+
+
+class TestOwnerActivity:
+    """A token's requests are its owner being active (issue #478), under
+    the same rules as a session's."""
+
+    def bea_last_active(self, client: TestClient, bea_id: int) -> Any:
+        log_in(client)
+        users = client.get("/api/v1/admin/users").json()["items"]
+        return next(u["last_active_at"] for u in users if u["id"] == bea_id)
+
+    def test_a_served_token_request_marks_the_owner_active(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        bea_id, token = bea_with_token(client)
+        fake_clock.advance(timedelta(hours=1))
+
+        as_token(client, token, "GET", "/api/v1/tasks")
+
+        assert self.bea_last_active(client, bea_id) == iso(fake_clock.now)
+
+    def test_a_refused_token_request_does_not(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        bea_id, token = bea_with_token(client)
+        signed_in = self.bea_last_active(client, bea_id)
+        fake_clock.advance(timedelta(hours=1))
+
+        as_token(client, token, "POST", TOKENS, json={"name": "replacement"})
+
+        assert self.bea_last_active(client, bea_id) == signed_in
 
 
 class TestRevoking:
