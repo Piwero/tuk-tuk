@@ -22,6 +22,11 @@ os.environ.setdefault(
 )
 os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
 os.environ.setdefault("APP_MASTER_KEY", "test-master-key")
+# Importing app.main builds a module-level app, which now refuses to start
+# without a PostgreSQL DATABASE_URL (issue #407). Building it never
+# connects, so a placeholder satisfies it; every test's own app gets the
+# real per-test URL from the `database_url` fixture instead.
+os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://unused:unused@localhost:5432/unused")
 # A small but non-zero base: the login path no longer sleeps (issue #339),
 # so this costs no wall-clock time, but a zero base would mean the lockout
 # itself never engages (LoginThrottle.lock_until(base_seconds=0) == now).
@@ -149,7 +154,7 @@ def run_sql(database_url: str, query: str, params: Sequence[object] = ()) -> lis
     any.
     """
     with psycopg.connect(DatabaseUrl(database_url).psycopg_url, autocommit=True) as connection:
-        cursor = connection.execute(query, params)  # type: ignore[arg-type]
+        cursor = connection.execute(query, params)
         return cursor.fetchall() if cursor.description else []
 
 

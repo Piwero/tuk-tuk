@@ -41,7 +41,7 @@ class AppSettings(Base):
     `password_hash` is nullable: its absence is exactly what gates every
     route behind `/setup` (app.middleware). `encrypted_google_client_secret`
     is encrypted with `APP_MASTER_KEY` (app.crypto), never `session_key` —
-    a copy of the SQLite file must not disclose it.
+    a copy of the database must not disclose it.
     """
 
     __tablename__ = "settings"

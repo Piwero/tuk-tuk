@@ -91,8 +91,9 @@ async def delete_list(list_id: int, session: SessionDep) -> None:
         raise APIError(
             status_code=403, code="inbox_undeletable", message="The Inbox cannot be deleted"
         )
-    # History travels with its Task, and the tasks go with the List (SQLite
-    # leaves ON DELETE CASCADE unenforced, so sweep the occurrences by hand).
+    # History travels with its Task, and the tasks go with the List. The
+    # hand sweep predates enforced ON DELETE CASCADE and is now redundant —
+    # removing such sweeps is the follow-up ADR 0013 deferred.
     task_ids = select(Task.id).where(Task.list_id == list_id)
     await session.execute(
         delete(CompletedOccurrence).where(CompletedOccurrence.task_id.in_(task_ids))

@@ -158,9 +158,11 @@ async def update_active_hours_settings(
 # the app's engine, and the submitted URL is never logged, stored, or
 # echoed back.
 class DatabaseStatus(BaseModel):
-    engine: Literal["sqlite", "postgresql"]
-    host: str | None = None
-    database: str | None = None
+    # Always "postgresql", the only engine (issue #407); kept so the response
+    # shape the Settings screen reads doesn't change.
+    engine: Literal["postgresql"] = "postgresql"
+    host: str | None
+    database: str | None
 
 
 class TestConnectionRequest(BaseModel):
@@ -177,9 +179,7 @@ class TestConnectionRequest(BaseModel):
 @router.get("/database")
 async def read_database_status(request: Request) -> DatabaseStatus:
     url = DatabaseUrl(request.app.state.settings.database_url)
-    if url.is_postgres:
-        return DatabaseStatus(engine="postgresql", host=url.hostname, database=url.database)
-    return DatabaseStatus(engine="sqlite")
+    return DatabaseStatus(host=url.hostname, database=url.database)
 
 
 @router.post("/database/test-connection")

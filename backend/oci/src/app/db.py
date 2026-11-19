@@ -36,29 +36,14 @@ class DatabaseUrl:
         return urlsplit(self.raw)
 
     @property
-    def is_sqlite(self) -> bool:
-        return self._parts.scheme.startswith("sqlite")
-
-    @property
-    def is_postgres(self) -> bool:
-        return self._parts.scheme.startswith("postgresql")
+    def scheme(self) -> str:
+        return self._parts.scheme
 
     @property
     def is_supported_postgres(self) -> bool:
         """Scheme/host check only — no network I/O. Guards the connection
         probe so a malformed URL never reaches psycopg."""
         return self._parts.scheme in _POSTGRES_SCHEMES and bool(self._parts.hostname)
-
-    @property
-    def sync_url(self) -> str:
-        """Alembic runs on a sync driver. SQLite's async URL needs its
-        `+aiosqlite` suffix stripped to fall back to the stdlib `sqlite3`
-        driver; psycopg3 (ADR 0013) drives both sync and async from the same
-        `postgresql+psycopg://` URL, so it passes through unchanged.
-        """
-        if self.is_sqlite:
-            return self.raw.replace("+aiosqlite", "")
-        return self.raw
 
     @property
     def psycopg_url(self) -> str:
@@ -86,14 +71,38 @@ class Base(DeclarativeBase):
     pass
 
 
-def create_engine(database_url: str) -> AsyncEngine:
-    """Builds the app's engine. Connection pool health-checking and
-    recycling (ADR 0013) only make sense for a network database — SQLite
-    is a local file with no connection to go stale, so it's left at
-    SQLAlchemy's defaults.
+def require_database_url(database_url: str | None) -> str:
+    """The app's own `DATABASE_URL`, checked before anything connects
+    (issue #407). PostgreSQL through psycopg3 is the only engine: the same
+    `postgresql+psycopg://` string drives the async app and sync Alembic
+    (ADR 0013). Fails closed with the variable named — the APP_MASTER_KEY
+    posture — rather than a driver traceback at the first query.
     """
-    if DatabaseUrl(database_url).is_sqlite:
-        return create_async_engine(database_url)
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL is not configured. The app refuses to start without it: set it "
+            "to postgresql+psycopg://user:password@host:5432/dbname in your .env or "
+            "1Password item."
+        )
+    scheme = DatabaseUrl(database_url).scheme
+    if scheme.startswith("sqlite"):
+        raise RuntimeError(
+            "DATABASE_URL points at SQLite, and SQLite is no longer supported. Move the "
+            "data to PostgreSQL first — see docs/self-hosting/upgrade.md — then set "
+            "DATABASE_URL to its postgresql+psycopg:// URL."
+        )
+    if scheme != "postgresql+psycopg":
+        raise RuntimeError(
+            f"DATABASE_URL must be a postgresql+psycopg:// URL, not {scheme}://. The "
+            "+psycopg driver suffix is required (ADR 0013)."
+        )
+    return database_url
+
+
+def create_engine(database_url: str) -> AsyncEngine:
+    """Builds the app's engine, health-checking and recycling pooled
+    connections so a server restart or idle timeout never hands a request
+    a dead one (ADR 0013)."""
     return create_async_engine(database_url, pool_pre_ping=True, pool_recycle=1800)
 
 
@@ -113,10 +122,11 @@ async def check_database_reachable(engine: AsyncEngine, database_url: str) -> No
 
 
 def run_migrations(database_url: str) -> None:
-    """Upgrade the database to head. Alembic runs on a sync driver."""
+    """Upgrade the database to head. Alembic runs sync, on the same
+    psycopg3 URL the app uses async."""
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
-    config.set_main_option("sqlalchemy.url", DatabaseUrl(database_url).sync_url)
+    config.set_main_option("sqlalchemy.url", database_url)
     command.upgrade(config, "head")
 
 

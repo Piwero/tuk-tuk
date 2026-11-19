@@ -25,12 +25,11 @@ async def get_goal_or_404(goal_id: int, session: SessionDep) -> Goal:
 
 
 async def detach_tasks(key_result_ids: list[int], session: SessionDep) -> None:
-    """Explicitly clear Task.key_result_id rather than trusting ON DELETE SET
-    NULL: SQLite only enforces foreign keys with PRAGMA foreign_keys=ON, which
-    this app does not set, so a deleted Key Result would otherwise leave Tasks
-    pointing at a dead row — and SQLite recycles rowids, so the next Key Result
-    created would inherit them as a phantom count. Same pattern as Habit
-    deletion clearing source_habit_id."""
+    """Explicitly clear Task.key_result_id. Written for an engine that left
+    ON DELETE SET NULL unenforced (ADR 0012); PostgreSQL enforces it, so
+    this is now redundant but harmless — removing the hand-written sweeps
+    is the follow-up ADR 0013 deferred. Same pattern as Habit deletion
+    clearing source_habit_id."""
     if not key_result_ids:
         return
     await session.execute(

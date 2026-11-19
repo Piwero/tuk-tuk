@@ -63,7 +63,8 @@ class GoalWindow(BaseModel):
 
 
 def as_utc(value: datetime) -> datetime:
-    """Pin naive datetimes (SQLite roundtrips) to UTC — the storage convention."""
+    """Pin naive datetimes to UTC — the storage convention. PostgreSQL's
+    `timestamptz` already returns aware values, so this only ever converts."""
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 

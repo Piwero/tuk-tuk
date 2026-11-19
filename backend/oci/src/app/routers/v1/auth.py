@@ -34,9 +34,10 @@ LOCKOUT_THRESHOLD = 5
 
 def _locked_retry_after(app_settings: AppSettings, now: datetime) -> int | None:
     """Seconds until `app_settings.login_locked_until`, or None if not
-    currently locked (null, or in the past). SQLite round-trips a
-    timezone-aware DateTime as naive, so it's normalized back to UTC
-    before comparing against `now` (also UTC, from app.session.Clock)."""
+    currently locked (null, or in the past). Normalized to UTC before
+    comparing against `now` (also UTC, from app.session.Clock) — a no-op
+    for PostgreSQL's aware `timestamptz`, kept as a guard against any
+    naive value."""
     locked_until = app_settings.login_locked_until
     if locked_until is None:
         return None

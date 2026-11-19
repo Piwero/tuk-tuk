@@ -11,7 +11,7 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
-from app.db import BACKEND_DIR, DatabaseUrl, run_migrations
+from app.db import BACKEND_DIR, run_migrations
 from tests.conftest import fresh_database, run_sql
 
 SEED_LIST = (
@@ -42,7 +42,7 @@ def empty_database_url(postgres_server: str) -> str:
 def alembic_config(database_url: str) -> Config:
     config = Config()
     config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
-    config.set_main_option("sqlalchemy.url", DatabaseUrl(database_url).sync_url)
+    config.set_main_option("sqlalchemy.url", database_url)
     return config
 
 

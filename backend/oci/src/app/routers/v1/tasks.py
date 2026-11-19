@@ -400,9 +400,9 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
 
 async def detach_task_history(task_ids: list[int], session: SessionDep) -> None:
     """The cleanup a Task's deletion carries with it, shared by the single
-    and bulk delete routes: its own history goes (SQLite leaves ON DELETE
-    CASCADE unenforced), while Focus Sessions/Timer presets outlive it —
-    only their link does."""
+    and bulk delete routes: its own history goes (by hand, predating
+    enforced ON DELETE CASCADE), while Focus Sessions/Timer presets outlive
+    it — only their link does."""
     if not task_ids:
         return
     await session.execute(
