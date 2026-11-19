@@ -2,7 +2,7 @@
 
 Takes a consecutive-failure count and the current instant, returns the
 instant login should stay locked until. No database, no HTTP — reading and
-writing the persisted count/lock onto the settings singleton is the
+writing the persisted count/lock onto the user (issue #408) is the
 router's job (app.routers.v1.auth), so a restart doesn't reset the counter
 (issue #333/#339). Global rather than per-client: the request chain (CDN,
 ingress, reverse proxy) is never trusted for a real client address, and

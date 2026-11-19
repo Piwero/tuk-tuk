@@ -13,7 +13,8 @@ router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
 
 
 async def ensure_name_free(session: SessionDep, name: str, tag_id: int | None = None) -> None:
-    query = select(Tag.id).where(Tag.name == name)
+    # Ignoring case, like the unique index it fronts (issue #408).
+    query = select(Tag.id).where(func.lower(Tag.name) == name.lower())
     if tag_id is not None:
         query = query.where(Tag.id != tag_id)
     if await session.scalar(query) is not None:

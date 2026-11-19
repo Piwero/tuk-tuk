@@ -104,3 +104,26 @@ def test_unknown_tag_is_404(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+def test_a_tag_name_differing_only_in_case_is_taken(client: TestClient) -> None:
+    """Issue #408: a user's Tag names are unique ignoring case."""
+    client.post("/api/v1/tags", json={"name": "Work"})
+    other = client.post("/api/v1/tags", json={"name": "Home"}).json()
+
+    duplicate = client.post("/api/v1/tags", json={"name": "work"})
+    renamed = client.patch(f"/api/v1/tags/{other['id']}", json={"name": "WORK"})
+
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["code"] == "tag_exists"
+    assert renamed.status_code == 409
+    assert renamed.json()["error"]["code"] == "tag_exists"
+
+
+def test_a_tag_can_be_renamed_to_a_different_case_of_its_own_name(client: TestClient) -> None:
+    tag = client.post("/api/v1/tags", json={"name": "work"}).json()
+
+    response = client.patch(f"/api/v1/tags/{tag['id']}", json={"name": "Work"})
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Work"
