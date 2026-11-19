@@ -31,16 +31,21 @@ function perceived(cell: Element): string {
   return (copy.textContent ?? "").replace(/\s+/g, " ").trim();
 }
 
-/** The table's body rows, top to bottom, as [user, role, status] texts. */
+/** The table's body rows, top to bottom, as [user, role, status] texts —
+ * every column but the row menus' (#481), which has no text of its own. */
 function listedRows(): string[][] {
   const table = screen.getByRole("table", { name: "Users" });
+  const actionsColumn = within(table)
+    .getAllByRole("columnheader")
+    .findIndex((header) => header.textContent === "Actions");
   return within(table)
     .getAllByRole("row")
     .filter((row) => within(row).queryAllByRole("cell").length > 0)
-    .map((row) => [
-      perceived(within(row).getByRole("rowheader")),
-      ...within(row).getAllByRole("cell").map(perceived),
-    ]);
+    .map((row) =>
+      [within(row).getByRole("rowheader"), ...within(row).getAllByRole("cell")]
+        .filter((_, column) => column !== actionsColumn)
+        .map(perceived),
+    );
 }
 
 function listReads(api: FakeApiState): string[] {
