@@ -25,6 +25,56 @@
     flex-direction: column;
     gap: var(--space-6);
   }
+  /* Settings tabs (#474): My account and, for Admins, Users. Links, not a
+   tablist, since each tab is its own URL. */
+  .settings-tabs {
+    display: flex;
+    gap: var(--space-1);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .settings-tabs a {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: -1px;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    text-decoration: none;
+  }
+  .settings-tabs a:hover {
+    color: var(--text-primary);
+  }
+  .settings-tabs a[aria-current="page"] {
+    border-bottom-color: var(--accent);
+    color: var(--text-primary);
+  }
+  .settings-tabs a:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius-xs);
+  }
+  @media (max-width: 720px) {
+    .settings-tabs a {
+      min-height: var(--tap-target);
+    }
+  }
+  /* Profile (#474): username and email side by side where there is room,
+   each with its own Save once edited. */
+  .profile-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-4);
+  }
+  .profile-field-row {
+    display: flex;
+    gap: var(--space-2);
+  }
+  .profile-field-row input {
+    flex: 1;
+    min-width: 0;
+  }
   .settings-section {
     padding: var(--space-5) var(--space-6);
     border: 1px solid var(--border-default);

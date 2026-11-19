@@ -42,8 +42,16 @@ PUBLIC_PATHS = frozenset({"/health", "/api/v1/auth/login", "/api/v1/auth/setup"}
 
 # All a User may reach while a forced step (a temporary password to
 # replace, a profile to complete) is pending: enough to see which step,
-# complete it, or give up and log out. Exact-match, like PUBLIC_PATHS.
-FORCED_STEP_PATHS = frozenset({"/api/v1/auth/me", "/api/v1/auth/complete", "/api/v1/auth/logout"})
+# complete it, or give up and log out. Exact-match on method and path, like
+# PUBLIC_PATHS: reading /me is open, editing the profile there (issue #474)
+# is not.
+FORCED_STEP_ROUTES = frozenset(
+    {
+        ("GET", "/api/v1/auth/me"),
+        ("POST", "/api/v1/auth/complete"),
+        ("POST", "/api/v1/auth/logout"),
+    }
+)
 
 
 def _setup_required() -> Response:
@@ -103,7 +111,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if claims.epoch != user.session_epoch:
             return error_response(401, "unauthorized", "A valid session is required")
 
-        if request.url.path not in FORCED_STEP_PATHS:
+        if (request.method, request.url.path) not in FORCED_STEP_ROUTES:
             blocked = _forced_step(user)
             if blocked is not None:
                 return blocked
