@@ -117,6 +117,57 @@
     width: 1%;
     text-align: right;
   }
+  /* What a row's last action failed to do (#481), under the name. */
+  .users-row-error {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-regular);
+    color: var(--text-danger);
+  }
+
+  /* The row menu (#481), on the shared overflow-menu surface. */
+  .users-actions .overflow-menu-list {
+    min-width: 200px;
+  }
+  .users-actions-separator {
+    margin: var(--space-1) 0;
+    border-top: 1px solid var(--border-default);
+  }
+  .users-actions .overflow-menu-list button[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .users-actions .overflow-menu-list button[aria-disabled="true"]:hover {
+    background: transparent;
+  }
+  .users-actions-reason {
+    max-width: 200px;
+    margin: var(--space-1) 0 0;
+    padding: var(--space-2);
+    border-top: 1px solid var(--border-default);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    text-align: left;
+    white-space: normal;
+  }
+
+  /* Disable's confirm dialog. */
+  .users-confirm-lead {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .users-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+  }
+  button.users-confirm-danger {
+    background: var(--danger);
+  }
+  button.users-confirm-danger:hover {
+    background: var(--danger-hover);
+  }
 
   @media (max-width: 720px) {
     .users-table thead {

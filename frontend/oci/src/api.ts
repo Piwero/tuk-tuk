@@ -198,6 +198,23 @@ export function fetchAdminUsers(): Promise<Page<AdminUser>> {
   return request(`/api/v1/admin/users?limit=${ADMIN_USERS_LIMIT}`);
 }
 
+/** What an Admin may change on an account (#412); only the fields given
+ * change. There is no delete: accounts are only ever disabled. */
+export interface AdminUserChange {
+  is_active?: boolean;
+  is_admin?: boolean;
+}
+
+/** Disables / enables an account or changes its role. Disabling ends its
+ * sessions at once. Rejects 409 `last_admin` when the change would leave
+ * no active Admin (the acting Admin's own row included), 404 `not_found`. */
+export function updateAdminUser(id: number, change: AdminUserChange): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(change),
+  });
+}
+
 /** Signs in by username or email (either ignoring case) and sets the
  * session cookie. Rejects with `invalid_credentials` (an unknown login and
  * a wrong password alike), `too_many_attempts`, or `account_disabled`. */
