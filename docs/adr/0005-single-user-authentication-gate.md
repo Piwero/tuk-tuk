@@ -2,11 +2,16 @@
 
 ## Status
 
-Accepted. Where the password hash and session signing key are stored is
+Superseded by [0018](0018-multi-user-row-level-isolation.md), which
+replaces the single shared password with per-user accounts. The stateless
+signed cookie, fail-closed handling, in-app authentication and
+`SameSite=Lax` carry over there; the cookie now also carries the user's id
+and session epoch, and the global failure delay becomes a per-user
+lockout.
+
+Earlier, where the password hash and session signing key are stored was
 superseded by [0008](0008-ui-managed-settings.md) — they move from `.env`
-into the database, managed from the UI. Everything else here (stateless
-signed cookie, fail-closed, `SameSite=Lax`, global failure delay) still
-stands.
+into the database, managed from the UI.
 
 ## Context
 

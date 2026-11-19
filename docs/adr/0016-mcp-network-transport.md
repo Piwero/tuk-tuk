@@ -11,6 +11,12 @@ unchanged and 0014 still governs it in full. The write principle, the
 no-delete rule and the description egress of 0014 are reused unchanged.
 ADR 0014 is left otherwise unedited; it carries a pointer here.
 
+The pod-held password is superseded by ADR 0018 and the multi-user
+amendment to ADR 0014: the pod now holds one user's personal API token
+(`TUK_API_TOKEN`), and the admin deploys one pod per user on request.
+Tailnet-only exposure, the static bearer token in front of the pod and
+the single replica are unchanged.
+
 ## Context
 
 `tuk-mcp` speaks JSON-RPC over stdio, so it cannot run as a Kubernetes

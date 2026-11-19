@@ -2,7 +2,21 @@
 
 An all-in-one personal productivity app — task management, calendar, habits, and focus — with a clean, conventional HTTP API.
 
-tuk-tuk is a single-user app: it is built for one person, not a household or team of distinct accounts.
+One instance serves several Users, and each sees only their own data (ADR 0018). Nothing is shared between Users: there are no shared Lists, assignees or invites.
+
+## Accounts
+
+**User**:
+A person with their own account on the instance: a username, an email and a password. Everything a User creates belongs to them alone, and no other User can see it. A User is disabled rather than deleted, which ends their sessions and keeps their data.
+_Avoid_: Member, tenant (nothing is shared, so a User belongs to no group)
+
+**Admin**:
+A User who can also manage accounts: create Users with a temporary password, disable or re-enable them, reset their passwords, and grant or remove Admin. Only an Admin creates accounts; there is no sign-up. Being Admin grants no access to other Users' data.
+_Avoid_: Superuser, root
+
+**API token**:
+A named, personal credential a User creates in Settings for a client that cannot log in with a password, such as an in-cluster MCP server. Shown once when created, acts strictly as the User who created it, and can be revoked on its own without logging the User out anywhere else.
+_Avoid_: Bearer token (the MCP pod's own shared gate in front of it, ADR 0016), session, password
 
 ## Language
 
@@ -27,7 +41,7 @@ The Calendar shows plans, not history: both the grid and the Unscheduled rail re
 Entries render in different timezones by kind, and this is deliberate, not a bug: a Task renders in whatever timezone it was scheduled in (a commitment the user made), while an Event renders in the **viewer's own** timezone, whatever timezone it was organised in (an artefact of whoever set it up). Rendering a Tokyo-organised meeting at its Tokyo hour would place it in the wrong row of the grid and cause a missed meeting. This asymmetry is the single most likely thing for a future reader to mistake for a bug — do not "fix" it into symmetry.
 
 **Active hours**:
-The band of the day the user marks as when they are usually active (issue #210). Inside it the Week/Day time grid renders at double height (96px/hour) so short tasks stay readable in place; outside it the grid compresses (24px/hour) so dead hours cost little scroll. A user-level setting stored server-side on the settings singleton — it describes the user, not a device — disabled by default, prefilling 09:00–17:00 on first enable. The band is aligned to 30 minutes, must start strictly before it ends, and may not wrap past midnight: a wrapping band makes "the start of your day" ambiguous, and night-shift support (a movable day boundary) is out of scope. Degenerate bands (the whole day, or a single 30-minute band) are allowed. Only the Week and Day views are affected; Month has no time axis, and the all-day lane is untouched. See ADR 0010 for the piecewise time-axis invariant this rests on.
+The band of the day the user marks as when they are usually active (issue #210). Inside it the Week/Day time grid renders at double height (96px/hour) so short tasks stay readable in place; outside it the grid compresses (24px/hour) so dead hours cost little scroll. A per-User setting stored server-side — it describes the User, not a device — disabled by default, prefilling 09:00–17:00 on first enable. The band is aligned to 30 minutes, must start strictly before it ends, and may not wrap past midnight: a wrapping band makes "the start of your day" ambiguous, and night-shift support (a movable day boundary) is out of scope. Degenerate bands (the whole day, or a single 30-minute band) are allowed. Only the Week and Day views are affected; Month has no time axis, and the all-day lane is untouched. See ADR 0010 for the piecewise time-axis invariant this rests on.
 _Avoid_: Working hours (the band is about activity, not work), office hours, business hours
 
 **Check Item**:
@@ -121,7 +135,7 @@ The Assist feature that plans a day in conversation: the user describes what the
 _Avoid_: Chat, bot, agent (it takes no actions), Copilot
 
 **Voice Assistant**:
-The Assist feature you talk to (ADR 0015): a spoken session in the browser for organising Tasks, the day and Habits, in English or Spanish. The only Assist member that writes. Its tools follow the MCP server's principle (idempotent, non-destructive, Task-or-Habit scoped, no delete), and each turn's batch of writes is read back and applied only after a spoken yes. The agent (`voice-agent/`) runs on the owner's own LiveKit Cloud project, but every tool call is relayed over LiveKit RPC to the owner's open tab, which runs it with its own session cookie. So no backend is ever exposed and no tuk-tuk credential is held at LiveKit. Push-to-talk by default (continuous is opt-in). Sessions start from the Agenda plus the tab's timezone and date, end only when you end them or close the tab, show captions only, and persist nothing. Invisible until LiveKit credentials are set in Settings; Voice goes unavailable for the rest of the month once free inference credit runs out.
+The Assist feature you talk to (ADR 0015): a spoken session in the browser for organising Tasks, the day and Habits, in English or Spanish. The only Assist member that writes. Its tools follow the MCP server's principle (idempotent, non-destructive, Task-or-Habit scoped, no delete), and each turn's batch of writes is read back and applied only after a spoken yes. The agent (`voice-agent/`) runs on the User's own LiveKit Cloud project, one worker per User deployed by the Admin on request, but every tool call is relayed over LiveKit RPC to that User's open tab, which runs it with its own session cookie. So no backend is ever exposed and no tuk-tuk credential is held at LiveKit. Push-to-talk by default (continuous is opt-in). Sessions start from the Agenda plus the tab's timezone and date, end only when you end them or close the tab, show captions only, and persist nothing. Invisible until that User's own LiveKit credentials are set in Settings; Voice goes unavailable for the rest of the month once free inference credit runs out.
 _Avoid_: Voice mode (it is not the Assistant with a microphone), voice agent (the name of the deployable in `voice-agent/`, not the feature), Assistant without "Voice"
 
 **Suggestion**:
@@ -167,12 +181,12 @@ The `tuk` command-line client for the daily loop: capture, review, complete. Fir
 _Avoid_: Console app (says nothing about which contract it speaks)
 
 **MCP server**:
-The `tuk-mcp` package in `mcp/oci/`: a Model Context Protocol server exposing reads plus a bounded write set — idempotent, non-destructive, Task-or-Habit scoped, with no delete tool of any kind. Two transports: stdio (default), run as a subprocess of the owner's own AI client; and Streamable HTTP (`--http`), deployed in the cluster, reachable only on the tailnet behind a bearer token, with the pod holding the owner's password and an in-memory session. Reuses shared HTTP client, session handling and transport seam from `shared/oci`. See ADR 0014 and ADR 0016.
+The `tuk-mcp` package in `mcp/oci/`: a Model Context Protocol server exposing reads plus a bounded write set — idempotent, non-destructive, Task-or-Habit scoped, with no delete tool of any kind. Two transports: stdio (default), run as a subprocess of the owner's own AI client; and Streamable HTTP (`--http`), deployed in the cluster, reachable only on the tailnet behind a bearer token, with each pod serving one User and holding that User's API token. Pods are deployed by the Admin when a User asks, never automatically. Reuses shared HTTP client, session handling and transport seam from `shared/oci`. See ADR 0014 and ADR 0016.
 _Avoid_: Agent (it takes no actions on its own; the owner's client directs it turn by turn)
 
 **Session file**:
-`session.json` under the XDG config directory (`~/.config/tuk/`, overridable with `TUK_CONFIG_DIR`), holding the cached signed session cookie both clients share. Written owner-only by `tuk login`, which prompts for the password on a terminal and posts it to the existing login endpoint — the password itself is never persisted in any form. A lapsed session renders as an instruction to run `tuk login` again.
-_Avoid_: Token (there is no token scheme; the credential is the browser's session cookie)
+`session.json` under the XDG config directory (`~/.config/tuk/`, overridable with `TUK_CONFIG_DIR`), holding the cached signed session cookie both clients share. Written owner-only by `tuk login`, which prompts for a username or email and the password on a terminal and posts them to the existing login endpoint — the password itself is never persisted in any form. A lapsed session renders as an instruction to run `tuk login` again.
+_Avoid_: Token (the Session file holds the browser's session cookie; an API token is a different credential)
 
 **Agenda**:
 The client-side answer to "what am I doing today": the local day's Tasks (with ids), Habits due, and — when the Google integration is configured and healthy — the day's Events, composed from existing endpoints in parallel with no backend endpoint of its own. A calendar failure contributes nothing and never fails the view. The MCP server's broad read reuses the same composition, and every id it returns joins the writable-id allowlist later write tools consult.
