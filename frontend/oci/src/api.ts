@@ -155,6 +155,9 @@ export interface CurrentUser {
   must_change_password: boolean;
   /** The upgraded single user is still to choose a username and email. */
   must_complete_profile: boolean;
+  /** When the password was last set, ISO-8601 (#475): on creation, an
+   * admin's temporary password, or the User's own change. Never null. */
+  password_changed_at: string;
 }
 
 /** Who this browser is signed in as — the gate's probe. Reachable while a

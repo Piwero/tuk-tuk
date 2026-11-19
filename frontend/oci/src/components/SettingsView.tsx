@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
-  changePassword,
   disconnectGoogleAccount,
   fetchActiveHoursSettings,
   updateActiveHoursSettings,
@@ -249,106 +248,6 @@ function GoogleAccountCalendars({
         </>
       )}
     </details>
-  );
-}
-
-/** The change-password form (issue #116, ADR 0008): current + new password.
- * Saving rotates the session signing key server-side, invalidating every
- * other device's cookie while this device gets a fresh one in the response
- * — nothing to do here on success beyond clearing the form and confirming. */
-// Mirrors the backend's MIN_PASSWORD_LENGTH (auth router, issue #338).
-const MIN_PASSWORD_LENGTH = 12;
-
-function ChangePasswordForm(): JSX.Element {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  function handleSubmit(event: React.FormEvent): void {
-    event.preventDefault();
-    if (pending) {
-      return;
-    }
-    setSuccess(false);
-    // Caught here, before any request: a mismatch is never worth spending
-    // a throttled attempt on (a wrong current password shares one counter
-    // with /login), and it isn't something the backend needs to know.
-    if (newPassword !== confirmPassword) {
-      setError("New password and confirmation don't match.");
-      return;
-    }
-    if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-      return;
-    }
-    setPending(true);
-    setError(null);
-    changePassword(currentPassword, newPassword)
-      .then(() => {
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-        setSuccess(true);
-        setPending(false);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
-        setPending(false);
-      });
-  }
-
-  return (
-    <form className="change-password-form settings-form" onSubmit={handleSubmit}>
-      <div className="settings-field">
-        <label htmlFor="settings-current-password">Current password</label>
-        <input
-          id="settings-current-password"
-          name="current-password"
-          type="password"
-          autoComplete="current-password"
-          value={currentPassword}
-          disabled={pending}
-          onChange={(event) => setCurrentPassword(event.target.value)}
-        />
-      </div>
-      <div className="settings-field">
-        <label htmlFor="settings-new-password">New password</label>
-        <p className="settings-hint">Must be at least {MIN_PASSWORD_LENGTH} characters.</p>
-        <input
-          id="settings-new-password"
-          name="new-password"
-          type="password"
-          autoComplete="new-password"
-          value={newPassword}
-          disabled={pending}
-          onChange={(event) => setNewPassword(event.target.value)}
-        />
-      </div>
-      <div className="settings-field">
-        <label htmlFor="settings-confirm-password">Confirm new password</label>
-        <input
-          id="settings-confirm-password"
-          name="confirm-password"
-          type="password"
-          autoComplete="new-password"
-          value={confirmPassword}
-          disabled={pending}
-          onChange={(event) => setConfirmPassword(event.target.value)}
-        />
-      </div>
-      {error !== null && <p role="alert">{error}</p>}
-      {success && (
-        <p className="settings-success">
-          Password changed. Other devices will need to log in again.
-        </p>
-      )}
-      <button type="submit" className="settings-primary-action" disabled={pending}>
-        {pending ? "Changing…" : "Change password"}
-      </button>
-    </form>
   );
 }
 
@@ -1438,7 +1337,6 @@ function MyAccountPanel({
             />
           )}
         </a>
-        <a href="#settings-security">Security</a>
         {isAdmin && <a href="#settings-database">Database</a>}
         <a href="#settings-about">About</a>
       </nav>
@@ -1718,13 +1616,6 @@ function MyAccountPanel({
       )}
       <section aria-label="Account and system" className="settings-group">
         <h2 className="settings-group-title">Account and system</h2>
-        <section aria-label="Security" id="settings-security" className="settings-section">
-          <div className="settings-section-head">
-            <h2>Security</h2>
-          </div>
-          <p className="settings-lead">Changing your password logs out other devices.</p>
-          <ChangePasswordForm />
-        </section>
         {/* The instance's own database, not the User's: Admins only (#474). */}
         {isAdmin && (
           <section aria-label="Database" id="settings-database" className="settings-section">

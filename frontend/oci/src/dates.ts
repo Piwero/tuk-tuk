@@ -351,6 +351,31 @@ export function formatDateRange(start: Date, end: Date, style: DateStyle = "shor
   return `${formatDate(start, style)} – ${formatDate(end, style)}`;
 }
 
+const RELATIVE = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
+
+// Largest unit first: the first one `then` is at least one of wins.
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 365 * 24 * 60 * 60 * 1000],
+  ["month", 30 * 24 * 60 * 60 * 1000],
+  ["week", 7 * 24 * 60 * 60 * 1000],
+  ["day", 24 * 60 * 60 * 1000],
+  ["hour", 60 * 60 * 1000],
+  ["minute", 60 * 1000],
+];
+
+/** How long ago `then` was, in the largest whole unit: "just now",
+ * "5 minutes ago", "yesterday", "3 weeks ago", "last year" (#475). A
+ * future instant (clock skew) reads as "just now". */
+export function formatTimeAgo(then: Date, now: Date = new Date()): string {
+  const elapsed = now.getTime() - then.getTime();
+  for (const [unit, size] of RELATIVE_UNITS) {
+    if (elapsed >= size) {
+      return RELATIVE.format(-Math.floor(elapsed / size), unit);
+    }
+  }
+  return "just now";
+}
+
 /** A short deterministic day label: "Jul 6". */
 export function shortDayLabel(dayIso: string): string {
   return formatDate(fromDayIso(dayIso), "short");
