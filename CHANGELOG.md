@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.21.1](https://github.com/Piwero/tuk-tuk/compare/v2.21.0...v2.21.1) - 2026-11-19
+
+### Bug Fixes
+
+- **backend:** Satisfy ruff 0.17.4 SIM102 and refresh cli lock ([42fa6fc](https://github.com/Piwero/tuk-tuk/commit/42fa6fcdb306d0fb8a3b5cdc2da526e9b93c4ae4))
+
 ## [2.21.0](https://github.com/Piwero/tuk-tuk/compare/v2.20.0...v2.21.0) - 2026-11-19
 
 ### Features
