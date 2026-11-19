@@ -13,8 +13,8 @@ afterEach(() => {
 async function openSettings(): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
   render(<App />);
-  await user.click(screen.getByRole("button", { name: "App menu" }));
-  await user.click(await screen.findByRole("link", { name: "Settings" }));
+  await user.click(await screen.findByRole("button", { name: "Account menu" }));
+  await user.click(screen.getByRole("menuitem", { name: "My account" }));
   return user;
 }
 

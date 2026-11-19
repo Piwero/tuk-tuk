@@ -1,0 +1,133 @@
+@layer components {
+  /* The account avatar at the top right of every view (#473). On a phone the
+   same entries head the More sheet instead, so the avatar is hidden there. */
+  .user-menu {
+    flex: none;
+    margin-left: auto;
+  }
+  .user-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+  }
+  .user-menu-trigger[aria-expanded="true"] {
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .user-avatar {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background: var(--accent);
+    color: var(--text-inverse);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    line-height: 1;
+  }
+  .user-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2);
+  }
+  .user-summary .user-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: var(--text-md);
+  }
+  .user-summary-text {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+  .user-summary-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: var(--weight-semibold);
+  }
+  .user-admin-badge {
+    padding: 1px var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    color: var(--text-accent);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+  }
+  .user-summary-email {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    text-overflow: ellipsis;
+  }
+  .user-menu-list {
+    min-width: 220px;
+    margin: var(--space-1) 0 0;
+    padding: var(--space-1) 0 0;
+    border-top: 1px solid var(--border-default);
+    list-style: none;
+  }
+  .user-menu-list .user-menu-separator {
+    margin: var(--space-1) 0;
+    border-top: 1px solid var(--border-default);
+  }
+  .user-menu-list button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: var(--text-sm);
+    text-align: left;
+  }
+  .user-menu-list button:hover,
+  .user-menu-list button:focus-visible {
+    background: var(--surface-hover);
+  }
+  /* The Dark mode entry is a switch: its track sits at the row's end. */
+  .user-switch {
+    position: relative;
+    flex: none;
+    width: 32px;
+    height: 18px;
+    margin-left: auto;
+    border-radius: var(--radius-full);
+    background: var(--border-default);
+  }
+  .user-switch::after {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-full);
+    background: var(--surface-raised);
+    content: "";
+  }
+  [aria-checked="true"] > .user-switch {
+    background: var(--accent);
+  }
+  [aria-checked="true"] > .user-switch::after {
+    left: 16px;
+  }
+  @media (hover: none), (pointer: coarse) {
+    .user-menu-list button {
+      min-height: var(--tap-target);
+    }
+  }
+  @media (max-width: 720px) {
+    .user-menu {
+      display: none;
+    }
+  }
+}

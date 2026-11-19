@@ -384,8 +384,8 @@ describe("History push/replace while navigating in the app", () => {
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Habits" }));
     await screen.findByRole("heading", { name: "Habits" });
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-    await user.click(screen.getByRole("link", { name: "Settings" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByRole("heading", { name: "Settings" });
 
     window.history.back();
