@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { App } from "./App";
 import { ApiError, type CurrentUser, fetchCurrentUser, logout, onUnauthorized } from "./api";
+import { ChangePasswordStep } from "./auth/ChangePasswordStep";
 import { ForcedStepFrame } from "./auth/ForcedStepFrame";
 import { SetupScreen } from "./auth/SetupScreen";
 import { type SignInNotice, SignInScreen } from "./auth/SignInScreen";
@@ -87,20 +88,18 @@ export function AuthGate({
     [],
   );
 
+  // A completed step or a new admin lands on Today, whatever URL they came
+  // in at, once the server has said so.
+  const landOnToday = useCallback((): Promise<void> => {
+    window.history.replaceState(null, "", pathForSmartView("today"));
+    return resolve();
+  }, [resolve]);
+
   switch (state.kind) {
     case "checking":
       return null;
     case "needs-setup":
-      return (
-        <SetupScreen
-          onSuccess={() => {
-            // The new Admin lands on Today, whatever URL setup was reached at.
-            window.history.replaceState(null, "", pathForSmartView("today"));
-            return resolve();
-          }}
-          onAlreadySetUp={() => setState(SIGNED_OUT)}
-        />
-      );
+      return <SetupScreen onSuccess={landOnToday} onAlreadySetUp={() => setState(SIGNED_OUT)} />;
     case "signed-out":
       return <SignInScreen notice={state.notice} onSuccess={resolve} />;
     case "must-change-password":
@@ -109,7 +108,9 @@ export function AuthGate({
           title="Choose a new password"
           footer={`Signed in as ${state.user.username}`}
           onLogout={signOut}
-        />
+        >
+          <ChangePasswordStep onComplete={landOnToday} />
+        </ForcedStepFrame>
       );
     case "must-complete-profile":
       return (
