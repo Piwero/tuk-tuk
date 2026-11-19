@@ -24,7 +24,9 @@ jobs:
       fail-fast: false
       matrix:
         # 3.12 is the floor declared by requires-python; 3.14 is what the
-        # runtime image ships (backend/oci/Dockerfile).
+        # runtime image ships (FROM python:3.14-slim in backend/oci/Dockerfile).
+        # Bump both together: the image job below fails if the base has no
+        # wheels for a locked dependency.
         python-version: ["3.12", "3.14"]
 
     steps:
@@ -61,3 +63,21 @@ jobs:
           name: backend-coverage
           path: backend/oci/coverage.xml
           if-no-files-found: ignore
+
+  # Build the prod image so a broken base bump (e.g. a Dependabot Python
+  # bump with no wheels for a locked dependency, #507) fails the PR rather
+  # than the self-hosting install.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build image (no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: backend/oci
+          file: backend/oci/Dockerfile
+          target: prod
+          push: false
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
