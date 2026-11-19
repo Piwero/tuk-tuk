@@ -192,6 +192,12 @@ class TestWhatATokenCannotDo:
             ("PATCH", "/api/v1/auth/me", {"email": "attacker@example.com"}),
             ("GET", "/api/v1/admin/users", None),
             ("POST", "/api/v1/admin/users/1/reset-password", {"temp_password": "x" * 12}),
+            ("GET", "/api/v1/settings/database", None),
+            (
+                "POST",
+                "/api/v1/settings/database/test-connection",
+                {"connection_url": "postgresql://x/y"},
+            ),
         ],
     )
     def test_account_and_credential_changes_need_a_password_session(
