@@ -237,6 +237,12 @@ longer holds. The credential decision is re-split by client:
   MCP pod holds `TUK_API_TOKEN` in place of `TUK_PASSWORD`, so stealing
   the pod's secret yields a credential that can be revoked, not the
   user's password. A token acts strictly as its owner.
+  So that revoking a stolen token is always enough, a token is refused
+  (403 `token_not_allowed`) wherever it could: minting another token,
+  changing the password, completing a forced step, editing the profile,
+  and the whole admin API, even for an Admin's token. Listing tokens and
+  revoking one stay open to it. Changing the password does not end a
+  token; revoking it, disabling the user or a pending forced step does.
 - **Stdio mode is unchanged.** It runs on the user's own machine and
   reuses the CLI's cached cookie.
 - **MCP pods are not created automatically.** One pod serves one user. The
