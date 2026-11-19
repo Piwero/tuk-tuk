@@ -21,6 +21,7 @@ from app.middleware import SessionAuthMiddleware
 from app.ownership import create_session_factory
 from app.routers.v1 import (
     admin_users,
+    api_tokens,
     assist,
     assistant,
     auth,
@@ -108,6 +109,7 @@ def create_app(
     )
     register_error_handlers(app)
     app.include_router(admin_users.router)
+    app.include_router(api_tokens.router)
     app.include_router(assist.router)
     app.include_router(assistant.router)
     app.include_router(auth.router)
