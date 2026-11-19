@@ -12,14 +12,16 @@ import { Popover } from "./Popover";
  * server's `last_admin` guard (#412), mirrored. */
 export const LAST_ADMIN_REASON = "An instance needs at least one active admin.";
 
-/** One account's row menu in Settings › Users (#481): Make admin / Remove
- * admin and Disable user / Enable user. There is no delete: accounts are
- * only ever disabled. Disable asks to confirm first; nothing else does. */
+/** One account's row menu in Settings › Users (#480, #481): Reset password,
+ * Make admin / Remove admin and Disable user / Enable user. There is no
+ * delete: accounts are only ever disabled. Disable asks to confirm first;
+ * Reset password hands over to the panel's dialog. */
 export function UserActionsMenu({
   account,
   isSelf,
   isLastAdmin,
   onChange,
+  onResetPassword,
 }: {
   account: AdminUser;
   isSelf: boolean;
@@ -28,6 +30,9 @@ export function UserActionsMenu({
   isLastAdmin: boolean;
   /** Sends a change for this account; the panel reports the outcome. */
   onChange: (change: AdminUserChange) => void;
+  /** Opens the reset dialog; focus is back on this menu's button first, so
+   * the dialog returns it there. */
+  onResetPassword: () => void;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [confirmingDisable, setConfirmingDisable] = useState(false);
@@ -82,6 +87,7 @@ export function UserActionsMenu({
       />
       <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
         <ul role="menu" aria-label={label} className="overflow-menu-list" onKeyDown={moveMenuFocus}>
+          {item("Reset password", "key-round", onResetPassword)}
           {account.is_admin
             ? item("Remove admin", "shield-off", () => onChange({ is_admin: false }), {
                 blocked: isLastAdmin,

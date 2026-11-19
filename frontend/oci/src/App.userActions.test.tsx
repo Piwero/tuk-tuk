@@ -288,11 +288,13 @@ describe("The row menu by keyboard", () => {
     await user.keyboard("{Enter}");
     const menu = screen.getByRole("menu", { name: "Actions for ines" });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(within(menu).getByRole("menuitem", { name: "Reset password" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
     expect(within(menu).getByRole("menuitem", { name: "Make admin" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
     expect(within(menu).getByRole("menuitem", { name: "Disable user" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
-    expect(within(menu).getByRole("menuitem", { name: "Make admin" })).toHaveFocus();
+    expect(within(menu).getByRole("menuitem", { name: "Reset password" })).toHaveFocus();
     await user.keyboard("{ArrowUp}");
     expect(within(menu).getByRole("menuitem", { name: "Disable user" })).toHaveFocus();
 
@@ -303,9 +305,10 @@ describe("The row menu by keyboard", () => {
     await user.keyboard(" ");
     expect(
       within(screen.getByRole("menu", { name: "Actions for ines" })).getByRole("menuitem", {
-        name: "Make admin",
+        name: "Reset password",
       }),
     ).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
     await user.keyboard("{Enter}");
 
     await waitFor(() => {

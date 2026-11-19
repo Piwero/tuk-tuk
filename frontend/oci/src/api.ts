@@ -233,6 +233,17 @@ export function updateAdminUser(id: number, change: AdminUserChange): Promise<Ad
   });
 }
 
+/** Gives an account a new temporary password, generated in the browser
+ * (#412, #480). Ends every session of that account, the acting Admin's own
+ * included, and forces a new password at next sign-in. Rejects 422
+ * `invalid_password`, 404 `not_found`. */
+export function resetAdminUserPassword(id: number, tempPassword: string): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${id}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ temp_password: tempPassword }),
+  });
+}
+
 /** Signs in by username or email (either ignoring case) and sets the
  * session cookie. Rejects with `invalid_credentials` (an unknown login and
  * a wrong password alike), `too_many_attempts`, or `account_disabled`. */
