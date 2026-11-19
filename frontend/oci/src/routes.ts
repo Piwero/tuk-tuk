@@ -44,6 +44,27 @@ const SMART_VIEW_PATHS: Record<SmartView, string> = {
   all: "/all",
 };
 
+/** Settings' tabs (#468), each with its own URL: My account, and Users for
+ * admins. `/settings` alone stays a valid path. */
+export type SettingsTab = "account" | "users";
+
+const SETTINGS_TAB_PATHS: Record<SettingsTab, string> = {
+  account: "/settings/account",
+  users: "/settings/users",
+};
+
+export function pathForSettingsTab(tab: SettingsTab): string {
+  return SETTINGS_TAB_PATHS[tab];
+}
+
+/** Reads the Settings tab out of a `/settings/<tab>` path; null otherwise. */
+export function settingsTabForPath(pathname: string): SettingsTab | null {
+  const match = (Object.keys(SETTINGS_TAB_PATHS) as SettingsTab[]).find(
+    (tab) => SETTINGS_TAB_PATHS[tab] === pathname,
+  );
+  return match ?? null;
+}
+
 export type ContainerRoute =
   | { kind: "list"; id: number; mode?: "list" | "kanban" | "completed" }
   | { kind: "tag" | "folder"; id: number };
@@ -106,6 +127,9 @@ export function staticViewKindForPath(pathname: string): StaticViewKind | null {
   }
   if (smartViewForPath(pathname) !== null) {
     return "smart";
+  }
+  if (settingsTabForPath(pathname) !== null) {
+    return "settings";
   }
   const match = (Object.keys(STATIC_VIEW_PATHS) as StaticViewKind[]).find(
     (kind) => STATIC_VIEW_PATHS[kind] === pathname,

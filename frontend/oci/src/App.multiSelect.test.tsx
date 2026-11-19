@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { pickDate } from "./test/pickDate";
-import { fakeList, fakeTask, installFakeApi, INBOX } from "./test/fakeApi";
+import { fakeList, fakeTask, fakeUser, installFakeApi, INBOX } from "./test/fakeApi";
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -96,7 +96,11 @@ describe("multi-select and bulk actions", () => {
   });
 
   it("deletes a selection as one undoable action", async () => {
-    const api = installFakeApi({ tasks: [fakeTask("A"), fakeTask("B"), fakeTask("Keep")] });
+    // Signed in as someone whose avatar initial is not one of the Task titles.
+    const api = installFakeApi({
+      users: [fakeUser("zoe")],
+      tasks: [fakeTask("A"), fakeTask("B"), fakeTask("Keep")],
+    });
     render(<App />);
     await openInboxRows();
 

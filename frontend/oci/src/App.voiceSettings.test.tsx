@@ -23,8 +23,8 @@ const findAssistantLink = async () => {
 
 async function openVoiceSettings(): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: "App menu" }));
-  await user.click(await screen.findByRole("link", { name: "Settings" }));
+  await user.click(await screen.findByRole("button", { name: "Account menu" }));
+  await user.click(screen.getByRole("menuitem", { name: "My account" }));
   return user;
 }
 
@@ -169,7 +169,7 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     installFakeApi({});
     render(<App />);
 
-    await screen.findByRole("button", { name: "App menu" });
+    await screen.findByRole("button", { name: "Account menu" });
     expect(assistantLink()).not.toBeInTheDocument();
   });
 
@@ -195,7 +195,7 @@ describe("The Voice Assistant's availability (ADR 0015, issue #366)", () => {
     });
     render(<App />);
 
-    await screen.findByRole("button", { name: "App menu" });
+    await screen.findByRole("button", { name: "Account menu" });
     expect(assistantLink()).not.toBeInTheDocument();
   });
 

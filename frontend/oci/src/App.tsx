@@ -30,6 +30,8 @@ import {
   type Task,
   type TaskList,
   type TaskPatch,
+  type CurrentUser,
+  fetchCurrentUser,
 } from "./api";
 import { type CalendarMode } from "./calendar";
 import {
@@ -57,10 +59,13 @@ import {
   containerForPath,
   pathForContainer,
   pathForCalendarMode,
+  pathForSettingsTab,
   pathForSmartView,
   pathForStaticView,
+  settingsTabForPath,
   smartViewForPath,
   staticViewKindForPath,
+  type SettingsTab,
   type StaticViewKind,
 } from "./routes";
 import { deriveOpenTaskCounts } from "./openCounts";
@@ -94,6 +99,7 @@ import { SearchView, type SearchState } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutHints, ShortcutsProvider } from "./components/ShortcutLayer";
 import { Sidebar } from "./components/Sidebar";
+import { UserMenu } from "./components/UserMenu";
 import { DayRail } from "./components/DayRail";
 import { FocusCard } from "./components/FocusCard";
 import { HabitsCard } from "./components/HabitsCard";
@@ -123,7 +129,7 @@ type View =
   | { kind: "focus"; task?: Task }
   | { kind: "focus-stats" }
   | { kind: "search"; search: SearchState }
-  | { kind: "settings" }
+  | { kind: "settings"; tab?: SettingsTab }
   | null;
 
 /** A stable identity for a View, for use as an effect dependency: two Views
@@ -211,8 +217,10 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
       return { kind: "focus" };
     case "focus-stats":
       return { kind: "focus-stats" };
-    case "settings":
-      return { kind: "settings" };
+    case "settings": {
+      const tab = settingsTabForPath(pathname);
+      return tab === null ? { kind: "settings" } : { kind: "settings", tab };
+    }
   }
 }
 
@@ -222,6 +230,28 @@ interface AppProps {
    * caller that supplies it, so App's bootstrap and tests never need to
    * know authentication exists beyond forwarding this one callback. */
   onLogout?: () => void;
+  /** The signed-in account, from the gate's probe. App reads it itself
+   * when rendered on its own (as its tests do). */
+  user?: CurrentUser;
+}
+
+/** Who is signed in: the gate's answer when given, else read once. */
+function useCurrentUser(given: CurrentUser | undefined): CurrentUser | null {
+  const [fetched, setFetched] = useState<CurrentUser | null>(null);
+  useEffect(() => {
+    if (given !== undefined) return;
+    let live = true;
+    fetchCurrentUser().then(
+      (user) => {
+        if (live) setFetched(user);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [given]);
+  return given ?? fetched;
 }
 
 /** True at/below the phone breakpoint (720px, same as the stylesheet), live. */
@@ -242,7 +272,12 @@ function useNarrowViewport(): boolean {
   return narrow;
 }
 
-export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}): JSX.Element {
+export function App({
+  onLogout,
+  user: signedInUser,
+  voiceProvider = livekitProvider,
+}: AppProps = {}): JSX.Element {
+  const currentUser = useCurrentUser(signedInUser);
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -465,6 +500,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       window.history.pushState(null, "", containerPath);
     } else if (kind === "calendar" && view?.kind === "calendar") {
       window.history.pushState(null, "", pathForCalendarMode(view.mode));
+    } else if (kind === "settings" && view?.kind === "settings" && view.tab !== undefined) {
+      window.history.pushState(null, "", pathForSettingsTab(view.tab));
     } else if (kind === "smart" && view?.kind === "smart") {
       window.history[missingViewNotice ? "replaceState" : "pushState"](
         null,
@@ -488,6 +525,18 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       return;
     }
     const path = pathForCalendarMode(view.mode);
+    if (window.location.pathname !== path) {
+      window.history.replaceState(null, "", path);
+    }
+  }, [view]);
+
+  // Keeps /settings/<tab> in sync when a tab is picked from within Settings
+  // (e.g. the user menu's My account while Settings is already open).
+  useEffect(() => {
+    if (view?.kind !== "settings" || view.tab === undefined) {
+      return;
+    }
+    const path = pathForSettingsTab(view.tab);
     if (window.location.pathname !== path) {
       window.history.replaceState(null, "", path);
     }
@@ -1152,7 +1201,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   const standupSelected = view?.kind === "standup";
   const assistantSelected = view?.kind === "assistant";
   const focusSelected = view?.kind === "focus" || view?.kind === "focus-stats";
-  const settingsSelected = view?.kind === "settings";
   const searchSelected = view?.kind === "search";
 
   // The List the open Task belongs to, shown as a breadcrumb in the mobile
@@ -1368,7 +1416,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               assistantAvailable={assistantAvailable}
               focusSelected={focusSelected}
               focusEnabled={sectionSettings.focus}
-              settingsSelected={settingsSelected}
               onSelect={(listId) => switchView({ kind: "list", id: listId })}
               onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
               onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
@@ -1379,13 +1426,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               onSelectStandup={() => switchView({ kind: "standup" })}
               onSelectAssistant={() => switchView({ kind: "assistant" })}
               onSelectFocus={() => switchView({ kind: "focus" })}
-              onSelectSettings={() => switchView({ kind: "settings" })}
               onQuickAdd={() => setQuickAddOpen(true)}
               collapsed={sidebarCollapsed}
               onToggleCollapsed={toggleSidebar}
-              resolvedTheme={resolveThemePreference(themePreference)}
-              onToggleTheme={toggleTheme}
-              onLogout={onLogout}
               onOpenPalette={() => setPaletteOpen(true)}
               onListsChanged={setLists}
               onFoldersChanged={setFolders}
@@ -1521,6 +1564,15 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                       >
                         {completedMode ? "Open tasks" : "Completed"}
                       </button>
+                    )}
+                    {currentUser !== null && (
+                      <UserMenu
+                        user={currentUser}
+                        onSelectTab={(tab) => switchView({ kind: "settings", tab })}
+                        darkMode={resolveThemePreference(themePreference) === "dark"}
+                        onToggleDarkMode={toggleTheme}
+                        onLogout={onLogout}
+                      />
                     )}
                   </div>
                   {/* Full-width row under the header: only .view-controls takes the
@@ -1810,7 +1862,11 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 assistantAvailable={assistantAvailable}
                 assistantSelected={assistantSelected}
                 searchSelected={searchSelected}
-                settingsSelected={settingsSelected}
+                settingsTab={view?.kind === "settings" ? (view.tab ?? "account") : null}
+                user={currentUser}
+                darkMode={resolveThemePreference(themePreference) === "dark"}
+                onToggleDarkMode={toggleTheme}
+                onLogout={onLogout}
                 onClose={closeMore}
                 onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
                 onSelectList={(listId) => switchView({ kind: "list", id: listId })}
@@ -1821,7 +1877,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 onSelectStandup={() => switchView({ kind: "standup" })}
                 onSelectAssistant={() => switchView({ kind: "assistant" })}
                 onSelectSearch={() => switchView({ kind: "search", search: BLANK_SEARCH_STATE })}
-                onSelectSettings={() => switchView({ kind: "settings" })}
+                onSelectSettingsTab={(tab) => switchView({ kind: "settings", tab })}
               />
             )}
             {selectedTask !== null && (

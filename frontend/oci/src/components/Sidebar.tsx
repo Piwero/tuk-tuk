@@ -1,6 +1,6 @@
 import "./Sidebar.css";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 
 import {
   createFolder,
@@ -115,7 +115,6 @@ interface SidebarProps {
   /** Settings toggle (this feature): hides the Focus nav item entirely
    * when off, same contract as `standupEnabled` above. */
   focusEnabled: boolean;
-  settingsSelected: boolean;
   onSelect: (listId: number) => void;
   onSelectFolder: (folderId: number) => void;
   onSelectTag: (tagId: number) => void;
@@ -126,7 +125,6 @@ interface SidebarProps {
   onSelectStandup: () => void;
   onSelectAssistant: () => void;
   onSelectFocus: () => void;
-  onSelectSettings: () => void;
   onOpenPalette: () => void;
   /** Opens the Quick add dialog; the sidebar is always there, so capture is
    * reachable from every screen, including Habits and Focus. */
@@ -135,19 +133,12 @@ interface SidebarProps {
    * the main view its width back. */
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  /** The concrete theme on screen right now ("light"/"dark") and a handler
-   * that flips it — the nav-bar shortcut for Settings › Appearance. */
-  resolvedTheme: "light" | "dark";
-  onToggleTheme: () => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
   onTagSaved: (tag: Tag) => void;
   onTagDeleted: (tagId: number) => void;
   onTaskMoved: (task: Task) => void;
-  /** Absent when the sidebar is rendered without AuthGate (most tests) —
-   * the log out control only appears once there is somewhere for it to go. */
-  onLogout?: () => void;
 }
 
 interface ListButtonProps {
@@ -464,7 +455,6 @@ export function Sidebar({
   assistantSelected,
   assistantAvailable,
   onSelectAssistant,
-  settingsSelected,
   onSelect,
   onSelectFolder,
   onSelectTag,
@@ -474,32 +464,18 @@ export function Sidebar({
   onSelectHabits,
   onSelectStandup,
   onSelectFocus,
-  onSelectSettings,
   onOpenPalette,
   onQuickAdd,
   collapsed,
   onToggleCollapsed,
-  resolvedTheme,
-  onToggleTheme,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
   onTagSaved,
   onTagDeleted,
   onTaskMoved,
-  onLogout,
 }: SidebarProps): JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRoot = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    function dismiss(event: MouseEvent): void {
-      if (!menuRoot.current?.contains(event.target as Node)) setMenuOpen(false);
-    }
-    document.addEventListener("mousedown", dismiss);
-    return () => document.removeEventListener("mousedown", dismiss);
-  }, [menuOpen]);
   // Layout preference, not data — persisted per Folder in localStorage
   // (layoutPrefs), independent of selection. Default expanded.
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(loadCollapsedFolderIds);
@@ -864,9 +840,8 @@ export function Sidebar({
   return (
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
       {/* Scrolls internally, independent of the rest of the app shell
-          (issue #159) — everything above the footer lives here so a long
-          list tree scrolls without carrying Settings/Log out (below, outside
-          this wrapper) along with it. */}
+          (issue #159). Dark mode, Settings and Log out live in the
+          top-right user menu (#473), so the sidebar has no footer. */}
       <div className="sidebar-scroll">
         <div className="sidebar-top">
           <div className="sidebar-brand" title={`tuk-tuk version ${APP_VERSION}`}>
@@ -1222,72 +1197,6 @@ export function Sidebar({
             </ul>
           </section>
         )}
-      </div>
-      <div className="sidebar-footer">
-        <div
-          className="sidebar-app-menu"
-          ref={menuRoot}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              setMenuOpen(false);
-              menuRoot.current?.querySelector<HTMLButtonElement>("button")?.focus();
-            }
-          }}
-        >
-          <button
-            type="button"
-            className="sidebar-menu-trigger btn-quiet"
-            aria-label="App menu"
-            title="App menu"
-            aria-expanded={menuOpen}
-            aria-controls="sidebar-app-actions"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <Icon name="settings" size={18} />
-            <span className="nav-label">App menu</span>
-          </button>
-          {menuOpen && (
-            <div id="sidebar-app-actions" className="sidebar-app-menu-actions">
-              <button
-                type="button"
-                className="sidebar-theme-toggle btn-quiet"
-                aria-label={
-                  resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"
-                }
-                title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                aria-pressed={resolvedTheme === "dark"}
-                onClick={onToggleTheme}
-              >
-                <Icon name={resolvedTheme === "dark" ? "sun" : "moon"} size={18} />
-                <span className="nav-label">
-                  {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
-                </span>
-              </button>
-              <a
-                href={pathForStaticView("settings")}
-                className={settingsSelected ? "sidebar-settings selected" : "sidebar-settings"}
-                aria-label="Settings"
-                title="Settings"
-                onClick={(event) => handleNavAnchorClick(event, onSelectSettings)}
-              >
-                <Icon name="settings" size={18} />
-                <span className="nav-label">Settings</span>
-              </a>
-              {onLogout !== undefined && (
-                <button
-                  type="button"
-                  className="sidebar-logout btn-quiet"
-                  aria-label="Log out"
-                  title="Log out"
-                  onClick={onLogout}
-                >
-                  <Icon name="log-out" size={18} />
-                  <span className="nav-label">Log out</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
       </div>
     </aside>
   );

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { AuthGate } from "./AuthGate";
 import { ApiError, fetchLists, setup } from "./api";
-import { FAKE_PASSWORD, fakeTask, fakeUser, installFakeApi } from "./test/fakeApi";
+import { FAKE_ADMIN, FAKE_PASSWORD, fakeTask, fakeUser, installFakeApi } from "./test/fakeApi";
 
 async function signIn(
   user: ReturnType<typeof userEvent.setup>,
@@ -163,12 +163,71 @@ describe("AuthGate sign-in", () => {
     render(<AuthGate />);
     expect(await screen.findByText("Buy milk")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-    await user.click(await screen.findByLabelText("Log out"));
+    await logOut(user);
 
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
     expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
     expect(api.loggedIn).toBe(false);
+  });
+});
+
+async function logOut(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.click(await screen.findByRole("button", { name: "Account menu" }));
+  await user.click(screen.getByRole("menuitem", { name: "Log out" }));
+}
+
+describe("AuthGate log out from the user menu (#473)", () => {
+  it("clears what the browser held for the previous user before sign-in shows", async () => {
+    localStorage.clear();
+    const task = fakeTask("Buy milk");
+    installFakeApi({ loggedIn: true, tasks: [task] });
+    localStorage.setItem(
+      "tuktuk.focus.run",
+      JSON.stringify({
+        mode: "stopwatch",
+        phase: "focus",
+        pomoMs: 0,
+        breakMs: 0,
+        longBreakMs: 0,
+        startedAtMs: Date.now(),
+        pausedMs: 0,
+        pauseStartedAtMs: null,
+        link: `task:${task.id}`,
+      }),
+    );
+    localStorage.setItem("tuktuk.sidebar.foldersCollapsed", "[3]");
+    localStorage.setItem("tuktuk.theme", "dark");
+    sessionStorage.setItem("tuktuk.draft", "Buy oat milk");
+    const user = userEvent.setup();
+    render(<AuthGate />);
+    expect(await screen.findByText("Buy milk")).toBeInTheDocument();
+
+    await logOut(user);
+
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(localStorage.getItem("tuktuk.focus.run")).toBeNull();
+    expect(localStorage.getItem("tuktuk.sidebar.foldersCollapsed")).toBeNull();
+    expect(sessionStorage.getItem("tuktuk.draft")).toBeNull();
+    // The theme is this device's appearance, not the person's data.
+    expect(localStorage.getItem("tuktuk.theme")).toBe("dark");
+    localStorage.clear();
+  });
+
+  it("shows the next person only their own account", async () => {
+    installFakeApi({ loggedIn: true, users: [FAKE_ADMIN, fakeUser("bea")] });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
+    expect(screen.getByText("admin@example.com")).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Log out" }));
+
+    await signIn(user, "bea", FAKE_PASSWORD);
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
+
+    expect(screen.getByText("bea@example.com")).toBeInTheDocument();
+    expect(screen.queryByText("admin@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("Admin")).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Users" })).not.toBeInTheDocument();
   });
 });
 

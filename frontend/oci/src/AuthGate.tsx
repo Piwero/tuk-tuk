@@ -6,6 +6,7 @@ import { ApiError, type CurrentUser, fetchCurrentUser, logout, onUnauthorized } 
 import { ForcedStepFrame } from "./auth/ForcedStepFrame";
 import { SetupScreen } from "./auth/SetupScreen";
 import { type SignInNotice, SignInScreen } from "./auth/SignInScreen";
+import { clearSignedInData } from "./layoutPrefs";
 import { pathForSmartView } from "./routes";
 
 /** What the gate shows, resolved from the current-user request (#468).
@@ -75,8 +76,16 @@ export function AuthGate({
   // Clearing the cookie server-side is what actually ends the session;
   // signing out regardless of the request's outcome just gets the sign-in
   // screen back up promptly, and unmounts App so no Task or List content is
-  // left sitting in component state behind it.
-  const signOut = useCallback(() => void logout().finally(() => setState(SIGNED_OUT)), []);
+  // left sitting in component state behind it. What the browser stored for
+  // this person is dropped first, before sign-in renders (#473).
+  const signOut = useCallback(
+    () =>
+      void logout().finally(() => {
+        clearSignedInData();
+        setState(SIGNED_OUT);
+      }),
+    [],
+  );
 
   switch (state.kind) {
     case "checking":
@@ -111,6 +120,6 @@ export function AuthGate({
         />
       );
     case "signed-in":
-      return <App voiceProvider={voiceProvider} onLogout={signOut} />;
+      return <App voiceProvider={voiceProvider} user={state.user} onLogout={signOut} />;
   }
 }
