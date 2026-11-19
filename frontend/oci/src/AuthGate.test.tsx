@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -189,6 +189,149 @@ describe("AuthGate pending forced step", () => {
     expect(await screen.findByRole("heading", { name: stepHeading })).toBeInTheDocument();
     expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    "/",
+    "/today",
+    "/all",
+    "/settings",
+    "/calendar/month",
+    "/lists/1/kanban",
+    "/tags/1",
+    "/habits",
+    "/assistant",
+    "/no-such-page",
+  ])(
+    "with a temporary password, shows only the step at %s and asks for no app data",
+    async (path) => {
+      const api = installFakeApi({
+        loggedIn: true,
+        users: [fakeUser("tomas", { must_change_password: true })],
+        tasks: [fakeTask("Buy milk")],
+      });
+      window.history.replaceState(null, "", path);
+
+      render(<AuthGate />);
+
+      expect(
+        await screen.findByRole("heading", { name: "Choose a new password" }),
+      ).toBeInTheDocument();
+      // Moving through history while the step is up changes nothing either.
+      window.history.pushState(null, "", "/settings");
+      act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+      expect(screen.getByRole("heading", { name: "Choose a new password" })).toBeInTheDocument();
+      expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+      expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
+      expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+      expect(api.requests.every((r) => r.url.startsWith("/api/v1/auth/"))).toBe(true);
+    },
+  );
+
+  it("takes a person signing in with a temporary password straight to the step, saying why", async () => {
+    installFakeApi({
+      loggedIn: false,
+      users: [fakeUser("tomas", { password: "temporary-pass", must_change_password: true })],
+      tasks: [fakeTask("Buy milk")],
+    });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await signIn(user, "tomas", "temporary-pass");
+
+    expect(
+      await screen.findByRole("heading", { name: "Choose a new password" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/you signed in with a temporary password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("New password")).toHaveFocus();
+    expect(screen.getByLabelText("Confirm new password")).toBeInTheDocument();
+    expect(screen.getByText("Signed in as tomas")).toBeInTheDocument();
+    expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  });
+
+  it("ticks a checklist as the person types and holds the button until both rules pass", async () => {
+    installFakeApi({
+      loggedIn: true,
+      users: [fakeUser("tomas", { must_change_password: true })],
+    });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    const rules = await screen.findByRole("list", { name: "Password requirements" });
+    const rule = (name: string): string =>
+      within(rules)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent ?? "")
+        .find((text) => text.startsWith(name)) ?? "";
+    const save = screen.getByRole("button", { name: "Save and continue" });
+    expect(rule("At least 12 characters")).toMatch(/not yet/);
+    expect(rule("Both entries match")).toMatch(/not yet/);
+    expect(save).toBeDisabled();
+
+    await user.type(screen.getByLabelText("New password"), "a-long-new-password");
+    expect(rule("At least 12 characters")).toMatch(/done/);
+    expect(rule("Both entries match")).toMatch(/not yet/);
+    expect(save).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Confirm new password"), "a-long-new-passwor");
+    expect(rule("Both entries match")).toMatch(/not yet/);
+    expect(save).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Confirm new password"), "d");
+    expect(rule("At least 12 characters")).toMatch(/done/);
+    expect(rule("Both entries match")).toMatch(/done/);
+    expect(save).toBeEnabled();
+  });
+
+  it("replaces the temporary password and lands on Today", async () => {
+    const api = installFakeApi({
+      loggedIn: true,
+      users: [fakeUser("tomas", { password: "temporary-pass", must_change_password: true })],
+      tasks: [fakeTask("Buy milk")],
+    });
+    window.history.replaceState(null, "", "/calendar/week");
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await user.type(await screen.findByLabelText("New password"), "a-long-new-password");
+    await user.type(screen.getByLabelText("Confirm new password"), "a-long-new-password{Enter}");
+
+    expect(await screen.findByRole("heading", { name: "Today", level: 1 })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/today");
+    expect(screen.queryByRole("heading", { name: "Choose a new password" })).toBeNull();
+    expect(api.requests).toContainEqual({
+      method: "POST",
+      url: "/api/v1/auth/complete",
+      body: { new_password: "a-long-new-password" },
+    });
+    expect(api.users[0]).toMatchObject({
+      password: "a-long-new-password",
+      must_change_password: false,
+    });
+  });
+
+  it("reports on the field a new password the server rejects as the temporary one", async () => {
+    const api = installFakeApi({
+      loggedIn: true,
+      users: [fakeUser("tomas", { password: "temporary-pass", must_change_password: true })],
+      tasks: [fakeTask("Buy milk")],
+    });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+
+    await user.type(await screen.findByLabelText("New password"), "temporary-pass");
+    await user.type(screen.getByLabelText("Confirm new password"), "temporary-pass{Enter}");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/different from your temporary password/i);
+    const field = screen.getByLabelText("New password");
+    expect(field).toBeInvalid();
+    expect(field).toHaveAccessibleDescription(alert.textContent ?? "");
+    expect(field).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Choose a new password" })).toBeInTheDocument();
+    expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
+    expect(api.users[0]?.must_change_password).toBe(true);
   });
 
   it("lets the person log out from the step", async () => {

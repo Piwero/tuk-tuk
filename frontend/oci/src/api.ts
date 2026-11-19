@@ -186,6 +186,27 @@ export function setup(input: SetupInput): Promise<void> {
   return request(SETUP_PATH, { method: "POST", body: JSON.stringify(input) });
 }
 
+/** What completing a forced step sends: always a new password, plus the
+ * username and email when the step is a profile to complete. */
+export interface CompleteStepInput {
+  newPassword: string;
+  username?: string;
+  email?: string;
+}
+
+/** Completes the pending forced step (ADR 0018) and re-issues this
+ * session's cookie; re-read the account record afterwards, since only the
+ * server's answer clears the step. Rejects 422 `invalid_password`,
+ * `password_unchanged` (the new password equals the current one) or
+ * `profile_required`, 409 `username_taken` / `email_taken`, or 409
+ * `no_pending_step`. */
+export function completeStep({ newPassword, username, email }: CompleteStepInput): Promise<void> {
+  return request("/api/v1/auth/complete", {
+    method: "POST",
+    body: JSON.stringify({ new_password: newPassword, username, email }),
+  });
+}
+
 /** Clears the session cookie server-side. The cookie is httpOnly, so this is
  * the only way to end a session — client-side code can't delete it itself. */
 export function logout(): Promise<void> {
