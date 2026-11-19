@@ -88,9 +88,12 @@ def validate_schedule(
         for value in (start_date, due_date):
             if value is not None and as_utc(value).time() != time(0, 0):
                 raise invalid_schedule("All-day dates are date-only: use midnight UTC")
-    elif start_date is not None and due_date is not None:
-        if as_utc(start_date).astimezone(zone).date() != as_utc(due_date).astimezone(zone).date():
-            raise invalid_schedule("A timed start+due duration must stay within one day")
+    elif (
+        start_date is not None
+        and due_date is not None
+        and as_utc(start_date).astimezone(zone).date() != as_utc(due_date).astimezone(zone).date()
+    ):
+        raise invalid_schedule("A timed start+due duration must stay within one day")
 
 
 async def validate_key_result(session: SessionDep, key_result_id: int | None) -> None:
