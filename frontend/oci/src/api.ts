@@ -187,6 +187,9 @@ export interface AdminUser {
   must_change_password: boolean;
   must_complete_profile: boolean;
   created_at: string;
+  /** When the account was last served a signed-in request (#478), ISO-8601,
+   * moved at most every few minutes; null if it never has been. */
+  last_active_at: string | null;
 }
 
 /** The most accounts one admin users read returns (the backend's cap). */

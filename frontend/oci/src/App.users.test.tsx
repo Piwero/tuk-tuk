@@ -31,7 +31,8 @@ function perceived(cell: Element): string {
   return (copy.textContent ?? "").replace(/\s+/g, " ").trim();
 }
 
-/** The table's body rows, top to bottom, as [user, role, status] texts. */
+/** The table's body rows, top to bottom, as [user, role, status, last
+ * active] texts. */
 function listedRows(): string[][] {
   const table = screen.getByRole("table", { name: "Users" });
   return within(table)
@@ -47,6 +48,10 @@ function listReads(api: FakeApiState): string[] {
   return api.requests
     .filter((r) => r.method === "GET" && r.url.startsWith("/api/v1/admin/users"))
     .map((r) => r.url);
+}
+
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
 }
 
 describe("Users list", () => {
@@ -67,10 +72,37 @@ describe("Users list", () => {
       ),
     ).toBeInTheDocument();
     expect(listedRows()).toEqual([
-      ["rafa You rafa@example.org", "Admin", "Active"],
-      ["ines ines@example.org", "Member", "Active"],
+      ["rafa You rafa@example.org", "Admin", "Active", "Now"],
+      ["ines ines@example.org", "Member", "Active", "Never"],
     ]);
     expect(listReads(api)).toHaveLength(1);
+  });
+
+  it("says when each account was last active, and Never for one nobody has used", async () => {
+    const api = installFakeApi({
+      users: [
+        { ...FAKE_ADMIN, last_active_at: null },
+        fakeUser("pat", { last_active_at: minutesAgo(3) }),
+        fakeUser("ines", { last_active_at: minutesAgo(2 * 60 + 10) }),
+        fakeUser("lu", { last_active_at: minutesAgo(6 * 24 * 60) }),
+        fakeUser("noor", { last_active_at: "2026-03-04T10:00:00Z" }),
+        fakeUser("tomas", { must_change_password: true, last_active_at: null }),
+      ],
+    });
+
+    await openUsers();
+
+    await screen.findByRole("table", { name: "Users" });
+    expect(screen.getByRole("columnheader", { name: "Last active" })).toBeInTheDocument();
+    expect(listedRows()).toEqual([
+      ["admin You admin@example.com", "Admin", "Active", "Now"],
+      ["pat pat@example.com", "Member", "Active", "Now"],
+      ["ines ines@example.com", "Member", "Active", "2 hours ago"],
+      ["lu lu@example.com", "Member", "Active", "6 days ago"],
+      ["noor noor@example.com", "Member", "Active", "Mar 4, 2026"],
+      ["tomas tomas@example.com", "Member", "Temporary password", "Never"],
+    ]);
+    expect(listReads(api)).toEqual(["/api/v1/admin/users?limit=200"]);
   });
 
   it("derives each status and lists disabled accounts last", async () => {
@@ -90,12 +122,12 @@ describe("Users list", () => {
     await screen.findByRole("table", { name: "Users" });
     expect(screen.getByRole("heading", { name: "6 users" })).toBeInTheDocument();
     expect(listedRows()).toEqual([
-      ["admin You admin@example.com", "Admin", "Active"],
-      ["tomas tomas@example.com", "Member", "Temporary password"],
-      ["ines ines@example.com", "Member", "Active"],
-      ["old", "Member", "Temporary password"],
-      ["marta marta@example.com", "Member", "Disabled"],
-      ["zed zed@example.com", "Admin", "Disabled"],
+      ["admin You admin@example.com", "Admin", "Active", "Now"],
+      ["tomas tomas@example.com", "Member", "Temporary password", "Never"],
+      ["ines ines@example.com", "Member", "Active", "Never"],
+      ["old", "Member", "Temporary password", "Never"],
+      ["marta marta@example.com", "Member", "Disabled", "Never"],
+      ["zed zed@example.com", "Admin", "Disabled", "Never"],
     ]);
   });
 

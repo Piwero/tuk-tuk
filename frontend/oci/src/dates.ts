@@ -376,6 +376,22 @@ export function formatTimeAgo(then: Date, now: Date = new Date()): string {
   return "just now";
 }
 
+// The backend records activity at most every five minutes (#478), so
+// anything that recent is as good as now.
+const ACTIVE_NOW_MS = 5 * 60 * 1000;
+const RELATIVE_FOR_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** When an account was last active (#478, spec #468): "Never" for null,
+ * "Now" within a few minutes, then relative ("2 hours ago", "6 days ago")
+ * for a week, then the date ("Mar 4, 2026"). */
+export function formatLastActive(then: Date | null, now: Date = new Date()): string {
+  if (then === null) return "Never";
+  const elapsed = now.getTime() - then.getTime();
+  if (elapsed < ACTIVE_NOW_MS) return "Now";
+  if (elapsed < RELATIVE_FOR_MS) return formatTimeAgo(then, now);
+  return formatDate(then, "date");
+}
+
 /** A short deterministic day label: "Jul 6". */
 export function shortDayLabel(dayIso: string): string {
   return formatDate(fromDayIso(dayIso), "short");

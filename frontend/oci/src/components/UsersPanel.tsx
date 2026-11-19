@@ -2,6 +2,7 @@ import "./UsersPanel.css";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { type AdminUser, ApiError, type CurrentUser, fetchAdminUsers, type Page } from "../api";
+import { formatLastActive } from "../dates";
 import { LoadError, SkeletonRows } from "./TaskViewState";
 import { Avatar } from "./UserMenu";
 
@@ -33,7 +34,8 @@ function disabledLast(accounts: AdminUser[]): AdminUser[] {
   ];
 }
 
-/** One account's row (#477): who it is, its role and its status. The last
+/** One account's row (#477): who it is, its role, its status and when it
+ * was last active (#478). The last
  * cell is a slot for the row's actions menu (#479-#481), left out when the
  * table has no actions. */
 export function UserRow({
@@ -72,6 +74,15 @@ export function UserRow({
         <span className="users-status" data-status={STATUS_STATE[status]}>
           {status}
         </span>
+      </td>
+      <td className="users-cell-active">
+        {account.last_active_at === null ? (
+          formatLastActive(null)
+        ) : (
+          <time dateTime={account.last_active_at}>
+            {formatLastActive(new Date(account.last_active_at))}
+          </time>
+        )}
       </td>
       {actions !== undefined && <td className="users-cell-actions">{actions}</td>}
     </tr>
@@ -137,6 +148,7 @@ export function UsersPanel({
                 <th scope="col">User</th>
                 <th scope="col">Role</th>
                 <th scope="col">Status</th>
+                <th scope="col">Last active</th>
               </tr>
             </thead>
             <tbody>
