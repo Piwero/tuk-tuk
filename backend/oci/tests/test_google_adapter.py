@@ -6,17 +6,22 @@ HTTP transport; no test in the suite ever contacts Google for real.
 import httpx
 import pytest
 
-from app.calendar_source import TerminalCalendarSourceError, TransientCalendarSourceError
+from app.calendar_source import (
+    GoogleOAuthClient,
+    TerminalCalendarSourceError,
+    TransientCalendarSourceError,
+)
 from app.google_adapter import GoogleCalendarSource
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
+OAUTH_CLIENT = GoogleOAuthClient(client_id="a-client-id", client_secret="a-client-secret")
+
+
 def adapter(handler: httpx.MockTransport) -> GoogleCalendarSource:
-    return GoogleCalendarSource(
-        client_id="a-client-id", client_secret="a-client-secret", transport=handler
-    )
+    return GoogleCalendarSource(transport=handler)
 
 
 class TestExchangeCode:
@@ -30,7 +35,7 @@ class TestExchangeCode:
             return httpx.Response(200, json={"id": "google-123", "email": "a@example.com"})
 
         credential = await adapter(httpx.MockTransport(handle)).exchange_code(
-            "auth-code", redirect_uri="https://tuk-tuk.example/api/v1/google/callback"
+            OAUTH_CLIENT, "auth-code", redirect_uri="https://tuk-tuk.example/api/v1/google/callback"
         )
 
         assert credential.google_account_id == "google-123"
@@ -43,7 +48,9 @@ class TestExchangeCode:
 
         with pytest.raises(TerminalCalendarSourceError):
             await adapter(httpx.MockTransport(handle)).exchange_code(
-                "bad-code", redirect_uri="https://tuk-tuk.example/api/v1/google/callback"
+                OAUTH_CLIENT,
+                "bad-code",
+                redirect_uri="https://tuk-tuk.example/api/v1/google/callback",
             )
 
     async def test_raises_when_google_grants_no_refresh_token(self) -> None:
@@ -56,7 +63,9 @@ class TestExchangeCode:
 
         with pytest.raises(TerminalCalendarSourceError):
             await adapter(httpx.MockTransport(handle)).exchange_code(
-                "auth-code", redirect_uri="https://tuk-tuk.example/api/v1/google/callback"
+                OAUTH_CLIENT,
+                "auth-code",
+                redirect_uri="https://tuk-tuk.example/api/v1/google/callback",
             )
 
     async def test_raises_transient_when_userinfo_lookup_fails(self) -> None:
@@ -67,7 +76,9 @@ class TestExchangeCode:
 
         with pytest.raises(TransientCalendarSourceError):
             await adapter(httpx.MockTransport(handle)).exchange_code(
-                "auth-code", redirect_uri="https://tuk-tuk.example/api/v1/google/callback"
+                OAUTH_CLIENT,
+                "auth-code",
+                redirect_uri="https://tuk-tuk.example/api/v1/google/callback",
             )
 
 
@@ -78,7 +89,7 @@ class TestRefresh:
             assert "refresh_token=rt-1" in request.content.decode()
             return httpx.Response(200, json={"access_token": "at-2"})
 
-        token = await adapter(httpx.MockTransport(handle)).refresh("rt-1")
+        token = await adapter(httpx.MockTransport(handle)).refresh(OAUTH_CLIENT, "rt-1")
 
         assert token.access_token == "at-2"
 
@@ -91,7 +102,7 @@ class TestRefresh:
             return httpx.Response(400, json={"error": "invalid_grant"})
 
         with pytest.raises(TerminalCalendarSourceError):
-            await adapter(httpx.MockTransport(handle)).refresh("revoked-token")
+            await adapter(httpx.MockTransport(handle)).refresh(OAUTH_CLIENT, "revoked-token")
 
     async def test_raises_transient_when_google_returns_a_server_error(self) -> None:
         """Adapter-level coverage (issue #109): a 5xx maps to
@@ -102,7 +113,7 @@ class TestRefresh:
             return httpx.Response(500, text="server error")
 
         with pytest.raises(TransientCalendarSourceError):
-            await adapter(httpx.MockTransport(handle)).refresh("rt-1")
+            await adapter(httpx.MockTransport(handle)).refresh(OAUTH_CLIENT, "rt-1")
 
     async def test_a_credential_refreshed_mid_request_is_not_served_stale(self) -> None:
         """Adapter-level coverage (issue #109): the adapter caches nothing
@@ -115,8 +126,8 @@ class TestRefresh:
             return httpx.Response(200, json={"access_token": next(tokens)})
 
         source = adapter(httpx.MockTransport(handle))
-        first = await source.refresh("rt-1")
-        second = await source.refresh("rt-1")
+        first = await source.refresh(OAUTH_CLIENT, "rt-1")
+        second = await source.refresh(OAUTH_CLIENT, "rt-1")
 
         assert first.access_token == "at-first"
         assert second.access_token == "at-second"

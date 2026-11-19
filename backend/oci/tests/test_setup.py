@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import FakeClock, app_settings_row, run_sql
+from tests.conftest import FakeClock, app_settings_row, run_sql, user_settings_row
 
 
 def fresh_client(database_url: str, fake_clock: FakeClock) -> TestClient:
@@ -154,7 +154,7 @@ class TestUpgradeImport:
         )
 
         with TestClient(create_app(settings, clock=fake_clock)) as client:
-            row = app_settings_row(client.app)  # type: ignore[arg-type]
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
 
         assert row.google_client_id == "a-client-id"
         assert row.encrypted_google_client_secret is not None
@@ -174,7 +174,7 @@ class TestUpgradeImport:
         )
 
         with TestClient(create_app(settings, clock=fake_clock)) as client:
-            row = app_settings_row(client.app)  # type: ignore[arg-type]
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
 
         assert row.google_client_id is None
         assert row.encrypted_google_client_secret is None
@@ -190,7 +190,7 @@ class TestUpgradeImport:
         )
 
         with TestClient(create_app(settings, clock=fake_clock)) as client:
-            row = app_settings_row(client.app)  # type: ignore[arg-type]
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
 
         assert row.assist_ollama_base_url == "http://localhost:11434"
         assert row.assist_model == "qwen3:14b"
@@ -209,10 +209,26 @@ class TestUpgradeImport:
         )
 
         with TestClient(create_app(settings, clock=fake_clock)) as client:
-            row = app_settings_row(client.app)  # type: ignore[arg-type]
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
 
         assert row.assist_ollama_base_url == "http://localhost:11434"
         assert row.assist_model is None
+
+    def test_the_integration_import_lands_on_user_1_once(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        """Issue #409: the env vars seed the first user's own settings,
+        when that user is created, and never again."""
+        first = Settings(database_url=database_url, assist_model="first-model")
+        with TestClient(create_app(first, clock=fake_clock)):
+            pass
+
+        second = Settings(database_url=database_url, assist_model="second-model")
+        with TestClient(create_app(second, clock=fake_clock)) as client:
+            row = user_settings_row(client.app)  # type: ignore[arg-type]
+
+        assert row.user_id == 1
+        assert row.assist_model == "first-model"
 
 
 class TestEncryptionAtRest:
@@ -229,5 +245,5 @@ class TestEncryptionAtRest:
         with TestClient(create_app(settings, clock=fake_clock)):
             pass
 
-        [row] = run_sql(database_url, "SELECT encrypted_google_client_secret FROM settings")
+        [row] = run_sql(database_url, "SELECT encrypted_google_client_secret FROM user_settings")
         assert "a-very-secret-client-secret" not in row[0]

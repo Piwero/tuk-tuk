@@ -17,7 +17,7 @@ PAYLOAD = {
 
 
 def stored_secret(database_url: str) -> str | None:
-    rows = run_sql(database_url, "SELECT encrypted_voice_livekit_api_secret FROM settings")
+    rows = run_sql(database_url, "SELECT encrypted_voice_livekit_api_secret FROM user_settings")
     return rows[0][0] if rows else None
 
 

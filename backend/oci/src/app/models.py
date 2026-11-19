@@ -90,16 +90,14 @@ class OwnedMixin:
 
 
 class AppSettings(Base):
-    """The DB-backed settings singleton (ADR 0008): the login password
-    hash, the session-cookie signing key, and — added by issue #117, but
-    the column shape anticipates it here — the Google OAuth client ID and
-    its encrypted client secret. Always exactly one row (`id` fixed at
-    `SETTINGS_ID` in app.app_settings), bootstrapped on first boot.
+    """The DB-backed settings singleton (ADR 0008), down to what is still
+    install-wide (issue #409): the session-cookie signing key, and the
+    install password until per-user login (issue #410) moves verification
+    onto `users`. Always exactly one row (`id` fixed at `SETTINGS_ID` in
+    app.app_settings), bootstrapped on first boot.
 
     `password_hash` is nullable: its absence is exactly what gates every
-    route behind `/setup` (app.middleware). `encrypted_google_client_secret`
-    is encrypted with `APP_MASTER_KEY` (app.crypto), never `session_key` —
-    a copy of the database must not disclose it.
+    route behind `/setup` (app.middleware).
     """
 
     __tablename__ = "settings"
@@ -108,6 +106,27 @@ class AppSettings(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     password_hash: Mapped[str | None] = mapped_column(Text, default=None)
     session_key: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class UserSettings(Base):
+    """One user's own settings, 1:1 with `users` (issue #409, ADR 0018):
+    everything the `settings` singleton used to hold except the session
+    key. Each user brings their own integrations. Created together with
+    the user (app.users.create_user) and read through
+    app.user_settings.current_user_settings only.
+
+    Every `encrypted_*` column is encrypted with `APP_MASTER_KEY`
+    (app.crypto), never `session_key`: a copy of the database must not
+    disclose it.
+    """
+
+    __tablename__ = "user_settings"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     google_client_id: Mapped[str | None] = mapped_column(String(255), default=None)
     encrypted_google_client_secret: Mapped[str | None] = mapped_column(Text, default=None)
     # Assist (ADR 0005). Neither value is sensitive — an Ollama base URL and

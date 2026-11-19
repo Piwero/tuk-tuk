@@ -131,7 +131,7 @@ def test_credentials_saved_by_an_earlier_version_still_start_sessions(
     # An upgraded install: the three columns were written before this refactor.
     run_sql(
         database_url,
-        "UPDATE settings SET voice_livekit_url = %s, voice_livekit_api_key = %s,"
+        "UPDATE user_settings SET voice_livekit_url = %s, voice_livekit_api_key = %s,"
         " encrypted_voice_livekit_api_secret = %s",
         (URL, KEY, encrypt_credential(SECRET, key="test-master-key")),
     )
