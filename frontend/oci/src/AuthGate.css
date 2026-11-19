@@ -129,4 +129,42 @@
   .auth-gate-step-footer button.btn-quiet {
     color: var(--accent);
   }
+
+  /* A step's own form sits inside the frame's card and lays out like it. */
+  .auth-gate-step-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  /* The password rules, ticking as they are met (#471). */
+  .auth-gate-rules {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+
+  .auth-gate-rule {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-tertiary);
+  }
+
+  .auth-gate-rule[data-met="true"] {
+    color: var(--text-success);
+  }
+
+  .auth-gate-rule-ring {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    margin: 1px;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
+  }
 }

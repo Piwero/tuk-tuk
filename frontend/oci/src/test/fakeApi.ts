@@ -1227,6 +1227,38 @@ export function installFakeApi({
       state.loggedIn = false;
       return new Response(null, { status: 204 });
     }
+    // Mirrors the backend's /auth/complete (auth router, ADR 0018) for the
+    // temporary-password step. The profile step (#472) adds its username
+    // and email handling here.
+    if (method === "POST" && url.pathname === "/api/v1/auth/complete") {
+      const account = sessionUser() as FakeUser;
+      if (!account.must_change_password && !account.must_complete_profile) {
+        return json(
+          { error: { code: "no_pending_step", message: "There is no step to complete" } },
+          409,
+        );
+      }
+      const input = body as { new_password: string };
+      if (account.must_complete_profile) {
+        // #472 replaces this with the profile step's username and email.
+        return unprocessable("profile_required", "Username and email are required");
+      }
+      if (input.new_password.length < MIN_PASSWORD_LENGTH) {
+        return unprocessable(
+          "invalid_password",
+          `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+        );
+      }
+      if (input.new_password === account.password) {
+        return unprocessable(
+          "password_unchanged",
+          "Choose a password different from the current one",
+        );
+      }
+      account.password = input.new_password;
+      account.must_change_password = false;
+      return new Response(null, { status: 204 });
+    }
     if (method === "POST" && url.pathname === "/api/v1/auth/password") {
       if (state.passwordChangeLocked) {
         return new Response(
