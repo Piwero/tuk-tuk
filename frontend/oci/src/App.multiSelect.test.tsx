@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { pickDate } from "./test/pickDate";
 import { fakeList, fakeTask, installFakeApi, INBOX } from "./test/fakeApi";
 
 beforeEach(() => {
@@ -22,7 +23,7 @@ function tick(ms: number): void {
 
 /** Opens the Inbox list and returns its task rows in visible order. */
 async function openInboxRows(): Promise<HTMLElement[]> {
-  fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+  fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
   await screen.findByRole("combobox", { name: "Add a task" });
   const list = screen.getByRole("list", { name: "Tasks" });
   return within(list).getAllByRole("listitem");
@@ -167,6 +168,26 @@ describe("multi-select and bulk actions", () => {
     });
   });
 
+  it("reschedules a selection with the shared date picker", async () => {
+    const api = installFakeApi({ tasks: [fakeTask("A"), fakeTask("B")] });
+    render(<App />);
+    await openInboxRows();
+
+    mark("A");
+    mark("B", true);
+    fireEvent.click(screen.getByRole("button", { name: "Reschedule" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reschedule selected Tasks" });
+    expect(dialog.querySelector('input[type="date"]')).toBeNull();
+    pickDate("Due date", "2026-07-10");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reschedule" }));
+    tick(6_000);
+
+    await waitFor(() => {
+      expect(api.tasks.find((t) => t.title === "A")?.due_date).toContain("2026-07-10");
+      expect(api.tasks.find((t) => t.title === "B")?.due_date).toContain("2026-07-10");
+    });
+  });
+
   it("clears the selection on a view change", async () => {
     installFakeApi({ tasks: [fakeTask("A"), fakeTask("B")] });
     render(<App />);
@@ -175,7 +196,7 @@ describe("multi-select and bulk actions", () => {
     expect(screen.getByRole("toolbar", { name: "Bulk actions" })).toBeInTheDocument();
 
     fireEvent.click(
-      within(screen.getByRole("navigation", { name: "Smart Lists" })).getByRole("button", {
+      within(screen.getByRole("complementary", { name: "" })).getByRole("button", {
         name: "All",
       }),
     );

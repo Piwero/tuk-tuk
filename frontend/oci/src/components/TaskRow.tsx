@@ -1,5 +1,7 @@
+import "./TaskRow.css";
+
 import { type Task, type TaskList } from "../api";
-import { formatSchedule, isDueToday, isOverdue, isSettled } from "../dates";
+import { formatSchedule, isDueToday, isOverdue, isSettled, type ScheduleContext } from "../dates";
 import { useLongPressReveal } from "../longPressReveal";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
@@ -54,6 +56,13 @@ export interface TaskRowProps {
    * inferred from context (#157 — a Task looked like a different object
    * depending on where it was rendered). */
   showDate: boolean;
+  /** Where the row is shown, which decides how much of the date the chip
+   * says (#431): "today" and "week" drop what the view already states. The
+   * chip's accessible name and title always carry the full date. Defaults to
+   * "absolute" — List, Search, Kanban and completed views. */
+  dateContext?: ScheduleContext;
+  leadingTime?: string;
+  trailingDuration?: string | null;
   showTags: boolean;
   showCheckProgress: boolean;
   /** Whether a long-overdue date settles into ordinary text (#280).
@@ -74,6 +83,9 @@ export interface TaskRowProps {
    * verb set the hover actions only sample. Keyboard-reachable like every
    * other row action. */
   onOpenActions?: (task: Task) => void;
+  /** Opens Focus with this Task linked, without starting the clock (#449).
+   * Left unset where Focus is disabled in Settings, which drops the action. */
+  onFocus?: (task: Task) => void;
   draggable?: boolean;
   onDragStart?: (event: React.DragEvent<HTMLLIElement>) => void;
   onDragEnd?: (event: React.DragEvent<HTMLLIElement>) => void;
@@ -110,6 +122,9 @@ export function TaskRow({
   className,
   list,
   showDate,
+  dateContext = "absolute",
+  leadingTime,
+  trailingDuration,
   showTags,
   showCheckProgress,
   settlesOverdue = true,
@@ -118,6 +133,7 @@ export function TaskRow({
   onSelect,
   onDelete,
   onOpenActions,
+  onFocus,
   draggable,
   onDragStart,
   onDragEnd,
@@ -135,8 +151,10 @@ export function TaskRow({
   const hasDescription = task.description.trim() !== "";
   const repeats = task.recurrence !== null;
   const checkItemsDone = task.check_items.filter((item) => item.done).length;
+  // The full date feeds the accessible name; the visible chip may be shorter.
   const schedule = formatSchedule(task);
-  const hasActions = onDelete !== undefined || onOpenActions !== undefined;
+  const visibleSchedule = formatSchedule(task, dateContext);
+  const hasActions = onDelete !== undefined || onOpenActions !== undefined || onFocus !== undefined;
 
   // Today's date reads in the accent, everything else in the secondary ink —
   // the accent used to be on every dated row, which made it mean nothing.
@@ -198,6 +216,7 @@ export function TaskRow({
       className={rowClassName}
       data-priority={task.priority}
       data-overdue={overdue || undefined}
+      data-date-context={dateContext === "absolute" ? undefined : dateContext}
       data-actions-open={reveal.dataActionsOpen}
       data-selected={selected || undefined}
       aria-selected={selectable ? Boolean(selected) : undefined}
@@ -215,6 +234,11 @@ export function TaskRow({
       onTouchCancel={reveal.onTouchCancel}
       onClick={reveal.onClick}
     >
+      {leadingTime !== undefined && (
+        <span className="task-row-time" aria-label={`Starts at ${leadingTime}`}>
+          {leadingTime}
+        </span>
+      )}
       <div className="task-row-head">
         {selectable && selected && <span className="visually-hidden">{task.title} selected</span>}
         <label>
@@ -307,12 +331,24 @@ export function TaskRow({
               aria-label={dateAccessibleName ?? undefined}
             >
               {dateState === "overdue" && <Icon name="alert-triangle" size={12} />}
-              <span aria-hidden="true">{schedule}</span>
+              <span aria-hidden="true">{visibleSchedule}</span>
             </span>
           )}
         </span>
         {hasActions && (
           <span className="row-actions">
+            {onFocus !== undefined && (
+              <button
+                type="button"
+                className="row-action-focus"
+                aria-label={`Focus on ${task.title}`}
+                title={`Focus on ${task.title}`}
+                onClick={() => onFocus(task)}
+              >
+                <Icon name="target" size={14} />
+                Focus
+              </button>
+            )}
             {onOpenActions !== undefined && (
               <IconButton
                 icon="list-checks"
@@ -331,6 +367,11 @@ export function TaskRow({
           </span>
         )}
       </div>
+      {trailingDuration != null && (
+        <span className="task-row-duration" aria-label={`${trailingDuration} planned`}>
+          {trailingDuration}
+        </span>
+      )}
     </li>
   );
 }

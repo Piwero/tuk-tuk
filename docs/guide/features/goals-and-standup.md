@@ -36,6 +36,9 @@ To link a task, open it and pick the key result under **Key Result**.
 ## Track it
 
 - **Score** = average progress of the key results, from 0% to 100%.
+- **Pace** = how much of the goal's time has passed. The goal card shows
+  whether your score is ahead of or behind pace.
+- The goal card shows the **Obstacle** and the **If-Then plan** on separate lines.
 - Goals run for the current quarter by default.
 - **Focus** one goal to pin it to your stand-up.
 - When the quarter ends, close the goal and write a short retro. You can also

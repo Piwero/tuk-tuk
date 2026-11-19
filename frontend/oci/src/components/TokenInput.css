@@ -1,0 +1,76 @@
+@layer components {
+  /* ── Token input (Quick-Add bar) ─────────────────────────────────── */
+
+  .token-input {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+  }
+
+  .token-input:focus-within {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+  }
+
+  .token-input input {
+    flex: 1;
+    min-width: 120px;
+    height: calc(var(--control-height) - 4px);
+    border: none;
+  }
+
+  .token-input input:focus {
+    box-shadow: none;
+  }
+
+  .token-input-chips {
+    display: contents;
+  }
+
+  .token-chip button {
+    display: inline-flex;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-tertiary);
+  }
+
+  /* IconButton wraps the chip's remove button in a span (#270) — the wrapper
+ * is the chip's flex item now, so it carries the separating margin the
+ * button itself used to. */
+
+  .token-chip .icon-button-wrap {
+    margin-left: var(--space-1);
+  }
+
+  .token-chip button:hover {
+    color: var(--text-danger);
+  }
+
+  .token-input-dropdown {
+    min-width: var(--popover-min-width);
+    max-height: var(--popover-max-height);
+    margin: calc(var(--space-1) * -1);
+    padding: var(--space-1);
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  .token-input-dropdown li {
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .token-input-dropdown li:hover,
+  .token-input-dropdown li.active {
+    background: var(--surface-selected);
+  }
+}

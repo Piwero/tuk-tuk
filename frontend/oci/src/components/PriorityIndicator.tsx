@@ -1,3 +1,5 @@
+import "./PriorityIndicator.css";
+
 import { type Priority } from "../api";
 import { PRIORITY_LABELS } from "../grouping";
 import { Icon, type IconName } from "./Icon";

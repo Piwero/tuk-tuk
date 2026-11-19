@@ -1,3 +1,4 @@
+import { readStylesheets } from "../test/stylesheets";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -338,7 +339,7 @@ describe("due date chip is not clipped (issue #257)", () => {
   // itself, the same approach contentColumn.test.ts uses for its own
   // container-query claim.
   const tokensCss = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
-  const indexCss = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+  const indexCss = readStylesheets();
 
   // A dated, timed Task with distinct start/end times is the widest shape
   // formatSchedule produces: "Aug 27, 07:00–08:00".
@@ -360,7 +361,7 @@ describe("due date chip is not clipped (issue #257)", () => {
   });
 
   it("sizes the aligned grid's date column to fit the widest chip", () => {
-    // ~7px per monospace char (--text-xs, --font-mono) is a conservative
+    // ~7px per tabular-figure char at --text-xs is a conservative
     // floor; a narrower column would clip the chip's leading characters.
     const minWidth = widestSchedule!.length * 7;
     const match = /--task-col-date:\s*(\d+)px/.exec(tokensCss);
@@ -372,7 +373,7 @@ describe("due date chip is not clipped (issue #257)", () => {
   it("never clips the date cell with overflow: hidden", () => {
     // A right-justified, width-constrained cell with overflow: hidden crops
     // from the *front* — exactly the "ug 27" bug this issue reports.
-    const rule = /\.task-row-list,\s*\n\.task-row-date\s*\{[^}]*\}/.exec(indexCss);
+    const rule = /\.task-row-list,\s*\.task-row-date\s*\{[^}]*\}/.exec(indexCss);
     expect(rule, ".task-row-date rule not found").not.toBeNull();
     expect((rule as RegExpExecArray)[0]).not.toMatch(/overflow:\s*hidden/);
   });
@@ -411,7 +412,7 @@ describe("settled date reads as ordinary text, light and dark (issue #280)", () 
   // Same approach as the #257 block above: jsdom applies no stylesheet, so
   // the claim is checked against the CSS source itself.
   const tokensCss = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
-  const indexCss = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+  const indexCss = readStylesheets();
 
   it("styles the settled chip only through semantic tokens", () => {
     // No hard-coded colour: the rule points at the secondary ink, which
@@ -553,5 +554,128 @@ describe("TaskRow within a list", () => {
 
     const list = screen.getByRole("list", { name: "Tasks" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+  });
+});
+
+describe("context-relative date chip (issue #431)", () => {
+  // Pinned: Wednesday 2026-08-19, noon, so every fixture lands in its intended state.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-19T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function chipOf(title: string): HTMLElement {
+    const chip = screen
+      .getByRole("button", { name: `Open details for ${title}` })
+      .closest("li")
+      ?.querySelector(".date-chip");
+    if (chip === null || chip === undefined) {
+      throw new Error("date chip not found");
+    }
+    return chip as HTMLElement;
+  }
+
+  it("shows a timed Task's time alone on Today, with the full date in its accessible name", () => {
+    renderRow({
+      task: fakeTask("Standup", { due_date: "2026-08-19T14:00:00Z", is_all_day: false }),
+      dateContext: "today",
+    });
+    expect(chipOf("Standup")).toHaveTextContent("14:00");
+    expect(chipOf("Standup")).not.toHaveTextContent("Aug");
+    expect(screen.getByLabelText("Due today: Aug 19, 14:00")).toBe(chipOf("Standup"));
+    expect(chipOf("Standup")).toHaveAttribute("title", "Due today: Aug 19, 14:00");
+  });
+
+  it("shows no visible date for an all-day Task on Today, but still names it", () => {
+    renderRow({
+      task: fakeTask("Anytime", { due_date: "2026-08-19T00:00:00Z", is_all_day: true }),
+      dateContext: "today",
+    });
+    expect(chipOf("Anytime")).toHaveTextContent("");
+    expect(screen.getByLabelText("Due today: Aug 19")).toBe(chipOf("Anytime"));
+  });
+
+  it("reads a Task overdue since yesterday as 'Yesterday', red with its glyph and Overdue name", () => {
+    renderRow({
+      task: fakeTask("Late", { due_date: "2026-08-18T00:00:00Z", is_all_day: true }),
+      dateContext: "today",
+    });
+    expect(chipOf("Late")).toHaveTextContent("Yesterday");
+    expect(chipOf("Late")).toHaveClass("overdue");
+    expect(chipOf("Late").querySelector(".icon")).not.toBeNull();
+    expect(screen.getByLabelText("Overdue: Aug 18")).toBe(chipOf("Late"));
+  });
+
+  it("reads a Task overdue within the week as a weekday", () => {
+    renderRow({
+      task: fakeTask("Lateish", { due_date: "2026-08-15T00:00:00Z", is_all_day: true }),
+      dateContext: "today",
+    });
+    expect(chipOf("Lateish")).toHaveTextContent("Sat");
+    expect(chipOf("Lateish")).toHaveClass("overdue");
+    expect(screen.getByLabelText("Overdue: Aug 15")).toBe(chipOf("Lateish"));
+  });
+
+  it("settles a Task overdue by more than a week exactly as before: no glyph, secondary ink", () => {
+    renderRow({
+      task: fakeTask("Ancient", { due_date: "2026-08-01T00:00:00Z", is_all_day: true }),
+      dateContext: "today",
+    });
+    expect(chipOf("Ancient")).toHaveClass("settled");
+    expect(chipOf("Ancient").querySelector(".icon")).toBeNull();
+    expect(chipOf("Ancient")).toHaveTextContent("Aug 1");
+    expect(screen.getByLabelText("Overdue: Aug 1")).toBe(chipOf("Ancient"));
+  });
+
+  it("shows weekday names in the week context, still naming the full date", () => {
+    renderRow({
+      task: fakeTask("Friday thing", { due_date: "2026-08-21T00:00:00Z", is_all_day: true }),
+      dateContext: "week",
+    });
+    expect(chipOf("Friday thing")).toHaveTextContent("Fri");
+    expect(screen.getByLabelText("Due Aug 21")).toBe(chipOf("Friday thing"));
+  });
+
+  it("keeps the absolute date by default", () => {
+    renderRow({
+      task: fakeTask("Plain", { due_date: "2026-08-21T00:00:00Z", is_all_day: true }),
+    });
+    expect(chipOf("Plain")).toHaveTextContent("Aug 21");
+    expect(
+      screen.getByRole("button", { name: "Open details for Plain" }).closest("li"),
+    ).not.toHaveAttribute("data-date-context");
+  });
+
+  it("marks the row with its context so CSS can narrow the date column", () => {
+    renderRow({ task: fakeTask("Today row"), dateContext: "today" });
+    expect(
+      screen.getByRole("button", { name: "Open details for Today row" }).closest("li"),
+    ).toHaveAttribute("data-date-context", "today");
+  });
+
+  describe("date column width", () => {
+    const tokensCss = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
+    const indexCss = readStylesheets();
+
+    it("narrows only in the today and week contexts, to fit their widest label", () => {
+      const narrow = /--task-col-date-narrow:\s*(\d+)px/.exec(tokensCss);
+      expect(narrow, "--task-col-date-narrow not found").not.toBeNull();
+      const width = Number((narrow as RegExpExecArray)[1]);
+      const full = Number(/--task-col-date:\s*(\d+)px/.exec(tokensCss)?.[1]);
+      expect(width).toBeLessThan(full);
+      // ~7px per monospace char; "Wed, 14:00–15:30" is the widest contextual label.
+      expect(width).toBeGreaterThanOrEqual("Wed, 14:00–15:30".length * 7);
+      const rule = /\.tasks li\.task-row\[data-date-context\]\s*\{[^}]*\}/.exec(indexCss);
+      expect(rule, "data-date-context rule not found").not.toBeNull();
+      expect((rule as RegExpExecArray)[0]).toMatch(
+        /--task-col-date:\s*var\(--task-col-date-narrow\)/,
+      );
+      // The absolute context sets no attribute, so List/Search/completed rows keep the wide column.
+      expect(indexCss).not.toMatch(/data-date-context="absolute"/);
+    });
   });
 });

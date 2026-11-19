@@ -1,3 +1,5 @@
+import "./KanbanView.css";
+
 import { useState } from "react";
 
 import { createSection, createTask, type Section, type Task } from "../api";

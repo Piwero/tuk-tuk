@@ -10,7 +10,7 @@ describe("Quick-Add Assist affordance (ADR 0005, issue #42)", () => {
     installFakeApi({ assistAvailable: false });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     await screen.findByRole("combobox", { name: "Add a task" });
 
@@ -21,7 +21,7 @@ describe("Quick-Add Assist affordance (ADR 0005, issue #42)", () => {
     installFakeApi({ assistAvailable: true });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     await screen.findByRole("combobox", { name: "Add a task" });
 

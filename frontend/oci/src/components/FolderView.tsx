@@ -1,3 +1,4 @@
+import "./FolderView.css";
 import { updateTask, type Folder, type Task, type TaskList } from "../api";
 import { formatSchedule, isOverdue } from "../dates";
 import { sortTasks, type SortBy } from "../grouping";
@@ -75,6 +76,7 @@ export function FolderView({
           ))}
         </button>
         <button
+          className="btn-secondary"
           type="button"
           aria-label={`Start Focus for ${task.title}`}
           onClick={() => onStartFocus(task)}

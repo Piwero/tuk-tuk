@@ -1,3 +1,4 @@
+import "./Icon.css";
 import {
   AlertTriangle,
   AlignLeft,

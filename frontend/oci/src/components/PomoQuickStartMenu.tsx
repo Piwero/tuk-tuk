@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import "./PomoQuickStartMenu.css";
+
+import { useEffect, useMemo, useState } from "react";
 
 import { fetchTimers, type Task, type Timer } from "../api";
 import { useStartPomo } from "../focusRunContext";
+import { Popover } from "./Popover";
 
 export const DEFAULT_POMO_MINUTES = 25;
 export const POMO_LABEL = (minutes: number): string => `Focus: ${minutes}min`;
@@ -12,6 +15,8 @@ export interface PomoQuickStartMenuProps {
   task: Task;
   /** Viewport coordinates to anchor the menu at (cursor position). */
   position: { x: number; y: number };
+  /** The element that was right-clicked; focus returns to it on close. */
+  origin: HTMLElement;
   onClose: () => void;
 }
 
@@ -24,13 +29,14 @@ export interface PomoQuickStartMenuProps {
 export function PomoQuickStartMenu({
   task,
   position,
+  origin,
   onClose,
 }: PomoQuickStartMenuProps): JSX.Element {
   const startPomoForTask = useStartPomo();
   const [timers, setTimers] = useState<Timer[]>([]);
   const [customOpen, setCustomOpen] = useState(false);
   const [customMinutes, setCustomMinutes] = useState(String(DEFAULT_POMO_MINUTES));
-  const root = useRef<HTMLDivElement>(null);
+  const originRef = useMemo(() => ({ current: origin }), [origin]);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,30 +49,6 @@ export function PomoQuickStartMenu({
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    function onPointerDown(event: MouseEvent): void {
-      if (root.current !== null && !root.current.contains(event.target as Node)) {
-        onClose();
-      }
-    }
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key !== "Escape") {
-        return;
-      }
-      if (customOpen) {
-        setCustomOpen(false);
-      } else {
-        onClose();
-      }
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [customOpen, onClose]);
 
   async function startPomo(pomoMs: number): Promise<void> {
     if (await startPomoForTask(task.id, pomoMs)) {
@@ -86,67 +68,65 @@ export function PomoQuickStartMenu({
   const pomoTimers = timers.filter((timer) => timer.mode === "pomo");
 
   return (
-    <div
-      className="pomo-quick-start-menu"
-      ref={root}
-      style={{ position: "fixed", left: position.x, top: position.y }}
-    >
-      {customOpen ? (
-        <form onSubmit={submitCustom}>
-          <input
-            type="number"
-            min={1}
-            aria-label="Custom Pomo minutes"
-            autoFocus
-            value={customMinutes}
-            onChange={(event) => setCustomMinutes(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.stopPropagation();
-                setCustomOpen(false);
-              }
-            }}
-          />
-        </form>
-      ) : (
-        <ul role="menu" aria-label={`Start Focus for ${task.title}`}>
-          {pomoTimers.length > 0 ? (
-            pomoTimers.map((timer) => (
-              <li role="none" key={timer.id}>
+    <Popover open triggerRef={originRef} anchorPoint={position} onClose={onClose}>
+      <div className="pomo-quick-start-menu">
+        {customOpen ? (
+          <form onSubmit={submitCustom}>
+            <input
+              type="number"
+              min={1}
+              aria-label="Custom Pomo minutes"
+              autoFocus
+              value={customMinutes}
+              onChange={(event) => setCustomMinutes(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.stopPropagation();
+                  setCustomOpen(false);
+                }
+              }}
+            />
+          </form>
+        ) : (
+          <ul role="menu" aria-label={`Start Focus for ${task.title}`}>
+            {pomoTimers.length > 0 ? (
+              pomoTimers.map((timer) => (
+                <li role="none" key={timer.id}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="pomo-timer-button"
+                    onClick={() => void startPomo((timer.duration_seconds ?? 0) * 1000)}
+                  >
+                    {timer.name}
+                  </button>
+                </li>
+              ))
+            ) : (
+              <li role="none">
                 <button
                   type="button"
                   role="menuitem"
                   className="pomo-timer-button"
-                  onClick={() => void startPomo((timer.duration_seconds ?? 0) * 1000)}
+                  onClick={() => void startPomo(DEFAULT_POMO_MINUTES * 60_000)}
                 >
-                  {timer.name}
+                  {POMO_LABEL(DEFAULT_POMO_MINUTES)}
                 </button>
               </li>
-            ))
-          ) : (
+            )}
             <li role="none">
               <button
                 type="button"
                 role="menuitem"
                 className="pomo-timer-button"
-                onClick={() => void startPomo(DEFAULT_POMO_MINUTES * 60_000)}
+                onClick={() => setCustomOpen(true)}
               >
-                {POMO_LABEL(DEFAULT_POMO_MINUTES)}
+                Custom…
               </button>
             </li>
-          )}
-          <li role="none">
-            <button
-              type="button"
-              role="menuitem"
-              className="pomo-timer-button"
-              onClick={() => setCustomOpen(true)}
-            >
-              Custom…
-            </button>
-          </li>
-        </ul>
-      )}
-    </div>
+          </ul>
+        )}
+      </div>
+    </Popover>
   );
 }

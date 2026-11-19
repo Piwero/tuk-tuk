@@ -1,3 +1,5 @@
+import "./TaskListView.css";
+
 import { useEffect, useState } from "react";
 
 import {
@@ -12,20 +14,28 @@ import {
   type TaskList,
   type TaskPatch,
 } from "../api";
-import { allDaySchedule } from "../dates";
+import { allDaySchedule, type ScheduleContext } from "../dates";
 import { endDrag, readDragPayload, startDrag } from "../dnd";
-import { groupTasks, type GroupBy, type SortBy, type TaskGroup } from "../grouping";
+import {
+  groupTasks,
+  groupTodayTasks,
+  type GroupBy,
+  type SortBy,
+  type TaskGroup,
+} from "../grouping";
 import { appendOrder, byOrder, planInsertBefore } from "../ordering";
 import { applierFor, moveTaskBeforeTask, moveTaskToSectionEnd } from "../taskMoves";
 import { useTaskCompletion } from "../taskCompletion";
 import { useTaskSelection } from "../taskSelection";
 import { type UndoQueue } from "../undoQueue";
+import { DatePopover } from "./DatePopover";
 import { BulkActionBar } from "./BulkActionBar";
 import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { SectionNameForm } from "./SectionNameForm";
 import { IconButton } from "./IconButton";
 import { TaskRow } from "./TaskRow";
+import { formatDate, formatDuration, taskZonedDate } from "../dates";
 
 interface TaskListViewProps {
   tasks: Task[];
@@ -43,11 +53,17 @@ interface TaskListViewProps {
   viewKey: string;
   groupBy: GroupBy;
   sortBy: SortBy;
+  /** How much of its date each row's chip says (#431); absolute by default. */
+  dateContext?: ScheduleContext;
+  todaySections?: boolean;
+  scheduleTimeline?: boolean;
   onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
   onSectionsChanged: (update: (current: Section[]) => Section[]) => void;
   /** Opens the command palette scoped to one Task (issue #205). */
   onOpenActions?: (task: Task) => void;
+  /** The row's Focus action (#449); absent when Focus is disabled. */
+  onFocusTask?: (task: Task) => void;
   /** The app-wide toast queue (see App.tsx). This view raises toasts but no
    * longer renders them: the single <ToastStack> lives at the app root so a
    * toast survives — and covers — any screen (#191). */
@@ -63,10 +79,14 @@ export function TaskListView({
   viewKey,
   groupBy,
   sortBy,
+  dateContext,
+  todaySections = false,
+  scheduleTimeline = false,
   onChanged,
   onSelect,
   onSectionsChanged,
   onOpenActions,
+  onFocusTask,
   toasts,
 }: TaskListViewProps): JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
@@ -87,6 +107,7 @@ export function TaskListView({
   const [quickStart, setQuickStart] = useState<{
     task: Task;
     position: { x: number; y: number };
+    origin: HTMLElement;
   } | null>(null);
 
   // Delete and complete are both undoable (#155): the toast holds the action
@@ -229,6 +250,8 @@ export function TaskListView({
     );
   }
 
+  const [rescheduleDay, setRescheduleDay] = useState("");
+
   function bulkReschedule(day: string): void {
     const patch = allDaySchedule(null, day);
     bulkPatch(
@@ -299,7 +322,8 @@ export function TaskListView({
 
   // Manual drag-reorder only makes sense in the manually ordered, section-
   // grouped List view; other groupings/sorts are computed projections.
-  const canDragReorder = listId !== null && groupBy === "section" && sortBy === "custom";
+  const canDragReorder =
+    (listId !== null || todaySections) && groupBy === "section" && sortBy === "custom";
 
   const apply = applierFor(onChanged);
 
@@ -311,6 +335,16 @@ export function TaskListView({
     event.stopPropagation();
     const payload = readDragPayload(event);
     if (payload?.kind === "task") {
+      if (
+        todaySections &&
+        !groups.some(
+          (group) =>
+            group.tasks.some((task) => task.id === payload.id) &&
+            group.tasks.some((task) => task.id === target.id),
+        )
+      ) {
+        return;
+      }
       void moveTaskBeforeTask(tasks, payload.id, target, apply);
     }
   }
@@ -351,7 +385,7 @@ export function TaskListView({
     }
   }
 
-  function renderTaskRow(task: Task): JSX.Element {
+  function renderTaskRow(task: Task, group: TaskGroup): JSX.Element {
     // The row shows only Actions and Delete (#280): Actions opens the full
     // verb set the hover row used to sample, so Start Focus and the Pomo
     // quick-start stay one click deeper through it. Right-click still opens
@@ -374,6 +408,15 @@ export function TaskListView({
         completed={task.completed || completion.isPending(task.id) || bulkPending.has(task.id)}
         list={taskList}
         showDate
+        dateContext={dateContext}
+        leadingTime={
+          scheduleTimeline && group.key === "today-Schedule" && task.start_date !== null
+            ? formatDate(taskZonedDate(task, task.start_date), "time")
+            : undefined
+        }
+        trailingDuration={
+          scheduleTimeline && group.key === "today-Schedule" ? formatDuration(task) : undefined
+        }
         showTags
         showCheckProgress
         selectable
@@ -386,6 +429,7 @@ export function TaskListView({
         onSelect={onSelect}
         onDelete={(t) => void remove(t)}
         onOpenActions={onOpenActions}
+        onFocus={onFocusTask}
         draggable
         onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
         onDragEnd={endDrag}
@@ -393,7 +437,11 @@ export function TaskListView({
         onDrop={(event) => handleDropOnTaskRow(event, task)}
         onContextMenu={(event) => {
           event.preventDefault();
-          setQuickStart({ task, position: { x: event.clientX, y: event.clientY } });
+          setQuickStart({
+            task,
+            position: { x: event.clientX, y: event.clientY },
+            origin: event.currentTarget,
+          });
         }}
       />
     );
@@ -429,7 +477,7 @@ export function TaskListView({
                 }
               }}
             >
-              <h2>{group.label}</h2>
+              <h2>{todaySections ? `${group.label} ${group.tasks.length}` : group.label}</h2>
               {section !== null && (
                 <span className="row-actions">
                   <IconButton
@@ -450,13 +498,15 @@ export function TaskListView({
           className="tasks"
           aria-label={group.label === null ? "Tasks" : `Tasks in ${group.label}`}
         >
-          {group.tasks.map((task) => renderTaskRow(task))}
+          {group.tasks.map((task) => renderTaskRow(task, group))}
         </ul>
       </section>
     );
   }
 
-  const groups = groupTasks(tasks, listId === null ? [] : sections, groupBy, sortBy, lists);
+  const groups = todaySections
+    ? groupTodayTasks(tasks, sortBy)
+    : groupTasks(tasks, listId === null ? [] : sections, groupBy, sortBy, lists);
   // Task ids in the order they appear on screen — what Shift-extend walks.
   const orderedIds = groups.flatMap((group) => group.tasks.map((task) => task.id));
 
@@ -471,7 +521,7 @@ export function TaskListView({
 
   /** Dropping on empty container space moves the payload to the end. */
   function handleDropOnContainer(event: React.DragEvent): void {
-    if (!canDragReorder) {
+    if (!canDragReorder || todaySections) {
       return;
     }
     event.preventDefault();
@@ -504,17 +554,18 @@ export function TaskListView({
             className="bulk-dialog"
             onSubmit={(event) => {
               event.preventDefault();
-              const day = new FormData(event.currentTarget).get("day")?.toString() ?? "";
-              if (day !== "") {
-                bulkReschedule(day);
+              if (rescheduleDay !== "") {
+                bulkReschedule(rescheduleDay);
               }
             }}
           >
             <label>
               Due date
-              <input type="date" name="day" aria-label="Due date" required />
+              <DatePopover label="Due date" value={rescheduleDay} onChange={setRescheduleDay} />
             </label>
-            <button type="submit">Reschedule</button>
+            <button className="btn-primary" type="submit">
+              Reschedule
+            </button>
           </form>
         </Modal>
       )}
@@ -545,7 +596,9 @@ export function TaskListView({
                   ))}
               </select>
             </label>
-            <button type="submit">Move</button>
+            <button className="btn-primary" type="submit">
+              Move
+            </button>
           </form>
         </Modal>
       )}
@@ -574,7 +627,9 @@ export function TaskListView({
                 ))}
               </select>
             </label>
-            <button type="submit">Add Tag</button>
+            <button className="btn-primary" type="submit">
+              Add Tag
+            </button>
           </form>
         </Modal>
       )}
@@ -600,6 +655,7 @@ export function TaskListView({
           <PomoQuickStartMenu
             task={quickStart.task}
             position={quickStart.position}
+            origin={quickStart.origin}
             onClose={() => setQuickStart(null)}
           />
         )}

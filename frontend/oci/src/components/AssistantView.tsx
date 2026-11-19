@@ -1,3 +1,4 @@
+import "./AssistantView.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -310,7 +311,12 @@ export function AssistantView(): JSX.Element {
               </li>
             ))}
           </ul>
-          <button type="button" onClick={() => void applyAccepted()} disabled={acceptedCount === 0}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => void applyAccepted()}
+            disabled={acceptedCount === 0}
+          >
             Apply {acceptedCount > 0 ? acceptedCount : ""} suggestion
             {acceptedCount === 1 ? "" : "s"}
           </button>
@@ -331,7 +337,7 @@ export function AssistantView(): JSX.Element {
           onChange={(event) => setDraft(event.target.value)}
           disabled={sending}
         />
-        <button type="submit" disabled={sending || draft.trim() === ""}>
+        <button className="btn-primary" type="submit" disabled={sending || draft.trim() === ""}>
           Send
         </button>
       </form>

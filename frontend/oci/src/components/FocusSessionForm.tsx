@@ -1,3 +1,4 @@
+import "./TimerForm.css";
 import { useState } from "react";
 
 import { type FocusMode, type FocusSession, type Habit, type Task } from "../api";
@@ -106,8 +107,10 @@ export function FocusSessionForm({
         value={link}
         onChange={setLink}
       />
-      <button type="submit">Save</button>
-      <button type="button" onClick={onCancel}>
+      <button className="btn-primary" type="submit">
+        Save
+      </button>
+      <button className="btn-quiet" type="button" onClick={onCancel}>
         Cancel
       </button>
     </form>

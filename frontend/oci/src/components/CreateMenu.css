@@ -1,0 +1,31 @@
+@layer components {
+  .create-menu {
+    position: relative;
+  }
+
+  /* `button.create-menu-trigger`: needs `.sidebar button`'s specificity
+ * (class+type) to actually override its width/height — see
+ * button.folder-disclosure for the same trap. */
+
+  button.create-menu-trigger {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    color: var(--text-secondary);
+  }
+
+  .create-menu-list {
+    min-width: 160px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .create-menu-list button {
+    width: 100%;
+  }
+
+  .create-menu-secondary {
+    color: var(--text-secondary);
+  }
+}

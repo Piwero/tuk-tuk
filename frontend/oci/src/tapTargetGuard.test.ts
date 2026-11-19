@@ -1,3 +1,4 @@
+import { readStylesheets } from "./test/stylesheets";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -24,7 +25,7 @@ import { describe, expect, it } from "vitest";
  * touch-capable laptop/tablet reporting `pointer: fine` gets the same floor
  * per the ticket's scope note. */
 
-const css: string = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+const css: string = readStylesheets();
 const tokensCss: string = readFileSync(resolve(process.cwd(), "src/tokens.css"), "utf8");
 
 const TAP_TARGET = 44;
@@ -288,27 +289,30 @@ const NON_INTERACTIVE_EXACT = new Set([
   ".modal-header",
   ".modal-header h2",
   ".modal-header > .icon-button-wrap",
-  ".filter-menu",
-  ".filter-menu-trigger-row",
-  ".filter-menu-popover",
+  ".view-menu",
+  ".view-menu-popover",
+  ".view-menu-popover label",
+  ".view-menu-filters",
+  ".view-menu-filters legend",
+  ".view-menu-count",
 ]);
 
 /** The main header renders a couple of its own controls (breadcrumb, view
  * toggle, completed toggle) as top-level, unscoped classnames rather than
  * under a `.main-header-` prefix or a `.main-header X` descendant selector
- * — so, unlike Modal (`.modal-*`) and the filter menu (`.filter-menu-*`),
+ * — so, unlike Modal (`.modal-*`) and the View menu (`.view-menu-*`),
  * they can't be discovered generically from the CSS text alone and are
  * listed by hand, the same way the production touch-target block below
  * enumerates its own concrete selectors rather than deriving containment. */
 const MAIN_HEADER_ANCHORS = [".view-toggle", ".completed-toggle", ".breadcrumb-folder"];
 
 /** Every selector on the three surfaces #286 calls out — main header,
- * filter row (`.view-controls`, plus its own `.filter-menu-*`/filter chip
+ * filter row (`.view-controls`, plus its own `.view-menu-*`
  * children), and any Modal — that denotes a real interactive control. */
 /** A state pseudo (`:hover`, `:focus`…) tacked onto an already-counted base
  * selector names the same control, not a second one — skip it so the
  * offender list reports one entry per control, not one per rule. */
-const STATE_PSEUDO = /:(hover|focus|focus-visible|active|disabled)(\([^)]*\))?$/;
+const STATE_PSEUDO = /(:(hover|focus|focus-visible|active|disabled)(\([^)]*\))?|\.is-filtered)$/;
 
 function mobileSurfaceControls(): string[] {
   const found = new Set<string>();
@@ -317,9 +321,9 @@ function mobileSurfaceControls(): string[] {
       if (NON_INTERACTIVE_EXACT.has(selector) || STATE_PSEUDO.test(selector)) continue;
 
       const isModalFamily = /^\.modal(?:[.\-:]|$)/.test(selector);
-      const isFilterMenuFamily = /^\.filter-menu(?:[.\-:]|$)/.test(selector);
+      const isViewMenuFamily = /^\.view-menu(?:[.\-:]|$)/.test(selector);
       const isAnchor = MAIN_HEADER_ANCHORS.includes(selector);
-      if (isModalFamily || isFilterMenuFamily || isAnchor) {
+      if (isModalFamily || isViewMenuFamily || isAnchor) {
         found.add(selector);
         continue;
       }
@@ -548,7 +552,7 @@ describe("tap-target floor on mobile task-listing surfaces (issue #286)", () => 
       ".view-toggle",
       ".completed-toggle",
       ".view-controls select",
-      ".filter-menu-button",
+      ".view-menu-button",
     ]) {
       const size = declaredSize(selector, GRID_BAND);
       expect(size, `${selector} loses the floor in the grid band`).toBeGreaterThanOrEqual(
@@ -661,5 +665,66 @@ describe("Quick-Add dialog is operable on touch (issue #288)", () => {
     // Desktop never capped or scrolled the panel, and must not start.
     expect(declaredValue(".modal", "max-height", DESKTOP)).toBeNull();
     expect(declaredValue(".modal", "overflow-y", DESKTOP)).toBeNull();
+  });
+});
+
+/** The tab bar and its More sheet (#462). A fixed list for the same reason
+ * as QUICK_ADD_CONTROLS: deleting the sizing must fail the guard. */
+const TAB_BAR_CONTROLS = [".mobile-tab-item", ".mobile-tab-quick-add", ".more-sheet-row"];
+
+describe("tab bar and More sheet are operable on touch (issue #462)", () => {
+  it("meets the 44px floor for every tab and every More row", () => {
+    const offenders = findOffenders(TAB_BAR_CONTROLS);
+    expect(offenders, offenderMessage("the tab bar / More sheet", offenders)).toEqual([]);
+  });
+});
+
+describe("phone Today rows stay compact (issue #466)", () => {
+  it("collapses the hidden row actions in height too, so they never stretch the row", () => {
+    expect(declaredValue(".tasks li.task-row .row-actions", "height")).toBe("0");
+  });
+
+  it("drops the Schedule time and duration tracks on the phone", () => {
+    expect(declaredValue(".tasks li.task-row > .task-row-time", "display")).toBe("none");
+    expect(declaredValue(".tasks li.task-row > .task-row-duration", "display")).toBe("none");
+    expect(declaredValue(".tasks li.task-row > .task-row-time", "display", DESKTOP)).toBeNull();
+  });
+});
+
+describe("Today Habit chip strip is operable on touch (issue #461)", () => {
+  it("meets the 44px floor for every chip", () => {
+    const offenders = findOffenders([".habit-chip"]);
+    expect(offenders, offenderMessage("the Habit chip strip", offenders)).toEqual([]);
+  });
+
+  it("scrolls sideways inside the strip, never the page", () => {
+    expect(declaredValue(".today-habit-strip", "overflow-x")).toBe("auto");
+    expect(declaredValue(".today-habit-strip", "flex-wrap")).toBe("nowrap");
+    expect(declaredValue(".today-habit-strip", "display", DESKTOP)).toBe("none");
+  });
+
+  // #466: the chip strip once shared `.habit-strip` with the Habits card's
+  // recent-days heat strip, and its desktop `display: none` hid that strip.
+  it("never hides the Habits card heat strip", () => {
+    expect(declaredValue(".habit-strip", "display", DESKTOP)).not.toBe("none");
+    expect(declaredValue(".habit-strip", "display")).not.toBe("none");
+  });
+});
+
+/** The Task detail bottom sheet (#456). Fixed list so deleting the sizing fails. */
+const TASK_SHEET_CONTROLS = [
+  ".task-detail-header > button",
+  ".task-detail-footer .overflow-menu-trigger",
+  ".task-detail-footer .btn-focus",
+  ".reminder-add",
+  ".tags-row-chip-remove",
+  ".property-row-trigger",
+  ".property-option",
+];
+
+describe("Task detail sheet is operable on touch (issue #456)", () => {
+  it("meets the 44px floor for the sheet's controls", () => {
+    const offenders = findOffenders(TASK_SHEET_CONTROLS);
+    expect(offenders, offenderMessage("the Task detail sheet", offenders)).toEqual([]);
   });
 });

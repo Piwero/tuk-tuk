@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { pickDate } from "./test/pickDate";
+import { fakeDataTransfer } from "./test/dnd";
 import { fakeGoal, fakeHabit, fakeKeyResult, fakeTask, installFakeApi } from "./test/fakeApi";
 
 async function openGoals(): Promise<void> {
@@ -10,7 +12,111 @@ async function openGoals(): Promise<void> {
   await screen.findByRole("heading", { name: "Goals" });
 }
 
+/** Opens a Goal's overflow menu and returns the chosen item. */
+async function goalAction(goal: string, item: string): Promise<HTMLElement> {
+  fireEvent.click(await screen.findByRole("button", { name: `Actions for ${goal}` }));
+  const menu = await screen.findByRole("menu", { name: `Actions for ${goal}` });
+  return within(menu).getByRole("menuitem", { name: item });
+}
+
+/** Opens a Key Result's overflow menu and returns the chosen item. */
+async function keyResultAction(kr: string, item: string): Promise<HTMLElement> {
+  fireEvent.click(await screen.findByRole("button", { name: `Actions for key result ${kr}` }));
+  const menu = await screen.findByRole("menu", { name: `Actions for key result ${kr}` });
+  return within(menu).getByRole("menuitem", { name: item });
+}
+
 describe("Goals", () => {
+  it("shows readable window, days left, Score and today's pace with the plan", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 6, 3, 12));
+    const api = installFakeApi({
+      goals: [
+        fakeGoal("Ship", {
+          start_date: "2026-07-01",
+          end_date: "2026-07-05",
+          is_focused: true,
+          obstacle: "Interruptions",
+          if_then_plan: "If interrupted, then I will close chat.",
+          key_results: [fakeKeyResult(1, "Build", { target_value: 100, current_value: 25 })],
+        }),
+      ],
+    });
+    try {
+      render(<App />);
+      await openGoals();
+      expect(
+        await screen.findByText("Jul 1, 2026 – Jul 5, 2026 · 2 days left"),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("progressbar", { name: "Ship Score" })).toHaveAttribute(
+        "aria-valuenow",
+        "25",
+      );
+      expect(screen.getByLabelText("Today's pace: 50%")).toBeInTheDocument();
+      expect(screen.getByText("25 percentage points behind pace")).toBeInTheDocument();
+      expect(screen.getByText("Focused")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          (_, el) =>
+            el?.className === "goal-obstacle" && el.textContent === "Obstacle: Interruptions",
+        ),
+      ).toBeInTheDocument();
+      // #466: the If-Then Plan gets its own labelled line, never run on after the Obstacle.
+      expect(
+        screen.getByText(
+          (_, el) =>
+            el?.className === "goal-if-then" &&
+            el.textContent === "If-Then Plan: If interrupted, then I will close chat.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/2026-07-/)).not.toBeInTheDocument();
+      expect(api.requests.some((r) => r.method === "GET" && r.url === "/api/v1/goals")).toBe(true);
+      expect(api.requests.filter((r) => r.method !== "GET")).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("shows an unmeasured Goal with no pace verdict", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 6, 3, 12));
+    installFakeApi({
+      goals: [fakeGoal("Ship", { start_date: "2026-07-01", end_date: "2026-07-05" })],
+    });
+    try {
+      render(<App />);
+      await openGoals();
+      expect(await screen.findByText("No Key Results yet — unmeasured.")).toBeInTheDocument();
+      expect(screen.queryByRole("progressbar", { name: "Ship Score" })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Today's pace/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/pace/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows a settled Goal's final score with no pace marker", async () => {
+    installFakeApi({
+      goals: [
+        fakeGoal("Ship", {
+          status: "closed",
+          final_score: 0.75,
+          start_date: "2026-01-01",
+          end_date: "2026-03-31",
+          key_results: [fakeKeyResult(1, "Build", { target_value: 100, current_value: 75 })],
+        }),
+      ],
+    });
+    render(<App />);
+    await openGoals();
+    expect(await screen.findByText("Final score: 75%")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Ship Score" })).toHaveAttribute(
+      "aria-valuenow",
+      "75",
+    );
+    expect(screen.queryByLabelText(/Today's pace/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ahead of pace|behind pace|On pace/)).not.toBeInTheDocument();
+  });
+
   it("opens from the sidebar and lists Goals", async () => {
     const api = installFakeApi();
     render(<App />);
@@ -88,10 +194,9 @@ describe("Goals", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add Goal" }));
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Six weeks" } });
-    fireEvent.change(screen.getByLabelText("Start date"), {
-      target: { value: "2026-01-01" },
-    });
-    fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2026-02-15" } });
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+    pickDate("Start date", "2026-01-01");
+    pickDate("End date", "2026-02-15");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -108,8 +213,24 @@ describe("Goals", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add Goal" }));
 
     expect(screen.getByText(/blank uses the current quarter/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Start date")).not.toBeRequired();
-    expect(screen.getByLabelText("End date")).not.toBeRequired();
+    expect(screen.getByRole("button", { name: "Start date" })).toHaveTextContent("No date");
+    expect(screen.getByRole("button", { name: "End date" })).toHaveTextContent("No date");
+  });
+
+  it("closes a Goal's actions menu on Escape, returning focus to its trigger", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2")] });
+    render(<App />);
+    await openGoals();
+
+    const trigger = await screen.findByRole("button", { name: "Actions for Ship v2" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const menu = await screen.findByRole("menu", { name: "Actions for Ship v2" });
+    expect(within(menu).getAllByRole("menuitem")[0]).toHaveFocus();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("menu", { name: "Actions for Ship v2" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it("edits a Goal in place", async () => {
@@ -117,7 +238,7 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Ship v2" }));
+    fireEvent.click(await goalAction("Ship v2", "Edit Ship v2"));
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Ship v2.1" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -131,7 +252,7 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete goal Ship v2" }));
+    fireEvent.click(await goalAction("Ship v2", "Delete goal Ship v2"));
 
     await waitFor(() => expect(screen.queryByText("Ship v2")).not.toBeInTheDocument());
     expect(api.goals).toHaveLength(0);
@@ -161,7 +282,7 @@ describe("Goals", () => {
       expect(post?.body).toMatchObject({ name: "Lines shipped", target_value: 100 });
     });
     expect(await screen.findByText("Lines shipped")).toBeInTheDocument();
-    expect(screen.getByText("40%")).toBeInTheDocument();
+    expect(screen.getByText("40 of 100")).toBeInTheDocument();
   });
 
   it("explains itself when Habit check-ins is chosen with no Habits", async () => {
@@ -198,8 +319,9 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    const value = await screen.findByLabelText("Meditation days current value");
-    expect(value.tagName).not.toBe("INPUT");
+    await screen.findByText("0 of 10");
+    expect(screen.queryByLabelText("Meditation days current value")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Add 1 to Meditation days/ })).toBeNull();
     // Where the number comes from is said in words, not in a "(auto)" tag.
     expect(await screen.findByText("From Check-ins")).toBeInTheDocument();
   });
@@ -211,6 +333,9 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Edit Lines shipped current value" }),
+    );
     const input = await screen.findByLabelText("Lines shipped current value");
     fireEvent.change(input, { target: { value: "25" } });
     fireEvent.blur(input);
@@ -227,16 +352,18 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Edit Lines shipped current value" }),
+    );
     const input = await screen.findByLabelText("Lines shipped current value");
-    input.focus();
     fireEvent.change(input, { target: { value: "25" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => {
       expect(api.goals[0]!.key_results[0]!.current_value).toBe(25);
     });
-    // The progress percentage on the row updates once the save lands.
-    expect(await screen.findByText("25%")).toBeInTheDocument();
+    // The row's 'current of target' updates once the save lands.
+    expect(await screen.findByText("25 of 100")).toBeInTheDocument();
   });
 
   it("pressing Enter in a Key Result's target value commits it, same as blur", async () => {
@@ -248,8 +375,8 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
+    fireEvent.click(await keyResultAction("Lines", "Edit Lines target value"));
     const target = await screen.findByLabelText("Lines target value");
-    target.focus();
     fireEvent.change(target, { target: { value: "200" } });
     fireEvent.keyDown(target, { key: "Enter" });
 
@@ -287,7 +414,7 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete key result Lines shipped" }));
+    fireEvent.click(await keyResultAction("Lines shipped", "Delete key result Lines shipped"));
 
     await waitFor(() => expect(api.goals[0]!.key_results).toHaveLength(0));
     expect(screen.queryByText("Lines shipped")).not.toBeInTheDocument();
@@ -298,10 +425,10 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Focus A" }));
+    fireEvent.click(await goalAction("A", "Focus A"));
     await waitFor(() => expect(api.goals.find((g) => g.title === "A")?.is_focused).toBe(true));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Focus B" }));
+    fireEvent.click(await goalAction("B", "Focus B"));
 
     await waitFor(() => {
       expect(api.goals.find((g) => g.title === "A")?.is_focused).toBe(false);
@@ -314,7 +441,7 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Abandon Give up on this" }));
+    fireEvent.click(await goalAction("Give up on this", "Abandon Give up on this"));
 
     await waitFor(() => {
       expect(api.goals.find((g) => g.title === "Give up on this")?.status).toBe("abandoned");
@@ -373,8 +500,8 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    const q1Section = await screen.findByRole("region", { name: "2099-01-01 – 2099-03-31" });
-    const q2Section = await screen.findByRole("region", { name: "2099-04-01 – 2099-06-30" });
+    const q1Section = await screen.findByRole("region", { name: "Jan 1, 2099 – Mar 31, 2099" });
+    const q2Section = await screen.findByRole("region", { name: "Apr 1, 2099 – Jun 30, 2099" });
     expect(within(q1Section).getByText("Ship v1")).toBeInTheDocument();
     expect(within(q2Section).getByText("Ship v2")).toBeInTheDocument();
   });
@@ -386,9 +513,13 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    await screen.findByText("Ship v1");
-    expect(screen.queryByRole("button", { name: "Focus Ship v1" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Abandon Ship v1" })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Actions for Ship v1" }));
+    const menu = await screen.findByRole("menu", { name: "Actions for Ship v1" });
+    expect(within(menu).queryByRole("menuitem", { name: "Focus Ship v1" })).not.toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Abandon Ship v1" }),
+    ).not.toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Edit Ship v1" })).toBeInTheDocument();
   });
 
   it("reorders Key Results so the one that matters most reads first", async () => {
@@ -401,7 +532,7 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Move key result Second up" }));
+    fireEvent.click(await keyResultAction("Second", "Move key result Second up"));
 
     await waitFor(() => {
       const names = within(screen.getByRole("list", { name: "Key results" }))
@@ -420,6 +551,7 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
+    fireEvent.click(await keyResultAction("Lines", "Edit Lines target value"));
     const target = await screen.findByLabelText("Lines target value");
     fireEvent.blur(target, { target: { value: "200" } });
 
@@ -452,6 +584,7 @@ describe("Goals", () => {
     const api = installFakeApi({ goals: [goal] });
     render(<App />);
     await openGoals();
+    fireEvent.click(await keyResultAction("Lines", "Edit Lines target value"));
     await screen.findByLabelText("Lines target value");
 
     // The Goal is gone by the time the write lands — a 404 the user must see,
@@ -478,7 +611,7 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Abandon Give up" }));
+    fireEvent.click(await goalAction("Give up", "Abandon Give up"));
 
     await waitFor(() => {
       expect(api.goals[0]?.status).toBe("abandoned");
@@ -487,98 +620,119 @@ describe("Goals", () => {
   });
 });
 
-describe("Goal card touch: Focus/Abandon/Edit/Delete stay behind a long-press (#248)", () => {
-  beforeEach(() => {
+describe("Key Result rows (#464)", () => {
+  it("shows no number inputs or up, down and remove buttons at rest", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [
+      fakeKeyResult(goal.id, "First", { target_value: 10 }),
+      fakeKeyResult(goal.id, "Second", { target_value: 10 }),
+    ];
+    installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    const panel = await screen.findByLabelText("Ship v2 key results");
+    await within(panel).findByText("First");
+    expect(within(panel).queryAllByRole("spinbutton")).toHaveLength(0);
+    expect(within(panel).queryByRole("button", { name: /^Move key result/ })).toBeNull();
+    expect(within(panel).queryByRole("button", { name: /^Delete key result/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /^(Edit|Delete goal|Abandon|Focus) Ship v2$/ }),
+    ).toBeNull();
+  });
+
+  it("the stepper adds one to a manual Key Result", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [fakeKeyResult(goal.id, "Lines", { target_value: 10, current_value: 3 })];
+    const api = installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add 1 to Lines" }));
+
+    await waitFor(() => expect(api.goals[0]!.key_results[0]!.current_value).toBe(4));
+    expect(await screen.findByText("4 of 10")).toBeInTheDocument();
+  });
+
+  it("names the source of an automatic Key Result", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [fakeKeyResult(goal.id, "Done", { source: "task_count", target_value: 3 })];
+    installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    expect(await screen.findByText("From completed Tasks")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add 1 to Done" })).toBeNull();
+  });
+
+  it("dragging a Key Result onto another moves it before that one", async () => {
+    const goal = fakeGoal("Ship v2");
+    goal.key_results = [
+      fakeKeyResult(goal.id, "First", { sort_order: 1024 }),
+      fakeKeyResult(goal.id, "Second", { sort_order: 2048 }),
+      fakeKeyResult(goal.id, "Third", { sort_order: 3072 }),
+    ];
+    installFakeApi({ goals: [goal] });
+    render(<App />);
+    await openGoals();
+
+    const list = await screen.findByRole("list", { name: "Key results" });
+    const row = (name: string): HTMLElement =>
+      within(list).getByText(name).closest("li") as HTMLElement;
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(row("Third"), { dataTransfer });
+    fireEvent.drop(row("First"), { dataTransfer });
+
+    await waitFor(() => {
+      const names = within(screen.getByRole("list", { name: "Key results" }))
+        .getAllByRole("listitem")
+        .map((item) => item.querySelector(".key-result-name")?.textContent);
+      expect(names).toEqual(["Third", "First", "Second"]);
+    });
+  });
+});
+
+describe("Goal actions menu (#464)", () => {
+  it("holds Unfocus, Abandon, Edit and Delete for a focused active Goal", async () => {
+    installFakeApi({ goals: [fakeGoal("Ship v2", { is_focused: true })] });
+    render(<App />);
+    await openGoals();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Actions for Ship v2" }));
+    const menu = await screen.findByRole("menu", { name: "Actions for Ship v2" });
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Unfocus", "Abandon", "Edit", "Delete"]);
+  });
+
+  it("the card no longer carries a long-press reveal", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  async function card(): Promise<HTMLElement> {
-    const heading = await screen.findByRole("heading", { name: "Ship v2" });
-    const el = heading.closest("li");
-    if (el === null) {
-      throw new Error("goal card not found");
+    try {
+      installFakeApi({ goals: [fakeGoal("Ship v2")] });
+      render(<App />);
+      await openGoals();
+      const el = (await screen.findByRole("heading", { name: "Ship v2" })).closest("li")!;
+      fireEvent.touchStart(el);
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(el).not.toHaveAttribute("data-actions-open");
+    } finally {
+      vi.useRealTimers();
     }
-    return el;
-  }
-
-  it("is closed at rest", async () => {
-    installFakeApi({ goals: [fakeGoal("Ship v2")] });
-    render(<App />);
-    await openGoals();
-
-    expect(await card()).not.toHaveAttribute("data-actions-open");
   });
 
-  it("opens after holding a touch for the long-press window", async () => {
-    installFakeApi({ goals: [fakeGoal("Ship v2")] });
-    render(<App />);
-    await openGoals();
-
-    const el = await card();
-    fireEvent.touchStart(el);
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-
-    expect(el).toHaveAttribute("data-actions-open", "true");
-  });
-
-  it("does not open on a plain, short tap", async () => {
-    installFakeApi({ goals: [fakeGoal("Ship v2")] });
-    render(<App />);
-    await openGoals();
-
-    const el = await card();
-    fireEvent.touchStart(el);
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-    fireEvent.touchEnd(el);
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-
-    expect(el).not.toHaveAttribute("data-actions-open");
-  });
-
-  it("cancels the long-press on a touch move (a scroll)", async () => {
-    installFakeApi({ goals: [fakeGoal("Ship v2")] });
-    render(<App />);
-    await openGoals();
-
-    const el = await card();
-    fireEvent.touchStart(el);
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-    fireEvent.touchMove(el);
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-
-    expect(el).not.toHaveAttribute("data-actions-open");
-  });
-
-  it("closes again once Delete is tapped, and still asks for confirmation", async () => {
+  it("closes once Delete is chosen, and still asks for confirmation", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
     installFakeApi({ goals: [fakeGoal("Ship v2")] });
     render(<App />);
     await openGoals();
 
-    const el = await card();
-    fireEvent.touchStart(el);
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-    expect(el).toHaveAttribute("data-actions-open", "true");
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete goal Ship v2" }));
+    fireEvent.click(await goalAction("Ship v2", "Delete goal Ship v2"));
 
     expect(window.confirm).toHaveBeenCalled();
-    expect(el).not.toHaveAttribute("data-actions-open");
+    expect(screen.queryByRole("menu", { name: "Actions for Ship v2" })).toBeNull();
   });
 });

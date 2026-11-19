@@ -1,0 +1,258 @@
+@layer components {
+  /* ── Task detail panel ───────────────────────────────────────────── */
+  .task-detail {
+    border-left: 1px solid var(--border-default);
+    background: var(--surface-raised);
+    padding: var(--space-6) var(--space-4);
+    display: grid;
+    gap: var(--space-4);
+    align-content: start;
+    /* Its own scroll region (issue #159): expanding the description editor
+     grows this panel's content, not the document — `min-height: 0` lets it
+     shrink to its grid track instead of stretching `.app` past the
+     viewport. */
+    min-height: 0;
+    overflow-y: auto;
+  }
+  /* The sheet's drag handle and mobile backdrop (issue #170) — both hidden on
+   desktop, where the panel is a plain grid-column sibling, not an overlay. */
+  .task-detail-handle {
+    display: none;
+  }
+  .task-detail-backdrop {
+    display: none;
+  }
+  .task-detail-header {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+  }
+  .task-detail-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    flex: 1;
+    min-width: 0;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  /* Breadcrumb crumbs are bare values: no label column. */
+  .task-detail-breadcrumb .property-row {
+    display: flex;
+    min-height: 0;
+  }
+  .task-detail-breadcrumb .property-row-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .task-detail-breadcrumb .property-row-trigger {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .task-detail-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .task-detail-title form {
+    flex: 1;
+  }
+  .task-detail-title input:not([type="checkbox"]) {
+    width: 100%;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    border-color: transparent;
+    background: transparent;
+  }
+  .task-detail-title input:not([type="checkbox"]):hover,
+  .task-detail-title input:not([type="checkbox"]):focus {
+    border-color: var(--border-default);
+  }
+  .task-detail-header > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+  .task-detail-header > button:hover {
+    background: var(--surface-hover);
+  }
+  .task-description {
+    display: grid;
+    gap: var(--space-2);
+    font-size: var(--text-md);
+  }
+  .task-description code {
+    font-family: var(--font-mono);
+  }
+  .task-description textarea {
+    width: 100%;
+  }
+  .task-description-view {
+    min-height: 28px;
+    padding: var(--space-1) var(--space-2);
+    margin: 0 calc(-1 * var(--space-2));
+    border-radius: var(--radius-sm);
+    cursor: text;
+  }
+  .task-description-view:hover {
+    background: var(--ink-50);
+  }
+  .task-description-view > :first-child {
+    margin-top: 0;
+  }
+  .task-description-view > :last-child {
+    margin-bottom: 0;
+  }
+  .task-description-placeholder {
+    color: var(--text-tertiary);
+  }
+  .check-items-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .check-items-progress progress {
+    flex: 0 0 80px;
+    height: 4px;
+    appearance: none;
+    border: 0;
+    border-radius: 2px;
+    background: var(--ink-100);
+    overflow: hidden;
+  }
+  .check-items-progress progress::-webkit-progress-bar {
+    background: var(--ink-100);
+  }
+  .check-items-progress progress::-webkit-progress-value {
+    background: var(--accent);
+  }
+  .check-items-progress progress::-moz-progress-bar {
+    background: var(--accent);
+  }
+  .task-detail-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+  .task-detail-focused {
+    font-variant-numeric: tabular-nums;
+  }
+  .check-items ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .check-items li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 32px;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .check-items li:hover .row-actions {
+    visibility: visible;
+  }
+  .check-items li .row-actions {
+    margin-left: auto;
+  }
+  .check-items input[type="text"],
+  .check-items form input:not([type="checkbox"]) {
+    width: 100%;
+    height: 28px;
+    font-size: var(--text-sm);
+  }
+  .check-items form {
+    margin-top: var(--space-2);
+  }
+  @media (max-width: 720px) {
+    /* The detail panel has no third column to sit in: it becomes a
+     dismissible sheet (issue #170) — a peek of backdrop stays visible above
+     it so it reads as having opened over the current screen, not replaced
+     it, and the handle up top signals it can be dragged away. */
+    .task-detail {
+      position: fixed;
+      top: 8vh;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: var(--z-modal);
+      width: auto;
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+      box-shadow: var(--shadow-lg);
+      overflow-y: auto;
+      animation: task-detail-sheet-in var(--duration-base) var(--ease-out);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .task-detail {
+        animation: none;
+      }
+    }
+
+    .task-detail-handle {
+      display: block;
+      width: 40px;
+      height: 4px;
+      margin: 0 auto var(--space-3);
+      border-radius: var(--radius-full);
+      background: var(--border-default);
+    }
+
+    .task-detail-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: calc(var(--z-modal) - 1);
+      background: var(--scrim);
+    }
+
+    @keyframes task-detail-sheet-in {
+      from {
+        transform: translateY(100%);
+      }
+      to {
+        transform: translateY(0);
+      }
+    }
+  }
+}
+@layer components {
+  @media (max-width: 720px) {
+    /* Every control in the sheet meets the 44px touch floor (issue #456). */
+    .task-detail-header > button,
+    .task-detail-footer .overflow-menu-trigger,
+    .task-detail-footer .btn-focus,
+    .check-items li .row-actions button {
+      min-width: var(--tap-target);
+      min-height: var(--tap-target);
+    }
+    .task-detail-title input:not([type="checkbox"]),
+    .check-items form input:not([type="checkbox"]) {
+      min-height: var(--tap-target);
+    }
+    .check-items li {
+      min-height: var(--tap-target);
+    }
+    .task-detail-footer {
+      position: sticky;
+      bottom: 0;
+      padding-bottom: env(safe-area-inset-bottom);
+      background: var(--surface-raised);
+    }
+  }
+}

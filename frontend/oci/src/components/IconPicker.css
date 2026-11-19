@@ -1,0 +1,48 @@
+@layer components {
+  /* The icon field: a square showing the current emoji, or a placeholder glyph
+   when unset. Opens the picker. */
+
+  .icon-picker {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .icon-picker h3 {
+    margin: var(--space-3) 0 6px;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+  }
+
+  .icon-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+    gap: 4px;
+  }
+
+  .icon-picker-grid button {
+    height: 38px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: 20px;
+    line-height: 1;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .icon-picker-grid button:hover {
+    background: var(--surface-hover);
+  }
+
+  .icon-picker .icon-picker-clear {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    font-size: var(--text-sm);
+  }
+}

@@ -1,12 +1,12 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { browserTimeZone } from "./dates";
 import { fakeTask, installFakeApi, type RecordedRequest } from "./test/fakeApi";
 
-// All tests pin the clock to Friday 2026-07-03, local noon, so quick picks
-// and overdue math are deterministic in any timezone.
+// Date row (#453). Clock pinned to Friday 2026-07-03, local noon (TZ=UTC).
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date(2026, 6, 3, 12, 0, 0));
@@ -17,152 +17,159 @@ afterEach(() => {
 });
 
 async function openDetail(taskTitle: string): Promise<HTMLElement> {
-  fireEvent.click(await screen.findByRole("button", { name: `Open details for ${taskTitle}` }));
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  await user.click(await screen.findByRole("button", { name: `Open details for ${taskTitle}` }));
   return await screen.findByRole("complementary", { name: "Task details" });
 }
 
-function lastTaskPatch(requests: RecordedRequest[], taskId: number): unknown {
-  const patches = requests.filter(
-    (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${taskId}`,
-  );
-  return patches.at(-1)?.body;
+function patches(requests: RecordedRequest[], taskId: number): unknown[] {
+  return requests
+    .filter((r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${taskId}`)
+    .map((r) => r.body);
 }
 
-describe("Task scheduling from the detail panel", () => {
-  it("quick pick Today sets an all-day due date today with the browser timezone", async () => {
+async function openDateRow(panel: HTMLElement, user: ReturnType<typeof userEvent.setup>) {
+  await user.click(within(panel).getByRole("button", { name: /^Date / }));
+  return within(panel).getByRole("dialog", { name: "Date" });
+}
+
+describe("Task detail Date row", () => {
+  it.each([
+    [
+      "a timed range today",
+      { start_date: "2026-07-03T10:00:00Z", due_date: "2026-07-03T11:30:00Z", is_all_day: false },
+      "Today, 10:00–11:30",
+    ],
+    ["all-day tomorrow", { due_date: "2026-07-04T00:00:00Z", is_all_day: true }, "Tomorrow"],
+    [
+      "timed yesterday",
+      { due_date: "2026-07-02T09:00:00Z", is_all_day: false },
+      "Yesterday, 09:00",
+    ],
+    ["later this week", { due_date: "2026-07-07T00:00:00Z", is_all_day: true }, "Tue"],
+    ["further out", { due_date: "2026-07-20T00:00:00Z", is_all_day: true }, "Jul 20"],
+    ["unscheduled", {}, "No date"],
+  ])("reads %s relatively", async (_name, schedule, label) => {
+    installFakeApi({ tasks: [fakeTask("Plan", { time_zone: "UTC", ...schedule })] });
+    render(<App />);
+
+    const panel = await openDetail("Plan");
+    expect(within(panel).getByRole("button", { name: `Date ${label}` })).toBeInTheDocument();
+  });
+
+  it("reads quietly when unset", async () => {
+    installFakeApi({ tasks: [fakeTask("Someday")] });
+    render(<App />);
+
+    const panel = await openDetail("Someday");
+    expect(within(panel).getByRole("button", { name: "Date No date" })).toHaveClass("is-quiet");
+  });
+
+  it("Today sets an all-day date and the row reads Today", async () => {
     const chore = fakeTask("Water plants");
     const api = installFakeApi({ tasks: [chore] });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App />);
 
     const panel = await openDetail("Water plants");
-    fireEvent.click(within(panel).getByRole("button", { name: "Today" }));
+    const dialog = await openDateRow(panel, user);
+    await user.click(within(dialog).getByRole("button", { name: "Today" }));
 
     await waitFor(() =>
-      expect(lastTaskPatch(api.requests, chore.id)).toEqual({
-        start_date: null,
-        due_date: "2026-07-03T00:00:00Z",
-        is_all_day: true,
-        time_zone: browserTimeZone(),
-      }),
+      expect(patches(api.requests, chore.id)).toEqual([
+        {
+          start_date: null,
+          due_date: "2026-07-03T00:00:00Z",
+          is_all_day: true,
+          time_zone: browserTimeZone(),
+        },
+      ]),
     );
-    expect(await within(panel).findByText("Jul 3")).toBeInTheDocument();
+    expect(await within(panel).findByRole("button", { name: "Date Today" })).toBeInTheDocument();
   });
 
-  it("quick pick Tomorrow sets tomorrow; Next Week sets next Monday", async () => {
+  it("Tomorrow and Next week pick tomorrow and next Monday", async () => {
     const chore = fakeTask("Water plants");
     const api = installFakeApi({ tasks: [chore] });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App />);
 
     const panel = await openDetail("Water plants");
-    fireEvent.click(within(panel).getByRole("button", { name: "Tomorrow" }));
-    await waitFor(() =>
-      expect(lastTaskPatch(api.requests, chore.id)).toMatchObject({
-        due_date: "2026-07-04T00:00:00Z",
-      }),
+    await user.click(
+      within(await openDateRow(panel, user)).getByRole("button", { name: "Tomorrow" }),
+    );
+    await within(panel).findByRole("button", { name: "Date Tomorrow" });
+    await user.click(
+      within(await openDateRow(panel, user)).getByRole("button", { name: "Next week" }),
     );
 
-    fireEvent.click(within(panel).getByRole("button", { name: "Next Week" }));
     await waitFor(() =>
-      expect(lastTaskPatch(api.requests, chore.id)).toMatchObject({
-        due_date: "2026-07-06T00:00:00Z",
-      }),
+      expect(patches(api.requests, chore.id)).toMatchObject([
+        { due_date: "2026-07-04T00:00:00Z" },
+        { due_date: "2026-07-06T00:00:00Z" },
+      ]),
     );
   });
 
-  it("schedules a timed start+due duration within a day from the custom editor", async () => {
+  it("picks a custom day and time range from the calendar", async () => {
     const meeting = fakeTask("Design review");
     const api = installFakeApi({ tasks: [meeting] });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App />);
 
     const panel = await openDetail("Design review");
-    fireEvent.click(within(panel).getByRole("button", { name: "Custom date" }));
-    fireEvent.change(within(panel).getByLabelText("Day"), { target: { value: "2026-07-10" } });
-    fireEvent.change(within(panel).getByLabelText("Start time"), { target: { value: "14:00" } });
-    fireEvent.change(within(panel).getByLabelText("Due time"), { target: { value: "15:30" } });
-    fireEvent.click(within(panel).getByRole("button", { name: "Save date" }));
+    const dialog = await openDateRow(panel, user);
+    await user.click(within(dialog).getByRole("button", { name: "Friday, July 10, 2026" }));
+    await waitFor(() =>
+      expect(patches(api.requests, meeting.id)).toMatchObject([
+        { due_date: "2026-07-10T00:00:00Z", is_all_day: true },
+      ]),
+    );
+
+    const again = await openDateRow(panel, user);
+    // The date popover takes plain values only: no Quick-Add sigil input.
+    expect(within(again).queryByRole("textbox")).not.toBeInTheDocument();
+    await user.type(within(again).getByLabelText("Start time"), "14:00");
+    await user.type(within(again).getByLabelText("End time"), "15:30");
 
     await waitFor(() =>
-      expect(lastTaskPatch(api.requests, meeting.id)).toEqual({
+      expect(patches(api.requests, meeting.id).at(-1)).toEqual({
         start_date: new Date(2026, 6, 10, 14, 0).toISOString(),
         due_date: new Date(2026, 6, 10, 15, 30).toISOString(),
         is_all_day: false,
         time_zone: browserTimeZone(),
       }),
     );
+    expect(
+      await within(panel).findByRole("button", { name: "Date Jul 10, 14:00–15:30" }),
+    ).toBeInTheDocument();
   });
 
-  it("saves a custom date without a time as an all-day date", async () => {
-    const errand = fakeTask("Pick up parcel");
-    const api = installFakeApi({ tasks: [errand] });
-    render(<App />);
-
-    const panel = await openDetail("Pick up parcel");
-    fireEvent.click(within(panel).getByRole("button", { name: "Custom date" }));
-    fireEvent.change(within(panel).getByLabelText("Day"), { target: { value: "2026-07-10" } });
-    fireEvent.click(within(panel).getByRole("button", { name: "Save date" }));
-
-    await waitFor(() =>
-      expect(lastTaskPatch(api.requests, errand.id)).toEqual({
-        start_date: null,
-        due_date: "2026-07-10T00:00:00Z",
-        is_all_day: true,
-        time_zone: browserTimeZone(),
-      }),
-    );
-  });
-
-  it("schedules an all-day span across multiple days", async () => {
-    const trip = fakeTask("Conference");
-    const api = installFakeApi({ tasks: [trip] });
-    render(<App />);
-
-    const panel = await openDetail("Conference");
-    fireEvent.click(within(panel).getByRole("button", { name: "Custom date" }));
-    fireEvent.click(within(panel).getByRole("checkbox", { name: "All day" }));
-    fireEvent.change(within(panel).getByLabelText("Start day"), {
-      target: { value: "2026-07-06" },
+  it("keeps a timed Task's times when moving it to another day", async () => {
+    const meeting = fakeTask("Stand-up", {
+      start_date: "2026-07-03T10:00:00Z",
+      due_date: "2026-07-03T11:30:00Z",
+      is_all_day: false,
+      time_zone: "UTC",
     });
-    fireEvent.change(within(panel).getByLabelText("Due day"), { target: { value: "2026-07-08" } });
-    fireEvent.click(within(panel).getByRole("button", { name: "Save date" }));
-
-    await waitFor(() =>
-      expect(lastTaskPatch(api.requests, trip.id)).toEqual({
-        start_date: "2026-07-06T00:00:00Z",
-        due_date: "2026-07-08T00:00:00Z",
-        is_all_day: true,
-        time_zone: browserTimeZone(),
-      }),
-    );
-    expect(await within(panel).findByText("Jul 6 – Jul 8")).toBeInTheDocument();
-  });
-
-  it("edits an existing schedule from the custom editor, prefilled", async () => {
-    const trip = fakeTask("Conference", {
-      start_date: "2026-07-06T00:00:00Z",
-      due_date: "2026-07-08T00:00:00Z",
-      is_all_day: true,
-      time_zone: browserTimeZone(),
-    });
-    const api = installFakeApi({ tasks: [trip] });
+    const api = installFakeApi({ tasks: [meeting] });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App />);
 
-    const panel = await openDetail("Conference");
-    fireEvent.click(within(panel).getByRole("button", { name: "Custom date" }));
-    expect(within(panel).getByRole("checkbox", { name: "All day" })).toBeChecked();
-    expect(within(panel).getByLabelText("Start day")).toHaveValue("2026-07-06");
-    expect(within(panel).getByLabelText("Due day")).toHaveValue("2026-07-08");
-
-    fireEvent.change(within(panel).getByLabelText("Due day"), { target: { value: "2026-07-09" } });
-    fireEvent.click(within(panel).getByRole("button", { name: "Save date" }));
-
-    await waitFor(() =>
-      expect(lastTaskPatch(api.requests, trip.id)).toMatchObject({
-        due_date: "2026-07-09T00:00:00Z",
-      }),
+    const panel = await openDetail("Stand-up");
+    await user.click(
+      within(await openDateRow(panel, user)).getByRole("button", { name: "Tomorrow" }),
     );
+
+    expect(
+      await within(panel).findByRole("button", { name: "Date Tomorrow, 10:00–11:30" }),
+    ).toBeInTheDocument();
+    expect(patches(api.requests, meeting.id)).toMatchObject([
+      { start_date: "2026-07-04T10:00:00.000Z", due_date: "2026-07-04T11:30:00.000Z" },
+    ]);
   });
 
-  it("clears the whole schedule with one click", async () => {
+  it("Clear removes the whole schedule", async () => {
     const trip = fakeTask("Conference", {
       start_date: "2026-07-06T00:00:00Z",
       due_date: "2026-07-08T00:00:00Z",
@@ -170,19 +177,18 @@ describe("Task scheduling from the detail panel", () => {
       time_zone: "Europe/Amsterdam",
     });
     const api = installFakeApi({ tasks: [trip] });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App />);
 
     const panel = await openDetail("Conference");
-    fireEvent.click(within(panel).getByRole("button", { name: "Clear date" }));
+    expect(within(panel).getByRole("button", { name: "Date Jul 6 – Jul 8" })).toBeInTheDocument();
+    await user.click(within(await openDateRow(panel, user)).getByRole("button", { name: "Clear" }));
 
     await waitFor(() =>
-      expect(lastTaskPatch(api.requests, trip.id)).toEqual({
-        start_date: null,
-        due_date: null,
-        is_all_day: false,
-        time_zone: null,
-      }),
+      expect(patches(api.requests, trip.id)).toEqual([
+        { start_date: null, due_date: null, is_all_day: false, time_zone: null },
+      ]),
     );
-    expect(within(panel).queryByRole("button", { name: "Clear date" })).not.toBeInTheDocument();
+    expect(await within(panel).findByRole("button", { name: "Date No date" })).toBeInTheDocument();
   });
 });

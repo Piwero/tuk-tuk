@@ -1,3 +1,4 @@
+import "./SearchView.css";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -11,6 +12,7 @@ import {
 import { useDebouncedValue } from "../debounce";
 import { PRIORITY_LABELS } from "../grouping";
 import { Icon } from "./Icon";
+import { EmptyState, LoadError, SkeletonRows } from "./TaskViewState";
 import { TaskRow } from "./TaskRow";
 
 /** What the search view shows: the query and its narrowing filters. */
@@ -20,6 +22,9 @@ export interface SearchState extends SearchFilters {
 
 interface SearchViewProps {
   tasks: Task[];
+  /** Whether `tasks` has loaded for the current query (#441). */
+  loadStatus: "loading" | "ready" | "error";
+  onRetry: () => void;
   lists: TaskList[];
   tags: Tag[];
   state: SearchState;
@@ -38,6 +43,8 @@ const SEARCH_DEBOUNCE_MS = 300;
  * carries a separate quick-jump field of its own (issue #167). */
 export function SearchView({
   tasks,
+  loadStatus,
+  onRetry,
   lists,
   tags,
   state,
@@ -176,8 +183,22 @@ export function SearchView({
       </div>
       {trimmedQuery === "" ? (
         <p className="search-hint">Type to search</p>
+      ) : loadStatus === "loading" ? (
+        <SkeletonRows />
+      ) : loadStatus === "error" ? (
+        <LoadError what="search results" onRetry={onRetry} />
       ) : tasks.length === 0 ? (
-        <p className="search-hint">No matches for “{trimmedQuery}”</p>
+        <EmptyState
+          title={`No matches for “${trimmedQuery}”`}
+          description="Try other words, or loosen the filters."
+          actionLabel="Clear search"
+          onAction={() => {
+            setQueryDraft("");
+            lastPushedQuery.current = "";
+            onStateChange({ ...state, query: "" });
+            fieldRef.current?.focus();
+          }}
+        />
       ) : (
         <>
           <p className="search-count">

@@ -269,6 +269,18 @@ export interface FakeApiState {
   focusSessions: FakeFocusSession[];
   timers: FakeTimer[];
   requests: RecordedRequest[];
+  /** Task-read failure (#441): while set, each `GET /api/v1/tasks` it
+   * returns true for answers 500. Mutate directly in a test. */
+  failTaskRead: ((params: URLSearchParams) => boolean) | null;
+  /** Task-read gate (#441): while set, `GET /api/v1/tasks` waits on it, so a
+   * test can observe the loading state before the read resolves. */
+  taskReadGate: Promise<void> | null;
+  /** Read failure (#442): while set, each `GET` whose pathname it returns
+   * true for answers 500. Mutate directly in a test. */
+  failRead: ((pathname: string) => boolean) | null;
+  /** Read gate (#442): while set, each `GET` whose pathname `match` accepts
+   * waits on `gate`, so a test can observe a view's loading state. */
+  readGate: { match: (pathname: string) => boolean; gate: Promise<void> } | null;
   /** Mutate directly to simulate a session lapsing mid-test. */
   loggedIn: boolean;
   /** The password the fake login and change-password routes check against;
@@ -848,6 +860,10 @@ export function installFakeApi({
     focusSessions: focusSessions.map((focusSession) => ({ ...focusSession })),
     timers: timers.map((timer) => ({ ...timer })),
     requests: [],
+    failTaskRead: null,
+    taskReadGate: null,
+    failRead: null,
+    readGate: null,
     loggedIn,
     password: FAKE_PASSWORD,
     needsSetup,
@@ -1003,6 +1019,12 @@ export function installFakeApi({
     const method = (init?.method ?? "GET").toUpperCase();
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     state.requests.push({ method, url: url.pathname + url.search, body });
+    if (method === "GET" && state.readGate?.match(url.pathname) === true) {
+      await state.readGate.gate;
+    }
+    if (method === "GET" && state.failRead?.(url.pathname) === true) {
+      return json({ error: { code: "internal_error", message: "Unavailable" } }, 500);
+    }
 
     if (method === "GET" && url.pathname === "/api/v1/auth/session") {
       if (state.needsSetup) {
@@ -1537,6 +1559,10 @@ export function installFakeApi({
       return new Response(null, { status: 204 });
     }
     if (method === "GET" && url.pathname === "/api/v1/tasks") {
+      if (state.taskReadGate !== null) await state.taskReadGate;
+      if (state.failTaskRead?.(url.searchParams) === true) {
+        return json({ error: { code: "internal_error", message: "Tasks unavailable" } }, 500);
+      }
       const listId = url.searchParams.get("list_id");
       const tagId = url.searchParams.get("tag_id");
       const keyResultId = url.searchParams.get("key_result_id");

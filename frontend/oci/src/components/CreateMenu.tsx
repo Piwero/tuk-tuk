@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import "./CreateMenu.css";
+
+import { useRef, useState } from "react";
 
 import { IconButton } from "./IconButton";
+import { Popover } from "./Popover";
 
 export interface CreateMenuProps {
   onNewList: () => void;
@@ -10,32 +13,10 @@ export interface CreateMenuProps {
 /** The Lists heading's single "+" control: a small menu offering "New list"
  * and, as the quieter second entry, "New folder". A user who has never made
  * a Folder meets the concept here first — never as a permanent, competing
- * button of its own. */
+ * button of its own. Dismissal and focus return come from the shared Popover. */
 export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): JSX.Element {
   const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    function onPointerDown(event: MouseEvent): void {
-      if (root.current !== null && !root.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   function choose(action: () => void): void {
     setOpen(false);
@@ -43,7 +24,7 @@ export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): JSX.Ele
   }
 
   return (
-    <div className="create-menu" ref={root}>
+    <div className="create-menu">
       <IconButton
         icon="plus"
         size={18}
@@ -51,12 +32,18 @@ export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): JSX.Ele
         className="create-menu-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
+        buttonRef={trigger}
         onClick={() => setOpen((current) => !current)}
       />
-      {open && (
+      <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
         <ul role="menu" aria-label="Create" className="create-menu-list">
           <li role="none">
-            <button type="button" role="menuitem" onClick={() => choose(onNewList)}>
+            <button
+              className="btn-quiet"
+              type="button"
+              role="menuitem"
+              onClick={() => choose(onNewList)}
+            >
               New list
             </button>
           </li>
@@ -64,14 +51,14 @@ export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): JSX.Ele
             <button
               type="button"
               role="menuitem"
-              className="create-menu-secondary"
+              className="create-menu-secondary btn-quiet"
               onClick={() => choose(onNewFolder)}
             >
               New folder
             </button>
           </li>
         </ul>
-      )}
+      </Popover>
     </div>
   );
 }

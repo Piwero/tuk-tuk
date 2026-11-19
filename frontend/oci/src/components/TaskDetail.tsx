@@ -1,39 +1,39 @@
+import "./TaskDetail.css";
+
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 import {
   createCheckItem,
   deleteCheckItem,
+  fetchFocusSessions,
   fetchGoals,
+  fetchSections,
   updateCheckItem,
   updateTask,
   type CheckItem,
   type Goal,
   type Priority,
+  type Section,
   type Tag,
   type Task,
   type TaskList,
 } from "../api";
-import {
-  addDays,
-  allDaySchedule,
-  clearedSchedule,
-  draftFrom,
-  formatSchedule,
-  isOverdue,
-  localDayOf,
-  nextMonday,
-  scheduleFromDraft,
-  type DateDraft,
-} from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
 import { PRIORITY_LABELS } from "../grouping";
+import { formatFocusTotal } from "../focusTotals";
 import { appendOrder, planInsertBefore } from "../ordering";
-import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
-import { DateFieldset } from "./DateFieldset";
+import { DateRow } from "./DateRow";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
-import { RepeatFieldset } from "./RepeatFieldset";
+import { OverflowMenu } from "./OverflowMenu";
+import { PriorityIndicator } from "./PriorityIndicator";
+import { PropertyOptions, PropertyRow } from "./PropertyRow";
+import { ReminderRow } from "./ReminderRow";
+import { RepeatRow } from "./RepeatRow";
+import { TagsRow } from "./TagsRow";
+
+const PRIORITIES = Object.keys(PRIORITY_LABELS) as Priority[];
 
 /** A vertical drag past this many pixels on the handle counts as a
  * swipe-to-dismiss (issue #170) — short enough to feel responsive, long
@@ -54,7 +54,17 @@ interface TaskDetailProps {
    * haven't loaded — the breadcrumb falls back to plain text then. */
   lists: TaskList[];
   onTaskChanged: (task: Task) => void;
+  /** A Tag created from the Tags row, so the app-wide Tag list stays current. */
+  onTagCreated: (tag: Tag) => void;
   onClose: () => void;
+  /** Presented as a modal bottom sheet (phones): focus moves in and is
+   * trapped, Escape closes, and focus returns to the opener on close. */
+  sheet?: boolean;
+  /** Opens Focus with this Task linked, clock idle. Absent when Focus is
+   * turned off, which hides the button. */
+  onStartFocus?: (task: Task) => void;
+  /** Deletes the Task (with undo); the caller closes the detail. */
+  onDelete: (task: Task) => void;
 }
 
 /** The `task_count` Key Results across every Goal — the picker's options.
@@ -74,17 +84,55 @@ export function TaskDetail({
   listName,
   lists,
   onTaskChanged,
+  onTagCreated,
   onClose,
+  sheet = false,
+  onStartFocus,
+  onDelete,
 }: TaskDetailProps): JSX.Element {
   const [title, setTitle] = useState(task.title);
   const [goals, setGoals] = useState<Goal[]>([]);
 
+  const [sections, setSections] = useState<Section[]>([]);
+
   useEffect(() => {
     void fetchGoals().then((page) => setGoals(page.items));
   }, []);
+
+  useEffect(() => {
+    let live = true;
+    setSections([]);
+    void fetchSections(task.list_id).then((page) => {
+      if (live) setSections(page.items);
+    });
+    return () => {
+      live = false;
+    };
+  }, [task.list_id]);
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null);
-  const [dateDraft, setDateDraft] = useState<DateDraft | null>(null);
-  const [offsetDraft, setOffsetDraft] = useState<{ amount: string; unit: OffsetUnit } | null>(null);
+  const [focusedSeconds, setFocusedSeconds] = useState<number | null>(null);
+
+  // Time already focused on this Task: the sum of its linked Focus Sessions.
+  const focusEnabled = onStartFocus !== undefined;
+  useEffect(() => {
+    if (!focusEnabled) {
+      return;
+    }
+    let live = true;
+    setFocusedSeconds(null);
+    void fetchFocusSessions().then((page) => {
+      if (live) {
+        setFocusedSeconds(
+          page.items
+            .filter((session) => session.task_id === task.id)
+            .reduce((sum, session) => sum + session.duration_seconds, 0),
+        );
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [task.id, focusEnabled]);
   const [newItemTitle, setNewItemTitle] = useState("");
   const [itemEditor, setItemEditor] = useState<{ id: number; title: string } | null>(null);
   // Tracks a drag on the mobile sheet's handle (issue #170) — desktop never
@@ -97,8 +145,6 @@ export function TaskDetail({
   useEffect(() => {
     setTitle(task.title);
     setDescriptionDraft(null);
-    setDateDraft(null);
-    setOffsetDraft(null);
   }, [task.id, task.title]);
 
   async function saveTitle(): Promise<void> {
@@ -114,8 +160,11 @@ export function TaskDetail({
     if (descriptionDraft === null) {
       return;
     }
-    onTaskChanged(await updateTask(task.id, { description: descriptionDraft }));
+    const draft = descriptionDraft;
     setDescriptionDraft(null);
+    if (draft !== task.description) {
+      onTaskChanged(await updateTask(task.id, { description: draft }));
+    }
   }
 
   async function addCheckItem(): Promise<void> {
@@ -138,60 +187,27 @@ export function TaskDetail({
     onTaskChanged(await updateTask(task.id, { list_id: listId }));
   }
 
-  async function toggleTag(tag: Tag): Promise<void> {
-    const assigned = task.tags.some((t) => t.id === tag.id);
-    const tagIds = assigned
-      ? task.tags.filter((t) => t.id !== tag.id).map((t) => t.id)
-      : [...task.tags.map((t) => t.id), tag.id];
-    onTaskChanged(await updateTask(task.id, { tag_ids: tagIds }));
-  }
-
-  async function quickPick(dueDay: string): Promise<void> {
-    onTaskChanged(await updateTask(task.id, allDaySchedule(null, dueDay)));
-    setDateDraft(null);
-  }
-
-  async function clearSchedule(): Promise<void> {
-    onTaskChanged(await updateTask(task.id, clearedSchedule()));
-    setDateDraft(null);
-  }
-
-  async function addReminder(offset: string): Promise<void> {
-    if (!task.reminders.includes(offset)) {
-      onTaskChanged(await updateTask(task.id, { reminders: [...task.reminders, offset] }));
-    }
-    setOffsetDraft(null);
-  }
-
-  async function removeReminder(offset: string): Promise<void> {
-    onTaskChanged(
-      await updateTask(task.id, {
-        reminders: task.reminders.filter((existing) => existing !== offset),
-      }),
-    );
-  }
-
-  async function addCustomReminder(): Promise<void> {
-    if (offsetDraft === null) {
+  async function moveToSection(sectionId: number | null): Promise<void> {
+    if (sectionId === task.section_id) {
       return;
     }
-    const amount = Number(offsetDraft.amount);
-    if (!Number.isInteger(amount) || amount < 0) {
-      return;
-    }
-    await addReminder(customOffset(amount, offsetDraft.unit));
+    onTaskChanged(await updateTask(task.id, { section_id: sectionId }));
   }
 
-  async function saveDateDraft(): Promise<void> {
-    if (dateDraft === null) {
-      return;
+  async function savePriority(priority: Priority): Promise<void> {
+    if (priority !== task.priority) {
+      onTaskChanged(await updateTask(task.id, { priority }));
     }
-    const schedule = scheduleFromDraft(dateDraft);
-    if (schedule === null) {
-      return;
+  }
+
+  async function saveKeyResult(keyResultId: number | null): Promise<void> {
+    if (keyResultId !== task.key_result_id) {
+      onTaskChanged(await updateTask(task.id, { key_result_id: keyResultId }));
     }
-    onTaskChanged(await updateTask(task.id, schedule));
-    setDateDraft(null);
+  }
+
+  async function toggleCompleted(): Promise<void> {
+    onTaskChanged(await updateTask(task.id, { completed: !task.completed }));
   }
 
   async function renameCheckItem(): Promise<void> {
@@ -258,6 +274,10 @@ export function TaskDetail({
     }
   }
 
+  const keyResults = taskCountKeyResults(goals);
+  const attached = keyResults.find((kr) => kr.id === task.key_result_id);
+  const keyResultName = attached === undefined ? null : `${attached.goalTitle}: ${attached.name}`;
+
   function handleHandleTouchStart(event: React.TouchEvent): void {
     const y = event.touches[0]?.clientY ?? null;
     touchStartY.current = y;
@@ -286,8 +306,72 @@ export function TaskDetail({
     touchLastY.current = null;
   }
 
+  const panel = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const surface = panel.current;
+    if (!sheet || surface === null) {
+      return;
+    }
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const openerLabel = `Open details for ${task.title}`;
+    surface.focus({ preventScroll: true });
+    function keydown(event: KeyboardEvent): void {
+      if (surface === null) return;
+      if (event.key === "Escape") {
+        // A popover or menu inside the sheet takes this Escape first.
+        if (event.defaultPrevented || surface.querySelector('[aria-expanded="true"]') !== null) {
+          return;
+        }
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [
+        ...surface.querySelectorAll<HTMLElement>(
+          'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        ),
+      ];
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first === undefined || last === undefined) {
+        event.preventDefault();
+        return;
+      }
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === surface)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (!surface.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", keydown);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      const target =
+        opener !== null && opener.isConnected
+          ? opener
+          : document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(openerLabel)}"]`);
+      target?.focus({ preventScroll: true });
+    };
+    // task.title is read only for the fallback label at open time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet]);
+
   return (
-    <aside className="task-detail" aria-label="Task details">
+    <aside
+      className="task-detail"
+      aria-label="Task details"
+      ref={panel}
+      tabIndex={sheet ? -1 : undefined}
+    >
       {/* Mobile only (hidden by CSS on desktop): the sheet's drag handle —
           both the visible affordance and the swipe-to-dismiss target
           (issue #170). Decorative, so it's kept out of the a11y tree; the
@@ -300,243 +384,202 @@ export function TaskDetail({
         onTouchEnd={handleHandleTouchEnd}
       />
       <div className="task-detail-header">
-        <div className="task-detail-titles">
+        <nav className="task-detail-breadcrumb property-rows" aria-label="Breadcrumb">
           {lists.length > 0 ? (
-            <select
-              className="task-detail-breadcrumb"
-              aria-label="List for this task"
-              value={task.list_id}
-              onChange={(event) => void moveToList(Number(event.target.value))}
-            >
-              {lists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name}
-                </option>
-              ))}
-            </select>
+            <PropertyRow label="List" value={listName ?? ""}>
+              {(close) => (
+                <PropertyOptions
+                  label="List"
+                  options={lists.map((list) => ({ value: list.id, label: list.name }))}
+                  selected={task.list_id}
+                  onSelect={(listId) => {
+                    close();
+                    void moveToList(listId);
+                  }}
+                />
+              )}
+            </PropertyRow>
           ) : (
-            listName !== null && <p className="task-detail-breadcrumb">{listName}</p>
+            listName !== null && <span className="task-detail-crumb">{listName}</span>
           )}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void saveTitle();
-            }}
-          >
-            <input
-              aria-label="Task title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              onBlur={() => void saveTitle()}
-            />
-          </form>
-        </div>
+          {(sections.length > 0 || task.section_id !== null) && (
+            <>
+              <span className="task-detail-crumb-separator" aria-hidden="true">
+                /
+              </span>
+              <PropertyRow
+                label="Section"
+                quiet={task.section_id === null}
+                value={
+                  sections.find((section) => section.id === task.section_id)?.name ?? "No section"
+                }
+              >
+                {(close) => (
+                  <PropertyOptions<number | null>
+                    label="Section"
+                    options={[
+                      { value: null, label: "No section" },
+                      ...sections.map((section) => ({ value: section.id, label: section.name })),
+                    ]}
+                    selected={task.section_id}
+                    onSelect={(sectionId) => {
+                      close();
+                      void moveToSection(sectionId);
+                    }}
+                  />
+                )}
+              </PropertyRow>
+            </>
+          )}
+        </nav>
         <IconButton icon="x" label="Close details" onClick={onClose} />
       </div>
-      <label className="task-priority">
-        Priority
-        <select
-          value={task.priority}
-          onChange={(event) =>
-            void updateTask(task.id, { priority: event.target.value as Priority }).then(
-              onTaskChanged,
-            )
+      <div className="task-detail-title">
+        <input
+          type="checkbox"
+          aria-label="Task complete"
+          checked={task.completed}
+          onChange={() => void toggleCompleted()}
+        />
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveTitle();
+          }}
+        >
+          <input
+            aria-label="Task title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onBlur={() => void saveTitle()}
+          />
+        </form>
+      </div>
+      <div className="property-rows">
+        <PropertyRow
+          label="Priority"
+          quiet={task.priority === "none"}
+          value={
+            <>
+              <PriorityIndicator priority={task.priority} />
+              {PRIORITY_LABELS[task.priority]}
+            </>
           }
         >
-          {(Object.keys(PRIORITY_LABELS) as Priority[]).map((level) => (
-            <option key={level} value={level}>
-              {PRIORITY_LABELS[level]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="task-key-result">
-        Key Result
-        <Hint hintKey="key-result">
-          <select
-            aria-label="Key result"
-            value={task.key_result_id ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              void updateTask(task.id, {
-                key_result_id: value === "" ? null : Number(value),
-              }).then(onTaskChanged);
-            }}
-          >
-            <option value="">No Key Result</option>
-            {taskCountKeyResults(goals).map((kr) => (
-              <option key={kr.id} value={kr.id}>
-                {kr.goalTitle}: {kr.name}
-              </option>
-            ))}
-          </select>
-        </Hint>
-      </label>
-      <fieldset className="task-dates">
-        <legend>Date</legend>
-        {task.due_date !== null && dateDraft === null && (
-          <p className={isOverdue(task) ? "date-label overdue" : "date-label"}>
-            {formatSchedule(task)}
-          </p>
-        )}
-        {dateDraft === null ? (
-          <div className="date-actions">
-            <button type="button" onClick={() => void quickPick(localDayOf(new Date()))}>
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => void quickPick(addDays(localDayOf(new Date()), 1))}
-            >
-              Tomorrow
-            </button>
-            <button
-              type="button"
-              onClick={() => void quickPick(nextMonday(localDayOf(new Date())))}
-            >
-              Next Week
-            </button>
-            <button
-              type="button"
-              aria-label="Custom date"
-              onClick={() => setDateDraft(draftFrom(task))}
-            >
-              Custom…
-            </button>
-            {task.due_date !== null && (
-              <button type="button" onClick={() => void clearSchedule()}>
-                Clear date
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="date-editor-actions">
-            <DateFieldset draft={dateDraft} onChange={setDateDraft} />
-            <button type="button" onClick={() => void saveDateDraft()}>
-              Save date
-            </button>
-            <button type="button" onClick={() => setDateDraft(null)}>
-              Cancel
-            </button>
-          </div>
-        )}
-      </fieldset>
-      <fieldset className="task-reminders">
-        <legend>Reminders</legend>
-        {task.due_date === null ? (
-          <p className="hint">Set a date to add Reminders.</p>
-        ) : (
-          <>
-            {task.reminders.length > 0 && (
-              <ul aria-label="Reminders">
-                {task.reminders.map((offset) => (
-                  <li key={offset}>
-                    {reminderLabel(offset)}
-                    <IconButton
-                      icon="x"
-                      label={`Remove reminder ${reminderLabel(offset)}`}
-                      onClick={() => void removeReminder(offset)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-            <select
-              aria-label="Add a reminder"
-              value=""
-              onChange={(event) => {
-                const choice = event.target.value;
-                if (choice === "custom") {
-                  setOffsetDraft({ amount: "1", unit: "hours" });
-                } else if (choice !== "") {
-                  void addReminder(choice);
-                }
+          {(close) => (
+            <PropertyOptions
+              label="Priority"
+              options={PRIORITIES.map((level) => ({
+                value: level,
+                label: PRIORITY_LABELS[level],
+              }))}
+              selected={task.priority}
+              onSelect={(level) => {
+                close();
+                void savePriority(level);
               }}
-            >
-              <option value="">Add a reminder…</option>
-              {REMINDER_PRESETS.map((preset) => (
-                <option key={preset.offset} value={preset.offset}>
-                  {preset.label}
-                </option>
-              ))}
-              <option value="custom">Custom…</option>
-            </select>
-            {offsetDraft !== null && (
-              <div className="offset-editor">
-                <input
-                  type="number"
-                  min={0}
-                  aria-label="Offset amount"
-                  value={offsetDraft.amount}
-                  onChange={(event) =>
-                    setOffsetDraft({ ...offsetDraft, amount: event.target.value })
-                  }
-                />
-                <select
-                  aria-label="Offset unit"
-                  value={offsetDraft.unit}
-                  onChange={(event) =>
-                    setOffsetDraft({ ...offsetDraft, unit: event.target.value as OffsetUnit })
-                  }
-                >
-                  <option value="minutes">minutes</option>
-                  <option value="hours">hours</option>
-                  <option value="days">days</option>
-                </select>
-                <span>before</span>
-                <button type="button" onClick={() => void addCustomReminder()}>
-                  Add reminder
-                </button>
-                <button type="button" onClick={() => setOffsetDraft(null)}>
-                  Cancel
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </fieldset>
-      <RepeatFieldset task={task} onTaskChanged={onTaskChanged} />
-      <fieldset className="task-tags">
-        <legend>Tags</legend>
-        {allTags.length === 0 && <p className="hint">No tags yet — add one in the sidebar.</p>}
-        {allTags.map((tag) => (
-          <label key={tag.id}>
-            <input
-              type="checkbox"
-              checked={task.tags.some((t) => t.id === tag.id)}
-              aria-label={`Tag ${tag.name}`}
-              onChange={() => void toggleTag(tag)}
             />
-            {tag.name}
-          </label>
-        ))}
-      </fieldset>
+          )}
+        </PropertyRow>
+        <RepeatRow task={task} onTaskChanged={onTaskChanged} />
+        <TagsRow
+          task={task}
+          allTags={allTags}
+          onTaskChanged={onTaskChanged}
+          onTagCreated={onTagCreated}
+        />
+        <Hint hintKey="key-result">
+          <div className="property-row-hint">
+            <PropertyRow
+              label="Key Result"
+              quiet={task.key_result_id === null}
+              value={keyResultName ?? "No Key Result"}
+            >
+              {(close) => (
+                <PropertyOptions<number | null>
+                  label="Key Result"
+                  options={[
+                    { value: null, label: "No Key Result" },
+                    ...keyResults.map((kr) => ({
+                      value: kr.id,
+                      label: `${kr.goalTitle}: ${kr.name}`,
+                    })),
+                  ]}
+                  selected={task.key_result_id}
+                  onSelect={(keyResultId) => {
+                    close();
+                    void saveKeyResult(keyResultId);
+                  }}
+                />
+              )}
+            </PropertyRow>
+          </div>
+        </Hint>
+        <DateRow task={task} onTaskChanged={onTaskChanged} />
+        <ReminderRow task={task} onTaskChanged={onTaskChanged} />
+      </div>
       <div className="task-description">
         {descriptionDraft === null ? (
-          <>
-            <ReactMarkdown>{task.description}</ReactMarkdown>
-            <button type="button" onClick={() => setDescriptionDraft(task.description)}>
-              Edit description
-            </button>
-          </>
+          // Click (or Enter) to edit in place; the rendered Markdown stays
+          // the resting state, so links inside it still work.
+          <div
+            className="task-description-view"
+            role="button"
+            tabIndex={0}
+            aria-label="Description"
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest("a") === null) {
+                setDescriptionDraft(task.description);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && event.target === event.currentTarget) {
+                event.preventDefault();
+                setDescriptionDraft(task.description);
+              }
+            }}
+          >
+            {task.description.trim() === "" ? (
+              <p className="task-description-placeholder">Add a description…</p>
+            ) : (
+              <ReactMarkdown>{task.description}</ReactMarkdown>
+            )}
+          </div>
         ) : (
-          <>
-            <textarea
-              aria-label="Description"
-              value={descriptionDraft}
-              rows={6}
-              onChange={(event) => setDescriptionDraft(event.target.value)}
-            />
-            <button type="button" onClick={() => void saveDescription()}>
-              Save description
-            </button>
-            <button type="button" onClick={() => setDescriptionDraft(null)}>
-              Cancel
-            </button>
-          </>
+          <textarea
+            aria-label="Description"
+            value={descriptionDraft}
+            rows={6}
+            autoFocus
+            onChange={(event) => setDescriptionDraft(event.target.value)}
+            onBlur={() => void saveDescription()}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                // Discard, and keep Escape from closing the detail too.
+                event.preventDefault();
+                event.stopPropagation();
+                event.nativeEvent.stopImmediatePropagation();
+                setDescriptionDraft(null);
+              }
+            }}
+          />
         )}
       </div>
-      <section className="check-items">
+      <section className="check-items" aria-label="Check items section">
+        {task.check_items.length > 0 && (
+          <div className="check-items-progress">
+            <span>
+              {task.check_items.filter((item) => item.done).length} of {task.check_items.length}
+            </span>
+            <progress
+              aria-label="Check items progress"
+              value={task.check_items.filter((item) => item.done).length}
+              max={task.check_items.length}
+              aria-valuenow={task.check_items.filter((item) => item.done).length}
+              aria-valuemax={task.check_items.length}
+            />
+          </div>
+        )}
         <ul
           aria-label="Check items"
           onDragOver={(event) => event.preventDefault()}
@@ -604,6 +647,30 @@ export function TaskDetail({
           />
         </form>
       </section>
+      <div className="task-detail-footer">
+        {onStartFocus !== undefined && (
+          <button type="button" className="btn-focus" onClick={() => onStartFocus(task)}>
+            Start focus
+            {focusedSeconds !== null && focusedSeconds > 0 && (
+              <span className="task-detail-focused">
+                {" · "}
+                {formatFocusTotal(focusedSeconds)} focused
+              </span>
+            )}
+          </button>
+        )}
+        <OverflowMenu
+          label="More task actions"
+          items={[
+            {
+              text: "Delete task",
+              icon: "trash-2",
+              danger: true,
+              onSelect: () => onDelete(task),
+            },
+          ]}
+        />
+      </div>
     </aside>
   );
 }

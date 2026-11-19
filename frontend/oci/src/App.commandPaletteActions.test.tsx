@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 async function openActions(listName: string, taskTitle: string): Promise<HTMLElement> {
-  fireEvent.click(await screen.findByRole("button", { name: listName }));
+  fireEvent.click(await screen.findByRole("link", { name: listName }));
   fireEvent.click(await screen.findByRole("button", { name: `Actions for ${taskTitle}` }));
   return screen.findByRole("dialog", { name: `Actions for ${taskTitle}` });
 }
@@ -145,20 +145,29 @@ describe("acting on a Task from the command palette", () => {
 
     fireEvent.click(within(dialog).getByRole("option", { name: "Start Pomo" }));
 
-    expect(await within(dialog).findByRole("option", { name: "Deep Work 50" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("option", { name: "Quick 15" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("option", { name: "Custom…" })).toBeInTheDocument();
-
-    // Picker order: Deep Work 50 (0), Quick 15 (1), Custom… (2).
-    fireEvent.keyDown(dialog, { key: "ArrowDown" });
-    fireEvent.keyDown(dialog, { key: "Enter" });
-
+    // Wait for the whole picker (Timers load asynchronously) before moving.
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Focus timer running, 15:00 left" }),
-      ).toBeInTheDocument(),
+        within(dialog)
+          .getAllByRole("option")
+          .map((o) => o.textContent),
+      ).toEqual(["Deep Work 50", "Quick 15", "Custom…"]),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Focus timer running, 15:00 left" }));
+    const quick = within(dialog).getByRole("option", { name: "Quick 15" });
+
+    fireEvent.keyDown(dialog, { key: "ArrowDown" });
+    await waitFor(() =>
+      expect(
+        dialog.querySelector("[aria-activedescendant]")?.getAttribute("aria-activedescendant"),
+      ).toBe(quick.id),
+    );
+    fireEvent.keyDown(dialog, { key: "Enter" });
+
+    // The clock may tick between start and assertion: 15:00 or 14:5x.
+    const badge = await screen.findByRole("button", {
+      name: /^Focus timer running, (15:00|14:\d\d) left$/,
+    });
+    fireEvent.click(badge);
     // A running stage states its link as text, not as an inert select.
     expect(await within(screen.getByRole("main")).findByText(/Focusing on/)).toHaveTextContent(
       task.title,
@@ -172,14 +181,13 @@ describe("acting on a Task from the command palette", () => {
 
     fireEvent.click(within(dialog).getByRole("option", { name: "Start Pomo" }));
 
-    expect(within(dialog).getByRole("option", { name: "Focus: 25min" })).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("option", { name: "Focus: 25min" }));
+    fireEvent.click(await within(dialog).findByRole("option", { name: "Focus: 25min" }));
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Focus timer running, 25:00 left" }),
-      ).toBeInTheDocument(),
-    );
+    expect(
+      await screen.findByRole("button", {
+        name: /^Focus timer running, (25:00|24:\d\d) left$/,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("Custom… lands on the Focus view, where a one-off length is adjustable", async () => {
@@ -192,10 +200,10 @@ describe("acting on a Task from the command palette", () => {
     fireEvent.click(within(dialog).getByRole("option", { name: "Custom…" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
-    // A running stage states its link as text, not as an inert select.
-    expect(await within(screen.getByRole("main")).findByText(/Focusing on/)).toHaveTextContent(
-      task.title,
-    );
+    // Linked and idle: the length is still the user's to set (#449).
+    const main = within(screen.getByRole("main"));
+    expect(await main.findByRole("button", { name: `Linked: ${task.title}` })).toBeInTheDocument();
+    expect(main.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 
   it("steps back from a picker to the verb list on Escape", async () => {

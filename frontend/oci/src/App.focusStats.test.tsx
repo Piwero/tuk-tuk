@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { pickDate } from "./test/pickDate";
 import { App } from "./App";
 import { fakeFocusSession, fakeHabit, fakeTask, installFakeApi } from "./test/fakeApi";
 
@@ -48,6 +49,9 @@ describe("Focus statistics", () => {
     render(<App />);
     await openFocusStats();
 
+    expect(await screen.findByText("Total: 55 min")).toBeInTheDocument();
+    expect(screen.getByText("Daily average: 8 min")).toBeInTheDocument();
+
     const daily = await screen.findByRole("list", { name: "Daily focus" });
     expect(within(daily).getByRole("listitem", { name: "Jul 2: 30 min" })).toBeInTheDocument();
     expect(within(daily).getByRole("listitem", { name: "Jul 3: 25 min" })).toBeInTheDocument();
@@ -85,7 +89,7 @@ describe("Focus statistics", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Jun 10: 30 min")).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-06-01" } });
+    pickDate("From", "2026-06-01");
 
     expect(await screen.findByRole("listitem", { name: "Jun 10: 30 min" })).toBeInTheDocument();
     expect(
@@ -152,13 +156,68 @@ describe("Session history", () => {
     render(<App />);
     await openFocusStats();
 
-    const history = await screen.findByRole("list", { name: "Focus Sessions" });
+    const history = await screen.findByRole("list", { name: "Focus Sessions on Jul 3" });
     const rows = within(history).getAllByRole("listitem");
     expect(rows[0]).toHaveTextContent("pomo");
     expect(rows[0]).toHaveTextContent("25 min");
     expect(rows[0]).toHaveTextContent("Write report");
     expect(rows[1]).toHaveTextContent("stopwatch");
     expect(rows[1]).toHaveTextContent("morning");
+  });
+
+  it("heads each day's group with that day's total", async () => {
+    installFakeApi({
+      focusSessions: [
+        fakeFocusSession({ started_at: "2026-07-03T08:00:00Z", ended_at: "2026-07-03T08:25:00Z" }),
+        fakeFocusSession({ started_at: "2026-07-03T10:00:00Z", ended_at: "2026-07-03T10:30:00Z" }),
+      ],
+    });
+    render(<App />);
+    await openFocusStats();
+
+    const day = await screen.findByRole("region", { name: "Jul 3" });
+    expect(within(day).getByText("Total 55 min")).toBeInTheDocument();
+  });
+
+  it("groups sessions by local start day, newest first, within the selected range", async () => {
+    installFakeApi({
+      focusSessions: [
+        // Starts Jul 2 locally even though it ends Jul 3: day follows the start.
+        fakeFocusSession({
+          started_at: "2026-07-02T23:45:00Z",
+          ended_at: "2026-07-03T00:15:00Z",
+          note: "overnight",
+        }),
+        fakeFocusSession({
+          started_at: "2026-07-03T10:00:00Z",
+          ended_at: "2026-07-03T10:30:00Z",
+          note: "latest",
+        }),
+        fakeFocusSession({
+          started_at: "2026-06-10T09:00:00Z",
+          ended_at: "2026-06-10T09:30:00Z",
+          note: "outside range",
+        }),
+      ],
+    });
+    render(<App />);
+    await openFocusStats();
+
+    const latest = await screen.findByRole("region", { name: "Jul 3" });
+    expect(within(latest).getByRole("heading", { name: "Jul 3", level: 3 })).toBeInTheDocument();
+    expect(within(latest).getByText("latest")).toBeInTheDocument();
+    const previous = screen.getByRole("region", { name: "Jul 2" });
+    expect(within(previous).getByText("overnight")).toBeInTheDocument();
+    expect(
+      latest.compareDocumentPosition(previous) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.queryByText("outside range")).not.toBeInTheDocument();
+
+    pickDate("From", "2026-07-03");
+    expect(screen.queryByRole("region", { name: "Jul 2" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Daily average: 30 min")).toBeInTheDocument();
+    pickDate("To", "2026-07-02");
+    expect(screen.queryByText(/Daily average:/)).not.toBeInTheDocument();
   });
 
   it("shows an empty state with no recorded sessions", async () => {
@@ -175,12 +234,8 @@ describe("Session history", () => {
     await openFocusStats();
 
     fireEvent.click(screen.getByRole("button", { name: "Add session" }));
-    fireEvent.change(screen.getByLabelText("Started"), {
-      target: { value: "2026-07-02T09:00" },
-    });
-    fireEvent.change(screen.getByLabelText("Ended"), {
-      target: { value: "2026-07-02T09:45" },
-    });
+    fireEvent.change(screen.getByLabelText("Started"), { target: { value: "2026-07-02T09:00" } });
+    fireEvent.change(screen.getByLabelText("Ended"), { target: { value: "2026-07-02T09:45" } });
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "backfilled" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 

@@ -1,3 +1,5 @@
+import "./CalendarView.css";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -180,11 +182,15 @@ function selectEntry(
 function handleEntryContextMenu(
   event: React.MouseEvent,
   entry: Entry,
-  onQuickStart?: (task: Task, position: { x: number; y: number }) => void,
+  onQuickStart?: (task: Task, position: { x: number; y: number }, origin: HTMLElement) => void,
 ): void {
   if (entry.kind === "task") {
     event.preventDefault();
-    onQuickStart?.(entry.task, { x: event.clientX, y: event.clientY });
+    onQuickStart?.(
+      entry.task,
+      { x: event.clientX, y: event.clientY },
+      event.currentTarget as HTMLElement,
+    );
   }
 }
 
@@ -287,6 +293,7 @@ export function CalendarView({
   const [quickStart, setQuickStart] = useState<{
     task: Task;
     position: { x: number; y: number };
+    origin: HTMLElement;
   } | null>(null);
   const timeColumnsRef = useRef<HTMLDivElement | null>(null);
   const isNarrow = useNarrowCalendar();
@@ -865,8 +872,8 @@ export function CalendarView({
                       }}
                       onContextMenu={(event) => {
                         event.stopPropagation();
-                        handleEntryContextMenu(event, entry, (task, position) =>
-                          setQuickStart({ task, position }),
+                        handleEntryContextMenu(event, entry, (task, position, origin) =>
+                          setQuickStart({ task, position, origin }),
                         );
                       }}
                     >
@@ -887,8 +894,8 @@ export function CalendarView({
                       }}
                       onContextMenu={(event) => {
                         event.stopPropagation();
-                        handleEntryContextMenu(event, entry, (task, position) =>
-                          setQuickStart({ task, position }),
+                        handleEntryContextMenu(event, entry, (task, position, origin) =>
+                          setQuickStart({ task, position, origin }),
                         );
                       }}
                     >
@@ -955,8 +962,8 @@ export function CalendarView({
         {...entryDragProps(entry)}
         onClick={() => selectEntry(entry, onSelect, onSelectEvent)}
         onContextMenu={(event) =>
-          handleEntryContextMenu(event, entry, (task, position) =>
-            setQuickStart({ task, position }),
+          handleEntryContextMenu(event, entry, (task, position, origin) =>
+            setQuickStart({ task, position, origin }),
           )
         }
       >
@@ -1050,8 +1057,8 @@ export function CalendarView({
                   }}
                   onContextMenu={(event) => {
                     event.stopPropagation();
-                    handleEntryContextMenu(event, entry, (task, position) =>
-                      setQuickStart({ task, position }),
+                    handleEntryContextMenu(event, entry, (task, position, origin) =>
+                      setQuickStart({ task, position, origin }),
                     );
                   }}
                 >
@@ -1175,6 +1182,7 @@ export function CalendarView({
           />
           <Hint hintKey="calendar-today">
             <button
+              className="btn-secondary"
               type="button"
               aria-label="Go to today"
               onClick={() => setAnchor(localDayOf(new Date()))}
@@ -1191,6 +1199,7 @@ export function CalendarView({
         <div className="calendar-modes">
           {MODES.map((candidate) => (
             <button
+              className="btn-secondary"
               key={candidate}
               type="button"
               aria-pressed={mode === candidate}
@@ -1292,8 +1301,10 @@ export function CalendarView({
               </div>
             )}
             <div className="calendar-draft-actions">
-              <button type="submit">Add</button>
-              <button type="button" onClick={() => resetDraft()}>
+              <button className="btn-primary" type="submit">
+                Add
+              </button>
+              <button className="btn-quiet" type="button" onClick={() => resetDraft()}>
                 Cancel
               </button>
             </div>
@@ -1362,6 +1373,7 @@ export function CalendarView({
         <PomoQuickStartMenu
           task={quickStart.task}
           position={quickStart.position}
+          origin={quickStart.origin}
           onClose={() => setQuickStart(null)}
         />
       )}

@@ -1,3 +1,5 @@
+import "./ListForm.css";
+
 import { useState } from "react";
 
 import { type Folder, type TaskList } from "../api";
@@ -107,8 +109,10 @@ export function ListForm({
           onClose={() => setPickingEmoji(false)}
         />
       )}
-      <button type="submit">Save</button>
-      <button type="button" onClick={onCancel}>
+      <button className="btn-primary" type="submit">
+        Save
+      </button>
+      <button className="btn-quiet" type="button" onClick={onCancel}>
         Cancel
       </button>
     </form>

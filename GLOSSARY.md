@@ -98,6 +98,9 @@ A Key Result's progress: `(current - start) / (target - start)`, clamped to 0.0-
 A Goal's overall progress: the unweighted mean of its Key Results' ratios, rounded to two places. Null (not zero) for a Goal with no Key Results, so "unmeasured" never reads as "failed." Computed live only while a Goal is active. The moment it leaves `active` — closed by its window passing, or abandoned — it **settles**: the Score is frozen as `final_score` and reported from there, so a Check-in backfilled afterward never rewrites it, and never contradicts it on the same payload.
 _Avoid_: Weighted score (rejected — see ADR 0012)
 
+**Pace**:
+How far through its window an active Goal is: elapsed days ÷ total days of the Goal's window, clamped to 0–1. The Goal card's verdict is Score minus pace in percentage points (ahead, on pace or behind). Shown for active Goals only; a settled Goal has no pace.
+
 **Focused Goal**:
 The one Goal, of possibly several active ones, carrying `is_focused`. Setting it clears the previous one in the same transaction, enforced at the service layer (not a database constraint) — the rule the next reader will actually find. Stand-up shows only the Focused Goal and its Key Result progress, never a list of every active Goal. Only an active Goal can be focused: settling drops the flag, since the morning ritual must not keep showing an outcome already closed or abandoned.
 

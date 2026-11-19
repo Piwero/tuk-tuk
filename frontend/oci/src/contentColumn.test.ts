@@ -1,8 +1,5 @@
+import { readStylesheets } from "./test/stylesheets";
 import { describe, expect, it } from "vitest";
-
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import process from "node:process";
 
 /** Which views fill the content area and which keep the shared reading
  * measure is a pure CSS decision (issue #196). jsdom applies no stylesheet
@@ -11,24 +8,15 @@ import process from "node:process";
  * list, Search, Kanban) fill the width; the prose surfaces (Settings,
  * Stand-up) stay on `--content-max`. */
 
-const css: string = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
+const css: string = readStylesheets();
 
 /** The selector list of the first rule whose body is `max-width:
  * var(--content-max)` — the App-layout content-column rule. */
 function measureSelectors(): string[] {
-  const declMatch = /max-width:\s*var\(--content-max\)/.exec(css);
-  expect(declMatch, "content-column declaration not found").not.toBeNull();
-  const declIndex = (declMatch as RegExpExecArray).index;
-  const before = css.slice(0, declIndex);
-  const braceIndex = before.lastIndexOf("{");
-  const prevRuleEnd = before.lastIndexOf("}");
-  const commentEnd = before.lastIndexOf("*/");
-  const selectorStart = Math.max(prevRuleEnd, commentEnd + 1) + 1;
-  return before
-    .slice(selectorStart, braceIndex)
-    .split(",")
-    .map((selector) => selector.trim())
-    .filter((selector) => selector.length > 0 && !selector.startsWith("/*"));
+  const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const measured = rules.filter((rule) => /max-width:\s*var\(--content-max\)/.test(rule[2] ?? ""));
+  expect(measured.length, "content-column declaration not found").toBeGreaterThan(0);
+  return measured.flatMap((rule) => (rule[1] ?? "").split(",").map((selector) => selector.trim()));
 }
 
 describe("content column (issue #196)", () => {
@@ -63,6 +51,23 @@ describe("content column (issue #196)", () => {
     const strip = /\.shortcut-hints\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
     expect(strip, "`.shortcut-hints` rule not found").not.toBe("");
     expect(strip).not.toMatch(/max-width:\s*var\(--content-max\)/);
+  });
+
+  it("pins the shortcut hint strip to the foot of main, after the content (issue #434)", () => {
+    // `main` is a flex column: the content wrapper grows into the spare
+    // height (never shrinks), so under short content the strip sits at the
+    // viewport foot; under long content it stays in flow after the last row
+    // and covers nothing.
+    const main = /(?:^|\n)\s*main\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
+    expect(main).toMatch(/display:\s*flex/);
+    expect(main).toMatch(/flex-direction:\s*column/);
+    const content = /\.main-content\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
+    expect(content).toMatch(/flex:\s*1 0 auto/);
+    const strip = /\.shortcut-hints\s*\{([^{}]*)\}/.exec(css)?.[1] ?? "";
+    expect(strip).not.toMatch(/position:\s*(fixed|sticky|absolute)/);
+    expect(css).toMatch(
+      /@media \(max-width: 720px\), \(pointer: coarse\)\s*\{\s*\.shortcut-hints\s*\{\s*display:\s*none/,
+    );
   });
 
   it("never caps `.tasks`, so the aligned-row container query keys off the real width", () => {

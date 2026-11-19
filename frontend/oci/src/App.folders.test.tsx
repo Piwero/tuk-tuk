@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 function folderRowOf(name: string): HTMLElement {
-  return closestOrThrow(screen.getByRole("button", { name }), ".folder-row");
+  return closestOrThrow(screen.getByRole("link", { name }), ".folder-row");
 }
 
 describe("Collapsing a Folder", () => {
@@ -29,17 +29,17 @@ describe("Collapsing a Folder", () => {
     installFakeApi({ folders: [work], lists: [INBOX, backend] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("button", { name: "Backend" });
-    await user.click(screen.getByRole("button", { name: "Inbox" }));
+    await screen.findByRole("link", { name: "Backend" });
+    await user.click(screen.getByRole("link", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Collapse folder Work" }));
 
-    expect(screen.queryByRole("button", { name: "Backend" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Backend" })).not.toBeInTheDocument();
     // The heading never changed — collapsing is not selecting.
     expect(screen.getByRole("heading", { name: "Inbox" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Expand folder Work" }));
-    expect(screen.getByRole("button", { name: "Backend" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Backend" })).toBeInTheDocument();
   });
 
   it("remembers a Folder's collapsed state across a reload, defaulting new Folders to expanded", async () => {
@@ -50,7 +50,7 @@ describe("Collapsing a Folder", () => {
     installFakeApi({ folders: [work, home], lists: [INBOX, backend, chores] });
     const user = userEvent.setup();
     const first = render(<App />);
-    await screen.findByRole("button", { name: "Backend" });
+    await screen.findByRole("link", { name: "Backend" });
 
     await user.click(screen.getByRole("button", { name: "Collapse folder Work" }));
     first.unmount();
@@ -59,9 +59,9 @@ describe("Collapsing a Folder", () => {
     render(<App />);
 
     expect(await screen.findByRole("button", { name: "Expand folder Work" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Backend" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Backend" })).not.toBeInTheDocument();
     // Home was never collapsed — still expanded, same as any Folder created since.
-    expect(screen.getByRole("button", { name: "Chores" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Chores" })).toBeInTheDocument();
   });
 
   it("clicking a Folder's name selects it without the chevron toggling collapse", async () => {
@@ -71,13 +71,13 @@ describe("Collapsing a Folder", () => {
     const user = userEvent.setup();
     render(<App />);
     const sidebar = screen.getByRole("complementary");
-    await within(sidebar).findByRole("button", { name: "Backend" });
+    await within(sidebar).findByRole("link", { name: "Backend" });
 
-    await user.click(within(sidebar).getByRole("button", { name: "Work" }));
+    await user.click(within(sidebar).getByRole("link", { name: "Work" }));
 
     expect(await screen.findByRole("heading", { name: "Work", level: 1 })).toBeInTheDocument();
     // Selecting the Folder didn't collapse it.
-    expect(within(sidebar).getByRole("button", { name: "Backend" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Backend" })).toBeInTheDocument();
   });
 });
 
@@ -97,11 +97,11 @@ describe("Folder drag and drop", () => {
     const groceries = fakeList("Groceries");
     const api = installFakeApi({ folders: [work], lists: [INBOX, groceries] });
     render(<App />);
-    await screen.findByRole("button", { name: "Groceries" });
+    await screen.findByRole("link", { name: "Groceries" });
 
     const dataTransfer = fakeDataTransfer();
     fireEvent.dragStart(
-      closestOrThrow(screen.getByRole("button", { name: "Groceries" }), ".list-row"),
+      closestOrThrow(screen.getByRole("link", { name: "Groceries" }), ".list-row"),
       { dataTransfer },
     );
     const folderRow = folderRowOf("Work");
@@ -112,7 +112,7 @@ describe("Folder drag and drop", () => {
     expect(folderRow).not.toHaveClass("drag-over");
 
     const workLists = screen.getByRole("list", { name: "Lists in Work" });
-    expect(await within(workLists).findByRole("button", { name: "Groceries" })).toBeInTheDocument();
+    expect(await within(workLists).findByRole("link", { name: "Groceries" })).toBeInTheDocument();
     const patch = api.requests.find(
       (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${groceries.id}`,
     );
@@ -149,21 +149,21 @@ describe("Folder drag and drop", () => {
     installFakeApi({ folders: [work], lists: [INBOX, backend, groceries] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("button", { name: "Backend" });
-    await user.click(screen.getByRole("button", { name: "Inbox" }));
+    await screen.findByRole("link", { name: "Backend" });
+    await user.click(screen.getByRole("link", { name: "Inbox" }));
 
     await user.click(screen.getByRole("button", { name: "Collapse folder Work" }));
-    expect(screen.queryByRole("button", { name: "Backend" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Backend" })).not.toBeInTheDocument();
 
     const dataTransfer = fakeDataTransfer();
     fireEvent.dragStart(
-      closestOrThrow(screen.getByRole("button", { name: "Groceries" }), ".list-row"),
+      closestOrThrow(screen.getByRole("link", { name: "Groceries" }), ".list-row"),
       { dataTransfer },
     );
     const folderRow = folderRowOf("Work");
     fireEvent.dragEnter(folderRow, { dataTransfer });
 
-    expect(screen.getByRole("button", { name: "Backend" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Backend" })).toBeInTheDocument();
     // Still just a hover — the Folder was never selected/opened.
     expect(screen.getByRole("heading", { name: "Inbox" })).toBeInTheDocument();
   });
@@ -202,7 +202,7 @@ describe("Filing a List into a Folder without dragging", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     const workLists = await screen.findByRole("list", { name: "Lists in Work" });
-    expect(within(workLists).getByRole("button", { name: "Backend" })).toBeInTheDocument();
+    expect(within(workLists).getByRole("link", { name: "Backend" })).toBeInTheDocument();
     const created = api.lists.find((l) => l.name === "Backend");
     expect(created?.folder_id).toBe(work.id);
   });
@@ -213,7 +213,7 @@ describe("Filing a List into a Folder without dragging", () => {
     const api = installFakeApi({ folders: [work], lists: [INBOX, backend] });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("button", { name: "Backend" });
+    await screen.findByRole("link", { name: "Backend" });
 
     await user.click(screen.getByRole("button", { name: "Edit Backend" }));
     expect(screen.getByLabelText("Folder")).toHaveValue(String(work.id));
@@ -222,7 +222,7 @@ describe("Filing a List into a Folder without dragging", () => {
 
     await screen.findByText(/no lists here yet/i);
     const workLists = screen.getByRole("list", { name: "Lists in Work" });
-    expect(within(workLists).queryByRole("button", { name: "Backend" })).not.toBeInTheDocument();
+    expect(within(workLists).queryByRole("link", { name: "Backend" })).not.toBeInTheDocument();
     const patch = api.requests.find(
       (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${backend.id}`,
     );
@@ -255,9 +255,9 @@ describe("The Folder view", () => {
     });
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("button", { name: "Backend" });
+    await screen.findByRole("link", { name: "Backend" });
 
-    await user.click(screen.getByRole("button", { name: "Work" }));
+    await user.click(screen.getByRole("link", { name: "Work" }));
 
     expect(await screen.findByRole("heading", { name: "Work" })).toBeInTheDocument();
     const backendGroup = screen.getByRole("list", { name: "Tasks in Backend" });
@@ -273,14 +273,14 @@ describe("The Folder view", () => {
     installFakeApi({ folders: [work], lists: [INBOX, backend] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Work" }));
+    await user.click(await screen.findByRole("link", { name: "Work" }));
     await screen.findByRole("heading", { name: "Work", level: 1 });
 
     const main = document.querySelector("main");
     if (main === null) {
       throw new Error("main not found");
     }
-    await user.click(within(main).getByRole("button", { name: "Backend" }));
+    await user.click(await within(main).findByRole("button", { name: "Backend" }));
 
     // The List belongs to Work, so its own header now shows the breadcrumb.
     const heading = await screen.findByRole("heading", { level: 1 });
@@ -294,7 +294,7 @@ describe("The Folder view", () => {
     const api = installFakeApi({ folders: [work], lists: [INBOX, backend], tasks: [build] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Work" }));
+    await user.click(await screen.findByRole("link", { name: "Work" }));
 
     await user.click(await screen.findByRole("checkbox", { name: "Complete Fix build" }));
 
@@ -311,7 +311,7 @@ describe("The Folder view", () => {
     const api = installFakeApi({ folders: [work], lists: [INBOX, backend, frontend] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Work" }));
+    await user.click(await screen.findByRole("link", { name: "Work" }));
 
     const input = await screen.findByPlaceholderText("Add a task to Backend…");
     await user.type(input, "Ship it{enter}");
@@ -329,7 +329,7 @@ describe("The Folder view", () => {
     installFakeApi({ folders: [work] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Work" }));
+    await user.click(await screen.findByRole("link", { name: "Work" }));
 
     expect(await screen.findByText(/has no lists yet/i)).toBeInTheDocument();
   });
@@ -343,7 +343,7 @@ describe("Breadcrumb", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Backend" }));
+    await user.click(await screen.findByRole("link", { name: "Backend" }));
     const heading = await screen.findByRole("heading", { level: 1 });
     expect(heading).toHaveTextContent("Work / Backend");
 
@@ -356,7 +356,7 @@ describe("Breadcrumb", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Groceries" }));
+    await user.click(await screen.findByRole("link", { name: "Groceries" }));
     const heading = await screen.findByRole("heading", { level: 1 });
     expect(heading).toHaveTextContent("Groceries");
     expect(within(heading).queryByRole("button")).not.toBeInTheDocument();

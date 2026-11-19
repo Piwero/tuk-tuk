@@ -1,3 +1,6 @@
+import { EmptyState, LoadError, SkeletonRows } from "./TaskViewState";
+import { DatePopover } from "./DatePopover";
+import "./StandupView.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -21,6 +24,7 @@ import {
 } from "../api";
 import { localDayOf, browserTimeZone, shortDayLabel, weekdayRecordLabel } from "../dates";
 import { readDragPayload, startDrag } from "../dnd";
+import { useLongPressReveal } from "../longPressReveal";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { IconButton } from "./IconButton";
 import { Icon, type IconName } from "./Icon";
@@ -75,22 +79,29 @@ export function StandupView(): JSX.Element {
     }
   }, []);
 
+  // The selected day's entry drives the loading/empty/error states (#442).
+  const [entryStatus, setEntryStatus] = useState<"loading" | "ready" | "error">("loading");
+
   const loadEntry = useCallback(async (date: string): Promise<void> => {
+    setEntryStatus("loading");
     try {
       const loaded = await fetchStandupEntry(date);
       if (selectedDateRef.current !== date) {
         return;
       }
       setEntry(loaded);
+      setEntryStatus("ready");
     } catch (error) {
-      if (error instanceof ApiError && error.code === "not_found") {
-        if (selectedDateRef.current !== date) {
-          return;
-        }
-        setEntry(null);
+      if (selectedDateRef.current !== date) {
         return;
       }
-      throw error;
+      if (error instanceof ApiError && error.code === "not_found") {
+        setEntry(null);
+        setEntryStatus("ready");
+        return;
+      }
+      setEntry(null);
+      setEntryStatus("error");
     }
   }, []);
 
@@ -319,37 +330,14 @@ export function StandupView(): JSX.Element {
                   </form>
                 </li>
               ) : (
-                <li
+                <BulletRow
                   key={bullet.id}
-                  className="standup-bullet"
-                  draggable
-                  onDragStart={(event) =>
-                    startDrag(event, { kind: "standup-bullet", id: bullet.id })
-                  }
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const payload = readDragPayload(event);
-                    if (payload?.kind === "standup-bullet") {
-                      void moveBulletBefore(payload.id, bullet);
-                    }
-                  }}
-                >
-                  <span className="standup-bullet-text">{bullet.text}</span>
-                  <div className="standup-bullet-actions">
-                    <IconButton
-                      icon="pencil"
-                      label={`Edit ${label} bullet`}
-                      onClick={() => setBulletEditor({ id: bullet.id, text: bullet.text })}
-                    />
-                    <IconButton
-                      icon="x"
-                      label={`Delete ${label} bullet`}
-                      onClick={() => void removeBullet(bullet)}
-                    />
-                  </div>
-                </li>
+                  bullet={bullet}
+                  label={label}
+                  onMoveBefore={(id) => void moveBulletBefore(id, bullet)}
+                  onEdit={() => setBulletEditor({ id: bullet.id, text: bullet.text })}
+                  onDelete={() => void removeBullet(bullet)}
+                />
               ),
             )
           )}
@@ -363,6 +351,7 @@ export function StandupView(): JSX.Element {
           className="standup-add-form"
         >
           <input
+            id={`standup-add-${section}`}
             aria-label={`Add a ${label} bullet`}
             placeholder={`Add to ${label}…`}
             value={drafts[section]}
@@ -383,15 +372,13 @@ export function StandupView(): JSX.Element {
         </div>
         <div className="standup-header-right">
           <div className="standup-date-picker">
-            <label htmlFor="standup-date" className="visually-hidden">
-              Stand-up date
-            </label>
-            <input
+            <DatePopover
               id="standup-date"
-              type="date"
+              label="Stand-up date"
               value={selectedDate}
-              onChange={(event) => {
-                setSelectedDate(event.target.value);
+              onChange={(day) => {
+                if (day === "") return;
+                setSelectedDate(day);
                 setHistoryOpen(false);
               }}
             />
@@ -499,9 +486,71 @@ export function StandupView(): JSX.Element {
         </div>
       )}
 
-      <div className="standup-sections">
-        {SECTIONS.map(({ key, label, icon }) => renderSection(key, label, icon))}
-      </div>
+      {entryStatus === "loading" ? (
+        <SkeletonRows label="Loading stand-up" count={3} />
+      ) : entryStatus === "error" ? (
+        <LoadError what="this stand-up" onRetry={() => void loadEntry(selectedDate)} />
+      ) : (
+        <>
+          {(entry === null || entry.bullets.length === 0) && (
+            <EmptyState
+              title="No stand-up for this day yet"
+              description="A Stand-up is what you did yesterday, what you'll do today and what's blocking you."
+              actionLabel="Add a bullet"
+              onAction={() => document.getElementById("standup-add-yesterday")?.focus()}
+            />
+          )}
+          <div className="standup-sections">
+            {SECTIONS.map(({ key, label, icon }) => renderSection(key, label, icon))}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+/** A Stand-up bullet at rest (#429): its text spans the whole column while
+ * Edit/Delete overlay the trailing edge on hover, keyboard focus or a touch
+ * long-press (the same gesture Task rows and Goal cards use). */
+function BulletRow({
+  bullet,
+  label,
+  onMoveBefore,
+  onEdit,
+  onDelete,
+}: {
+  bullet: StandupBullet;
+  label: string;
+  onMoveBefore: (draggedId: number) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}): JSX.Element {
+  const reveal = useLongPressReveal();
+
+  return (
+    <li
+      className="standup-bullet"
+      draggable
+      data-actions-open={reveal.dataActionsOpen}
+      onTouchStart={reveal.onTouchStart}
+      onTouchEnd={reveal.onTouchEnd}
+      onTouchMove={reveal.onTouchMove}
+      onTouchCancel={reveal.onTouchCancel}
+      onClick={reveal.onClick}
+      onDragStart={(event) => startDrag(event, { kind: "standup-bullet", id: bullet.id })}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const payload = readDragPayload(event);
+        if (payload?.kind === "standup-bullet") onMoveBefore(payload.id);
+      }}
+    >
+      <span className="standup-bullet-text">{bullet.text}</span>
+      <div className="standup-bullet-actions">
+        <IconButton icon="pencil" label={`Edit ${label} bullet`} onClick={onEdit} />
+        <IconButton icon="x" label={`Delete ${label} bullet`} onClick={onDelete} />
+      </div>
+    </li>
   );
 }

@@ -1,3 +1,5 @@
+import "./HabitForm.css";
+import "./SettingsView.css";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -177,7 +179,7 @@ function GoogleAccountCalendars({
       {error ? (
         <p role="alert">
           {error}{" "}
-          <button type="button" onClick={handleOpen}>
+          <button className="btn-secondary" type="button" onClick={handleOpen}>
             Retry
           </button>
         </p>
@@ -222,7 +224,12 @@ function GoogleAccountCalendars({
               ))}
             </ul>
           )}
-          <button type="button" onClick={() => void handleRefresh()} disabled={refreshing}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+          >
             {refreshing ? "Refreshing…" : "Refresh calendars"}
           </button>
         </>
@@ -401,7 +408,12 @@ function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps):
         {status.client_secret_set && !overwriteSecret ? (
           <p className="settings-hint">
             A client secret is already saved.{" "}
-            <button type="button" onClick={() => setOverwriteSecret(true)} disabled={pending}>
+            <button
+              className="btn-quiet"
+              type="button"
+              onClick={() => setOverwriteSecret(true)}
+              disabled={pending}
+            >
               Replace it
             </button>
           </p>
@@ -423,7 +435,12 @@ function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps):
           {pending ? "Saving…" : "Save Google credentials"}
         </button>
         {status.configured && (
-          <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => void handleRemove()}
+            disabled={pending}
+          >
             Remove Google integration
           </button>
         )}
@@ -619,6 +636,7 @@ function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Eleme
             />
           )}
           <button
+            className="btn-secondary"
             type="button"
             onClick={handleRefreshModels}
             disabled={modelsPending || !ollamaBaseUrl}
@@ -633,6 +651,7 @@ function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Eleme
           {pending ? "Saving…" : "Save Assist settings"}
         </button>
         <button
+          className="btn-secondary"
           type="button"
           onClick={handleTest}
           disabled={testPending || isDirty}
@@ -641,7 +660,12 @@ function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Eleme
           {testPending ? "Testing…" : "Test connection"}
         </button>
         {(config.ollama_base_url !== null || config.model !== null) && (
-          <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => void handleRemove()}
+            disabled={pending}
+          >
             Remove
           </button>
         )}
@@ -786,7 +810,12 @@ function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX
         {config.api_key_set && !overwriteApiKey ? (
           <p className="settings-hint">
             An API key is already saved.{" "}
-            <button type="button" onClick={() => setOverwriteApiKey(true)} disabled={pending}>
+            <button
+              className="btn-quiet"
+              type="button"
+              onClick={() => setOverwriteApiKey(true)}
+              disabled={pending}
+            >
               Replace it
             </button>
           </p>
@@ -819,6 +848,7 @@ function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX
           {pending ? "Saving…" : "Save Assistant settings"}
         </button>
         <button
+          className="btn-secondary"
           type="button"
           onClick={handleTest}
           disabled={testPending || isDirty}
@@ -827,7 +857,12 @@ function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX
           {testPending ? "Testing…" : "Test Assistant connection"}
         </button>
         {(config.base_url !== null || config.model !== null || config.api_key_set) && (
-          <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => void handleRemove()}
+            disabled={pending}
+          >
             Remove Assistant configuration
           </button>
         )}
@@ -943,7 +978,12 @@ function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): JSX.Element
         {config.livekit_api_secret_set && !overwriteSecret ? (
           <p className="settings-hint">
             A LiveKit API secret is already saved.{" "}
-            <button type="button" onClick={() => setOverwriteSecret(true)} disabled={pending}>
+            <button
+              className="btn-quiet"
+              type="button"
+              onClick={() => setOverwriteSecret(true)}
+              disabled={pending}
+            >
               Replace it
             </button>
           </p>
@@ -967,7 +1007,12 @@ function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): JSX.Element
         {(config.livekit_url !== null ||
           config.livekit_api_key !== null ||
           config.livekit_api_secret_set) && (
-          <button type="button" onClick={() => void handleRemove()} disabled={pending}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => void handleRemove()}
+            disabled={pending}
+          >
             Remove Voice configuration
           </button>
         )}
@@ -1122,6 +1167,7 @@ function DatabaseSettingsForm(): JSX.Element {
         />
       </label>
       <button
+        className="btn-secondary"
         type="button"
         disabled={testing || connectionUrl.trim() === ""}
         onClick={() => void handleTestConnection()}
@@ -1499,6 +1545,7 @@ export function SettingsView({
                   <p>Default shortcut</p>
                 )}
                 <button
+                  className="btn-secondary"
                   type="button"
                   onClick={() => {
                     setOverlayShortcut(DEFAULT_OVERLAY_SHORTCUT);
@@ -1563,7 +1610,11 @@ export function SettingsView({
                               </a>
                             </p>
                           )}
-                          <button type="button" onClick={() => void handleDisconnect(account.id)}>
+                          <button
+                            className="btn-secondary"
+                            type="button"
+                            onClick={() => void handleDisconnect(account.id)}
+                          >
                             Disconnect
                           </button>
                         </li>

@@ -87,7 +87,7 @@ export function zonedTime(iso: string, timeZone: string | null): string {
       timeZone: timeZone ?? undefined,
       hour: "2-digit",
       minute: "2-digit",
-      hour12: false,
+      hourCycle: "h23",
     });
     zonedTimeFormats.set(key, format);
   }
@@ -300,11 +300,20 @@ export function dueInstant(task: Task): number | null {
  * - "weekdayLong": "Monday" (history row label)
  * - "short": "Jul 6" (compact day label)
  * - "shortEuro": "10/08/26" (history row label)
+ * - "date": "Jul 6, 2026" (Goal window, where the year matters)
  * - "time": "14:00" (24-hour wall clock)
  * - "dateTime": "Jul 10, 14:00" — "short" and "time" composed
  */
 export type DateStyle =
-  "full" | "month" | "weekday" | "weekdayLong" | "short" | "shortEuro" | "time" | "dateTime";
+  | "full"
+  | "month"
+  | "weekday"
+  | "weekdayLong"
+  | "short"
+  | "shortEuro"
+  | "date"
+  | "time"
+  | "dateTime";
 
 // Fixed locales, deterministic output: en-US for month/weekday names, en-GB
 // for the numeric day/month/year order "shortEuro" wants — consistent with
@@ -319,13 +328,14 @@ const FORMATTERS: { [S in Exclude<DateStyle, "dateTime">]: Intl.DateTimeFormat }
   month: new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }),
   weekday: new Intl.DateTimeFormat("en-US", { weekday: "short" }),
   weekdayLong: new Intl.DateTimeFormat("en-US", { weekday: "long" }),
+  date: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }),
   short: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }),
   shortEuro: new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "2-digit",
     year: "2-digit",
   }),
-  time: new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }),
+  time: new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
 };
 
 /** A Date rendered in a named style — the app's one formatting function. */
@@ -357,10 +367,37 @@ export function weekdayRecordLabel(dayIso: string): string {
  * the same wall-clock convention when no explicit timezone applies. */
 type Scheduled = Pick<Task, "start_date" | "due_date" | "is_all_day">;
 
-/** A compact human label: "Jul 6", "Jul 6 – Jul 8", "Jul 10, 14:00–15:30". */
-export function formatSchedule(task: Scheduled): string | null {
+/** Where a date is rendered, which decides what it can leave unsaid:
+ * - "today": the view already says "today", so a timed Task shows only its
+ *   time, an all-day Task nothing, and lateness within the last week reads
+ *   "Yesterday" or a weekday.
+ * - "week": the next seven days read as weekday names.
+ * - "detail": Task detail's Date row names the day relative to today
+ *   ("Today, 10:00–11:30", "Tomorrow", "Yesterday"), the rest of the coming
+ *   week by weekday, and anything else absolutely.
+ * - "absolute": the full "Jul 6" form (List, Search, completed views). */
+export type ScheduleContext = "today" | "week" | "detail" | "absolute";
+
+const WEEK_DAYS = 7;
+
+/** A compact human label: "Jul 6", "Jul 6 – Jul 8", "Jul 10, 14:00–15:30" —
+ * shortened per `context`. In "today" an all-day Task due today yields "" (no
+ * chip text), null still means unscheduled. Day maths reads the same
+ * `dueDay` as the Smart Lists; a full week out or late falls back to the
+ * absolute form, since a weekday name would read as the wrong day. */
+export function formatSchedule(
+  task: Scheduled,
+  context: ScheduleContext = "absolute",
+  now: Date = new Date(),
+): string | null {
   if (task.due_date === null) {
     return null;
+  }
+  if (context !== "absolute") {
+    const label = contextLabel(task, task.due_date, context, now);
+    if (label !== null) {
+      return label;
+    }
   }
   if (task.is_all_day) {
     const due = task.due_date.slice(0, 10);
@@ -374,4 +411,72 @@ export function formatSchedule(task: Scheduled): string | null {
     return formatDate(due, "dateTime");
   }
   return `${formatDate(due, "short")}, ${formatDate(new Date(task.start_date), "time")}–${formatDate(due, "time")}`;
+}
+
+/** The shortened label for a context, or null when the date is outside the
+ * context's window (or a multi-day range) and the absolute form applies. */
+function contextLabel(
+  task: Scheduled,
+  dueIso: string,
+  context: "today" | "week" | "detail",
+  now: Date,
+): string | null {
+  const start = task.start_date?.slice(0, 10) ?? null;
+  if (task.is_all_day && start !== null && start !== dueIso.slice(0, 10)) {
+    return null;
+  }
+  const day = task.is_all_day ? dueIso.slice(0, 10) : localDayOf(new Date(dueIso));
+  const ahead = diffDays(day, localDayOf(now));
+  const due = task.is_all_day ? fromDayIso(day) : new Date(dueIso);
+  const times = task.is_all_day
+    ? ""
+    : task.start_date === null
+      ? formatDate(due, "time")
+      : `${formatDate(new Date(task.start_date), "time")}–${formatDate(due, "time")}`;
+  if (context === "detail") {
+    const named =
+      ahead === 0 ? "Today" : ahead === 1 ? "Tomorrow" : ahead === -1 ? "Yesterday" : null;
+    const day = named ?? (ahead > 1 && ahead < WEEK_DAYS ? formatDate(due, "weekday") : null);
+    if (day === null) {
+      return null;
+    }
+    return times === "" ? day : `${day}, ${times}`;
+  }
+  if (context === "today") {
+    if (ahead === 0) {
+      return times;
+    }
+    if (ahead === -1) {
+      return "Yesterday";
+    }
+    // Older (or, defensively, later) days drop the time: a bare day keeps
+    // the narrowed today column wide enough.
+    return ahead < 0 && ahead > -WEEK_DAYS ? formatDate(due, "weekday") : shortDayLabel(day);
+  }
+  if (ahead < 0 || ahead >= WEEK_DAYS) {
+    return null;
+  }
+  const weekday = formatDate(due, "weekday");
+  return times === "" ? weekday : `${weekday}, ${times}`;
+}
+
+export function durationMinutes(task: Pick<Task, "start_date" | "due_date">): number | null {
+  return task.start_date === null || task.due_date === null
+    ? null
+    : Math.max(
+        0,
+        Math.round(
+          (new Date(task.due_date).getTime() - new Date(task.start_date).getTime()) / 60000,
+        ),
+      );
+}
+
+export function formatDuration(task: Pick<Task, "start_date" | "due_date">): string | null {
+  const minutes = durationMinutes(task);
+  if (minutes === null) return null;
+  return minutes % 60 === 0
+    ? `${minutes / 60}h`
+    : minutes < 60
+      ? `${minutes}m`
+      : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }

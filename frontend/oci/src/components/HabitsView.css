@@ -1,0 +1,314 @@
+@layer components {
+  /* Secondary buttons: the default for classless form and section actions. */
+  .habits-view > button,
+  .other-habits > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+  .habits-view > button:hover,
+  .other-habits > button:hover {
+    background: var(--ink-50);
+  }
+  /* The content column.
+
+   Task list, Search results and the Kanban board fill the full width of
+   the content area — they are dense, columnar surfaces, not prose (issue
+   #196). A consequence worth naming: the aligned single-line task row is a
+   container query on `.tasks` (see "The task row is a grid" in the design
+   system), so a wider list makes the aligned form apply in far more
+   windows and the wrapped fallback in fewer — expected and desired.
+
+   Settings and Stand-up keep the reading measure: they are prose and read
+   badly at full width. Habits and Focus stay on the measure too. Calendar
+   and Kanban were already full width.
+
+   The task list's own chrome — the `.main-chrome` wrapper holding the
+   `.main-header` title bar, the QuickAdd bar and the `.view-controls` —
+   fills with it, so the
+   list and everything above it share one left-to-right extent. */
+  .habits-view {
+    max-width: var(--content-max);
+  }
+  /* ── Habits ──────────────────────────────────────────────────────── */
+  .habits-empty-hint {
+    max-width: 480px;
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .habits-view ul {
+    list-style: none;
+    margin: 0 0 var(--space-4);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  /* Habits read as a grid of cards, not one long column — a card holds the
+ * name, its recent-days strip and Streak, one Check-in control and the
+ * actions menu. `auto-fill` + a min track means the grid reflows to a
+ * single column once the viewport can't hold two full cards. */
+  .habits-view ul.habits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--space-3);
+  }
+  .habits-grid > .habit-editing {
+    grid-column: 1 / -1;
+  }
+  .habits-view .habit {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    transition:
+      background var(--duration-base) var(--ease-out),
+      border-color var(--duration-base) var(--ease-out);
+  }
+  .habit-head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+  .habit-head .habit-body {
+    flex: 1;
+  }
+  .habits-view .habit.complete {
+    background: var(--success-soft);
+    border-color: var(--green-100);
+  }
+  /* Target met, said in words + a mark — not signalled by the card's green
+ * wash alone (which fails for anyone who can't tell the two grounds
+ * apart). */
+  .habit-target-met {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-success);
+  }
+  .habit-checkin {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+  }
+  .habit-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+  .habit-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .habit-body h3 {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: var(--weight-medium);
+  }
+  .habit-encouragement {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+  }
+  .habit-frequency {
+    margin: 0;
+    color: var(--text-tertiary);
+    font-size: var(--text-2xs);
+  }
+  /* On touch a 12px square is far under --tap-target, and a near miss checks
+   in the wrong day. Per the touch-target rule below, the hit area grows by
+   padding while the square itself stays 12px — the strip already wraps, so
+   the taller rows just wrap sooner. Horizontal padding is kept to
+   --space-1 so three weeks still reads as a strip rather than a grid. */
+  .habit-check {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 2px solid var(--border-strong);
+    border-radius: var(--radius-full);
+    background: transparent;
+    transition: all var(--duration-fast) var(--ease-out);
+  }
+  .habit-check:hover {
+    border-color: var(--ink-400);
+  }
+  .habit-check[aria-pressed="true"] {
+    border-color: var(--success);
+    background: var(--success);
+    color: var(--white);
+  }
+  .habit-progress {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .habit-done {
+    color: var(--text-success);
+    font-weight: var(--weight-semibold);
+  }
+  .habit-step {
+    flex: none;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-full);
+    background: var(--surface-card);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--text-sm);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+  .habit-step:hover {
+    background: var(--surface-hover);
+  }
+  .other-habits h2,
+  .archived-habits h2 {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .other-habits h2 {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-caps);
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  /* ── Week grid: a row per Habit, a column per day (Mon–Sun) ───────── */
+  .habits-week-scroll {
+    overflow-x: auto;
+    margin: 0 0 var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+  }
+  .habits-week-grid {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .habits-week-grid th,
+  .habits-week-grid td {
+    padding: var(--space-2);
+    text-align: center;
+    border-bottom: 1px solid var(--border-subtle, var(--border-default));
+  }
+  .habits-week-grid tr:last-child > * {
+    border-bottom: none;
+  }
+  .habits-week-grid .habit-row-head,
+  .habits-week-corner {
+    text-align: left;
+    font-weight: var(--weight-medium);
+    min-width: 180px;
+  }
+  .habits-week-corner,
+  .week-day {
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+  }
+  .week-day-num {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+  .week-day.today .week-day-num {
+    color: var(--accent, var(--success));
+    font-weight: var(--weight-semibold);
+  }
+  .habit-name {
+    display: block;
+    font-size: var(--text-sm);
+  }
+  .habit-streak-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+  }
+  /* Cells: state is carried by fill + mark + outline, not hue alone. */
+  .habits-week-grid .habit-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-2xs);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+  }
+  .habit-cell.state-done {
+    color: var(--white);
+  }
+  .habit-cell.state-open-today {
+    border: 2px solid var(--border-strong);
+  }
+  .habit-cell.state-missed {
+    border: 1px dashed var(--border-strong);
+  }
+  .habits-week-grid .habit-cell.state-not-scheduled {
+    background: transparent;
+    border-color: var(--border-default);
+    opacity: 0.5;
+  }
+  .habits-week-grid .habit-cell.state-future {
+    background: transparent;
+    border: 1px dotted var(--border-default);
+  }
+  .habit-cell.today {
+    box-shadow:
+      0 0 0 2px var(--surface-card),
+      0 0 0 3px var(--text-secondary);
+  }
+  .habits-long-history {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+  }
+  .habit-long-history-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .habit-long-history-row > .habit-name {
+    flex: none;
+    width: 140px;
+    color: var(--text-secondary);
+  }
+}

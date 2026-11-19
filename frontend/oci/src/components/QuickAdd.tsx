@@ -1,3 +1,5 @@
+import "./QuickAdd.css";
+
 import { useEffect, useRef, useState } from "react";
 
 import { createTag, createTask, type Priority, type Tag, type Task, type TaskList } from "../api";

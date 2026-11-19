@@ -139,7 +139,7 @@ describe("Pomo quick-start menu", () => {
     expect(await stageLink()).toHaveTextContent(task.title);
   });
 
-  it("Start Focus stays reachable from Actions", async () => {
+  it("Focus stays reachable from Actions", async () => {
     const task = fakeTask("Write report");
     installFakeApi({ tasks: [task] });
     render(<App />);
@@ -147,9 +147,10 @@ describe("Pomo quick-start menu", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Actions for Write report" }));
     const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
-    fireEvent.click(within(dialog).getByRole("option", { name: "Start Focus" }));
+    fireEvent.click(within(dialog).getByRole("option", { name: "Focus" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
     expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
     expect(await stageLink()).toHaveTextContent(task.title);
   });
@@ -176,14 +177,18 @@ describe("Pomo quick-start menu", () => {
     render(<App />);
     const row = await screen.findByRole("button", { name: "Open details for Write report" });
 
-    fireEvent.contextMenu(row.closest("li") as HTMLElement);
-    await screen.findByRole("menu", { name: "Start Focus for Write report" });
+    const li = row.closest("li") as HTMLElement;
+    li.focus();
+    fireEvent.contextMenu(li);
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
+    expect(within(menu).getAllByRole("menuitem")[0]).toHaveFocus();
 
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(
       screen.queryByRole("menu", { name: "Start Focus for Write report" }),
     ).not.toBeInTheDocument();
+    expect(li).toHaveFocus();
   });
 
   it("confirms before finishing a running session and starting the new one", async () => {
@@ -193,17 +198,18 @@ describe("Pomo quick-start menu", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App />);
 
-    // Start a run against the other task via Actions' Start Focus verb.
+    // Start a run against the other task via Actions' Focus verb, then Start.
     await screen.findByRole("button", { name: `Actions for ${otherTask.title}` });
     fireEvent.click(screen.getByRole("button", { name: `Actions for ${otherTask.title}` }));
     const actions = await screen.findByRole("dialog", { name: `Actions for ${otherTask.title}` });
-    fireEvent.click(within(actions).getByRole("option", { name: "Start Focus" }));
+    fireEvent.click(within(actions).getByRole("option", { name: "Focus" }));
     await screen.findByRole("heading", { name: "Focus" });
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
     tick(60_000);
 
     // Back to the List view.
     const listsNav = await screen.findByRole("navigation", { name: "Lists" });
-    fireEvent.click(within(listsNav).getByRole("button", { name: "Inbox" }));
+    fireEvent.click(within(listsNav).getByRole("link", { name: "Inbox" }));
 
     const row = await screen.findByRole("button", { name: "Open details for Write report" });
     fireEvent.contextMenu(row.closest("li") as HTMLElement);
@@ -232,11 +238,12 @@ describe("Pomo quick-start menu", () => {
     await screen.findByRole("button", { name: `Actions for ${otherTask.title}` });
     fireEvent.click(screen.getByRole("button", { name: `Actions for ${otherTask.title}` }));
     const actions = await screen.findByRole("dialog", { name: `Actions for ${otherTask.title}` });
-    fireEvent.click(within(actions).getByRole("option", { name: "Start Focus" }));
+    fireEvent.click(within(actions).getByRole("option", { name: "Focus" }));
     await screen.findByRole("heading", { name: "Focus" });
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
 
     const listsNav = await screen.findByRole("navigation", { name: "Lists" });
-    fireEvent.click(within(listsNav).getByRole("button", { name: "Inbox" }));
+    fireEvent.click(within(listsNav).getByRole("link", { name: "Inbox" }));
 
     const row = await screen.findByRole("button", { name: "Open details for Write report" });
     fireEvent.contextMenu(row.closest("li") as HTMLElement);

@@ -51,27 +51,6 @@ describe("Task detail panel", () => {
     expect(patch?.body).toEqual({ title: "Write report" });
   });
 
-  it("edits the description in a textarea and renders the saved Markdown", async () => {
-    const report = fakeTask("Write report", { description: "plain text" });
-    const api = installFakeApi({ tasks: [report] });
-    const user = userEvent.setup();
-    render(<App />);
-
-    const panel = await openDetail("Write report");
-    await user.click(within(panel).getByRole("button", { name: "Edit description" }));
-    const editor = within(panel).getByRole("textbox", { name: "Description" });
-    expect(editor).toHaveValue("plain text");
-    await user.clear(editor);
-    await user.type(editor, "# Heading");
-    await user.click(within(panel).getByRole("button", { name: "Save description" }));
-
-    expect(await within(panel).findByRole("heading", { name: "Heading" })).toBeInTheDocument();
-    const patch = api.requests.find(
-      (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${report.id}`,
-    );
-    expect(patch?.body).toEqual({ description: "# Heading" });
-  });
-
   it("moves the task to another List from the breadcrumb picker", async () => {
     const groceries = fakeList("Groceries");
     const report = fakeTask("Write report");
@@ -80,15 +59,15 @@ describe("Task detail panel", () => {
     render(<App />);
 
     const panel = await openDetail("Write report");
-    await user.selectOptions(
-      within(panel).getByRole("combobox", { name: "List for this task" }),
-      "Groceries",
-    );
+    await user.click(within(panel).getByRole("button", { name: "List Inbox" }));
+    await user.click(within(panel).getByRole("menuitemradio", { name: "Groceries" }));
 
-    const patch = api.requests.find(
-      (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${report.id}`,
-    );
-    expect(patch?.body).toEqual({ list_id: groceries.id });
+    await waitFor(() => {
+      const patch = api.requests.find(
+        (r) => r.method === "PATCH" && r.url === `/api/v1/tasks/${report.id}`,
+      );
+      expect(patch?.body).toEqual({ list_id: groceries.id });
+    });
   });
 
   it("sets Priority from the four named levels and marks the task row", async () => {
@@ -98,14 +77,15 @@ describe("Task detail panel", () => {
     render(<App />);
 
     const panel = await openDetail("Write report");
-    const select = within(panel).getByRole("combobox", { name: "Priority" });
+    await user.click(within(panel).getByRole("button", { name: /^Priority/ }));
+    const menu = within(panel).getByRole("menu", { name: "Priority" });
     expect(
-      within(select)
-        .getAllByRole("option")
+      within(menu)
+        .getAllByRole("menuitemradio")
         .map((option) => option.textContent),
     ).toEqual(["None", "Low", "Medium", "High"]);
 
-    await user.selectOptions(select, "High");
+    await user.click(within(menu).getByRole("menuitemradio", { name: "High" }));
 
     const row = screen.getByRole("button", { name: "Open details for Write report" }).closest("li");
     await waitFor(() => expect(row).toHaveAttribute("data-priority", "high"));
@@ -145,7 +125,7 @@ describe("Task detail panel", () => {
     installFakeApi({ tasks: [trip] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const panel = await openDetail("Pack bags");
     await user.click(within(panel).getByRole("checkbox", { name: "Tick Socks" }));

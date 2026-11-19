@@ -1,6 +1,9 @@
+import "./TokenInput.css";
+
 import { useEffect, useId, useRef, useState } from "react";
 
 import { IconButton } from "./IconButton";
+import { Popover } from "./Popover";
 
 /** One sigil's slice of the input: what it suggests from, how picks are
  * committed to chips, and (optionally) how an unmatched query creates a new
@@ -100,6 +103,7 @@ export function TokenInput({
   const pendingCaret = useRef<number | null>(null);
   const [caret, setCaret] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [dismissed, setDismissed] = useState(false);
   const listboxId = useId();
   // Read inside the async pick() below, after its onCreate() await — refs
   // (unlike the closed-over channels param) always hold what's current, so
@@ -143,13 +147,14 @@ export function TokenInput({
         ];
   // A query with nothing to pick from — no matching items, no create offer —
   // leaves the popup closed rather than render an empty listbox.
-  const open = active !== null && rows.length > 0;
+  const open = active !== null && rows.length > 0 && !dismissed;
 
   /** Reads the caret from the DOM — the source of truth for where the user's
    * typing cursor sits, which a controlled `value` alone doesn't capture. */
   function syncCaret(): void {
     setCaret(inputRef.current?.selectionStart ?? 0);
     setActiveIndex(null);
+    setDismissed(false);
   }
 
   async function pick(row: Row): Promise<void> {
@@ -229,8 +234,11 @@ export function TokenInput({
         event.preventDefault();
         event.stopPropagation();
         setActiveIndex(null);
+        return;
       }
-      return;
+      event.preventDefault();
+      event.stopPropagation();
+      setDismissed(true);
     }
     if (event.key === "Enter" && activeIndex !== null) {
       event.preventDefault();
@@ -279,6 +287,7 @@ export function TokenInput({
         placeholder={placeholder}
         value={value}
         role="combobox"
+        aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
         aria-activedescendant={
@@ -313,25 +322,35 @@ export function TokenInput({
       )}
       {trailingContent}
       {open && active !== null && (
-        <ul className="token-input-dropdown" role="listbox" id={listboxId}>
-          {rows.map((row, index) => (
-            <li
-              key={row.kind === "item" ? active.channel.getId(row.item) : `create:${row.name}`}
-              id={`${listboxId}-option-${index}`}
-              role="option"
-              aria-selected={index === activeIndex}
-              className={index === activeIndex ? "active" : undefined}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                void pick(row);
-              }}
-            >
-              {row.kind === "item"
-                ? active.channel.getLabel(row.item)
-                : active.channel.createLabel(row.name)}
-            </li>
-          ))}
-        </ul>
+        <Popover
+          open={open}
+          triggerRef={inputRef}
+          focusOnOpen={false}
+          onClose={() => {
+            setDismissed(true);
+            setActiveIndex(null);
+          }}
+        >
+          <ul className="token-input-dropdown" role="listbox" id={listboxId}>
+            {rows.map((row, index) => (
+              <li
+                key={row.kind === "item" ? active.channel.getId(row.item) : `create:${row.name}`}
+                id={`${listboxId}-option-${index}`}
+                role="option"
+                aria-selected={index === activeIndex}
+                className={index === activeIndex ? "active" : undefined}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  void pick(row);
+                }}
+              >
+                {row.kind === "item"
+                  ? active.channel.getLabel(row.item)
+                  : active.channel.createLabel(row.name)}
+              </li>
+            ))}
+          </ul>
+        </Popover>
       )}
     </div>
   );

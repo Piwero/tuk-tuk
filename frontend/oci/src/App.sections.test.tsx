@@ -19,7 +19,7 @@ async function openList(name: string): Promise<void> {
   const user = userEvent.setup();
   const nav = await screen.findByRole("navigation", { name: "Lists" });
   // Custom lists load via a separate async fetch; wait for the button first.
-  await user.click(await within(nav).findByRole("button", { name }));
+  await user.click(await within(nav).findByRole("link", { name }));
 }
 
 describe("Sections in the list view", () => {
@@ -228,6 +228,7 @@ describe("Task drag within the list view", () => {
     await openList("Project");
     await screen.findByText("Build it");
 
+    fireEvent.click(screen.getByRole("button", { name: /^View/ }));
     const sortSelect = screen.getByRole("combobox", { name: "Sort by" });
     expect(within(sortSelect).getByRole("option", { name: "Custom" })).toBeDefined();
     expect(screen.getByText("Drag a Task to start your own order.")).toBeInTheDocument();
@@ -356,6 +357,7 @@ describe("Group and sort controls", () => {
     await openList("Project");
     await screen.findByText("Idle thought");
 
+    fireEvent.click(screen.getByRole("button", { name: /^View/ }));
     await user.selectOptions(screen.getByRole("combobox", { name: "Group by" }), "Priority");
     await user.selectOptions(screen.getByRole("combobox", { name: "Sort by" }), "Title");
 

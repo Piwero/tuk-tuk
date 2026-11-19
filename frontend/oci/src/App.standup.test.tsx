@@ -1,6 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import process from "node:process";
+
+import { pickDate } from "./test/pickDate";
 import { App } from "./App";
 import {
   fakeGoal,
@@ -161,9 +166,7 @@ describe("Stand-up", () => {
     render(<App />);
     await openStandup();
 
-    fireEvent.change(screen.getByLabelText("Stand-up date"), {
-      target: { value: "2026-07-01" },
-    });
+    pickDate("Stand-up date", "2026-07-01");
 
     await waitFor(() => {
       expect(
@@ -171,9 +174,7 @@ describe("Stand-up", () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText("Stand-up date"), {
-      target: { value: "2026-06-15" },
-    });
+    pickDate("Stand-up date", "2026-06-15");
 
     await waitFor(() => {
       expect(screen.queryByText("Old work")).not.toBeInTheDocument();
@@ -563,5 +564,70 @@ describe("Stand-up settings toggle", () => {
     // (still-pending) settings fetch and pass for the wrong reason.
     await within(nav).findByRole("link", { name: "Focus" });
     expect(within(nav).queryByRole("link", { name: "Stand-up" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Stand-up bullet actions overlay the row (issue #429)", () => {
+  // jsdom applies no stylesheet, so the layout claim is checked against the
+  // CSS source, as contentColumn.test.ts does.
+  const css = readFileSync(resolve(process.cwd(), "src/components/StandupView.css"), "utf8");
+  const rule = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = new RegExp(`(^|\\n)\\s*${escaped}\\s*\\{[^}]*\\}`).exec(css);
+    expect(match, `${selector} rule not found`).not.toBeNull();
+    return (match as RegExpExecArray)[0];
+  };
+
+  it("takes the actions out of flow so the text spans the column", () => {
+    expect(rule(".standup-bullet")).toMatch(/position:\s*relative/);
+    expect(rule(".standup-bullet-actions")).toMatch(/position:\s*absolute/);
+  });
+
+  it("opens the actions on a touch long-press", async () => {
+    installFakeApi();
+    render(<App />);
+    await openStandup();
+    await addBullet("Today", "Hold me");
+
+    const row = within(screen.getByRole("list", { name: "Today bullets" }))
+      .getByText("Hold me")
+      .closest("li") as HTMLElement;
+    expect(row).not.toHaveAttribute("data-actions-open");
+    fireEvent.touchStart(row);
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(row).toHaveAttribute("data-actions-open", "true");
+  });
+});
+
+describe("Date popover", () => {
+  it("replaces native date inputs and is keyboard operable with labelled days", async () => {
+    installFakeApi({
+      standupEntries: [
+        fakeStandupEntry("2026-07-01", {
+          bullets: [{ id: 1, section: "today", text: "Old work", sort_order: 1024 }],
+        }),
+      ],
+    });
+    const { container } = render(<App />);
+    await openStandup();
+    expect(container.querySelector('input[type="date"]')).toBeNull();
+
+    const trigger = screen.getByRole("button", { name: "Stand-up date" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const today = screen.getByRole("button", { name: "Friday, July 3, 2026" });
+    expect(today).toHaveAttribute("aria-current", "date");
+    today.focus();
+    fireEvent.keyDown(today, { key: "ArrowUp" });
+    fireEvent.keyDown(today, { key: "ArrowLeft" });
+    const target = await screen.findByRole("button", { name: "Thursday, June 25, 2026" });
+    expect(target).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    pickDate("Stand-up date", "2026-07-01");
+    expect(await screen.findByText("Old work")).toBeInTheDocument();
   });
 });

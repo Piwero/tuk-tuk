@@ -1,3 +1,4 @@
+import "./HabitForm.css";
 import { useState } from "react";
 
 import { type Habit, type HabitType } from "../api";
@@ -253,8 +254,10 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
           />
         </label>
       )}
-      <button type="submit">Save</button>
-      <button type="button" onClick={onCancel}>
+      <button className="btn-primary" type="submit">
+        Save
+      </button>
+      <button className="btn-quiet" type="button" onClick={onCancel}>
         Cancel
       </button>
     </form>

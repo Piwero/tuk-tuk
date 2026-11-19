@@ -15,7 +15,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     installFakeApi({ tags: [books, fun] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#");
@@ -35,7 +35,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     installFakeApi({ tags: [books, boat, fun] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#BO");
@@ -53,7 +53,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     installFakeApi({ tags: [fakeTag("Sharp")] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "C#");
@@ -65,7 +65,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     installFakeApi({ tags: [fakeTag("Books")] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#books ");
@@ -78,7 +78,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     const api = installFakeApi({ tags: [books] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read #books{Enter}");
@@ -97,7 +97,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     const api = installFakeApi({ tags: [books, fun] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read #bo");
@@ -121,7 +121,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     installFakeApi({ tags: [books, boat] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#bo");
@@ -137,7 +137,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     installFakeApi({ tags: [books] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read #bo");
@@ -156,12 +156,33 @@ describe("Quick-Add # suggestion dropdown", () => {
     );
   });
 
+  it("dismisses suggestions with Escape or outside click and reopens when typing", async () => {
+    installFakeApi({ tags: [fakeTag("Books"), fakeTag("Boat")] });
+    render(<App />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
+    const input = await screen.findByRole("combobox", { name: "Add a task" });
+    await user.type(input, "read #b");
+    expect(input).toHaveFocus();
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    expect(screen.getByRole("option", { name: "Books" })).toHaveAttribute("aria-selected", "true");
+    await user.keyboard("{Escape}{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue("read #b");
+    await user.type(input, "o");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.click(screen.getByRole("heading", { name: "Inbox" }));
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(input).toHaveValue("read #bo");
+  });
+
   it("removing a chip drops that tag from the created task", async () => {
     const books = fakeTag("Books");
     const api = installFakeApi({ tags: [books] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read #bo");
@@ -178,7 +199,7 @@ describe("Quick-Add # suggestion dropdown", () => {
     const api = installFakeApi({ tags: [books] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read #bo");
@@ -203,7 +224,7 @@ describe("Quick-Add # dropdown create-tag row", () => {
     installFakeApi({ tags: [fakeTag("Books")] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#zzz");
@@ -215,7 +236,7 @@ describe("Quick-Add # dropdown create-tag row", () => {
     installFakeApi({ tags: [fakeTag("Books")] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#");
@@ -228,7 +249,7 @@ describe("Quick-Add # dropdown create-tag row", () => {
     installFakeApi({ tags: [fakeTag("Books")] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#BOOKS");
@@ -241,7 +262,7 @@ describe("Quick-Add # dropdown create-tag row", () => {
     const api = installFakeApi({ tags: [] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "read #zzz");
@@ -270,7 +291,7 @@ describe("Quick-Add # dropdown create-tag row", () => {
     const api = installFakeApi({ tags: [boat] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#bo");
@@ -286,7 +307,7 @@ describe("Quick-Add # dropdown create-tag row", () => {
     const api = installFakeApi({ tags: [] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#zzz");
@@ -302,7 +323,7 @@ describe("Quick-Add # dropdown create-tag row", () => {
     installFakeApi({ tags: [] });
     render(<App />);
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "#zzz");

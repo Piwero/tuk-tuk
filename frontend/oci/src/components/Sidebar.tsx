@@ -1,3 +1,5 @@
+import "./Sidebar.css";
+
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import {
@@ -24,7 +26,7 @@ import { HINT_REGISTRY } from "../hintRegistry";
 import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { folderOpenCount, openCountLabel } from "../openCounts";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
-import { pathForStaticView } from "../routes";
+import { pathForContainer, pathForStaticView } from "../routes";
 import { useHoverHint } from "../useHoverHint";
 import { APP_VERSION } from "../version";
 import { CreateMenu } from "./CreateMenu";
@@ -114,9 +116,6 @@ interface SidebarProps {
    * when off, same contract as `standupEnabled` above. */
   focusEnabled: boolean;
   settingsSelected: boolean;
-  /** Selected when viewing /search — distinct from having typed a query,
-   * so the nav item highlights for a blank search too (issue #143). */
-  searchSelected: boolean;
   onSelect: (listId: number) => void;
   onSelectFolder: (folderId: number) => void;
   onSelectTag: (tagId: number) => void;
@@ -128,10 +127,7 @@ interface SidebarProps {
   onSelectAssistant: () => void;
   onSelectFocus: () => void;
   onSelectSettings: () => void;
-  onSearch: (query: string) => void;
-  /** The Search nav item (icon-only, always reachable) opens a blank search,
-   * as opposed to onSearch which carries a typed query (issue #143). */
-  onOpenSearch: () => void;
+  onOpenPalette: () => void;
   /** Opens the Quick add dialog; the sidebar is always there, so capture is
    * reachable from every screen, including Habits and Focus. */
   onQuickAdd: () => void;
@@ -143,10 +139,6 @@ interface SidebarProps {
    * that flips it — the nav-bar shortcut for Settings › Appearance. */
   resolvedTheme: "light" | "dark";
   onToggleTheme: () => void;
-  /** Closes the off-canvas mobile drawer explicitly (issue #170) — until
-   * now the only way out was tapping the backdrop. Ignored by the desktop
-   * layout, where this button stays hidden. */
-  onCloseDrawer: () => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
@@ -192,8 +184,9 @@ function ListButton({
   const describedBy = joinIds(openCount > 0 && countId, list.is_inbox && open && inboxHintId);
   return (
     <span className="icon-button-wrap">
-      <button
-        type="button"
+      <a
+        href={pathForContainer({ kind: "list", id: list.id, mode: list.view_mode })}
+        aria-current={selected ? "page" : undefined}
         className={selected ? "list-button selected" : "list-button"}
         // Only on the rail: expanded, the name comes from the label itself —
         // emoji included, which is the name the rest of the app expects.
@@ -202,7 +195,7 @@ function ListButton({
         // Always set, not just when collapsed — expanded names can still be
         // truncated by ellipsis, and the native tooltip is the fallback.
         title={list.name}
-        onClick={() => onSelect(list.id)}
+        onClick={(event) => handleNavAnchorClick(event, () => onSelect(list.id))}
         {...handlers}
       >
         {list.is_inbox ? (
@@ -222,7 +215,7 @@ function ListButton({
             {openCount}
           </span>
         )}
-      </button>
+      </a>
       {openCount > 0 && (
         <span id={countId} className="visually-hidden">
           {openCountLabel(openCount)}
@@ -271,6 +264,7 @@ function SmartListButton({
         type="button"
         className={selected ? "list-button selected" : "list-button"}
         aria-label={SMART_LABELS[view]}
+        aria-current={selected ? "page" : undefined}
         aria-describedby={describedBy}
         title={SMART_LABELS[view]}
         onClick={() => onSelect(view)}
@@ -314,16 +308,17 @@ function FolderNameButton({
   const { open, handlers } = useHoverHint();
   return (
     <span className="icon-button-wrap">
-      <button
-        type="button"
+      <a
+        href={pathForContainer({ kind: "folder", id: folder.id })}
+        aria-current={selected ? "page" : undefined}
         className={selected ? "folder-name selected" : "folder-name"}
         aria-describedby={openCount > 0 ? `folder-open-count-${folder.id}` : undefined}
         title={folder.name}
-        onClick={() => onSelect(folder.id)}
+        onClick={(event) => handleNavAnchorClick(event, () => onSelect(folder.id))}
         {...handlers}
       >
         {folder.name}
-      </button>
+      </a>
       {collapsed && open && (
         <span role="tooltip" className="icon-button-hint">
           {folder.name}
@@ -347,12 +342,13 @@ function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): JSX.
   const { open, handlers } = useHoverHint();
   return (
     <span className="icon-button-wrap">
-      <button
-        type="button"
+      <a
+        href={pathForContainer({ kind: "tag", id: tag.id })}
+        aria-current={selected ? "page" : undefined}
         className={selected ? "list-button selected" : "list-button"}
         aria-label={tag.name}
         title={tag.name}
-        onClick={() => onSelect(tag.id)}
+        onClick={(event) => handleNavAnchorClick(event, () => onSelect(tag.id))}
         {...handlers}
       >
         {tag.color !== null ? (
@@ -361,7 +357,7 @@ function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): JSX.
           collapsed && <span className="list-initial">{tag.name.slice(0, 1)}</span>
         )}
         <span className="nav-label">{tag.name}</span>
-      </button>
+      </a>
       {collapsed && open && (
         <span role="tooltip" className="icon-button-hint">
           {tag.name}
@@ -383,7 +379,8 @@ function handleNavAnchorClick(
     event.button !== 0 ||
     event.metaKey ||
     event.ctrlKey ||
-    event.shiftKey
+    event.shiftKey ||
+    event.altKey
   ) {
     return;
   }
@@ -462,12 +459,12 @@ export function Sidebar({
   habitsEnabled,
   standupSelected,
   standupEnabled,
-  assistantSelected,
-  assistantAvailable,
   focusSelected,
   focusEnabled,
+  assistantSelected,
+  assistantAvailable,
+  onSelectAssistant,
   settingsSelected,
-  searchSelected,
   onSelect,
   onSelectFolder,
   onSelectTag,
@@ -476,17 +473,14 @@ export function Sidebar({
   onSelectGoals,
   onSelectHabits,
   onSelectStandup,
-  onSelectAssistant,
   onSelectFocus,
   onSelectSettings,
-  onSearch,
-  onOpenSearch,
+  onOpenPalette,
   onQuickAdd,
   collapsed,
   onToggleCollapsed,
   resolvedTheme,
   onToggleTheme,
-  onCloseDrawer,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
@@ -496,18 +490,16 @@ export function Sidebar({
   onLogout,
 }: SidebarProps): JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
-  // Bumped only on the true→false edge of searchSelected — i.e. the moment
-  // Search stops being the active view — to remount (and so clear) the quick
-  // search field below (issue #167). Left untouched while arriving at or
-  // staying on Search, so a query that was just submitted stays visible.
-  const [searchFieldResetKey, setSearchFieldResetKey] = useState(0);
-  const wasSearchSelected = useRef(searchSelected);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRoot = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (wasSearchSelected.current && !searchSelected) {
-      setSearchFieldResetKey((key) => key + 1);
+    if (!menuOpen) return;
+    function dismiss(event: MouseEvent): void {
+      if (!menuRoot.current?.contains(event.target as Node)) setMenuOpen(false);
     }
-    wasSearchSelected.current = searchSelected;
-  }, [searchSelected]);
+    document.addEventListener("mousedown", dismiss);
+    return () => document.removeEventListener("mousedown", dismiss);
+  }, [menuOpen]);
   // Layout preference, not data — persisted per Folder in localStorage
   // (layoutPrefs), independent of selection. Default expanded.
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(loadCollapsedFolderIds);
@@ -848,15 +840,26 @@ export function Sidebar({
     );
   }
 
-  const tasksSelected =
-    !calendarSelected &&
-    !goalsSelected &&
-    !habitsSelected &&
-    !standupSelected &&
-    !assistantSelected &&
-    !focusSelected &&
-    !settingsSelected &&
-    !searchSelected;
+  function renderSmartList(view: SmartView): JSX.Element {
+    const count = smartOpenCounts[view];
+    const countId = `smart-open-count-${view}`;
+    return (
+      <Fragment key={view}>
+        <SmartListButton
+          view={view}
+          selected={selectedSmart === view}
+          count={count}
+          countId={countId}
+          onSelect={onSelectSmart}
+        />
+        {count > 0 && (
+          <span id={countId} className="visually-hidden">
+            {openCountLabel(count)}
+          </span>
+        )}
+      </Fragment>
+    );
+  }
 
   return (
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
@@ -878,24 +881,10 @@ export function Sidebar({
             aria-expanded={!collapsed}
             onClick={onToggleCollapsed}
           />
-          {/* Mobile only (hidden by CSS on desktop, issue #170): the drawer's
-              own close control, so dismissing it no longer requires hunting
-              for the backdrop. */}
-          <IconButton
-            icon="x"
-            size={18}
-            label="Close navigation"
-            className="drawer-close"
-            onClick={onCloseDrawer}
-          />
         </div>
         <nav aria-label="Views" className="top-nav">
-          <TopNavItem
-            icon="list-checks"
-            label="Tasks"
-            selected={tasksSelected}
-            onClick={() => onSelectSmart("today")}
-          />
+          {renderSmartList("today")}
+          {renderSmartList("next7")}
           {calendarEnabled && (
             <TopNavItem
               icon="calendar-days"
@@ -903,6 +892,15 @@ export function Sidebar({
               href={pathForStaticView("calendar")}
               selected={calendarSelected}
               onClick={onSelectCalendar}
+            />
+          )}
+          {habitsEnabled && (
+            <TopNavItem
+              icon="repeat"
+              label="Habits"
+              href={pathForStaticView("habits")}
+              selected={habitsSelected}
+              onClick={onSelectHabits}
             />
           )}
           {goalsEnabled && (
@@ -914,13 +912,13 @@ export function Sidebar({
               onClick={onSelectGoals}
             />
           )}
-          {habitsEnabled && (
+          {focusEnabled && (
             <TopNavItem
-              icon="repeat"
-              label="Habits"
-              href={pathForStaticView("habits")}
-              selected={habitsSelected}
-              onClick={onSelectHabits}
+              icon="timer"
+              label="Focus"
+              href={pathForStaticView("focus")}
+              selected={focusSelected}
+              onClick={onSelectFocus}
             />
           )}
           {standupEnabled && (
@@ -941,43 +939,18 @@ export function Sidebar({
               onClick={onSelectAssistant}
             />
           )}
-          {focusEnabled && (
-            <TopNavItem
-              icon="timer"
-              label="Focus"
-              href={pathForStaticView("focus")}
-              selected={focusSelected}
-              onClick={onSelectFocus}
-            />
-          )}
-          <TopNavItem
-            icon="search"
-            label="Search"
-            href={pathForStaticView("search")}
-            selected={searchSelected}
-            onClick={onOpenSearch}
-          />
         </nav>
-        {!collapsed && (
-          <form
-            // Remounts (clearing the field) the moment Search stops being
-            // the active view — leaving it, the typed text used to linger
-            // and look like it was still filtering whatever view the user
-            // had moved to, when it filters nothing (issue #167). The live,
-            // contextful results field lives on the Search page itself now;
-            // this one is only a quick jump into it, so it's left alone
-            // while Search stays open (including right after submitting).
-            key={searchFieldResetKey}
-            role="search"
-            className="sidebar-search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSearch(new FormData(event.currentTarget).get("query")?.toString() ?? "");
-            }}
+        <div className="sidebar-search" role="search">
+          <button
+            type="button"
+            className="btn-quiet"
+            aria-label="Quick search"
+            onClick={onOpenPalette}
           >
-            <input type="search" name="query" aria-label="Quick search" placeholder="Search…" />
-          </form>
-        )}
+            <Icon name="search" size={18} />
+            <span className="nav-label">Search…</span>
+          </button>
+        </div>
         <button
           type="button"
           className="quick-add-trigger"
@@ -988,28 +961,6 @@ export function Sidebar({
           <Icon name="plus" />
           <span className="nav-label">Quick add</span>
         </button>
-        <nav aria-label="Smart Lists" className="smart-lists">
-          {(Object.keys(SMART_LABELS) as SmartView[]).map((view) => {
-            const count = smartOpenCounts[view];
-            const countId = `smart-open-count-${view}`;
-            return (
-              <Fragment key={view}>
-                <SmartListButton
-                  view={view}
-                  selected={selectedSmart === view}
-                  count={count}
-                  countId={countId}
-                  onSelect={onSelectSmart}
-                />
-                {count > 0 && (
-                  <span id={countId} className="visually-hidden">
-                    {openCountLabel(count)}
-                  </span>
-                )}
-              </Fragment>
-            );
-          })}
-        </nav>
         <nav
           aria-label="Lists"
           className="lists-nav"
@@ -1025,6 +976,7 @@ export function Sidebar({
               onNewFolder={() => setEditor({ mode: "create-folder" })}
             />
           </div>
+          {renderSmartList("all")}
           {editor?.mode === "create-list" && (
             <ListForm
               folders={folders}
@@ -1220,7 +1172,7 @@ export function Sidebar({
           ) : (
             <button
               type="button"
-              className="sidebar-add"
+              className="sidebar-add btn-quiet"
               aria-label="Add Tag"
               title="Add Tag"
               onClick={() => setEditor({ mode: "create-tag" })}
@@ -1272,39 +1224,70 @@ export function Sidebar({
         )}
       </div>
       <div className="sidebar-footer">
-        <button
-          type="button"
-          className="sidebar-theme-toggle"
-          aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          aria-pressed={resolvedTheme === "dark"}
-          onClick={onToggleTheme}
+        <div
+          className="sidebar-app-menu"
+          ref={menuRoot}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setMenuOpen(false);
+              menuRoot.current?.querySelector<HTMLButtonElement>("button")?.focus();
+            }
+          }}
         >
-          <Icon name={resolvedTheme === "dark" ? "sun" : "moon"} size={18} />
-          <span className="nav-label">{resolvedTheme === "dark" ? "Light mode" : "Dark mode"}</span>
-        </button>
-        <a
-          href={pathForStaticView("settings")}
-          className={settingsSelected ? "sidebar-settings selected" : "sidebar-settings"}
-          aria-label="Settings"
-          title="Settings"
-          onClick={(event) => handleNavAnchorClick(event, onSelectSettings)}
-        >
-          <Icon name="settings" size={18} />
-          <span className="nav-label">Settings</span>
-        </a>
-        {onLogout !== undefined && (
           <button
             type="button"
-            className="sidebar-logout"
-            aria-label="Log out"
-            title="Log out"
-            onClick={onLogout}
+            className="sidebar-menu-trigger btn-quiet"
+            aria-label="App menu"
+            title="App menu"
+            aria-expanded={menuOpen}
+            aria-controls="sidebar-app-actions"
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            <Icon name="log-out" size={18} />
-            <span className="nav-label">Log out</span>
+            <Icon name="settings" size={18} />
+            <span className="nav-label">App menu</span>
           </button>
-        )}
+          {menuOpen && (
+            <div id="sidebar-app-actions" className="sidebar-app-menu-actions">
+              <button
+                type="button"
+                className="sidebar-theme-toggle btn-quiet"
+                aria-label={
+                  resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+                }
+                title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                aria-pressed={resolvedTheme === "dark"}
+                onClick={onToggleTheme}
+              >
+                <Icon name={resolvedTheme === "dark" ? "sun" : "moon"} size={18} />
+                <span className="nav-label">
+                  {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+                </span>
+              </button>
+              <a
+                href={pathForStaticView("settings")}
+                className={settingsSelected ? "sidebar-settings selected" : "sidebar-settings"}
+                aria-label="Settings"
+                title="Settings"
+                onClick={(event) => handleNavAnchorClick(event, onSelectSettings)}
+              >
+                <Icon name="settings" size={18} />
+                <span className="nav-label">Settings</span>
+              </a>
+              {onLogout !== undefined && (
+                <button
+                  type="button"
+                  className="sidebar-logout btn-quiet"
+                  aria-label="Log out"
+                  title="Log out"
+                  onClick={onLogout}
+                >
+                  <Icon name="log-out" size={18} />
+                  <span className="nav-label">Log out</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   );

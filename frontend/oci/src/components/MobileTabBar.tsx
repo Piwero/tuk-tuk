@@ -1,37 +1,44 @@
+import "./MobileTabBar.css";
 import { Icon, type IconName } from "./Icon";
+import { IconButton } from "./IconButton";
 
 interface MobileTabBarProps {
-  tasksSelected: boolean;
+  todaySelected: boolean;
   calendarSelected: boolean;
   calendarEnabled: boolean;
   habitsSelected: boolean;
   habitsEnabled: boolean;
-  focusSelected: boolean;
-  focusEnabled: boolean;
-  onSelectTasks: () => void;
+  /** Any destination that lives in the More sheet is current. */
+  moreSelected: boolean;
+  moreOpen: boolean;
+  onSelectToday: () => void;
   onSelectCalendar: () => void;
+  onQuickAdd: () => void;
   onSelectHabits: () => void;
-  onSelectFocus: () => void;
+  onToggleMore: () => void;
 }
 
 interface TabItemProps {
   icon: IconName;
   label: string;
+  /** Overrides the visible label as the accessible name, where the label
+   * alone would collide with a same-named sidebar button. */
+  accessibleName?: string;
   selected: boolean;
   onClick: () => void;
 }
 
-/** Always a plain button, never an anchor — unlike the sidebar's top nav
- * (#143), which needs anchors so its URL-addressable destinations support
- * cmd/ctrl-click and "open in new tab". This is a touch-first tab bar with
- * no such expectation, and staying button-only keeps its four destinations'
- * accessible names from colliding with the sidebar's same-named links,
- * which both surfaces render at every width. */
-function TabItem({ icon, label, selected, onClick }: TabItemProps): JSX.Element {
+/** Always a plain button, never an anchor (#170): this is a touch-first tab
+ * bar with no "open in new tab" expectation, and staying button-only keeps
+ * its names from colliding with the sidebar's same-named links, which render
+ * at every width. Today is the exception that needs its own name, because
+ * the sidebar's Today is a button too. */
+function TabItem({ icon, label, accessibleName, selected, onClick }: TabItemProps): JSX.Element {
   return (
     <button
       type="button"
       className={selected ? "mobile-tab-item selected" : "mobile-tab-item"}
+      aria-label={accessibleName}
       aria-current={selected ? "page" : undefined}
       onClick={onClick}
     >
@@ -41,27 +48,33 @@ function TabItem({ icon, label, selected, onClick }: TabItemProps): JSX.Element 
   );
 }
 
-/** Mobile-only bottom tab bar (issue #170): puts the four most-used
- * destinations within thumb reach instead of behind the drawer, which used
- * to cost an open-tap-close round trip for every switch. Hidden entirely on
- * desktop by CSS — the drawer stays the one and only nav surface there, and
- * still holds every destination (including these four) at every width. */
+/** Mobile-only bottom tab bar (#170, #462): Today, Calendar, a centre
+ * Quick-Add, Habits and More. More opens a sheet with every other
+ * destination and the Lists/Folders/Tags tree, which replaced the drawer.
+ * Hidden on desktop by CSS, where the sidebar is the nav surface. */
 export function MobileTabBar({
-  tasksSelected,
+  todaySelected,
   calendarSelected,
   calendarEnabled,
   habitsSelected,
   habitsEnabled,
-  focusSelected,
-  focusEnabled,
-  onSelectTasks,
+  moreSelected,
+  moreOpen,
+  onSelectToday,
   onSelectCalendar,
+  onQuickAdd,
   onSelectHabits,
-  onSelectFocus,
+  onToggleMore,
 }: MobileTabBarProps): JSX.Element {
   return (
     <nav aria-label="Primary" className="mobile-tab-bar">
-      <TabItem icon="list-checks" label="Tasks" selected={tasksSelected} onClick={onSelectTasks} />
+      <TabItem
+        icon="sun"
+        label="Today"
+        accessibleName="Today tab"
+        selected={todaySelected}
+        onClick={onSelectToday}
+      />
       {calendarEnabled && (
         <TabItem
           icon="calendar-days"
@@ -70,12 +83,29 @@ export function MobileTabBar({
           onClick={onSelectCalendar}
         />
       )}
+      {/* Named "Quick add task", not "Quick add", so it stays distinct from
+          the sidebar's trigger (#287). Glyph-only, so IconButton (#270). */}
+      <IconButton
+        icon="plus"
+        size={24}
+        label="Quick add task"
+        className="mobile-tab-quick-add"
+        onClick={onQuickAdd}
+      />
       {habitsEnabled && (
         <TabItem icon="repeat" label="Habits" selected={habitsSelected} onClick={onSelectHabits} />
       )}
-      {focusEnabled && (
-        <TabItem icon="timer" label="Focus" selected={focusSelected} onClick={onSelectFocus} />
-      )}
+      <button
+        type="button"
+        className={moreSelected ? "mobile-tab-item selected" : "mobile-tab-item"}
+        aria-current={moreSelected ? "page" : undefined}
+        aria-expanded={moreOpen}
+        aria-haspopup="dialog"
+        onClick={onToggleMore}
+      >
+        <Icon name="menu" size={20} />
+        <span>More</span>
+      </button>
     </nav>
   );
 }

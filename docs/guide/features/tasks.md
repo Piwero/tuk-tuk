@@ -25,6 +25,8 @@ think. Tuk Tuk shows you what matters today.
 ## Daily use
 
 1. Open **Today** to see what's due or scheduled today. Overdue tasks are shown in red.
+   Scheduled tasks show their start time and planned length. On a wide screen a
+   day rail beside the list shows your Habits and Focus for today.
 2. Tick the box to complete a task. Changed your mind? Untick it.
 3. Click a task to open its details: priority, dates, reminders, repeat,
    tags, description and checklist.

@@ -1,3 +1,5 @@
+import "./BulkActionBar.css";
+
 import { IconButton } from "./IconButton";
 
 interface BulkActionBarProps {
@@ -30,16 +32,16 @@ export function BulkActionBar({
       <span className="bulk-action-count" aria-live="polite">
         {count} selected
       </span>
-      <button type="button" onClick={onComplete}>
+      <button className="btn-secondary" type="button" onClick={onComplete}>
         Complete
       </button>
-      <button type="button" onClick={onReschedule}>
+      <button className="btn-secondary" type="button" onClick={onReschedule}>
         Reschedule
       </button>
-      <button type="button" onClick={onMove}>
+      <button className="btn-secondary" type="button" onClick={onMove}>
         Move to List
       </button>
-      <button type="button" onClick={onAddTag}>
+      <button className="btn-secondary" type="button" onClick={onAddTag}>
         Add Tag
       </button>
       <button type="button" className="row-action-danger" onClick={onDelete}>

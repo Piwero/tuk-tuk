@@ -15,7 +15,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("button", { name: "Inbox" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Inbox" })).toBeInTheDocument();
     expect(await screen.findByText("Buy milk")).toBeInTheDocument();
     expect(screen.getByText("Water plants")).toBeInTheDocument();
   });
@@ -24,7 +24,7 @@ describe("App", () => {
     const api = installFakeApi();
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const input = await screen.findByRole("combobox", { name: "Add a task" });
     await user.type(input, "Buy milk{Enter}");
@@ -43,7 +43,7 @@ describe("App", () => {
     const api = installFakeApi({ tasks: [fakeTask("Water plants")] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     const checkbox = await screen.findByRole("checkbox", { name: "Complete Water plants" });
     expect(checkbox).not.toBeChecked();
@@ -92,7 +92,7 @@ describe("App", () => {
     const api = installFakeApi({ tasks: [fakeTask("Old chore")] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     await user.click(await screen.findByRole("button", { name: "Delete Old chore" }));
 
@@ -110,7 +110,7 @@ describe("App", () => {
     const api = installFakeApi({ tasks: [fakeTask("Old chore")] });
     const user = userEvent.setup();
     render(<App />);
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
 
     await user.click(await screen.findByRole("button", { name: "Delete Old chore" }));
     expect(screen.queryByText("Old chore")).not.toBeInTheDocument();

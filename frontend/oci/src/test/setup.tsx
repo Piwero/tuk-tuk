@@ -4,9 +4,11 @@ import { beforeEach, vi } from "vitest";
 // jsdom's location/history persists across tests within a file — reset it so
 // a pushState left over from one test (e.g. clicking Calendar) never leaks
 // into the next test's initial render (issue #143's URL routing reads
-// window.location.pathname on mount).
+// window.location.pathname on mount). Starts at /all, not the bare root
+// (which opens Today since #428), so suites written against All keep their
+// landing view; root-URL tests set "/" themselves.
 beforeEach(() => {
-  window.history.replaceState(null, "", "/");
+  window.history.replaceState(null, "", "/all");
 });
 
 // jsdom has no PointerEvent; without it `fireEvent.pointerMove(el, { clientX })` and user-event's

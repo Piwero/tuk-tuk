@@ -38,7 +38,7 @@ describe("Task dates in list views", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Late" });
 
     expect(rowFor("Late")).toHaveAttribute("data-overdue", "true");
@@ -65,7 +65,7 @@ describe("Task dates in list views", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Ancient" });
 
     // The date is still shown and still announced as overdue — only the
@@ -93,7 +93,7 @@ describe("Task dates in list views", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Inbox" }));
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
     await screen.findByRole("button", { name: "Open details for Timed ancient" });
 
     const timedChip = within(rowFor("Timed ancient")).getByLabelText(/Overdue:/);
@@ -122,7 +122,7 @@ describe("Task dates in list views", () => {
     const nav = await screen.findByRole("navigation", { name: "Lists" });
     // Custom lists load via a separate async fetch, so wait for the Board list
     // button to render before clicking it (a bare getByRole races that fetch).
-    fireEvent.click(await within(nav).findByRole("button", { name: "Board" }));
+    fireEvent.click(await within(nav).findByRole("link", { name: "Board" }));
     const card = (
       await screen.findByRole("button", { name: "Open details for Late card" })
     ).closest("li");
@@ -144,7 +144,7 @@ describe("Task dates in list views", () => {
     render(<App />);
 
     const nav = await screen.findByRole("navigation", { name: "Lists" });
-    fireEvent.click(await within(nav).findByRole("button", { name: "Board" }));
+    fireEvent.click(await within(nav).findByRole("link", { name: "Board" }));
     await screen.findByRole("button", { name: "Open details for Ancient card" });
 
     // Same Task settles in the List view (see the test above), but the
@@ -164,6 +164,7 @@ describe("Task dates in list views", () => {
     render(<App />);
     await screen.findByRole("button", { name: "Open details for No date" });
 
+    fireEvent.click(screen.getByRole("button", { name: /^View/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Sort by" }), {
       target: { value: "date" },
     });
@@ -192,6 +193,7 @@ describe("Task dates in list views", () => {
     render(<App />);
     await screen.findByRole("button", { name: "Open details for Slipped" });
 
+    fireEvent.click(screen.getByRole("button", { name: /^View/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
       target: { value: "date" },
     });
@@ -222,6 +224,7 @@ describe("Task dates in list views", () => {
     render(<App />);
     await screen.findByRole("button", { name: "Open details for Ancient" });
 
+    fireEvent.click(screen.getByRole("button", { name: /^View/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Group by" }), {
       target: { value: "date" },
     });
@@ -241,5 +244,60 @@ describe("Task dates in list views", () => {
       .getAllByRole("button", { name: /^Open details for / })
       .map((button) => button.getAttribute("aria-label"));
     expect(titles).toEqual(["Open details for Ancient", "Open details for Recent"]);
+  });
+});
+
+describe("context-relative dates per view (issue #431)", () => {
+  async function openSmart(name: string): Promise<void> {
+    const nav = await screen.findByRole("complementary", { name: "" });
+    fireEvent.click(await within(nav).findByRole("button", { name }));
+  }
+
+  function chipText(title: string): string {
+    return rowFor(title).querySelector(".date-chip")?.textContent ?? "";
+  }
+
+  const seed = (): Parameters<typeof installFakeApi>[0] => ({
+    tasks: [
+      fakeTask("Timed today", {
+        due_date: new Date(2026, 6, 3, 14, 0).toISOString(),
+        is_all_day: false,
+      }),
+      fakeTask("Yesterday's", { due_date: "2026-07-02T00:00:00Z", is_all_day: true }),
+      fakeTask("Monday's", { due_date: "2026-07-06T00:00:00Z", is_all_day: true }),
+    ],
+  });
+
+  it("Today shows the time alone and 'Yesterday' for yesterday's overdue Task", async () => {
+    installFakeApi(seed());
+    render(<App />);
+    await openSmart("Today");
+    await screen.findByRole("button", { name: "Open details for Timed today" });
+
+    expect(chipText("Timed today")).toBe("14:00");
+    expect(chipText("Yesterday's")).toBe("Yesterday");
+    expect(within(rowFor("Yesterday's")).getByLabelText("Overdue: Jul 2")).toBeInTheDocument();
+  });
+
+  it("Next 7 Days shows weekday names", async () => {
+    installFakeApi(seed());
+    render(<App />);
+    await openSmart("Next 7 Days");
+    await screen.findByRole("button", { name: "Open details for Monday's" });
+
+    expect(chipText("Monday's")).toBe("Mon");
+    expect(chipText("Timed today")).toBe("Fri, 14:00");
+    expect(within(rowFor("Monday's")).getByLabelText("Due Jul 6")).toBeInTheDocument();
+  });
+
+  it("a List keeps absolute dates", async () => {
+    installFakeApi(seed());
+    render(<App />);
+    fireEvent.click(await screen.findByRole("link", { name: "Inbox" }));
+    await screen.findByRole("button", { name: "Open details for Monday's" });
+
+    expect(chipText("Monday's")).toBe("Jul 6");
+    expect(chipText("Timed today")).toBe("Jul 3, 14:00");
+    expect(chipText("Yesterday's")).toBe("Jul 2");
   });
 });

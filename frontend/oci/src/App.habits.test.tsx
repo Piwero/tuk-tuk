@@ -31,7 +31,32 @@ async function openHabitMenu(name: string): Promise<void> {
   await screen.findByRole("menu", { name: `Actions for ${name}` });
 }
 
-describe("Today's Habits", () => {
+/** A Habit's cell in the week grid, by its spoken day and state. */
+function cell(habit: string, day: string, state: string): Promise<HTMLElement> {
+  return screen.findByRole("button", { name: `${habit}, ${day}: ${state}` });
+}
+
+describe("Habits week grid", () => {
+  it("shows every active Habit in one Monday-first week grid and backfills past days", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Meditate"), fakeHabit("Review", { frequency: "FREQ=WEEKLY;BYDAY=MO" })],
+    });
+    render(<App />);
+    await openHabits();
+
+    const grid = await screen.findByRole("table", { name: "Habits this week" });
+    expect(
+      within(grid).getByRole("columnheader", { name: "Today, Friday, Jul 3" }),
+    ).toBeInTheDocument();
+    expect(within(grid).getByRole("row", { name: /Review/ })).toBeInTheDocument();
+    const cell = within(grid).getByRole("button", { name: "Meditate, Thursday, Jul 2: missed" });
+    fireEvent.click(cell);
+    await screen.findByRole("button", { name: "Meditate, Thursday, Jul 2: checked in" });
+    expect(
+      api.requests.some((r) => r.method === "PUT" && r.url.endsWith("/check-ins/2026-07-02")),
+    ).toBe(true);
+  });
+
   it("opens from the sidebar and queries the local day", async () => {
     const api = installFakeApi();
     render(<App />);
@@ -39,35 +64,46 @@ describe("Today's Habits", () => {
     await openHabits();
 
     await waitFor(() => {
-      expect(
-        api.requests.some((r) => r.method === "GET" && r.url === "/api/v1/habits?due=2026-07-03"),
-      ).toBe(true);
+      expect(api.requests.some((r) => r.method === "GET" && r.url === "/api/v1/habits")).toBe(true);
     });
     expect(
       api.requests.some((r) => r.method === "GET" && r.url === "/api/v1/check-ins?date=2026-07-03"),
     ).toBe(true);
   });
 
-  it("shows exactly the Habits scheduled today, the rest under Other habits", async () => {
-    installFakeApi({
+  it("tells done, partial, open today, missed, not scheduled and future cells apart", async () => {
+    const api = installFakeApi({
       habits: [
-        fakeHabit("Meditate"),
+        fakeHabit("Drink water", { type: "numeric", target: 4, step: 2 }),
         fakeHabit("Review week", { frequency: "FREQ=WEEKLY;BYDAY=MO" }),
-        fakeHabit("Gym", { frequency: "FREQ=WEEKLY;TT_TIMES=3" }),
       ],
     });
+    const water = api.habits[0]?.id ?? 0;
+    checkIn(api, water, "2026-06-29", 4);
+    checkIn(api, water, "2026-06-30", 2);
     render(<App />);
-
     await openHabits();
 
-    const today = await screen.findByRole("list", { name: "Today's Habits" });
-    const names = within(today)
-      .getAllByRole("listitem")
-      .map((item) => within(item).getByRole("heading").textContent);
-    expect(names).toEqual(["Meditate", "Gym"]);
-
-    const other = screen.getByRole("list", { name: "Other habits" });
-    expect(within(other).getByText("Review week")).toBeInTheDocument();
+    const grid = await screen.findByRole("table", { name: "Habits this week" });
+    const state = (name: string): string | undefined =>
+      [...within(grid).getByLabelText(name).classList].find((c) => c.startsWith("state-"));
+    await cell("Drink water", "Monday, Jun 29", "checked in");
+    expect(state("Drink water, Monday, Jun 29: checked in")).toBe("state-done");
+    expect(state("Drink water, Tuesday, Jun 30: in progress: 2 of 4")).toBe("state-partial");
+    expect(state("Drink water, Wednesday, Jul 1: missed")).toBe("state-missed");
+    expect(state("Drink water, Friday, Jul 3: not yet checked in")).toBe("state-open-today");
+    expect(state("Review week, Friday, Jul 3: not scheduled")).toBe("state-not-scheduled");
+    // A partial day sits on a lighter step of the heat ramp than a full one.
+    expect(within(grid).getByLabelText("Drink water, Monday, Jun 29: checked in")).toHaveClass(
+      "level-4",
+    );
+    expect(
+      within(grid).getByLabelText("Drink water, Tuesday, Jun 30: in progress: 2 of 4"),
+    ).toHaveClass("level-2");
+    // Future days are inert: not buttons, so a tap can't write.
+    const future = within(grid).getByRole("img", { name: "Drink water, Saturday, Jul 4: future" });
+    fireEvent.click(future);
+    expect(api.requests.filter((r) => r.method === "PUT")).toHaveLength(0);
   });
 
   it("checks a Boolean Habit in with one tap and undoes it with another", async () => {
@@ -75,9 +111,9 @@ describe("Today's Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Check in Meditate" }));
+    fireEvent.click(await cell("Meditate", "Friday, Jul 3", "not yet checked in"));
 
-    await screen.findByRole("button", { name: "Undo check-in Meditate" });
+    await cell("Meditate", "Friday, Jul 3", "checked in");
     expect(
       api.requests.some(
         (r) =>
@@ -88,9 +124,9 @@ describe("Today's Habits", () => {
     expect(api.checkIns).toHaveLength(1);
     expect(api.checkIns[0]?.value).toBe(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo check-in Meditate" }));
+    fireEvent.click(await cell("Meditate", "Friday, Jul 3", "checked in"));
 
-    await screen.findByRole("button", { name: "Check in Meditate" });
+    await cell("Meditate", "Friday, Jul 3", "not yet checked in");
     expect(api.checkIns).toHaveLength(0);
   });
 
@@ -99,30 +135,27 @@ describe("Today's Habits", () => {
     render(<App />);
     await openHabits();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Check in Meditate" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Undo check-in Meditate" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Check in Meditate" }));
+    fireEvent.click(await cell("Meditate", "Friday, Jul 3", "not yet checked in"));
+    fireEvent.click(await cell("Meditate", "Friday, Jul 3", "checked in"));
+    fireEvent.click(await cell("Meditate", "Friday, Jul 3", "not yet checked in"));
 
-    await screen.findByRole("button", { name: "Undo check-in Meditate" });
+    await cell("Meditate", "Friday, Jul 3", "checked in");
     expect(api.checkIns).toHaveLength(1);
   });
 
-  it("accumulates a Numeric Habit by +step and completes at the Target", async () => {
+  it("adds a step to a Numeric Habit from today's cell and completes at the Target", async () => {
     const api = installFakeApi({
       habits: [fakeHabit("Drink water", { type: "numeric", target: 4, step: 2, unit: "glasses" })],
     });
     render(<App />);
     await openHabits();
 
-    expect(await screen.findByText("0 / 4 glasses")).toBeInTheDocument();
+    fireEvent.click(await cell("Drink water", "Friday, Jul 3", "not yet checked in"));
+    const partial = await cell("Drink water", "Friday, Jul 3", "in progress: 2 of 4 glasses");
+    expect(partial).toHaveTextContent("2/4");
 
-    fireEvent.click(screen.getByRole("button", { name: "Add 2 to Drink water" }));
-    expect(await screen.findByText("2 / 4 glasses")).toBeInTheDocument();
-    expect(screen.queryByText("— Done")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Add 2 to Drink water" }));
-    expect(await screen.findByText("4 / 4 glasses")).toBeInTheDocument();
-    expect(screen.getByText("— Done")).toBeInTheDocument();
+    fireEvent.click(partial);
+    expect(await cell("Drink water", "Friday, Jul 3", "checked in")).toBeInTheDocument();
 
     expect(api.checkIns).toHaveLength(1);
     expect(api.checkIns[0]?.value).toBe(4);
@@ -131,7 +164,7 @@ describe("Today's Habits", () => {
   });
 });
 
-describe("Habit card stats", () => {
+describe("Habit Streak and history strip", () => {
   it("shows the Streak and a recent-days strip that reads misses only on scheduled days", async () => {
     const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
     const habitId = api.habits[0]?.id ?? 0;
@@ -170,10 +203,10 @@ describe("Habit card stats", () => {
     // Today is graced while un-checked, so the run so far reads as 3.
     expect(await screen.findByText("Streak: 3")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Check in Meditate" }));
+    fireEvent.click(await cell("Meditate", "Friday, Jul 3", "not yet checked in"));
     expect(await screen.findByText("Streak: 4")).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Undo check-in Meditate" }));
+    fireEvent.click(await cell("Meditate", "Friday, Jul 3", "checked in"));
     expect(await screen.findByText("Streak: 3")).toBeInTheDocument();
   });
 
@@ -272,7 +305,7 @@ describe("Habit card stats", () => {
     expect(api.checkIns).toHaveLength(0);
   });
 
-  it("keeps the card's check control in step when today's square is tapped", async () => {
+  it("keeps the grid's today cell in step when today's strip square is tapped", async () => {
     const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
     render(<App />);
     await openHabits();
@@ -280,15 +313,13 @@ describe("Habit card stats", () => {
     const strip = await screen.findByRole("group", { name: "Recent days for Meditate" });
     fireEvent.click(within(strip).getByRole("button", { name: "Jul 3: not yet checked in" }));
 
-    // The strip and the big check control are two views of the same day.
-    expect(
-      await screen.findByRole("button", { name: "Undo check-in Meditate" }),
-    ).toBeInTheDocument();
+    // The strip and the grid are two views of the same day.
+    expect(await cell("Meditate", "Friday, Jul 3", "checked in")).toBeInTheDocument();
     expect(api.checkIns).toHaveLength(1);
 
     fireEvent.click(await within(strip).findByRole("button", { name: "Jul 3: checked in" }));
 
-    expect(await screen.findByRole("button", { name: "Check in Meditate" })).toBeInTheDocument();
+    expect(await cell("Meditate", "Friday, Jul 3", "not yet checked in")).toBeInTheDocument();
     expect(api.checkIns).toHaveLength(0);
   });
 
@@ -372,9 +403,8 @@ describe("Managing Habits", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Repeat on Fri" }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    // Friday 2026-07-03 is one of the chosen weekdays, so it lands in today.
-    const today = await screen.findByRole("list", { name: "Today's Habits" });
-    expect(within(today).getByText("Drink water")).toBeInTheDocument();
+    // Friday 2026-07-03 is one of the chosen weekdays, so today's cell is open.
+    expect(await cell("Drink water", "Friday, Jul 3", "not yet checked in")).toBeInTheDocument();
     const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/habits");
     expect(post?.body).toEqual({
       name: "Drink water",
@@ -551,8 +581,8 @@ describe("Managing Habits", () => {
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Sit still" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    const today = await screen.findByRole("list", { name: "Today's Habits" });
-    await waitFor(() => expect(within(today).getByText("Sit still")).toBeInTheDocument());
+    const grid = await screen.findByRole("table", { name: "Habits this week" });
+    await waitFor(() => expect(within(grid).getByText("Sit still")).toBeInTheDocument());
     expect(api.habits[0]?.name).toBe("Sit still");
   });
 
@@ -578,7 +608,7 @@ describe("Managing Habits", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByText("0 / 20 minutes")).toBeInTheDocument();
+    expect(await cell("Meditate", "Friday, Jul 3", "not yet checked in")).toBeInTheDocument();
     const patch = api.requests.find((r) => r.method === "PATCH");
     expect(patch?.body).toMatchObject({
       type: "numeric",
@@ -613,18 +643,19 @@ describe("Managing Habits", () => {
 
     const archived = await screen.findByRole("list", { name: "Archived habits" });
     expect(within(archived).getByText("Meditate")).toBeInTheDocument();
-    const today = screen.getByRole("list", { name: "Today's Habits" });
-    expect(within(today).queryByText("Meditate")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Habits this week" })).not.toBeInTheDocument();
     expect(api.habits[0]?.is_archived).toBe(true);
     // Archived habits keep no check-in controls — today is not their screen.
-    expect(screen.queryByRole("button", { name: "Check in Meditate" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Meditate, Friday, Jul 3/ }),
+    ).not.toBeInTheDocument();
 
     await openHabitMenu("Meditate");
     fireEvent.click(await screen.findByRole("menuitem", { name: "Unarchive Meditate" }));
 
     await waitFor(() =>
       expect(
-        within(screen.getByRole("list", { name: "Today's Habits" })).getByText("Meditate"),
+        within(screen.getByRole("table", { name: "Habits this week" })).getByText("Meditate"),
       ).toBeInTheDocument(),
     );
     expect(api.habits[0]?.is_archived).toBe(false);
@@ -657,6 +688,7 @@ describe("Managing Habits", () => {
     await waitFor(() =>
       expect(screen.queryByRole("menu", { name: "Actions for Meditate" })).not.toBeInTheDocument(),
     );
+    expect(trigger).toHaveFocus();
   });
 
   it("opens History from the actions menu", async () => {
@@ -671,7 +703,7 @@ describe("Managing Habits", () => {
     expect(await screen.findByText("July 2026")).toBeInTheDocument();
   });
 
-  it("marks a met Target with words and a mark, not colour alone", async () => {
+  it("marks a met Target with a mark, not colour alone", async () => {
     const api = installFakeApi({
       habits: [fakeHabit("Drink water", { type: "numeric", target: 2, step: 2, unit: "glasses" })],
     });
@@ -679,9 +711,8 @@ describe("Managing Habits", () => {
     render(<App />);
     await openHabits();
 
-    const card = (await screen.findByRole("heading", { name: "Drink water" })).closest("li");
-    expect(card).toHaveClass("complete");
-    expect(within(card as HTMLElement).getByText("Target met")).toBeInTheDocument();
+    const done = await cell("Drink water", "Friday, Jul 3", "checked in");
+    expect(done.querySelector("svg")).not.toBeNull();
   });
 
   it("explains what a Habit is when none exist yet", async () => {
@@ -691,6 +722,6 @@ describe("Managing Habits", () => {
     await openHabits();
 
     expect(screen.getByText(/habits are things you check in on/i)).toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "Today's Habits" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Habits this week" })).not.toBeInTheDocument();
   });
 });

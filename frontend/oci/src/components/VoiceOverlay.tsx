@@ -1,3 +1,4 @@
+import "./VoiceOverlay.css";
 import { useEffect, useRef, useState } from "react";
 
 import { isTypingContext } from "../shortcuts";
@@ -93,7 +94,12 @@ export function VoiceOverlay({
             }
           }}
         >
-          <button ref={closeButton} type="button" className="voice-overlay-close" onClick={close}>
+          <button
+            ref={closeButton}
+            type="button"
+            className="voice-overlay-close btn-secondary"
+            onClick={close}
+          >
             Close voice overlay
           </button>
           <VoiceView />
@@ -102,7 +108,7 @@ export function VoiceOverlay({
       {!open && voice.capturing && (
         <div className="voice-live" role="status">
           Microphone live{" "}
-          <button type="button" onClick={voice.end}>
+          <button className="btn-secondary" type="button" onClick={voice.end}>
             Stop voice
           </button>
         </div>

@@ -61,6 +61,6 @@ export async function connectVoiceFromAssistant(user: {
 
 /** Back to the All list, where tasks the agent writes show up; the session carries on. */
 export async function backToAllTasks(user: { click: (element: Element) => Promise<void> }) {
-  const nav = await screen.findByRole("navigation", { name: "Smart Lists" });
+  const nav = await screen.findByRole("navigation", { name: "Lists" });
   await user.click(await within(nav).findByRole("button", { name: "All" }));
 }

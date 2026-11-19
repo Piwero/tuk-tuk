@@ -273,7 +273,7 @@ describe("voice writes: complete, priority, list", () => {
     const task = fakeTask("laundry");
     const { api, call } = await startVoice({ tasks: [task] });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     await open("laundry");
     await call("get_task", { task_id: task.id });
     const result = await call("complete_task", { task_id: task.id });
@@ -408,11 +408,11 @@ describe("voice writes: tags, check items, habits", () => {
     const { call } = await startVoice({ habits: [habit] });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await user.click(await screen.findByRole("link", { name: "Habits" }));
-    await screen.findByRole("button", { name: "Check in Meditate" });
+    await screen.findByRole("button", { name: "Meditate, Friday, Jul 3: not yet checked in" });
     await call("get_agenda");
     await call("check_in_habit", { habit_id: habit.id });
     expect(
-      await screen.findByRole("button", { name: "Undo check-in Meditate" }),
+      await screen.findByRole("button", { name: "Meditate, Friday, Jul 3: checked in" }),
     ).toBeInTheDocument();
   });
 });
@@ -421,11 +421,13 @@ describe("voice writes: visible views refresh", () => {
   it("a created Task appears in the open List view, the sidebar count and nothing else needs a reload", async () => {
     const { call } = await startVoice();
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    await user.click(await screen.findByRole("button", { name: "Inbox" }));
+    await user.click(await screen.findByRole("link", { name: "Inbox" }));
     await call("create_task", { title: "buy milk" });
     expect(await open("buy milk")).toBeInTheDocument();
     const lists = await screen.findByRole("navigation", { name: "Lists" });
-    expect(await within(lists).findByText("1")).toBeInTheDocument();
+    expect(within(lists).getByRole("link", { name: "Inbox" })).toHaveAccessibleDescription(
+      "1 open task",
+    );
   });
 
   it("a rescheduled Task moves on the Calendar", async () => {

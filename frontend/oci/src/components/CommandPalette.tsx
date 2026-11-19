@@ -1,3 +1,5 @@
+import "./CommandPalette.css";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -57,6 +59,9 @@ interface CommandPaletteProps {
   /** When set, the palette opens scoped to this one Task and offers its
    * verbs instead of jump targets (issue #205). */
   task?: Task;
+  /** Whether Focus is enabled in Settings — drops the Focus verb when off
+   * (#449). Defaults on. */
+  focusEnabled?: boolean;
   /** All Lists — capture files a Task into the one a `~list` token or chip
    * names, or `defaultListId` when none does; also feeds the scoped
    * "Move to a List" picker. */
@@ -236,6 +241,7 @@ function pickerChoices(
 export function CommandPalette({
   items,
   task,
+  focusEnabled = true,
   lists,
   tags,
   actions,
@@ -322,7 +328,7 @@ export function CommandPalette({
     }
     const rows: Row[] =
       picker === null
-        ? taskVerbs(task).map((verb) => ({
+        ? taskVerbs(task, { focusEnabled }).map((verb) => ({
             key: verb.id,
             label: verb.label,
             run: () => {

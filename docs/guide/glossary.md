@@ -46,6 +46,7 @@
 | **Goal** | An outcome for the quarter. |
 | **Key result** | A number that proves progress toward a goal. |
 | **Score** | Average progress across a goal's key results, from 0% to 100%. |
+| **Pace** | How much of an active goal's time has passed (days gone ÷ total days). The goal card compares it with the score to say if you are ahead or behind. |
 | **Focused goal** | The one goal shown on your stand-up. |
 | **Obstacle / If-Then plan** | What might stop you, and what you'll do when it happens. |
 | **Stand-up** | Daily page: Yesterday, Today, Blockers. |

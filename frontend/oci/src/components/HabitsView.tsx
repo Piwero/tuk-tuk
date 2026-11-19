@@ -1,3 +1,5 @@
+import { EmptyState, LoadError, SkeletonRows } from "./TaskViewState";
+import "./HabitsView.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -6,17 +8,16 @@ import {
   fetchCheckIns,
   fetchHabits,
   fetchHabitStats,
-  putCheckIn,
-  removeCheckIn,
   updateHabit,
   type CheckIn,
   type Habit,
   type HabitCreateInput,
   type HabitStats,
 } from "../api";
-import { localDayOf } from "../dates";
-import { habitFrequencyLabel } from "../habitFrequency";
-import { nextCheckIn, stripDays } from "../habitStats";
+import { addDays, formatDate, fromDayIso, localDayOf, shortDayLabel } from "../dates";
+import { habitDueOn, habitFrequencyLabel } from "../habitFrequency";
+import { tapCheckIn } from "../habitCheckIn";
+import { heatLevel, stripDays } from "../habitStats";
 import { HabitActionsMenu } from "./HabitActionsMenu";
 import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
@@ -33,7 +34,6 @@ type Editor = { mode: "create" } | { mode: "edit"; habitId: number } | null;
  */
 export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {}): JSX.Element {
   const [habits, setHabits] = useState<Habit[]>([]);
-  const [dueIds, setDueIds] = useState<Set<number>>(new Set());
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [editor, setEditor] = useState<Editor>(null);
   // The habit whose history (grid + heatmap) is expanded, if any.
@@ -47,15 +47,15 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
   const [statsByHabit, setStatsByHabit] = useState<Map<number, HabitStats>>(new Map());
   const today = localDayOf(new Date());
 
+  // "loading" until the first read lands, "error" when it fails (#442): an
+  // unloaded view is not an empty one.
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+
   const load = useCallback(async (): Promise<void> => {
-    const [duePage, allPage, checkInPage] = await Promise.all([
-      fetchHabits(today),
-      fetchHabits(),
-      fetchCheckIns(today),
-    ]);
-    setDueIds(new Set(duePage.items.map((habit) => habit.id)));
+    const [allPage, checkInPage] = await Promise.all([fetchHabits(), fetchCheckIns(today)]);
     setHabits(allPage.items);
     setCheckIns(checkInPage.items);
+    setStatus("ready");
     const statsEntries = await Promise.all(
       allPage.items.map(async (habit) => [habit.id, await habitStatsFor(habit, today)] as const),
     );
@@ -63,13 +63,20 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
   }, [today]);
 
   // `refreshToken` bumps when a Voice Assistant write lands (issue #370): re-read, as ever.
-  useEffect(() => {
-    void load();
-  }, [load, refreshToken]);
+  const loadOrFail = useCallback(async (): Promise<void> => {
+    try {
+      await load();
+    } catch {
+      setStatus((current) => (current === "ready" ? current : "error"));
+    }
+  }, [load]);
 
-  const dueToday = habits.filter((habit) => dueIds.has(habit.id));
-  const others = habits.filter((habit) => !dueIds.has(habit.id) && !habit.is_archived);
+  useEffect(() => {
+    void loadOrFail();
+  }, [loadOrFail, refreshToken]);
+
   const archived = habits.filter((habit) => habit.is_archived);
+  const active = habits.filter((habit) => !habit.is_archived);
   const checkInOf = (habit: Habit): CheckIn | undefined =>
     checkIns.find((checkIn) => checkIn.habit_id === habit.id);
 
@@ -126,27 +133,15 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
    * gesture as checking today in, so it needs no separate screen. */
   async function toggleDay(habit: Habit, day: string): Promise<void> {
     await writeDay(habit, day, async () => {
-      const next = nextCheckIn(habit, valueOn(habit, day));
-      if (next.clear) {
-        await removeCheckIn(habit.id, day);
-        if (day === today) {
-          setCheckIns((current) => current.filter((checkIn) => checkIn.habit_id !== habit.id));
-        }
+      const saved = await tapCheckIn(habit, day, valueOn(habit, day));
+      if (day !== today) {
         return;
       }
-      const saved = await putCheckIn(habit.id, day, next.value);
-      if (day === today) {
+      if (saved === null) {
+        setCheckIns((current) => current.filter((checkIn) => checkIn.habit_id !== habit.id));
+      } else {
         applyCheckIn(saved);
       }
-    });
-  }
-
-  /** The Numeric card's "+step" control: it only ever adds, whatever its
-   * label promises — clearing a met Target is the strip's job, not this
-   * button's. */
-  async function addStep(habit: Habit): Promise<void> {
-    await writeDay(habit, today, async () => {
-      applyCheckIn(await putCheckIn(habit.id, today, valueOn(habit, today) + habit.step));
     });
   }
 
@@ -189,129 +184,243 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
     await load();
   }
 
-  function renderHabit(habit: Habit, showCheckInControls: boolean): JSX.Element {
+  /** The week-grid cell for one Habit's day: its state, fill level and
+   * the words a screen reader hears. Partial Numeric days take a lighter
+   * step of the heat ramp than a met Target. */
+  function cellState(habit: Habit, day: string): { state: CellState; level: number; text: string } {
+    const value = valueOn(habit, day);
+    if (value >= habit.target) {
+      return { state: "done", level: 4, text: "checked in" };
+    }
+    if (value > 0) {
+      const unit = habit.unit === null ? "" : ` ${habit.unit}`;
+      return {
+        state: "partial",
+        level: Math.min(3, Math.max(1, heatLevel(value / habit.target))),
+        text: `in progress: ${value} of ${habit.target}${unit}`,
+      };
+    }
+    if (day > today) {
+      return { state: "future", level: 0, text: "future" };
+    }
+    if (!habitDueOn(habit.frequency, day)) {
+      return { state: "not-scheduled", level: 0, text: "not scheduled" };
+    }
+    return day === today
+      ? { state: "open-today", level: 0, text: "not yet checked in" }
+      : { state: "missed", level: 0, text: "missed" };
+  }
+
+  function actionsMenu(habit: Habit): JSX.Element {
+    return (
+      <HabitActionsMenu
+        habit={habit}
+        onHistory={() => setHistoryId((current) => (current === habit.id ? null : habit.id))}
+        onEdit={() => setEditor({ mode: "edit", habitId: habit.id })}
+        onToggleArchive={() => void setArchived(habit, !habit.is_archived)}
+        onDelete={() => void handleDelete(habit)}
+      />
+    );
+  }
+
+  function editForm(habit: Habit): JSX.Element {
+    return (
+      <HabitForm
+        initial={habit}
+        onSubmit={(values) => void handleEdit(habit, values)}
+        onCancel={() => setEditor(null)}
+      />
+    );
+  }
+
+  function renderRow(habit: Habit): JSX.Element[] {
+    if (editor?.mode === "edit" && editor.habitId === habit.id) {
+      return [
+        <tr key={habit.id}>
+          <td colSpan={8} className="habit-editing">
+            {editForm(habit)}
+          </td>
+        </tr>,
+      ];
+    }
+    const stats = statsByHabit.get(habit.id);
+    const rows = [
+      <tr key={habit.id} className="habit-row">
+        <th scope="row" className="habit-row-head">
+          <div className="habit-head">
+            {habit.color !== null && (
+              <span className="color-dot" style={{ background: habit.color }} />
+            )}
+            {habit.icon !== null && <span className="habit-icon">{habit.icon}</span>}
+            <div className="habit-body">
+              <span className="habit-name">{habit.name}</span>
+              <Hint hintKey="streak">
+                <span className="habit-streak-count" tabIndex={0}>
+                  <Icon name="flame" size={12} />
+                  Streak: {stats?.streak ?? 0}
+                </span>
+              </Hint>
+            </div>
+            {actionsMenu(habit)}
+          </div>
+        </th>
+        {weekDays.map((day) => {
+          const { state, level, text } = cellState(habit, day);
+          const label = `${habit.name}, ${weekdayLongLabel(day)}: ${text}`;
+          const className = `habit-cell state-${state} heatmap-day level-${level}${day === today ? " today" : ""}`;
+          const value = valueOn(habit, day);
+          return (
+            <td key={day}>
+              {state === "future" ? (
+                <span role="img" className={className} aria-label={label} />
+              ) : (
+                <button
+                  type="button"
+                  className={className}
+                  aria-label={label}
+                  aria-pressed={value > 0}
+                  onClick={() => void toggleDay(habit, day)}
+                >
+                  {state === "done" && <Icon name="check" size={12} />}
+                  {state === "partial" && (
+                    <span className="habit-cell-progress">
+                      {value}/{habit.target}
+                    </span>
+                  )}
+                </button>
+              )}
+            </td>
+          );
+        })}
+      </tr>,
+    ];
+    if (historyId === habit.id) {
+      rows.push(
+        <tr key={`${habit.id}-history`}>
+          <td colSpan={8}>
+            <HabitHistory habit={habit} onChanged={() => void load()} />
+          </td>
+        </tr>,
+      );
+    }
+    return rows;
+  }
+
+  function renderArchived(habit: Habit): JSX.Element {
     if (editor?.mode === "edit" && editor.habitId === habit.id) {
       return (
         <li key={habit.id} className="habit-editing">
-          <HabitForm
-            initial={habit}
-            onSubmit={(values) => void handleEdit(habit, values)}
-            onCancel={() => setEditor(null)}
-          />
+          {editForm(habit)}
         </li>
       );
     }
-    const checkIn = checkInOf(habit);
-    const value = checkIn?.value ?? 0;
-    const complete = value >= habit.target;
-    const targetMet = complete && showCheckInControls;
     return (
-      <li key={habit.id} className={targetMet ? "habit complete" : "habit"}>
+      <li key={habit.id} className="habit">
         <div className="habit-head">
-          {habit.color !== null && (
-            <span className="color-dot" style={{ background: habit.color }} />
-          )}
           {habit.icon !== null && <span className="habit-icon">{habit.icon}</span>}
           <div className="habit-body">
             <h3>{habit.name}</h3>
-            {habit.encouragement !== "" && (
-              <p className="habit-encouragement">{habit.encouragement}</p>
-            )}
             <p className="habit-frequency">{habitFrequencyLabel(habit.frequency)}</p>
           </div>
-          <HabitActionsMenu
-            habit={habit}
-            onHistory={() => setHistoryId((current) => (current === habit.id ? null : habit.id))}
-            onEdit={() => setEditor({ mode: "edit", habitId: habit.id })}
-            onToggleArchive={() => void setArchived(habit, !habit.is_archived)}
-            onDelete={() => void handleDelete(habit)}
-          />
+          {actionsMenu(habit)}
         </div>
-        {/* A met Target is called out in words and with a mark, not by the
-         * card's green wash alone. */}
-        {targetMet && (
-          <p className="habit-target-met">
-            <Icon name="check" size={14} />
-            Target met
-          </p>
-        )}
-        {/* The expanded history panel already shows the Streak (plus the
-         * full grid and heatmap); skip the compact badge so it isn't
-         * repeated. */}
-        {historyId !== habit.id && (
-          <HabitCardStats
-            habit={habit}
-            stats={statsByHabit.get(habit.id)}
-            today={today}
-            onToggleDay={habit.is_archived ? null : (day) => void toggleDay(habit, day)}
-          />
-        )}
-        {showCheckInControls && (
-          <div className="habit-checkin">
-            {habit.type === "boolean" ? (
-              <Hint hintKey="habit-checkin">
-                <button
-                  type="button"
-                  className="habit-check"
-                  aria-label={complete ? `Undo check-in ${habit.name}` : `Check in ${habit.name}`}
-                  aria-pressed={complete}
-                  onClick={() => void toggleDay(habit, today)}
-                >
-                  {complete && <Icon name="check" size={18} />}
-                </button>
-              </Hint>
-            ) : (
-              <>
-                <Hint hintKey="target">
-                  <span className="habit-progress" tabIndex={0}>
-                    {value} / {habit.target}
-                    {habit.unit === null ? "" : ` ${habit.unit}`}
-                    {complete && <span className="habit-done"> — Done</span>}
-                  </span>
-                </Hint>
-                <Hint hintKey="habit-step">
-                  <button
-                    type="button"
-                    className="habit-step"
-                    aria-label={`Add ${habit.step} to ${habit.name}`}
-                    onClick={() => void addStep(habit)}
-                  >
-                    +{habit.step}
-                  </button>
-                </Hint>
-              </>
-            )}
-          </div>
-        )}
+        <HabitCardStats
+          habit={habit}
+          stats={statsByHabit.get(habit.id)}
+          today={today}
+          onToggleDay={null}
+          showStreak={false}
+        />
         {historyId === habit.id && <HabitHistory habit={habit} onChanged={() => void load()} />}
       </li>
     );
   }
 
+  const weekStart = addDays(today, -((fromDayIso(today).getDay() + 6) % 7));
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  if (status === "loading") {
+    return (
+      <div className="habits-view">
+        <SkeletonRows label="Loading habits" />
+      </div>
+    );
+  }
+  if (status === "error") {
+    return (
+      <div className="habits-view">
+        <LoadError
+          what="habits"
+          onRetry={() => {
+            setStatus("loading");
+            void loadOrFail();
+          }}
+        />
+      </div>
+    );
+  }
+
+  const empty = habits.length === 0 && editor === null;
+
   return (
     <div className="habits-view">
-      {habits.length === 0 ? (
-        <p className="habits-empty-hint">
-          Habits are things you check in on daily or weekly — add one below to start tracking it.
-        </p>
-      ) : (
-        <ul className="habits-grid" aria-label="Today's Habits">
-          {dueToday.map((habit) => renderHabit(habit, true))}
-        </ul>
-      )}
-      {others.length > 0 && (
-        <section className="other-habits">
-          <h2>Other habits</h2>
-          <ul className="habits-grid" aria-label="Other habits">
-            {others.map((habit) => renderHabit(habit, false))}
-          </ul>
-        </section>
-      )}
+      {habits.length === 0
+        ? empty && (
+            <EmptyState
+              title="No habits yet"
+              description="Habits are things you check in on daily or weekly — add one to start tracking it."
+              actionLabel="Add Habit"
+              onAction={() => setEditor({ mode: "create" })}
+            />
+          )
+        : active.length > 0 && (
+            <>
+              <div className="habits-week-scroll">
+                <table className="habits-week-grid" aria-label="Habits this week">
+                  <thead>
+                    <tr>
+                      <th scope="col" className="habits-week-corner">
+                        Habit
+                      </th>
+                      {weekDays.map((day) => (
+                        <th
+                          key={day}
+                          scope="col"
+                          aria-label={`${day === today ? "Today, " : ""}${weekdayLongLabel(day)}`}
+                          className={day === today ? "week-day today" : "week-day"}
+                        >
+                          <span aria-hidden="true">
+                            {formatDate(fromDayIso(day), "weekday")}
+                            <span className="week-day-num">{day.slice(8).replace(/^0/, "")}</span>
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>{active.flatMap((habit) => renderRow(habit))}</tbody>
+                </table>
+              </div>
+              <section className="habits-long-history" aria-label="Recent days">
+                {active.map((habit) => (
+                  <div key={habit.id} className="habit-long-history-row">
+                    <span className="habit-name">{habit.name}</span>
+                    <HabitCardStats
+                      habit={habit}
+                      stats={statsByHabit.get(habit.id)}
+                      today={today}
+                      onToggleDay={(day) => void toggleDay(habit, day)}
+                      showStreak={false}
+                    />
+                  </div>
+                ))}
+              </section>
+            </>
+          )}
       {archived.length > 0 && (
         <section className="archived-habits">
           <h2>Archived</h2>
           <ul className="habits-grid" aria-label="Archived habits">
-            {archived.map((habit) => renderHabit(habit, false))}
+            {archived.map((habit) => renderArchived(habit))}
           </ul>
         </section>
       )}
@@ -321,12 +430,25 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
           onCancel={() => setEditor(null)}
         />
       ) : (
-        <button type="button" onClick={() => setEditor({ mode: "create" })}>
-          Add Habit
-        </button>
+        !empty && (
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => setEditor({ mode: "create" })}
+          >
+            Add Habit
+          </button>
+        )
       )}
     </div>
   );
+}
+
+type CellState = "done" | "partial" | "open-today" | "missed" | "not-scheduled" | "future";
+
+/** "Friday, Jul 3" — a week-grid column's spoken day. */
+function weekdayLongLabel(day: string): string {
+  return `${formatDate(fromDayIso(day), "weekdayLong")}, ${shortDayLabel(day)}`;
 }
 
 /** One Habit's stats, covering every day its card's strip shows. The

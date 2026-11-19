@@ -31,8 +31,8 @@ describe("Collapsing the sidebar", () => {
     await user.click(within(sidebar).getByRole("button", { name: "Collapse sidebar" }));
 
     // The rail keeps every destination reachable, by icon alone.
-    expect(within(sidebar).queryByRole("search")).not.toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Errands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("button", { name: "Quick search" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Errands" })).toBeInTheDocument();
     expect(within(sidebar).getByRole("button", { name: "Quick add" })).toBeInTheDocument();
 
     await user.click(within(sidebar).getByRole("button", { name: "Expand sidebar" }));
@@ -54,10 +54,10 @@ describe("Collapsing the sidebar", () => {
     const sidebar = screen.getByRole("complementary");
     await user.click(within(sidebar).getByRole("button", { name: "Collapse sidebar" }));
 
-    expect(within(sidebar).getByRole("button", { name: "Errands" })).toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Reports" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Errands" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Reports" })).toBeInTheDocument();
     expect(within(sidebar).getByTitle("Work")).toBeInTheDocument();
-    expect(within(sidebar).getByRole("button", { name: "Urgent" })).toBeInTheDocument();
+    expect(within(sidebar).getByRole("link", { name: "Urgent" })).toBeInTheDocument();
   });
 
   // #264: `title` alone only ever reveals on mouse hover — a keyboard user
@@ -103,80 +103,6 @@ describe("Collapsing the sidebar", () => {
     expect(await within(sidebar).findByRole("tooltip", { name: "Urgent" })).toBeInTheDocument();
   });
 
-  // Below the mobile breakpoint the sidebar is off-canvas, so the header
-  // carries its own control. jsdom applies no CSS, so the layout itself isn't
-  // observable here — the drawer's state and its dismissal are.
-  it("opens the navigation drawer from the header and closes it on a choice", async () => {
-    const errands = fakeList("Errands");
-    installFakeApi({ lists: [INBOX, errands] });
-    const user = userEvent.setup();
-    render(<App />);
-    await screen.findByRole("heading", { name: "All" });
-
-    const menu = screen.getByRole("button", { name: "Show navigation" });
-    expect(menu).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(menu);
-    expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-
-    // Picking a destination gets the drawer out of the way.
-    const sidebar = screen.getByRole("complementary");
-    await user.click(within(sidebar).getByRole("button", { name: "Errands" }));
-
-    expect(await screen.findByRole("heading", { name: "Errands" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-  });
-
-  // Issue #170: the drawer used to have no way out but the backdrop —
-  // an explicit control closes it too.
-  it("closes the drawer from its own explicit close control", async () => {
-    installFakeApi();
-    const user = userEvent.setup();
-    render(<App />);
-    await screen.findByRole("heading", { name: "All" });
-
-    await user.click(screen.getByRole("button", { name: "Show navigation" }));
-    expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-
-    const sidebar = screen.getByRole("complementary");
-    await user.click(within(sidebar).getByRole("button", { name: "Close navigation" }));
-
-    expect(screen.getByRole("button", { name: "Show navigation" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-  });
-
-  // Issue #290: a drag starting over the scrim used to scroll the list
-  // underneath, because nothing locked `main`'s own scroll region while
-  // the drawer sat on top of it. `.app` itself never scrolls (`overflow:
-  // hidden` in index.css) — `main` is the real scroll region — so it's
-  // `main`'s overflow that must lock, not `document.body`'s.
-  it("locks main's scroll region while the drawer is open, and restores it on close", async () => {
-    installFakeApi();
-    const user = userEvent.setup();
-    render(<App />);
-    await screen.findByRole("heading", { name: "All" });
-
-    const main = screen.getByRole("main");
-    expect(main.style.overflow).toBe("");
-
-    await user.click(screen.getByRole("button", { name: "Show navigation" }));
-    expect(main.style.overflow).toBe("hidden");
-
-    await user.click(screen.getByRole("button", { name: "Close navigation" }));
-    expect(main.style.overflow).toBe("");
-  });
-
   it("remembers the choice across a reload", async () => {
     installFakeApi();
     const user = userEvent.setup();
@@ -188,6 +114,6 @@ describe("Collapsing the sidebar", () => {
     render(<App />);
 
     expect(await screen.findByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
-    expect(screen.queryByRole("search")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Quick search" })).toBeInTheDocument();
   });
 });
