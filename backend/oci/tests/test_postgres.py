@@ -1,15 +1,12 @@
 """The opt-in PostgreSQL job (ADR 0013, issue #254): migrations to head,
 the List-delete paths foreign key enforcement affects, a core API slice,
-the connection probe's success path, and sequence correctness after a real
-copy. Skips locally (see tests/postgres_fixtures.py); CI's postgres job
+the connection probe's success path, and sequence correctness after an
+explicit-id insert. Skips locally (see tests/postgres_fixtures.py); CI's postgres job
 exercises it.
 """
 
 import asyncio
-import shutil
-import sqlite3
 from datetime import UTC, datetime
-from pathlib import Path
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -18,7 +15,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import Settings
-from app.copy_database import copy_database
 from app.db import BACKEND_DIR
 from app.db_probe import probe_connection
 from app.main import create_app
@@ -137,59 +133,9 @@ def test_probe_reports_existing_data_even_with_no_settings_row(postgres_url: str
     assert result.has_existing_data is True
 
 
-def test_copy_from_sqlite_reseeds_sequences_so_new_rows_insert(
-    postgres_url: str, tmp_path: Path, migrated_template_db: Path
-) -> None:
-    """The reseed path end to end: copy real ids across, then create a Task
-    through the API. Without `setval` this is a duplicate-key violation."""
-    source_path = tmp_path / "source.db"
-    shutil.copyfile(migrated_template_db, source_path)
-    with sqlite3.connect(source_path) as conn:
-        conn.execute(
-            "INSERT INTO lists (id, name, is_inbox, is_archived, sort_order, view_mode, owner, "
-            "created_at) VALUES (7, 'Inbox', 1, 0, 0, 'list', 'local', '2026-01-01T00:00:00+00:00')"
-        )
-        conn.execute(
-            "INSERT INTO tasks (id, title, completed, description, priority, is_all_day, "
-            "reminders, list_id, sort_order, owner, created_at) VALUES "
-            "(42, 'Copied task', 0, '', 'none', 0, '[]', 7, 0, 'local', "
-            "'2026-01-01T00:00:00+00:00')"
-        )
-        conn.commit()
-
-    report = copy_database(f"sqlite:///{source_path}", postgres_url, force=True)
-    assert report.success, str(report)
-
-    app = create_app(Settings(database_url=postgres_url), clock=FakeClock(datetime.now(UTC)))
-    with TestClient(app) as client:
-        _login(client)
-        response = client.post("/api/v1/tasks", json={"title": "After the move", "list_id": 7})
-        assert response.status_code == 201, response.text
-        assert response.json()["id"] > 42
-
-
-def test_reseed_leaves_an_empty_table_starting_at_one(
-    postgres_url: str, tmp_path: Path, migrated_template_db: Path
-) -> None:
-    """`setval(…, MAX(id), true)` on an empty table would burn id 1. A copy
-    of an empty source must still hand out 1 for the first row."""
-    source_path = tmp_path / "source.db"
-    shutil.copyfile(migrated_template_db, source_path)
-
-    copy_database(f"sqlite:///{source_path}", postgres_url, force=True)
-
-    app = create_app(Settings(database_url=postgres_url), clock=FakeClock(datetime.now(UTC)))
-    with TestClient(app) as client:
-        _login(client)
-        created = client.post("/api/v1/folders", json={"name": "First"})
-        assert created.status_code == 201, created.text
-        assert created.json()["id"] == 1
-
-
 def test_sequence_correct_after_explicit_id_insert(postgres_url: str) -> None:
-    """Validates the engine setup, not the copy tool (#254's job) — the
-    copy tool itself is what calls `setval` after a real data load (#255).
-    """
+    """Validates the engine setup: an explicit-id insert must not leave the
+    sequence handing out an id that collides with it."""
 
     async def _insert_explicit_id() -> None:
         engine = create_async_engine(postgres_url)
