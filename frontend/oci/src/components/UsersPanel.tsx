@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { type AdminUser, ApiError, type CurrentUser, fetchAdminUsers, type Page } from "../api";
 import { LoadError, SkeletonRows } from "./TaskViewState";
+import { NewUserDialog } from "./NewUserDialog";
 import { Avatar } from "./UserMenu";
 
 /** How an account stands (#468): Disabled if it is not active; otherwise
@@ -93,8 +94,19 @@ export function UsersPanel({
 }): JSX.Element {
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [creating, setCreating] = useState(false);
   const onAccessLostRef = useRef(onAccessLost);
   onAccessLostRef.current = onAccessLost;
+
+  /** Re-reads the list behind an open dialog, keeping the table (and the
+   * New user button focus returns to) on screen; a failed re-read leaves the
+   * list as it was. */
+  function rereadQuietly(): void {
+    fetchAdminUsers().then(
+      (page) => setList({ kind: "loaded", page }),
+      () => {},
+    );
+  }
 
   useEffect(() => {
     let live = true;
@@ -126,10 +138,19 @@ export function UsersPanel({
       {list.kind === "loaded" && (
         <>
           <header className="users-head">
-            <h2>{list.page.total === 1 ? "1 user" : `${list.page.total} users`}</h2>
-            <p className="users-boundary">
-              You manage accounts here. You can’t see another user’s tasks, habits or settings.
-            </p>
+            <div>
+              <h2>{list.page.total === 1 ? "1 user" : `${list.page.total} users`}</h2>
+              <p className="users-boundary">
+                You manage accounts here. You can’t see another user’s tasks, habits or settings.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="settings-primary-action"
+              onClick={() => setCreating(true)}
+            >
+              New user
+            </button>
           </header>
           <table aria-label="Users" className="users-table">
             <thead>
@@ -149,6 +170,9 @@ export function UsersPanel({
               ))}
             </tbody>
           </table>
+          {creating && (
+            <NewUserDialog onClose={() => setCreating(false)} onCreated={rereadQuietly} />
+          )}
         </>
       )}
     </section>

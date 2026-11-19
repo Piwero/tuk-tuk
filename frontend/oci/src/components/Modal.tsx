@@ -7,6 +7,10 @@ interface ModalProps {
   /** Names the dialog for assistive tech and heads its title row. */
   title: string;
   onClose: () => void;
+  /** False while the dialog must not be dismissed (a one-time password not
+   * yet saved, #479): Escape and a backdrop click do nothing and the close
+   * control is disabled. The dialog's own actions decide when it closes. */
+  dismissible?: boolean;
   children: React.ReactNode;
 }
 
@@ -16,7 +20,7 @@ interface ModalProps {
  * Deliberately not the native <dialog> element: jsdom 25 (this project's test
  * environment) does not implement showModal(), so a native dialog would be
  * untestable here. */
-export function Modal({ title, onClose, children }: ModalProps): JSX.Element {
+export function Modal({ title, onClose, dismissible = true, children }: ModalProps): JSX.Element {
   const panel = useRef<HTMLDivElement>(null);
 
   // Read during the first render, which is the last moment the opener still
@@ -35,7 +39,9 @@ export function Modal({ title, onClose, children }: ModalProps): JSX.Element {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key === "Escape") {
-        onClose();
+        if (dismissible) {
+          onClose();
+        }
         return;
       }
       if (event.key !== "Tab" || panel.current === null) {
@@ -62,14 +68,14 @@ export function Modal({ title, onClose, children }: ModalProps): JSX.Element {
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, dismissible]);
 
   return (
     <div
       className="modal-backdrop"
       // Only the scrim itself dismisses — clicks inside the panel bubble here.
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && dismissible) {
           onClose();
         }
       }}
@@ -84,7 +90,13 @@ export function Modal({ title, onClose, children }: ModalProps): JSX.Element {
       >
         <div className="modal-header">
           <h2>{title}</h2>
-          <IconButton icon="x" label="Close" className="modal-close" onClick={onClose} />
+          <IconButton
+            icon="x"
+            label="Close"
+            className="modal-close"
+            onClick={onClose}
+            disabled={!dismissible}
+          />
         </div>
         {children}
       </div>
