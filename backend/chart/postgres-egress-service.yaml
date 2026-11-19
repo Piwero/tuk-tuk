@@ -1,0 +1,22 @@
+---
+# Egress proxy to the shared Postgres Machine on the tailnet (Proxmox
+# `postgres-supernova`). Same pattern as gitops-homelab-supernova's
+# apps/base/{bifrost,litellm}/postgres-egress.yaml and
+# apps/base/openwebui/pgvector-egress.yaml: the tailscale-operator watches
+# ExternalName Services carrying the `tailnet-fqdn` annotation, spins up an
+# egress proxy StatefulSet in the `tailscale` namespace, and rewrites
+# spec.externalName to point at it. Consumers use
+# `postgres.tuk-tuk.svc.cluster.local:5432`. Shipped ahead of the DB cutover
+# (#417) so the proxy is programmed before the backend depends on it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: tuk-tuk
+  annotations:
+    tailscale.com/tailnet-fqdn: "postgres-supernova.mora-garibaldi.ts.net"
+spec:
+  type: ExternalName
+  # Placeholder — overwritten by the operator with the egress proxy's
+  # in-cluster DNS name.
+  externalName: placeholder

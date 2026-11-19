@@ -19,6 +19,7 @@ resources:
   - imageupdateautomation.yaml
   - deployment.yaml
   - service.yaml
+  - postgres-egress-service.yaml
   - tailscale-ingress.yaml
   - cf-ingressroute.yaml
   - cf-ingressroute-web-redirect.yaml
