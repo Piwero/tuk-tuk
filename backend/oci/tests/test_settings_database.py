@@ -1,17 +1,15 @@
 """The Database status + test-connection endpoints (issue #256).
 
 Read-only probe: neither endpoint can switch the app's own database, and
-the submitted URL is never logged, stored, or echoed back. The success
-path (real PostgreSQL, reporting version and emptiness) is deliberately
-not covered here — it's exercised by the opt-in PostgreSQL job from #254,
-which has a real server to talk to.
+the submitted URL is never logged, stored, or echoed back.
 """
 
 import socket
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import app_settings_row
+from app.db_probe import probe_connection
+from tests.conftest import app_settings_row, run_sql
 
 
 def _closed_port_url() -> str:
@@ -106,3 +104,31 @@ class TestConnectionProbe:
         )
 
         assert snapshot() == before
+
+
+class TestProbeSuccess:
+    """The probe pointed straight at a real server — the half the endpoint
+    tests above can't reach without one."""
+
+    def test_reports_version_and_that_a_migrated_database_is_empty(self, database_url: str) -> None:
+        result = probe_connection(database_url)
+
+        assert result.ok, result.message
+        assert result.version is not None
+        assert result.version.startswith("PostgreSQL ")
+        assert "compiled by" not in result.version  # the build banner, not the version
+        assert result.has_existing_data is False
+
+    def test_reports_existing_data_even_with_no_settings_row(self, database_url: str) -> None:
+        """Any tuk-tuk table carrying a row means "already holds data", not
+        just `settings`."""
+        run_sql(
+            database_url,
+            "INSERT INTO lists (id, name, is_inbox, sort_order, owner, created_at) "
+            "VALUES (1, 'Pre-existing', false, 0, 'local', now())",
+        )
+
+        result = probe_connection(database_url)
+
+        assert result.ok, result.message
+        assert result.has_existing_data is True
