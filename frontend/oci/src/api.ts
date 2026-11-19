@@ -1581,7 +1581,7 @@ export function updateActiveHoursSettings(
  * populated for postgresql; the username, password, and full URL are never
  * reported. */
 export interface DatabaseStatus {
-  engine: "sqlite" | "postgresql";
+  engine: "postgresql";
   host: string | null;
   database: string | null;
 }

@@ -724,7 +724,7 @@ export function installFakeApi({
   standupEnabled = true,
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
-  databaseStatus = { engine: "sqlite", host: null, database: null },
+  databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
     version: "PostgreSQL 16.0",
@@ -811,8 +811,8 @@ export function installFakeApi({
   /** Active hours (issue #210) -- the Calendar's double-height band.
    * Defaults to disabled, matching the backend. */
   activeHours?: { enabled: boolean; start: string; end: string };
-  /** Settings > Database (issue #256). Defaults to sqlite, matching a
-   * fresh deployment; databaseTestConnectionResult is what every
+  /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
+   * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
   databaseStatus?: DatabaseStatus;
   databaseTestConnectionResult?: DatabaseTestConnectionResult;
@@ -2135,7 +2135,7 @@ export function installFakeApi({
       }
       if (method === "DELETE") {
         // Deleting a Key Result detaches its Tasks (mirrors the backend's
-        // explicit UPDATE — SQLite's ON DELETE SET NULL never fires).
+        // explicit UPDATE and ON DELETE SET NULL).
         for (const task of state.tasks) {
           if (task.key_result_id === keyResultId) task.key_result_id = null;
         }
