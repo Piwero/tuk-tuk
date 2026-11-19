@@ -13,9 +13,9 @@ spec:
   # read-then-insert. Moving to PostgreSQL makes scaling *look* available.
   # It is not. Don't raise this.
   replicas: 1
-  # Recreate, not RollingUpdate: the SQLite PVC is ReadWriteOnce and the app
-  # is single-writer — the old pod must release the volume before the new one
-  # starts. Still correct on PostgreSQL, for the replicas: 1 reason above.
+  # Recreate, not RollingUpdate: the app is single-writer (the replicas: 1
+  # reason above), and the leftover PVC below is ReadWriteOnce — the old pod
+  # must release it before the new one starts.
   # No init containers: the app runs Alembic migrations itself on startup
   # (and fails fast, naming the host, if the database is unreachable — see
   # app.db.check_database_reachable), so there is nothing to wait for even
