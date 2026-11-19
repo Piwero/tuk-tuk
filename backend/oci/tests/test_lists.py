@@ -124,6 +124,20 @@ def test_deleting_a_list_removes_all_its_sections(client: TestClient) -> None:
     assert sections["items"] == []
 
 
+def test_deleting_a_list_removes_tasks_filed_in_its_sections(client: TestClient) -> None:
+    task_list = client.post("/api/v1/lists", json={"name": "Old project"}).json()
+    section = client.post(
+        "/api/v1/sections", json={"list_id": task_list["id"], "name": "Doing"}
+    ).json()
+    task = make_task(client, "Filed", list_id=task_list["id"], section_id=section["id"])
+
+    response = client.delete(f"/api/v1/lists/{task_list['id']}")
+
+    assert response.status_code == 204
+    remaining_tasks = client.get("/api/v1/tasks").json()["items"]
+    assert all(t["id"] != task["id"] for t in remaining_tasks)
+
+
 def test_deleting_a_list_leaves_another_lists_sections_and_tasks_alone(
     client: TestClient,
 ) -> None:
