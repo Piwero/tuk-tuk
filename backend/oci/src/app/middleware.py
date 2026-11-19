@@ -279,7 +279,8 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Local-dev escape hatch (AUTH_DISABLED): no cookie, no forced
-        steps; every request acts as the first Admin. An install with no
+        steps; every request acts as the first Admin, and marks them active
+        like any served request (issue #478). An install with no
         User yet still has to go through `/setup` to create one."""
         session_factory = request.app.state.session_factory
         async with session_factory() as db_session:
@@ -287,5 +288,6 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if admin is None:
             return _setup_required()
         request.state.user_id = admin.id
+        await self._record_activity(request, admin)
         with acting_as(admin.id):
             return await call_next(request)
