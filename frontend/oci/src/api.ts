@@ -171,6 +171,30 @@ export function updateProfile(fields: { username?: string; email?: string }): Pr
   return request("/api/v1/auth/me", { method: "PATCH", body: JSON.stringify(fields) });
 }
 
+/** An account as the admin users API returns it (#412): account fields
+ * only, never anything the account owns. */
+export interface AdminUser {
+  id: number;
+  username: string;
+  /** Null only for the upgraded single user before they complete their
+   * profile. */
+  email: string | null;
+  is_admin: boolean;
+  is_active: boolean;
+  must_change_password: boolean;
+  must_complete_profile: boolean;
+  created_at: string;
+}
+
+/** The most accounts one admin users read returns (the backend's cap). */
+const ADMIN_USERS_LIMIT = 200;
+
+/** Every account on the instance, ordered by id, for Settings › Users.
+ * Admins only: rejects 403 `admin_required` for anyone else. */
+export function fetchAdminUsers(): Promise<Page<AdminUser>> {
+  return request(`/api/v1/admin/users?limit=${ADMIN_USERS_LIMIT}`);
+}
+
 /** Signs in by username or email (either ignoring case) and sets the
  * session cookie. Rejects with `invalid_credentials` (an unknown login and
  * a wrong password alike), `too_many_attempts`, or `account_disabled`. */

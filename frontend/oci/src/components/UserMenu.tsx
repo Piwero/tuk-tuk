@@ -7,7 +7,7 @@ import { Icon } from "./Icon";
 import { Popover } from "./Popover";
 
 /** The account's initial, the only avatar there is (#468: no uploads). */
-export function Avatar({ user }: { user: CurrentUser }): JSX.Element {
+export function Avatar({ user }: { user: Pick<CurrentUser, "username"> }): JSX.Element {
   return (
     <span className="user-avatar" aria-hidden="true">
       {user.username.charAt(0).toUpperCase()}
