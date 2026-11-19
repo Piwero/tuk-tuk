@@ -7,7 +7,7 @@ anything a User owns: being an Admin grants no access to other Users' data.
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,7 +86,9 @@ async def read_users(
 
 
 @router.post("", status_code=201)
-async def create_account(payload: AdminUserCreate, session: SessionDep) -> AdminUserRead:
+async def create_account(
+    payload: AdminUserCreate, request: Request, session: SessionDep
+) -> AdminUserRead:
     """Creates a User, with their own settings and Inbox, holding a
     temporary password they must change at first login (ADR 0018).
     A taken username or email is a 409 naming the field."""
@@ -102,6 +104,7 @@ async def create_account(payload: AdminUserCreate, session: SessionDep) -> Admin
             password_hash=password_hasher.hash(payload.temp_password),
             is_admin=payload.is_admin,
             must_change_password=True,
+            password_changed_at=request.app.state.clock(),
         ),
     )
     await session.commit()
@@ -154,7 +157,7 @@ async def update_account(
 
 @router.post("/{user_id}/reset-password")
 async def reset_password(
-    user_id: int, payload: AdminPasswordReset, session: SessionDep
+    user_id: int, payload: AdminPasswordReset, request: Request, session: SessionDep
 ) -> AdminUserRead:
     """Gives a User a temporary password they must change at their next
     login. Bumps their session epoch, logging them out everywhere, and
@@ -162,7 +165,7 @@ async def reset_password(
     password gets back in."""
     user = await _get_user_or_404(session, user_id)
     check_new_password(payload.temp_password)
-    set_password(user, password_hasher.hash(payload.temp_password))
+    set_password(user, password_hasher.hash(payload.temp_password), now=request.app.state.clock())
     user.must_change_password = True
     user.login_failed_attempts = 0
     user.login_locked_until = None

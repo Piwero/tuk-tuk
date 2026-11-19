@@ -270,6 +270,12 @@ export interface FakeUser {
   must_change_password: boolean;
   /** Forced step: the upgraded single user's profile to complete (#472). */
   must_complete_profile: boolean;
+  /** When the password was last set (#475), ISO-8601: on creation, an
+   * admin's temporary password, and the user's own change. Only ever on
+   * the user's own record (GET /auth/me), never in the admin list. */
+  password_changed_at: string;
+  /** ISO-8601; only the admin record carries it. Defaults when absent. */
+  created_at?: string;
 }
 
 export interface FakeApiState {
@@ -407,6 +413,8 @@ export const FAKE_PASSWORD = "correct-password";
 
 let nextUserId = 100;
 
+const DEFAULT_PASSWORD_CHANGED_AT = "2026-01-01T00:00:00Z";
+
 /** An account for `installFakeApi({ users })`. Defaults to an active,
  * non-admin Member with FAKE_PASSWORD and no forced step. */
 export function fakeUser(username: string, overrides: Partial<FakeUser> = {}): FakeUser {
@@ -419,6 +427,7 @@ export function fakeUser(username: string, overrides: Partial<FakeUser> = {}): F
     password: FAKE_PASSWORD,
     must_change_password: false,
     must_complete_profile: false,
+    password_changed_at: DEFAULT_PASSWORD_CHANGED_AT,
     ...overrides,
   };
 }
@@ -434,6 +443,7 @@ export const FAKE_ADMIN: FakeUser = {
   password: FAKE_PASSWORD,
   must_change_password: false,
   must_complete_profile: false,
+  password_changed_at: DEFAULT_PASSWORD_CHANGED_AT,
 };
 
 // Mirrors the backend's setup/profile validation (auth router, ADR 0018).
@@ -449,6 +459,22 @@ function currentUserRecord(account: FakeUser): Record<string, unknown> {
     is_admin: account.is_admin,
     must_change_password: account.must_change_password,
     must_complete_profile: account.must_complete_profile,
+    password_changed_at: account.password_changed_at,
+  };
+}
+
+/** What the admin users endpoints return for `account` (AdminUserRead,
+ * #412): account fields only, never anything the account owns. */
+function adminUserRecord(account: FakeUser): Record<string, unknown> {
+  return {
+    id: account.id,
+    username: account.username,
+    email: account.email,
+    is_admin: account.is_admin,
+    is_active: account.is_active,
+    must_change_password: account.must_change_password,
+    must_complete_profile: account.must_complete_profile,
+    created_at: account.created_at ?? "2026-01-01T00:00:00Z",
   };
 }
 
@@ -1059,6 +1085,124 @@ export function installFakeApi({
   const sessionUser = (): FakeUser | undefined =>
     state.loggedIn ? state.users.find((account) => account.id === state.sessionUserId) : undefined;
 
+  /** The admin users API (#412), mirrored: list, create, update (with the
+   * last-admin guard) and reset password. Null for a path it doesn't own.
+   * Runs after the session middleware, so the caller is signed in. */
+  const adminUsersRoute = (method: string, url: URL, body: unknown): Response | null => {
+    const actor = sessionUser() as FakeUser;
+    if (!actor.is_admin) {
+      return json({ error: { code: "admin_required", message: "Admin rights are required" } }, 403);
+    }
+    if (method === "GET" && url.pathname === "/api/v1/admin/users") {
+      const limit = Number(url.searchParams.get("limit") ?? "50");
+      const offset = Number(url.searchParams.get("offset") ?? "0");
+      if (!Number.isInteger(limit) || limit < 1 || limit > 200 || offset < 0) {
+        return unprocessable("validation_error", "Request validation failed");
+      }
+      const ordered = [...state.users].sort((a, b) => a.id - b.id);
+      return json({
+        items: ordered.slice(offset, offset + limit).map(adminUserRecord),
+        total: ordered.length,
+        limit,
+        offset,
+      });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/admin/users") {
+      const input = body as {
+        username: string;
+        email: string;
+        temp_password: string;
+        is_admin?: boolean;
+      };
+      const username = input.username.trim();
+      if (username === "" || username.length > MAX_USERNAME_LENGTH) {
+        return unprocessable(
+          "invalid_username",
+          `Username must be 1 to ${MAX_USERNAME_LENGTH} characters`,
+        );
+      }
+      const email = input.email.trim();
+      if (!EMAIL_PATTERN.test(email)) {
+        return unprocessable("invalid_email", "Enter a valid email address");
+      }
+      if (input.temp_password.length < MIN_PASSWORD_LENGTH) {
+        return unprocessable(
+          "invalid_password",
+          `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+        );
+      }
+      const conflict = identityConflict(state.users, null, username, email);
+      if (conflict !== null) {
+        return conflict;
+      }
+      const created = fakeUser(username, {
+        email,
+        is_admin: input.is_admin ?? false,
+        password: input.temp_password,
+        must_change_password: true,
+        created_at: new Date().toISOString(),
+        password_changed_at: new Date().toISOString(),
+      });
+      state.users.push(created);
+      return json(adminUserRecord(created), 201);
+    }
+    const match = /^\/api\/v1\/admin\/users\/(\d+)(\/reset-password)?$/.exec(url.pathname);
+    if (match === null) {
+      return null;
+    }
+    const target = state.users.find((account) => account.id === Number(match[1]));
+    const isReset = match[2] !== undefined;
+    if (method === "PATCH" && !isReset) {
+      if (target === undefined) {
+        return notFound(`User ${match[1]} not found`);
+      }
+      const input = body as { is_active?: boolean; is_admin?: boolean };
+      const losesAdmin =
+        target.is_admin &&
+        target.is_active &&
+        (input.is_admin === false || input.is_active === false);
+      const otherActiveAdmin = state.users.some(
+        (account) => account !== target && account.is_admin && account.is_active,
+      );
+      if (losesAdmin && !otherActiveAdmin) {
+        return json(
+          { error: { code: "last_admin", message: "The last active admin must stay an admin" } },
+          409,
+        );
+      }
+      // Disabling ends the account's sessions; the session middleware then
+      // answers its next request 401 account_disabled.
+      if (input.is_active !== undefined) {
+        target.is_active = input.is_active;
+      }
+      if (input.is_admin !== undefined) {
+        target.is_admin = input.is_admin;
+      }
+      return json(adminUserRecord(target));
+    }
+    if (method === "POST" && isReset) {
+      const input = body as { temp_password: string };
+      if (input.temp_password.length < MIN_PASSWORD_LENGTH) {
+        return unprocessable(
+          "invalid_password",
+          `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+        );
+      }
+      if (target === undefined) {
+        return notFound(`User ${match[1]} not found`);
+      }
+      target.password = input.temp_password;
+      target.must_change_password = true;
+      target.password_changed_at = new Date().toISOString();
+      // A new password ends every session of that account (epoch bump).
+      if (target.id === state.sessionUserId) {
+        state.loggedIn = false;
+      }
+      return json(adminUserRecord(target));
+    }
+    return null;
+  };
+
   /** Mirrors the backend's resolve_section rule: 404 unknown, 409 foreign. */
   const sectionMismatch = (sectionId: number, listId: number): Response | null => {
     const section = state.sections.find((s) => s.id === sectionId);
@@ -1285,6 +1429,14 @@ export function installFakeApi({
       }
       return json(currentUserRecord(account));
     }
+    if (url.pathname.startsWith("/api/v1/admin/")) {
+      // Admin account management (#412). The admin-users store is
+      // `state.users` itself; every endpoint is for Admins only.
+      const adminResponse = adminUsersRoute(method, url, body);
+      if (adminResponse !== null) {
+        return adminResponse;
+      }
+    }
     if (method === "GET" && url.pathname === "/api/v1/auth/session") {
       return new Response(null, { status: 204 });
     }
@@ -1358,6 +1510,7 @@ export function installFakeApi({
         account.email = profile.email;
       }
       account.password = input.new_password;
+      account.password_changed_at = new Date().toISOString();
       account.must_change_password = false;
       account.must_complete_profile = false;
       return new Response(null, { status: 204 });
@@ -1386,6 +1539,7 @@ export function installFakeApi({
         );
       }
       account.password = input.new_password;
+      account.password_changed_at = new Date().toISOString();
       return new Response(null, { status: 204 });
     }
     if (method === "GET" && url.pathname === "/api/v1/assist/status") {

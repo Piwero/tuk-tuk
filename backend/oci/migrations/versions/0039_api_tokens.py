@@ -7,10 +7,10 @@ the central owner filter (ADR 0018) keeps each User's tokens their own.
 Only a SHA-256 hash of each token is stored, unique, so a presented token
 is found by its hash.
 
-No downgrade, like 0035-0037 before it: restore the pre-upgrade backup.
+No downgrade, like 0035-0038 before it: restore the pre-upgrade backup.
 
-Revision ID: 0038
-Revises: 0037
+Revision ID: 0039
+Revises: 0038
 Create Date: 2026-11-19
 
 """
@@ -20,8 +20,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0038"
-down_revision: str | None = "0037"
+revision: str = "0039"
+down_revision: str | None = "0038"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -43,5 +43,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     raise NotImplementedError(
-        "0038 has no downgrade: restore the database backup taken before upgrading."
+        "0039 has no downgrade: restore the database backup taken before upgrading."
     )

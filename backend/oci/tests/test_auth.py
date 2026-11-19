@@ -330,7 +330,11 @@ class TestMe:
         response = client.get("/api/v1/auth/me")
 
         assert response.status_code == 200
-        assert response.json() == {
+        record = response.json()
+        # When the password changed is covered in tests/test_password_changed.py.
+        assert "password_changed_at" in record
+        del record["password_changed_at"]
+        assert record == {
             "id": 1,
             "username": TEST_USERNAME,
             "email": TEST_EMAIL,
@@ -752,6 +756,35 @@ class TestRollingReissue:
         assert "httponly" in set_cookie
         assert "samesite=lax" in set_cookie
         assert "path=/" in set_cookie
+
+    def test_a_session_due_for_reissue_stays_signed_in_after_changing_the_password(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        """The route's fresh cookie (new epoch) must not be overwritten by
+        the rolling reissue's copy of the old one (issue #475)."""
+        settings = client.app.state.settings  # type: ignore[attr-defined]
+        fake_clock.advance(timedelta(days=settings.auth_session_reissue_threshold_days, hours=1))
+
+        assert change_password(client, TEST_PASSWORD, NEW_PASSWORD).status_code == 204
+
+        assert client.get("/api/v1/tasks").status_code == 200
+
+    def test_a_session_due_for_reissue_stays_signed_in_after_a_forced_step(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        settings = client.app.state.settings  # type: ignore[attr-defined]
+        temporary = "a-temporary-password"
+        create_user_row(
+            client, "bea", "bea@example.com", password=temporary, must_change_password=True
+        )
+        client.cookies.clear()
+        log_in(client, "bea", temporary)
+        fake_clock.advance(timedelta(days=settings.auth_session_reissue_threshold_days, hours=1))
+
+        completed = client.post("/api/v1/auth/complete", json={"new_password": NEW_PASSWORD})
+        assert completed.status_code == 204
+
+        assert client.get("/api/v1/tasks").status_code == 200
 
 
 class TestChangePassword:

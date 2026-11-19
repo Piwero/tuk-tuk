@@ -155,6 +155,9 @@ export interface CurrentUser {
   must_change_password: boolean;
   /** The upgraded single user is still to choose a username and email. */
   must_complete_profile: boolean;
+  /** When the password was last set, ISO-8601 (#475): on creation, an
+   * admin's temporary password, or the User's own change. Never null. */
+  password_changed_at: string;
 }
 
 /** Who this browser is signed in as — the gate's probe. Reachable while a
@@ -169,6 +172,30 @@ export function fetchCurrentUser(): Promise<CurrentUser> {
  * (422) or `username_taken` / `email_taken` (409). */
 export function updateProfile(fields: { username?: string; email?: string }): Promise<CurrentUser> {
   return request("/api/v1/auth/me", { method: "PATCH", body: JSON.stringify(fields) });
+}
+
+/** An account as the admin users API returns it (#412): account fields
+ * only, never anything the account owns. */
+export interface AdminUser {
+  id: number;
+  username: string;
+  /** Null only for the upgraded single user before they complete their
+   * profile. */
+  email: string | null;
+  is_admin: boolean;
+  is_active: boolean;
+  must_change_password: boolean;
+  must_complete_profile: boolean;
+  created_at: string;
+}
+
+/** The most accounts one admin users read returns (the backend's cap). */
+const ADMIN_USERS_LIMIT = 200;
+
+/** Every account on the instance, ordered by id, for Settings › Users.
+ * Admins only: rejects 403 `admin_required` for anyone else. */
+export function fetchAdminUsers(): Promise<Page<AdminUser>> {
+  return request(`/api/v1/admin/users?limit=${ADMIN_USERS_LIMIT}`);
 }
 
 /** Signs in by username or email (either ignoring case) and sets the
