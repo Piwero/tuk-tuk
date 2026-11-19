@@ -14,6 +14,8 @@ their rows (issue #411). A public path runs with no User in context: it
 can't touch an owned table at all. The cookie names
 a User and their session epoch; the User is loaded on each request and the
 cookie is refused once that User is disabled or their epoch has moved on.
+A request let through to its route also moves the User's last-active time
+(issue #478), at most once every LAST_ACTIVE_WRITE_INTERVAL.
 
 The AUTH_DISABLED local-dev escape hatch below is the one exception: when
 set, no cookie is needed and every request acts as the first Admin. The
@@ -21,6 +23,9 @@ app refuses to start with it outside APP_ENV=development
 (app.main.create_app).
 """
 
+from datetime import timedelta
+
+from sqlalchemy import or_, update
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
@@ -43,6 +48,10 @@ from app.users import first_admin, install_has_password
 # Exact-match only, never by prefix: a future path that merely starts with
 # one of these strings must not be accidentally opened.
 PUBLIC_PATHS = frozenset({"/health", "/api/v1/auth/login", "/api/v1/auth/setup"})
+
+# A User's last-active time (issue #478) is coarse on purpose: written at
+# most this often, so serving a request doesn't also mean a write.
+LAST_ACTIVE_WRITE_INTERVAL = timedelta(minutes=5)
 
 # All a User may reach while a forced step (a temporary password to
 # replace, a profile to complete) is pending: enough to see which step,
@@ -132,6 +141,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 return blocked
 
         request.state.user_id = user.id
+        await self._record_activity(request, user)
         with acting_as(user.id):
             response = await call_next(request)
         if needs_reissue(
@@ -146,6 +156,33 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 epoch=user.session_epoch,
             )
         return response
+
+    async def _record_activity(self, request: Request, user: User) -> None:
+        """Moves the User's last-active time (issue #478) to now, unless it
+        was written less than LAST_ACTIVE_WRITE_INTERVAL ago: one write per
+        User every few minutes, not one per request. The condition sits in
+        the UPDATE itself, so concurrent requests can't both write."""
+        now = self._clock()
+        if user.last_active_at is not None and now - user.last_active_at < (
+            LAST_ACTIVE_WRITE_INTERVAL
+        ):
+            return
+        async with request.app.state.session_factory() as db_session:
+            await db_session.execute(
+                update(User)
+                .where(
+                    User.id == user.id,
+                    or_(
+                        User.last_active_at.is_(None),
+                        User.last_active_at <= now - LAST_ACTIVE_WRITE_INTERVAL,
+                    ),
+                )
+                # Being active doesn't change the account: keep `updated_at`
+                # from its onupdate default.
+                .values(last_active_at=now, updated_at=User.updated_at)
+                .execution_options(synchronize_session=False)
+            )
+            await db_session.commit()
 
     async def _dispatch_as_first_admin(
         self, request: Request, call_next: RequestResponseEndpoint
