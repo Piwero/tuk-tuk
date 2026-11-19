@@ -10,6 +10,7 @@ import {
   type Page,
   updateAdminUser,
 } from "../api";
+import { formatLastActive } from "../dates";
 import { LoadError, SkeletonRows } from "./TaskViewState";
 import { NewUserDialog } from "./NewUserDialog";
 import { LAST_ADMIN_REASON, UserActionsMenu } from "./UserActionsMenu";
@@ -70,7 +71,8 @@ function failure(account: AdminUser, change: AdminUserChange, error: unknown): s
   return `Couldn’t ${what}. ${why}`;
 }
 
-/** One account's row (#477): who it is, its role and its status. The last
+/** One account's row (#477): who it is, its role, its status and when it
+ * was last active (#478). The last
  * cell is a slot for the row's actions menu (#479-#481), left out when the
  * table has no actions; `error` says what the row's last action failed to do. */
 export function UserRow({
@@ -116,6 +118,15 @@ export function UserRow({
         <span className="users-status" data-status={STATUS_STATE[status]}>
           {status}
         </span>
+      </td>
+      <td className="users-cell-active">
+        {account.last_active_at === null ? (
+          formatLastActive(null)
+        ) : (
+          <time dateTime={account.last_active_at}>
+            {formatLastActive(new Date(account.last_active_at))}
+          </time>
+        )}
       </td>
       {actions !== undefined && <td className="users-cell-actions">{actions}</td>}
     </tr>
@@ -243,6 +254,7 @@ export function UsersPanel({
                 <th scope="col">User</th>
                 <th scope="col">Role</th>
                 <th scope="col">Status</th>
+                <th scope="col">Last active</th>
                 <th scope="col">
                   <span className="visually-hidden">Actions</span>
                 </th>

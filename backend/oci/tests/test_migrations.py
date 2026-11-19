@@ -568,3 +568,22 @@ class TestPasswordChangedMigration:
             "INSERT INTO users (username, email) VALUES ('ana', 'a@x.io') "
             "RETURNING password_changed_at IS NOT NULL",
         ) == [(True,)]
+
+
+class TestLastActiveMigration:
+    """Issue #478: no request was ever recorded before the upgrade, so every
+    existing User reads "Never" until their next authenticated request."""
+
+    def test_existing_users_start_never_active(self, empty_database_url: str) -> None:
+        config = alembic_config(empty_database_url)
+        command.upgrade(config, "0038")
+        run_sql(
+            empty_database_url,
+            "INSERT INTO users (username, email) VALUES ('ana', 'ana@example.com')",
+        )
+
+        command.upgrade(config, "head")
+
+        assert run_sql(empty_database_url, "SELECT username, last_active_at FROM users") == [
+            ("ana", None)
+        ]

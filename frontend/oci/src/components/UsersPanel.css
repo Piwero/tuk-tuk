@@ -1,6 +1,6 @@
 @layer components {
   /* Settings › Users (#477): the Admin's table of accounts. On a phone the
-   table becomes a list: name and email over role and status. */
+   table becomes a list: name and email over role, status and last active. */
   .users-panel {
     display: flex;
     flex-direction: column;
@@ -85,6 +85,10 @@
   .users-cell-role {
     color: var(--text-secondary);
   }
+  .users-cell-active {
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
   .users-status {
     display: inline-flex;
     align-items: center;
@@ -117,7 +121,8 @@
   /* Disabled accounts are greyed (and listed last). */
   .users-row[data-status="disabled"] .users-name,
   .users-row[data-status="disabled"] .users-email,
-  .users-row[data-status="disabled"] .users-cell-role {
+  .users-row[data-status="disabled"] .users-cell-role,
+  .users-row[data-status="disabled"] .users-cell-active {
     color: var(--text-tertiary);
   }
   .users-row[data-status="disabled"] .user-avatar {
@@ -285,10 +290,10 @@
     }
     .users-row {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      grid-template-columns: auto auto 1fr auto;
       grid-template-areas:
-        "user user actions"
-        "role status status";
+        "user user user actions"
+        "role status active active";
       align-items: center;
       column-gap: var(--space-3);
       row-gap: var(--space-2);
@@ -315,6 +320,11 @@
     }
     .users-row > .users-cell-status {
       grid-area: status;
+    }
+    .users-row > .users-cell-active {
+      grid-area: active;
+      font-size: var(--text-sm);
+      text-align: right;
     }
     .users-row > .users-cell-actions {
       grid-area: actions;
