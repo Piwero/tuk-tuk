@@ -5,7 +5,8 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
-from app.models import CompletedOccurrence, Task
+from app.models import SEED_USER_ID, CompletedOccurrence, Task
+from app.ownership import acting_as
 from tests.conftest import make_task
 from tests.test_stand_up_suggestions import (
     seed_completed_occurrence,
@@ -32,7 +33,8 @@ def seed_occurrence_for_task(client: TestClient, task_id: int, completed_at: dat
             )
             await session.commit()
 
-    asyncio.run(_seed())
+    with acting_as(SEED_USER_ID):
+        asyncio.run(_seed())
 
 
 def add_bullet(client: TestClient, day: str, section: str, text: str) -> dict:

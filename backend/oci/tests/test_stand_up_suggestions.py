@@ -13,7 +13,8 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.models import CompletedOccurrence, Task, TaskList
+from app.models import SEED_USER_ID, CompletedOccurrence, Task, TaskList
+from app.ownership import acting_as
 
 VIEW_DATE = "2026-08-11"
 YESTERDAY = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
@@ -33,7 +34,8 @@ def seed_completed_task(client: TestClient, title: str, completed_at: datetime) 
             )
             await session.commit()
 
-    asyncio.run(_seed())
+    with acting_as(SEED_USER_ID):
+        asyncio.run(_seed())
 
 
 def seed_completed_occurrence(client: TestClient, title: str, completed_at: datetime) -> None:
@@ -56,7 +58,8 @@ def seed_completed_occurrence(client: TestClient, title: str, completed_at: date
             )
             await session.commit()
 
-    asyncio.run(_seed())
+    with acting_as(SEED_USER_ID):
+        asyncio.run(_seed())
 
 
 def suggestions(client: TestClient, date: str) -> list[dict]:
@@ -114,7 +117,8 @@ class TestYesterdaySuggestions:
                 task.completed = False
                 await session.commit()
 
-        asyncio.run(_reopen())
+        with acting_as(SEED_USER_ID):
+            asyncio.run(_reopen())
 
         items = suggestions(client, VIEW_DATE)
 

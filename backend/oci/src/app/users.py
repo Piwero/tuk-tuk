@@ -7,6 +7,7 @@ from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import TaskList, User, UserSettings
+from app.ownership import acting_as
 
 INBOX_NAME = "Inbox"
 # The username migration 0035 gives the seeded user #1.
@@ -33,14 +34,19 @@ async def create_user(
     creates a user (`/setup`, the one-time env import, an Admin's create)
     goes through here, so no user ever exists without either. Flushes; the
     caller commits.
+
+    The Inbox is created acting as the new User (app.ownership), whoever
+    the caller acts as: an Admin creating an account must not end up
+    owning its Inbox.
     """
     session.add(user)
     await session.flush()
     settings_row = user_settings or UserSettings()
     settings_row.user_id = user.id
     session.add(settings_row)
-    session.add(TaskList(name=INBOX_NAME, is_inbox=True, owner_id=user.id))
-    await session.flush()
+    with acting_as(user.id):
+        session.add(TaskList(name=INBOX_NAME, is_inbox=True))
+        await session.flush()
     return user
 
 
