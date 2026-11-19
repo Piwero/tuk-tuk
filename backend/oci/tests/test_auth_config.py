@@ -76,12 +76,38 @@ def test_settings_read_auth_disabled_env_var(monkeypatch: pytest.MonkeyPatch) ->
 def test_app_logs_a_warning_when_auth_is_disabled(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    settings = Settings(app_master_key="a-master-key", auth_disabled=True)
+    settings = Settings(app_master_key="a-master-key", auth_disabled=True, app_env="development")
 
     with caplog.at_level("WARNING", logger="app.main"):
         create_app(settings)
 
     assert "AUTH_DISABLED" in caplog.text
+
+
+def test_settings_default_to_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("APP_ENV", raising=False)
+
+    assert Settings().app_env == "production"
+
+
+def test_settings_read_app_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "development")
+
+    assert Settings().app_env == "development"
+
+
+def test_an_unknown_app_env_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "staging")
+
+    with pytest.raises(ValueError, match="app_env"):
+        Settings()
+
+
+def test_app_refuses_to_start_with_auth_disabled_in_production() -> None:
+    settings = Settings(app_master_key="a-master-key", auth_disabled=True, app_env="production")
+
+    with pytest.raises(RuntimeError, match="AUTH_DISABLED"):
+        create_app(settings)
 
 
 def test_app_stays_silent_when_auth_is_enabled(caplog: pytest.LogCaptureFixture) -> None:

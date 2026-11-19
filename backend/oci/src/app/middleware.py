@@ -1,4 +1,5 @@
-"""Session enforcement middleware (ADR 0005, issue #84; ADR 0008, issue #115).
+"""Session enforcement middleware (ADR 0005, issue #84; ADR 0008, issue #115;
+ADR 0018, issue #410).
 
 Default-deny by construction: a per-router auth dependency is default-open,
 so a router added without the decorator is silently published
@@ -6,9 +7,15 @@ unauthenticated. Middleware sits in front of routing entirely, so it also
 covers the interactive docs and the OpenAPI schema, which aren't routers at
 all and which a per-router approach couldn't reach.
 
+Every accepted request carries the signed-in User's id on
+`request.state.user_id` (read through app.current_user). The cookie names
+a User and their session epoch; the User is loaded on each request and the
+cookie is refused once that User is disabled or their epoch has moved on.
+
 The AUTH_DISABLED local-dev escape hatch below is the one exception: when
-set, the gate is skipped entirely and the app logs a warning at startup
-(app.main.create_app). Never set in a real deployment.
+set, no cookie is needed and every request acts as the first Admin. The
+app refuses to start with it outside APP_ENV=development
+(app.main.create_app).
 """
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -16,9 +23,10 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from app.app_settings import get_app_settings
+from app.app_settings import require_app_settings
 from app.config import Settings
 from app.errors import error_response
+from app.models import User
 from app.session import (
     SESSION_COOKIE_NAME,
     Clock,
@@ -26,10 +34,34 @@ from app.session import (
     set_session_cookie,
     verify_session_token,
 )
+from app.users import first_admin, install_has_password
 
 # Exact-match only, never by prefix: a future path that merely starts with
 # one of these strings must not be accidentally opened.
 PUBLIC_PATHS = frozenset({"/health", "/api/v1/auth/login", "/api/v1/auth/setup"})
+
+# All a User may reach while a forced step (a temporary password to
+# replace, a profile to complete) is pending: enough to see which step,
+# complete it, or give up and log out. Exact-match, like PUBLIC_PATHS.
+FORCED_STEP_PATHS = frozenset({"/api/v1/auth/me", "/api/v1/auth/complete", "/api/v1/auth/logout"})
+
+
+def _setup_required() -> Response:
+    # A distinct code from "unauthorized" so the frontend can route to the
+    # first-run setup screen instead of the login screen.
+    return error_response(401, "setup_required", "Initial setup is required")
+
+
+def _forced_step(user: User) -> Response | None:
+    # 403, not 401: the session is valid and must not be dropped by the
+    # frontend's log-out-on-401 listener; it just can't be used yet.
+    if user.must_complete_profile:
+        return error_response(
+            403, "profile_completion_required", "Complete your profile to continue"
+        )
+    if user.must_change_password:
+        return error_response(403, "password_change_required", "Choose a new password to continue")
+    return None
 
 
 class SessionAuthMiddleware(BaseHTTPMiddleware):
@@ -39,40 +71,66 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         self._clock = clock
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        # Local-dev escape hatch (AUTH_DISABLED): skip the gate entirely, so
-        # a dev database never needs a password or a cookie. Never set in a
-        # real deployment — every route serves unauthenticated.
-        if self._settings.auth_disabled:
-            return await call_next(request)
-
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 
+        if self._settings.auth_disabled:
+            return await self._dispatch_as_first_admin(request, call_next)
+
         # A dedicated session, not the request's own SessionDep — this runs
-        # before routing has picked a handler to inject one into. The
-        # single-row `settings` lookup is cheap enough (one row, by primary
-        # key) to repeat if the handler below also needs it.
+        # before routing has picked a handler to inject one into. Two
+        # primary-key lookups (the settings singleton, the User) per request.
         session_factory = request.app.state.session_factory
         async with session_factory() as db_session:
-            app_settings = await get_app_settings(db_session)
+            app_settings = await require_app_settings(db_session)
+            claims = verify_session_token(
+                request.cookies.get(SESSION_COOKIE_NAME),
+                app_settings.session_key,
+                self._settings,
+                self._clock,
+            )
+            user = await db_session.get(User, claims.user_id) if claims is not None else None
+            if claims is None or user is None:
+                # Only a request with no usable session pays for this check.
+                if not await install_has_password(db_session):
+                    return _setup_required()
+                return error_response(401, "unauthorized", "A valid session is required")
 
-        # No password set yet: every route (other than PUBLIC_PATHS, which
-        # includes /api/v1/auth/setup itself) is gated until one is, a
-        # distinct code from "unauthorized" so the frontend can route to the
-        # first-run setup screen instead of the login screen.
-        if app_settings is None or app_settings.password_hash is None:
-            return error_response(401, "setup_required", "Initial setup is required")
-
-        issued_at = verify_session_token(
-            request.cookies.get(SESSION_COOKIE_NAME),
-            app_settings.session_key,
-            self._settings,
-            self._clock,
-        )
-        if issued_at is None:
+        # Disabled before stale: disabling also bumps the epoch, and the
+        # frontend wants to tell "your account was disabled" apart.
+        if not user.is_active:
+            return error_response(401, "account_disabled", "This account is disabled")
+        if claims.epoch != user.session_epoch:
             return error_response(401, "unauthorized", "A valid session is required")
 
+        if request.url.path not in FORCED_STEP_PATHS:
+            blocked = _forced_step(user)
+            if blocked is not None:
+                return blocked
+
+        request.state.user_id = user.id
         response = await call_next(request)
-        if needs_reissue(issued_at, self._settings, self._clock):
-            set_session_cookie(response, app_settings.session_key, self._settings, self._clock)
+        if needs_reissue(claims.issued_at, self._settings, self._clock):
+            set_session_cookie(
+                response,
+                app_settings.session_key,
+                self._settings,
+                self._clock,
+                user_id=user.id,
+                epoch=user.session_epoch,
+            )
         return response
+
+    async def _dispatch_as_first_admin(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        """Local-dev escape hatch (AUTH_DISABLED): no cookie, no forced
+        steps; every request acts as the first Admin. An install with no
+        User yet still has to go through `/setup` to create one."""
+        session_factory = request.app.state.session_factory
+        async with session_factory() as db_session:
+            admin = await first_admin(db_session)
+        if admin is None:
+            return _setup_required()
+        request.state.user_id = admin.id
+        return await call_next(request)

@@ -20,7 +20,7 @@ from app.config import Settings
 from app.main import create_app
 from app.models import User
 from app.users import create_user, current_user_id
-from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock, run_sql
+from tests.conftest import FakeCalendarSource, FakeClock, log_in_admin, run_sql
 from tests.test_assistant_chat import StubChatProvider, _chat
 from tests.test_google_accounts import connect_and_authorize
 from tests.test_voice_session import start_session, verify_hs256
@@ -60,8 +60,7 @@ def two_users(
         Settings(database_url=database_url), clock=fake_clock, calendar_source=fake_calendar_source
     )
     with TestClient(app, follow_redirects=False) as client:
-        response = client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(client)
         yield client, add_user(app, "ben")
 
 

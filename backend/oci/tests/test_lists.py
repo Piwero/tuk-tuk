@@ -2,12 +2,12 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, make_task
+from tests.conftest import create_user_row, log_in, make_task
 from tests.test_focus_sessions import make_session
 from tests.test_timers import make_timer
 
 
-def test_first_boot_creates_the_inbox(client: TestClient) -> None:
+def test_a_user_starts_with_an_inbox(client: TestClient) -> None:
     response = client.get("/api/v1/lists")
 
     assert response.status_code == 200
@@ -19,12 +19,13 @@ def test_first_boot_creates_the_inbox(client: TestClient) -> None:
 
 
 def test_restarting_does_not_duplicate_the_inbox(database_url: str) -> None:
-    for _ in range(2):
-        with TestClient(create_app(Settings(database_url=database_url))):
-            pass
+    with TestClient(create_app(Settings(database_url=database_url))) as client:
+        create_user_row(client, is_admin=True)
+    with TestClient(create_app(Settings(database_url=database_url))):
+        pass
 
     with TestClient(create_app(Settings(database_url=database_url))) as client:
-        client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+        log_in(client)
         items = client.get("/api/v1/lists").json()["items"]
         assert [item["name"] for item in items] == ["Inbox"]
 

@@ -91,20 +91,15 @@ class OwnedMixin:
 
 class AppSettings(Base):
     """The DB-backed settings singleton (ADR 0008), down to what is still
-    install-wide (issue #409): the session-cookie signing key, and the
-    install password until per-user login (issue #410) moves verification
-    onto `users`. Always exactly one row (`id` fixed at `SETTINGS_ID` in
-    app.app_settings), bootstrapped on first boot.
-
-    `password_hash` is nullable: its absence is exactly what gates every
-    route behind `/setup` (app.middleware).
+    install-wide (issue #409): the session-cookie signing key. Always
+    exactly one row (`id` fixed at `SETTINGS_ID` in app.app_settings),
+    bootstrapped on first boot. Passwords live on each User (issue #410).
     """
 
     __tablename__ = "settings"
     __table_args__ = (CheckConstraint("id = 1", name="settings_singleton"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    password_hash: Mapped[str | None] = mapped_column(Text, default=None)
     session_key: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

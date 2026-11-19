@@ -43,7 +43,7 @@ from app.routers.v1 import (
 from app.routers.v1 import settings as settings_router
 from app.session import Clock, real_clock
 from app.user_settings import user_settings_from_env
-from app.users import ensure_seed_user
+from app.users import import_env_password
 
 
 def create_app(
@@ -67,8 +67,14 @@ def create_app(
     database_url = require_database_url(app_settings.database_url)
 
     if app_settings.auth_disabled:
+        if app_settings.app_env != "development":
+            raise RuntimeError(
+                "AUTH_DISABLED is set but APP_ENV is not 'development'. The app refuses to "
+                "start: AUTH_DISABLED serves every route as the first admin with no login. "
+                "Set APP_ENV=development for local development, or unset AUTH_DISABLED."
+            )
         logging.getLogger(__name__).warning(
-            "AUTH_DISABLED is on: every route serves unauthenticated. "
+            "AUTH_DISABLED is on: every route serves unauthenticated, as the first admin. "
             "Local development only — never enable in a real deployment."
         )
 
@@ -80,8 +86,10 @@ def create_app(
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         app.state.session_factory = session_factory
         async with session_factory() as session:
-            settings_row = await bootstrap_app_settings(session, app_settings)
-            await ensure_seed_user(session, settings_row, user_settings_from_env(app_settings))
+            await bootstrap_app_settings(session, app_settings)
+            await import_env_password(
+                session, app_settings.auth_password_hash, user_settings_from_env(app_settings)
+            )
         yield
         await engine.dispose()
 

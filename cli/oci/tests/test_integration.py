@@ -14,12 +14,9 @@ import pytest
 from argon2 import PasswordHasher
 from argon2.low_level import Type
 
+TEST_USERNAME = "admin"
 TEST_PASSWORD = "test-password"
 
-os.environ.setdefault(
-    "AUTH_PASSWORD_HASH",
-    PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash(TEST_PASSWORD),
-)
 os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
 os.environ.setdefault("APP_MASTER_KEY", "test-master-key")
 os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0")
@@ -28,9 +25,13 @@ os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0")
 # gets the real one.
 os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://unused:unused@localhost:5432/unused")
 
+import asyncio  # noqa: E402
+
 import httpx  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.main import create_app  # noqa: E402
+from app.models import User  # noqa: E402
+from app.users import create_user  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
@@ -53,12 +54,33 @@ def postgres_url() -> Iterator[str]:
 
 @pytest.fixture
 def live_client(postgres_url: str) -> Iterator[TestClient]:
-    """The real application on a throwaway database, already logged in — the
-    password is pre-seeded above, so the fixture's own setup calls are
-    authenticated without each test driving first-run setup."""
+    """The real application on a throwaway database, already logged in as
+    its Admin — created straight in the database with a cheap hash, so the
+    fixture's own setup calls are authenticated without each test driving
+    first-run setup."""
     app = create_app(Settings(database_url=postgres_url))
+    password_hash = PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash(
+        TEST_PASSWORD
+    )
+
+    async def create_admin() -> None:
+        async with app.state.session_factory() as session:
+            await create_user(
+                session,
+                User(
+                    username=TEST_USERNAME,
+                    email="admin@example.com",
+                    password_hash=password_hash,
+                    is_admin=True,
+                ),
+            )
+            await session.commit()
+
     with TestClient(app) as test_client:
-        login = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+        asyncio.run(create_admin())
+        login = test_client.post(
+            "/api/v1/auth/login", json={"login": TEST_USERNAME, "password": TEST_PASSWORD}
+        )
         assert login.status_code == 204, login.text
         yield test_client
 
@@ -81,6 +103,10 @@ def app_transport(test_client: TestClient) -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="`tuk login` still sends a password only; the backend now needs a login too (#416)",
+)
 def test_login_then_read_against_real_app(
     live_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

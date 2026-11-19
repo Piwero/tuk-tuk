@@ -2,12 +2,12 @@
 
 Takes a consecutive-failure count and the current instant, returns the
 instant login should stay locked until. No database, no HTTP — reading and
-writing the persisted count/lock onto the user (issue #408) is the
+writing the persisted count/lock onto the User (issue #408) is the
 router's job (app.routers.v1.auth), so a restart doesn't reset the counter
-(issue #333/#339). Global rather than per-client: the request chain (CDN,
-ingress, reverse proxy) is never trusted for a real client address, and
-with exactly one legitimate user a global counter is nearly equivalent to
-a per-user one.
+(issue #333/#339). Per User rather than per client: the request chain
+(CDN, ingress, reverse proxy) is never trusted for a real client address.
+ADR 0018 accepts that one password tried against many usernames is not
+slowed, since accounts are few and created by an Admin.
 """
 
 from datetime import datetime, timedelta
