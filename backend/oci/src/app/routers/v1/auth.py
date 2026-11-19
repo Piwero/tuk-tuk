@@ -2,7 +2,6 @@
 steps, change-password and logout (ADR 0005, ADR 0008, ADR 0018; issues
 #83, #115, #116, #339, #410)."""
 
-import re
 from datetime import UTC, datetime
 
 from argon2.exceptions import InvalidHashError, VerificationError
@@ -20,28 +19,23 @@ from app.login_throttle import LoginThrottle
 from app.models import User
 from app.session import Clock, delete_session_cookie, set_session_cookie
 from app.user_settings import user_settings_from_env
-from app.users import create_user, find_user_by_login, install_has_password, set_password
+from app.users import (
+    check_new_password,
+    clean_email,
+    clean_username,
+    create_user,
+    ensure_identity_free,
+    find_user_by_login,
+    install_has_password,
+    set_password,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
-# Lives here, next to the handlers that enforce it (issue #338), not in
-# Settings: making this operator-configurable would let a deployment set it
-# to 1, which is the state this constant exists to remove. Enforced only at
-# the write points below — never at login, so a password set before this
-# minimum existed keeps logging in until its owner changes it.
-MIN_PASSWORD_LENGTH = 12
-
 # Consecutive wrong-password attempts (login or change-password's
 # current-password check, same per-User counter) before login locks — not
-# operator-configurable, same reasoning as the password minimum above.
+# operator-configurable, same reasoning as app.users.MIN_PASSWORD_LENGTH.
 LOCKOUT_THRESHOLD = 5
-
-MAX_USERNAME_LENGTH = 64
-
-# Deliberately loose: one "@" with something either side and no spaces.
-# Nothing is sent to the address yet (ADR 0018), so this catches typos like
-# a missing "@", not deliverability.
-_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+$")
 
 
 def _locked_retry_after(user: User, now: datetime) -> int | None:
@@ -96,41 +90,6 @@ def _password_matches(user: User, password: str) -> bool:
     except (VerificationError, InvalidHashError):
         return False
     return True
-
-
-def _check_new_password(password: str) -> None:
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise APIError(
-            422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
-        )
-
-
-def _clean_username(username: str) -> str:
-    username = username.strip()
-    if not username or len(username) > MAX_USERNAME_LENGTH:
-        raise APIError(
-            422, "invalid_username", f"Username must be 1 to {MAX_USERNAME_LENGTH} characters"
-        )
-    return username
-
-
-def _clean_email(email: str) -> str:
-    email = email.strip()
-    if not _EMAIL_PATTERN.match(email):
-        raise APIError(422, "invalid_email", "Enter a valid email address")
-    return email
-
-
-async def _ensure_identity_free(
-    session: AsyncSession, username: str, email: str, *, except_user: User | None = None
-) -> None:
-    """409 when another User already holds `username` or `email` (both
-    citext, so case is ignored), reported per field."""
-    others = select(User).where(User.id != except_user.id) if except_user else select(User)
-    if await session.scalar(others.where(User.username == username)) is not None:
-        raise APIError(409, "username_taken", "That username is already taken")
-    if await session.scalar(others.where(User.email == email)) is not None:
-        raise APIError(409, "email_taken", "That email is already in use")
 
 
 def _sign_in(request: Request, response: Response, session_key: str, user: User) -> None:
@@ -196,9 +155,9 @@ async def setup(
     if await install_has_password(session):
         raise APIError(404, "not_found", "Setup has already been completed")
 
-    username = _clean_username(payload.username)
-    email = _clean_email(payload.email)
-    _check_new_password(payload.password)
+    username = clean_username(payload.username)
+    email = clean_email(payload.email)
+    check_new_password(payload.password)
     password_hash = password_hasher.hash(payload.password)
 
     seeded = await session.scalar(select(User).order_by(User.id).limit(1))
@@ -211,7 +170,7 @@ async def setup(
             user_settings_from_env(request.app.state.settings),
         )
     else:
-        await _ensure_identity_free(session, username, email, except_user=seeded)
+        await ensure_identity_free(session, username, email, except_user=seeded)
         user = seeded
         user.username, user.email, user.is_admin = username, email, True
         user.must_complete_profile = user.must_change_password = False
@@ -297,15 +256,15 @@ async def complete(
             raise APIError(
                 422, "profile_required", "Username and email are required to complete a profile"
             )
-        username = _clean_username(payload.username)
-        email = _clean_email(payload.email)
-    _check_new_password(payload.new_password)
+        username = clean_username(payload.username)
+        email = clean_email(payload.email)
+    check_new_password(payload.new_password)
     if _password_matches(user, payload.new_password):
         raise APIError(
             422, "password_unchanged", "Choose a password different from the current one"
         )
     if user.must_complete_profile:
-        await _ensure_identity_free(session, username, email, except_user=user)
+        await ensure_identity_free(session, username, email, except_user=user)
         user.username, user.email = username, email
 
     user.must_complete_profile = user.must_change_password = False
@@ -349,7 +308,7 @@ async def change_password(
     # leave a prior bad-guess streak counted against a later, valid attempt.
     await _record_success(session, user)
 
-    _check_new_password(payload.new_password)
+    check_new_password(payload.new_password)
     set_password(user, password_hasher.hash(payload.new_password))
     await session.commit()
 
