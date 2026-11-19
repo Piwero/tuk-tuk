@@ -1,8 +1,8 @@
 # backend
 
 Python 3.12 / FastAPI service managed with [uv](https://docs.astral.sh/uv/);
-linted with ruff, type-checked with mypy, tested with pytest. SQLite via
-SQLAlchemy (async) + Alembic.
+linted with ruff, type-checked with mypy, tested with pytest. PostgreSQL via
+SQLAlchemy (async, psycopg3) + Alembic.
 
 ## Setup
 
@@ -20,7 +20,8 @@ In Docker with hot reload (from the repo root):
 mise run backend:dev
 ```
 
-Or natively:
+Or natively, against the Compose `postgres` service (start it with
+`docker compose up -d postgres`; `DATABASE_URL` from `.env.example`):
 
 ```bash
 uv run uvicorn app.main:app --reload
@@ -28,8 +29,12 @@ uv run uvicorn app.main:app --reload
 
 Then open http://localhost:8900/health (interactive docs at `/docs`).
 
-Alembic migrations (`migrations/`) run automatically at startup; the SQLite
-database lands at `./tuk_tuk.db` (gitignored).
+Alembic migrations (`migrations/`) run automatically at startup.
+`DATABASE_URL` is required and must be `postgresql+psycopg://…`.
+
+`pytest` needs Docker: the suite starts its own throwaway PostgreSQL through
+testcontainers and gives each test a fresh database
+([ADR 0017](../../docs/adr/0017-postgres-only-tests-on-testcontainers.md)).
 
 ## Common commands
 

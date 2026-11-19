@@ -32,7 +32,7 @@ For whoever installs and looks after the app. Often that's you.
 1. [Install](self-hosting/install.md): run it on a laptop or home server
 2. [Upgrade and back up](self-hosting/upgrade.md)
 3. [Security](self-hosting/security.md): passwords, HTTPS, the master key
-4. [Move to PostgreSQL](self-hosting/postgres.md) (optional, advanced)
+4. [Use your own PostgreSQL server](self-hosting/postgres.md) (optional, advanced)
 
 ## Build it
 

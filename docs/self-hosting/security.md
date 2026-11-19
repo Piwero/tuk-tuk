@@ -63,12 +63,12 @@ the app then shows the "choose a password" screen again. Your data is kept.
 
 1. From the `tuk-tuk` folder, run:
    ```sh
-   docker compose -f docker-compose.prod.yml exec backend python -c "import sqlite3; c = sqlite3.connect('/data/tuk_tuk.db'); c.execute('UPDATE settings SET password_hash = NULL'); c.commit()"
+   docker compose -f docker-compose.prod.yml exec postgres psql -U tuktuk -d tuktuk -c "UPDATE settings SET password_hash = NULL"
    ```
 2. Open the app and choose a new password **straight away**. Until you do, anyone
    who can reach the app can set it.
 
-On PostgreSQL, run `UPDATE settings SET password_hash = NULL;` with `psql` instead.
+On your own PostgreSQL server, run the same `UPDATE` with `psql` against it.
 
 ## Report a vulnerability
 
@@ -76,4 +76,4 @@ Report it privately, as described in [`SECURITY.md`](../../SECURITY.md). Don't o
 
 ## Next
 
-→ [Move to PostgreSQL](postgres.md) (optional)
+→ [Use your own PostgreSQL server](postgres.md) (optional)

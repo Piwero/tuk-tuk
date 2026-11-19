@@ -1,54 +1,49 @@
-# Move to PostgreSQL (optional, advanced)
+# Use your own PostgreSQL server (optional, advanced)
 
-⏱ 20 min · Needs: a PostgreSQL server, and [mise](https://mise.jdx.dev/) set up as in [CONTRIBUTING.md](../../CONTRIBUTING.md)
+⏱ 15 min · Needs: a PostgreSQL 16 server you already run and back up
 
-**Do this first:** decide if you need this. Most people don't. The built-in
-SQLite file handles one person's data with room to spare. Move only if you
-already run PostgreSQL and want Tuk Tuk's data there.
+**Do this first:** decide if you need this. Most people don't. Tuk Tuk comes
+with its own PostgreSQL in `docker-compose.prod.yml`, and that handles one
+person's data with room to spare. Switch only if you already run a
+PostgreSQL server and want Tuk Tuk's data there, for example so your
+existing backups cover it.
 
 ## Before you start
 
-- **It's one-way.** The SQLite file is left untouched as a backup, but there's
-  no tool to copy data back from PostgreSQL to SQLite.
-- **Still one copy of the app.** Moving to PostgreSQL does not make it safe to run more than
-  one backend. See [Security → Rules to follow](security.md#rules-to-follow).
-- Take a [backup](upgrade.md#back-up) first.
+- **Still one copy of the app.** Pointing at your own server does not make it
+  safe to run more than one backend. See
+  [Security → Rules to follow](security.md#rules-to-follow).
+- Create an empty database and a user that owns it. Tuk Tuk creates its own
+  tables on first start.
+- Take a [backup](upgrade.md#back-up) of the bundled database first.
 
 ## Steps
 
-1. **Test the connection.** In **Settings → Database**, paste your PostgreSQL
-   URL and click **Test connection**.
-2. **Take a fresh [backup](upgrade.md#back-up), then stop the app**
-   (`docker compose -f docker-compose.prod.yml down`) so nothing changes
-   after the copy. The backup file is what you copy from.
-3. **Run the copy** from the `tuk-tuk` folder:
+1. **Test the connection.** In **Settings → Database**, paste your server's
+   URL (`postgresql+psycopg://user:password@host:5432/dbname`) and click
+   **Test connection**. It should report the server as reachable, the
+   credentials as OK, and the database as empty.
+2. **Move your data.** With the app stopped
+   (`docker compose -f docker-compose.prod.yml stop backend`), load the
+   backup into the new database:
    ```sh
-   mise run backend:copy-db -- sqlite:///$PWD/tuk-tuk-backup.db postgresql+psycopg://user:pass@host/db
+   psql "postgresql://user:password@host:5432/dbname" -v ON_ERROR_STOP=1 -q -o /dev/null < tuk-tuk-backup.sql
    ```
-   It prints row counts for each table and confirms the copy when it's done.
-4. **Point the app at PostgreSQL.** In `docker-compose.prod.yml`, change
-   `DATABASE_URL` to the same PostgreSQL URL, then start the app.
-5. **Check it worked:** log in, confirm your lists, tasks, habits and goals are
-   there and Google still shows as connected, then **create one new task**. If
-   that works, the database's ID counters were set up correctly.
-
-## If the copy refuses
-
-| Message is about | What to do |
-| --- | --- |
-| Orphaned rows in the source | Add `--prune-orphans` to delete them. This also deletes rows left orphaned by those deletions. Every deleted id is listed in the report. |
-| Target already has data | Add `--force` to retry a failed attempt. **This deletes every row in the target** and replaces it with the source. It's for retrying, not for merging two databases. |
-
-An empty target is set up automatically, so you don't need to prepare tables.
+3. **Point the app at it.** In `docker-compose.prod.yml`, set the backend's
+   `DATABASE_URL` to the same URL, then start the app with
+   `docker compose -f docker-compose.prod.yml up -d backend`. The bundled
+   `postgres` service is no longer used; you can remove it and its
+   `pgdata` volume once you're happy.
+4. **Check it worked:** log in, confirm your lists, tasks, habits and goals
+   are there, then **create one new task**.
 
 ## On Kubernetes
 
-Follow [`backend/chart/README.md`](../../backend/chart/README.md#moving-to-postgresql)
-instead. The same five steps, but the copy runs as a one-off Job, and
-`DATABASE_URL` is set on a 1Password item. That page also explains what
-switching back costs.
+`DATABASE_URL` comes from the `tuk-tuk-db` 1Password item. See
+[`backend/chart/README.md`](../../backend/chart/README.md#database).
 
-Background: [ADR 0013](../adr/0013-optional-external-postgres.md).
+Background: [ADR 0013](../adr/0013-optional-external-postgres.md),
+[ADR 0017](../adr/0017-postgres-only-tests-on-testcontainers.md).
 
 ## Next
 
