@@ -65,17 +65,11 @@ spec:
             - secretRef:
                 name: tuk-tuk-google
                 optional: true
-            # Also optional, and last on purpose: envFrom applies sources in
-            # order and later ones win, so a DATABASE_URL in this Secret
-            # overrides the SQLite default in backend-config. That override
-            # is the entire PostgreSQL switching mechanism (ADR 0013) — the
-            # ConfigMap stays pinned at the SQLite path, so reverting is
-            # removing the field here rather than editing config back.
-            # Absent until someone actually wants PostgreSQL, so it must
-            # never crash-loop the pod, exactly like tuk-tuk-google.
+            # The only source of DATABASE_URL (PostgreSQL only, ADR 0017).
+            # Required, like tuk-tuk-auth: without it the pod waits with the
+            # missing Secret named rather than starting with no database.
             - secretRef:
                 name: tuk-tuk-db
-                optional: true
           readinessProbe:
             httpGet:
               path: /health
@@ -88,6 +82,10 @@ spec:
               port: 8900
             initialDelaySeconds: 15
             periodSeconds: 30
+          # No longer read by the app (PostgreSQL only, #407). The PVC is
+          # kept as the SQLite file's point-in-time copy from the cutover
+          # (#417) until it is removed on purpose — its reclaim policy is
+          # Delete, so dropping pvc.yaml destroys the file.
           volumeMounts:
             - name: data
               mountPath: /data
