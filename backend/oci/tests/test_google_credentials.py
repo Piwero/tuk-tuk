@@ -4,7 +4,6 @@ connected accounts to "needs_reconnect" on a credential change, and removing
 the integration entirely.
 """
 
-import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -13,7 +12,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.crypto import decrypt_credential
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock
+from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock, run_sql
 from tests.test_google_accounts import connect_and_authorize
 
 
@@ -36,13 +35,8 @@ def make_client(
 
 
 def stored_encrypted_secret(database_url: str) -> str | None:
-    db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-    row = (
-        sqlite3.connect(db_path)
-        .execute("SELECT encrypted_google_client_secret FROM settings")
-        .fetchone()
-    )
-    return row[0] if row else None
+    rows = run_sql(database_url, "SELECT encrypted_google_client_secret FROM settings")
+    return rows[0][0] if rows else None
 
 
 class TestSaveCredentials:
@@ -225,9 +219,7 @@ class TestRemoveCredentials:
 
             client.delete("/api/v1/google/credentials")
 
-            db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-            rows = sqlite3.connect(db_path).execute("SELECT * FROM google_accounts").fetchall()
-            assert rows == []
+            assert run_sql(database_url, "SELECT * FROM google_accounts") == []
 
     def test_is_rejected_without_a_session(
         self, database_url: str, fake_clock: FakeClock, fake_calendar_source: FakeCalendarSource

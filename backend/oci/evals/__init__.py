@@ -23,6 +23,9 @@ import os
 # without a master key (ADR 0008's fail-closed posture), so — exactly as
 # `tests/conftest.py` does, and for the same reason — a throwaway one is
 # set before the first app import. It encrypts nothing that outlives a
-# scenario: every run gets its own temporary SQLite file, deleted when the
-# run ends. `setdefault`, so a real environment is never overwritten.
+# scenario: every run gets its own throwaway PostgreSQL database, on a
+# server discarded when the run ends. `setdefault`, so a real environment is never overwritten.
 os.environ.setdefault("APP_MASTER_KEY", "eval-master-key")
+# Likewise DATABASE_URL (issue #407): the module-level app is never started,
+# so a placeholder is enough; each scenario's app gets a real database.
+os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://unused:unused@localhost:5432/unused")

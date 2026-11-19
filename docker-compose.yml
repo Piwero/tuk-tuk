@@ -1,6 +1,25 @@
 name: tuk-tuk
 
 services:
+  # Local dev database with throwaway credentials. Published on
+  # localhost:5433 (5432 is often a host Postgres already) so the backend
+  # can also run outside Docker — see .env.example.
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tuktuk
+      POSTGRES_PASSWORD: tuktuk
+      POSTGRES_DB: tuktuk
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tuktuk -d tuktuk"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   backend:
     build:
       context: ./backend/oci
@@ -10,8 +29,15 @@ services:
     env_file:
       - path: .env
         format: raw
+    # Set here, not from .env: inside Compose the database is always the
+    # `postgres` service above, whatever .env says for running outside it.
+    environment:
+      DATABASE_URL: postgresql+psycopg://tuktuk:tuktuk@postgres:5432/tuktuk
     volumes:
       - ./backend/oci:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
@@ -30,3 +56,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+volumes:
+  pgdata:

@@ -8,7 +8,7 @@ lives in [`CONTEXT.md`](CONTEXT.md); design decisions in [`docs/adr/`](docs/adr/
 
 - **`backend/oci/`**: Python 3.12 / [FastAPI](https://fastapi.tiangolo.com/)
   service managed with [uv](https://docs.astral.sh/uv/) (`ruff`, `mypy`,
-  `pytest`; SQLite via SQLAlchemy + Alembic). `backend/chart/` holds its
+  `pytest`; PostgreSQL via SQLAlchemy + Alembic). `backend/chart/` holds its
   Kubernetes manifests.
 - **`frontend/oci/`**: TypeScript / React app built with
   [Vite](https://vitejs.dev/), linted with ESLint, formatted with Prettier,
@@ -162,7 +162,7 @@ entirely from the app itself rather than `.env`
 The one secret that still lives outside the database, generated once at
 deploy time. It encrypts the sensitive columns of `settings` (the Google
 client secret, AI API keys) and stored Google refresh tokens. It never appears
-in the UI or in any API response: a copy of the SQLite file discloses nothing
+in the UI or in any API response: a copy of the database discloses nothing
 it protects without it. The password hash needs no such protection, because
 Argon2id is one-way.
 
@@ -184,10 +184,11 @@ There is no `.env` in the cluster: `APP_MASTER_KEY` lives in the
 
 ## Database
 
-SQLite by default ([ADR 0004](docs/adr/0004-sqlite-sqlalchemy-alembic.md)),
-optionally PostgreSQL ([ADR 0013](docs/adr/0013-optional-external-postgres.md)).
-The one-way copy tool (`mise run backend:copy-db`) is documented in
-[docs/self-hosting/postgres.md](docs/self-hosting/postgres.md).
+PostgreSQL only ([ADR 0017](docs/adr/0017-postgres-only-tests-on-testcontainers.md);
+background in [ADR 0013](docs/adr/0013-optional-external-postgres.md)).
+`DATABASE_URL` is required. `docker compose up` brings its own `postgres`
+service, and the backend tests start a throwaway one through testcontainers,
+so Docker is the only prerequisite for either.
 
 **Do not run more than one backend replica.** The login throttle counts
 consecutive failures in process memory, so N replicas weaken brute-force

@@ -1147,14 +1147,11 @@ function DatabaseSettingsForm(): JSX.Element {
       <p className="settings-hint">
         {status === null
           ? "Loading…"
-          : status.engine === "sqlite"
-            ? "Currently using SQLite, the default embedded database."
-            : `Currently using PostgreSQL — host ${status.host ?? "unknown"}, database ${status.database ?? "unknown"}.`}
+          : `Currently using PostgreSQL — host ${status.host ?? "unknown"}, database ${status.database ?? "unknown"}.`}
       </p>
       <p className="settings-hint">
         Testing a connection here does not switch the database and does not save the address — it
-        only checks whether the server responds. See the README&rsquo;s &ldquo;Moving to
-        PostgreSQL&rdquo; section for the real switching steps.
+        only checks whether the server responds.
       </p>
       <label>
         Connection URL

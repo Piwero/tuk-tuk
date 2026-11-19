@@ -6,7 +6,6 @@ state carried in that redirect's query string — no test reaches into the
 router's internals to fabricate a state token.
 """
 
-import sqlite3
 import time as time_module
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -18,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock
+from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock, run_sql
 
 
 @contextmanager
@@ -286,9 +285,7 @@ class TestAccountsAndDisconnect:
 
         configured_client.delete(f"/api/v1/google/accounts/{account_id}")
 
-        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-        rows = sqlite3.connect(db_path).execute("SELECT * FROM google_accounts").fetchall()
-        assert rows == []
+        assert run_sql(database_url, "SELECT * FROM google_accounts") == []
 
     def test_disconnecting_an_unknown_account_is_a_404(self, configured_client: TestClient) -> None:
         response = configured_client.delete("/api/v1/google/accounts/999")
@@ -326,12 +323,7 @@ class TestAccountsAndDisconnect:
             refresh_token="a-very-secret-refresh-token",
         )
 
-        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-        row = (
-            sqlite3.connect(db_path)
-            .execute("SELECT encrypted_refresh_token FROM google_accounts")
-            .fetchone()
-        )
+        [row] = run_sql(database_url, "SELECT encrypted_refresh_token FROM google_accounts")
         assert "a-very-secret-refresh-token" not in row[0]
 
     def test_is_not_found_when_unconfigured(self, unconfigured_client: TestClient) -> None:
@@ -368,10 +360,7 @@ class TestCredentialSurvivesSessionKeyRotation:
                 refresh_token="rt-1",
             )
 
-        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-        connection = sqlite3.connect(db_path)
-        connection.execute("UPDATE settings SET session_key = 'rotated-signing-key'")
-        connection.commit()
+        run_sql(database_url, "UPDATE settings SET session_key = 'rotated-signing-key'")
 
         # A fresh app, as if the signing key were rotated — same database,
         # same master key.

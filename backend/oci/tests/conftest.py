@@ -1,4 +1,5 @@
-"""Shared fixtures: each test boots the real app against a throwaway SQLite file."""
+"""Shared fixtures: each test boots the real app against its own throwaway
+PostgreSQL database."""
 
 import os
 
@@ -21,21 +22,27 @@ os.environ.setdefault(
 )
 os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
 os.environ.setdefault("APP_MASTER_KEY", "test-master-key")
+# Importing app.main builds a module-level app, which now refuses to start
+# without a PostgreSQL DATABASE_URL (issue #407). Building it never
+# connects, so a placeholder satisfies it; every test's own app gets the
+# real per-test URL from the `database_url` fixture instead.
+os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://unused:unused@localhost:5432/unused")
 # A small but non-zero base: the login path no longer sleeps (issue #339),
 # so this costs no wall-clock time, but a zero base would mean the lockout
 # itself never engages (LoginThrottle.lock_until(base_seconds=0) == now).
 os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0.001")
 
 import asyncio  # noqa: E402
-import shutil  # noqa: E402
-from collections.abc import Iterator  # noqa: E402
+import itertools  # noqa: E402
+from collections.abc import Iterator, Sequence  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
-from pathlib import Path  # noqa: E402
-from tempfile import TemporaryDirectory  # noqa: E402
+from typing import Any  # noqa: E402
 
+import psycopg  # noqa: E402
 import pytest  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from testcontainers.postgres import PostgresContainer  # noqa: E402
 
 from app.app_settings import get_app_settings  # noqa: E402
 from app.calendar_source import (  # noqa: E402
@@ -46,7 +53,7 @@ from app.calendar_source import (  # noqa: E402
     RefreshedAccessToken,
 )
 from app.config import Settings  # noqa: E402
-from app.db import run_migrations  # noqa: E402
+from app.db import DatabaseUrl, run_migrations  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import AppSettings  # noqa: E402
 
@@ -84,25 +91,71 @@ class FakeClock:
         self.now += delta
 
 
+TEMPLATE_DATABASE = "tuktuk_template"
+
+
 @pytest.fixture(scope="session")
-def migrated_template_db() -> Iterator[Path]:
-    """Run the full Alembic chain against an empty file exactly once per test
-    session, so individual tests can start from a cheap file copy instead of
-    each replaying ~1.5-2s of migrations (see issue #113). The chain itself
-    is still exercised end-to-end — see test_migrations.py for a test that
-    runs it in isolation, independent of this caching.
+def postgres_server() -> Iterator[str]:
+    """One throwaway PostgreSQL server per test session (issue #407),
+    started through testcontainers, so `pytest` needs Docker and nothing
+    else. Durability is switched off: the server is discarded when the
+    session ends, and fsync is most of what makes creating a database slow.
+
+    Yields a `postgresql+psycopg://user:password@host:port` authority with
+    no database name; append `/<name>` to address one.
     """
-    with TemporaryDirectory() as tmp_dir:
-        template_path = Path(tmp_dir) / "template.db"
-        run_migrations(f"sqlite:///{template_path}")
-        yield template_path
+    container = PostgresContainer("postgres:16", driver=None).with_command(
+        "-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
+    )
+    with container as server:
+        host = server.get_container_host_ip()
+        port = server.get_exposed_port(5432)
+        yield f"postgresql+psycopg://{server.username}:{server.password}@{host}:{port}"
+
+
+@pytest.fixture(scope="session")
+def migrated_template_db(postgres_server: str) -> str:
+    """Run the full Alembic chain once per session into a template database,
+    so each test starts from a cheap clone of it rather than replaying every
+    migration (see issue #113). The chain itself is still exercised
+    end-to-end — see test_migrations.py, which runs it in isolation.
+    """
+    run_sql(f"{postgres_server}/postgres", f'CREATE DATABASE "{TEMPLATE_DATABASE}"')
+    run_migrations(f"{postgres_server}/{TEMPLATE_DATABASE}")
+    return TEMPLATE_DATABASE
+
+
+_test_database_ids = itertools.count(1)
+
+
+def fresh_database(postgres_server: str, *, template: str = "template0") -> str:
+    """Creates a new, uniquely named database and returns its URL. Cloned
+    from `template` — pass the migrated template for a ready schema, or
+    keep the default for a truly empty database (migration tests).
+
+    Never dropped: the whole server is discarded at session end, and
+    dropping costs ~20x what cloning does (measured for #407).
+    """
+    name = f"test_{next(_test_database_ids)}"
+    run_sql(f"{postgres_server}/postgres", f'CREATE DATABASE "{name}" TEMPLATE "{template}"')
+    return f"{postgres_server}/{name}"
 
 
 @pytest.fixture
-def database_url(tmp_path: Path, migrated_template_db: Path) -> str:
-    db_path = tmp_path / "test.db"
-    shutil.copyfile(migrated_template_db, db_path)
-    return f"sqlite+aiosqlite:///{db_path}"
+def database_url(postgres_server: str, migrated_template_db: str) -> str:
+    return fresh_database(postgres_server, template=migrated_template_db)
+
+
+def run_sql(database_url: str, query: str, params: Sequence[object] = ()) -> list[tuple[Any, ...]]:
+    """Runs one statement straight against a test database, outside the
+    app — for asserting what is actually stored (an encrypted column, a
+    cascade's leftovers) or arranging state no endpoint can write.
+    Autocommits; returns the result rows, or `[]` for a statement without
+    any.
+    """
+    with psycopg.connect(DatabaseUrl(database_url).psycopg_url, autocommit=True) as connection:
+        cursor = connection.execute(query, params)
+        return cursor.fetchall() if cursor.description else []
 
 
 @pytest.fixture

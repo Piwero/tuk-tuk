@@ -21,13 +21,6 @@ async function openDatabaseSettings(): Promise<ReturnType<typeof userEvent.setup
 }
 
 describe("Settings > Database status", () => {
-  it("shows SQLite for the default engine", async () => {
-    installFakeApi({ databaseStatus: { engine: "sqlite", host: null, database: null } });
-    await openDatabaseSettings();
-
-    expect(await screen.findByText(/SQLite/)).toBeInTheDocument();
-  });
-
   it("shows the host and database when running PostgreSQL", async () => {
     installFakeApi({
       databaseStatus: { engine: "postgresql", host: "db.internal", database: "tuktuk" },
@@ -45,7 +38,6 @@ describe("Settings > Database status", () => {
     expect(
       screen.getByText(/does not switch the database and does not save the address/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Moving to PostgreSQL/i)).toBeInTheDocument();
   });
 });
 

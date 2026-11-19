@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted. Supersedes ADR 0004.
+Accepted. Supersedes ADR 0004. Partly superseded by ADR 0017: SQLite is no
+longer supported, and the tests run on PostgreSQL.
 
 ## Context
 

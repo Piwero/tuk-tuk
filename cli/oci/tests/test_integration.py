@@ -23,22 +23,40 @@ os.environ.setdefault(
 os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
 os.environ.setdefault("APP_MASTER_KEY", "test-master-key")
 os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0")
+# app.main builds a module-level app on import, which requires a PostgreSQL
+# DATABASE_URL (backend #407). Building it never connects; the fixture's app
+# gets the real one.
+os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://unused:unused@localhost:5432/unused")
 
 import httpx  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from testcontainers.postgres import PostgresContainer  # noqa: E402
 
 from tuk.cli import main  # noqa: E402
 
 
+@pytest.fixture(scope="module")
+def postgres_url() -> Iterator[str]:
+    """A throwaway PostgreSQL for this module, started through
+    testcontainers like the backend suite's (needs Docker)."""
+    container = PostgresContainer("postgres:16", driver=None).with_command("-c fsync=off")
+    with container as server:
+        host = server.get_container_host_ip()
+        port = server.get_exposed_port(5432)
+        yield (
+            f"postgresql+psycopg://{server.username}:{server.password}"
+            f"@{host}:{port}/{server.dbname}"
+        )
+
+
 @pytest.fixture
-def live_client(tmp_path: Path) -> Iterator[TestClient]:
+def live_client(postgres_url: str) -> Iterator[TestClient]:
     """The real application on a throwaway database, already logged in — the
     password is pre-seeded above, so the fixture's own setup calls are
     authenticated without each test driving first-run setup."""
-    db_path = tmp_path / "test.db"
-    app = create_app(Settings(database_url=f"sqlite+aiosqlite:///{db_path}"))
+    app = create_app(Settings(database_url=postgres_url))
     with TestClient(app) as test_client:
         login = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
         assert login.status_code == 204, login.text

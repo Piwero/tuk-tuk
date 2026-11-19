@@ -14,7 +14,11 @@ class Settings(BaseSettings):
     backend_host: str = "0.0.0.0"
     backend_port: int = 8900
     backend_log_level: str = "info"
-    database_url: str = "sqlite+aiosqlite:///./tuk_tuk.db"
+    # Required, PostgreSQL only (issue #407): postgresql+psycopg://… . Left
+    # optional here so importing this module never fails; create_app
+    # refuses to start without it (app.db.require_database_url), the same
+    # posture as app_master_key below.
+    database_url: str | None = None
     cors_origins: list[str] = ["http://localhost:5900"]
 
     # Authentication (ADR 0005/0008). The password hash and the session
@@ -47,7 +51,7 @@ class Settings(BaseSettings):
     # deploy time the same way SECRET_KEY was before it, and required
     # unconditionally: the app refuses to start without it, the same
     # fail-closed posture SECRET_KEY had. Never read from or written to any
-    # API response — a copy of the SQLite file must not disclose what it
+    # API response — a copy of the database must not disclose what it
     # protects.
     app_master_key: str | None = None
 

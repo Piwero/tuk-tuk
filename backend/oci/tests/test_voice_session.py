@@ -9,7 +9,6 @@ import hashlib
 import hmac
 import json
 import re
-import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.crypto import encrypt_credential
 from app.voice_livekit import AGENT_NAME
+from tests.conftest import run_sql
 
 URL = "wss://tuktuk-abc123.livekit.cloud"
 KEY = "APIkey123"
@@ -129,14 +129,12 @@ def test_credentials_saved_by_an_earlier_version_still_start_sessions(
     client: TestClient, database_url: str
 ) -> None:
     # An upgraded install: the three columns were written before this refactor.
-    db = sqlite3.connect(database_url.removeprefix("sqlite+aiosqlite:///"))
-    db.execute(
-        "UPDATE settings SET voice_livekit_url = ?, voice_livekit_api_key = ?,"
-        " encrypted_voice_livekit_api_secret = ?",
+    run_sql(
+        database_url,
+        "UPDATE settings SET voice_livekit_url = %s, voice_livekit_api_key = %s,"
+        " encrypted_voice_livekit_api_secret = %s",
         (URL, KEY, encrypt_credential(SECRET, key="test-master-key")),
     )
-    db.commit()
-    db.close()
 
     body = start_session(client)
 

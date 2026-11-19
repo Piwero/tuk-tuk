@@ -7,7 +7,6 @@ Google's list. Every test drives the HTTP API, exactly as
 tests/test_google_accounts.py does.
 """
 
-import sqlite3
 from collections.abc import Iterator
 
 import pytest
@@ -19,7 +18,7 @@ from app.calendar_source import (
     TransientCalendarSourceError,
 )
 from app.routers.v1.google import CALENDAR_COLOR_PALETTE
-from tests.conftest import FakeCalendarSource, FakeClock
+from tests.conftest import FakeCalendarSource, FakeClock, run_sql
 from tests.test_google_accounts import connect_and_authorize, make_client
 
 
@@ -356,6 +355,4 @@ class TestDisconnectRemovesCalendars:
 
         configured_client.delete(f"/api/v1/google/accounts/{account_id}")
 
-        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-        rows = sqlite3.connect(db_path).execute("SELECT * FROM google_calendars").fetchall()
-        assert rows == []
+        assert run_sql(database_url, "SELECT * FROM google_calendars") == []

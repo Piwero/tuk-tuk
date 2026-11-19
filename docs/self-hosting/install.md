@@ -13,9 +13,10 @@ From a terminal:
    ```sh
    git clone https://github.com/Piwero/tuk-tuk.git && cd tuk-tuk
    ```
-2. Create the master key (one time only):
+2. Create the master key and the database password (one time only):
    ```sh
    echo "APP_MASTER_KEY=$(openssl rand -base64 32)" > .env
+   echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> .env
    ```
 3. Build and start it:
    ```sh
@@ -27,7 +28,8 @@ The app builds on your own machine, so it runs on Intel/AMD and Apple Silicon (M
 
 > **Back up `.env`.** The master key in it encrypts your saved Google and AI
 > credentials. If you lose it, you'll have to enter those again. Your tasks are
-> not affected. See [Security](security.md#the-master-key).
+> not affected. See [Security](security.md#the-master-key). Don't change
+> `POSTGRES_PASSWORD` later: the database keeps the one it was created with.
 
 ## Everyday commands
 
@@ -41,7 +43,8 @@ Run these from the `tuk-tuk` folder.
 | Check it's running | `docker compose -f docker-compose.prod.yml ps` |
 
 The app restarts by itself after a reboot as long as Docker is running. Your data
-lives in a Docker volume called `tuk-tuk-prod_data` and survives `down`.
+lives in a PostgreSQL database, in a Docker volume called `tuk-tuk-prod_pgdata`,
+and survives `down`.
 
 > **Never add `-v` to `down`.** `down -v` deletes the volume, and with it every
 > task, habit and goal. Back up first: see [Upgrade and back up](upgrade.md#back-up).

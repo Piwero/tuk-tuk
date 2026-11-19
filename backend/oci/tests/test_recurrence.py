@@ -215,12 +215,10 @@ def test_deleting_a_list_removes_its_tasks_occurrences(client: TestClient) -> No
     task = make_recurring_task(client, "FREQ=DAILY", list_id=errands["id"])
     complete(client, task["id"])
 
+    assert client.get("/api/v1/completed-occurrences").json()["total"] == 1
+
     assert client.delete(f"/api/v1/lists/{errands['id']}").status_code == 204
 
-    # A new task can reuse the deleted task's id (SQLite rowid reuse) — stale
-    # history must not attach itself to the newcomer.
-    replacement = client.post("/api/v1/tasks", json={"title": "Fresh"}).json()
-    assert replacement["id"] == task["id"]
     assert client.get("/api/v1/completed-occurrences").json()["total"] == 0
 
 

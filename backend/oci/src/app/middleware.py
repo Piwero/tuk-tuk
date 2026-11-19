@@ -50,8 +50,8 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
 
         # A dedicated session, not the request's own SessionDep — this runs
         # before routing has picked a handler to inject one into. The
-        # single-row `settings` lookup is cheap enough (SQLite, one row) to
-        # repeat if the handler below also needs it.
+        # single-row `settings` lookup is cheap enough (one row, by primary
+        # key) to repeat if the handler below also needs it.
         session_factory = request.app.state.session_factory
         async with session_factory() as db_session:
             app_settings = await get_app_settings(db_session)
