@@ -198,6 +198,21 @@ export function fetchAdminUsers(): Promise<Page<AdminUser>> {
   return request(`/api/v1/admin/users?limit=${ADMIN_USERS_LIMIT}`);
 }
 
+export interface NewAdminUser {
+  username: string;
+  email: string;
+  /** Generated in the browser; the person must replace it at first sign-in. */
+  temp_password: string;
+  is_admin: boolean;
+}
+
+/** Creates an account with a temporary password (#412, #479). Rejects with
+ * `invalid_username` / `invalid_email` / `invalid_password` (422) or
+ * `username_taken` / `email_taken` (409, one per response). */
+export function createAdminUser(input: NewAdminUser): Promise<AdminUser> {
+  return request("/api/v1/admin/users", { method: "POST", body: JSON.stringify(input) });
+}
+
 /** Signs in by username or email (either ignoring case) and sets the
  * session cookie. Rejects with `invalid_credentials` (an unknown login and
  * a wrong password alike), `too_many_attempts`, or `account_disabled`. */
