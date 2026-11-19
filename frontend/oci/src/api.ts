@@ -174,6 +174,42 @@ export function updateProfile(fields: { username?: string; email?: string }): Pr
   return request("/api/v1/auth/me", { method: "PATCH", body: JSON.stringify(fields) });
 }
 
+/** One of the signed-in User's API tokens (#413), as listed: never its value. */
+export interface ApiToken {
+  id: number;
+  name: string;
+  /** `tuk_pat_<user id>_` plus the first 8 hex characters of the secret. */
+  prefix: string;
+  created_at: string;
+  /** Null until a client first uses it; moved at most every few minutes. */
+  last_used_at: string | null;
+}
+
+/** A token just created: the only response that carries its value. */
+export interface CreatedApiToken extends ApiToken {
+  token: string;
+}
+
+/** The most tokens one read returns (the backend's page cap). */
+const API_TOKENS_LIMIT = 200;
+
+/** The signed-in User's live API tokens, newest first. */
+export function fetchApiTokens(): Promise<Page<ApiToken>> {
+  return request(`/api/v1/auth/me/tokens?limit=${API_TOKENS_LIMIT}`);
+}
+
+/** Creates a token for clients acting as the User. Its value is in this
+ * response only. Rejects 422 `invalid_token_name` (1 to 100 characters). */
+export function createApiToken(name: string): Promise<CreatedApiToken> {
+  return request("/api/v1/auth/me/tokens", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+/** Revokes a token; it stops working at once. Rejects 404 `not_found` for
+ * one that is unknown or already revoked. */
+export function revokeApiToken(id: number): Promise<void> {
+  return request(`/api/v1/auth/me/tokens/${id}`, { method: "DELETE" });
+}
+
 /** An account as the admin users API returns it (#412): account fields
  * only, never anything the account owns. */
 export interface AdminUser {
