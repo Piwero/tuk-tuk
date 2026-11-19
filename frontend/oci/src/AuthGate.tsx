@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { App } from "./App";
 import { ApiError, type CurrentUser, fetchCurrentUser, logout, onUnauthorized } from "./api";
 import { ChangePasswordStep } from "./auth/ChangePasswordStep";
+import { CompleteProfileStep } from "./auth/CompleteProfileStep";
 import { ForcedStepFrame } from "./auth/ForcedStepFrame";
 import { SetupScreen } from "./auth/SetupScreen";
 import { type SignInNotice, SignInScreen } from "./auth/SignInScreen";
@@ -109,7 +110,9 @@ export function AuthGate({
           title="Complete your profile"
           footer="Signed in with your existing password"
           onLogout={signOut}
-        />
+        >
+          <CompleteProfileStep onComplete={landOnToday} />
+        </ForcedStepFrame>
       );
     case "signed-in":
       return <App voiceProvider={voiceProvider} onLogout={signOut} />;

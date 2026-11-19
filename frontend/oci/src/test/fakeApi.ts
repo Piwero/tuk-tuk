@@ -1227,9 +1227,9 @@ export function installFakeApi({
       state.loggedIn = false;
       return new Response(null, { status: 204 });
     }
-    // Mirrors the backend's /auth/complete (auth router, ADR 0018) for the
-    // temporary-password step. The profile step (#472) adds its username
-    // and email handling here.
+    // Mirrors the backend's /auth/complete (auth router, ADR 0018) for both
+    // forced steps, in the backend's order: profile validation, password
+    // length, unchanged password, then identity conflicts.
     if (method === "POST" && url.pathname === "/api/v1/auth/complete") {
       const account = sessionUser() as FakeUser;
       if (!account.must_change_password && !account.must_complete_profile) {
@@ -1238,10 +1238,27 @@ export function installFakeApi({
           409,
         );
       }
-      const input = body as { new_password: string };
+      const input = body as { new_password: string; username?: string; email?: string };
+      let profile: { username: string; email: string } | null = null;
       if (account.must_complete_profile) {
-        // #472 replaces this with the profile step's username and email.
-        return unprocessable("profile_required", "Username and email are required");
+        if (input.username === undefined || input.email === undefined) {
+          return unprocessable(
+            "profile_required",
+            "Username and email are required to complete a profile",
+          );
+        }
+        const username = input.username.trim();
+        if (username === "" || username.length > MAX_USERNAME_LENGTH) {
+          return unprocessable(
+            "invalid_username",
+            `Username must be 1 to ${MAX_USERNAME_LENGTH} characters`,
+          );
+        }
+        const email = input.email.trim();
+        if (!EMAIL_PATTERN.test(email)) {
+          return unprocessable("invalid_email", "Enter a valid email address");
+        }
+        profile = { username, email };
       }
       if (input.new_password.length < MIN_PASSWORD_LENGTH) {
         return unprocessable(
@@ -1255,8 +1272,29 @@ export function installFakeApi({
           "Choose a password different from the current one",
         );
       }
+      if (profile !== null) {
+        // Username and email are citext on the backend: case never matters.
+        const others = state.users.filter((candidate) => candidate.id !== account.id);
+        const taken = (field: "username" | "email", value: string): boolean =>
+          others.some((other) => other[field]?.toLowerCase() === value.toLowerCase());
+        if (taken("username", profile.username)) {
+          return json(
+            { error: { code: "username_taken", message: "That username is already taken" } },
+            409,
+          );
+        }
+        if (taken("email", profile.email)) {
+          return json(
+            { error: { code: "email_taken", message: "That email is already in use" } },
+            409,
+          );
+        }
+        account.username = profile.username;
+        account.email = profile.email;
+      }
       account.password = input.new_password;
       account.must_change_password = false;
+      account.must_complete_profile = false;
       return new Response(null, { status: 204 });
     }
     if (method === "POST" && url.pathname === "/api/v1/auth/password") {
