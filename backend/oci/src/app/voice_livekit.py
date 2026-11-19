@@ -45,8 +45,10 @@ AGENT_NAME = "tuktuk-voice"
 TOKEN_TTL_SECONDS = 600
 
 
-def new_room_name() -> str:
-    return f"tuktuk-{secrets.token_urlsafe(12)}"
+def new_room_name(user_id: int) -> str:
+    """A fresh room in the User's own LiveKit project, named after their id
+    (opaque, no PII) so the project's room list says whose session it was."""
+    return f"tuktuk-{user_id}-{secrets.token_urlsafe(12)}"
 
 
 def _b64(raw: bytes) -> str:
@@ -120,11 +122,12 @@ def clear(user_settings: UserSettings) -> None:
 
 
 def create_session(user_settings: UserSettings, *, master_key: str) -> dict[str, str]:
-    """`{url, token, room}` for a fresh room; the caller checks `is_configured`."""
+    """`{url, token, room}` for a fresh room, minted from this User's own
+    LiveKit credentials (ADR 0015's amendment); the caller checks `is_configured`."""
     assert user_settings.voice_livekit_url is not None
     assert user_settings.voice_livekit_api_key is not None
     assert user_settings.encrypted_voice_livekit_api_secret is not None
-    room = new_room_name()
+    room = new_room_name(user_settings.user_id)
     token = mint_token(
         api_key=user_settings.voice_livekit_api_key,
         api_secret=decrypt_credential(

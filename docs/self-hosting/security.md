@@ -43,18 +43,22 @@ credentials, Google sign-ins and AI API keys. It never appears in the app or the
 
 Optional. If you deploy `tuk-mcp --http` on Kubernetes
 ([`mcp/oci/README.md`](../../mcp/oci/README.md),
-[ADR 0016](../adr/0016-mcp-network-transport.md)), know what it changes:
+[ADR 0016](../adr/0016-mcp-network-transport.md)), know what it changes.
+Each server serves one User, and the Admin deploys one on that User's request
+([runbook](per-user-mcp-and-voice.md)).
 
 - **Tailnet only.** It is published as `tuk-tuk-mcp` through a Tailscale
   Ingress with Funnel off. Never give it a public hostname.
 - **Bearer token.** Clients must send `MCP_BEARER_TOKEN` (32+ characters).
-  It is one shared secret: rotate it by changing the 1Password item and every
+  It is one shared secret per server: rotate it by changing the 1Password item and every
   client. Keep it out of checked-in config.
-- **The pod holds your password** (`TUK_PASSWORD`) and logs in as you. Anyone
-  who can read that namespace's secrets or the 1Password item has the full
-  password. Changing the password in **Settings → Security** logs the pod
-  out; update the item too.
-- A token holder can read your tasks and use the write tools, but not delete.
+- **The pod holds an API token, not a password** (`TUK_API_TOKEN`). It acts
+  only as the User who created the token. Anyone who can read that
+  namespace's secrets or the 1Password item can act as that User through the
+  API, but can't sign in to the web app, change their password, create more
+  tokens or use admin pages. Changing the password doesn't affect the pod.
+  Revoking the token in **Settings → My account → API tokens** cuts it off at once.
+- A bearer-token holder can read that User's tasks and use the write tools, but not delete.
 
 ## Forgotten password
 

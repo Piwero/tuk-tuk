@@ -39,8 +39,9 @@ class Body(dict[str, object]):
 class LoginRequest:
     """Thin client-side declaration of the login body — deliberately not
     imported from the backend, so installing the CLI never pulls in the
-    database stack."""
+    database stack. `login` is the User's username or email (ADR 0018)."""
 
+    login: str
     password: str
 
 
@@ -64,9 +65,9 @@ class Client:
     def __init__(self, base_url: str, transport: httpx.BaseTransport | None = None) -> None:
         self._http = httpx.Client(base_url=base_url, transport=transport)
 
-    def login(self, password: str) -> str:
+    def login(self, login: str, password: str) -> str:
         response = self._http.post(
-            "/api/v1/auth/login", json=asdict(LoginRequest(password=password))
+            "/api/v1/auth/login", json=asdict(LoginRequest(login=login, password=password))
         )
         if response.status_code == 204:
             cookie = response.cookies.get(SESSION_COOKIE_NAME)
