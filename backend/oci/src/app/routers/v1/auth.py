@@ -27,6 +27,7 @@ from app.users import (
     ensure_identity_free,
     find_user_by_login,
     install_has_password,
+    reporting_taken_identity,
     set_password,
 )
 
@@ -182,27 +183,28 @@ async def setup(
     password_hash = password_hasher.hash(payload.password)
 
     seeded = await session.scalar(select(User).order_by(User.id).limit(1))
-    if seeded is None:
-        # The first Admin also takes the one-time integration env import
-        # (ADR 0008), as user #1 did when the lifespan created it.
-        user = await create_user(
-            session,
-            User(
-                username=username,
-                email=email,
-                password_hash=password_hash,
-                is_admin=True,
-                password_changed_at=request.app.state.clock(),
-            ),
-            user_settings_from_env(request.app.state.settings),
-        )
-    else:
-        await ensure_identity_free(session, username, email, except_user=seeded)
-        user = seeded
-        user.username, user.email, user.is_admin = username, email, True
-        user.must_complete_profile = user.must_change_password = False
-        set_password(user, password_hash, now=request.app.state.clock())
-    await session.commit()
+    async with reporting_taken_identity():
+        if seeded is None:
+            # The first Admin also takes the one-time integration env import
+            # (ADR 0008), as user #1 did when the lifespan created it.
+            user = await create_user(
+                session,
+                User(
+                    username=username,
+                    email=email,
+                    password_hash=password_hash,
+                    is_admin=True,
+                    password_changed_at=request.app.state.clock(),
+                ),
+                user_settings_from_env(request.app.state.settings),
+            )
+        else:
+            await ensure_identity_free(session, username, email, except_user=seeded)
+            user = seeded
+            user.username, user.email, user.is_admin = username, email, True
+            user.must_complete_profile = user.must_change_password = False
+            set_password(user, password_hash, now=request.app.state.clock())
+        await session.commit()
 
     _sign_in(request, response, app_settings.session_key, user)
 
@@ -271,7 +273,8 @@ async def update_me(
         user.username = username
     if email is not None:
         user.email = email
-    await session.commit()
+    async with reporting_taken_identity():
+        await session.commit()
     return _me(user)
 
 
@@ -310,7 +313,8 @@ async def complete(
 
     user.must_complete_profile = user.must_change_password = False
     set_password(user, password_hasher.hash(payload.new_password), now=request.app.state.clock())
-    await session.commit()
+    async with reporting_taken_identity():
+        await session.commit()
 
     app_settings = await require_app_settings(session)
     _sign_in(request, response, app_settings.session_key, user)

@@ -24,6 +24,7 @@ from app.users import (
     clean_username,
     create_user,
     ensure_identity_free,
+    reporting_taken_identity,
     set_password,
 )
 
@@ -98,18 +99,19 @@ async def create_account(
     email = clean_email(payload.email)
     check_new_password(payload.temp_password)
     await ensure_identity_free(session, username, email)
-    user = await create_user(
-        session,
-        User(
-            username=username,
-            email=email,
-            password_hash=password_hasher.hash(payload.temp_password),
-            is_admin=payload.is_admin,
-            must_change_password=True,
-            password_changed_at=request.app.state.clock(),
-        ),
-    )
-    await session.commit()
+    async with reporting_taken_identity():
+        user = await create_user(
+            session,
+            User(
+                username=username,
+                email=email,
+                password_hash=password_hasher.hash(payload.temp_password),
+                is_admin=payload.is_admin,
+                must_change_password=True,
+                password_changed_at=request.app.state.clock(),
+            ),
+        )
+        await session.commit()
     return AdminUserRead.model_validate(user)
 
 
