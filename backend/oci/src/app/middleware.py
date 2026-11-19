@@ -1,5 +1,5 @@
 """Session enforcement middleware (ADR 0005, issue #84; ADR 0008, issue #115;
-ADR 0018, issue #410).
+ADR 0018, issues #410, #413).
 
 Default-deny by construction: a per-router auth dependency is default-open,
 so a router added without the decorator is silently published
@@ -17,6 +17,11 @@ cookie is refused once that User is disabled or their epoch has moved on.
 A request let through to its route also moves the User's last-active time
 (issue #478), at most once every LAST_ACTIVE_WRITE_INTERVAL.
 
+A client that cannot log in with a password (the MCP server's HTTP mode)
+sends `Authorization: Bearer <API token>` instead (issue #413, app.api_tokens):
+the same checks as the cookie except the epoch, and never the routes that
+manage credentials or accounts (TOKEN_REFUSED_ROUTES, the admin API).
+
 The AUTH_DISABLED local-dev escape hatch below is the one exception: when
 set, no cookie is needed and every request acts as the first Admin. The
 app refuses to start with it outside APP_ENV=development
@@ -31,6 +36,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
+from app.api_tokens import find_live_token, mark_used, owner_of
 from app.app_settings import require_app_settings
 from app.config import Settings
 from app.errors import error_response
@@ -66,11 +72,52 @@ FORCED_STEP_ROUTES = frozenset(
     }
 )
 
+# What an API token may never do (issue #413), so a stolen one stays a
+# credential its owner can simply revoke: mint another token, set the
+# password or complete a forced step, change the account's identity, or,
+# for an Admin's token, manage any account. Exact match on method and path,
+# plus everything under the admin API.
+TOKEN_REFUSED_ROUTES = frozenset(
+    {
+        ("POST", "/api/v1/auth/me/tokens"),
+        ("POST", "/api/v1/auth/password"),
+        ("POST", "/api/v1/auth/complete"),
+        ("PATCH", "/api/v1/auth/me"),
+    }
+)
+ADMIN_PATH = "/api/v1/admin"
+
+
+def _needs_password_session(request: Request) -> bool:
+    path = request.url.path
+    return (
+        (request.method, path) in TOKEN_REFUSED_ROUTES
+        or path == ADMIN_PATH
+        or path.startswith(ADMIN_PATH + "/")
+    )
+
 
 def _setup_required() -> Response:
     # A distinct code from "unauthorized" so the frontend can route to the
     # first-run setup screen instead of the login screen.
     return error_response(401, "setup_required", "Initial setup is required")
+
+
+def _account_disabled() -> Response:
+    return error_response(401, "account_disabled", "This account is disabled")
+
+
+def _bearer_token(request: Request) -> str | None:
+    """The credential of an `Authorization: Bearer ...` header, if the
+    request carries one; it then decides alone, whatever cookie comes too."""
+    scheme, _, credential = request.headers.get("authorization", "").partition(" ")
+    return credential.strip() if scheme.lower() == "bearer" else None
+
+
+def _forced_step_gate(request: Request, user: User) -> Response | None:
+    if (request.method, request.url.path) in FORCED_STEP_ROUTES:
+        return None
+    return _forced_step(user)
 
 
 def _forced_step(user: User) -> Response | None:
@@ -109,6 +156,10 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if self._settings.auth_disabled:
             return await self._dispatch_as_first_admin(request, call_next)
 
+        token = _bearer_token(request)
+        if token is not None:
+            return await self._dispatch_with_token(request, call_next, token)
+
         # A dedicated session, not the request's own SessionDep — this runs
         # before routing has picked a handler to inject one into. Two
         # primary-key lookups (the settings singleton, the User) per request.
@@ -131,14 +182,13 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         # Disabled before stale: disabling also bumps the epoch, and the
         # frontend wants to tell "your account was disabled" apart.
         if not user.is_active:
-            return error_response(401, "account_disabled", "This account is disabled")
+            return _account_disabled()
         if claims.epoch != user.session_epoch:
             return error_response(401, "unauthorized", "A valid session is required")
 
-        if (request.method, request.url.path) not in FORCED_STEP_ROUTES:
-            blocked = _forced_step(user)
-            if blocked is not None:
-                return blocked
+        blocked = _forced_step_gate(request, user)
+        if blocked is not None:
+            return blocked
 
         request.state.user_id = user.id
         await self._record_activity(request, user)
@@ -156,6 +206,44 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 epoch=user.session_epoch,
             )
         return response
+
+    async def _dispatch_with_token(
+        self, request: Request, call_next: RequestResponseEndpoint, token: str
+    ) -> Response:
+        """`Authorization: Bearer <API token>` (issue #413): the same user
+        checks as a cookie (an active User, no forced step pending), but
+        no session epoch: a token is revoked on its own, so changing the
+        password does not end it."""
+        unauthorized = error_response(401, "unauthorized", "A valid API token is required")
+        user_id = owner_of(token)
+        if user_id is None:
+            return unauthorized
+        session_factory = request.app.state.session_factory
+        # The token is looked up acting as the User it names: only their
+        # own tokens are searched (app.api_tokens).
+        with acting_as(user_id):
+            async with session_factory() as db_session:
+                api_token = await find_live_token(db_session, token)
+                user = await db_session.get(User, user_id) if api_token is not None else None
+                if api_token is None or user is None:
+                    return unauthorized
+                if not user.is_active:
+                    return _account_disabled()
+                blocked = _forced_step_gate(request, user)
+                if blocked is not None:
+                    return blocked
+                if _needs_password_session(request):
+                    return error_response(
+                        403, "token_not_allowed", "Sign in with your password to do this"
+                    )
+                # A served token request is its owner being active (#478),
+                # read before the commit below expires `user`.
+                await self._record_activity(request, user)
+                if mark_used(api_token, self._clock()):
+                    await db_session.commit()
+
+            request.state.user_id = user_id
+            return await call_next(request)
 
     async def _record_activity(self, request: Request, user: User) -> None:
         """Moves the User's last-active time (issue #478) to now, unless it

@@ -19,8 +19,8 @@ from whose row it is.
 
 A new resource type, or a new route over one, is not isolated until this
 test covers it. Each probe also runs once per way of signing in
-(`SIGN_IN`): an API token (issue #413) adds its own entry there and every
-probe runs for it too.
+(`SIGN_IN`): a session cookie, and an API token (issue #413), whose own
+list and revoke routes are probed like any other owned row.
 """
 
 import json
@@ -42,6 +42,7 @@ from tests.conftest import FakeCalendarSource, FakeClock, create_user_row, log_i
 from tests.test_assistant_chat import StubChatProvider
 
 MARKER = "alice"
+TOKENS = "/api/v1/auth/me/tokens"
 
 
 @dataclass(frozen=True)
@@ -74,8 +75,25 @@ def sign_in_with_cookie(client: TestClient, username: str) -> dict[str, str]:
     return {"Cookie": f"{SESSION_COOKIE_NAME}={token}"}
 
 
+def create_api_token(client: TestClient, username: str, name: str) -> dict[str, Any]:
+    """`username` mints a token, signed in with their password: a token
+    can't mint another."""
+    client.cookies.clear()
+    log_in(client, username)
+    response = client.post(TOKENS, json={"name": name})
+    client.cookies.clear()
+    assert response.status_code == 201, response.text
+    created: dict[str, Any] = response.json()
+    return created
+
+
+def sign_in_with_token(client: TestClient, username: str) -> dict[str, str]:
+    token = create_api_token(client, username, f"{username} client")["token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 # Every way a client can prove who it is. Each probe runs once per entry.
-SIGN_IN: dict[str, SignIn] = {"cookie": sign_in_with_cookie}
+SIGN_IN: dict[str, SignIn] = {"cookie": sign_in_with_cookie, "token": sign_in_with_token}
 
 
 @dataclass(frozen=True)
@@ -105,6 +123,7 @@ class AliceWorld(World):
     bullet: int
     google_account: int
     google_calendar: int
+    api_token: int
 
 
 type Request = Callable[[AliceWorld, World], tuple[str, str, dict[str, Any] | None]]
@@ -215,6 +234,7 @@ READS: dict[str, Read] = {
     "calendar events": Read(
         get(lambda a, me: f"/api/v1/events?range_start={a.today}&range_end={a.today}")
     ),
+    "api tokens": Read(get(lambda a, me: TOKENS)),
 }
 
 ASSISTANT_READ = Read(
@@ -272,6 +292,7 @@ REACHES |= {
         lambda a, me: ("PATCH", f"/api/v1/lists/{a.inbox}", {"view_mode": "kanban"})
     ),
     "habit stats": Reach(get(lambda a, me: f"/api/v1/habits/{a.habit}/stats?today={a.today}")),
+    "revoke api token": Reach(lambda a, me: ("DELETE", f"{TOKENS}/{a.api_token}", None)),
     "PUT check-in": Reach(
         lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/check-ins/{a.today}", {"value": 1})
     ),
@@ -525,9 +546,14 @@ def connect_google(
 
 
 def build_alice(
-    alice: Actor, calendar_source: FakeCalendarSource, assistant: StubChatProvider, today: date
+    alice: Actor,
+    calendar_source: FakeCalendarSource,
+    assistant: StubChatProvider,
+    today: date,
+    api_token: int,
 ) -> AliceWorld:
-    """One of every resource type, each named so "alice" finds it."""
+    """One of every resource type, each named so "alice" finds it.
+    `api_token` is minted beforehand: only a password session can."""
     google_account, google_calendar = connect_google(alice, calendar_source, MARKER, today)
     alice.ok(
         "PUT",
@@ -609,6 +635,7 @@ def build_alice(
         bullet=entry["bullets"][0]["id"],
         google_account=google_account,
         google_calendar=google_calendar,
+        api_token=api_token,
     )
 
 
@@ -666,13 +693,14 @@ def pair(
     with TestClient(app, follow_redirects=False) as client:
         create_user_row(app, "alice", "alice@example.com")
         create_user_row(app, "bea", "bea@example.com")
+        alices_token = create_api_token(client, "alice", "alice token")["id"]
         alice = Actor(client, sign_in(client, "alice"))
         bea = Actor(client, sign_in(client, "bea"))
         today = fake_clock.now.date()
         yield Pair(
             alice=alice,
             bea=bea,
-            a=build_alice(alice, fake_calendar_source, assistant, today),
+            a=build_alice(alice, fake_calendar_source, assistant, today, alices_token),
             b=build_bea(bea, assistant, today),
             assistant=assistant,
         )

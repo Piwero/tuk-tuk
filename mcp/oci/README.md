@@ -11,7 +11,7 @@ Two transports, same tools:
 |---|---|---|
 | Runs | subprocess of your AI client, on your machine | pod in Kubernetes, next to the backend |
 | Reached by | the client's stdin/stdout | `POST /mcp` over the tailnet |
-| Backend login | `tuk login` session file | pod logs in with `TUK_PASSWORD`, cookie in memory |
+| Backend login | `tuk login` session file | the owner's API token, `TUK_API_TOKEN` |
 | Client auth | none (local process) | bearer token (`MCP_BEARER_TOKEN`) |
 | Decision | [ADR 0014](../../docs/adr/0014-non-browser-clients-credential-write-boundary.md) | [ADR 0016](../../docs/adr/0016-mcp-network-transport.md) |
 
@@ -94,18 +94,18 @@ tailnet as `tuk-tuk-mcp`.
 | Variable | Required | Meaning |
 |---|---|---|
 | `MCP_BEARER_TOKEN` | yes | Shared secret clients send as `Authorization: Bearer ...`. At least 32 characters or the server refuses to start. |
-| `TUK_PASSWORD` | yes | Owner's tuk-tuk password; the pod logs in with it. |
+| `TUK_API_TOKEN` | yes | The owner's API token (`tuk_pat_...`), created in the web app's Settings. Sent to the backend as `Authorization: Bearer ...`. |
 | `TUK_BASE_URL` | yes in a pod | Backend URL, e.g. `http://backend.tuk-tuk.svc:8900`. Overrides the config file. |
 | `MCP_ALLOWED_ORIGINS` | no | Comma-separated `Origin` values to accept. A request with any other `Origin` gets `403`; requests with no `Origin` are fine. |
 
-Generate a token with `openssl rand -hex 32` and keep it, with the password,
-in the 1Password item the chart reads (`tuk-tuk-mcp`).
+Generate the bearer token with `openssl rand -hex 32` and keep it, with the
+API token, in the 1Password item the chart reads (`tuk-tuk-mcp`).
 
 Try it locally:
 
 ```bash
 export MCP_BEARER_TOKEN=$(openssl rand -hex 32)
-TUK_BASE_URL=http://localhost:8900 TUK_PASSWORD=... tuk-mcp --http
+TUK_BASE_URL=http://localhost:8900 TUK_API_TOKEN=tuk_pat_... tuk-mcp --http
 curl -s -X POST localhost:8901/mcp -d '{"jsonrpc":"2.0","id":1,"method":"ping"}'   # 401
 curl -s -X POST localhost:8901/mcp -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"ping"}'                                    # {"jsonrpc":"2.0","id":1,"result":{}}
@@ -159,10 +159,11 @@ config.) Then ask the client to call `get_agenda`.
 - **Bearer token.** Every `POST /mcp` needs it, checked before the body is
   parsed. One shared token, no per-client revocation; rotate it by updating the
   1Password item and every client.
-- **The pod holds your password.** HTTP mode logs in as you. Whoever can read
-  the namespace's secrets or the 1Password item has the full password, not a
-  revocable session. The session cookie stays in memory and nothing is written
-  to disk.
+- **The pod holds your API token, not your password.** HTTP mode acts as you
+  with it. Whoever can read the namespace's secrets or the 1Password item can
+  act as you until you revoke the token in Settings; it cannot mint another
+  token, change your password or reach the admin API. It stays in memory and
+  nothing is written to disk.
 - Anyone with the token on the tailnet can call the write tools (never delete).
 
 See the [self-hosting security guide](../../docs/self-hosting/security.md#remote-mcp-server)

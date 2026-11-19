@@ -635,3 +635,23 @@ class Timer(OwnedMixin, Base):
     task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), index=True, default=None)
     habit_id: Mapped[int | None] = mapped_column(ForeignKey("habits.id"), index=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ApiToken(OwnedMixin, Base):
+    """An API token (GLOSSARY.md; ADR 0014's amendment, issue #413): a
+    named, personal credential for a client that cannot log in with a
+    password. Only a SHA-256 hash of the plaintext is kept; `prefix` is its
+    first few characters, enough for its owner to tell tokens apart.
+    Revoking sets `revoked_at`: the token stops authenticating at once and
+    leaves every listing. See app.api_tokens.
+    """
+
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    prefix: Mapped[str] = mapped_column(String(32))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
