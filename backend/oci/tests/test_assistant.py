@@ -208,22 +208,12 @@ class TestAssistantConfig:
     def test_the_api_key_is_encrypted_at_rest(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:
-        from app.app_settings import get_app_settings
         from app.crypto import decrypt_credential
+        from tests.conftest import user_settings_row
 
         with make_client(database_url, fake_clock) as client:
             client.put("/api/v1/assistant/config", json={"api_key": "sk-secret"})
-            app = client.app
-
-            async def _fetch() -> str | None:
-                async with app.state.session_factory() as session:
-                    row = await get_app_settings(session)
-                    assert row is not None
-                    return row.encrypted_assistant_api_key
-
-            import asyncio
-
-            encrypted = asyncio.run(_fetch())
+            encrypted = user_settings_row(client.app).encrypted_assistant_api_key  # type: ignore[arg-type]
 
         assert encrypted is not None
         assert encrypted != "sk-secret"

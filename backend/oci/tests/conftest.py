@@ -50,12 +50,13 @@ from app.calendar_source import (  # noqa: E402
     CalendarListEntry,
     CalendarSourceError,
     ExchangedCredential,
+    GoogleOAuthClient,
     RefreshedAccessToken,
 )
 from app.config import Settings  # noqa: E402
 from app.db import DatabaseUrl, run_migrations  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.models import AppSettings, User  # noqa: E402
+from app.models import SEED_USER_ID, AppSettings, User, UserSettings  # noqa: E402
 from app.users import require_seed_user  # noqa: E402
 
 
@@ -71,6 +72,20 @@ def app_settings_row(app: FastAPI) -> AppSettings:
     async def _fetch() -> AppSettings:
         async with session_factory() as session:
             row = await get_app_settings(session)
+            assert row is not None
+            return row
+
+    return asyncio.run(_fetch())
+
+
+def user_settings_row(app: FastAPI, user_id: int = SEED_USER_ID) -> UserSettings:
+    """Synchronously fetches a user's own settings row (issue #409) —
+    user #1's by default, the user every request acts as today."""
+    session_factory = app.state.session_factory
+
+    async def _fetch() -> UserSettings:
+        async with session_factory() as session:
+            row = await session.get(UserSettings, user_id)
             assert row is not None
             return row
 
@@ -185,11 +200,10 @@ class FakeCalendarSource:
     """
 
     def __init__(self) -> None:
-        # Set by `configure` (issue #117) — recorded so a test can assert
-        # Settings' credentials save actually reached the calendar source,
-        # not just the DB row.
-        self.client_id = ""
-        self.client_secret = ""
+        # The OAuth client every exchange and refresh was made with — each
+        # user's own (issue #409), recorded so a test can assert which one.
+        self.exchanged_with: list[GoogleOAuthClient] = []
+        self.refreshed_with: list[GoogleOAuthClient] = []
         self._codes: dict[str, ExchangedCredential] = {}
         self._calendars: dict[str, list[CalendarListEntry]] = {}
         self._events: dict[tuple[str, str], list[CalendarEventEntry]] = {}
@@ -201,10 +215,6 @@ class FakeCalendarSource:
         self.refresh_calls: list[str] = []
         self.list_events_calls: list[tuple[str, str, str]] = []
 
-    def configure(self, client_id: str, client_secret: str) -> None:
-        self.client_id = client_id
-        self.client_secret = client_secret
-
     def register_code(
         self, code: str, *, google_account_id: str, email: str, refresh_token: str
     ) -> None:
@@ -212,7 +222,10 @@ class FakeCalendarSource:
             google_account_id=google_account_id, email=email, refresh_token=refresh_token
         )
 
-    async def exchange_code(self, code: str, redirect_uri: str) -> ExchangedCredential:
+    async def exchange_code(
+        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str
+    ) -> ExchangedCredential:
+        self.exchanged_with.append(oauth_client)
         try:
             return self._codes[code]
         except KeyError:
@@ -231,7 +244,10 @@ class FakeCalendarSource:
         the user having gone through a fresh OAuth consent."""
         self._refresh_errors.pop(refresh_token, None)
 
-    async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
+    async def refresh(
+        self, oauth_client: GoogleOAuthClient, refresh_token: str
+    ) -> RefreshedAccessToken:
+        self.refreshed_with.append(oauth_client)
         self.refresh_calls.append(refresh_token)
         error = self._refresh_errors.get(refresh_token)
         if error is not None:

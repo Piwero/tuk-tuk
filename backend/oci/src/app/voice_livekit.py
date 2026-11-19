@@ -1,5 +1,5 @@
 """The LiveKit adapter for the Voice Assistant (ADR 0015; issues #367, #391):
-credential storage on `AppSettings`, token minting and agent dispatch. The
+credential storage on each user's `UserSettings` (issue #409), token minting and agent dispatch. The
 router only calls `is_configured`, `read_config`, `apply_update`, `clear` and
 `create_session` and knows nothing of tokens or the `voice_livekit_*` columns (kept as-is, so
 installs upgrade without a migration).
@@ -23,9 +23,9 @@ import secrets
 import time
 from typing import Any
 
-from app.app_settings import voice_configured as is_configured
 from app.crypto import decrypt_credential, encrypt_credential
-from app.models import AppSettings
+from app.models import UserSettings
+from app.user_settings import voice_configured as is_configured
 
 __all__ = [
     "AGENT_NAME",
@@ -83,18 +83,18 @@ def mint_token(*, api_key: str, api_secret: str, room: str) -> str:
     return f"{signing_input}.{_b64(signature)}"
 
 
-def read_config(app_settings: AppSettings) -> dict[str, Any]:
+def read_config(user_settings: UserSettings) -> dict[str, Any]:
     """The `/voice/config` fields; the secret is only reported as set or not."""
     return {
-        "livekit_url": app_settings.voice_livekit_url,
-        "livekit_api_key": app_settings.voice_livekit_api_key,
-        "livekit_api_secret_set": app_settings.encrypted_voice_livekit_api_secret is not None,
-        "configured": is_configured(app_settings),
+        "livekit_url": user_settings.voice_livekit_url,
+        "livekit_api_key": user_settings.voice_livekit_api_key,
+        "livekit_api_secret_set": user_settings.encrypted_voice_livekit_api_secret is not None,
+        "configured": is_configured(user_settings),
     }
 
 
 def apply_update(
-    app_settings: AppSettings,
+    user_settings: UserSettings,
     *,
     master_key: str,
     url: str | None,
@@ -104,32 +104,32 @@ def apply_update(
     """PATCH-style: `None` leaves a field unchanged. The secret is stored
     encrypted under `APP_MASTER_KEY` (ADR 0008)."""
     if url is not None:
-        app_settings.voice_livekit_url = url
+        user_settings.voice_livekit_url = url
     if api_key is not None:
-        app_settings.voice_livekit_api_key = api_key
+        user_settings.voice_livekit_api_key = api_key
     if api_secret is not None:
-        app_settings.encrypted_voice_livekit_api_secret = encrypt_credential(
+        user_settings.encrypted_voice_livekit_api_secret = encrypt_credential(
             api_secret, key=master_key
         )
 
 
-def clear(app_settings: AppSettings) -> None:
-    app_settings.voice_livekit_url = None
-    app_settings.voice_livekit_api_key = None
-    app_settings.encrypted_voice_livekit_api_secret = None
+def clear(user_settings: UserSettings) -> None:
+    user_settings.voice_livekit_url = None
+    user_settings.voice_livekit_api_key = None
+    user_settings.encrypted_voice_livekit_api_secret = None
 
 
-def create_session(app_settings: AppSettings, *, master_key: str) -> dict[str, str]:
+def create_session(user_settings: UserSettings, *, master_key: str) -> dict[str, str]:
     """`{url, token, room}` for a fresh room; the caller checks `is_configured`."""
-    assert app_settings.voice_livekit_url is not None
-    assert app_settings.voice_livekit_api_key is not None
-    assert app_settings.encrypted_voice_livekit_api_secret is not None
+    assert user_settings.voice_livekit_url is not None
+    assert user_settings.voice_livekit_api_key is not None
+    assert user_settings.encrypted_voice_livekit_api_secret is not None
     room = new_room_name()
     token = mint_token(
-        api_key=app_settings.voice_livekit_api_key,
+        api_key=user_settings.voice_livekit_api_key,
         api_secret=decrypt_credential(
-            app_settings.encrypted_voice_livekit_api_secret, key=master_key
+            user_settings.encrypted_voice_livekit_api_secret, key=master_key
         ),
         room=room,
     )
-    return {"url": app_settings.voice_livekit_url, "token": token, "room": room}
+    return {"url": user_settings.voice_livekit_url, "token": token, "room": room}

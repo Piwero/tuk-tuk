@@ -19,12 +19,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import Select, select
 
-from app.app_settings import google_configured, require_app_settings
+from app.app_settings import require_app_settings
 from app.calendar_source import (
     CalendarSource,
     CalendarSourceError,
+    GoogleOAuthClient,
     TerminalCalendarSourceError,
     TransientCalendarSourceError,
 )
@@ -32,8 +33,9 @@ from app.config import Settings
 from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import AppSettings, GoogleAccount, GoogleCalendar
+from app.models import GoogleAccount, GoogleCalendar, UserSettings
 from app.schemas import reject_explicit_null
+from app.user_settings import CurrentUserSettings, google_configured, google_oauth_client
 
 router = APIRouter(prefix="/api/v1/google", tags=["google"])
 
@@ -125,8 +127,8 @@ class GoogleCalendarUpdate(BaseModel):
     _reject_off_palette = field_validator("color")(_reject_off_palette_color)
 
 
-def require_google_configured(app_settings: AppSettings) -> None:
-    if not google_configured(app_settings):
+def require_google_configured(user_settings: UserSettings) -> None:
+    if not google_configured(user_settings):
         raise NotFoundError("Google Calendar integration is not configured")
 
 
@@ -179,76 +181,89 @@ def _callback_redirect_uri(origin: str) -> str:
 
 
 @router.get("/status")
-async def google_status(session: SessionDep) -> GoogleStatus:
-    app_settings = await require_app_settings(session)
+async def google_status(user_settings: CurrentUserSettings) -> GoogleStatus:
     return GoogleStatus(
-        configured=google_configured(app_settings),
-        client_id=app_settings.google_client_id,
-        client_secret_set=app_settings.encrypted_google_client_secret is not None,
+        configured=google_configured(user_settings),
+        client_id=user_settings.google_client_id,
+        client_secret_set=user_settings.encrypted_google_client_secret is not None,
     )
 
 
 @router.put("/credentials")
 async def save_google_credentials(
-    payload: GoogleCredentialsUpdate, request: Request, session: SessionDep
+    payload: GoogleCredentialsUpdate,
+    request: Request,
+    session: SessionDep,
+    user_settings: CurrentUserSettings,
 ) -> GoogleStatus:
     """Saves the Google OAuth client credentials from Settings (issue #117).
     The secret is write-only: omitting it keeps whatever is already stored,
     so editing just the client ID doesn't force re-entering a secret the
-    operator never sees again. Whenever credentials change, every connected
-    account is flipped to "needs_reconnect" — a refresh token is only valid
-    for the OAuth client that minted it, so a credential swap would
-    otherwise leave accounts silently broken on their next read.
+    operator never sees again. Whenever credentials change, every account
+    this user connected is flipped to "needs_reconnect" — a refresh token
+    is only valid for the OAuth client that minted it, so a credential swap
+    would otherwise leave accounts silently broken on their next read.
+    Another user's accounts were minted by their own client, so they are
+    left alone.
     """
     settings = request.app.state.settings
     assert settings.app_master_key is not None  # app.main refuses to start without it
-    app_settings = await require_app_settings(session)
 
     if payload.client_secret is not None:
         encrypted_secret = encrypt_credential(payload.client_secret, key=settings.app_master_key)
-    elif app_settings.encrypted_google_client_secret is not None:
-        encrypted_secret = app_settings.encrypted_google_client_secret
+    elif user_settings.encrypted_google_client_secret is not None:
+        encrypted_secret = user_settings.encrypted_google_client_secret
     else:
         raise APIError(422, "client_secret_required", "A client secret is required")
 
-    app_settings.google_client_id = payload.client_id
-    app_settings.encrypted_google_client_secret = encrypted_secret
-    for account in await session.scalars(select(GoogleAccount)):
+    user_settings.google_client_id = payload.client_id
+    user_settings.encrypted_google_client_secret = encrypted_secret
+    for account in await session.scalars(_accounts_of(user_settings)):
         account.connection_state = "needs_reconnect"
     await session.commit()
-
-    request.app.state.calendar_source.configure(
-        payload.client_id, decrypt_credential(encrypted_secret, key=settings.app_master_key)
-    )
 
     return GoogleStatus(configured=True, client_id=payload.client_id, client_secret_set=True)
 
 
 @router.delete("/credentials", status_code=204)
-async def remove_google_credentials(request: Request, session: SessionDep) -> None:
-    """Removes the Google integration entirely (issue #117): clears the
-    stored credentials and disconnects every account, returning the app to
-    the same "unconfigured, feature invisible" state as a fresh deployment
-    — never a greyed-out or broken corner."""
-    app_settings = await require_app_settings(session)
-    app_settings.google_client_id = None
-    app_settings.encrypted_google_client_secret = None
-    for account in await session.scalars(select(GoogleAccount)):
+async def remove_google_credentials(
+    session: SessionDep, user_settings: CurrentUserSettings
+) -> None:
+    """Removes this user's Google integration entirely (issue #117): clears
+    their stored credentials and disconnects every account they connected,
+    returning them to the same "unconfigured, feature invisible" state as a
+    fresh deployment — never a greyed-out or broken corner."""
+    user_settings.google_client_id = None
+    user_settings.encrypted_google_client_secret = None
+    for account in await session.scalars(_accounts_of(user_settings)):
         await session.delete(account)
     await session.commit()
 
-    request.app.state.calendar_source.configure("", "")
+
+def _accounts_of(user_settings: UserSettings) -> Select[GoogleAccount]:
+    """The accounts this user connected. Filtered by hand because another
+    user's OAuth client is no business of this one's; the central owner
+    filter (issue #411) makes the `where` redundant."""
+    return select(GoogleAccount).where(GoogleAccount.owner_id == user_settings.user_id)
+
+
+def _oauth_client(request: Request, user_settings: UserSettings) -> GoogleOAuthClient:
+    settings: Settings = request.app.state.settings
+    assert settings.app_master_key is not None  # app.main refuses to start without it
+    return google_oauth_client(user_settings, master_key=settings.app_master_key)
 
 
 @router.get("/connect")
-async def connect(request: Request, session: SessionDep) -> RedirectResponse:
+async def connect(
+    request: Request, session: SessionDep, user_settings: CurrentUserSettings
+) -> RedirectResponse:
     settings = request.app.state.settings
+    require_google_configured(user_settings)
     app_settings = await require_app_settings(session)
-    require_google_configured(app_settings)
 
     return_to = _resolve_return_origin(settings, request.headers.get("referer"))
     params = {
-        "client_id": app_settings.google_client_id,
+        "client_id": user_settings.google_client_id,
         "redirect_uri": _callback_redirect_uri(return_to),
         "response_type": "code",
         "scope": SCOPE,
@@ -266,12 +281,13 @@ async def connect(request: Request, session: SessionDep) -> RedirectResponse:
 async def callback(
     request: Request,
     session: SessionDep,
+    user_settings: CurrentUserSettings,
     code: str | None = None,
     state: str | None = None,
 ) -> RedirectResponse:
     settings = request.app.state.settings
+    require_google_configured(user_settings)
     app_settings = await require_app_settings(session)
-    require_google_configured(app_settings)
 
     if state is None:
         raise _invalid_state_error()
@@ -283,7 +299,9 @@ async def callback(
     calendar_source: CalendarSource = request.app.state.calendar_source
     try:
         credential = await calendar_source.exchange_code(
-            code, redirect_uri=_callback_redirect_uri(return_to)
+            _oauth_client(request, user_settings),
+            code,
+            redirect_uri=_callback_redirect_uri(return_to),
         )
     except CalendarSourceError:
         return RedirectResponse(f"{return_to}?googleError=1", status_code=302)
@@ -294,7 +312,9 @@ async def callback(
     encrypted = encrypt_credential(credential.refresh_token, key=settings.app_master_key)
 
     existing = await session.scalar(
-        select(GoogleAccount).where(GoogleAccount.google_account_id == credential.google_account_id)
+        _accounts_of(user_settings).where(
+            GoogleAccount.google_account_id == credential.google_account_id
+        )
     )
     if existing is not None:
         # Reconnecting an already-connected account updates it in place
@@ -305,6 +325,7 @@ async def callback(
     else:
         session.add(
             GoogleAccount(
+                owner_id=user_settings.user_id,
                 google_account_id=credential.google_account_id,
                 email=credential.email,
                 encrypted_refresh_token=encrypted,
@@ -316,15 +337,19 @@ async def callback(
 
 
 @router.get("/accounts")
-async def list_accounts(request: Request, session: SessionDep) -> list[GoogleAccountRead]:
-    require_google_configured(await require_app_settings(session))
+async def list_accounts(
+    session: SessionDep, user_settings: CurrentUserSettings
+) -> list[GoogleAccountRead]:
+    require_google_configured(user_settings)
     rows = await session.scalars(select(GoogleAccount).order_by(GoogleAccount.id))
     return [GoogleAccountRead.model_validate(row) for row in rows]
 
 
 @router.delete("/accounts/{account_id}", status_code=204)
-async def disconnect_account(account_id: int, request: Request, session: SessionDep) -> None:
-    require_google_configured(await require_app_settings(session))
+async def disconnect_account(
+    account_id: int, session: SessionDep, user_settings: CurrentUserSettings
+) -> None:
+    require_google_configured(user_settings)
     account = await session.get(GoogleAccount, account_id)
     if account is None:
         raise NotFoundError(f"Google Account {account_id} not found")
@@ -352,6 +377,7 @@ async def _sync_calendars(
     session: SessionDep,
     calendar_source: CalendarSource,
     settings: Settings,
+    oauth_client: GoogleOAuthClient,
     account: GoogleAccount,
 ) -> list[GoogleCalendar]:
     """Re-reads Google's calendar list for `account` and upserts it:
@@ -369,7 +395,7 @@ async def _sync_calendars(
     assert settings.app_master_key is not None
     refresh_token = decrypt_credential(account.encrypted_refresh_token, key=settings.app_master_key)
     try:
-        access_token = (await calendar_source.refresh(refresh_token)).access_token
+        access_token = (await calendar_source.refresh(oauth_client, refresh_token)).access_token
         entries = await calendar_source.list_calendars(access_token)
     except TerminalCalendarSourceError as exc:
         account.connection_state = "needs_reconnect"
@@ -421,29 +447,37 @@ async def _sync_calendars(
 
 @router.get("/accounts/{account_id}/calendars")
 async def list_calendars(
-    account_id: int, request: Request, session: SessionDep
+    account_id: int, request: Request, session: SessionDep, user_settings: CurrentUserSettings
 ) -> list[GoogleCalendarRead]:
-    require_google_configured(await require_app_settings(session))
+    require_google_configured(user_settings)
     account = await _get_account_or_404(session, account_id)
 
     calendars = await _calendars_for(session, account.id)
     if not calendars:
         # First-ever look at this account's calendars: seed from Google.
         calendars = await _sync_calendars(
-            session, request.app.state.calendar_source, request.app.state.settings, account
+            session,
+            request.app.state.calendar_source,
+            request.app.state.settings,
+            _oauth_client(request, user_settings),
+            account,
         )
     return [GoogleCalendarRead.model_validate(row) for row in calendars]
 
 
 @router.post("/accounts/{account_id}/calendars/refresh")
 async def refresh_calendars(
-    account_id: int, request: Request, session: SessionDep
+    account_id: int, request: Request, session: SessionDep, user_settings: CurrentUserSettings
 ) -> list[GoogleCalendarRead]:
-    require_google_configured(await require_app_settings(session))
+    require_google_configured(user_settings)
     account = await _get_account_or_404(session, account_id)
 
     calendars = await _sync_calendars(
-        session, request.app.state.calendar_source, request.app.state.settings, account
+        session,
+        request.app.state.calendar_source,
+        request.app.state.settings,
+        _oauth_client(request, user_settings),
+        account,
     )
     return [GoogleCalendarRead.model_validate(row) for row in calendars]
 
@@ -453,10 +487,10 @@ async def update_calendar(
     account_id: int,
     calendar_id: int,
     payload: GoogleCalendarUpdate,
-    request: Request,
     session: SessionDep,
+    user_settings: CurrentUserSettings,
 ) -> GoogleCalendarRead:
-    require_google_configured(await require_app_settings(session))
+    require_google_configured(user_settings)
     await _get_account_or_404(session, account_id)
 
     calendar = await session.get(GoogleCalendar, calendar_id)

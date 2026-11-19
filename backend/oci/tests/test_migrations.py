@@ -412,3 +412,122 @@ class TestPerUserUniqueness:
 
         with pytest.raises(psycopg.errors.CheckViolation):
             run_sql(two_users, "INSERT INTO users (username) VALUES ('dan')")
+
+
+# A 0034 settings row with every per-user field set away from its default.
+SETTINGS_WITH_EVERY_FIELD = (
+    "INSERT INTO settings (id, session_key, password_hash, google_client_id, "
+    "encrypted_google_client_secret, assist_ollama_base_url, assist_model, "
+    "assistant_base_url, assistant_model, encrypted_assistant_api_key, "
+    "assistant_planning_preferences, voice_livekit_url, voice_livekit_api_key, "
+    "encrypted_voice_livekit_api_secret, standup_enabled, calendar_enabled, goals_enabled, "
+    "habits_enabled, focus_enabled, assistant_enabled, active_hours_enabled, "
+    "active_hours_start, active_hours_end, login_failed_attempts, created_at, updated_at) "
+    "VALUES (1, 'a-session-key', 'an-existing-hash', 'a-client-id', 'secret-cipher', "
+    "'http://ollama:11434', 'qwen3:14b', 'https://api.example.com', 'a-model', 'key-cipher', "
+    "'Mornings are for deep work', 'wss://livekit.example.com', 'lk-key', 'lk-secret-cipher', "
+    "false, false, false, false, false, false, true, '08:00', '16:30', 0, now(), now())"
+)
+
+USER_SETTINGS_FIELDS = (
+    "google_client_id, encrypted_google_client_secret, assist_ollama_base_url, assist_model, "
+    "assistant_base_url, assistant_model, encrypted_assistant_api_key, "
+    "assistant_planning_preferences, voice_livekit_url, voice_livekit_api_key, "
+    "encrypted_voice_livekit_api_secret, standup_enabled, calendar_enabled, goals_enabled, "
+    "habits_enabled, focus_enabled, assistant_enabled, active_hours_enabled, "
+    "active_hours_start, active_hours_end"
+)
+
+
+def upgrade_an_install_with_every_setting(database_url: str) -> None:
+    config = alembic_config(database_url)
+    command.upgrade(config, "0034")
+    run_sql(database_url, SETTINGS_WITH_EVERY_FIELD)
+    command.upgrade(config, "head")
+
+
+class TestUserSettingsMigration:
+    """Issue #409: every setting but the session key moves off the
+    `settings` singleton onto user #1's own `user_settings` row."""
+
+    def test_user_1s_settings_hold_the_values_the_singleton_held(
+        self, empty_database_url: str
+    ) -> None:
+        upgrade_an_install_with_every_setting(empty_database_url)
+
+        assert run_sql(
+            empty_database_url,
+            f"SELECT user_id, {USER_SETTINGS_FIELDS} FROM user_settings",  # noqa: S608
+        ) == [
+            (
+                1,
+                "a-client-id",
+                "secret-cipher",
+                "http://ollama:11434",
+                "qwen3:14b",
+                "https://api.example.com",
+                "a-model",
+                "key-cipher",
+                "Mornings are for deep work",
+                "wss://livekit.example.com",
+                "lk-key",
+                "lk-secret-cipher",
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+                "08:00",
+                "16:30",
+            )
+        ]
+
+    def test_the_singleton_keeps_only_the_session_key_and_the_install_password(
+        self, empty_database_url: str
+    ) -> None:
+        """The password stays until per-user login (issue #410) stops
+        reading it."""
+        upgrade_an_install_with_every_setting(empty_database_url)
+
+        assert columns_of(empty_database_url, "settings") == {
+            "id",
+            "session_key",
+            "password_hash",
+            "created_at",
+            "updated_at",
+        }
+        assert run_sql(empty_database_url, "SELECT session_key, password_hash FROM settings") == [
+            ("a-session-key", "an-existing-hash")
+        ]
+
+    def test_user_1_without_a_settings_row_gets_the_defaults(self, empty_database_url: str) -> None:
+        config = alembic_config(empty_database_url)
+        command.upgrade(config, "0034")
+        run_sql(
+            empty_database_url,
+            "INSERT INTO folders (id, name, sort_order, owner, created_at) "
+            "VALUES (1, 'Work', 0, 'local', now())",
+        )
+
+        command.upgrade(config, "head")
+
+        assert run_sql(
+            empty_database_url,
+            "SELECT user_id, google_client_id, standup_enabled, calendar_enabled, "
+            "active_hours_enabled, active_hours_start, active_hours_end FROM user_settings",
+        ) == [(1, None, True, True, False, "09:00", "17:00")]
+
+    def test_a_fresh_database_has_no_user_settings(self, empty_database_url: str) -> None:
+        run_migrations(empty_database_url)
+
+        assert run_sql(empty_database_url, "SELECT COUNT(*) FROM user_settings") == [(0,)]
+
+    def test_a_user_has_at_most_one_settings_row(self, empty_database_url: str) -> None:
+        run_migrations(empty_database_url)
+        run_sql(empty_database_url, "INSERT INTO users (username, email) VALUES ('ana', 'a@x.io')")
+        run_sql(empty_database_url, "INSERT INTO user_settings (user_id) VALUES (1)")
+
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            run_sql(empty_database_url, "INSERT INTO user_settings (user_id) VALUES (1)")
