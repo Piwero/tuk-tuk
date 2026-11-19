@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock, run_sql
+from tests.conftest import FakeCalendarSource, FakeClock, log_in_admin, run_sql
 
 
 @contextmanager
@@ -32,12 +32,10 @@ def make_client(
         clock=fake_clock,
         calendar_source=fake_calendar_source,
     )
-    # Login needs the DB (the password hash and session key both live in
-    # `settings` now, ADR 0008), so it must happen only once the lifespan's
-    # startup — which bootstraps that row — has actually run.
+    # Signing in needs the DB (the User and the session key live there), so
+    # it must happen only once the lifespan's startup has actually run.
     with TestClient(app, follow_redirects=False) as test_client:
-        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(test_client)
         yield test_client
 
 

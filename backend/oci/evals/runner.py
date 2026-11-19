@@ -27,6 +27,7 @@ from app.db import DatabaseUrl, run_migrations
 from app.main import create_app
 from evals.scenarios import MONDAY, TIME_ZONE, Result, Scenario, World
 
+_USERNAME = "eval"
 _PASSWORD = "eval-password"
 _REFRESH_TOKEN = "eval-refresh-token"
 _CALENDAR_ID = "eval-calendar"
@@ -105,10 +106,14 @@ def _fresh_database() -> str:
 
 @contextmanager
 def booted_app(events: list[CalendarEventEntry]) -> Iterator[TestClient]:
-    """A real app on a throwaway database, logged in, with Google wired to
-    the seeded Events."""
+    """A real app on a throwaway database, logged in as its one Admin, with
+    Google wired to the seeded Events."""
+    import asyncio
+
     from argon2 import PasswordHasher
     from argon2.low_level import Type
+
+    from app.users import create_user
 
     calendar_source = _EvalCalendarSource()
     calendar_source.events = events
@@ -117,17 +122,32 @@ def booted_app(events: list[CalendarEventEntry]) -> Iterator[TestClient]:
     settings = Settings(
         database_url=database_url,
         app_master_key="eval-master-key",
-        auth_password_hash=PasswordHasher(
-            time_cost=1, memory_cost=64, parallelism=1, type=Type.ID
-        ).hash(_PASSWORD),
         auth_cookie_secure=False,
         auth_login_delay_seconds=0.0,
         google_client_id="eval-client-id",
         google_client_secret="eval-client-secret",
     )
     app = create_app(settings, calendar_source=calendar_source)  # type: ignore[arg-type]
+    password_hash = PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash(
+        _PASSWORD
+    )
+
+    async def _create_admin() -> None:
+        async with app.state.session_factory() as session:
+            await create_user(
+                session,
+                username=_USERNAME,
+                email="eval@example.com",
+                password_hash=password_hash,
+                is_admin=True,
+            )
+            await session.commit()
+
     with TestClient(app, follow_redirects=False) as client:
-        response = client.post("/api/v1/auth/login", json={"password": _PASSWORD})
+        asyncio.run(_create_admin())
+        response = client.post(
+            "/api/v1/auth/login", json={"login": _USERNAME, "password": _PASSWORD}
+        )
         assert response.status_code == 204, response.text
         yield client
 

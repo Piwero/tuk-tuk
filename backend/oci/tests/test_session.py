@@ -2,8 +2,15 @@
 
 from datetime import timedelta
 
+from itsdangerous import URLSafeSerializer
+
 from app.config import Settings
-from app.session import issue_session_token, needs_reissue, verify_session_token
+from app.session import (
+    SessionClaims,
+    issue_session_token,
+    needs_reissue,
+    verify_session_token,
+)
 from tests.conftest import FakeClock
 
 KEY = "test-signing-key"
@@ -21,17 +28,28 @@ def settings(**overrides: object) -> Settings:
 class TestIssueAndVerify:
     def test_a_freshly_issued_token_verifies(self, fake_clock: FakeClock) -> None:
         s = settings()
-        token = issue_session_token(KEY, issued_at=fake_clock.now)
+        token = issue_session_token(KEY, user_id=7, epoch=2, issued_at=fake_clock.now)
 
         assert verify_session_token(token, KEY, s, fake_clock) is not None
 
-    def test_verify_returns_the_issued_at_time(self, fake_clock: FakeClock) -> None:
+    def test_verify_returns_the_user_epoch_and_issued_at_time(self, fake_clock: FakeClock) -> None:
         s = settings()
         issued_at = fake_clock.now
-        token = issue_session_token(KEY, issued_at=issued_at)
+        token = issue_session_token(KEY, user_id=7, epoch=2, issued_at=issued_at)
         fake_clock.advance(timedelta(days=1))
 
-        assert verify_session_token(token, KEY, s, fake_clock) == issued_at
+        assert verify_session_token(token, KEY, s, fake_clock) == SessionClaims(
+            user_id=7, epoch=2, issued_at=issued_at
+        )
+
+    def test_a_cookie_from_before_users_naming_no_user_is_rejected(
+        self, fake_clock: FakeClock
+    ) -> None:
+        legacy = URLSafeSerializer(KEY, salt="tuk-tuk-session").dumps(
+            {"iat": fake_clock.now.timestamp()}
+        )
+
+        assert verify_session_token(legacy, KEY, settings(), fake_clock) is None
 
     def test_a_malformed_token_is_rejected(self, fake_clock: FakeClock) -> None:
         assert verify_session_token("not-a-real-token", KEY, settings(), fake_clock) is None
@@ -40,14 +58,14 @@ class TestIssueAndVerify:
         assert verify_session_token(None, KEY, settings(), fake_clock) is None
 
     def test_a_token_signed_with_a_different_key_is_rejected(self, fake_clock: FakeClock) -> None:
-        token = issue_session_token("key-one", issued_at=fake_clock.now)
+        token = issue_session_token("key-one", user_id=7, epoch=2, issued_at=fake_clock.now)
 
         assert verify_session_token(token, "key-two", settings(), fake_clock) is None
 
     def test_an_expired_token_is_rejected(self, fake_clock: FakeClock) -> None:
         s = settings(auth_session_lifetime_days=30)
         issued_at = fake_clock.now
-        token = issue_session_token(KEY, issued_at=issued_at)
+        token = issue_session_token(KEY, user_id=7, epoch=2, issued_at=issued_at)
         fake_clock.advance(timedelta(days=31))
 
         assert verify_session_token(token, KEY, s, fake_clock) is None
@@ -55,7 +73,7 @@ class TestIssueAndVerify:
     def test_a_token_within_the_lifetime_is_accepted(self, fake_clock: FakeClock) -> None:
         s = settings(auth_session_lifetime_days=30)
         issued_at = fake_clock.now
-        token = issue_session_token(KEY, issued_at=issued_at)
+        token = issue_session_token(KEY, user_id=7, epoch=2, issued_at=issued_at)
         fake_clock.advance(timedelta(days=29))
 
         assert verify_session_token(token, KEY, s, fake_clock) is not None

@@ -14,16 +14,19 @@ from app.models import AppSettings
 SETTINGS_ID = 1
 
 
-async def get_app_settings(session: AsyncSession) -> AppSettings | None:
-    return await session.get(AppSettings, SETTINGS_ID)
+async def get_app_settings(
+    session: AsyncSession, *, for_update: bool = False
+) -> AppSettings | None:
+    return await session.get(AppSettings, SETTINGS_ID, with_for_update=for_update)
 
 
-async def require_app_settings(session: AsyncSession) -> AppSettings:
+async def require_app_settings(session: AsyncSession, *, for_update: bool = False) -> AppSettings:
     """Like get_app_settings, but asserts the singleton row exists — true
     for every request that reaches here, since app.main's lifespan
-    bootstraps it before the app starts serving.
+    bootstraps it before the app starts serving. `for_update` locks the
+    row until the transaction ends, to serialize a whole-install change.
     """
-    row = await get_app_settings(session)
+    row = await get_app_settings(session, for_update=for_update)
     assert row is not None
     return row
 
@@ -74,12 +77,13 @@ async def bootstrap_app_settings(session: AsyncSession, settings: Settings) -> A
     A fresh row generates its own session_key — this value carries no
     meaning a person needs to choose, unlike the password, so it never
     waits on `/setup`. The one-time upgrade path (ADR 0008) lives here too:
-    if this is the very first boot (no row yet) and AUTH_PASSWORD_HASH /
-    GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set in the environment,
-    they're imported into the row so an existing deployment's password and
-    Google connection survive the upgrade without a person re-entering
-    anything. This runs at most once: once a row exists, the env vars are
-    never consulted again, even if left in `.env`.
+    if this is the very first boot (no row yet) and GOOGLE_CLIENT_ID /
+    GOOGLE_CLIENT_SECRET are set in the environment, they're imported into
+    the row so an existing deployment's Google connection survives the
+    upgrade without a person re-entering anything. This runs at most once:
+    once a row exists, the env vars are never consulted again, even if left
+    in `.env`. AUTH_PASSWORD_HASH is imported onto a User instead
+    (app.users.import_env_password).
     """
     row = await get_app_settings(session)
     if row is not None:
@@ -101,7 +105,6 @@ async def bootstrap_app_settings(session: AsyncSession, settings: Settings) -> A
     row = AppSettings(
         id=SETTINGS_ID,
         session_key=secrets.token_urlsafe(32),
-        password_hash=settings.auth_password_hash,
         google_client_id=google_client_id,
         encrypted_google_client_secret=encrypted_google_client_secret,
         # Neither value is a credential, so — unlike the Google pair above —

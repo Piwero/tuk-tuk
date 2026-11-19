@@ -90,23 +90,24 @@ class OwnedMixin:
 
 
 class AppSettings(Base):
-    """The DB-backed settings singleton (ADR 0008): the login password
-    hash, the session-cookie signing key, and — added by issue #117, but
-    the column shape anticipates it here — the Google OAuth client ID and
-    its encrypted client secret. Always exactly one row (`id` fixed at
-    `SETTINGS_ID` in app.app_settings), bootstrapped on first boot.
+    """The DB-backed settings singleton (ADR 0008): the session-cookie
+    signing key and — added by issue #117, but the column shape anticipates
+    it here — the Google OAuth client ID and its encrypted client secret.
+    Always exactly one row (`id` fixed at `SETTINGS_ID` in
+    app.app_settings), bootstrapped on first boot.
 
-    `password_hash` is nullable: its absence is exactly what gates every
-    route behind `/setup` (app.middleware). `encrypted_google_client_secret`
-    is encrypted with `APP_MASTER_KEY` (app.crypto), never `session_key` —
-    a copy of the database must not disclose it.
+    The login password moved to `users.password_hash` (ADR 0018, issue
+    #410). The old `settings.password_hash` column is left unmapped until
+    the migration that strips this table to `session_key` drops it (#409).
+    `encrypted_google_client_secret` is encrypted with `APP_MASTER_KEY`
+    (app.crypto), never `session_key` — a copy of the database must not
+    disclose it.
     """
 
     __tablename__ = "settings"
     __table_args__ = (CheckConstraint("id = 1", name="settings_singleton"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    password_hash: Mapped[str | None] = mapped_column(Text, default=None)
     session_key: Mapped[str] = mapped_column(Text)
     google_client_id: Mapped[str | None] = mapped_column(String(255), default=None)
     encrypted_google_client_secret: Mapped[str | None] = mapped_column(Text, default=None)

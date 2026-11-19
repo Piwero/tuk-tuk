@@ -1,36 +1,91 @@
-"""Login, the session probe, default-deny enforcement (ADR 0005, issues
-#83 and #84), and the change-password flow (ADR 0008, issue #116).
+"""Per-user login, the session cookie and what the middleware checks on it,
+forced steps, change-password and logout (ADR 0005, ADR 0008, ADR 0018;
+issues #83, #84, #116, #339, #410).
 """
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from app.config import Settings
 from app.login_throttle import LoginThrottle
 from app.main import create_app
 from app.session import issue_session_token, verify_session_token
-from tests.conftest import TEST_PASSWORD, FakeClock, app_settings_row, seed_user_row
+from tests.conftest import (
+    TEST_EMAIL,
+    TEST_PASSWORD,
+    TEST_USERNAME,
+    FakeClock,
+    app_settings_row,
+    create_user_row,
+    log_in,
+    run_sql,
+    user_row,
+)
+
+NEW_PASSWORD = "a-new-password"
+LOCKOUT_THRESHOLD = 5  # keep in sync with app.routers.v1.auth.LOCKOUT_THRESHOLD
+
+
+def login(client: TestClient, login: str, password: str) -> Response:
+    return client.post("/api/v1/auth/login", json={"login": login, "password": password})
+
+
+def session_key(client: TestClient) -> str:
+    return app_settings_row(client.app).session_key  # type: ignore[arg-type]
+
+
+def change_password(client: TestClient, current: str, new: str) -> Response:
+    return client.post(
+        "/api/v1/auth/password", json={"current_password": current, "new_password": new}
+    )
 
 
 class TestLogin:
-    def test_the_correct_password_returns_204_with_no_body_and_a_session_cookie(
+    def test_the_username_and_password_return_204_with_no_body_and_a_session_cookie(
         self, unauthenticated_client: TestClient
     ) -> None:
-        response = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
-        )
+        response = login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD)
 
         assert response.status_code == 204
         assert response.content == b""
         assert "tuktuk_session" in response.cookies
+        assert unauthenticated_client.get("/api/v1/tasks").status_code == 200
+
+    def test_the_email_logs_in_too(self, unauthenticated_client: TestClient) -> None:
+        response = login(unauthenticated_client, TEST_EMAIL, TEST_PASSWORD)
+
+        assert response.status_code == 204
+        assert unauthenticated_client.get("/api/v1/auth/me").json()["username"] == TEST_USERNAME
+
+    @pytest.mark.parametrize("given", ["ADMIN", "Admin@Example.COM", "  admin  "])
+    def test_the_login_ignores_case_and_surrounding_spaces(
+        self, unauthenticated_client: TestClient, given: str
+    ) -> None:
+        assert login(unauthenticated_client, given, TEST_PASSWORD).status_code == 204
+
+    def test_each_user_is_signed_in_as_themselves(self, unauthenticated_client: TestClient) -> None:
+        create_user_row(unauthenticated_client, "bea", "bea@example.com", password="bea-password")
+
+        login(unauthenticated_client, "bea", "bea-password")
+
+        assert unauthenticated_client.get("/api/v1/auth/me").json()["username"] == "bea"
+
+    def test_the_password_belongs_to_the_named_user(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        create_user_row(unauthenticated_client, "bea", "bea@example.com", password="bea-password")
+
+        response = login(unauthenticated_client, "bea", TEST_PASSWORD)
+
+        assert response.status_code == 401
 
     def test_the_cookie_is_httponly_and_samesite_lax(
         self, unauthenticated_client: TestClient
     ) -> None:
-        response = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
-        )
+        response = login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD)
 
         set_cookie = response.headers["set-cookie"].lower()
         assert "httponly" in set_cookie
@@ -40,52 +95,47 @@ class TestLogin:
     def test_the_wrong_password_is_rejected_with_the_error_envelope(
         self, unauthenticated_client: TestClient
     ) -> None:
-        response = unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
+        response = login(unauthenticated_client, TEST_USERNAME, "wrong")
 
         assert response.status_code == 401
         assert response.json()["error"]["code"] == "invalid_credentials"
         assert "tuktuk_session" not in response.cookies
 
+    def test_an_unknown_login_gets_the_same_answer_as_a_wrong_password(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        unknown = login(unauthenticated_client, "nobody", TEST_PASSWORD)
+        wrong = login(unauthenticated_client, TEST_USERNAME, "wrong")
+
+        assert unknown.status_code == wrong.status_code == 401
+        assert unknown.json() == wrong.json()
+
+    def test_the_old_password_only_body_is_rejected(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        response = unauthenticated_client.post(
+            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
+        )
+
+        assert response.status_code == 422
+
     def test_consecutive_failures_escalate_and_success_resets(
         self, unauthenticated_client: TestClient
     ) -> None:
-        # The base delay is zeroed in tests (conftest), so a locked-out
-        # response is immediate; the lockout isn't engaged until the
-        # threshold in TestLockout below. This proves the sequence of
-        # outcomes: repeated failures, then a reset via success, then a
-        # fresh failure is once again treated as first-in-sequence
-        # (indirectly, by the login continuing to work at all afterwards).
         for _ in range(3):
-            failed = unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
-            assert failed.status_code == 401
+            assert login(unauthenticated_client, TEST_USERNAME, "wrong").status_code == 401
 
-        success = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
-        )
-        assert success.status_code == 204
+        assert login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD).status_code == 204
 
     def test_a_stored_password_shorter_than_the_minimum_still_logs_in(
-        self, database_url: str, fake_clock: FakeClock
+        self, unauthenticated_client: TestClient
     ) -> None:
-        # Mirrors test_setup.py's TestUpgradeImport: an imported hash is
-        # never re-validated against the current minimum, so an existing
-        # deployment's short password keeps working until its next change
+        # An existing hash is never re-validated against the current
+        # minimum, so a short password keeps working until its next change
         # (issue #338) — the minimum must never lock an owner out.
-        import argon2
-        from argon2.low_level import Type
+        create_user_row(unauthenticated_client, "bea", "bea@example.com", password="short")
 
-        short_hash = argon2.PasswordHasher(
-            time_cost=1, memory_cost=64, parallelism=1, type=Type.ID
-        ).hash("short")
-        settings = Settings(database_url=database_url, auth_password_hash=short_hash)
-
-        with TestClient(create_app(settings, clock=fake_clock)) as client:
-            response = client.post("/api/v1/auth/login", json={"password": "short"})
-
-        assert response.status_code == 204
-
-
-LOCKOUT_THRESHOLD = 5  # keep in sync with app.routers.v1.auth.LOCKOUT_THRESHOLD
+        assert login(unauthenticated_client, "bea", "short").status_code == 204
 
 
 class TestLockout:
@@ -93,59 +143,52 @@ class TestLockout:
         self, unauthenticated_client: TestClient
     ) -> None:
         for _ in range(LOCKOUT_THRESHOLD):
-            unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
+            login(unauthenticated_client, TEST_USERNAME, "wrong")
 
-        response = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
-        )
+        response = login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD)
 
         assert response.status_code == 429
         assert response.json()["error"]["code"] == "too_many_attempts"
         assert "Retry-After" in response.headers
+        assert "tuktuk_session" not in response.cookies
 
-    def test_a_locked_login_does_not_verify_the_password(
+    def test_the_lock_is_per_user(self, unauthenticated_client: TestClient) -> None:
+        create_user_row(unauthenticated_client, "bea", "bea@example.com", password="bea-password")
+        for _ in range(LOCKOUT_THRESHOLD):
+            login(unauthenticated_client, TEST_USERNAME, "wrong")
+
+        assert login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD).status_code == 429
+        assert login(unauthenticated_client, "bea", "bea-password").status_code == 204
+
+    def test_failures_by_email_and_by_username_count_against_the_same_user(
         self, unauthenticated_client: TestClient
     ) -> None:
-        for _ in range(LOCKOUT_THRESHOLD):
-            unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
+        for attempt in range(LOCKOUT_THRESHOLD):
+            name = TEST_EMAIL if attempt % 2 else TEST_USERNAME
+            login(unauthenticated_client, name, "wrong")
 
-        # Even the *correct* password is refused while locked — the lock
-        # is answered before verification ever runs.
-        response = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
-        )
-
-        assert response.status_code == 429
-        assert "tuktuk_session" not in response.cookies
+        assert login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD).status_code == 429
 
     def test_advancing_the_clock_past_the_lock_lets_login_work_again(
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
         for _ in range(LOCKOUT_THRESHOLD):
-            unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
-        locked = unauthenticated_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert locked.status_code == 429
+            login(unauthenticated_client, TEST_USERNAME, "wrong")
+        assert login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD).status_code == 429
 
         fake_clock.advance(timedelta(seconds=LoginThrottle.CAP_SECONDS + 1))
 
-        response = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
-        )
-
-        assert response.status_code == 204
+        assert login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD).status_code == 204
 
     def test_a_successful_login_clears_the_count_and_the_lock(
         self, unauthenticated_client: TestClient
     ) -> None:
         for _ in range(LOCKOUT_THRESHOLD - 1):
-            unauthenticated_client.post("/api/v1/auth/login", json={"password": "wrong"})
+            login(unauthenticated_client, TEST_USERNAME, "wrong")
 
-        success = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
-        )
-        assert success.status_code == 204
+        assert login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD).status_code == 204
 
-        row = seed_user_row(unauthenticated_client.app)  # type: ignore[arg-type]
+        row = user_row(unauthenticated_client, 1)
         assert row.login_failed_attempts == 0
         assert row.login_locked_until is None
 
@@ -154,53 +197,157 @@ class TestLockout:
     ) -> None:
         first_app = create_app(Settings(database_url=database_url), clock=fake_clock)
         with TestClient(first_app) as first_client:
+            create_user_row(first_app, is_admin=True)
             for _ in range(LOCKOUT_THRESHOLD):
-                first_client.post("/api/v1/auth/login", json={"password": "wrong"})
+                login(first_client, TEST_USERNAME, "wrong")
 
         second_app = create_app(Settings(database_url=database_url), clock=fake_clock)
         with TestClient(second_app) as second_client:
-            response = second_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
+            response = login(second_client, TEST_USERNAME, TEST_PASSWORD)
 
         assert response.status_code == 429
-        assert response.json()["error"]["code"] == "too_many_attempts"
 
     def test_change_passwords_current_password_check_feeds_the_same_lock(
         self, client: TestClient
     ) -> None:
         for _ in range(LOCKOUT_THRESHOLD):
-            client.post(
-                "/api/v1/auth/password",
-                json={"current_password": "wrong", "new_password": NEW_PASSWORD},
-            )
+            change_password(client, "wrong", NEW_PASSWORD)
 
-        response = client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
-        )
+        response = change_password(client, TEST_PASSWORD, NEW_PASSWORD)
 
         assert response.status_code == 429
         assert response.json()["error"]["code"] == "too_many_attempts"
 
 
-class TestSessionProbe:
-    def test_returns_204_with_a_valid_session(self, client: TestClient) -> None:
-        response = client.get("/api/v1/auth/session")
+class TestDisabledUser:
+    def test_a_disabled_user_with_the_right_password_is_told_the_account_is_disabled(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        create_user_row(
+            unauthenticated_client,
+            "bea",
+            "bea@example.com",
+            password="bea-password",
+            is_active=False,
+        )
 
-        assert response.status_code == 204
+        response = login(unauthenticated_client, "bea", "bea-password")
 
-    def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
-        response = unauthenticated_client.get("/api/v1/auth/session")
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "account_disabled"
+        assert "tuktuk_session" not in response.cookies
+
+    def test_a_wrong_password_never_learns_the_account_is_disabled(
+        self, unauthenticated_client: TestClient
+    ) -> None:
+        create_user_row(
+            unauthenticated_client,
+            "bea",
+            "bea@example.com",
+            password="bea-password",
+            is_active=False,
+        )
+
+        response = login(unauthenticated_client, "bea", "wrong")
+
+        assert response.json()["error"]["code"] == "invalid_credentials"
+
+    def test_a_session_is_refused_once_its_user_is_disabled(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        run_sql(database_url, "UPDATE users SET is_active = false")
+
+        response = client.get("/api/v1/tasks")
 
         assert response.status_code == 401
+        assert response.json()["error"]["code"] == "account_disabled"
+
+
+class TestSessionEpoch:
+    def test_a_cookie_at_an_older_epoch_is_rejected(
+        self, unauthenticated_client: TestClient, fake_clock: FakeClock, database_url: str
+    ) -> None:
+        run_sql(database_url, "UPDATE users SET session_epoch = 3")
+        stale = issue_session_token(
+            session_key(unauthenticated_client), user_id=1, epoch=2, issued_at=fake_clock.now
+        )
+        unauthenticated_client.cookies.set("tuktuk_session", stale)
+
+        response = unauthenticated_client.get("/api/v1/tasks")
+
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "unauthorized"
+
+    def test_a_cookie_at_the_current_epoch_is_accepted(
+        self, unauthenticated_client: TestClient, fake_clock: FakeClock, database_url: str
+    ) -> None:
+        run_sql(database_url, "UPDATE users SET session_epoch = 3")
+        current = issue_session_token(
+            session_key(unauthenticated_client), user_id=1, epoch=3, issued_at=fake_clock.now
+        )
+        unauthenticated_client.cookies.set("tuktuk_session", current)
+
+        assert unauthenticated_client.get("/api/v1/tasks").status_code == 200
+
+    def test_a_cookie_naming_a_user_that_does_not_exist_is_rejected(
+        self, unauthenticated_client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        forged = issue_session_token(
+            session_key(unauthenticated_client), user_id=999, epoch=0, issued_at=fake_clock.now
+        )
+        unauthenticated_client.cookies.set("tuktuk_session", forged)
+
+        response = unauthenticated_client.get("/api/v1/tasks")
+
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "unauthorized"
+
+    def test_the_cookie_names_the_user_and_their_epoch(
+        self, unauthenticated_client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        response = login(unauthenticated_client, TEST_USERNAME, TEST_PASSWORD)
+
+        claims = verify_session_token(
+            response.cookies["tuktuk_session"],
+            session_key(unauthenticated_client),
+            unauthenticated_client.app.state.settings,  # type: ignore[attr-defined]
+            fake_clock,
+        )
+        assert claims is not None
+        assert (claims.user_id, claims.epoch) == (1, 0)
+
+
+class TestSessionProbe:
+    def test_returns_204_with_a_valid_session(self, client: TestClient) -> None:
+        assert client.get("/api/v1/auth/session").status_code == 204
+
+    def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
+        assert unauthenticated_client.get("/api/v1/auth/session").status_code == 401
+
+
+class TestMe:
+    def test_returns_the_signed_in_users_account_record(self, client: TestClient) -> None:
+        response = client.get("/api/v1/auth/me")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "id": 1,
+            "username": TEST_USERNAME,
+            "email": TEST_EMAIL,
+            "is_admin": True,
+            "must_change_password": False,
+            "must_complete_profile": False,
+        }
+
+    def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
+        assert unauthenticated_client.get("/api/v1/auth/me").status_code == 401
 
 
 class TestEnforcement:
     def test_health_is_reachable_without_a_session(
         self, unauthenticated_client: TestClient
     ) -> None:
-        response = unauthenticated_client.get("/health")
-
-        assert response.status_code == 200
+        assert unauthenticated_client.get("/health").status_code == 200
 
     def test_a_data_endpoint_rejects_a_request_without_a_session(
         self, unauthenticated_client: TestClient
@@ -213,40 +360,32 @@ class TestEnforcement:
     def test_a_data_endpoint_accepts_a_request_with_a_valid_session(
         self, client: TestClient
     ) -> None:
-        response = client.get("/api/v1/tasks")
-
-        assert response.status_code == 200
+        assert client.get("/api/v1/tasks").status_code == 200
 
     def test_the_openapi_schema_requires_a_session(
         self, unauthenticated_client: TestClient
     ) -> None:
-        response = unauthenticated_client.get("/openapi.json")
-
-        assert response.status_code == 401
+        assert unauthenticated_client.get("/openapi.json").status_code == 401
 
     def test_the_interactive_docs_require_a_session(
         self, unauthenticated_client: TestClient
     ) -> None:
-        response = unauthenticated_client.get("/docs")
-
-        assert response.status_code == 401
+        assert unauthenticated_client.get("/docs").status_code == 401
 
     def test_a_malformed_cookie_is_rejected(self, unauthenticated_client: TestClient) -> None:
         unauthenticated_client.cookies.set("tuktuk_session", "not-a-real-token")
 
-        response = unauthenticated_client.get("/api/v1/tasks")
-
-        assert response.status_code == 401
+        assert unauthenticated_client.get("/api/v1/tasks").status_code == 401
 
     def test_a_cookie_signed_with_a_different_key_is_rejected(
         self, unauthenticated_client: TestClient
     ) -> None:
-        forged = issue_session_token("a-different-key", issued_at=datetime.now(UTC))
+        forged = issue_session_token(
+            "a-different-key", user_id=1, epoch=0, issued_at=datetime.now(UTC)
+        )
         unauthenticated_client.cookies.set("tuktuk_session", forged)
 
-        response = unauthenticated_client.get("/api/v1/tasks")
-
-        assert response.status_code == 401
+        assert unauthenticated_client.get("/api/v1/tasks").status_code == 401
 
     def test_a_path_merely_prefixed_by_an_allowlisted_one_is_not_opened(
         self, unauthenticated_client: TestClient
@@ -255,6 +394,173 @@ class TestEnforcement:
 
         assert response.status_code == 401
         assert response.json()["error"]["code"] == "unauthorized"
+
+
+class TestForcedStepGate:
+    @pytest.fixture
+    def temporary_password_client(self, unauthenticated_client: TestClient) -> TestClient:
+        create_user_row(
+            unauthenticated_client,
+            "bea",
+            "bea@example.com",
+            password="temporary-pass",
+            must_change_password=True,
+        )
+        log_in(unauthenticated_client, "bea", "temporary-pass")
+        return unauthenticated_client
+
+    @pytest.fixture
+    def incomplete_profile_client(
+        self, unauthenticated_client: TestClient, database_url: str
+    ) -> TestClient:
+        run_sql(database_url, "UPDATE users SET email = NULL, must_complete_profile = true")
+        log_in(unauthenticated_client)
+        return unauthenticated_client
+
+    @pytest.mark.parametrize(
+        ("method", "path"),
+        [
+            ("GET", "/api/v1/tasks"),
+            ("GET", "/api/v1/auth/session"),
+            ("POST", "/api/v1/auth/password"),
+            ("GET", "/api/v1/settings"),
+            ("GET", "/openapi.json"),
+        ],
+    )
+    def test_a_pending_password_change_blocks_everything_else(
+        self, temporary_password_client: TestClient, method: str, path: str
+    ) -> None:
+        response = temporary_password_client.request(method, path)
+
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "password_change_required"
+
+    def test_a_pending_profile_completion_blocks_everything_else(
+        self, incomplete_profile_client: TestClient
+    ) -> None:
+        response = incomplete_profile_client.get("/api/v1/tasks")
+
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "profile_completion_required"
+
+    def test_me_is_reachable_and_names_the_pending_step(
+        self, temporary_password_client: TestClient
+    ) -> None:
+        response = temporary_password_client.get("/api/v1/auth/me")
+
+        assert response.status_code == 200
+        assert response.json()["must_change_password"] is True
+
+    def test_logout_is_reachable(self, temporary_password_client: TestClient) -> None:
+        assert temporary_password_client.post("/api/v1/auth/logout").status_code == 204
+
+    def test_completing_a_password_change_opens_the_app(
+        self, temporary_password_client: TestClient
+    ) -> None:
+        response = temporary_password_client.post(
+            "/api/v1/auth/complete", json={"new_password": NEW_PASSWORD}
+        )
+
+        assert response.status_code == 204
+        assert temporary_password_client.get("/api/v1/tasks").status_code == 200
+        assert (
+            temporary_password_client.get("/api/v1/auth/me").json()["must_change_password"] is False
+        )
+
+    def test_the_new_password_logs_in_and_the_temporary_one_no_longer_does(
+        self, temporary_password_client: TestClient
+    ) -> None:
+        temporary_password_client.post("/api/v1/auth/complete", json={"new_password": NEW_PASSWORD})
+        temporary_password_client.cookies.clear()
+
+        assert login(temporary_password_client, "bea", "temporary-pass").status_code == 401
+        assert login(temporary_password_client, "bea", NEW_PASSWORD).status_code == 204
+
+    def test_the_temporary_password_cannot_be_chosen_again(
+        self, temporary_password_client: TestClient
+    ) -> None:
+        response = temporary_password_client.post(
+            "/api/v1/auth/complete", json={"new_password": "temporary-pass"}
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "password_unchanged"
+        assert temporary_password_client.get("/api/v1/tasks").status_code == 403
+
+    def test_the_new_password_must_meet_the_minimum(
+        self, temporary_password_client: TestClient
+    ) -> None:
+        response = temporary_password_client.post(
+            "/api/v1/auth/complete", json={"new_password": "short"}
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_password"
+
+    def test_completing_ends_the_users_other_sessions(
+        self, temporary_password_client: TestClient
+    ) -> None:
+        other_device = temporary_password_client.cookies["tuktuk_session"]
+        temporary_password_client.post("/api/v1/auth/complete", json={"new_password": NEW_PASSWORD})
+
+        temporary_password_client.cookies.set("tuktuk_session", other_device)
+
+        assert temporary_password_client.get("/api/v1/auth/me").status_code == 401
+
+    def test_completing_a_profile_sets_username_email_and_password(
+        self, incomplete_profile_client: TestClient
+    ) -> None:
+        response = incomplete_profile_client.post(
+            "/api/v1/auth/complete",
+            json={"username": "ana", "email": "ana@example.com", "new_password": NEW_PASSWORD},
+        )
+
+        assert response.status_code == 204
+        me = incomplete_profile_client.get("/api/v1/auth/me").json()
+        assert (me["username"], me["email"], me["must_complete_profile"]) == (
+            "ana",
+            "ana@example.com",
+            False,
+        )
+        assert incomplete_profile_client.get("/api/v1/tasks").status_code == 200
+
+    def test_completing_a_profile_needs_a_username_and_an_email(
+        self, incomplete_profile_client: TestClient
+    ) -> None:
+        response = incomplete_profile_client.post(
+            "/api/v1/auth/complete", json={"new_password": NEW_PASSWORD}
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "profile_required"
+
+    def test_a_taken_email_is_reported_on_its_field(
+        self, incomplete_profile_client: TestClient
+    ) -> None:
+        create_user_row(incomplete_profile_client, "bea", "bea@example.com")
+
+        response = incomplete_profile_client.post(
+            "/api/v1/auth/complete",
+            json={"username": "ana", "email": "BEA@example.com", "new_password": NEW_PASSWORD},
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "email_taken"
+
+    def test_an_invalid_email_is_rejected(self, incomplete_profile_client: TestClient) -> None:
+        response = incomplete_profile_client.post(
+            "/api/v1/auth/complete",
+            json={"username": "ana", "email": "not-an-email", "new_password": NEW_PASSWORD},
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_email"
+
+    def test_there_is_nothing_to_complete_without_a_pending_step(self, client: TestClient) -> None:
+        response = client.post("/api/v1/auth/complete", json={"new_password": NEW_PASSWORD})
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "no_pending_step"
 
 
 class TestLogout:
@@ -270,20 +576,19 @@ class TestLogout:
     def test_subsequent_requests_are_rejected(self, client: TestClient) -> None:
         client.post("/api/v1/auth/logout")
 
-        response = client.get("/api/v1/tasks")
-
-        assert response.status_code == 401
+        assert client.get("/api/v1/tasks").status_code == 401
 
     def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
-        response = unauthenticated_client.post("/api/v1/auth/logout")
-
-        assert response.status_code == 401
+        assert unauthenticated_client.post("/api/v1/auth/logout").status_code == 401
 
     def test_the_deletion_samesite_matches_the_set_samesite(self, client: TestClient) -> None:
         response = client.post("/api/v1/auth/logout")
 
-        set_cookie = response.headers["set-cookie"].lower()
-        assert "samesite=lax" in set_cookie
+        assert "samesite=lax" in response.headers["set-cookie"].lower()
+
+
+def admin_token(client: TestClient, issued_at: datetime) -> str:
+    return issue_session_token(session_key(client), user_id=1, epoch=0, issued_at=issued_at)
 
 
 class TestRollingReissue:
@@ -291,9 +596,8 @@ class TestRollingReissue:
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
         settings = unauthenticated_client.app.state.settings  # type: ignore[attr-defined]
-        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
         issued_at = fake_clock.now
-        old_token = issue_session_token(session_key, issued_at=issued_at)
+        old_token = admin_token(unauthenticated_client, issued_at)
         unauthenticated_client.cookies.set("tuktuk_session", old_token)
         fake_clock.advance(timedelta(days=settings.auth_session_reissue_threshold_days, hours=1))
 
@@ -302,21 +606,22 @@ class TestRollingReissue:
         assert response.status_code == 200
         new_token = response.cookies["tuktuk_session"]
         assert new_token != old_token
-        reissued_at = verify_session_token(new_token, session_key, settings, fake_clock)
-        assert reissued_at is not None
-        assert reissued_at > issued_at
+        claims = verify_session_token(
+            new_token, session_key(unauthenticated_client), settings, fake_clock
+        )
+        assert claims is not None
+        assert claims.issued_at > issued_at
+        assert (claims.user_id, claims.epoch) == (1, 0)
 
     def test_a_fresh_session_is_not_reissued(self, client: TestClient) -> None:
-        first_response = client.get("/api/v1/tasks")
-
-        assert "tuktuk_session" not in first_response.cookies
+        assert "tuktuk_session" not in client.get("/api/v1/tasks").cookies
 
     def test_a_session_still_within_the_reissue_threshold_is_not_reissued(
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
-        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
-        token = issue_session_token(session_key, issued_at=fake_clock.now)
-        unauthenticated_client.cookies.set("tuktuk_session", token)
+        unauthenticated_client.cookies.set(
+            "tuktuk_session", admin_token(unauthenticated_client, fake_clock.now)
+        )
         fake_clock.advance(timedelta(hours=23))
 
         response = unauthenticated_client.get("/api/v1/tasks")
@@ -327,9 +632,9 @@ class TestRollingReissue:
     def test_a_session_used_regularly_over_longer_than_the_lifetime_never_expires(
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
-        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
-        token = issue_session_token(session_key, issued_at=fake_clock.now)
-        unauthenticated_client.cookies.set("tuktuk_session", token)
+        unauthenticated_client.cookies.set(
+            "tuktuk_session", admin_token(unauthenticated_client, fake_clock.now)
+        )
 
         # A request every couple of days, well past the 30-day lifetime.
         for _ in range(20):
@@ -345,9 +650,9 @@ class TestRollingReissue:
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
         settings = unauthenticated_client.app.state.settings  # type: ignore[attr-defined]
-        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
-        token = issue_session_token(session_key, issued_at=fake_clock.now)
-        unauthenticated_client.cookies.set("tuktuk_session", token)
+        unauthenticated_client.cookies.set(
+            "tuktuk_session", admin_token(unauthenticated_client, fake_clock.now)
+        )
         fake_clock.advance(timedelta(days=settings.auth_session_lifetime_days + 1))
 
         response = unauthenticated_client.get("/api/v1/tasks")
@@ -359,9 +664,9 @@ class TestRollingReissue:
         self, unauthenticated_client: TestClient, fake_clock: FakeClock
     ) -> None:
         settings = unauthenticated_client.app.state.settings  # type: ignore[attr-defined]
-        session_key = app_settings_row(unauthenticated_client.app).session_key  # type: ignore[arg-type]
-        token = issue_session_token(session_key, issued_at=fake_clock.now)
-        unauthenticated_client.cookies.set("tuktuk_session", token)
+        unauthenticated_client.cookies.set(
+            "tuktuk_session", admin_token(unauthenticated_client, fake_clock.now)
+        )
         fake_clock.advance(timedelta(days=settings.auth_session_reissue_threshold_days, hours=1))
 
         response = unauthenticated_client.get("/api/v1/tasks")
@@ -372,210 +677,148 @@ class TestRollingReissue:
         assert "path=/" in set_cookie
 
 
-NEW_PASSWORD = "a-new-password"
-
-
 class TestChangePassword:
-    def test_the_correct_current_password_updates_the_hash_and_returns_204_with_a_fresh_cookie(
+    def test_the_correct_current_password_returns_204_with_a_fresh_cookie(
         self, client: TestClient
     ) -> None:
-        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
-
-        response = client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
-        )
+        response = change_password(client, TEST_PASSWORD, NEW_PASSWORD)
 
         assert response.status_code == 204
         assert response.content == b""
         assert "tuktuk_session" in response.cookies
-        assert app_settings_row(client.app).password_hash != old_hash  # type: ignore[arg-type]
 
-    def test_the_session_key_is_rotated(self, client: TestClient) -> None:
-        old_key = app_settings_row(client.app).session_key  # type: ignore[arg-type]
+    def test_bumps_the_session_epoch_and_leaves_the_signing_key_alone(
+        self, client: TestClient
+    ) -> None:
+        old_key = session_key(client)
 
-        client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
-        )
+        change_password(client, TEST_PASSWORD, NEW_PASSWORD)
 
-        assert app_settings_row(client.app).session_key != old_key  # type: ignore[arg-type]
+        assert user_row(client, 1).session_epoch == 1  # type: ignore[arg-type]
+        assert session_key(client) == old_key
 
     def test_the_device_that_changed_the_password_stays_logged_in(self, client: TestClient) -> None:
-        change_response = client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
-        )
-        client.cookies.set("tuktuk_session", change_response.cookies["tuktuk_session"])
+        change_password(client, TEST_PASSWORD, NEW_PASSWORD)
 
-        response = client.get("/api/v1/tasks")
+        assert client.get("/api/v1/tasks").status_code == 200
 
-        assert response.status_code == 200
+    def test_the_users_other_sessions_are_rejected_after_the_change(
+        self, client: TestClient
+    ) -> None:
+        other_device = client.cookies["tuktuk_session"]
 
-    def test_a_second_devices_session_is_rejected_after_the_change(
+        change_password(client, TEST_PASSWORD, NEW_PASSWORD)
+
+        client.cookies.set("tuktuk_session", other_device)
+        assert client.get("/api/v1/tasks").status_code == 401
+
+    def test_another_users_session_survives_the_change(
         self, unauthenticated_client: TestClient
     ) -> None:
-        first_login = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": TEST_PASSWORD}
-        )
-        second_device_cookie = first_login.cookies["tuktuk_session"]
-
-        unauthenticated_client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
-        )
-
-        unauthenticated_client.cookies.set("tuktuk_session", second_device_cookie)
-        response = unauthenticated_client.get("/api/v1/tasks")
-
-        assert response.status_code == 401
-
-    def test_the_new_password_logs_in_after_the_change(
-        self, unauthenticated_client: TestClient
-    ) -> None:
-        unauthenticated_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        unauthenticated_client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
-        )
+        create_user_row(unauthenticated_client, "bea", "bea@example.com", password="bea-password")
+        log_in(unauthenticated_client, "bea", "bea-password")
+        beas_session = unauthenticated_client.cookies["tuktuk_session"]
         unauthenticated_client.cookies.clear()
+        log_in(unauthenticated_client)
 
-        response = unauthenticated_client.post(
-            "/api/v1/auth/login", json={"password": NEW_PASSWORD}
-        )
+        change_password(unauthenticated_client, TEST_PASSWORD, NEW_PASSWORD)
 
-        assert response.status_code == 204
+        unauthenticated_client.cookies.set("tuktuk_session", beas_session)
+        assert unauthenticated_client.get("/api/v1/tasks").status_code == 200
+
+    def test_the_new_password_logs_in_after_the_change(self, client: TestClient) -> None:
+        change_password(client, TEST_PASSWORD, NEW_PASSWORD)
+        client.cookies.clear()
+
+        assert login(client, TEST_USERNAME, NEW_PASSWORD).status_code == 204
+        assert login(client, TEST_USERNAME, TEST_PASSWORD).status_code == 401
 
     def test_the_wrong_current_password_is_rejected_and_changes_nothing(
         self, client: TestClient
     ) -> None:
-        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
-        old_key = app_settings_row(client.app).session_key  # type: ignore[arg-type]
+        response = change_password(client, "wrong", NEW_PASSWORD)
 
-        response = client.post(
-            "/api/v1/auth/password",
-            json={"current_password": "wrong", "new_password": NEW_PASSWORD},
-        )
-
-        assert response.status_code != 204
+        assert response.status_code == 400
         assert response.json()["error"]["code"] == "invalid_current_password"
-        row = app_settings_row(client.app)  # type: ignore[arg-type]
-        assert row.password_hash == old_hash
-        assert row.session_key == old_key
+        assert user_row(client, 1).session_epoch == 0  # type: ignore[arg-type]
+        client.cookies.clear()
+        assert login(client, TEST_USERNAME, TEST_PASSWORD).status_code == 204
 
     def test_consecutive_wrong_current_password_failures_escalate_and_success_resets(
         self, client: TestClient
     ) -> None:
         for _ in range(3):
-            failed = client.post(
-                "/api/v1/auth/password",
-                json={"current_password": "wrong", "new_password": NEW_PASSWORD},
-            )
-            assert failed.status_code != 204
+            assert change_password(client, "wrong", NEW_PASSWORD).status_code == 400
 
-        success = client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
-        )
-        assert success.status_code == 204
+        assert change_password(client, TEST_PASSWORD, NEW_PASSWORD).status_code == 204
 
     def test_an_empty_new_password_is_rejected(self, client: TestClient) -> None:
-        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
-
-        response = client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": ""},
-        )
-
-        assert response.status_code == 422
-        assert app_settings_row(client.app).password_hash == old_hash  # type: ignore[arg-type]
+        assert change_password(client, TEST_PASSWORD, "").status_code == 422
 
     def test_a_new_password_shorter_than_the_minimum_is_rejected(self, client: TestClient) -> None:
-        old_hash = app_settings_row(client.app).password_hash  # type: ignore[arg-type]
-
-        response = client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": "short"},
-        )
+        response = change_password(client, TEST_PASSWORD, "short")
 
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "invalid_password"
         assert "12" in response.json()["error"]["message"]
-        assert app_settings_row(client.app).password_hash == old_hash  # type: ignore[arg-type]
+        assert user_row(client, 1).session_epoch == 0  # type: ignore[arg-type]
 
     def test_a_new_password_of_exactly_the_minimum_length_is_accepted(
         self, client: TestClient
     ) -> None:
-        response = client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": "123456789012"},
-        )
-
-        assert response.status_code == 204
+        assert change_password(client, TEST_PASSWORD, "123456789012").status_code == 204
 
     def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:
-        response = unauthenticated_client.post(
-            "/api/v1/auth/password",
-            json={"current_password": TEST_PASSWORD, "new_password": NEW_PASSWORD},
-        )
+        response = change_password(unauthenticated_client, TEST_PASSWORD, NEW_PASSWORD)
 
         assert response.status_code == 401
 
 
 class TestAuthDisabled:
-    def disabled_client(
-        self, database_url: str, fake_clock: FakeClock, password_hash: str | None = None
-    ) -> TestClient:
-        app = create_app(
-            Settings(
-                database_url=database_url, auth_password_hash=password_hash, auth_disabled=True
-            ),
-            clock=fake_clock,
-        )
-        return TestClient(app)
+    def disabled_app(self, database_url: str, fake_clock: FakeClock) -> TestClient:
+        settings = Settings(database_url=database_url, auth_disabled=True, app_env="development")
+        return TestClient(create_app(settings, clock=fake_clock))
 
-    def test_data_endpoint_accepts_request_without_session(
+    def test_acts_as_the_first_admin_without_a_session(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:
-        with self.disabled_client(database_url, fake_clock) as client:
-            response = client.get("/api/v1/tasks")
+        with self.disabled_app(database_url, fake_clock) as client:
+            create_user_row(client, "bea", "bea@example.com")
+            create_user_row(client, is_admin=True)
+
+            response = client.get("/api/v1/auth/me")
 
         assert response.status_code == 200
+        assert response.json()["username"] == TEST_USERNAME
 
-    def test_session_probe_accepts_request_without_session(
+    def test_data_endpoints_and_docs_accept_a_request_without_a_session(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:
-        with self.disabled_client(database_url, fake_clock) as client:
-            response = client.get("/api/v1/auth/session")
+        with self.disabled_app(database_url, fake_clock) as client:
+            create_user_row(client, is_admin=True)
 
-        assert response.status_code == 204
+            assert client.get("/api/v1/tasks").status_code == 200
+            assert client.get("/api/v1/auth/session").status_code == 204
+            assert client.get("/docs").status_code == 200
 
-    def test_docs_accept_request_without_session(
+    def test_a_pending_forced_step_does_not_gate(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:
-        with self.disabled_client(database_url, fake_clock) as client:
-            response = client.get("/docs")
+        with self.disabled_app(database_url, fake_clock) as client:
+            create_user_row(client, is_admin=True, must_change_password=True)
 
-        assert response.status_code == 200
+            assert client.get("/api/v1/tasks").status_code == 200
 
-    def test_no_password_set_yet_does_not_gate(
+    def test_with_no_user_yet_setup_is_still_required(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:
-        with self.disabled_client(database_url, fake_clock, password_hash=None) as client:
-            response = client.get("/api/v1/tasks")
-
-        assert response.status_code == 200
-
-    def test_flag_off_still_enforces_auth(self, database_url: str, fake_clock: FakeClock) -> None:
-        app = create_app(
-            Settings(
-                database_url=database_url,
-                auth_password_hash="an-imported-hash",
-                auth_disabled=False,
-            ),
-            clock=fake_clock,
-        )
-        with TestClient(app) as client:
+        with self.disabled_app(database_url, fake_clock) as client:
             response = client.get("/api/v1/tasks")
 
         assert response.status_code == 401
+        assert response.json()["error"]["code"] == "setup_required"
+
+    def test_flag_off_still_enforces_auth(self, client: TestClient) -> None:
+        client.cookies.clear()
+
+        assert client.get("/api/v1/tasks").status_code == 401

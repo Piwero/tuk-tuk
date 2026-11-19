@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.crypto import decrypt_credential
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock, run_sql
+from tests.conftest import FakeCalendarSource, FakeClock, log_in_admin, run_sql
 from tests.test_google_accounts import connect_and_authorize
 
 
@@ -29,8 +29,7 @@ def make_client(
         calendar_source=fake_calendar_source,
     )
     with TestClient(app, follow_redirects=False) as test_client:
-        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(test_client)
         yield test_client
 
 

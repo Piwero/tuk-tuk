@@ -23,7 +23,7 @@ from app.main import create_app
 from app.priority_phrase import resolve_priority_phrase
 from app.recurrence_phrase import resolve_recurrence_phrase
 from app.reminder_phrase import resolve_reminder_phrase
-from tests.conftest import TEST_PASSWORD, FakeClock
+from tests.conftest import FakeClock, log_in_admin
 
 
 class _OllamaHandler(BaseHTTPRequestHandler):
@@ -135,8 +135,7 @@ def make_client(
 ) -> Iterator[TestClient]:
     app = create_app(Settings(database_url=database_url, **overrides), clock=fake_clock)  # type: ignore[arg-type]
     with TestClient(app) as test_client:
-        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(test_client)
         yield test_client
 
 

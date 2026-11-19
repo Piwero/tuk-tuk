@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app import __version__
@@ -21,7 +20,6 @@ from app.errors import register_error_handlers
 from app.event_cache import EventCache
 from app.google_adapter import GoogleCalendarSource
 from app.middleware import SessionAuthMiddleware
-from app.models import TaskList
 from app.routers.v1 import (
     assist,
     assistant,
@@ -45,9 +43,7 @@ from app.routers.v1 import (
 )
 from app.routers.v1 import settings as settings_router
 from app.session import Clock, real_clock
-from app.users import ensure_seed_user
-
-INBOX_NAME = "Inbox"
+from app.users import import_env_password
 
 
 def create_app(
@@ -72,8 +68,14 @@ def create_app(
     database_url = require_database_url(app_settings.database_url)
 
     if app_settings.auth_disabled:
+        if app_settings.app_env != "development":
+            raise RuntimeError(
+                "AUTH_DISABLED is set but APP_ENV is not 'development'. The app refuses to "
+                "start: AUTH_DISABLED serves every route as the first admin with no login. "
+                "Set APP_ENV=development for local development, or unset AUTH_DISABLED."
+            )
         logging.getLogger(__name__).warning(
-            "AUTH_DISABLED is on: every route serves unauthenticated. "
+            "AUTH_DISABLED is on: every route serves unauthenticated, as the first admin. "
             "Local development only — never enable in a real deployment."
         )
 
@@ -86,7 +88,7 @@ def create_app(
         app.state.session_factory = session_factory
         async with session_factory() as session:
             settings_row = await bootstrap_app_settings(session, app_settings)
-            await ensure_seed_user(session, settings_row)
+            await import_env_password(session, app_settings.auth_password_hash)
             if (
                 google_configured(settings_row)
                 and settings_row.google_client_id is not None
@@ -97,10 +99,6 @@ def create_app(
                     settings_row.encrypted_google_client_secret, key=app_settings.app_master_key
                 )
                 app_calendar_source.configure(settings_row.google_client_id, client_secret)
-            inbox = await session.scalar(select(TaskList).where(TaskList.is_inbox))
-            if inbox is None:
-                session.add(TaskList(name=INBOX_NAME, is_inbox=True))
-                await session.commit()
         yield
         await engine.dispose()
 

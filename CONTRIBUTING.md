@@ -115,43 +115,63 @@ frontend tests, lint, typecheck and build after each migration.
 
 ## Authentication
 
-tuk-tuk is a single-user app gated by one shared password
-([ADR 0005](docs/adr/0005-single-user-authentication-gate.md)). There are no
-accounts, no signup, and no user records. The password hash and the session
-signing key live in a single-row `settings` table in the database, managed
-entirely from the app itself rather than `.env`
-([ADR 0008](docs/adr/0008-ui-managed-settings.md)).
+One instance serves several Users, each with their own username, email and
+password ([ADR 0018](docs/adr/0018-multi-user-row-level-isolation.md)). There
+is no signup: the first Admin is created by first-run setup, and Admins create
+everyone else. Passwords live on `users.password_hash`; the session signing
+key lives in the single-row `settings` table, managed by the app itself rather
+than `.env` ([ADR 0008](docs/adr/0008-ui-managed-settings.md)).
 
 ### How it works
 
-- **First run.** A fresh database has no password set yet. Every route other
-  than `/health`, `/api/v1/auth/login`, and `/api/v1/auth/setup` responds
-  `401 setup_required` until one exists, and the frontend shows a one-time
-  setup screen instead of the login screen. `POST /api/v1/auth/setup` sets
-  the password and logs you in; it 404s once a password already exists, so it
-  is not a way to reset a forgotten one (see
+- **First run.** A fresh database has no Users. Every route other than
+  `/health`, `/api/v1/auth/login`, and `/api/v1/auth/setup` responds
+  `401 setup_required` until someone can log in, and the frontend shows a
+  one-time setup screen instead of the login screen.
+  `POST /api/v1/auth/setup` takes `{"username", "email", "password"}`,
+  creates the first Admin and logs them in; it 404s once a User can log in,
+  so it is not a way to reset a forgotten password (see
   [Security → Forgotten password](docs/self-hosting/security.md#forgotten-password)).
-- **Login.** `POST /api/v1/auth/login` takes `{"password": "…"}` and verifies
-  it against the Argon2id hash stored in `settings`. On success it sets a
-  signed `tuktuk_session` cookie (`HttpOnly`, `SameSite=Lax`,
-  `Secure` per `AUTH_COOKIE_SECURE`). Nothing else is stored server-side: the
-  cookie carries its own issued-at time, signed with the session key
-  `settings` generated for itself on first boot.
-- **Enforcement.** `SessionAuthMiddleware` runs in front of routing and
-  rejects any request without a valid cookie with `401`. Only `/health`,
-  `/api/v1/auth/login`, and `/api/v1/auth/setup` are public. Every other
-  path, including `/docs` and the OpenAPI schema, is gated by default.
+- **Login.** `POST /api/v1/auth/login` takes `{"login": "…", "password": "…"}`,
+  where `login` is a username or an email, either ignoring case. A wrong
+  password and an unknown login get the same `401 invalid_credentials`; a
+  disabled User with the right password gets `403 account_disabled`. On
+  success it sets a signed `tuktuk_session` cookie (`HttpOnly`,
+  `SameSite=Lax`, `Secure` per `AUTH_COOKIE_SECURE`). Nothing is stored
+  server-side: the cookie carries the User's id, their `session_epoch` and
+  its own issued-at time, signed with the session key `settings` generated
+  for itself on first boot.
+- **Enforcement.** `SessionAuthMiddleware` runs in front of routing, loads
+  the cookie's User on every request and rejects the request with `401`
+  when there is no valid cookie (`unauthorized`), the User is disabled
+  (`account_disabled`), or the cookie's epoch is not the User's current one
+  (`unauthorized`). Only `/health`, `/api/v1/auth/login`, and
+  `/api/v1/auth/setup` are public. Every other path, including `/docs` and
+  the OpenAPI schema, is gated by default.
+- **Forced steps.** A User with a temporary password (`must_change_password`)
+  or an unfinished profile (`must_complete_profile`, the upgraded user #1)
+  can reach only `GET /api/v1/auth/me`, `POST /api/v1/auth/complete` and
+  `POST /api/v1/auth/logout`. Everything else answers `403
+  password_change_required` or `403 profile_completion_required`.
+  `/auth/complete` takes `{"new_password"}`, plus `username` and `email` for
+  a profile; the new password must differ from the current one.
 - **Rolling window.** Sessions last `AUTH_SESSION_LIFETIME_DAYS` (30). Once a
   session is older than `AUTH_SESSION_REISSUE_THRESHOLD_DAYS` (1), the next
   request refreshes the cookie, so an active browser stays logged in
   indefinitely and an idle one lapses after 30 days.
-- **Failed attempts.** A global delay doubles per consecutive failure
-  (from `AUTH_LOGIN_DELAY_SECONDS`, capped at 30s) and resets on success.
-  Expect wrong-password responses to get progressively slower during local
-  testing.
-- **Logout.** `POST /api/v1/auth/logout` deletes the cookie. There is no
-  server-side session to revoke; revoking every device at once means
-  changing the password from Settings, which rotates the session key.
+- **Failed attempts.** Each User has their own lockout: after 5 consecutive
+  failures (login, or change-password's current-password check) login locks
+  for a delay that doubles per further failure (from
+  `AUTH_LOGIN_DELAY_SECONDS`, capped at 30s) and resets on success.
+- **Logout and revocation.** `POST /api/v1/auth/logout` deletes this
+  device's cookie. Changing a password (`POST /api/v1/auth/password`, or
+  completing a forced step) bumps the User's `session_epoch`, which logs out
+  every other session of that User and nobody else's. Rotating the session
+  key in `settings` logs out every User, so it is an operator action.
+- **`AUTH_DISABLED` (local development only).** No cookie is needed and every
+  request acts as the first Admin, with no forced steps. A database with no
+  User still needs `/setup` once. The app refuses to start with it unless
+  `APP_ENV=development`; any other or missing `APP_ENV` counts as production.
 - **Frontend.** `AuthGate` wraps `App`: it probes `GET /api/v1/auth/session`
   on mount, shows the setup screen or the login screen depending on which the
   probe reports, and drops back to the login screen if any later request
@@ -170,10 +190,13 @@ The app refuses to start without `APP_MASTER_KEY` set.
 
 ### Pre-v2 env import
 
-If `AUTH_PASSWORD_HASH` (and `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`,
-`ASSIST_*`) are still set in `.env`, the first boot with no `settings` row
-imports them and skips the setup screen. This happens at most once; after
-that, `settings` is authoritative. `mise run backend:hash-password` still
+If `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `ASSIST_*` are still set in
+`.env`, the first boot with no `settings` row imports them. If
+`AUTH_PASSWORD_HASH` is set while no User can log in yet, it becomes user #1's
+password (creating user #1, username `admin`, if the database has none) and
+the setup screen is skipped; that User completes their profile on first
+login. Each import happens at most once; after that, the database is
+authoritative. `mise run backend:hash-password` still
 generates an `AUTH_PASSWORD_HASH` value for this path.
 
 ### In production
