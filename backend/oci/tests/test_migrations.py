@@ -316,6 +316,57 @@ class TestUsersMigration:
         assert run_sql(empty_database_url, "SELECT COUNT(*) FROM users") == [(0,)]
 
 
+class TestUniquenessPreCheck:
+    """Issue #408 adds per-user uniqueness that a single-user install never
+    enforced: tag names ignoring case, and one Inbox. 0035 refuses to start
+    on data that breaks either, naming the rows and how to fix them, rather
+    than failing on an index error or quietly rewriting anything."""
+
+    def upgrade_with(self, database_url: str, *statements: str) -> pytest.ExceptionInfo[Exception]:
+        config = alembic_config(database_url)
+        command.upgrade(config, "0034")
+        for statement in statements:
+            run_sql(database_url, statement)
+        with pytest.raises(RuntimeError) as refused:
+            command.upgrade(config, "head")
+        return refused
+
+    def test_tags_differing_only_in_case_stop_the_upgrade(self, empty_database_url: str) -> None:
+        refused = self.upgrade_with(
+            empty_database_url,
+            "INSERT INTO tags (id, name, owner, created_at) VALUES "
+            "(7, 'Work', 'local', now()), (9, 'work', 'local', now()), "
+            "(11, 'Home', 'local', now())",
+        )
+
+        message = str(refused.value)
+        assert "'Work' (id 7)" in message
+        assert "'work' (id 9)" in message
+        assert "Home" not in message
+        assert "upgrade.md" in message
+        assert run_sql(empty_database_url, "SELECT version_num FROM alembic_version") == [("0034",)]
+        assert run_sql(empty_database_url, "SELECT id, name FROM tags ORDER BY id") == [
+            (7, "Work"),
+            (9, "work"),
+            (11, "Home"),
+        ]
+
+    def test_more_than_one_inbox_stops_the_upgrade(self, empty_database_url: str) -> None:
+        refused = self.upgrade_with(
+            empty_database_url,
+            "INSERT INTO lists (id, name, is_inbox, is_archived, sort_order, view_mode, owner, "
+            "created_at) VALUES (3, 'Inbox', true, false, 0, 'list', 'local', now()), "
+            "(5, 'Old inbox', true, false, 1, 'list', 'local', now()), "
+            "(6, 'Errands', false, false, 2, 'list', 'local', now())",
+        )
+
+        message = str(refused.value)
+        assert "'Inbox' (id 3)" in message
+        assert "'Old inbox' (id 5)" in message
+        assert "Errands" not in message
+        assert run_sql(empty_database_url, "SELECT version_num FROM alembic_version") == [("0034",)]
+
+
 class TestPerUserUniqueness:
     """Issue #408: what used to be unique across the install is unique per
     user. Two users can hold the same name; one user still cannot."""
