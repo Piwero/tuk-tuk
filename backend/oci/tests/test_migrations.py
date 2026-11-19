@@ -484,22 +484,26 @@ class TestUserSettingsMigration:
             )
         ]
 
-    def test_the_singleton_keeps_only_the_session_key_and_the_install_password(
-        self, empty_database_url: str
-    ) -> None:
-        """The password stays until per-user login (issue #410) stops
-        reading it."""
+    def test_the_singleton_keeps_only_the_session_key(self, empty_database_url: str) -> None:
+        """The install password is dropped once login reads `users`
+        (issue #410, migration 0037)."""
         upgrade_an_install_with_every_setting(empty_database_url)
 
         assert columns_of(empty_database_url, "settings") == {
             "id",
             "session_key",
-            "password_hash",
             "created_at",
             "updated_at",
         }
-        assert run_sql(empty_database_url, "SELECT session_key, password_hash FROM settings") == [
-            ("a-session-key", "an-existing-hash")
+        assert run_sql(empty_database_url, "SELECT session_key FROM settings") == [
+            ("a-session-key",)
+        ]
+
+    def test_user_1_keeps_the_install_password(self, empty_database_url: str) -> None:
+        upgrade_an_install_with_every_setting(empty_database_url)
+
+        assert run_sql(empty_database_url, "SELECT id, password_hash FROM users") == [
+            (1, "an-existing-hash")
         ]
 
     def test_user_1_without_a_settings_row_gets_the_defaults(self, empty_database_url: str) -> None:
