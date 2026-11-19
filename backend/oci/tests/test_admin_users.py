@@ -21,6 +21,7 @@ ACCOUNT_FIELDS = {
     "must_change_password",
     "must_complete_profile",
     "created_at",
+    "last_active_at",
 }
 NEW_USER = {"username": "cy", "email": "cy@example.com", "temp_password": TEMP_PASSWORD}
 
@@ -110,6 +111,7 @@ class TestCreatingAUser:
             "must_change_password": True,
             "must_complete_profile": False,
             "created_at": None,
+            "last_active_at": None,
         }
         client.cookies.clear()
         log_in(client, "cy@example.com", TEMP_PASSWORD)
@@ -338,4 +340,5 @@ class TestListingUsers:
             "must_change_password": True,
             "must_complete_profile": False,
             "created_at": None,
+            "last_active_at": None,
         }

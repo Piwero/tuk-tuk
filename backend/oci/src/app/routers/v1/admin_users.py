@@ -48,6 +48,8 @@ class AdminUserRead(BaseModel):
     must_change_password: bool
     must_complete_profile: bool
     created_at: datetime
+    # Null until the account's first authenticated request (issue #478).
+    last_active_at: datetime | None
 
 
 class AdminUserCreate(BaseModel):

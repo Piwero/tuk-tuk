@@ -187,6 +187,9 @@ export interface AdminUser {
   must_change_password: boolean;
   must_complete_profile: boolean;
   created_at: string;
+  /** When the account was last served a signed-in request (#478), ISO-8601,
+   * moved at most every few minutes; null if it never has been. */
+  last_active_at: string | null;
 }
 
 /** The most accounts one admin users read returns (the backend's cap). */
@@ -196,6 +199,38 @@ const ADMIN_USERS_LIMIT = 200;
  * Admins only: rejects 403 `admin_required` for anyone else. */
 export function fetchAdminUsers(): Promise<Page<AdminUser>> {
   return request(`/api/v1/admin/users?limit=${ADMIN_USERS_LIMIT}`);
+}
+
+export interface NewAdminUser {
+  username: string;
+  email: string;
+  /** Generated in the browser; the person must replace it at first sign-in. */
+  temp_password: string;
+  is_admin: boolean;
+}
+
+/** Creates an account with a temporary password (#412, #479). Rejects with
+ * `invalid_username` / `invalid_email` / `invalid_password` (422) or
+ * `username_taken` / `email_taken` (409, one per response). */
+export function createAdminUser(input: NewAdminUser): Promise<AdminUser> {
+  return request("/api/v1/admin/users", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** What an Admin may change on an account (#412); only the fields given
+ * change. There is no delete: accounts are only ever disabled. */
+export interface AdminUserChange {
+  is_active?: boolean;
+  is_admin?: boolean;
+}
+
+/** Disables / enables an account or changes its role. Disabling ends its
+ * sessions at once. Rejects 409 `last_admin` when the change would leave
+ * no active Admin (the acting Admin's own row included), 404 `not_found`. */
+export function updateAdminUser(id: number, change: AdminUserChange): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(change),
+  });
 }
 
 /** Signs in by username or email (either ignoring case) and sets the

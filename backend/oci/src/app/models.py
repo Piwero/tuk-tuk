@@ -71,6 +71,10 @@ class User(Base):
     # Admin's temporary password, and on the User's own change. Shown only
     # to the User themselves (GET /auth/me), never in the admin list.
     password_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # When the User was last served an authenticated request (issue #478),
+    # written at most once every few minutes (app.middleware); null until
+    # first use. Shown to Admins in the users list.
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     login_failed_attempts: Mapped[int] = mapped_column(default=0)
     login_locked_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None

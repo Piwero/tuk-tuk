@@ -274,6 +274,10 @@ export interface FakeUser {
    * admin's temporary password, and the user's own change. Only ever on
    * the user's own record (GET /auth/me), never in the admin list. */
   password_changed_at: string;
+  /** When the account was last served a signed-in request (#478), ISO-8601;
+   * null until then. The fake middleware moves it like the backend's: at
+   * most every LAST_ACTIVE_WRITE_INTERVAL_MS. Only in the admin record. */
+  last_active_at: string | null;
   /** ISO-8601; only the admin record carries it. Defaults when absent. */
   created_at?: string;
 }
@@ -428,6 +432,7 @@ export function fakeUser(username: string, overrides: Partial<FakeUser> = {}): F
     must_change_password: false,
     must_complete_profile: false,
     password_changed_at: DEFAULT_PASSWORD_CHANGED_AT,
+    last_active_at: null,
     ...overrides,
   };
 }
@@ -444,7 +449,11 @@ export const FAKE_ADMIN: FakeUser = {
   must_change_password: false,
   must_complete_profile: false,
   password_changed_at: DEFAULT_PASSWORD_CHANGED_AT,
+  last_active_at: null,
 };
+
+/** Mirrors the backend's LAST_ACTIVE_WRITE_INTERVAL (app.middleware, #478). */
+const LAST_ACTIVE_WRITE_INTERVAL_MS = 5 * 60_000;
 
 // Mirrors the backend's setup/profile validation (auth router, ADR 0018).
 const MAX_USERNAME_LENGTH = 64;
@@ -475,6 +484,7 @@ function adminUserRecord(account: FakeUser): Record<string, unknown> {
     must_change_password: account.must_change_password,
     must_complete_profile: account.must_complete_profile,
     created_at: account.created_at ?? "2026-01-01T00:00:00Z",
+    last_active_at: account.last_active_at,
   };
 }
 
@@ -1396,6 +1406,15 @@ export function installFakeApi({
             403,
           );
         }
+      }
+      // Served from here on: the account was active now, recorded at most
+      // once per interval like the backend middleware.
+      const now = Date.now();
+      if (
+        account.last_active_at === null ||
+        now - Date.parse(account.last_active_at) >= LAST_ACTIVE_WRITE_INTERVAL_MS
+      ) {
+        account.last_active_at = new Date(now).toISOString();
       }
     }
     if (method === "GET" && url.pathname === "/api/v1/auth/me") {

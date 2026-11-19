@@ -1,8 +1,19 @@
 import "./UsersPanel.css";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { type AdminUser, ApiError, type CurrentUser, fetchAdminUsers, type Page } from "../api";
+import {
+  type AdminUser,
+  type AdminUserChange,
+  ApiError,
+  type CurrentUser,
+  fetchAdminUsers,
+  type Page,
+  updateAdminUser,
+} from "../api";
+import { formatLastActive } from "../dates";
 import { LoadError, SkeletonRows } from "./TaskViewState";
+import { NewUserDialog } from "./NewUserDialog";
+import { LAST_ADMIN_REASON, UserActionsMenu } from "./UserActionsMenu";
 import { Avatar } from "./UserMenu";
 
 /** How an account stands (#468): Disabled if it is not active; otherwise
@@ -33,17 +44,47 @@ function disabledLast(accounts: AdminUser[]): AdminUser[] {
   ];
 }
 
-/** One account's row (#477): who it is, its role and its status. The last
+/** Whether `account` is the only active Admin listed — the UI's mirror of
+ * the server's `last_admin` guard (#412). Disabled Admins don't count. */
+function isLastActiveAdmin(account: AdminUser, accounts: AdminUser[]): boolean {
+  return (
+    account.is_admin &&
+    account.is_active &&
+    !accounts.some((other) => other.id !== account.id && other.is_admin && other.is_active)
+  );
+}
+
+/** What a failed row action says: what it couldn't do, then why (the
+ * server's `last_admin` guard) or that it may be tried again. */
+function failure(account: AdminUser, change: AdminUserChange, error: unknown): string {
+  const name = account.username;
+  const what =
+    change.is_active === false
+      ? `disable ${name}`
+      : change.is_active === true
+        ? `enable ${name}`
+        : change.is_admin === true
+          ? `make ${name} an admin`
+          : `remove admin from ${name}`;
+  const why =
+    error instanceof ApiError && error.code === "last_admin" ? LAST_ADMIN_REASON : "Try again.";
+  return `Couldn’t ${what}. ${why}`;
+}
+
+/** One account's row (#477): who it is, its role, its status and when it
+ * was last active (#478). The last
  * cell is a slot for the row's actions menu (#479-#481), left out when the
- * table has no actions. */
+ * table has no actions; `error` says what the row's last action failed to do. */
 export function UserRow({
   account,
   isSelf,
   actions,
+  error,
 }: {
   account: AdminUser;
   isSelf: boolean;
   actions?: ReactNode;
+  error?: string;
 }): JSX.Element {
   const status = accountStatus(account);
   return (
@@ -64,6 +105,11 @@ export function UserRow({
             {account.email !== null && <span className="users-email">{account.email}</span>}
           </span>
         </span>
+        {error !== undefined && (
+          <p role="alert" className="users-row-error">
+            {error}
+          </p>
+        )}
       </th>
       <td className="users-cell-role">
         {account.is_admin ? <span className="user-admin-badge">Admin</span> : "Member"}
@@ -72,6 +118,15 @@ export function UserRow({
         <span className="users-status" data-status={STATUS_STATE[status]}>
           {status}
         </span>
+      </td>
+      <td className="users-cell-active">
+        {account.last_active_at === null ? (
+          formatLastActive(null)
+        ) : (
+          <time dateTime={account.last_active_at}>
+            {formatLastActive(new Date(account.last_active_at))}
+          </time>
+        )}
       </td>
       {actions !== undefined && <td className="users-cell-actions">{actions}</td>}
     </tr>
@@ -93,8 +148,21 @@ export function UsersPanel({
 }): JSX.Element {
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [creating, setCreating] = useState(false);
+  /** What the last action on a row failed to do, by account id. */
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const onAccessLostRef = useRef(onAccessLost);
   onAccessLostRef.current = onAccessLost;
+
+  /** Re-reads the list behind an open dialog, keeping the table (and the
+   * New user button focus returns to) on screen; a failed re-read leaves the
+   * list as it was. */
+  function rereadQuietly(): void {
+    fetchAdminUsers().then(
+      (page) => setList({ kind: "loaded", page }),
+      () => {},
+    );
+  }
 
   useEffect(() => {
     let live = true;
@@ -117,6 +185,46 @@ export function UsersPanel({
     };
   }, [attempt]);
 
+  /** Sends one row's change. On success the list is re-read quietly (no
+   * skeleton) so every row, and the last-admin guard, shows what the server
+   * now holds; on failure the row stays as it was and says what failed. */
+  function changeAccount(account: AdminUser, change: AdminUserChange): void {
+    setRowErrors((errors) => {
+      const others = { ...errors };
+      delete others[account.id];
+      return others;
+    });
+    updateAdminUser(account.id, change).then(
+      (updated) =>
+        fetchAdminUsers().then(
+          (page) => setList({ kind: "loaded", page }),
+          (error: unknown) => {
+            if (error instanceof ApiError && error.code === "admin_required") {
+              // The Admin removed their own admin rights.
+              onAccessLostRef.current();
+              return;
+            }
+            // The change stands even if the re-read failed: show it.
+            setList((current) =>
+              current.kind === "loaded"
+                ? {
+                    kind: "loaded",
+                    page: {
+                      ...current.page,
+                      items: current.page.items.map((item) =>
+                        item.id === updated.id ? updated : item,
+                      ),
+                    },
+                  }
+                : current,
+            );
+          },
+        ),
+      (error: unknown) =>
+        setRowErrors((errors) => ({ ...errors, [account.id]: failure(account, change, error) })),
+    );
+  }
+
   return (
     <section aria-label="Users" className="users-panel">
       {list.kind === "loading" && <SkeletonRows label="Loading users" count={3} />}
@@ -126,10 +234,19 @@ export function UsersPanel({
       {list.kind === "loaded" && (
         <>
           <header className="users-head">
-            <h2>{list.page.total === 1 ? "1 user" : `${list.page.total} users`}</h2>
-            <p className="users-boundary">
-              You manage accounts here. You can’t see another user’s tasks, habits or settings.
-            </p>
+            <div>
+              <h2>{list.page.total === 1 ? "1 user" : `${list.page.total} users`}</h2>
+              <p className="users-boundary">
+                You manage accounts here. You can’t see another user’s tasks, habits or settings.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="settings-primary-action"
+              onClick={() => setCreating(true)}
+            >
+              New user
+            </button>
           </header>
           <table aria-label="Users" className="users-table">
             <thead>
@@ -137,6 +254,10 @@ export function UsersPanel({
                 <th scope="col">User</th>
                 <th scope="col">Role</th>
                 <th scope="col">Status</th>
+                <th scope="col">Last active</th>
+                <th scope="col">
+                  <span className="visually-hidden">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -145,10 +266,22 @@ export function UsersPanel({
                   key={account.id}
                   account={account}
                   isSelf={account.id === currentUser.id}
+                  error={rowErrors[account.id]}
+                  actions={
+                    <UserActionsMenu
+                      account={account}
+                      isSelf={account.id === currentUser.id}
+                      isLastAdmin={isLastActiveAdmin(account, list.page.items)}
+                      onChange={(change) => changeAccount(account, change)}
+                    />
+                  }
                 />
               ))}
             </tbody>
           </table>
+          {creating && (
+            <NewUserDialog onClose={() => setCreating(false)} onCreated={rereadQuietly} />
+          )}
         </>
       )}
     </section>
