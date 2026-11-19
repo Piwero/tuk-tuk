@@ -113,6 +113,7 @@ def booted_app(events: list[CalendarEventEntry]) -> Iterator[TestClient]:
     from argon2 import PasswordHasher
     from argon2.low_level import Type
 
+    from app.models import User
     from app.users import create_user
 
     calendar_source = _EvalCalendarSource()
@@ -136,10 +137,12 @@ def booted_app(events: list[CalendarEventEntry]) -> Iterator[TestClient]:
         async with app.state.session_factory() as session:
             await create_user(
                 session,
-                username=_USERNAME,
-                email="eval@example.com",
-                password_hash=password_hash,
-                is_admin=True,
+                User(
+                    username=_USERNAME,
+                    email="eval@example.com",
+                    password_hash=password_hash,
+                    is_admin=True,
+                ),
             )
             await session.commit()
 

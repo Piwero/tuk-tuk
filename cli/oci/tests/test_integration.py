@@ -30,6 +30,7 @@ import asyncio  # noqa: E402
 import httpx  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.main import create_app  # noqa: E402
+from app.models import User  # noqa: E402
 from app.users import create_user  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
@@ -66,10 +67,12 @@ def live_client(postgres_url: str) -> Iterator[TestClient]:
         async with app.state.session_factory() as session:
             await create_user(
                 session,
-                username=TEST_USERNAME,
-                email="admin@example.com",
-                password_hash=password_hash,
-                is_admin=True,
+                User(
+                    username=TEST_USERNAME,
+                    email="admin@example.com",
+                    password_hash=password_hash,
+                    is_admin=True,
+                ),
             )
             await session.commit()
 
