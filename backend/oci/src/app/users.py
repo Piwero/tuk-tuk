@@ -108,6 +108,13 @@ def set_password(user: User, password_hash: str, *, now: datetime) -> None:
     user.session_epoch += 1
 
 
+def clear_lockout(user: User) -> None:
+    """Forgets the User's wrong-password streak and lifts any login lockout:
+    after a correct password, and when an Admin resets theirs."""
+    user.login_failed_attempts = 0
+    user.login_locked_until = None
+
+
 async def import_env_password(
     session: AsyncSession, password_hash: str | None, user_settings: UserSettings
 ) -> None:

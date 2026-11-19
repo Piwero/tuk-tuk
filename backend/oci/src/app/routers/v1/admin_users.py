@@ -22,6 +22,7 @@ from app.users import (
     check_new_password,
     clean_email,
     clean_username,
+    clear_lockout,
     create_user,
     ensure_identity_free,
     reporting_taken_identity,
@@ -171,7 +172,6 @@ async def reset_password(
     check_new_password(payload.temp_password)
     set_password(user, password_hasher.hash(payload.temp_password), now=request.app.state.clock())
     user.must_change_password = True
-    user.login_failed_attempts = 0
-    user.login_locked_until = None
+    clear_lockout(user)
     await session.commit()
     return AdminUserRead.model_validate(user)

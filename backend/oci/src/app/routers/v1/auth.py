@@ -23,6 +23,7 @@ from app.users import (
     check_new_password,
     clean_email,
     clean_username,
+    clear_lockout,
     create_user,
     ensure_identity_free,
     find_user_by_login,
@@ -78,8 +79,7 @@ async def _record_failure(
 
 
 async def _record_success(session: AsyncSession, user: User) -> None:
-    user.login_failed_attempts = 0
-    user.login_locked_until = None
+    clear_lockout(user)
     await session.commit()
 
 
