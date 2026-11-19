@@ -1,20 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError, completeStep } from "../api";
-import { Icon } from "../components/Icon";
-import { MIN_PASSWORD_LENGTH } from "./rules";
-
-/** One line of the checklist: a tick once met, an empty ring until then,
- * with the state also spoken, since the glyph alone is decorative. */
-function Rule({ met, children }: { met: boolean; children: string }): JSX.Element {
-  return (
-    <li className="auth-gate-rule" data-met={met}>
-      {met ? <Icon name="check" /> : <span className="auth-gate-rule-ring" aria-hidden="true" />}
-      {children}
-      <span className="visually-hidden">{met ? ": done" : ": not yet"}</span>
-    </li>
-  );
-}
+import { NewPasswordFields } from "./NewPasswordFields";
+import { newPasswordReady } from "./rules";
 
 interface Failure {
   /** Whether it is about the new password, so marks that field. */
@@ -59,8 +47,7 @@ export function ChangePasswordStep({
   // Bumped to move focus back to the new password after a rejection.
   const [focusRequest, setFocusRequest] = useState(0);
   const newPasswordRef = useRef<HTMLInputElement>(null);
-  const longEnough = newPassword.length >= MIN_PASSWORD_LENGTH;
-  const matching = confirmation !== "" && confirmation === newPassword;
+  const ready = newPasswordReady(newPassword, confirmation);
   const invalid = failure?.onField === true;
 
   useEffect(() => {
@@ -73,7 +60,7 @@ export function ChangePasswordStep({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        if (pending || !(longEnough && matching)) {
+        if (pending || !ready) {
           return;
         }
         setPending(true);
@@ -90,39 +77,22 @@ export function ChangePasswordStep({
       <p className="auth-gate-lead">
         You signed in with a temporary password. Replace it with one only you know.
       </p>
-      <label htmlFor="auth-gate-new-password">New password</label>
-      <input
-        ref={newPasswordRef}
-        id="auth-gate-new-password"
-        name="new-password"
-        type="password"
-        autoComplete="new-password"
+      <NewPasswordFields
+        newPassword={newPassword}
+        confirmation={confirmation}
+        onNewPasswordChange={setNewPassword}
+        onConfirmationChange={setConfirmation}
         disabled={pending}
-        aria-invalid={invalid || undefined}
-        aria-describedby={invalid ? ERROR_ID : undefined}
-        value={newPassword}
-        onChange={(event) => setNewPassword(event.target.value)}
+        invalid={invalid}
+        errorId={ERROR_ID}
+        newPasswordRef={newPasswordRef}
       />
-      <label htmlFor="auth-gate-confirm-new-password">Confirm new password</label>
-      <input
-        id="auth-gate-confirm-new-password"
-        name="confirm-new-password"
-        type="password"
-        autoComplete="new-password"
-        disabled={pending}
-        value={confirmation}
-        onChange={(event) => setConfirmation(event.target.value)}
-      />
-      <ul className="auth-gate-rules" aria-label="Password requirements">
-        <Rule met={longEnough}>{`At least ${MIN_PASSWORD_LENGTH} characters`}</Rule>
-        <Rule met={matching}>Both entries match</Rule>
-      </ul>
       {failure !== null && (
         <p id={ERROR_ID} className="auth-gate-error" role="alert">
           {failure.message}
         </p>
       )}
-      <button className="btn-primary" type="submit" disabled={pending || !(longEnough && matching)}>
+      <button className="btn-primary" type="submit" disabled={pending || !ready}>
         {pending ? "Saving…" : "Save and continue"}
       </button>
     </form>

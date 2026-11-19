@@ -118,6 +118,11 @@ export function SignInScreen({
           {pending ? "Signing in…" : "Sign in"}
         </button>
         <p className="auth-gate-footnote">Forgot your password? Ask your admin to reset it.</p>
+        {/* Migration 0035 named the single pre-existing account "admin" (with
+            no email), and nothing else would tell its owner so. */}
+        <p className="auth-gate-footnote">
+          Set up before usernames? Sign in as admin with your existing password.
+        </p>
       </form>
     </div>
   );
