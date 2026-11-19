@@ -155,13 +155,14 @@ def clean_email(email: str) -> str:
 
 
 async def ensure_identity_free(
-    session: AsyncSession, username: str, email: str, *, except_user: User | None = None
+    session: AsyncSession, username: str, email: str | None, *, except_user: User | None = None
 ) -> None:
     """409 when another User already holds `username` or `email` (both
     citext, so case is ignored), reported per field: `username_taken` or
-    `email_taken`."""
+    `email_taken`. A missing email (the migration's seeded user #1) clashes
+    with nobody."""
     others = select(User).where(User.id != except_user.id) if except_user else select(User)
     if await session.scalar(others.where(User.username == username)) is not None:
         raise APIError(409, "username_taken", "That username is already taken")
-    if await session.scalar(others.where(User.email == email)) is not None:
+    if email is not None and await session.scalar(others.where(User.email == email)) is not None:
         raise APIError(409, "email_taken", "That email is already in use")

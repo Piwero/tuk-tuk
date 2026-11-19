@@ -164,6 +164,13 @@ export function fetchCurrentUser(): Promise<CurrentUser> {
   return request("/api/v1/auth/me");
 }
 
+/** Changes the signed-in User's own username and/or email; only the fields
+ * given change (#474). Rejects with `invalid_username` / `invalid_email`
+ * (422) or `username_taken` / `email_taken` (409). */
+export function updateProfile(fields: { username?: string; email?: string }): Promise<CurrentUser> {
+  return request("/api/v1/auth/me", { method: "PATCH", body: JSON.stringify(fields) });
+}
+
 /** Signs in by username or email (either ignoring case) and sets the
  * session cookie. Rejects with `invalid_credentials` (an unknown login and
  * a wrong password alike), `too_many_attempts`, or `account_disabled`. */

@@ -129,7 +129,7 @@ type View =
   | { kind: "focus"; task?: Task }
   | { kind: "focus-stats" }
   | { kind: "search"; search: SearchState }
-  | { kind: "settings"; tab?: SettingsTab }
+  | { kind: "settings"; tab: SettingsTab }
   | null;
 
 /** A stable identity for a View, for use as an effect dependency: two Views
@@ -217,10 +217,8 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
       return { kind: "focus" };
     case "focus-stats":
       return { kind: "focus-stats" };
-    case "settings": {
-      const tab = settingsTabForPath(pathname);
-      return tab === null ? { kind: "settings" } : { kind: "settings", tab };
-    }
+    case "settings":
+      return { kind: "settings", tab: settingsTabForPath(pathname) ?? "account" };
   }
 }
 
@@ -235,15 +233,18 @@ interface AppProps {
   user?: CurrentUser;
 }
 
-/** Who is signed in: the gate's answer when given, else read once. */
-function useCurrentUser(given: CurrentUser | undefined): CurrentUser | null {
-  const [fetched, setFetched] = useState<CurrentUser | null>(null);
+/** Who is signed in: the gate's answer when given, else read once; kept
+ * current by whatever re-reads or changes the record later (Settings). */
+function useCurrentUser(
+  given: CurrentUser | undefined,
+): [CurrentUser | null, (user: CurrentUser) => void] {
+  const [user, setUser] = useState<CurrentUser | null>(given ?? null);
   useEffect(() => {
     if (given !== undefined) return;
     let live = true;
     fetchCurrentUser().then(
-      (user) => {
-        if (live) setFetched(user);
+      (fetched) => {
+        if (live) setUser(fetched);
       },
       () => undefined,
     );
@@ -251,7 +252,7 @@ function useCurrentUser(given: CurrentUser | undefined): CurrentUser | null {
       live = false;
     };
   }, [given]);
-  return given ?? fetched;
+  return [user, setUser];
 }
 
 /** True at/below the phone breakpoint (720px, same as the stylesheet), live. */
@@ -277,7 +278,7 @@ export function App({
   user: signedInUser,
   voiceProvider = livekitProvider,
 }: AppProps = {}): JSX.Element {
-  const currentUser = useCurrentUser(signedInUser);
+  const [currentUser, setCurrentUser] = useCurrentUser(signedInUser);
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -418,7 +419,7 @@ export function App({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has("googleConnected") || params.has("googleError")) {
-      setView({ kind: "settings" });
+      setView({ kind: "settings", tab: "account" });
       setGoogleOAuthError(params.has("googleError"));
       params.delete("googleConnected");
       params.delete("googleError");
@@ -500,7 +501,7 @@ export function App({
       window.history.pushState(null, "", containerPath);
     } else if (kind === "calendar" && view?.kind === "calendar") {
       window.history.pushState(null, "", pathForCalendarMode(view.mode));
-    } else if (kind === "settings" && view?.kind === "settings" && view.tab !== undefined) {
+    } else if (kind === "settings" && view?.kind === "settings") {
       window.history.pushState(null, "", pathForSettingsTab(view.tab));
     } else if (kind === "smart" && view?.kind === "smart") {
       window.history[missingViewNotice ? "replaceState" : "pushState"](
@@ -530,15 +531,26 @@ export function App({
     }
   }, [view]);
 
-  // Keeps /settings/<tab> in sync when a tab is picked from within Settings
-  // (e.g. the user menu's My account while Settings is already open).
+  // Settings' tabs (#474) are separate places, so switching tabs pushes a
+  // history entry. A redirect replaces instead: the bare /settings alias, or
+  // the Users URL for someone who is not an Admin (SettingsView decides that).
+  const replaceSettingsTabRef = useRef(false);
+  const showSettingsTab = useCallback(
+    (tab: SettingsTab, options: { replace?: boolean } = {}): void => {
+      replaceSettingsTabRef.current = options.replace ?? false;
+      setView({ kind: "settings", tab });
+    },
+    [],
+  );
   useEffect(() => {
-    if (view?.kind !== "settings" || view.tab === undefined) {
+    if (view?.kind !== "settings") {
       return;
     }
+    const replace = replaceSettingsTabRef.current || window.location.pathname === "/settings";
+    replaceSettingsTabRef.current = false;
     const path = pathForSettingsTab(view.tab);
     if (window.location.pathname !== path) {
-      window.history.replaceState(null, "", path);
+      window.history[replace ? "replaceState" : "pushState"](null, "", path);
     }
   }, [view]);
 
@@ -1303,7 +1315,7 @@ export function App({
       key: "view-settings",
       kind: "view" as const,
       label: "Settings",
-      run: () => switchView({ kind: "settings" }),
+      run: () => switchView({ kind: "settings", tab: "account" }),
     },
     ...lists
       .filter((list) => !list.is_archived)
@@ -1679,6 +1691,9 @@ export function App({
                 )}
                 {view?.kind === "settings" ? (
                   <SettingsView
+                    tab={view.tab}
+                    onTabChange={showSettingsTab}
+                    onUserChange={setCurrentUser}
                     googleOAuthError={googleOAuthError}
                     themePreference={themePreference}
                     onThemeChange={chooseTheme}
@@ -1862,7 +1877,7 @@ export function App({
                 assistantAvailable={assistantAvailable}
                 assistantSelected={assistantSelected}
                 searchSelected={searchSelected}
-                settingsTab={view?.kind === "settings" ? (view.tab ?? "account") : null}
+                settingsTab={view?.kind === "settings" ? view.tab : null}
                 user={currentUser}
                 darkMode={resolveThemePreference(themePreference) === "dark"}
                 onToggleDarkMode={toggleTheme}

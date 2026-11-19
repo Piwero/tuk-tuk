@@ -1,6 +1,6 @@
 import "./HabitForm.css";
 import "./SettingsView.css";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -15,6 +15,7 @@ import {
   fetchAssistStatus,
   fetchAssistantConfig,
   fetchAssistantStatus,
+  fetchCurrentUser,
   fetchGoogleAccounts,
   fetchGoogleCalendars,
   fetchGoogleStatus,
@@ -37,6 +38,7 @@ import {
   type AssistConfig,
   type AssistantConfig,
   type ActiveHoursSettings,
+  type CurrentUser,
   type DatabaseStatus,
   type DatabaseTestConnectionResult,
   type GoogleAccount,
@@ -47,6 +49,7 @@ import {
 } from "../api";
 import { timeMinutes } from "../calendar";
 import { type ThemePreference } from "../layoutPrefs";
+import { pathForSettingsTab, type SettingsTab } from "../routes";
 import {
   DEFAULT_OVERLAY_SHORTCUT,
   formatOverlayShortcut,
@@ -58,8 +61,9 @@ import { ACCENT_PALETTE } from "../theme";
 import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
 import { Hint } from "./Hint";
+import { ProfileCard } from "./ProfileCard";
 
-interface SettingsViewProps {
+interface MyAccountPanelProps {
   /** Set when the browser just landed back from a Google consent round
    * trip that failed (backend redirected with ?googleError=1) — e.g. the
    * user declined consent, or the authorization code exchange failed. */
@@ -69,6 +73,19 @@ interface SettingsViewProps {
    * resolved `data-theme`. */
   themePreference: ThemePreference;
   onThemeChange: (preference: ThemePreference) => void;
+  /** The signed-in User's account record; null until it has loaded. */
+  user: CurrentUser | null;
+  onUserChange: (user: CurrentUser) => void;
+}
+
+interface SettingsViewProps extends Omit<MyAccountPanelProps, "user" | "onUserChange"> {
+  /** The tab the URL names (#474). */
+  tab: SettingsTab;
+  /** Shows another tab; `replace` for a redirect rather than a move. */
+  onTabChange: (tab: SettingsTab, options?: { replace?: boolean }) => void;
+  /** Hears every fresh copy of the account record (the read on mount and
+   * each profile save), so the user menu names the account as it is now. */
+  onUserChange?: (user: CurrentUser) => void;
 }
 
 const THEME_OPTIONS: readonly { value: ThemePreference; label: string }[] = [
@@ -1179,18 +1196,95 @@ function DatabaseSettingsForm(): JSX.Element {
   );
 }
 
-/** The Settings screen. Asks the Google status endpoint once on mount. The
+/** The Settings screen (#474): a My account tab and, for Admins only, a
+ * Users tab, each at its own URL. Reads the signed-in User's account record
+ * on mount, so a role change since the last visit shows on the next one. A
+ * non-Admin on the Users URL is redirected to My account. */
+export function SettingsView({
+  tab,
+  onTabChange,
+  onUserChange,
+  ...accountProps
+}: SettingsViewProps): JSX.Element {
+  const [user, setStoredUser] = useState<CurrentUser | null>(null);
+  const reportUser = useRef(onUserChange);
+  reportUser.current = onUserChange;
+  const setUser = useCallback((next: CurrentUser): void => {
+    setStoredUser(next);
+    reportUser.current?.(next);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchCurrentUser().then((fetched) => {
+      if (!cancelled) {
+        setUser(fetched);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isAdmin = user?.is_admin === true;
+  useEffect(() => {
+    if (tab === "users" && user !== null && !user.is_admin) {
+      onTabChange("account", { replace: true });
+    }
+  }, [tab, user, onTabChange]);
+
+  function tabLink(target: SettingsTab, label: string): JSX.Element {
+    return (
+      <a
+        href={pathForSettingsTab(target)}
+        aria-current={tab === target ? "page" : undefined}
+        onClick={(event) => {
+          event.preventDefault();
+          if (tab !== target) {
+            onTabChange(target);
+          }
+        }}
+      >
+        {label}
+      </a>
+    );
+  }
+
+  return (
+    <div className="settings-view">
+      <nav aria-label="Settings" className="settings-tabs">
+        {tabLink("account", "My account")}
+        {isAdmin && tabLink("users", "Users")}
+      </nav>
+      {tab === "account" ? (
+        <MyAccountPanel {...accountProps} user={user} onUserChange={setUser} />
+      ) : (
+        isAdmin && (
+          <section aria-label="Users" className="settings-section">
+            <p className="settings-hint">Account management is coming soon.</p>
+          </section>
+        )
+      )}
+    </div>
+  );
+}
+
+/** Settings › My account: the profile, then the per-user settings groups.
+ * Asks the Google status endpoint once on mount. The
  * Google Calendar section itself is always shown once that answer is in —
  * unlike before issue #117, its credentials form is how an operator gets
  * from unconfigured to configured in the first place — but the account list
  * and Connect button inside it stay invisible, not greyed-out, until the
  * backend reports credentials are actually set. See CONTEXT.md's Assist
  * glossary entry. */
-export function SettingsView({
+function MyAccountPanel({
   googleOAuthError = false,
   themePreference,
   onThemeChange,
-}: SettingsViewProps): JSX.Element {
+  user,
+  onUserChange,
+}: MyAccountPanelProps): JSX.Element {
+  const isAdmin = user?.is_admin === true;
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
   // Enabled by default (issue #140) so the toggle doesn't flash off before
@@ -1308,8 +1402,9 @@ export function SettingsView({
   const showConnectionsGroup = googleStatus !== null;
 
   return (
-    <div className="settings-view">
+    <>
       <nav aria-label="Settings sections" className="settings-toc">
+        <a href="#settings-profile">Profile</a>
         <a href="#settings-appearance">Appearance</a>
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
@@ -1354,9 +1449,10 @@ export function SettingsView({
           )}
         </a>
         <a href="#settings-security">Security</a>
-        <a href="#settings-database">Database</a>
+        {isAdmin && <a href="#settings-database">Database</a>}
         <a href="#settings-about">About</a>
       </nav>
+      {user !== null && <ProfileCard user={user} onUserChange={onUserChange} />}
       <section aria-label="Personalize" className="settings-group">
         <h2 className="settings-group-title">Personalize</h2>
         <section aria-label="Appearance" id="settings-appearance" className="settings-section">
@@ -1639,12 +1735,15 @@ export function SettingsView({
           <p className="settings-lead">Changing your password logs out other devices.</p>
           <ChangePasswordForm />
         </section>
-        <section aria-label="Database" id="settings-database" className="settings-section">
-          <div className="settings-section-head">
-            <h2>Database</h2>
-          </div>
-          <DatabaseSettingsForm />
-        </section>
+        {/* The instance's own database, not the User's: Admins only (#474). */}
+        {isAdmin && (
+          <section aria-label="Database" id="settings-database" className="settings-section">
+            <div className="settings-section-head">
+              <h2>Database</h2>
+            </div>
+            <DatabaseSettingsForm />
+          </section>
+        )}
         <section aria-label="About" id="settings-about" className="settings-section">
           <div className="settings-section-head">
             <h2>About</h2>
@@ -1654,6 +1753,6 @@ export function SettingsView({
           </p>
         </section>
       </section>
-    </div>
+    </>
   );
 }

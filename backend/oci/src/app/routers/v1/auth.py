@@ -137,6 +137,24 @@ class MeResponse(BaseModel):
     must_complete_profile: bool
 
 
+class ProfileUpdate(BaseModel):
+    """Only the fields present change (issue #474)."""
+
+    username: str | None = None
+    email: str | None = None
+
+
+def _me(user: User) -> MeResponse:
+    return MeResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        is_admin=user.is_admin,
+        must_change_password=user.must_change_password,
+        must_complete_profile=user.must_complete_profile,
+    )
+
+
 @router.post("/setup", status_code=204)
 async def setup(
     payload: SetupRequest, request: Request, response: Response, session: SessionDep
@@ -224,14 +242,28 @@ async def login(
 async def me(user: CurrentUserDep) -> MeResponse:
     """The signed-in User's own account record, including any forced step
     still pending — reachable while one is (app.middleware)."""
-    return MeResponse(
-        id=user.id,
-        username=user.username,
-        email=user.email,
-        is_admin=user.is_admin,
-        must_change_password=user.must_change_password,
-        must_complete_profile=user.must_complete_profile,
+    return _me(user)
+
+
+@router.patch("/me")
+async def update_me(
+    payload: ProfileUpdate, user: CurrentUserDep, session: SessionDep
+) -> MeResponse:
+    """The signed-in User changes their own username and/or email, under
+    the same rules as account creation: 422 `invalid_username` /
+    `invalid_email`, 409 `username_taken` / `email_taken` naming the field.
+    The session is untouched: neither field is a credential secret."""
+    username = clean_username(payload.username) if payload.username is not None else None
+    email = clean_email(payload.email) if payload.email is not None else None
+    await ensure_identity_free(
+        session, username or user.username, email or user.email, except_user=user
     )
+    if username is not None:
+        user.username = username
+    if email is not None:
+        user.email = email
+    await session.commit()
+    return _me(user)
 
 
 @router.post("/complete", status_code=204)

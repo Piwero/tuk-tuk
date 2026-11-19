@@ -23,8 +23,18 @@ const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
   focus: "/focus",
   "focus-stats": "/focus/stats",
   search: "/search",
-  settings: "/settings",
+  settings: "/settings/account",
   smart: "/all",
+};
+
+/** Settings' tabs (#474), each at its own URL. `/settings` alone is an alias
+ * for My account, so old bookmarks/links to it still resolve. Users is for
+ * Admins only; SettingsView resolves it to My account for anyone else. */
+export type SettingsTab = "account" | "users";
+
+const SETTINGS_TAB_PATHS: Record<SettingsTab, string> = {
+  account: "/settings/account",
+  users: "/settings/users",
 };
 
 /** The Calendar's per-mode URLs (issue: individual URIs for Month/Week/Day)
@@ -43,27 +53,6 @@ const SMART_VIEW_PATHS: Record<SmartView, string> = {
   next7: "/next-7-days",
   all: "/all",
 };
-
-/** Settings' tabs (#468), each with its own URL: My account, and Users for
- * admins. `/settings` alone stays a valid path. */
-export type SettingsTab = "account" | "users";
-
-const SETTINGS_TAB_PATHS: Record<SettingsTab, string> = {
-  account: "/settings/account",
-  users: "/settings/users",
-};
-
-export function pathForSettingsTab(tab: SettingsTab): string {
-  return SETTINGS_TAB_PATHS[tab];
-}
-
-/** Reads the Settings tab out of a `/settings/<tab>` path; null otherwise. */
-export function settingsTabForPath(pathname: string): SettingsTab | null {
-  const match = (Object.keys(SETTINGS_TAB_PATHS) as SettingsTab[]).find(
-    (tab) => SETTINGS_TAB_PATHS[tab] === pathname,
-  );
-  return match ?? null;
-}
 
 export type ContainerRoute =
   | { kind: "list"; id: number; mode?: "list" | "kanban" | "completed" }
@@ -121,15 +110,31 @@ export function calendarModeForPath(pathname: string): CalendarMode | null {
   return match ?? null;
 }
 
+export function pathForSettingsTab(tab: SettingsTab): string {
+  return SETTINGS_TAB_PATHS[tab];
+}
+
+/** Reads the Settings tab out of a `/settings...` path, defaulting to My
+ * account for the bare `/settings` alias. Returns null for any other path. */
+export function settingsTabForPath(pathname: string): SettingsTab | null {
+  if (pathname === "/settings") {
+    return "account";
+  }
+  const match = (Object.keys(SETTINGS_TAB_PATHS) as SettingsTab[]).find(
+    (tab) => SETTINGS_TAB_PATHS[tab] === pathname,
+  );
+  return match ?? null;
+}
+
 export function staticViewKindForPath(pathname: string): StaticViewKind | null {
+  if (settingsTabForPath(pathname) !== null) {
+    return "settings";
+  }
   if (calendarModeForPath(pathname) !== null) {
     return "calendar";
   }
   if (smartViewForPath(pathname) !== null) {
     return "smart";
-  }
-  if (settingsTabForPath(pathname) !== null) {
-    return "settings";
   }
   const match = (Object.keys(STATIC_VIEW_PATHS) as StaticViewKind[]).find(
     (kind) => STATIC_VIEW_PATHS[kind] === pathname,

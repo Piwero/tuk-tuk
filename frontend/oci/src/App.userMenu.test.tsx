@@ -89,6 +89,25 @@ describe("User menu", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
   });
 
+  it("names the account by its new username after a rename in My account", async () => {
+    installFakeApi({ users: [fakeUser("bea")] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(
+      within(await openAccountMenu(user)).getByRole("menuitem", { name: "My account" }),
+    );
+
+    const username = await screen.findByLabelText("Username");
+    await user.clear(username);
+    await user.type(username, "beatriz{Enter}");
+    await screen.findByText("Username saved.");
+
+    const avatar = screen.getByRole("button", { name: "Account menu" });
+    await openAccountMenu(user);
+    expect(screen.getByText("beatriz")).toBeInTheDocument();
+    expect(within(avatar).getByText("B")).toBeInTheDocument();
+  });
+
   it("opens with Enter or Space, moves with the arrow keys and returns focus on Escape", async () => {
     installFakeApi();
     const user = userEvent.setup();
