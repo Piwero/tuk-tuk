@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 
 import { ApiError, updateProfile, type CurrentUser } from "../api";
 import { EMAIL_PATTERN, MAX_USERNAME_LENGTH } from "../auth/rules";
+import { PasswordRow } from "./PasswordRow";
 
 type ProfileFieldName = "username" | "email";
 
@@ -153,6 +154,7 @@ export function ProfileCard({ user, onUserChange }: ProfileCardProps): JSX.Eleme
         />
         <ProfileField field="email" label="Email" saved={user.email ?? ""} onSaved={onUserChange} />
       </div>
+      <PasswordRow user={user} onUserChange={onUserChange} />
     </section>
   );
 }

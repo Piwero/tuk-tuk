@@ -270,6 +270,10 @@ export interface FakeUser {
   must_change_password: boolean;
   /** Forced step: the upgraded single user's profile to complete (#472). */
   must_complete_profile: boolean;
+  /** When the password was last set (#475), ISO-8601: on creation, an
+   * admin's temporary password, and the user's own change. Only ever on
+   * the user's own record (GET /auth/me), never in the admin list. */
+  password_changed_at: string;
 }
 
 export interface FakeApiState {
@@ -407,6 +411,8 @@ export const FAKE_PASSWORD = "correct-password";
 
 let nextUserId = 100;
 
+const DEFAULT_PASSWORD_CHANGED_AT = "2026-01-01T00:00:00Z";
+
 /** An account for `installFakeApi({ users })`. Defaults to an active,
  * non-admin Member with FAKE_PASSWORD and no forced step. */
 export function fakeUser(username: string, overrides: Partial<FakeUser> = {}): FakeUser {
@@ -419,6 +425,7 @@ export function fakeUser(username: string, overrides: Partial<FakeUser> = {}): F
     password: FAKE_PASSWORD,
     must_change_password: false,
     must_complete_profile: false,
+    password_changed_at: DEFAULT_PASSWORD_CHANGED_AT,
     ...overrides,
   };
 }
@@ -434,6 +441,7 @@ export const FAKE_ADMIN: FakeUser = {
   password: FAKE_PASSWORD,
   must_change_password: false,
   must_complete_profile: false,
+  password_changed_at: DEFAULT_PASSWORD_CHANGED_AT,
 };
 
 // Mirrors the backend's setup/profile validation (auth router, ADR 0018).
@@ -449,6 +457,7 @@ function currentUserRecord(account: FakeUser): Record<string, unknown> {
     is_admin: account.is_admin,
     must_change_password: account.must_change_password,
     must_complete_profile: account.must_complete_profile,
+    password_changed_at: account.password_changed_at,
   };
 }
 
@@ -1358,6 +1367,7 @@ export function installFakeApi({
         account.email = profile.email;
       }
       account.password = input.new_password;
+      account.password_changed_at = new Date().toISOString();
       account.must_change_password = false;
       account.must_complete_profile = false;
       return new Response(null, { status: 204 });
@@ -1386,6 +1396,7 @@ export function installFakeApi({
         );
       }
       account.password = input.new_password;
+      account.password_changed_at = new Date().toISOString();
       return new Response(null, { status: 204 });
     }
     if (method === "GET" && url.pathname === "/api/v1/assist/status") {

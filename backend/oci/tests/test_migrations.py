@@ -535,3 +535,36 @@ class TestUserSettingsMigration:
 
         with pytest.raises(psycopg.errors.UniqueViolation):
             run_sql(empty_database_url, "INSERT INTO user_settings (user_id) VALUES (1)")
+
+
+class TestPasswordChangedMigration:
+    """Issue #475: existing Users never had the time recorded, so it starts
+    at when their account was created rather than blank."""
+
+    def test_existing_users_get_their_created_at(self, empty_database_url: str) -> None:
+        config = alembic_config(empty_database_url)
+        command.upgrade(config, "0037")
+        run_sql(
+            empty_database_url,
+            "INSERT INTO users (username, email, created_at) VALUES "
+            "('ana', 'ana@example.com', '2026-03-04T05:06:07+00:00'), "
+            "('ben', 'ben@example.com', '2026-07-08T09:10:11+00:00')",
+        )
+
+        command.upgrade(config, "head")
+
+        assert run_sql(
+            empty_database_url,
+            "SELECT username, password_changed_at::text FROM users ORDER BY id",
+        ) == [("ana", "2026-03-04 05:06:07+00"), ("ben", "2026-07-08 09:10:11+00")]
+
+    def test_a_user_inserted_without_one_gets_the_current_time(
+        self, empty_database_url: str
+    ) -> None:
+        run_migrations(empty_database_url)
+
+        assert run_sql(
+            empty_database_url,
+            "INSERT INTO users (username, email) VALUES ('ana', 'a@x.io') "
+            "RETURNING password_changed_at IS NOT NULL",
+        ) == [(True,)]
