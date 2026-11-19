@@ -4,6 +4,57 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2.21.0](https://github.com/Piwero/tuk-tuk/compare/v2.20.0...v2.21.0) - 2026-11-19
+
+### Features
+
+- **frontend:** Overlay stand-up bullet actions so text spans the column (#429) ([ea78677](https://github.com/Piwero/tuk-tuk/commit/ea786771956bd10b85f6c01f03679d9a2d254d1c))
+- **frontend:** Open Today at the root URL (#428) ([3bcccc7](https://github.com/Piwero/tuk-tuk/commit/3bcccc76868d0060483f0b848f5f2495184878ae))
+- **frontend:** Context-relative dates on Task rows (#431) ([56a6eb9](https://github.com/Piwero/tuk-tuk/commit/56a6eb94489aacfa240a45d4234c606a6f0d560c))
+- **frontend:** Set numeric metadata in body face with tabular figures (#432) ([9ad8994](https://github.com/Piwero/tuk-tuk/commit/9ad899416a8540f1de284f517d2d8a935d52342d))
+- **frontend:** Self-host fonts (#430) ([3a2bc0e](https://github.com/Piwero/tuk-tuk/commit/3a2bc0e0e65fbf88dfb3dd689602e382c5150228))
+- **frontend:** Introduce stylesheet layers and component convention (#435) ([f20a940](https://github.com/Piwero/tuk-tuk/commit/f20a940a1c18ef0f082a7f03bf0a4e550579caaa))
+- **frontend:** Pin shortcut hint strip to the foot of main (#434) ([6cec234](https://github.com/Piwero/tuk-tuk/commit/6cec234e01d7bce681ef1ace4326b9e77db9adf1))
+- **frontend:** Hide shortcut hint strip at the mobile breakpoint (#434) ([7140d75](https://github.com/Piwero/tuk-tuk/commit/7140d757b31769cd15e8cb1b4e3bd1a1c00a146a))
+- **frontend:** Share token-based button styles (#433) ([07961a7](https://github.com/Piwero/tuk-tuk/commit/07961a74bb4c54e42dbfc561ddb1f81435f02b1f))
+- **frontend:** Give Lists Tags and Folders bookmarkable URLs (#450) ([52183b7](https://github.com/Piwero/tuk-tuk/commit/52183b784f9bf7110955613fecba2705b8a8d777))
+- **frontend:** Consolidate sidebar navigation and footer (#451) ([6c2c404](https://github.com/Piwero/tuk-tuk/commit/6c2c40412a5dec90624c05b2544ac450ed374c37))
+- **frontend:** Goal card with readable window, score bar and pace verdict (#463) ([fc3c908](https://github.com/Piwero/tuk-tuk/commit/fc3c90877988ff9a71792b7ed4d9a0f04d19dedc))
+- **frontend:** Focus mode switch, length presets and Timers as presets (#457) ([1954a0d](https://github.com/Piwero/tuk-tuk/commit/1954a0dc4727ab01a6c7edbd59edbc4e7f23270b))
+- **frontend:** Group Today into Overdue, Schedule and Anytime sections (#444) ([7bb2b96](https://github.com/Piwero/tuk-tuk/commit/7bb2b96c79152eb28e1e154898a6610314a4453b))
+- **frontend:** Show Habits as a Monday-first week grid (#465) ([6eeee4b](https://github.com/Piwero/tuk-tuk/commit/6eeee4be3ba8f433430a9e68e0756ab42e849c89))
+- **frontend:** Add Popover primitive and move Quick-Add suggestions onto it (#440) ([a8a5f4e](https://github.com/Piwero/tuk-tuk/commit/a8a5f4e8eb4bab7254eb4bb8773f8f71a0b4d56a))
+- **frontend:** Group focus sessions by day with total and daily average (#459) ([7a66aac](https://github.com/Piwero/tuk-tuk/commit/7a66aacfb96d6b764aadae64d7229ae977f7a67b))
+- **frontend:** Focus today's Tasks, link headline and totals beside the clock (#458) ([067132e](https://github.com/Piwero/tuk-tuk/commit/067132ee9e50ea78b1835bd4e1fe716250a300da))
+- **frontend:** Read-only key result rows and goal actions menu (#464) ([d014721](https://github.com/Piwero/tuk-tuk/commit/d014721adc7363624252274e862fb49731099116))
+- **frontend:** One View button for Filters, Group by and Sort by (#445) ([ec9fa40](https://github.com/Piwero/tuk-tuk/commit/ec9fa40a341cff83fc4823dd0017e61562fb718e))
+- **frontend:** Day rail with the Focused Goal card beside Today (#446) ([72570e1](https://github.com/Piwero/tuk-tuk/commit/72570e16356b29507b8ff67fd9713fd5a923bcd1))
+- **frontend:** Task detail document layout with Priority, Repeat and Key Result rows (#452) ([ed3f530](https://github.com/Piwero/tuk-tuk/commit/ed3f5300403fe03ac24e77f058f07c2f45ca8516))
+- **frontend:** Day rail Focus card with today's total and Pomos (#448) ([fe99de4](https://github.com/Piwero/tuk-tuk/commit/fe99de49942bfe65947c88af35b569c9150f3b42))
+- **frontend:** Date popover replaces native date inputs (#443) ([007dee5](https://github.com/Piwero/tuk-tuk/commit/007dee5da7428804ac6dac6c6c4d43c77a3d4f3b))
+- **frontend:** Habits card with Check-in in the Day rail (#447) ([d18d870](https://github.com/Piwero/tuk-tuk/commit/d18d87042bf6a647055af3d49bdc562840cdf926))
+- **frontend:** Focus action on a Task row opens Focus with the Task linked (#449) ([c613c18](https://github.com/Piwero/tuk-tuk/commit/c613c188617661bce23bc95636589b449a4b7aba))
+- **frontend:** Loading, empty and error states on Task views (#441) ([590aa8a](https://github.com/Piwero/tuk-tuk/commit/590aa8a4eac0912139a39a1ef408140c056ddc41))
+- **frontend:** Mobile tab bar with centre Quick-Add and a More sheet (#462) ([5ffc968](https://github.com/Piwero/tuk-tuk/commit/5ffc9685abb8416a817eb8674dcd706157be90f4))
+- **frontend:** Loading, empty and error states on Habits, Goals, Focus and Stand-up (#442) ([3501973](https://github.com/Piwero/tuk-tuk/commit/350197360fe50bee2a1c5915e621ccd1d40eec6d))
+- **frontend:** Task detail Tags row with chips and prefix-narrowing popover (#454) ([810952d](https://github.com/Piwero/tuk-tuk/commit/810952d95ac58629c71ba87fd6748b9cea9da9de))
+- **frontend:** Compact mobile Today header, View sheet and two-line rows (#460) ([fbac5d3](https://github.com/Piwero/tuk-tuk/commit/fbac5d35c1fa533b1f2c38f446c1721acbee1060))
+- **frontend:** Task detail Date and Reminder rows (#453) ([898f545](https://github.com/Piwero/tuk-tuk/commit/898f5455dc161e550ce578fd918c47ad76406823))
+- **frontend:** Task detail inline description, Check Item progress, Start focus and overflow menu (#455) ([06a192e](https://github.com/Piwero/tuk-tuk/commit/06a192e940582f91adb11e1c9b0dff109c848918))
+- **frontend:** Today Habit chip strip on mobile (#461) ([2b89ac0](https://github.com/Piwero/tuk-tuk/commit/2b89ac0bfb0ed52089624aef3982dbf1f2a5e766))
+- **frontend:** Task detail as a bottom sheet on phones (#456) ([e0bdfab](https://github.com/Piwero/tuk-tuk/commit/e0bdfabccb18a1e698168fdce730866f8655eb67))
+- **frontend:** Show each day's Focus total in the session history (#427) ([fa2c311](https://github.com/Piwero/tuk-tuk/commit/fa2c3118e7493178e2f679c26768b8590741120c))
+
+### Bug Fixes
+
+- **frontend:** Scan component styles in button guard (#427) ([dcdcbe4](https://github.com/Piwero/tuk-tuk/commit/dcdcbe49bf6cf8388bc48602a0c5abd1c77d612f))
+- **frontend:** Show If-Then Plan on its own line on the Goal card (#466) ([bc348c3](https://github.com/Piwero/tuk-tuk/commit/bc348c3ae5479518803e5325347b813019546d16))
+- **frontend:** Fit Schedule rows, compact phone rows, restore Habits heat strip (#466) ([12725e6](https://github.com/Piwero/tuk-tuk/commit/12725e68876e7ef777be96e907a317625d522c60))
+- **frontend:** Use the shared date picker for repeat end, Goal window and bulk reschedule (#427) ([bebe693](https://github.com/Piwero/tuk-tuk/commit/bebe693de57b17c138ecc85131c9a2957f56c370))
+- **frontend:** Share Pomo-of-cycle label and Focus totals read; refresh Focus aside on recorded sessions (#427) ([1756f4a](https://github.com/Piwero/tuk-tuk/commit/1756f4a43723526b7e5a8a5c08b783bd568da97b))
+- **frontend:** Still Task detail sheet under reduced motion; drop dead task-tags CSS; correct drawer-scrim comment (#427) ([a27c3f9](https://github.com/Piwero/tuk-tuk/commit/a27c3f90c265d03055d4f21670f259e44196f595))
+- **oci:** Use h23 hour cycle so midnight renders 00:00; await section settings in tab bar test ([e1dfe62](https://github.com/Piwero/tuk-tuk/commit/e1dfe62d762d90dccb6b5c1baf9a5ebc5b7cbc6a))
+
 ## [2.20.0](https://github.com/Piwero/tuk-tuk/compare/v2.19.4...v2.20.0) - 2026-11-05
 
 ### Bug Fixes
