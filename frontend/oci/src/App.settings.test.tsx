@@ -664,7 +664,7 @@ describe("Change password (issue #116)", () => {
     expect(screen.getByLabelText("Current password")).toHaveValue("");
     expect(screen.getByLabelText("New password")).toHaveValue("");
     expect(screen.getByLabelText("Confirm new password")).toHaveValue("");
-    expect(state.password).toBe("a-new-password");
+    expect(state.users[0]?.password).toBe("a-new-password");
   });
 
   it("submitting with an incorrect current password shows an error and changes nothing", async () => {
@@ -681,7 +681,7 @@ describe("Change password (issue #116)", () => {
     await user.click(screen.getByRole("button", { name: "Change password" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/incorrect/i);
-    expect(state.password).toBe(FAKE_PASSWORD);
+    expect(state.users[0]?.password).toBe(FAKE_PASSWORD);
   });
 
   it("shows an error and doesn't submit when the new password and confirmation don't match", async () => {
@@ -698,7 +698,7 @@ describe("Change password (issue #116)", () => {
     await user.click(screen.getByRole("button", { name: "Change password" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("don't match");
-    expect(state.password).toBe(FAKE_PASSWORD);
+    expect(state.users[0]?.password).toBe(FAKE_PASSWORD);
   });
 
   it("states the minimum password length before the person types", async () => {
@@ -727,7 +727,7 @@ describe("Change password (issue #116)", () => {
     await user.click(screen.getByRole("button", { name: "Change password" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("12 characters");
-    expect(state.password).toBe(FAKE_PASSWORD);
+    expect(state.users[0]?.password).toBe(FAKE_PASSWORD);
   });
 
   it("the fake /password route applies the same minimum the real backend does", async () => {
