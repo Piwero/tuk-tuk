@@ -3,11 +3,10 @@ own Google OAuth client, Assist and Assistant providers, LiveKit project,
 section toggles and Active hours, and one user's changes never reach
 another's.
 
-Until per-user login lands (issue #410), a test picks the acting user
-through the one seam that names them, `app.users.current_user_id`.
+A test acts as a user by logging in as them: the session cookie is what
+names the user both their settings and their rows (issue #411) belong to.
 """
 
-import asyncio
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -18,9 +17,15 @@ from fastapi.testclient import TestClient
 from app.calendar_source import CalendarListEntry, GoogleOAuthClient
 from app.config import Settings
 from app.main import create_app
-from app.models import User
-from app.users import create_user, current_user_id
-from tests.conftest import FakeCalendarSource, FakeClock, log_in_admin, run_sql
+from tests.conftest import (
+    FakeCalendarSource,
+    FakeClock,
+    create_user_row,
+    log_in,
+    log_in_admin,
+    run_sql,
+    user_row,
+)
 from tests.test_assistant_chat import StubChatProvider, _chat
 from tests.test_google_accounts import connect_and_authorize
 from tests.test_voice_session import start_session, verify_hs256
@@ -30,25 +35,20 @@ CLIENT_B = {"client_id": "client-b", "client_secret": "secret-b"}
 
 
 def add_user(app: FastAPI, username: str) -> int:
-    async def _add() -> int:
-        async with app.state.session_factory() as session:
-            user = await create_user(
-                session, User(username=username, email=f"{username}@example.com")
-            )
-            await session.commit()
-            return user.id
-
-    return asyncio.run(_add())
+    return create_user_row(app, username, f"{username}@example.com").id
 
 
 @contextmanager
 def acting_as(client: TestClient, user_id: int) -> Iterator[TestClient]:
-    app: FastAPI = client.app  # type: ignore[assignment]
-    app.dependency_overrides[current_user_id] = lambda: user_id
+    """Logs `client` in as `user_id` for the block, then back in as the
+    test admin. Every user here shares TEST_PASSWORD."""
+    client.cookies.clear()
+    log_in(client, user_row(client, user_id).username)
     try:
         yield client
     finally:
-        app.dependency_overrides.pop(current_user_id, None)
+        client.cookies.clear()
+        log_in(client)
 
 
 @pytest.fixture

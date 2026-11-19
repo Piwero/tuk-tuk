@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app import __version__
 from app.app_settings import bootstrap_app_settings
@@ -19,6 +18,7 @@ from app.errors import register_error_handlers
 from app.event_cache import EventCache
 from app.google_adapter import GoogleCalendarSource
 from app.middleware import SessionAuthMiddleware
+from app.ownership import create_session_factory
 from app.routers.v1 import (
     admin_users,
     assist,
@@ -84,7 +84,7 @@ def create_app(
         engine = create_engine(database_url)
         await check_database_reachable(engine, database_url)
         await asyncio.to_thread(run_migrations, database_url)
-        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        session_factory = create_session_factory(engine)
         app.state.session_factory = session_factory
         async with session_factory() as session:
             await bootstrap_app_settings(session, app_settings)

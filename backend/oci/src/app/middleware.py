@@ -8,7 +8,10 @@ covers the interactive docs and the OpenAPI schema, which aren't routers at
 all and which a per-router approach couldn't reach.
 
 Every accepted request carries the signed-in User's id on
-`request.state.user_id` (read through app.current_user). The cookie names
+`request.state.user_id` (read through app.current_user) and runs inside
+`app.ownership.acting_as` that User, so every session it opens sees only
+their rows (issue #411). A public path runs with no User in context: it
+can't touch an owned table at all. The cookie names
 a User and their session epoch; the User is loaded on each request and the
 cookie is refused once that User is disabled or their epoch has moved on.
 
@@ -27,6 +30,7 @@ from app.app_settings import require_app_settings
 from app.config import Settings
 from app.errors import error_response
 from app.models import User
+from app.ownership import acting_as
 from app.session import (
     SESSION_COOKIE_NAME,
     Clock,
@@ -117,7 +121,8 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 return blocked
 
         request.state.user_id = user.id
-        response = await call_next(request)
+        with acting_as(user.id):
+            response = await call_next(request)
         if needs_reissue(claims.issued_at, self._settings, self._clock):
             set_session_cookie(
                 response,
@@ -141,4 +146,5 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if admin is None:
             return _setup_required()
         request.state.user_id = admin.id
-        return await call_next(request)
+        with acting_as(admin.id):
+            return await call_next(request)

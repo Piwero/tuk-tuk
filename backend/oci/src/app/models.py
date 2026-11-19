@@ -26,8 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 # User #1: the admin an existing single-user install's data was migrated to
-# (migration 0035), and the user a fresh install creates on boot. Until
-# per-user login lands, every request acts as this user.
+# (migration 0035).
 SEED_USER_ID = 1
 
 # Sparse gap between consecutive sort_order values, so a drag-reorder
@@ -82,11 +81,13 @@ class OwnedMixin:
     """Every owned table, children included, carries its own `owner_id`, so
     isolating one user's rows never depends on a join (issue #405).
 
-    New rows default to user #1 for now; the global owner filter (issue
-    #411) replaces that default with the current user.
+    Nothing here filters or fills it: app.ownership does both, for every
+    session the app opens (issue #411). There is deliberately no default,
+    so a row created outside that filter fails the NOT NULL rather than
+    landing on some User.
     """
 
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, default=SEED_USER_ID)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
 
 
 class AppSettings(Base):
