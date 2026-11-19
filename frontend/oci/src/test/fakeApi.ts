@@ -256,6 +256,22 @@ export interface FakeEventFailure {
   message: string;
 }
 
+/** An account (ADR 0018). Mirrors the backend's User row plus the plain
+ * password the fake login checks, standing in for the stored hash. The
+ * fields `GET /auth/me` returns are the CurrentUser shape. */
+export interface FakeUser {
+  id: number;
+  username: string;
+  email: string | null;
+  is_admin: boolean;
+  is_active: boolean;
+  password: string;
+  /** Forced step: a temporary password to replace (#471). */
+  must_change_password: boolean;
+  /** Forced step: the upgraded single user's profile to complete (#472). */
+  must_complete_profile: boolean;
+}
+
 export interface FakeApiState {
   lists: FakeList[];
   folders: FakeFolder[];
@@ -281,16 +297,16 @@ export interface FakeApiState {
   /** Read gate (#442): while set, each `GET` whose pathname `match` accepts
    * waits on `gate`, so a test can observe a view's loading state. */
   readGate: { match: (pathname: string) => boolean; gate: Promise<void> } | null;
-  /** Mutate directly to simulate a session lapsing mid-test. */
+  /** Whether this browser holds a valid session cookie. Mutate directly to
+   * simulate a session lapsing mid-test (the backend's epoch bump). */
   loggedIn: boolean;
-  /** The password the fake login and change-password routes check against;
-   * starts at FAKE_PASSWORD, and a successful fake change-password call
-   * updates it — mirrors the backend hash living in `settings`. */
-  password: string;
-  /** Mirrors a fresh deployment with no password set yet (ADR 0008):
-   * every route but /health, /login, and /setup answers "setup_required"
-   * regardless of `loggedIn`. Cleared by a successful fake /setup call. */
-  needsSetup: boolean;
+  /** Every account on the instance. Empty mirrors a fresh install (ADR
+   * 0018): every route but /login and /setup answers "setup_required" and
+   * /setup creates the first Admin. Mutate a user directly to simulate an
+   * admin disabling them or setting a forced step. */
+  users: FakeUser[];
+  /** Whose session the cookie carries while `loggedIn`. */
+  sessionUserId: number;
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
@@ -386,8 +402,50 @@ export interface FakeApiState {
   voiceSecretSet: boolean;
 }
 
-/** The password installFakeApi's fake login route accepts. */
+/** The password installFakeApi's default user signs in with. */
 export const FAKE_PASSWORD = "correct-password";
+
+let nextUserId = 100;
+
+/** An account for `installFakeApi({ users })`. Defaults to an active,
+ * non-admin Member with FAKE_PASSWORD and no forced step. */
+export function fakeUser(username: string, overrides: Partial<FakeUser> = {}): FakeUser {
+  return {
+    id: nextUserId++,
+    username,
+    email: `${username}@example.com`,
+    is_admin: false,
+    is_active: true,
+    password: FAKE_PASSWORD,
+    must_change_password: false,
+    must_complete_profile: false,
+    ...overrides,
+  };
+}
+
+/** The instance's default sole account: the Admin a test is signed in as
+ * unless it seeds `users` itself (mirrors the backend suite's test admin). */
+export const FAKE_ADMIN: FakeUser = {
+  id: 1,
+  username: "admin",
+  email: "admin@example.com",
+  is_admin: true,
+  is_active: true,
+  password: FAKE_PASSWORD,
+  must_change_password: false,
+  must_complete_profile: false,
+};
+
+// Mirrors the backend's setup/profile validation (auth router, ADR 0018).
+const MAX_USERNAME_LENGTH = 64;
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+$/;
+
+// All a User may reach while a forced step is pending (app.middleware).
+const FORCED_STEP_PATHS = new Set([
+  "/api/v1/auth/me",
+  "/api/v1/auth/complete",
+  "/api/v1/auth/logout",
+]);
 
 // Mirrors the backend's MIN_PASSWORD_LENGTH (auth router, issue #338), so
 // the fake behaves like the real backend for the frontend tests exercised
@@ -709,7 +767,8 @@ export function installFakeApi({
   focusSessions = [],
   timers = [],
   loggedIn = true,
-  needsSetup = false,
+  users = [FAKE_ADMIN],
+  sessionUserId,
   loginLocked = false,
   passwordChangeLocked = false,
   googleConfigured = false,
@@ -762,8 +821,11 @@ export function installFakeApi({
   /** Start unauthenticated: every non-auth route is rejected until a fake
    * login succeeds. */
   loggedIn?: boolean;
-  /** Start on a fresh deployment with no password set (ADR 0008). */
-  needsSetup?: boolean;
+  /** The instance's accounts; `[]` starts on a fresh install that needs
+   * setup. Defaults to FAKE_ADMIN alone. */
+  users?: FakeUser[];
+  /** Whose session `loggedIn` starts with; defaults to the first user. */
+  sessionUserId?: number;
   /** Mutate directly (or seed true) to simulate a persisted lockout
    * (issue #339) — the fake login route then answers 429 regardless of
    * the submitted password. */
@@ -865,8 +927,8 @@ export function installFakeApi({
     failRead: null,
     readGate: null,
     loggedIn,
-    password: FAKE_PASSWORD,
-    needsSetup,
+    users: users.map((account) => ({ ...account })),
+    sessionUserId: sessionUserId ?? users[0]?.id ?? 0,
     loginLocked,
     passwordChangeLocked,
     googleConfigured,
@@ -944,6 +1006,13 @@ export function installFakeApi({
 
   const setupRequired = (): Response =>
     json({ error: { code: "setup_required", message: "Initial setup is required" } }, 401);
+
+  const unprocessable = (code: string, message: string): Response =>
+    json({ error: { code, message } }, 422);
+
+  /** The account this browser's session belongs to, if it has one. */
+  const sessionUser = (): FakeUser | undefined =>
+    state.loggedIn ? state.users.find((account) => account.id === state.sessionUserId) : undefined;
 
   /** Mirrors the backend's resolve_section rule: 404 unknown, 409 foreign. */
   const sectionMismatch = (sectionId: number, listId: number): Response | null => {
@@ -1026,11 +1095,163 @@ export function installFakeApi({
       return json({ error: { code: "internal_error", message: "Unavailable" } }, 500);
     }
 
-    if (method === "GET" && url.pathname === "/api/v1/auth/session") {
-      if (state.needsSetup) {
-        return setupRequired();
+    // Public routes, then the backend's session middleware (ADR 0018):
+    // no session, a disabled account, or a pending forced step stops the
+    // request before any other route sees it.
+    if (method === "POST" && url.pathname === "/api/v1/auth/setup") {
+      if (state.users.length > 0) {
+        return notFound("Setup has already been completed");
       }
-      return state.loggedIn ? new Response(null, { status: 204 }) : unauthorized();
+      const input = body as { username: string; email: string; password: string };
+      const username = input.username.trim();
+      if (username === "" || username.length > MAX_USERNAME_LENGTH) {
+        return unprocessable(
+          "invalid_username",
+          `Username must be 1 to ${MAX_USERNAME_LENGTH} characters`,
+        );
+      }
+      const email = input.email.trim();
+      if (!EMAIL_PATTERN.test(email)) {
+        return unprocessable("invalid_email", "Enter a valid email address");
+      }
+      if (input.password.length < MIN_PASSWORD_LENGTH) {
+        return unprocessable(
+          "invalid_password",
+          `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+        );
+      }
+      const admin = fakeUser(username, { email, is_admin: true, password: input.password });
+      state.users.push(admin);
+      state.loggedIn = true;
+      state.sessionUserId = admin.id;
+      return new Response(null, { status: 204 });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/login") {
+      if (state.users.length === 0) {
+        return notFound("Setup has not been completed");
+      }
+      const input = body as { login?: unknown; password?: unknown };
+      if (typeof input.login !== "string" || typeof input.password !== "string") {
+        return unprocessable("validation_error", "Request validation failed");
+      }
+      // Username and email are citext on the backend: case never matters.
+      const login = input.login.trim().toLowerCase();
+      const account = state.users.find(
+        (candidate) =>
+          candidate.username.toLowerCase() === login || candidate.email?.toLowerCase() === login,
+      );
+      // One body for an unknown login and a wrong password, so the response
+      // never reveals who has an account.
+      const invalid = (): Response =>
+        json(
+          { error: { code: "invalid_credentials", message: "Incorrect login or password" } },
+          401,
+        );
+      if (account === undefined) {
+        return invalid();
+      }
+      if (state.loginLocked) {
+        return new Response(
+          JSON.stringify({
+            error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
+        );
+      }
+      if (input.password !== account.password) {
+        return invalid();
+      }
+      if (!account.is_active) {
+        return json(
+          { error: { code: "account_disabled", message: "This account is disabled" } },
+          403,
+        );
+      }
+      state.loggedIn = true;
+      state.sessionUserId = account.id;
+      return new Response(null, { status: 204 });
+    }
+    if (url.pathname.startsWith("/api/")) {
+      const account = sessionUser();
+      if (account === undefined) {
+        return state.users.length === 0 ? setupRequired() : unauthorized();
+      }
+      if (!account.is_active) {
+        return json(
+          { error: { code: "account_disabled", message: "This account is disabled" } },
+          401,
+        );
+      }
+      // 403, not 401: the session is valid, just not usable until the step
+      // is done — so the frontend's log-out-on-401 listener leaves it be.
+      if (!FORCED_STEP_PATHS.has(url.pathname)) {
+        if (account.must_complete_profile) {
+          return json(
+            {
+              error: {
+                code: "profile_completion_required",
+                message: "Complete your profile to continue",
+              },
+            },
+            403,
+          );
+        }
+        if (account.must_change_password) {
+          return json(
+            {
+              error: {
+                code: "password_change_required",
+                message: "Choose a new password to continue",
+              },
+            },
+            403,
+          );
+        }
+      }
+    }
+    if (method === "GET" && url.pathname === "/api/v1/auth/me") {
+      const account = sessionUser() as FakeUser;
+      return json({
+        id: account.id,
+        username: account.username,
+        email: account.email,
+        is_admin: account.is_admin,
+        must_change_password: account.must_change_password,
+        must_complete_profile: account.must_complete_profile,
+      });
+    }
+    if (method === "GET" && url.pathname === "/api/v1/auth/session") {
+      return new Response(null, { status: 204 });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/logout") {
+      state.loggedIn = false;
+      return new Response(null, { status: 204 });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/password") {
+      if (state.passwordChangeLocked) {
+        return new Response(
+          JSON.stringify({
+            error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
+        );
+      }
+      const account = sessionUser() as FakeUser;
+      const input = body as { current_password: string; new_password: string };
+      if (input.current_password !== account.password) {
+        return json(
+          { error: { code: "invalid_current_password", message: "Current password is incorrect" } },
+          400,
+        );
+      }
+      if (input.new_password.length < MIN_PASSWORD_LENGTH) {
+        return unprocessable(
+          "invalid_password",
+          `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+        );
+      }
+      account.password = input.new_password;
+      return new Response(null, { status: 204 });
     }
     if (method === "GET" && url.pathname === "/api/v1/assist/status") {
       if (!state.loggedIn) {
@@ -1376,86 +1597,6 @@ export function installFakeApi({
       }
       return json(withoutAccountId(calendar));
     }
-    if (method === "POST" && url.pathname === "/api/v1/auth/setup") {
-      if (!state.needsSetup) {
-        return notFound("Setup has already been completed");
-      }
-      const input = body as { password: string };
-      if (input.password.length < MIN_PASSWORD_LENGTH) {
-        return json(
-          {
-            error: {
-              code: "invalid_password",
-              message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
-            },
-          },
-          422,
-        );
-      }
-      state.needsSetup = false;
-      state.loggedIn = true;
-      return new Response(null, { status: 204 });
-    }
-    if (method === "POST" && url.pathname === "/api/v1/auth/login") {
-      if (state.needsSetup) {
-        return setupRequired();
-      }
-      if (state.loginLocked) {
-        return new Response(
-          JSON.stringify({
-            error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
-          }),
-          { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
-        );
-      }
-      const input = body as { password: string };
-      if (input.password !== state.password) {
-        return json({ error: { code: "invalid_credentials", message: "Incorrect password" } }, 401);
-      }
-      state.loggedIn = true;
-      return new Response(null, { status: 204 });
-    }
-    if (state.needsSetup) {
-      return setupRequired();
-    }
-    if (!state.loggedIn) {
-      return unauthorized();
-    }
-    if (method === "POST" && url.pathname === "/api/v1/auth/logout") {
-      state.loggedIn = false;
-      return new Response(null, { status: 204 });
-    }
-    if (method === "POST" && url.pathname === "/api/v1/auth/password") {
-      if (state.passwordChangeLocked) {
-        return new Response(
-          JSON.stringify({
-            error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
-          }),
-          { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
-        );
-      }
-      const input = body as { current_password: string; new_password: string };
-      if (input.current_password !== state.password) {
-        return json(
-          { error: { code: "invalid_current_password", message: "Current password is incorrect" } },
-          400,
-        );
-      }
-      if (input.new_password.length < MIN_PASSWORD_LENGTH) {
-        return json(
-          {
-            error: {
-              code: "invalid_password",
-              message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
-            },
-          },
-          422,
-        );
-      }
-      state.password = input.new_password;
-      return new Response(null, { status: 204 });
-    }
-
     if (method === "GET" && url.pathname === "/api/v1/lists") {
       const items = [...state.lists].sort(
         (a, b) =>
