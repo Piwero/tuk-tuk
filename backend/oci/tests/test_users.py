@@ -1,10 +1,9 @@
-"""Creating a User (ADR 0018): each starts with their own Inbox, and new
-rows still default to user #1 until the global owner filter (issue #411)
-fills `owner_id` from the signed-in User."""
+"""Creating a User (ADR 0018): each starts with their own Inbox, and every
+row they create, children included, is theirs (issue #411)."""
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import create_user_row, make_task, run_sql
+from tests.conftest import create_user_row, log_in, make_task, run_sql
 
 
 class TestCreatingAUser:
@@ -18,13 +17,18 @@ class TestCreatingAUser:
         ) == [(1, "Inbox"), (bea.id, "Inbox")]
 
 
-class TestUser1OwnsNewRowsForNow:
-    def test_a_created_task_and_its_check_item_belong_to_user_1(
-        self, client: TestClient, database_url: str
+class TestNewRowsBelongToTheSignedInUser:
+    def test_a_created_task_and_its_check_item_belong_to_whoever_created_them(
+        self, unauthenticated_client: TestClient, database_url: str
     ) -> None:
-        task = make_task(client, "Write code")
-        response = client.post(f"/api/v1/tasks/{task['id']}/check-items", json={"title": "Tests"})
+        bea = create_user_row(unauthenticated_client, "bea", "bea@example.com")
+        log_in(unauthenticated_client, "bea")
+
+        task = make_task(unauthenticated_client, "Write code")
+        response = unauthenticated_client.post(
+            f"/api/v1/tasks/{task['id']}/check-items", json={"title": "Tests"}
+        )
         assert response.status_code == 201, response.text
 
-        assert run_sql(database_url, "SELECT owner_id FROM tasks") == [(1,)]
-        assert run_sql(database_url, "SELECT owner_id FROM check_items") == [(1,)]
+        assert run_sql(database_url, "SELECT owner_id FROM tasks") == [(bea.id,)]
+        assert run_sql(database_url, "SELECT owner_id FROM check_items") == [(bea.id,)]

@@ -19,7 +19,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Select, select
+from sqlalchemy import select
 
 from app.app_settings import require_app_settings
 from app.calendar_source import (
@@ -218,7 +218,7 @@ async def save_google_credentials(
 
     user_settings.google_client_id = payload.client_id
     user_settings.encrypted_google_client_secret = encrypted_secret
-    for account in await session.scalars(_accounts_of(user_settings)):
+    for account in await session.scalars(select(GoogleAccount)):
         account.connection_state = "needs_reconnect"
     await session.commit()
 
@@ -235,16 +235,9 @@ async def remove_google_credentials(
     fresh deployment — never a greyed-out or broken corner."""
     user_settings.google_client_id = None
     user_settings.encrypted_google_client_secret = None
-    for account in await session.scalars(_accounts_of(user_settings)):
+    for account in await session.scalars(select(GoogleAccount)):
         await session.delete(account)
     await session.commit()
-
-
-def _accounts_of(user_settings: UserSettings) -> Select[GoogleAccount]:
-    """The accounts this user connected. Filtered by hand because another
-    user's OAuth client is no business of this one's; the central owner
-    filter (issue #411) makes the `where` redundant."""
-    return select(GoogleAccount).where(GoogleAccount.owner_id == user_settings.user_id)
 
 
 def _oauth_client(request: Request, user_settings: UserSettings) -> GoogleOAuthClient:
@@ -312,9 +305,7 @@ async def callback(
     encrypted = encrypt_credential(credential.refresh_token, key=settings.app_master_key)
 
     existing = await session.scalar(
-        _accounts_of(user_settings).where(
-            GoogleAccount.google_account_id == credential.google_account_id
-        )
+        select(GoogleAccount).where(GoogleAccount.google_account_id == credential.google_account_id)
     )
     if existing is not None:
         # Reconnecting an already-connected account updates it in place
@@ -325,7 +316,6 @@ async def callback(
     else:
         session.add(
             GoogleAccount(
-                owner_id=user_settings.user_id,
                 google_account_id=credential.google_account_id,
                 email=credential.email,
                 encrypted_refresh_token=encrypted,
