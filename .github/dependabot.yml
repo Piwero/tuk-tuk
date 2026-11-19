@@ -24,6 +24,14 @@ updates:
         update-types:
           - "minor"
           - "patch"
+      # Dependabot can't classify these as minor/patch (extras suffix or a
+      # four-part date version), so they escape the group above. Match them
+      # by name instead; this also batches their major bumps.
+      odd-versioning:
+        patterns:
+          - "sqlalchemy*"
+          - "psycopg*"
+          - "types-python-dateutil"
 
   - package-ecosystem: "uv"
     directory: "/cli/oci"
