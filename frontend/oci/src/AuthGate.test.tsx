@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -22,7 +22,8 @@ describe("AuthGate sign-in", () => {
     render(<AuthGate />);
 
     const loginField = await screen.findByLabelText("Username or email");
-    expect(loginField).toHaveFocus();
+    // The field can be found a moment before the focus effect has run.
+    await waitFor(() => expect(loginField).toHaveFocus());
     await user.type(loginField, "admin");
     await user.type(screen.getByLabelText("Password"), `${FAKE_PASSWORD}{Enter}`);
 
@@ -387,7 +388,7 @@ describe("AuthGate profile to complete", () => {
       await screen.findByRole("heading", { name: "Complete your profile" }),
     ).toBeInTheDocument();
     expect(screen.getByText(/your tasks and settings are untouched/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Username")).toHaveFocus();
+    await waitFor(() => expect(screen.getByLabelText("Username")).toHaveFocus());
     expect(screen.getByLabelText("Email")).toHaveAccessibleDescription(
       "Stored for password resets later. Nothing is sent yet.",
     );
