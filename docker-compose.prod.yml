@@ -5,13 +5,21 @@
 name: tuk-tuk-prod
 
 services:
-  # The prod image runs as non-root `appuser`; a fresh named volume mounts
-  # root-owned, so hand it over once before the backend starts.
-  data-permissions:
-    image: busybox
-    command: chown -R 1000:1000 /data
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tuktuk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (openssl rand -hex 24)}
+      POSTGRES_DB: tuktuk
+    # Not published: only the backend, on this Compose network, reaches it.
     volumes:
-      - data:/data
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tuktuk -d tuktuk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   backend:
     build:
@@ -19,16 +27,14 @@ services:
       target: prod
     restart: unless-stopped
     environment:
-      DATABASE_URL: sqlite+aiosqlite:////data/tuk_tuk.db
+      DATABASE_URL: postgresql+psycopg://tuktuk:${POSTGRES_PASSWORD}@postgres:5432/tuktuk
       APP_MASTER_KEY: ${APP_MASTER_KEY:?Set APP_MASTER_KEY in .env (openssl rand -base64 32)}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       # Every address you open the app at; Google Calendar sign-in only returns to these.
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:8080"]}
-    volumes:
-      - data:/data
     depends_on:
-      data-permissions:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
@@ -43,4 +49,6 @@ services:
         condition: service_healthy
 
 volumes:
-  data:
+  # Holds every row. `docker compose down -v` deletes it — back up first
+  # (see docs/self-hosting/upgrade.md).
+  pgdata:
