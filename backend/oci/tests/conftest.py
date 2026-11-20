@@ -235,17 +235,26 @@ def fresh_database(postgres_server: str, *, template: str = "template0") -> str:
     from `template` — pass the migrated template for a ready schema, or
     keep the default for a truly empty database (migration tests).
 
-    Never dropped: the whole server is discarded at session end, and
-    dropping costs ~20x what cloning does (measured for #407).
+    Pair it with `drop_database` once the test is done: each clone is about
+    9 MB on disk, so keeping every one fills the disk of a CI runner.
     """
     name = f"test_{next(_test_database_ids)}"
     run_sql(f"{postgres_server}/postgres", f'CREATE DATABASE "{name}" TEMPLATE "{template}"')
     return f"{postgres_server}/{name}"
 
 
+def drop_database(database_url: str) -> None:
+    """Drops a database made by `fresh_database`, closing any connection
+    the test left open (an app's pool, say)."""
+    server, name = database_url.rsplit("/", 1)
+    run_sql(f"{server}/postgres", f'DROP DATABASE "{name}" WITH (FORCE)')
+
+
 @pytest.fixture
-def database_url(postgres_server: str, migrated_template_db: str) -> str:
-    return fresh_database(postgres_server, template=migrated_template_db)
+def database_url(postgres_server: str, migrated_template_db: str) -> Iterator[str]:
+    url = fresh_database(postgres_server, template=migrated_template_db)
+    yield url
+    drop_database(url)
 
 
 def run_sql(database_url: str, query: str, params: Sequence[object] = ()) -> list[tuple[Any, ...]]:

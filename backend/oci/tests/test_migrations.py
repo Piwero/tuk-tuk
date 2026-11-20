@@ -6,6 +6,8 @@ Foreign keys need no separate check after an upgrade: PostgreSQL enforces
 them on every write, so a migration that broke one fails the upgrade itself.
 """
 
+from collections.abc import Iterator
+
 import psycopg
 import pytest
 from alembic import command
@@ -13,7 +15,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 
 from app.db import BACKEND_DIR, run_migrations
-from tests.conftest import fresh_database, run_sql
+from tests.conftest import drop_database, fresh_database, run_sql
 
 SEED_LIST = (
     "INSERT INTO lists (id, name, is_inbox, is_archived, sort_order, view_mode, owner, "
@@ -36,8 +38,10 @@ SEED_STANDUP_ENTRY = (
 
 
 @pytest.fixture
-def empty_database_url(postgres_server: str) -> str:
-    return fresh_database(postgres_server)
+def empty_database_url(postgres_server: str) -> Iterator[str]:
+    url = fresh_database(postgres_server)
+    yield url
+    drop_database(url)
 
 
 def alembic_config(database_url: str) -> Config:
