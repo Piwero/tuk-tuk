@@ -2,11 +2,11 @@
 by construction: tasks reference the tag row, never a copy of the name."""
 
 from fastapi import APIRouter, Query
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import Tag, task_tags
+from app.models import Tag
 from app.schemas import Page, TagCreate, TagRead, TagUpdate
 
 router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
@@ -73,6 +73,5 @@ async def update_tag(tag_id: int, payload: TagUpdate, session: SessionDep) -> Ta
 async def delete_tag(tag_id: int, session: SessionDep) -> None:
     """Delete the Tag and detach it from every task; the tasks are unaffected."""
     tag = await get_tag_or_404(tag_id, session)
-    await session.execute(delete(task_tags).where(task_tags.c.tag_id == tag_id))
     await session.delete(tag)
     await session.commit()

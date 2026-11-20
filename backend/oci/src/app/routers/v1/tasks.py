@@ -6,7 +6,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, func, or_, select
 
 from app.calendar_window import validate_range_pair
 from app.db import SessionDep
@@ -14,15 +14,12 @@ from app.errors import APIError, NotFoundError
 from app.models import (
     SORT_GAP,
     CheckItem,
-    CompletedOccurrence,
-    FocusSession,
     GoogleCalendar,
     KeyResult,
     Section,
     Tag,
     Task,
     TaskList,
-    Timer,
     utcnow,
 )
 from app.recurrence import advance_in_place, validate_recurrence
@@ -407,26 +404,9 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
     return TaskRead.model_validate(task)
 
 
-async def detach_task_history(task_ids: list[int], session: SessionDep) -> None:
-    """The cleanup a Task's deletion carries with it, shared by the single
-    and bulk delete routes: its own history goes (by hand, predating
-    enforced ON DELETE CASCADE), while Focus Sessions/Timer presets outlive
-    it — only their link does."""
-    if not task_ids:
-        return
-    await session.execute(
-        delete(CompletedOccurrence).where(CompletedOccurrence.task_id.in_(task_ids))
-    )
-    await session.execute(
-        update(FocusSession).where(FocusSession.task_id.in_(task_ids)).values(task_id=None)
-    )
-    await session.execute(update(Timer).where(Timer.task_id.in_(task_ids)).values(task_id=None))
-
-
 @router.delete("/{task_id}", status_code=204)
 async def delete_task(task_id: int, session: SessionDep) -> None:
     task = await get_task_or_404(task_id, session)
-    await detach_task_history([task.id], session)
     await session.delete(task)
     await session.commit()
 
@@ -456,7 +436,6 @@ async def delete_completed_tasks(
             )
         )
     )
-    await detach_task_history(ids, session)
     if ids:
         await session.execute(delete(Task).where(Task.id.in_(ids)))
     await session.commit()
