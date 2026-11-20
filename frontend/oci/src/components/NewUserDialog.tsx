@@ -132,6 +132,7 @@ export function NewUserDialog({ onClose, onCreated }: NewUserDialogProps): JSX.E
           </dl>
           <OneTimePassword
             username={account.username}
+            signIn="first"
             password={password}
             ready={ready}
             onReadyChange={(next) => setStage({ ...stage, ready: next })}

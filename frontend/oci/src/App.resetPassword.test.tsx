@@ -91,6 +91,11 @@ describe("Reset password", () => {
         "Shown once. Copy it now and pass it to ines yourself; tuk-tuk sends no email.",
       ),
     ).toBeInTheDocument();
+    expect(
+      within(done).getByText(
+        "At next sign-in they must choose a new password before anything else.",
+      ),
+    ).toBeInTheDocument();
 
     await user.click(within(done).getByRole("button", { name: "Copy" }));
     expect(await navigator.clipboard.readText()).toBe(password);

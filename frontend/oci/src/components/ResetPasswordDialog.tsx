@@ -72,6 +72,7 @@ export function ResetPasswordDialog({
         <div className="new-user-created">
           <OneTimePassword
             username={name}
+            signIn="next"
             password={stage.password}
             ready={stage.ready}
             onReadyChange={(ready) => setStage({ ...stage, ready })}
