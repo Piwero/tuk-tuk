@@ -191,6 +191,24 @@ def test_bulk_delete_completed_scopes_to_one_list(client: TestClient) -> None:
     assert remaining_ids == {inbox_done}
 
 
+def test_bulk_delete_takes_check_items_and_tag_links_with_the_tasks(
+    client: TestClient,
+) -> None:
+    """Issue #508: clearing completed Tasks deletes them in one statement,
+    so their Check Items and Tag links must go with them in the database.
+    The Tag itself stays."""
+    tag = client.post("/api/v1/tags", json={"name": "Errand"}).json()
+    done_id = client.post("/api/v1/tasks", json={"title": "Pack"}).json()["id"]
+    client.post(f"/api/v1/tasks/{done_id}/check-items", json={"title": "Socks"})
+    client.patch(f"/api/v1/tasks/{done_id}", json={"completed": True, "tag_ids": [tag["id"]]})
+
+    response = client.delete("/api/v1/tasks", params={"completed": "true"})
+
+    assert response.status_code == 204
+    assert client.get(f"/api/v1/tasks/{done_id}").status_code == 404
+    assert [t["name"] for t in client.get("/api/v1/tags").json()["items"]] == ["Errand"]
+
+
 def test_bulk_delete_requires_the_completed_filter(client: TestClient) -> None:
     """Only completed Tasks are eligible: an unscoped bulk delete would wipe
     open Tasks by accident, so the endpoint refuses without `completed=true`."""
