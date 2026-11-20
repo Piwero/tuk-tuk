@@ -126,7 +126,7 @@ class Toolbox:
             if exc.code == "unauthorized":
                 text = self.session.expired_hint
             elif exc.code == "setup_required":
-                text = "No password set yet — the owner must finish first-run setup in the web app."
+                text = "No Admin account yet — open the web app to create the first Admin."
             else:
                 text = exc.message
         except (ValueError, TypeError) as exc:  # bad model-supplied arguments, e.g. int("x")

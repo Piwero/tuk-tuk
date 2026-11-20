@@ -15,9 +15,19 @@ dependencies = ["httpx>=0.27.0", "tuk-core"]
 tuk-mcp = "tuk_mcp:main"
 
 [dependency-groups]
-dev = ["pytest>=8.3.0", "ruff>=0.17.1", "mypy>=2.3.1"]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.17.1",
+    "mypy>=2.3.1",
+    # Test-only: lets the two-user integration test boot the real
+    # application in-process. Never a runtime dependency: the image installs
+    # with --no-dev and must not pull in the database stack.
+    "app",
+    "testcontainers[postgres]>=4.8",
+]
 
 [tool.uv.sources]
+app = { path = "../../backend/oci", editable = true }
 tuk-core = { path = "../../shared/oci", editable = true }
 
 [tool.hatch.build.targets.wheel]

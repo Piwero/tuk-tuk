@@ -104,7 +104,10 @@ async def delete_list(list_id: int, session: SessionDep) -> None:
         update(FocusSession).where(FocusSession.task_id.in_(task_ids)).values(task_id=None)
     )
     await session.execute(update(Timer).where(Timer.task_id.in_(task_ids)).values(task_id=None))
-    # A Section has no meaning outside its List; it goes with it.
+    # A Section has no meaning outside its List; it goes with it. Its Tasks
+    # are only deleted at the flush below, so unfile them first or the
+    # Section's foreign key refuses the delete.
+    await session.execute(update(Task).where(Task.list_id == list_id).values(section_id=None))
     await session.execute(delete(Section).where(Section.list_id == list_id))
     await session.delete(task_list)
     await session.commit()

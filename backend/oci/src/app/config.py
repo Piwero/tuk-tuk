@@ -1,5 +1,7 @@
 """Application settings loaded from environment variables."""
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,20 +23,25 @@ class Settings(BaseSettings):
     database_url: str | None = None
     cors_origins: list[str] = ["http://localhost:5900"]
 
-    # Authentication (ADR 0005/0008). The password hash and the session
-    # signing key now live in the DB-backed `settings` table (see
-    # app.app_settings), not here — auth_password_hash below is consulted
-    # only once, on the very first boot, to import an existing deployment's
-    # `.env` value (ADR 0008's one-time upgrade path); it is never read
-    # again once that row exists, even if left in `.env`. A fresh
-    # deployment leaves it unset and sets a password through `/setup`
-    # instead.
+    # Authentication (ADR 0005/0008/0018). Passwords live on each User
+    # (`users.password_hash`) and the session signing key in the DB-backed
+    # `settings` table, not here — auth_password_hash below is consulted
+    # only while no User can log in yet, to import an existing deployment's
+    # `.env` value onto user #1 (ADR 0008's one-time upgrade path,
+    # app.users.import_env_password); it is never read again once a User
+    # holds a password, even if left in `.env`. A fresh deployment leaves
+    # it unset and creates its first Admin through `/setup` instead.
     auth_password_hash: str | None = None
-    # Local-dev escape hatch: when true SessionAuthMiddleware skips the
-    # whole gate (no password, no cookie). Off by default, so a missing or
-    # ambiguous value keeps the fail-closed posture (ADR 0005). Never set
-    # in a real deployment — backend/chart/configmap.yaml deliberately
-    # omits it, and the app logs a warning at startup whenever it is on.
+    # Which kind of deployment this is. Anything but an explicit
+    # "development" counts as production, so a deployment that never sets
+    # it is held to the production rules: today, only that AUTH_DISABLED is
+    # refused (app.main). `.env.example` sets it for local development.
+    app_env: Literal["production", "development"] = "production"
+    # Local-dev escape hatch: when true SessionAuthMiddleware needs no
+    # cookie and every request acts as the first Admin (ADR 0018). Off by
+    # default, so a missing or ambiguous value keeps the fail-closed
+    # posture (ADR 0005). The app refuses to start with it unless
+    # APP_ENV=development, and logs a warning whenever it is on.
     auth_disabled: bool = False
     auth_cookie_secure: bool = True
     auth_login_delay_seconds: float = 1.0

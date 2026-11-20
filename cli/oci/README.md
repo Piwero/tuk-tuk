@@ -1,7 +1,7 @@
 # tuk CLI
 
-Terminal client for tuk-tuk. Logs in once with the account password, caches
-the signed session cookie, and covers the daily loop: capture, review,
+Terminal client for tuk-tuk. Logs in once with your username (or email) and
+password, caches the signed session cookie, and covers the daily loop: capture, review,
 complete — plus editing and deleting what you captured.
 
 ## Install

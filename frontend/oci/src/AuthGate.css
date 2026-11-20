@@ -13,27 +13,42 @@
     flex-direction: column;
     gap: var(--space-3);
     width: 100%;
-    max-width: 320px;
+    max-width: 400px;
     padding: var(--space-6);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
     background: var(--surface-card);
   }
 
-  /* The mark sits above the wordmark on the app's first screen. It is
-   decorative (Logo.tsx) — the <h1> carries the name. */
+  /* The mark beside the wordmark heads the sign-in and setup cards. The mark
+   is decorative (Logo.tsx); the wordmark carries the name. */
 
-  .auth-gate-form .logo {
-    align-self: center;
+  .auth-gate-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .auth-gate-brand .logo {
+    color: var(--accent);
   }
 
   .auth-gate-form h1 {
-    margin: 0 0 var(--space-2);
+    margin: 0 0 var(--space-1);
     font-family: var(--font-display);
     font-size: var(--text-2xl);
     font-weight: var(--weight-semibold);
     color: var(--text-primary);
-    text-align: center;
+  }
+
+  .auth-gate-lead {
+    margin: 0 0 var(--space-2);
+    color: var(--text-secondary);
   }
 
   .auth-gate-form label {
@@ -42,13 +57,24 @@
     color: var(--text-secondary);
   }
 
+  /* A hint under its field, read out with it via aria-describedby. */
+  .auth-gate-hint {
+    margin: calc(-1 * var(--space-2)) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+  }
+
   .auth-gate-error {
     margin: 0;
     font-size: var(--text-sm);
     color: var(--text-danger);
   }
 
-  .auth-gate-form button {
+  .auth-gate-form input[aria-invalid="true"] {
+    border-color: var(--text-danger);
+  }
+
+  .auth-gate-form button[type="submit"] {
     height: var(--control-height);
     border-radius: var(--radius-sm);
     border: none;
@@ -57,12 +83,88 @@
     font-weight: var(--weight-medium);
   }
 
-  .auth-gate-form button:hover:not(:disabled) {
+  .auth-gate-form button[type="submit"]:hover:not(:disabled) {
     background: var(--accent-strong-hover);
   }
 
-  .auth-gate-form button:disabled {
+  .auth-gate-form button[type="submit"]:disabled {
     opacity: 0.7;
     cursor: default;
+  }
+
+  .auth-gate-footnote {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+    text-align: center;
+  }
+
+  /* Forced steps (#471, #472): a badge in place of the brand, and a footer
+   naming who is signed in beside the way out. */
+
+  .auth-gate-badge {
+    align-self: flex-start;
+    margin: 0;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--warning-soft);
+    /* Amber text on the soft amber fails contrast in the light theme. */
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .auth-gate-step-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-default);
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+  }
+
+  .auth-gate-step-footer button.btn-quiet {
+    color: var(--accent);
+  }
+
+  /* A step's own form sits inside the frame's card and lays out like it. */
+  .auth-gate-step-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  /* The password rules, ticking as they are met (#471). */
+  .auth-gate-rules {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+
+  .auth-gate-rule {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-tertiary);
+  }
+
+  .auth-gate-rule[data-met="true"] {
+    color: var(--text-success);
+  }
+
+  .auth-gate-rule-ring {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    margin: 1px;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
   }
 }

@@ -16,6 +16,7 @@ from app.models import (
     CheckItem,
     CompletedOccurrence,
     FocusSession,
+    GoogleCalendar,
     KeyResult,
     Section,
     Tag,
@@ -103,6 +104,13 @@ async def validate_key_result(session: SessionDep, key_result_id: int | None) ->
         raise NotFoundError(f"Key result {key_result_id} not found")
 
 
+async def validate_source_calendar(session: SessionDep, calendar_id: int | None) -> None:
+    """A converted Task names the Google Calendar its Event came from; it
+    must be one of the caller's own."""
+    if calendar_id is not None and await session.get(GoogleCalendar, calendar_id) is None:
+        raise NotFoundError(f"Google Calendar {calendar_id} not found")
+
+
 async def resolve_section(session: SessionDep, section_id: int, list_id: int) -> Section:
     """A Section belongs to one List: 404 when unknown, 409 when foreign."""
     section = await session.get(Section, section_id)
@@ -139,6 +147,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
     if payload.section_id is not None:
         await resolve_section(session, payload.section_id, list_id)
     await validate_key_result(session, payload.key_result_id)
+    await validate_source_calendar(session, payload.source_google_calendar_id)
     validate_schedule(payload.start_date, payload.due_date, payload.is_all_day, payload.time_zone)
     validate_recurrence(payload.recurrence, payload.due_date)
     reminders = validate_reminders(payload.reminders, payload.due_date)

@@ -6,10 +6,11 @@ the submitted URL is never logged, stored, or echoed back.
 
 import socket
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.db_probe import probe_connection
-from tests.conftest import app_settings_row, run_sql
+from tests.conftest import TEST_PASSWORD, app_settings_row, create_user_row, log_in, run_sql
 
 
 def _closed_port_url() -> str:
@@ -23,6 +24,35 @@ def _closed_port_url() -> str:
     port = sock.getsockname()[1]
     sock.close()
     return f"postgresql://postgres:postgres@127.0.0.1:{port}/tuktuk"
+
+
+class TestAdminOnly:
+    """The instance's own database is an Admin's concern (ADR 0018), and
+    the probe makes the server connect wherever it is told: a member is
+    refused both, before anything is probed."""
+
+    @pytest.mark.parametrize(
+        ("method", "path", "body"),
+        [
+            ("GET", "/api/v1/settings/database", None),
+            (
+                "POST",
+                "/api/v1/settings/database/test-connection",
+                {"connection_url": "postgresql://x/y"},
+            ),
+        ],
+    )
+    def test_a_member_gets_403_admin_required(
+        self, client: TestClient, method: str, path: str, body: dict[str, str] | None
+    ) -> None:
+        create_user_row(client, "bea", "bea@example.com")
+        client.cookies.clear()
+        log_in(client, "bea", TEST_PASSWORD)
+
+        response = client.request(method, path, json=body)
+
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "admin_required"
 
 
 class TestDatabaseStatus:
@@ -124,8 +154,12 @@ class TestProbeSuccess:
         just `settings`."""
         run_sql(
             database_url,
-            "INSERT INTO lists (id, name, is_inbox, sort_order, owner, created_at) "
-            "VALUES (1, 'Pre-existing', false, 0, 'local', now())",
+            "INSERT INTO users (id, username, must_complete_profile) VALUES (1, 'admin', true)",
+        )
+        run_sql(
+            database_url,
+            "INSERT INTO lists (id, name, is_inbox, sort_order, owner_id, created_at) "
+            "VALUES (1, 'Pre-existing', false, 0, 1, now())",
         )
 
         result = probe_connection(database_url)

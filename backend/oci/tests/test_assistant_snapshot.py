@@ -13,6 +13,9 @@ from fastapi.testclient import TestClient
 
 from app.assistant_snapshot import WeekSnapshot, WeekSnapshotTask, build_week_snapshot
 from app.calendar_source import CalendarEventEntry, CalendarListEntry, TransientCalendarSourceError
+from app.models import SEED_USER_ID
+from app.ownership import acting_as
+from app.user_settings import current_user_settings
 from tests.conftest import FakeCalendarSource, FakeClock
 from tests.test_events import seed_one_enabled_calendar
 from tests.test_google_accounts import make_client
@@ -43,13 +46,15 @@ def snapshot(client: TestClient, local_date: date, time_zone: str = "UTC") -> We
             return await build_week_snapshot(
                 session,
                 settings=app.state.settings,
+                user_settings=await current_user_settings(session, SEED_USER_ID),
                 calendar_source=app.state.calendar_source,
                 event_cache=app.state.event_cache,
                 local_date=local_date,
                 time_zone=time_zone,
             )
 
-    return asyncio.run(_build())
+    with acting_as(SEED_USER_ID):
+        return asyncio.run(_build())
 
 
 def make_list(client: TestClient, name: str) -> int:

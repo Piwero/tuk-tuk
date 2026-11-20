@@ -15,7 +15,7 @@ from tuk_core.store import resolve_base_url
 
 from .http import make_server
 from .protocol import error, handle
-from .session import PasswordSession
+from .session import TokenSession
 from .tools import Toolbox
 
 
@@ -48,15 +48,15 @@ def main(transport: httpx.BaseTransport | None = None, argv: list[str] | None = 
         finally:
             client.close()
         return 0
-    token, password = os.environ.get("MCP_BEARER_TOKEN", ""), os.environ.get("TUK_PASSWORD", "")
-    if not password:
-        print("tuk-mcp: TUK_PASSWORD is required with --http.", file=sys.stderr)
+    token, api_token = os.environ.get("MCP_BEARER_TOKEN", ""), os.environ.get("TUK_API_TOKEN", "")
+    if not api_token:
+        print("tuk-mcp: TUK_API_TOKEN is required with --http.", file=sys.stderr)
         return 1
     client = Client(resolve_base_url(None), transport=transport)
     origins = frozenset(filter(None, os.environ.get("MCP_ALLOWED_ORIGINS", "").split(",")))
     try:
         server = make_server(
-            Toolbox(client, PasswordSession(client, password)), token, args.host, args.port, origins
+            Toolbox(client, TokenSession(api_token)), token, args.host, args.port, origins
         )
     except ValueError as exc:
         client.close()

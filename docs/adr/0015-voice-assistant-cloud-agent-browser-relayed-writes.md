@@ -11,6 +11,11 @@ Triage stay suggest-only. Reuses the write principle of
 [0014](0014-non-browser-clients-credential-write-boundary.md) unchanged.
 ADRs 0005, 0009 and 0014 are left unedited.
 
+**Amended by [0018](0018-multi-user-row-level-isolation.md):** LiveKit
+configuration is per user, and there is one agent worker per user's
+LiveKit project instead of one per install. See "Amendment: per-user
+LiveKit (ADR 0018, issue #405)" below.
+
 ## Context
 
 The owner wants to talk to tuk-tuk: organise Tasks, the day, and Habits
@@ -248,6 +253,32 @@ replaced:
   `start_conversation` and `stop_conversation` RPCs switch detection modes.
 - Real LiveKit audio check: **not run** in the implementation environment; no LiveKit
   credentials or browser audio device available. See `voice-agent/README.md` for the check.
+
+## Amendment: per-user LiveKit (ADR 0018, issue #405)
+
+tuk-tuk is now multi-user. "One deployment per install" becomes one
+deployment per user's LiveKit project:
+
+- **LiveKit configuration is per user.** The LiveKit URL, API key and
+  API secret move from the settings singleton to each user's
+  `user_settings` row, with the secret still encrypted under
+  `APP_MASTER_KEY`. `POST /voice/session` mints the join token from the
+  current user's credentials, and the room name includes the user's id.
+  The Voice Assistant stays invisible to a user until their own LiveKit
+  settings are complete.
+- **One agent worker per user's LiveKit project, deployed manually by the
+  admin.** When a user asks for voice, the admin runs `lk agent deploy`
+  against that user's LiveKit project, following the runbook. Nothing is
+  provisioned automatically. Each project has its own free Build-plan
+  allowance, so one user's voice use never spends another user's credit.
+- **Isolation comes free from the data path.** Tools still run in the
+  user's own tab with that user's session cookie, so every write the
+  agent relays is filtered to that user by ADR 0018's central owner
+  filter. No tuk-tuk credential is held at LiveKit, as before.
+
+The browser relay, the shared roster and `contract_version`, the write
+principle, one spoken confirmation per turn, no retry and the egress
+disclosure all stand unchanged.
 
 ## What would justify revisiting this
 

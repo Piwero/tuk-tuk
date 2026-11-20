@@ -7,22 +7,21 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app import __version__
-from app.app_settings import bootstrap_app_settings, google_configured
+from app.app_settings import bootstrap_app_settings
 from app.calendar_source import CalendarSource
 from app.config import Settings
 from app.config import settings as default_settings
-from app.crypto import decrypt_credential
 from app.db import check_database_reachable, create_engine, require_database_url, run_migrations
 from app.errors import register_error_handlers
 from app.event_cache import EventCache
 from app.google_adapter import GoogleCalendarSource
 from app.middleware import SessionAuthMiddleware
-from app.models import TaskList
+from app.ownership import create_session_factory
 from app.routers.v1 import (
+    admin_users,
+    api_tokens,
     assist,
     assistant,
     auth,
@@ -45,8 +44,8 @@ from app.routers.v1 import (
 )
 from app.routers.v1 import settings as settings_router
 from app.session import Clock, real_clock
-
-INBOX_NAME = "Inbox"
+from app.user_settings import user_settings_from_env
+from app.users import import_env_password
 
 
 def create_app(
@@ -56,10 +55,9 @@ def create_app(
 ) -> FastAPI:
     app_settings = settings or default_settings
     app_clock = clock or real_clock
-    # Credentials are wired up below, once the DB-backed `settings` row is
-    # bootstrapped — that row, not these env vars, is the source of truth
-    # for Google credentials after first boot (issue #117).
-    app_calendar_source = calendar_source or GoogleCalendarSource(client_id="", client_secret="")
+    # Holds no credentials: each call names the acting user's own OAuth
+    # client (issue #409).
+    app_calendar_source = calendar_source or GoogleCalendarSource()
 
     if not app_settings.app_master_key:
         raise RuntimeError(
@@ -71,8 +69,14 @@ def create_app(
     database_url = require_database_url(app_settings.database_url)
 
     if app_settings.auth_disabled:
+        if app_settings.app_env != "development":
+            raise RuntimeError(
+                "AUTH_DISABLED is set but APP_ENV is not 'development'. The app refuses to "
+                "start: AUTH_DISABLED serves every route as the first admin with no login. "
+                "Set APP_ENV=development for local development, or unset AUTH_DISABLED."
+            )
         logging.getLogger(__name__).warning(
-            "AUTH_DISABLED is on: every route serves unauthenticated. "
+            "AUTH_DISABLED is on: every route serves unauthenticated, as the first admin. "
             "Local development only — never enable in a real deployment."
         )
 
@@ -81,24 +85,13 @@ def create_app(
         engine = create_engine(database_url)
         await check_database_reachable(engine, database_url)
         await asyncio.to_thread(run_migrations, database_url)
-        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        session_factory = create_session_factory(engine)
         app.state.session_factory = session_factory
         async with session_factory() as session:
-            settings_row = await bootstrap_app_settings(session, app_settings)
-            if (
-                google_configured(settings_row)
-                and settings_row.google_client_id is not None
-                and settings_row.encrypted_google_client_secret is not None
-            ):
-                assert app_settings.app_master_key is not None  # checked above
-                client_secret = decrypt_credential(
-                    settings_row.encrypted_google_client_secret, key=app_settings.app_master_key
-                )
-                app_calendar_source.configure(settings_row.google_client_id, client_secret)
-            inbox = await session.scalar(select(TaskList).where(TaskList.is_inbox))
-            if inbox is None:
-                session.add(TaskList(name=INBOX_NAME, is_inbox=True))
-                await session.commit()
+            await bootstrap_app_settings(session, app_settings)
+            await import_env_password(
+                session, app_settings.auth_password_hash, user_settings_from_env(app_settings)
+            )
         yield
         await engine.dispose()
 
@@ -115,6 +108,8 @@ def create_app(
         allow_headers=["*"],
     )
     register_error_handlers(app)
+    app.include_router(admin_users.router)
+    app.include_router(api_tokens.router)
     app.include_router(assist.router)
     app.include_router(assistant.router)
     app.include_router(auth.router)

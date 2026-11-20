@@ -15,6 +15,7 @@ from app.calendar_source import (
     CalendarListEntry,
     EventAttendee,
     ExchangedCredential,
+    GoogleOAuthClient,
     RefreshedAccessToken,
     TerminalCalendarSourceError,
     TransientCalendarSourceError,
@@ -101,21 +102,10 @@ def _parse_event(item: dict[str, Any]) -> CalendarEventEntry:
 
 
 class GoogleCalendarSource:
-    def __init__(
-        self,
-        client_id: str,
-        client_secret: str,
-        transport: httpx.AsyncBaseTransport | None = None,
-    ) -> None:
-        self._client_id = client_id
-        self._client_secret = client_secret
+    def __init__(self, transport: httpx.AsyncBaseTransport | None = None) -> None:
         # `transport` is a test-only seam (httpx.MockTransport); production
         # code never passes one and gets httpx's real network transport.
         self._transport = transport
-
-    def configure(self, client_id: str, client_secret: str) -> None:
-        self._client_id = client_id
-        self._client_secret = client_secret
 
     @asynccontextmanager
     async def _client(self, action: str) -> AsyncIterator[httpx.AsyncClient]:
@@ -129,14 +119,16 @@ class GoogleCalendarSource:
         except httpx.HTTPError as exc:
             raise TransientCalendarSourceError(f"Network error {action}: {exc}") from exc
 
-    async def exchange_code(self, code: str, redirect_uri: str) -> ExchangedCredential:
+    async def exchange_code(
+        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str
+    ) -> ExchangedCredential:
         async with self._client("exchanging the authorization code") as client:
             token_response = await client.post(
                 TOKEN_URL,
                 data={
                     "code": code,
-                    "client_id": self._client_id,
-                    "client_secret": self._client_secret,
+                    "client_id": oauth_client.client_id,
+                    "client_secret": oauth_client.client_secret,
                     "redirect_uri": redirect_uri,
                     "grant_type": "authorization_code",
                 },
@@ -166,14 +158,16 @@ class GoogleCalendarSource:
             refresh_token=refresh_token,
         )
 
-    async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
+    async def refresh(
+        self, oauth_client: GoogleOAuthClient, refresh_token: str
+    ) -> RefreshedAccessToken:
         async with self._client("refreshing the access token") as client:
             response = await client.post(
                 TOKEN_URL,
                 data={
                     "refresh_token": refresh_token,
-                    "client_id": self._client_id,
-                    "client_secret": self._client_secret,
+                    "client_id": oauth_client.client_id,
+                    "client_secret": oauth_client.client_secret,
                     "grant_type": "refresh_token",
                 },
             )

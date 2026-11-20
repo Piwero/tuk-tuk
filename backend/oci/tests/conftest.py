@@ -7,19 +7,16 @@ from argon2 import PasswordHasher
 from argon2.low_level import Type
 
 # Minimal Argon2 cost parameters so verification costs microseconds, not the
-# ~200ms tuned for production (see app.auth). Set before the first import of
-# app.config/app.main below, so the module-level `app` singleton and every
-# ad-hoc `Settings(...)` construction across the suite pick it up too. This
-# is imported into the DB-backed `settings` table on each app's first boot
-# (ADR 0008's upgrade path — see app.app_settings), which is what gives
-# every test's `client` fixture a password to log in with without each test
-# having to drive `/setup` itself.
+# ~200ms tuned for production (see app.auth). Users seeded by the fixtures
+# below store this hash directly, so logging in as them is cheap; only the
+# routes that hash a new password (/setup, /auth/complete, /auth/password)
+# pay the production cost.
+TEST_USERNAME = "admin"
+TEST_EMAIL = "admin@example.com"
 TEST_PASSWORD = "test-password"
+_cheap_hasher = PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID)
+TEST_PASSWORD_HASH = _cheap_hasher.hash(TEST_PASSWORD)
 
-os.environ.setdefault(
-    "AUTH_PASSWORD_HASH",
-    PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash(TEST_PASSWORD),
-)
 os.environ.setdefault("AUTH_COOKIE_SECURE", "false")
 os.environ.setdefault("APP_MASTER_KEY", "test-master-key")
 # Importing app.main builds a module-level app, which now refuses to start
@@ -50,12 +47,15 @@ from app.calendar_source import (  # noqa: E402
     CalendarListEntry,
     CalendarSourceError,
     ExchangedCredential,
+    GoogleOAuthClient,
     RefreshedAccessToken,
 )
 from app.config import Settings  # noqa: E402
 from app.db import DatabaseUrl, run_migrations  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.models import AppSettings  # noqa: E402
+from app.models import SEED_USER_ID, AppSettings, User, UserSettings  # noqa: E402
+from app.user_settings import user_settings_from_env  # noqa: E402
+from app.users import create_user, find_user_by_login  # noqa: E402
 
 
 def app_settings_row(app: FastAPI) -> AppSettings:
@@ -74,6 +74,108 @@ def app_settings_row(app: FastAPI) -> AppSettings:
             return row
 
     return asyncio.run(_fetch())
+
+
+def user_settings_row(app: FastAPI, user_id: int = SEED_USER_ID) -> UserSettings:
+    """Synchronously fetches a user's own settings row (issue #409) —
+    user #1's by default, the user every request acts as today."""
+    session_factory = app.state.session_factory
+
+    async def _fetch() -> UserSettings:
+        async with session_factory() as session:
+            row = await session.get(UserSettings, user_id)
+            assert row is not None
+            return row
+
+    return asyncio.run(_fetch())
+
+
+def _app_of(target: FastAPI | TestClient) -> FastAPI:
+    if isinstance(target, TestClient):
+        app = target.app
+        assert isinstance(app, FastAPI)
+        return app
+    return target
+
+
+def create_user_row(
+    target: FastAPI | TestClient,
+    username: str = TEST_USERNAME,
+    email: str | None = TEST_EMAIL,
+    *,
+    password: str = TEST_PASSWORD,
+    is_admin: bool = False,
+    is_active: bool = True,
+    must_change_password: bool = False,
+    must_complete_profile: bool = False,
+    first_admin: bool = False,
+) -> User:
+    """Creates a User through the same helper the app uses (app.users),
+    straight on the test's database rather than over an endpoint, with a
+    cheaply hashed password so logging in as them costs nothing.
+
+    `first_admin` stands in for `/setup`: an Admin who also takes the
+    app's one-time integration env import (GOOGLE_*, ASSIST_*) as their
+    settings, so a test booting with those configured sees them."""
+    app = _app_of(target)
+    session_factory = app.state.session_factory
+    is_admin = is_admin or first_admin
+
+    async def _create() -> User:
+        async with session_factory() as session:
+            user = await create_user(
+                session,
+                User(
+                    username=username,
+                    email=email,
+                    password_hash=_cheap_hasher.hash(password),
+                    is_admin=is_admin,
+                    is_active=is_active,
+                    must_change_password=must_change_password,
+                    must_complete_profile=must_complete_profile,
+                ),
+                user_settings_from_env(app.state.settings) if first_admin else None,
+            )
+            await session.commit()
+            return user
+
+    return asyncio.run(_create())
+
+
+def user_row(target: FastAPI | TestClient, user_id: int) -> User:
+    """Synchronously fetches one User for a test's app."""
+    session_factory = _app_of(target).state.session_factory
+
+    async def _fetch() -> User:
+        async with session_factory() as session:
+            user = await session.get(User, user_id)
+            assert user is not None
+            return user
+
+    return asyncio.run(_fetch())
+
+
+def log_in(
+    test_client: TestClient, login: str = TEST_USERNAME, password: str = TEST_PASSWORD
+) -> None:
+    """Logs `test_client` in; its cookie jar keeps the session after."""
+    response = test_client.post("/api/v1/auth/login", json={"login": login, "password": password})
+    assert response.status_code == 204, response.text
+
+
+def log_in_admin(test_client: TestClient) -> User:
+    """Logs in as the test admin, creating them first unless an earlier app
+    over the same database already did: for tests that build their own app
+    but just need to be signed in."""
+    session_factory = _app_of(test_client).state.session_factory
+
+    async def _existing() -> User | None:
+        async with session_factory() as session:
+            return await find_user_by_login(session, TEST_USERNAME)
+
+    admin = asyncio.run(_existing()) or create_user_row(test_client, first_admin=True)
+    log_in(test_client)
+    return admin
 
 
 class FakeClock:
@@ -172,11 +274,10 @@ class FakeCalendarSource:
     """
 
     def __init__(self) -> None:
-        # Set by `configure` (issue #117) — recorded so a test can assert
-        # Settings' credentials save actually reached the calendar source,
-        # not just the DB row.
-        self.client_id = ""
-        self.client_secret = ""
+        # The OAuth client every exchange and refresh was made with — each
+        # user's own (issue #409), recorded so a test can assert which one.
+        self.exchanged_with: list[GoogleOAuthClient] = []
+        self.refreshed_with: list[GoogleOAuthClient] = []
         self._codes: dict[str, ExchangedCredential] = {}
         self._calendars: dict[str, list[CalendarListEntry]] = {}
         self._events: dict[tuple[str, str], list[CalendarEventEntry]] = {}
@@ -188,10 +289,6 @@ class FakeCalendarSource:
         self.refresh_calls: list[str] = []
         self.list_events_calls: list[tuple[str, str, str]] = []
 
-    def configure(self, client_id: str, client_secret: str) -> None:
-        self.client_id = client_id
-        self.client_secret = client_secret
-
     def register_code(
         self, code: str, *, google_account_id: str, email: str, refresh_token: str
     ) -> None:
@@ -199,7 +296,10 @@ class FakeCalendarSource:
             google_account_id=google_account_id, email=email, refresh_token=refresh_token
         )
 
-    async def exchange_code(self, code: str, redirect_uri: str) -> ExchangedCredential:
+    async def exchange_code(
+        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str
+    ) -> ExchangedCredential:
+        self.exchanged_with.append(oauth_client)
         try:
             return self._codes[code]
         except KeyError:
@@ -218,7 +318,10 @@ class FakeCalendarSource:
         the user having gone through a fresh OAuth consent."""
         self._refresh_errors.pop(refresh_token, None)
 
-    async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
+    async def refresh(
+        self, oauth_client: GoogleOAuthClient, refresh_token: str
+    ) -> RefreshedAccessToken:
+        self.refreshed_with.append(oauth_client)
         self.refresh_calls.append(refresh_token)
         error = self._refresh_errors.get(refresh_token)
         if error is not None:
@@ -271,21 +374,24 @@ def fake_calendar_source() -> FakeCalendarSource:
 def unauthenticated_client(
     database_url: str, fake_clock: FakeClock, fake_calendar_source: FakeCalendarSource
 ) -> Iterator[TestClient]:
+    """The app past first-run setup, with the test admin (TEST_USERNAME /
+    TEST_PASSWORD) created, but not logged in."""
     app = create_app(
         Settings(database_url=database_url), clock=fake_clock, calendar_source=fake_calendar_source
     )
     with TestClient(app) as test_client:
+        create_user_row(app, first_admin=True)
         yield test_client
 
 
 @pytest.fixture
 def client(unauthenticated_client: TestClient) -> TestClient:
-    """Logs in before yielding so every pre-existing test file exercises
-    authenticated requests without edits — each becomes an incidental test
-    that the session gate lets a real session through.
+    """Logs in as the test admin before yielding, so every pre-existing
+    test file exercises authenticated requests without edits — each
+    becomes an incidental test that the session gate lets a real session
+    through.
     """
-    response = unauthenticated_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-    assert response.status_code == 204, response.text
+    log_in(unauthenticated_client)
     return unauthenticated_client
 
 

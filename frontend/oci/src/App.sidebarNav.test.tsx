@@ -48,13 +48,17 @@ describe("Sidebar navigation (#451)", () => {
     expect(await screen.findByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
   });
 
-  it("keeps footer actions behind one disclosure", async () => {
+  it("leaves Dark mode, Settings and Log out to the one user menu (#473)", async () => {
     installFakeApi();
     render(<App onLogout={() => undefined} />);
-    expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("App menu"));
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
-    expect(screen.getByRole("button", { name: "Log out" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Switch to .* mode/ })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "Account menu" });
+
+    const sidebar = screen.getByRole("complementary");
+    expect(within(sidebar).queryByRole("button", { name: "App menu" })).not.toBeInTheDocument();
+    expect(within(sidebar).queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
+    expect(within(sidebar).queryByRole("button", { name: "Log out" })).not.toBeInTheDocument();
+    expect(
+      within(sidebar).queryByRole("button", { name: /Switch to .* mode/ }),
+    ).not.toBeInTheDocument();
   });
 });

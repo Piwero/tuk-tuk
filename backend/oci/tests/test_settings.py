@@ -8,7 +8,7 @@ we only cover the settings flag's own read/write round-trip.
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import app_settings_row
+from tests.conftest import user_settings_row
 
 
 class TestStandupSettings:
@@ -20,7 +20,7 @@ class TestStandupSettings:
 
     def test_get_reflects_the_stored_default(self, client: TestClient) -> None:
         app = client.app
-        row = app_settings_row(app)
+        row = user_settings_row(app)
 
         assert row.standup_enabled is True
 
@@ -42,7 +42,7 @@ class TestStandupSettings:
         response = client.put("/api/v1/settings/stand-up", json={"enabled": False})
         assert response.status_code == 200
 
-        row = app_settings_row(client.app)
+        row = user_settings_row(client.app)
         assert row.standup_enabled is False
 
     def test_put_can_re_enable(self, client: TestClient) -> None:
@@ -97,7 +97,7 @@ class TestSectionSettings:
     def test_put_persists_to_the_settings_row(self, client: TestClient) -> None:
         client.put("/api/v1/settings/sections", json={**self.ALL_ENABLED, "goals": False})
 
-        row = app_settings_row(client.app)
+        row = user_settings_row(client.app)
         assert row.goals_enabled is False
         assert row.calendar_enabled is True
 
@@ -118,7 +118,7 @@ class TestActiveHoursSettings:
         assert response.json() == {"enabled": False, "start": "09:00", "end": "17:00"}
 
     def test_get_reflects_the_stored_default(self, client: TestClient) -> None:
-        row = app_settings_row(client.app)
+        row = user_settings_row(client.app)
 
         assert row.active_hours_enabled is False
         assert row.active_hours_start == "09:00"
@@ -140,7 +140,7 @@ class TestActiveHoursSettings:
             json={"enabled": True, "start": "08:00", "end": "16:00"},
         )
 
-        row = app_settings_row(client.app)
+        row = user_settings_row(client.app)
         assert row.active_hours_enabled is True
         assert row.active_hours_start == "08:00"
         assert row.active_hours_end == "16:00"

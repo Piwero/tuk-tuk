@@ -1,20 +1,22 @@
 """Small, dedicated settings endpoints that don't warrant a generic PATCH
 surface (issue #140's Stand-up toggle is the first of these — mirrors the
 GoogleStatus precedent in app.routers.v1.google rather than exposing the
-whole AppSettings singleton for editing).
+whole of a user's settings for editing). Each reads and writes the acting
+user's own settings (issue #409).
 """
 
 import asyncio
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, field_validator, model_validator
 
-from app.app_settings import require_app_settings
+from app.current_user import require_admin
 from app.db import DatabaseUrl, SessionDep
 from app.db_probe import ProbeResult, is_valid_postgres_url, probe_connection
-from app.models import AppSettings
+from app.models import UserSettings
+from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -79,76 +81,76 @@ class ActiveHoursSettings(BaseModel):
 
 
 @router.get("/stand-up")
-async def read_standup_settings(session: SessionDep) -> StandupSettings:
-    app_settings = await require_app_settings(session)
-    return StandupSettings(enabled=app_settings.standup_enabled)
+async def read_standup_settings(user_settings: CurrentUserSettings) -> StandupSettings:
+    return StandupSettings(enabled=user_settings.standup_enabled)
 
 
 @router.put("/stand-up")
-async def update_standup_settings(payload: StandupSettings, session: SessionDep) -> StandupSettings:
+async def update_standup_settings(
+    payload: StandupSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> StandupSettings:
     """Purely a UI-visibility flag (issue #140): toggling it never blocks
     the stand-up API routes and never touches stored entries, bullets, or
     the Sprint goal — those stay intact and reachable while the feature is
     hidden in the sidebar.
     """
-    app_settings = await require_app_settings(session)
-    app_settings.standup_enabled = payload.enabled
+    user_settings.standup_enabled = payload.enabled
     await session.commit()
-    return StandupSettings(enabled=app_settings.standup_enabled)
+    return StandupSettings(enabled=user_settings.standup_enabled)
 
 
-def _sections(app_settings: AppSettings) -> SectionSettings:
+def _sections(user_settings: UserSettings) -> SectionSettings:
     return SectionSettings(
-        **{name: getattr(app_settings, field) for name, field in _SECTION_FIELDS.items()}
+        **{name: getattr(user_settings, field) for name, field in _SECTION_FIELDS.items()}
     )
 
 
 @router.get("/sections")
-async def read_section_settings(session: SessionDep) -> SectionSettings:
-    return _sections(await require_app_settings(session))
+async def read_section_settings(user_settings: CurrentUserSettings) -> SectionSettings:
+    return _sections(user_settings)
 
 
 @router.put("/sections")
-async def update_section_settings(payload: SectionSettings, session: SessionDep) -> SectionSettings:
+async def update_section_settings(
+    payload: SectionSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> SectionSettings:
     """Purely UI-visibility flags, same contract as the Stand-up toggle:
     turning one off hides its nav item and route, never blocks the section's
     own API routes and never touches its stored data.
     """
-    app_settings = await require_app_settings(session)
     for name, field in _SECTION_FIELDS.items():
-        setattr(app_settings, field, getattr(payload, name))
+        setattr(user_settings, field, getattr(payload, name))
     await session.commit()
-    return _sections(app_settings)
+    return _sections(user_settings)
 
 
-def _active_hours(app_settings: AppSettings) -> ActiveHoursSettings:
+def _active_hours(user_settings: UserSettings) -> ActiveHoursSettings:
     return ActiveHoursSettings(
-        enabled=app_settings.active_hours_enabled,
-        start=app_settings.active_hours_start,
-        end=app_settings.active_hours_end,
+        enabled=user_settings.active_hours_enabled,
+        start=user_settings.active_hours_start,
+        end=user_settings.active_hours_end,
     )
 
 
 @router.get("/active-hours")
-async def read_active_hours_settings(session: SessionDep) -> ActiveHoursSettings:
-    return _active_hours(await require_app_settings(session))
+async def read_active_hours_settings(user_settings: CurrentUserSettings) -> ActiveHoursSettings:
+    return _active_hours(user_settings)
 
 
 @router.put("/active-hours")
 async def update_active_hours_settings(
-    payload: ActiveHoursSettings, session: SessionDep
+    payload: ActiveHoursSettings, session: SessionDep, user_settings: CurrentUserSettings
 ) -> ActiveHoursSettings:
     """Active hours describe the user (issue #210): the Calendar renders this
     band at double height and compresses the hours outside it. Stored on the
-    settings singleton, not per-device. The payload is validated for the
+    user's own settings, not per-device. The payload is validated for the
     30-minute grid, start-before-end, and no midnight wrap before it lands.
     """
-    app_settings = await require_app_settings(session)
-    app_settings.active_hours_enabled = payload.enabled
-    app_settings.active_hours_start = payload.start
-    app_settings.active_hours_end = payload.end
+    user_settings.active_hours_enabled = payload.enabled
+    user_settings.active_hours_start = payload.start
+    user_settings.active_hours_end = payload.end
     await session.commit()
-    return _active_hours(app_settings)
+    return _active_hours(user_settings)
 
 
 # Database status + connection probe (issue #256). Read-only: the status
@@ -156,7 +158,8 @@ async def update_active_hours_settings(
 # (never the settings table), and the test-connection endpoint only ever
 # probes a candidate URL supplied in the request body — neither can switch
 # the app's engine, and the submitted URL is never logged, stored, or
-# echoed back.
+# echoed back. Both are the instance's own concern, not a User's: Admins
+# only, and never over an API token (ADR 0018, app.middleware).
 class DatabaseStatus(BaseModel):
     # Always "postgresql", the only engine (issue #407); kept so the response
     # shape the Settings screen reads doesn't change.
@@ -176,13 +179,13 @@ class TestConnectionRequest(BaseModel):
         return value
 
 
-@router.get("/database")
+@router.get("/database", dependencies=[Depends(require_admin)])
 async def read_database_status(request: Request) -> DatabaseStatus:
     url = DatabaseUrl(request.app.state.settings.database_url)
     return DatabaseStatus(host=url.hostname, database=url.database)
 
 
-@router.post("/database/test-connection")
+@router.post("/database/test-connection", dependencies=[Depends(require_admin)])
 async def test_database_connection(payload: TestConnectionRequest) -> ProbeResult:
     """A pure probe — see app.db_probe. No path from here touches the
     `settings` row or the app's own engine; validation of the URL's scheme
@@ -192,5 +195,8 @@ async def test_database_connection(payload: TestConnectionRequest) -> ProbeResul
     `probe_connection` blocks for up to its connect timeout, so it runs in a
     thread: an unreachable host must fail only this request, not stall every
     other one sharing the event loop.
+
+    It makes the server connect wherever it is told (server-side request
+    forgery by construction, ADR 0013), so only an Admin may run it.
     """
     return await asyncio.to_thread(probe_connection, payload.connection_url)

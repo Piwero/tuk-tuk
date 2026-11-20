@@ -9,7 +9,7 @@ from fastapi import APIRouter
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.goal_read import build_goal_read
-from app.models import Goal, KeyResult
+from app.models import Goal, Habit, KeyResult
 from app.routers.v1.goals import detach_tasks, get_goal_or_404
 from app.schemas import GoalRead, KeyResultCreate, KeyResultRead, KeyResultUpdate
 from app.sparse_order import append_order
@@ -30,6 +30,8 @@ async def create_key_result(
 ) -> GoalRead:
     goal = await get_goal_or_404(goal_id, session)
     source_habit_id = payload.source_habit_id if payload.source == "habit_checkins" else None
+    if source_habit_id is not None and await session.get(Habit, source_habit_id) is None:
+        raise NotFoundError(f"Habit {source_habit_id} not found")
     last = goal.key_results[-1] if goal.key_results else None
     sort_order = append_order(last.sort_order if last is not None else None)
     goal.key_results.append(

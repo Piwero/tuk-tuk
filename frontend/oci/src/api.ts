@@ -106,16 +106,17 @@ export class ApiError extends Error {
 
 const LOGIN_PATH = "/api/v1/auth/login";
 const SETUP_PATH = "/api/v1/auth/setup";
-const SESSION_PATH = "/api/v1/auth/session";
 const LOGOUT_PATH = "/api/v1/auth/logout";
 
-type UnauthorizedListener = () => void;
+/** The error code a 401 carried: `unauthorized` (no session, or one ended
+ * elsewhere), `account_disabled`, or `setup_required` (ADR 0018). */
+type UnauthorizedListener = (code: string) => void;
 const unauthorizedListeners = new Set<UnauthorizedListener>();
 
-/** Notified whenever any request other than login itself comes back 401 —
- * the session expired or was never there. Lets the auth gate hear about a
- * lapsed session from requests made deep in the component tree, not just
- * its own session probe. Returns an unsubscribe function. */
+/** Notified whenever any request other than login or setup comes back 401
+ * — the session expired, was revoked, or its account was disabled. Lets the
+ * auth gate hear about it from requests made deep in the component tree,
+ * not just its own probe. Returns an unsubscribe function. */
 export function onUnauthorized(listener: UnauthorizedListener): () => void {
   unauthorizedListeners.add(listener);
   return () => unauthorizedListeners.delete(listener);
@@ -128,14 +129,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = (await response.json()) as ApiErrorBody;
-    if (
-      response.status === 401 &&
-      path !== LOGIN_PATH &&
-      path !== SETUP_PATH &&
-      path !== SESSION_PATH
-    ) {
+    if (response.status === 401 && path !== LOGIN_PATH && path !== SETUP_PATH) {
       for (const listener of unauthorizedListeners) {
-        listener();
+        listener(body.error.code);
       }
     }
     throw new ApiError(body.error.code, body.error.message, response.status);
@@ -146,22 +142,185 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** Asks whether the current session (if any) is still valid — the gate's
- * mount-time probe. Resolves on a valid session, rejects (401) otherwise. */
-export function checkSession(): Promise<void> {
-  return request(SESSION_PATH);
+/** The signed-in User's own account record (ADR 0018), including any
+ * forced step still pending. */
+export interface CurrentUser {
+  id: number;
+  username: string;
+  /** Null only for the upgraded single user before they complete their
+   * profile. */
+  email: string | null;
+  is_admin: boolean;
+  /** A temporary password set by an admin is still to be replaced. */
+  must_change_password: boolean;
+  /** The upgraded single user is still to choose a username and email. */
+  must_complete_profile: boolean;
+  /** When the password was last set, ISO-8601 (#475): on creation, an
+   * admin's temporary password, or the User's own change. Never null. */
+  password_changed_at: string;
 }
 
-/** Exchanges the app password for a session cookie set by the response. */
-export function login(password: string): Promise<void> {
-  return request(LOGIN_PATH, { method: "POST", body: JSON.stringify({ password }) });
+/** Who this browser is signed in as — the gate's probe. Reachable while a
+ * forced step is pending; rejects 401 with `setup_required`,
+ * `unauthorized` or `account_disabled` otherwise. */
+export function fetchCurrentUser(): Promise<CurrentUser> {
+  return request("/api/v1/auth/me");
 }
 
-/** Sets the initial password on a fresh deployment and logs in with it —
- * reachable only until a password exists (checkSession's "setup_required"
- * error code is what routes the gate here in the first place). */
-export function setup(password: string): Promise<void> {
-  return request(SETUP_PATH, { method: "POST", body: JSON.stringify({ password }) });
+/** Changes the signed-in User's own username and/or email; only the fields
+ * given change (#474). Rejects with `invalid_username` / `invalid_email`
+ * (422) or `username_taken` / `email_taken` (409). */
+export function updateProfile(fields: { username?: string; email?: string }): Promise<CurrentUser> {
+  return request("/api/v1/auth/me", { method: "PATCH", body: JSON.stringify(fields) });
+}
+
+/** One of the signed-in User's API tokens (#413), as listed: never its value. */
+export interface ApiToken {
+  id: number;
+  name: string;
+  /** `tuk_pat_<user id>_` plus the first 8 hex characters of the secret. */
+  prefix: string;
+  created_at: string;
+  /** Null until a client first uses it; moved at most every few minutes. */
+  last_used_at: string | null;
+}
+
+/** A token just created: the only response that carries its value. */
+export interface CreatedApiToken extends ApiToken {
+  token: string;
+}
+
+/** The most tokens one read returns (the backend's page cap). */
+const API_TOKENS_LIMIT = 200;
+
+/** The signed-in User's live API tokens, newest first. */
+export function fetchApiTokens(): Promise<Page<ApiToken>> {
+  return request(`/api/v1/auth/me/tokens?limit=${API_TOKENS_LIMIT}`);
+}
+
+/** Creates a token for clients acting as the User. Its value is in this
+ * response only. Rejects 422 `invalid_token_name` (1 to 100 characters). */
+export function createApiToken(name: string): Promise<CreatedApiToken> {
+  return request("/api/v1/auth/me/tokens", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+/** Revokes a token; it stops working at once. Rejects 404 `not_found` for
+ * one that is unknown or already revoked. */
+export function revokeApiToken(id: number): Promise<void> {
+  return request(`/api/v1/auth/me/tokens/${id}`, { method: "DELETE" });
+}
+
+/** An account as the admin users API returns it (#412): account fields
+ * only, never anything the account owns. */
+export interface AdminUser {
+  id: number;
+  username: string;
+  /** Null only for the upgraded single user before they complete their
+   * profile. */
+  email: string | null;
+  is_admin: boolean;
+  is_active: boolean;
+  must_change_password: boolean;
+  must_complete_profile: boolean;
+  created_at: string;
+  /** When the account was last served a signed-in request (#478), ISO-8601,
+   * moved at most every few minutes; null if it never has been. */
+  last_active_at: string | null;
+}
+
+/** The most accounts one admin users read returns (the backend's cap). */
+const ADMIN_USERS_LIMIT = 200;
+
+/** Every account on the instance, ordered by id, for Settings › Users.
+ * Admins only: rejects 403 `admin_required` for anyone else. */
+export function fetchAdminUsers(): Promise<Page<AdminUser>> {
+  return request(`/api/v1/admin/users?limit=${ADMIN_USERS_LIMIT}`);
+}
+
+export interface NewAdminUser {
+  username: string;
+  email: string;
+  /** Generated in the browser; the person must replace it at first sign-in. */
+  temp_password: string;
+  is_admin: boolean;
+}
+
+/** Creates an account with a temporary password (#412, #479). Rejects with
+ * `invalid_username` / `invalid_email` / `invalid_password` (422) or
+ * `username_taken` / `email_taken` (409, one per response). */
+export function createAdminUser(input: NewAdminUser): Promise<AdminUser> {
+  return request("/api/v1/admin/users", { method: "POST", body: JSON.stringify(input) });
+}
+
+/** What an Admin may change on an account (#412); only the fields given
+ * change. There is no delete: accounts are only ever disabled. */
+export interface AdminUserChange {
+  is_active?: boolean;
+  is_admin?: boolean;
+}
+
+/** Disables / enables an account or changes its role. Disabling ends its
+ * sessions at once. Rejects 409 `last_admin` when the change would leave
+ * no active Admin (the acting Admin's own row included), 404 `not_found`. */
+export function updateAdminUser(id: number, change: AdminUserChange): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(change),
+  });
+}
+
+/** Gives an account a new temporary password, generated in the browser
+ * (#412, #480). Ends every session of that account, the acting Admin's own
+ * included, and forces a new password at next sign-in. Rejects 422
+ * `invalid_password`, 404 `not_found`. */
+export function resetAdminUserPassword(id: number, tempPassword: string): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${id}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ temp_password: tempPassword }),
+  });
+}
+
+/** Signs in by username or email (either ignoring case) and sets the
+ * session cookie. Rejects with `invalid_credentials` (an unknown login and
+ * a wrong password alike), `too_many_attempts`, or `account_disabled`. */
+export function login(loginName: string, password: string): Promise<void> {
+  return request(LOGIN_PATH, {
+    method: "POST",
+    body: JSON.stringify({ login: loginName, password }),
+  });
+}
+
+export interface SetupInput {
+  username: string;
+  email: string;
+  password: string;
+}
+
+/** Creates the first Admin on a fresh instance and signs them in —
+ * reachable only while no User exists (a 404 `not_found` once one does). */
+export function setup(input: SetupInput): Promise<void> {
+  return request(SETUP_PATH, { method: "POST", body: JSON.stringify(input) });
+}
+
+/** What completing a forced step sends: always a new password, plus the
+ * username and email when the step is a profile to complete. */
+export interface CompleteStepInput {
+  newPassword: string;
+  username?: string;
+  email?: string;
+}
+
+/** Completes the pending forced step (ADR 0018) and re-issues this
+ * session's cookie; re-read the account record afterwards, since only the
+ * server's answer clears the step. Rejects 422 `invalid_password`,
+ * `password_unchanged` (the new password equals the current one) or
+ * `profile_required`, 409 `username_taken` / `email_taken`, or 409
+ * `no_pending_step`. */
+export function completeStep({ newPassword, username, email }: CompleteStepInput): Promise<void> {
+  return request("/api/v1/auth/complete", {
+    method: "POST",
+    body: JSON.stringify({ new_password: newPassword, username, email }),
+  });
 }
 
 /** Clears the session cookie server-side. The cookie is httpOnly, so this is
@@ -170,8 +329,8 @@ export function logout(): Promise<void> {
   return request(LOGOUT_PATH, { method: "POST" });
 }
 
-/** Changes the password and rotates the session signing key server-side
- * (ADR 0008), which invalidates every other device's cookie. The response
+/** Changes the signed-in User's password and bumps their session epoch
+ * server-side (ADR 0018), which ends their sessions on every other device. The response
  * re-issues a fresh cookie for this device, so the caller stays logged in —
  * nothing else to do here on success. A wrong current password rejects with
  * `invalid_current_password` at 400, not 401, so it isn't mistaken for a

@@ -19,16 +19,16 @@ from datetime import date, datetime
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
 
-from app.app_settings import require_app_settings
 from app.assist import assist_available, list_installed_models, parse_capture_extraction
 from app.date_phrase import resolve_date_phrase
 from app.db import SessionDep
-from app.models import AppSettings
+from app.models import UserSettings
 from app.name_phrase import resolve_name_phrase
 from app.priority_phrase import resolve_priority_phrase
 from app.recurrence_phrase import resolve_recurrence_phrase
 from app.reminder_phrase import resolve_reminder_phrase
 from app.schemas import Priority, reject_explicit_null
+from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/assist", tags=["assist"])
 
@@ -57,31 +57,29 @@ class AssistConfigUpdate(BaseModel):
     _reject_nulls = field_validator("ollama_base_url", "model")(reject_explicit_null)
 
 
-def _config_from(app_settings: AppSettings) -> AssistConfig:
+def _config_from(user_settings: UserSettings) -> AssistConfig:
     return AssistConfig(
-        ollama_base_url=app_settings.assist_ollama_base_url,
-        model=app_settings.assist_model,
+        ollama_base_url=user_settings.assist_ollama_base_url,
+        model=user_settings.assist_model,
     )
 
 
 @router.get("/status")
-async def assist_status(session: SessionDep) -> AssistStatus:
-    app_settings = await require_app_settings(session)
+async def assist_status(user_settings: CurrentUserSettings) -> AssistStatus:
     available = await assist_available(
-        app_settings.assist_ollama_base_url, app_settings.assist_model
+        user_settings.assist_ollama_base_url, user_settings.assist_model
     )
     return AssistStatus(available=available)
 
 
 @router.get("/config")
-async def read_assist_config(session: SessionDep) -> AssistConfig:
-    app_settings = await require_app_settings(session)
-    return _config_from(app_settings)
+async def read_assist_config(user_settings: CurrentUserSettings) -> AssistConfig:
+    return _config_from(user_settings)
 
 
 @router.get("/models")
 async def read_assist_models(
-    session: SessionDep, base_url: str | None = Query(default=None)
+    user_settings: CurrentUserSettings, base_url: str | None = Query(default=None)
 ) -> AssistModels:
     """Powers Settings' model dropdown: every model Ollama reports
     installed at `base_url`, so an operator picks from what's actually
@@ -93,30 +91,29 @@ async def read_assist_models(
     answers an empty list, same posture as `/status`.
     """
     if base_url is None:
-        app_settings = await require_app_settings(session)
-        base_url = app_settings.assist_ollama_base_url
+        base_url = user_settings.assist_ollama_base_url
     return AssistModels(models=await list_installed_models(base_url))
 
 
 @router.put("/config")
-async def update_assist_config(payload: AssistConfigUpdate, session: SessionDep) -> AssistConfig:
-    app_settings = await require_app_settings(session)
+async def update_assist_config(
+    payload: AssistConfigUpdate, session: SessionDep, user_settings: CurrentUserSettings
+) -> AssistConfig:
     if payload.ollama_base_url is not None:
-        app_settings.assist_ollama_base_url = payload.ollama_base_url
+        user_settings.assist_ollama_base_url = payload.ollama_base_url
     if payload.model is not None:
-        app_settings.assist_model = payload.model
+        user_settings.assist_model = payload.model
     await session.commit()
-    return _config_from(app_settings)
+    return _config_from(user_settings)
 
 
 @router.delete("/config", status_code=204)
-async def remove_assist_config(session: SessionDep) -> None:
+async def remove_assist_config(session: SessionDep, user_settings: CurrentUserSettings) -> None:
     """Clears both settings, returning Assist to the same unconfigured,
     invisible state as a fresh deployment (mirrors Google's credential
     removal)."""
-    app_settings = await require_app_settings(session)
-    app_settings.assist_ollama_base_url = None
-    app_settings.assist_model = None
+    user_settings.assist_ollama_base_url = None
+    user_settings.assist_model = None
     await session.commit()
 
 
@@ -184,7 +181,9 @@ def _resolve_and_strip(
 
 
 @router.post("/parse-capture")
-async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> ParseCaptureDraft:
+async def parse_capture(
+    payload: ParseCaptureRequest, session: SessionDep, user_settings: CurrentUserSettings
+) -> ParseCaptureDraft:
     """Assisted Capture's parse step (ADR 0005; issues #43, #44, #45): one
     stateless extraction plus deterministic date, recurrence, reminder,
     list, tag, and priority resolution, for Quick-Add's single confirmation
@@ -197,9 +196,8 @@ async def parse_capture(payload: ParseCaptureRequest, session: SessionDep) -> Pa
     recur or hold reminders); an unresolvable phrase of either kind simply
     leaves its words in the title rather than blocking the draft.
     """
-    app_settings = await require_app_settings(session)
-    base_url = app_settings.assist_ollama_base_url
-    model = app_settings.assist_model
+    base_url = user_settings.assist_ollama_base_url
+    model = user_settings.assist_model
     plain_capture = ParseCaptureDraft(
         title=payload.text,
         due_date=None,

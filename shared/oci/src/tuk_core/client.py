@@ -39,18 +39,35 @@ class Body(dict[str, object]):
 class LoginRequest:
     """Thin client-side declaration of the login body — deliberately not
     imported from the backend, so installing the CLI never pulls in the
-    database stack."""
+    database stack. `login` is the User's username or email (ADR 0018)."""
 
+    login: str
     password: str
+
+
+# Every API token starts with this (the backend's app.api_tokens); a session
+# cookie never does.
+API_TOKEN_PREFIX = "tuk_pat_"
+
+
+def auth_headers(credential: str) -> dict[str, str]:
+    """How a request proves who it is. Every API method's `session_cookie`
+    is either the signed session cookie (`tuk login`, the stdio MCP server)
+    or an API token (the MCP server's HTTP mode, ADR 0014's amendment),
+    sent as `Authorization: Bearer`, which the backend never answers with a
+    reissued cookie."""
+    if credential.startswith(API_TOKEN_PREFIX):
+        return {"Authorization": f"Bearer {credential}"}
+    return {"Cookie": f"{SESSION_COOKIE_NAME}={credential}"}
 
 
 class Client:
     def __init__(self, base_url: str, transport: httpx.BaseTransport | None = None) -> None:
         self._http = httpx.Client(base_url=base_url, transport=transport)
 
-    def login(self, password: str) -> str:
+    def login(self, login: str, password: str) -> str:
         response = self._http.post(
-            "/api/v1/auth/login", json=asdict(LoginRequest(password=password))
+            "/api/v1/auth/login", json=asdict(LoginRequest(login=login, password=password))
         )
         if response.status_code == 204:
             cookie = response.cookies.get(SESSION_COOKIE_NAME)
@@ -65,7 +82,7 @@ class Client:
         """
         response = self._http.get(
             f"/api/v1/tasks/{task_id}",
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             return self._object(response, "task")
@@ -109,7 +126,7 @@ class Client:
         response = self._http.get(
             "/api/v1/tasks",
             params=params,
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             return self._object(response, "task list")
@@ -135,7 +152,7 @@ class Client:
             response = self._http.get(
                 path,
                 params=params,
-                headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+                headers=auth_headers(session_cookie),
             )
             if response.status_code != 200:
                 raise self._error(response, fallback)
@@ -163,7 +180,7 @@ class Client:
         response = self._http.get(
             "/api/v1/habits",
             params={"due": due, "limit": limit, "offset": offset},
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             return self._object(response, "habit list")
@@ -181,7 +198,7 @@ class Client:
         response = self._http.put(
             f"/api/v1/habits/{habit_id}/check-ins/{day}",
             json={"value": value},
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             return self._object(response, "check-in")
@@ -191,7 +208,7 @@ class Client:
         """Undo the day's check-in. Returns a refreshed cookie when reissued."""
         response = self._http.delete(
             f"/api/v1/habits/{habit_id}/check-ins/{day}",
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 204:
             return response.cookies.get(SESSION_COOKIE_NAME)
@@ -207,7 +224,7 @@ class Client:
         response = self._http.get(
             "/api/v1/events",
             params={"range_start": day, "range_end": end or day},
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             body = response.json()
@@ -224,7 +241,7 @@ class Client:
         response = self._http.post(
             "/api/v1/tasks",
             json=body,
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 201:
             return self._object(response, "task")
@@ -239,7 +256,7 @@ class Client:
         response = self._http.patch(
             f"/api/v1/tasks/{task_id}",
             json=body,
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             return self._object(response, "task")
@@ -251,7 +268,7 @@ class Client:
         doing, never reimplemented here. Returns a refreshed cookie."""
         response = self._http.delete(
             f"/api/v1/tasks/{task_id}",
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 204:
             return response.cookies.get(SESSION_COOKIE_NAME)
@@ -266,7 +283,7 @@ class Client:
         response = self._http.post(
             f"/api/v1/tasks/{task_id}/check-items",
             json={"title": title},
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 201:
             return self._object(response, "task")
@@ -281,7 +298,7 @@ class Client:
         response = self._http.patch(
             f"/api/v1/tasks/{task_id}/check-items/{check_item_id}",
             json={"done": done},
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             return self._object(response, "task")
@@ -292,7 +309,7 @@ class Client:
         response = self._http.get(
             "/api/v1/goals",
             params={"limit": 200, "offset": 0},
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             return self._object(response, "goal list")
@@ -305,7 +322,7 @@ class Client:
         response = self._http.get(
             "/api/v1/focus-stats",
             params={"start": start, "end": end, "tz": tz},
-            headers={"Cookie": f"{SESSION_COOKIE_NAME}={session_cookie}"},
+            headers=auth_headers(session_cookie),
         )
         if response.status_code == 200:
             return self._object(response, "focus stats")

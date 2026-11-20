@@ -23,8 +23,18 @@ const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
   focus: "/focus",
   "focus-stats": "/focus/stats",
   search: "/search",
-  settings: "/settings",
+  settings: "/settings/account",
   smart: "/all",
+};
+
+/** Settings' tabs (#474), each at its own URL. `/settings` alone is an alias
+ * for My account, so old bookmarks/links to it still resolve. Users is for
+ * Admins only; SettingsView resolves it to My account for anyone else. */
+export type SettingsTab = "account" | "users";
+
+const SETTINGS_TAB_PATHS: Record<SettingsTab, string> = {
+  account: "/settings/account",
+  users: "/settings/users",
 };
 
 /** The Calendar's per-mode URLs (issue: individual URIs for Month/Week/Day)
@@ -100,7 +110,26 @@ export function calendarModeForPath(pathname: string): CalendarMode | null {
   return match ?? null;
 }
 
+export function pathForSettingsTab(tab: SettingsTab): string {
+  return SETTINGS_TAB_PATHS[tab];
+}
+
+/** Reads the Settings tab out of a `/settings...` path, defaulting to My
+ * account for the bare `/settings` alias. Returns null for any other path. */
+export function settingsTabForPath(pathname: string): SettingsTab | null {
+  if (pathname === "/settings") {
+    return "account";
+  }
+  const match = (Object.keys(SETTINGS_TAB_PATHS) as SettingsTab[]).find(
+    (tab) => SETTINGS_TAB_PATHS[tab] === pathname,
+  );
+  return match ?? null;
+}
+
 export function staticViewKindForPath(pathname: string): StaticViewKind | null {
+  if (settingsTabForPath(pathname) !== null) {
+    return "settings";
+  }
   if (calendarModeForPath(pathname) !== null) {
     return "calendar";
   }

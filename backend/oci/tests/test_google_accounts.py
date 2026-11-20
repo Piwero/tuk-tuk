@@ -14,10 +14,20 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from itsdangerous import URLSafeTimedSerializer
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock, run_sql
+from tests.conftest import (
+    TEST_PASSWORD,
+    FakeCalendarSource,
+    FakeClock,
+    app_settings_row,
+    create_user_row,
+    log_in,
+    log_in_admin,
+    run_sql,
+)
 
 
 @contextmanager
@@ -32,12 +42,10 @@ def make_client(
         clock=fake_clock,
         calendar_source=fake_calendar_source,
     )
-    # Login needs the DB (the password hash and session key both live in
-    # `settings` now, ADR 0008), so it must happen only once the lifespan's
-    # startup — which bootstraps that row — has actually run.
+    # Signing in needs the DB (the User and the session key live there), so
+    # it must happen only once the lifespan's startup has actually run.
     with TestClient(app, follow_redirects=False) as test_client:
-        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(test_client)
         yield test_client
 
 
@@ -246,6 +254,56 @@ class TestCallback:
         )
 
         assert response.status_code == 404
+
+    def test_a_state_started_by_another_user_links_nothing(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """The state names the User who started /connect: a consent the
+        admin began cannot be finished in Bea's session (login CSRF the
+        other way round: her Google account must not land on his link, nor
+        his on hers)."""
+        state, _ = state_from_connect_redirect(configured_client.get("/api/v1/google/connect"))
+        create_user_row(configured_client, "bea", "bea@example.com")
+        configured_client.cookies.clear()
+        log_in(configured_client, "bea", TEST_PASSWORD)
+        configured_client.put(
+            "/api/v1/google/credentials",
+            json={"client_id": "beas-client-id", "client_secret": "beas-secret"},
+        )
+        fake_calendar_source.register_code(
+            "a-code", google_account_id="g-1", email="someone@example.com", refresh_token="rt"
+        )
+
+        response = configured_client.get(
+            "/api/v1/google/callback", params={"code": "a-code", "state": state}
+        )
+
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "invalid_oauth_state"
+        assert configured_client.get("/api/v1/google/accounts").json() == []
+        configured_client.cookies.clear()
+        log_in(configured_client)
+        assert configured_client.get("/api/v1/google/accounts").json() == []
+
+    def test_a_state_naming_no_user_is_rejected(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """A state from before states named their User (one minted by an
+        older build, signed with the same key and salt) is not enough."""
+        session_key = app_settings_row(configured_client.app).session_key
+        state = URLSafeTimedSerializer(session_key, salt="google-oauth-state").dumps(
+            {"return_to": "http://localhost:5900"}
+        )
+        fake_calendar_source.register_code(
+            "a-code", google_account_id="g-1", email="someone@example.com", refresh_token="rt"
+        )
+
+        response = configured_client.get(
+            "/api/v1/google/callback", params={"code": "a-code", "state": state}
+        )
+
+        assert response.status_code == 400
+        assert configured_client.get("/api/v1/google/accounts").json() == []
 
 
 class TestAccountsAndDisconnect:

@@ -3,7 +3,12 @@
 ## Status
 
 Accepted. Supersedes ADR 0004. Partly superseded by ADR 0017: SQLite is no
-longer supported, and the tests run on PostgreSQL.
+longer supported, and the tests run on PostgreSQL. Its single-user
+premises are superseded by ADR 0018: tuk-tuk is multi-user, so the
+Database section's connection test (whose request-forgery risk was
+accepted because there was one user) and the login counter (now per
+user) no longer rest on "exactly one user". The Database section is now
+admin-only and refused to API tokens.
 
 ## Context
 

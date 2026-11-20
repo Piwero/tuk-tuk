@@ -3,8 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { ApiError, changePassword } from "./api";
-import { FAKE_PASSWORD, installFakeApi } from "./test/fakeApi";
+import { installFakeApi } from "./test/fakeApi";
 
 // Note: fetch stays stubbed across tests (each test installs a fresh fake).
 afterEach(() => {
@@ -18,9 +17,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(
       await screen.findByRole("heading", { name: "Google API credentials" }),
@@ -35,9 +34,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByRole("heading", { name: "Google Calendar" })).toBeInTheDocument();
     expect(screen.getByText(/no accounts connected/i)).toBeInTheDocument();
@@ -48,9 +47,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     const connectLink = await screen.findByRole("link", { name: "Connect" });
     expect(connectLink).toHaveAttribute("href", "/api/v1/google/connect");
@@ -79,9 +78,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByText("work@example.com")).toBeInTheDocument();
     expect(screen.getByText("personal@example.com")).toBeInTheDocument();
@@ -104,9 +103,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByText("work@example.com");
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
 
@@ -164,9 +163,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByText("work@example.com"));
 
     expect(await screen.findByText("Work")).toBeInTheDocument();
@@ -199,9 +198,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByText("work@example.com"));
     const checkbox = await screen.findByRole("checkbox", { name: "Work" });
     expect(checkbox).toBeChecked();
@@ -245,9 +244,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByText("work@example.com"));
     await screen.findByText("Work");
 
@@ -291,9 +290,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByText("work@example.com"));
     await screen.findByText("Work");
 
@@ -342,9 +341,9 @@ describe("Google Calendar gate", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByText("work@example.com");
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
 
@@ -384,9 +383,9 @@ describe("Appearance (issue #193)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByRole("heading", { name: "Appearance" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "System" })).toBeChecked();
@@ -401,9 +400,9 @@ describe("Appearance (issue #193)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByRole("radio", { name: "Dark" })).toBeChecked();
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
@@ -415,9 +414,9 @@ describe("Appearance (issue #193)", () => {
     const user = userEvent.setup();
     const first = render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByRole("radio", { name: "Dark" }));
 
     expect(localStorage.getItem("tuktuk.theme")).toBe("dark");
@@ -425,8 +424,8 @@ describe("Appearance (issue #193)", () => {
     first.unmount();
 
     render(<App />);
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     expect(await screen.findByRole("radio", { name: "Dark" })).toBeChecked();
   });
 });
@@ -437,9 +436,9 @@ describe("Active hours (issue #210)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     const section = await screen.findByRole("region", { name: "Active hours" });
     const toggle = within(section).getByLabelText("Active hours");
@@ -453,9 +452,9 @@ describe("Active hours (issue #210)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     const section = await screen.findByRole("region", { name: "Active hours" });
 
     await user.click(within(section).getByLabelText("Active hours"));
@@ -475,9 +474,9 @@ describe("Active hours (issue #210)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     const section = await screen.findByRole("region", { name: "Active hours" });
 
     await user.selectOptions(within(section).getByLabelText("Start"), "18:00");
@@ -493,9 +492,9 @@ describe("About section", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     // Nothing sets VITE_APP_VERSION in the test suite, so it falls back to "dev".
     expect(await screen.findByText(/tuk-tuk version/i)).toHaveTextContent("tuk-tuk version dev");
@@ -508,9 +507,9 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.type(screen.getByLabelText("Client ID"), "a-client-id");
     await user.type(screen.getByLabelText("Client secret"), "a-client-secret");
     await user.click(screen.getByRole("button", { name: "Save Google credentials" }));
@@ -535,9 +534,9 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByLabelText("Client ID")).toHaveValue("existing-client-id");
     expect(screen.getByText(/client secret is already saved/i)).toBeInTheDocument();
@@ -553,9 +552,9 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     const clientIdField = await screen.findByLabelText("Client ID");
     await user.clear(clientIdField);
     await user.type(clientIdField, "new-client-id");
@@ -589,9 +588,9 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByRole("button", { name: "Replace it" }));
     await user.type(screen.getByLabelText("Client secret"), "new-client-secret");
     await user.click(screen.getByRole("button", { name: "Save Google credentials" }));
@@ -617,9 +616,9 @@ describe("Google API credentials (issue #117)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByText("me@example.com");
     await user.click(screen.getByRole("button", { name: "Remove Google integration" }));
 
@@ -628,130 +627,6 @@ describe("Google API credentials (issue #117)", () => {
     });
     expect(screen.queryByText("me@example.com")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Client ID")).toHaveValue("");
-  });
-});
-
-describe("Change password (issue #116)", () => {
-  it("shows a Security section with a change-password form", async () => {
-    installFakeApi({});
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
-
-    expect(await screen.findByRole("heading", { name: "Security" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Current password")).toBeInTheDocument();
-    expect(screen.getByLabelText("New password")).toBeInTheDocument();
-    expect(screen.getByLabelText("Confirm new password")).toBeInTheDocument();
-  });
-
-  it("submitting with the correct current password succeeds and clears the form", async () => {
-    const state = installFakeApi({});
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
-    await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
-    await user.type(screen.getByLabelText("New password"), "a-new-password");
-    await user.type(screen.getByLabelText("Confirm new password"), "a-new-password");
-    await user.click(screen.getByRole("button", { name: "Change password" }));
-
-    expect(await screen.findByText(/password changed/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Current password")).toHaveValue("");
-    expect(screen.getByLabelText("New password")).toHaveValue("");
-    expect(screen.getByLabelText("Confirm new password")).toHaveValue("");
-    expect(state.password).toBe("a-new-password");
-  });
-
-  it("submitting with an incorrect current password shows an error and changes nothing", async () => {
-    const state = installFakeApi({});
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
-    await user.type(screen.getByLabelText("Current password"), "wrong-password");
-    await user.type(screen.getByLabelText("New password"), "a-new-password");
-    await user.type(screen.getByLabelText("Confirm new password"), "a-new-password");
-    await user.click(screen.getByRole("button", { name: "Change password" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(/incorrect/i);
-    expect(state.password).toBe(FAKE_PASSWORD);
-  });
-
-  it("shows an error and doesn't submit when the new password and confirmation don't match", async () => {
-    const state = installFakeApi({});
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
-    await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
-    await user.type(screen.getByLabelText("New password"), "a-new-password");
-    await user.type(screen.getByLabelText("Confirm new password"), "a-different-password");
-    await user.click(screen.getByRole("button", { name: "Change password" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("don't match");
-    expect(state.password).toBe(FAKE_PASSWORD);
-  });
-
-  it("states the minimum password length before the person types", async () => {
-    installFakeApi({});
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
-
-    expect(await screen.findByText(/12 characters/i)).toBeInTheDocument();
-  });
-
-  it("rejects a too-short new password client-side without issuing a request", async () => {
-    const state = installFakeApi({});
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
-    await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
-    await user.type(screen.getByLabelText("New password"), "short");
-    await user.type(screen.getByLabelText("Confirm new password"), "short");
-    await user.click(screen.getByRole("button", { name: "Change password" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("12 characters");
-    expect(state.password).toBe(FAKE_PASSWORD);
-  });
-
-  it("the fake /password route applies the same minimum the real backend does", async () => {
-    installFakeApi({});
-
-    await expect(changePassword(FAKE_PASSWORD, "short")).rejects.toSatisfy(
-      (err: unknown) => err instanceof ApiError && err.code === "invalid_password",
-    );
-  });
-
-  it("shows the lockout message when changing the password is locked", async () => {
-    installFakeApi({ passwordChangeLocked: true });
-    const user = userEvent.setup();
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
-    await user.type(screen.getByLabelText("Current password"), FAKE_PASSWORD);
-    await user.type(screen.getByLabelText("New password"), "a-new-password");
-    await user.type(screen.getByLabelText("Confirm new password"), "a-new-password");
-    await user.click(screen.getByRole("button", { name: "Change password" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts");
   });
 });
 
@@ -772,9 +647,9 @@ describe("Per-account failure handling (issue #109)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/needs to be reconnected/i);
     const reconnectLinks = screen.getAllByRole("link", { name: "Reconnect" });
@@ -797,9 +672,9 @@ describe("Per-account failure handling (issue #109)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByText("me@example.com");
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

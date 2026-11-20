@@ -9,10 +9,11 @@ from contextlib import contextmanager
 
 from fastapi.testclient import TestClient
 
+from app.calendar_source import GoogleOAuthClient
 from app.config import Settings
 from app.crypto import decrypt_credential
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock, run_sql
+from tests.conftest import FakeCalendarSource, FakeClock, log_in_admin, run_sql
 from tests.test_google_accounts import connect_and_authorize
 
 
@@ -29,13 +30,12 @@ def make_client(
         calendar_source=fake_calendar_source,
     )
     with TestClient(app, follow_redirects=False) as test_client:
-        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(test_client)
         yield test_client
 
 
 def stored_encrypted_secret(database_url: str) -> str | None:
-    rows = run_sql(database_url, "SELECT encrypted_google_client_secret FROM settings")
+    rows = run_sql(database_url, "SELECT encrypted_google_client_secret FROM user_settings")
     return rows[0][0] if rows else None
 
 
@@ -71,7 +71,7 @@ class TestSaveCredentials:
         assert "a-very-secret-value" not in encrypted
         assert decrypt_credential(encrypted, key="test-master-key") == "a-very-secret-value"
 
-    def test_reaches_the_calendar_source_without_a_restart(
+    def test_takes_effect_without_a_restart(
         self, database_url: str, fake_clock: FakeClock, fake_calendar_source: FakeCalendarSource
     ) -> None:
         with make_client(database_url, fake_clock, fake_calendar_source) as client:
@@ -80,14 +80,23 @@ class TestSaveCredentials:
                 json={"client_id": "a-client-id", "client_secret": "a-client-secret"},
             )
 
-            assert fake_calendar_source.client_id == "a-client-id"
-            assert fake_calendar_source.client_secret == "a-client-secret"
-
             # The very next request on the same running app uses the new
-            # credentials, not just the DB row.
+            # credentials, for the redirect and for the code exchange.
             connect_response = client.get("/api/v1/google/connect")
             assert connect_response.status_code == 302
             assert "a-client-id" in connect_response.headers["location"]
+            connect_and_authorize(
+                client,
+                fake_calendar_source,
+                code="a-code",
+                google_account_id="g-1",
+                email="me@example.com",
+                refresh_token="rt-1",
+            )
+
+        assert fake_calendar_source.exchanged_with == [
+            GoogleOAuthClient(client_id="a-client-id", client_secret="a-client-secret")
+        ]
 
     def test_omitting_the_secret_keeps_the_one_already_stored(
         self, database_url: str, fake_clock: FakeClock, fake_calendar_source: FakeCalendarSource
@@ -107,8 +116,18 @@ class TestSaveCredentials:
                 "client_id": "new-client-id",
                 "client_secret_set": True,
             }
-            assert fake_calendar_source.client_id == "new-client-id"
-            assert fake_calendar_source.client_secret == "old-client-secret"
+            connect_and_authorize(
+                client,
+                fake_calendar_source,
+                code="a-code",
+                google_account_id="g-1",
+                email="me@example.com",
+                refresh_token="rt-1",
+            )
+
+        assert fake_calendar_source.exchanged_with == [
+            GoogleOAuthClient(client_id="new-client-id", client_secret="old-client-secret")
+        ]
 
     def test_omitting_the_secret_with_none_stored_yet_is_rejected(
         self, database_url: str, fake_clock: FakeClock, fake_calendar_source: FakeCalendarSource

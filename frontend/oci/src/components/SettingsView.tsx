@@ -1,10 +1,9 @@
 import "./HabitForm.css";
 import "./SettingsView.css";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
-  changePassword,
   disconnectGoogleAccount,
   fetchActiveHoursSettings,
   updateActiveHoursSettings,
@@ -15,6 +14,7 @@ import {
   fetchAssistStatus,
   fetchAssistantConfig,
   fetchAssistantStatus,
+  fetchCurrentUser,
   fetchGoogleAccounts,
   fetchGoogleCalendars,
   fetchGoogleStatus,
@@ -37,6 +37,7 @@ import {
   type AssistConfig,
   type AssistantConfig,
   type ActiveHoursSettings,
+  type CurrentUser,
   type DatabaseStatus,
   type DatabaseTestConnectionResult,
   type GoogleAccount,
@@ -47,6 +48,7 @@ import {
 } from "../api";
 import { timeMinutes } from "../calendar";
 import { type ThemePreference } from "../layoutPrefs";
+import { pathForSettingsTab, type SettingsTab } from "../routes";
 import {
   DEFAULT_OVERLAY_SHORTCUT,
   formatOverlayShortcut,
@@ -58,8 +60,11 @@ import { ACCENT_PALETTE } from "../theme";
 import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
 import { Hint } from "./Hint";
+import { ProfileCard } from "./ProfileCard";
+import { ApiTokensCard } from "./ApiTokensCard";
+import { UsersPanel } from "./UsersPanel";
 
-interface SettingsViewProps {
+interface MyAccountPanelProps {
   /** Set when the browser just landed back from a Google consent round
    * trip that failed (backend redirected with ?googleError=1) — e.g. the
    * user declined consent, or the authorization code exchange failed. */
@@ -69,6 +74,19 @@ interface SettingsViewProps {
    * resolved `data-theme`. */
   themePreference: ThemePreference;
   onThemeChange: (preference: ThemePreference) => void;
+  /** The signed-in User's account record; null until it has loaded. */
+  user: CurrentUser | null;
+  onUserChange: (user: CurrentUser) => void;
+}
+
+interface SettingsViewProps extends Omit<MyAccountPanelProps, "user" | "onUserChange"> {
+  /** The tab the URL names (#474). */
+  tab: SettingsTab;
+  /** Shows another tab; `replace` for a redirect rather than a move. */
+  onTabChange: (tab: SettingsTab, options?: { replace?: boolean }) => void;
+  /** Hears every fresh copy of the account record (the read on mount and
+   * each profile save), so the user menu names the account as it is now. */
+  onUserChange?: (user: CurrentUser) => void;
 }
 
 const THEME_OPTIONS: readonly { value: ThemePreference; label: string }[] = [
@@ -235,106 +253,6 @@ function GoogleAccountCalendars({
         </>
       )}
     </details>
-  );
-}
-
-/** The change-password form (issue #116, ADR 0008): current + new password.
- * Saving rotates the session signing key server-side, invalidating every
- * other device's cookie while this device gets a fresh one in the response
- * — nothing to do here on success beyond clearing the form and confirming. */
-// Mirrors the backend's MIN_PASSWORD_LENGTH (auth router, issue #338).
-const MIN_PASSWORD_LENGTH = 12;
-
-function ChangePasswordForm(): JSX.Element {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  function handleSubmit(event: React.FormEvent): void {
-    event.preventDefault();
-    if (pending) {
-      return;
-    }
-    setSuccess(false);
-    // Caught here, before any request: a mismatch is never worth spending
-    // a throttled attempt on (a wrong current password shares one counter
-    // with /login), and it isn't something the backend needs to know.
-    if (newPassword !== confirmPassword) {
-      setError("New password and confirmation don't match.");
-      return;
-    }
-    if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-      return;
-    }
-    setPending(true);
-    setError(null);
-    changePassword(currentPassword, newPassword)
-      .then(() => {
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-        setSuccess(true);
-        setPending(false);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
-        setPending(false);
-      });
-  }
-
-  return (
-    <form className="change-password-form settings-form" onSubmit={handleSubmit}>
-      <div className="settings-field">
-        <label htmlFor="settings-current-password">Current password</label>
-        <input
-          id="settings-current-password"
-          name="current-password"
-          type="password"
-          autoComplete="current-password"
-          value={currentPassword}
-          disabled={pending}
-          onChange={(event) => setCurrentPassword(event.target.value)}
-        />
-      </div>
-      <div className="settings-field">
-        <label htmlFor="settings-new-password">New password</label>
-        <p className="settings-hint">Must be at least {MIN_PASSWORD_LENGTH} characters.</p>
-        <input
-          id="settings-new-password"
-          name="new-password"
-          type="password"
-          autoComplete="new-password"
-          value={newPassword}
-          disabled={pending}
-          onChange={(event) => setNewPassword(event.target.value)}
-        />
-      </div>
-      <div className="settings-field">
-        <label htmlFor="settings-confirm-password">Confirm new password</label>
-        <input
-          id="settings-confirm-password"
-          name="confirm-password"
-          type="password"
-          autoComplete="new-password"
-          value={confirmPassword}
-          disabled={pending}
-          onChange={(event) => setConfirmPassword(event.target.value)}
-        />
-      </div>
-      {error !== null && <p role="alert">{error}</p>}
-      {success && (
-        <p className="settings-success">
-          Password changed. Other devices will need to log in again.
-        </p>
-      )}
-      <button type="submit" className="settings-primary-action" disabled={pending}>
-        {pending ? "Changing…" : "Change password"}
-      </button>
-    </form>
   );
 }
 
@@ -1179,18 +1097,94 @@ function DatabaseSettingsForm(): JSX.Element {
   );
 }
 
-/** The Settings screen. Asks the Google status endpoint once on mount. The
+/** The Settings screen (#474): a My account tab and, for Admins only, a
+ * Users tab, each at its own URL. Reads the signed-in User's account record
+ * on mount, so a role change since the last visit shows on the next one. A
+ * non-Admin on the Users URL is redirected to My account. */
+export function SettingsView({
+  tab,
+  onTabChange,
+  onUserChange,
+  ...accountProps
+}: SettingsViewProps): JSX.Element {
+  const [user, setStoredUser] = useState<CurrentUser | null>(null);
+  const reportUser = useRef(onUserChange);
+  reportUser.current = onUserChange;
+  const setUser = useCallback((next: CurrentUser): void => {
+    setStoredUser(next);
+    reportUser.current?.(next);
+  }, []);
+
+  // Re-read on every tab switch too, so a role removed since the last one
+  // takes the Users tab away on the next navigation (#477).
+  const refreshUser = useCallback((): (() => void) => {
+    let cancelled = false;
+    void fetchCurrentUser().then((fetched) => {
+      if (!cancelled) {
+        setUser(fetched);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [setUser]);
+  useEffect(() => refreshUser(), [tab, refreshUser]);
+
+  const isAdmin = user?.is_admin === true;
+  useEffect(() => {
+    if (tab === "users" && user !== null && !user.is_admin) {
+      onTabChange("account", { replace: true });
+    }
+  }, [tab, user, onTabChange]);
+
+  function tabLink(target: SettingsTab, label: string): JSX.Element {
+    return (
+      <a
+        href={pathForSettingsTab(target)}
+        aria-current={tab === target ? "page" : undefined}
+        onClick={(event) => {
+          event.preventDefault();
+          if (tab !== target) {
+            onTabChange(target);
+          }
+        }}
+      >
+        {label}
+      </a>
+    );
+  }
+
+  return (
+    <div className="settings-view">
+      <nav aria-label="Settings" className="settings-tabs">
+        {tabLink("account", "My account")}
+        {isAdmin && tabLink("users", "Users")}
+      </nav>
+      {tab === "account" ? (
+        <MyAccountPanel {...accountProps} user={user} onUserChange={setUser} />
+      ) : (
+        isAdmin && user !== null && <UsersPanel currentUser={user} onAccessLost={refreshUser} />
+      )}
+    </div>
+  );
+}
+
+/** Settings › My account: the profile, then the per-user settings groups.
+ * Asks the Google status endpoint once on mount. The
  * Google Calendar section itself is always shown once that answer is in —
  * unlike before issue #117, its credentials form is how an operator gets
  * from unconfigured to configured in the first place — but the account list
  * and Connect button inside it stay invisible, not greyed-out, until the
  * backend reports credentials are actually set. See CONTEXT.md's Assist
  * glossary entry. */
-export function SettingsView({
+function MyAccountPanel({
   googleOAuthError = false,
   themePreference,
   onThemeChange,
-}: SettingsViewProps): JSX.Element {
+  user,
+  onUserChange,
+}: MyAccountPanelProps): JSX.Element {
+  const isAdmin = user?.is_admin === true;
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
   // Enabled by default (issue #140) so the toggle doesn't flash off before
@@ -1308,8 +1302,10 @@ export function SettingsView({
   const showConnectionsGroup = googleStatus !== null;
 
   return (
-    <div className="settings-view">
+    <>
       <nav aria-label="Settings sections" className="settings-toc">
+        <a href="#settings-profile">Profile</a>
+        <a href="#settings-api-tokens">API tokens</a>
         <a href="#settings-appearance">Appearance</a>
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
@@ -1353,10 +1349,11 @@ export function SettingsView({
             />
           )}
         </a>
-        <a href="#settings-security">Security</a>
-        <a href="#settings-database">Database</a>
+        {isAdmin && <a href="#settings-database">Database</a>}
         <a href="#settings-about">About</a>
       </nav>
+      {user !== null && <ProfileCard user={user} onUserChange={onUserChange} />}
+      <ApiTokensCard />
       <section aria-label="Personalize" className="settings-group">
         <h2 className="settings-group-title">Personalize</h2>
         <section aria-label="Appearance" id="settings-appearance" className="settings-section">
@@ -1632,19 +1629,15 @@ export function SettingsView({
       )}
       <section aria-label="Account and system" className="settings-group">
         <h2 className="settings-group-title">Account and system</h2>
-        <section aria-label="Security" id="settings-security" className="settings-section">
-          <div className="settings-section-head">
-            <h2>Security</h2>
-          </div>
-          <p className="settings-lead">Changing your password logs out other devices.</p>
-          <ChangePasswordForm />
-        </section>
-        <section aria-label="Database" id="settings-database" className="settings-section">
-          <div className="settings-section-head">
-            <h2>Database</h2>
-          </div>
-          <DatabaseSettingsForm />
-        </section>
+        {/* The instance's own database, not the User's: Admins only (#474). */}
+        {isAdmin && (
+          <section aria-label="Database" id="settings-database" className="settings-section">
+            <div className="settings-section-head">
+              <h2>Database</h2>
+            </div>
+            <DatabaseSettingsForm />
+          </section>
+        )}
         <section aria-label="About" id="settings-about" className="settings-section">
           <div className="settings-section-head">
             <h2>About</h2>
@@ -1654,6 +1647,6 @@ export function SettingsView({
           </p>
         </section>
       </section>
-    </div>
+    </>
   );
 }

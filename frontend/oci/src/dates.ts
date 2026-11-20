@@ -351,6 +351,47 @@ export function formatDateRange(start: Date, end: Date, style: DateStyle = "shor
   return `${formatDate(start, style)} – ${formatDate(end, style)}`;
 }
 
+const RELATIVE = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
+
+// Largest unit first: the first one `then` is at least one of wins.
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 365 * 24 * 60 * 60 * 1000],
+  ["month", 30 * 24 * 60 * 60 * 1000],
+  ["week", 7 * 24 * 60 * 60 * 1000],
+  ["day", 24 * 60 * 60 * 1000],
+  ["hour", 60 * 60 * 1000],
+  ["minute", 60 * 1000],
+];
+
+/** How long ago `then` was, in the largest whole unit: "just now",
+ * "5 minutes ago", "yesterday", "3 weeks ago", "last year" (#475). A
+ * future instant (clock skew) reads as "just now". */
+export function formatTimeAgo(then: Date, now: Date = new Date()): string {
+  const elapsed = now.getTime() - then.getTime();
+  for (const [unit, size] of RELATIVE_UNITS) {
+    if (elapsed >= size) {
+      return RELATIVE.format(-Math.floor(elapsed / size), unit);
+    }
+  }
+  return "just now";
+}
+
+// The backend records activity at most every five minutes (#478), so
+// anything that recent is as good as now.
+const ACTIVE_NOW_MS = 5 * 60 * 1000;
+const RELATIVE_FOR_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** When an account was last active (#478, spec #468): "Never" for null,
+ * "Now" within a few minutes, then relative ("2 hours ago", "6 days ago")
+ * for a week, then the date ("Mar 4, 2026"). */
+export function formatLastActive(then: Date | null, now: Date = new Date()): string {
+  if (then === null) return "Never";
+  const elapsed = now.getTime() - then.getTime();
+  if (elapsed < ACTIVE_NOW_MS) return "Now";
+  if (elapsed < RELATIVE_FOR_MS) return formatTimeAgo(then, now);
+  return formatDate(then, "date");
+}
+
 /** A short deterministic day label: "Jul 6". */
 export function shortDayLabel(dayIso: string): string {
   return formatDate(fromDayIso(dayIso), "short");

@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from app.crypto import encrypt_credential
 from app.voice_livekit import AGENT_NAME
-from tests.conftest import run_sql
+from tests.conftest import create_user_row, log_in, run_sql
 
 URL = "wss://tuktuk-abc123.livekit.cloud"
 KEY = "APIkey123"
@@ -131,7 +131,7 @@ def test_credentials_saved_by_an_earlier_version_still_start_sessions(
     # An upgraded install: the three columns were written before this refactor.
     run_sql(
         database_url,
-        "UPDATE settings SET voice_livekit_url = %s, voice_livekit_api_key = %s,"
+        "UPDATE user_settings SET voice_livekit_url = %s, voice_livekit_api_key = %s,"
         " encrypted_voice_livekit_api_secret = %s",
         (URL, KEY, encrypt_credential(SECRET, key="test-master-key")),
     )
@@ -140,6 +140,69 @@ def test_credentials_saved_by_an_earlier_version_still_start_sessions(
 
     assert body["url"] == URL
     assert verify_hs256(body["token"], SECRET)["iss"] == KEY
+
+
+BEA_PAYLOAD = {
+    "livekit_url": "wss://bea-project.livekit.cloud",
+    "livekit_api_key": "APIbea",
+    "livekit_api_secret": "bea-own-secret",
+}
+
+
+def sign_in_as_bea(client: TestClient) -> int:
+    bea = create_user_row(client, "bea", "bea@example.com", password="bea-password-long")
+    client.cookies.clear()
+    log_in(client, "bea", "bea-password-long")
+    return bea.id
+
+
+def test_room_name_carries_the_users_id(client: TestClient) -> None:
+    client.put("/api/v1/voice/config", json=PAYLOAD)
+    admin_id = client.get("/api/v1/auth/me").json()["id"]
+
+    body = start_session(client)
+
+    assert body["room"].startswith(f"tuktuk-{admin_id}-")
+    assert verify_hs256(body["token"], SECRET)["video"]["room"] == body["room"]
+
+
+def test_another_user_without_livekit_settings_has_no_voice(client: TestClient) -> None:
+    """One User's LiveKit project is theirs alone (ADR 0015's amendment):
+    another User stays unconfigured, so the frontend keeps the mic hidden."""
+    client.put("/api/v1/voice/config", json=PAYLOAD)
+    sign_in_as_bea(client)
+
+    assert client.get("/api/v1/voice/config").json()["configured"] is False
+    response = client.post("/api/v1/voice/session")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "voice_unavailable"
+
+
+def test_incomplete_livekit_settings_keep_voice_off(client: TestClient) -> None:
+    sign_in_as_bea(client)
+
+    # No secret yet: the first save needs one, so nothing is stored.
+    client.put(
+        "/api/v1/voice/config",
+        json={"livekit_url": BEA_PAYLOAD["livekit_url"], "livekit_api_key": "APIbea"},
+    )
+
+    assert client.get("/api/v1/voice/config").json()["configured"] is False
+    assert client.post("/api/v1/voice/session").status_code == 404
+
+
+def test_each_user_gets_a_token_from_their_own_livekit_project(client: TestClient) -> None:
+    client.put("/api/v1/voice/config", json=PAYLOAD)
+    bea_id = sign_in_as_bea(client)
+    client.put("/api/v1/voice/config", json=BEA_PAYLOAD)
+
+    body = start_session(client)
+
+    assert body["url"] == BEA_PAYLOAD["livekit_url"]
+    claims = verify_hs256(body["token"], BEA_PAYLOAD["livekit_api_secret"])
+    assert claims["iss"] == BEA_PAYLOAD["livekit_api_key"]
+    assert body["room"].startswith(f"tuktuk-{bea_id}-")
+    assert claims["video"]["room"] == body["room"]
 
 
 def test_dispatch_name_matches_the_separately_deployed_agent() -> None:
