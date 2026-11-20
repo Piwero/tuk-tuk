@@ -1,10 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import process from "node:process";
 
 import { describe, expect, it } from "vitest";
-
-import { readStylesheets } from "./test/stylesheets";
 
 /** The dark theme (#193) only re-points semantic aliases, so a surface that
  * paints a raw ramp value stays light-theme coloured on a dark ground. A Task
@@ -13,26 +11,45 @@ import { readStylesheets } from "./test/stylesheets";
  * applies no CSS, so this reads the sources off disk. */
 
 const SRC = resolve(process.cwd(), "src");
-const tokens = readFileSync(join(SRC, "tokens.css"), "utf8");
-const css = readStylesheets().replace(/\/\*[\s\S]*?\*\//g, "");
+const stripComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, "");
+const tokens = stripComments(readFileSync(join(SRC, "tokens.css"), "utf8"));
 
-const darkBlock = /:root\[data-theme="dark"\]\s*\{([^}]*)\}/.exec(tokens)?.[1] ?? "";
+/** A base-ramp step (`--ink-50`, `--plum-700`) or `--white`. */
+const RAMP = /var\(--(?:(?:ink|blue|green|red|amber|plum)-\d+|white)\)/;
 
-function backgroundOf(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const rule = new RegExp(String.raw`(?:^|[},])\s*${escaped}\s*\{([^}]*)\}`, "m").exec(css);
-  const value = /background\s*:\s*([^;]+);/.exec(rule?.[1] ?? "")?.[1];
-  if (value === undefined) throw new Error(`no background rule for ${selector}`);
-  return value.trim();
+function block(selector: string): string {
+  const start = tokens.indexOf(`${selector} {`);
+  if (start === -1) throw new Error(`no ${selector} block in tokens.css`);
+  return tokens.slice(start, tokens.indexOf("}", start));
 }
 
-describe("dark theme surfaces (#482)", () => {
-  it.each([".tasks li:hover", ".month-cell[data-outside]"])(
-    "%s paints a token the dark theme redefines",
-    (selector) => {
-      const variable = /^var\((--[\w-]+)\)$/.exec(backgroundOf(selector))?.[1];
-      expect(variable, selector).toBeDefined();
-      expect(darkBlock).toMatch(new RegExp(String.raw`${variable}\s*:`));
-    },
+function declarations(body: string): Map<string, string> {
+  return new Map(
+    [...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1] as string, m[2] as string]),
   );
+}
+
+const stylesheets = (readdirSync(SRC, { recursive: true }) as string[])
+  .filter((name) => name.endsWith(".css") && name !== "tokens.css")
+  .sort();
+
+describe("dark theme surfaces (#482)", () => {
+  it.each(stylesheets)("%s paints semantic aliases, never a raw ramp step", (name) => {
+    const lines = stripComments(readFileSync(join(SRC, name), "utf8")).split("\n");
+    const offenders = lines
+      .map((line, i) => ({ line: i + 1, text: line.trim() }))
+      .filter(({ text }) => RAMP.test(text));
+    expect(offenders).toEqual([]);
+  });
+
+  it("re-points every alias the light theme builds from a ramp step", () => {
+    const light = declarations(block(":root"));
+    const dark = declarations(block(':root[data-theme="dark"]'));
+    const missing = [...light]
+      .filter(([name]) => !/^--(?:ink|blue|green|red|amber|plum)-\d+$/.test(name))
+      .filter(([, value]) => RAMP.test(value))
+      .map(([name]) => name)
+      .filter((name) => !dark.has(name));
+    expect(missing).toEqual([]);
+  });
 });

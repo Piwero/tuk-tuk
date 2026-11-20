@@ -21,7 +21,7 @@
   .focus-timers > button:hover,
   .focus-timers-footer .hint-wrap > button:hover,
   .focus-view > button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   /* The content column.
 
@@ -104,7 +104,7 @@
   }
   .focus-dial-track {
     fill: none;
-    stroke: var(--plum-100);
+    stroke: var(--focus-border);
     stroke-width: 6;
   }
   .focus-dial-progress {
@@ -231,7 +231,7 @@
     transition: background var(--duration-fast) var(--ease-out);
   }
   .focus-actions > button:hover {
-    background: var(--plum-700);
+    background: var(--focus-accent-hover);
   }
   .focus-actions > button:disabled {
     background: var(--surface-hover);
@@ -473,7 +473,7 @@
     text-align: left;
   }
   .focus-today-task:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .focus-today-task[aria-pressed="true"] {
     border-color: var(--focus-accent);
@@ -516,7 +516,7 @@
     align-items: flex-end;
     height: 100%;
     border-radius: var(--radius-sm);
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .focus-strip li[aria-current="date"] {
     outline: 2px solid var(--focus-accent);

@@ -96,11 +96,11 @@
   .view-toggle:hover,
   .completed-toggle:hover,
   .hide-completed-toggle:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   .hide-completed-toggle[aria-pressed="true"] {
-    background: var(--ink-50);
+    background: var(--surface-soft);
     color: var(--text-primary);
   }
 

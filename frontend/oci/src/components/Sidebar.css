@@ -504,7 +504,7 @@
   }
 
   .sidebar .focus-nav-badge:hover {
-    background: var(--plum-700);
+    background: var(--focus-accent-hover);
   }
 
   .sidebar .focus-nav-badge.paused {

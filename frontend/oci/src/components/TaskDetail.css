@@ -107,7 +107,7 @@
     cursor: text;
   }
   .task-description-view:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .task-description-view > :first-child {
     margin-top: 0;
@@ -131,11 +131,11 @@
     appearance: none;
     border: 0;
     border-radius: 2px;
-    background: var(--ink-100);
+    background: var(--surface-track);
     overflow: hidden;
   }
   .check-items-progress progress::-webkit-progress-bar {
-    background: var(--ink-100);
+    background: var(--surface-track);
   }
   .check-items-progress progress::-webkit-progress-value {
     background: var(--accent);

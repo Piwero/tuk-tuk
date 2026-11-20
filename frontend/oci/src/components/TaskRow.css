@@ -264,7 +264,7 @@
   }
   /* The matched substring in a Search result's title (issue #167). */
   .task-title mark {
-    background: var(--amber-100);
+    background: var(--highlight);
     color: inherit;
     border-radius: 2px;
   }
@@ -296,8 +296,12 @@
     border-color: transparent;
     border-radius: var(--radius-xs);
     font-weight: var(--weight-medium);
-    background: color-mix(in oklab, var(--chip-color, var(--ink-400)) 14%, var(--white));
-    color: color-mix(in oklab, var(--chip-color, var(--ink-500)) 62%, var(--ink-900));
+    background: color-mix(
+      in oklab,
+      var(--chip-color, var(--text-tertiary)) 14%,
+      var(--chip-ground)
+    );
+    color: color-mix(in oklab, var(--chip-color, var(--text-tertiary)) 62%, var(--chip-ink));
   }
   /* The List is context, not a badge: the 10px dot that already identifies a
  * List in the sidebar (or the List's own emoji) and its name, in the same
