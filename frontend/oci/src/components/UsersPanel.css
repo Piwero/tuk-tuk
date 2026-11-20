@@ -126,7 +126,7 @@
     color: var(--text-tertiary);
   }
   .users-row[data-status="disabled"] .user-avatar {
-    background: var(--ink-300);
+    background: var(--fill-muted);
   }
   .users-cell-actions {
     width: 1%;

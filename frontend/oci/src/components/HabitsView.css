@@ -19,7 +19,7 @@
   }
   .habits-view > button:hover,
   .other-habits > button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   /* The content column.
 
@@ -91,7 +91,7 @@
   }
   .habits-view .habit.complete {
     background: var(--success-soft);
-    border-color: var(--green-100);
+    border-color: var(--success-border);
   }
   /* Target met, said in words + a mark — not signalled by the card's green
  * wash alone (which fails for anyone who can't tell the two grounds
@@ -156,12 +156,12 @@
     transition: all var(--duration-fast) var(--ease-out);
   }
   .habit-check:hover {
-    border-color: var(--ink-400);
+    border-color: var(--border-hover);
   }
   .habit-check[aria-pressed="true"] {
     border-color: var(--success);
     background: var(--success);
-    color: var(--white);
+    color: var(--text-on-fill);
   }
   .habit-progress {
     font-variant-numeric: tabular-nums;
@@ -273,7 +273,7 @@
     color: var(--text-primary);
   }
   .habit-cell.state-done {
-    color: var(--white);
+    color: var(--text-on-fill);
   }
   .habit-cell.state-open-today {
     border: 2px solid var(--border-strong);

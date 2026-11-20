@@ -272,7 +272,7 @@
     height: 6px;
     margin-left: 6px;
     border-radius: var(--radius-full);
-    background: var(--ink-300);
+    background: var(--fill-muted);
   }
   .settings-toc-dot[data-state="on"] {
     background: var(--success);
@@ -501,7 +501,7 @@
     font-weight: var(--weight-medium);
   }
   .google-account > button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .google-account [role="alert"] {
     margin: 0;

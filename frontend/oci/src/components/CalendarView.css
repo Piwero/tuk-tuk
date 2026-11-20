@@ -45,7 +45,7 @@
 
   .calendar-nav-buttons button:hover,
   .calendar-modes button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   .calendar-modes button[aria-pressed="true"] {
@@ -76,7 +76,7 @@
   }
 
   .calendar-refresh-button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   .calendar-refresh-button:disabled {
@@ -100,7 +100,7 @@
   }
 
   .unscheduled-toggle:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   /* Reuses .drawer-scrim's fixed/backdrop styling (App.css, inside its narrow
@@ -242,7 +242,7 @@
 
   .month-cell[data-outside] {
     color: var(--text-tertiary);
-    background: var(--ink-25);
+    background: var(--surface-tint);
   }
 
   /* Today's cell: a tinted background plus an inset accent ring, distinct from
@@ -914,7 +914,7 @@
 
   .calendar-nav-buttons button:hover,
   .calendar-modes button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   .month-cell:hover .month-cell-head button,

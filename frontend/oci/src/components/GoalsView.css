@@ -19,11 +19,11 @@
   }
   .goals-view > button:hover,
   .key-results > button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .goals-view > button:active,
   .key-results > button:active {
-    background: var(--ink-100);
+    background: var(--surface-hover);
   }
   /* ── Goals ───────────────────────────────────────────────────────── */
   /* Goals is prose, not a dense columnar surface — it opts into the reading

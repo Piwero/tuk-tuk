@@ -62,20 +62,31 @@
   --surface-card: var(--white);
   --surface-raised: var(--white); /* popovers, detail panel */
   --surface-hover: var(--ink-100);
+  --surface-tint: var(--ink-25); /* faintest lift: list row hover, out-of-month day */
+  --surface-soft: var(--ink-50); /* quiet hover on a control or card */
+  --surface-track: var(--ink-100); /* the empty part of a progress bar or strip */
+  --surface-inverse: var(--ink-900); /* the undo toast: the opposite of the page */
   --surface-selected: var(--blue-50);
+  --selection: var(--blue-100); /* ::selection */
+  --highlight: var(--amber-100); /* the matched text in a Search result */
   --calendar-offhours-tint: var(--surface-sunken); /* recessed Active-hours off band (#210) */
 
   --text-primary: var(--ink-900);
   --text-secondary: var(--ink-600);
   --text-tertiary: var(--ink-400);
   --text-inverse: var(--white);
+  --text-disabled: var(--ink-300);
+  --text-on-fill: var(--white); /* a label on a saturated fill (done habit, success check) */
   --text-accent: var(--blue-600);
+  --text-accent-inverse: var(--blue-300); /* an action on --surface-inverse */
   --text-danger: var(--red-600);
   --text-success: var(--green-600);
 
   --border-default: var(--ink-200);
   --border-subtle: var(--ink-100);
   --border-strong: var(--ink-300);
+  --border-hover: var(--ink-400);
+  --fill-muted: var(--ink-300); /* an "off" status dot, a disabled user's avatar */
 
   --accent: var(--blue-600);
   --accent-hover: var(--blue-700);
@@ -91,10 +102,20 @@
   --warning-soft: var(--amber-50);
   --success: var(--green-500);
   --success-soft: var(--green-50);
+  --success-border: var(--green-100);
+  --success-border-strong: var(--green-300);
+  --heat-ink: var(--green-700); /* the day number on a completed heat cell */
 
   /* Focus (the feature) */
   --focus-accent: var(--plum-600);
   --focus-soft: var(--plum-50);
+  --focus-border: var(--plum-100); /* Focus chip borders, the dial's track */
+  --focus-accent-hover: var(--plum-700); /* filled Focus control hover */
+
+  /* A Tag chip: its colour mixed into the ground for the tint, and into
+     the ink for the label (TaskRow.css). */
+  --chip-ground: var(--white);
+  --chip-ink: var(--ink-900);
 
   /* Priority — named levels, from the app's data attributes. Shape (the
      signal-bar glyph in PriorityIndicator) carries the meaning; these only
@@ -256,20 +277,31 @@
   --surface-card: #1b1e24;
   --surface-raised: #22262e; /* popovers, detail panel */
   --surface-hover: #262b34;
+  --surface-tint: #1b1e24;
+  --surface-soft: #1f232a;
+  --surface-track: #262b34;
+  --surface-inverse: #eef1f5;
   --surface-selected: #1c2c52;
+  --selection: #2a3f73;
+  --highlight: #5a4312;
   --calendar-offhours-tint: var(--surface-sunken);
 
   --text-primary: #eef1f5;
   --text-secondary: #b6bdc8;
   --text-tertiary: #868e9b;
   --text-inverse: #14161b;
+  --text-disabled: #555d6b;
+  --text-on-fill: #14161b;
   --text-accent: #9bb5fd;
+  --text-accent-inverse: #3a5ede;
   --text-danger: #ff8589;
   --text-success: #63cf8b;
 
   --border-default: #333a45;
   --border-subtle: #262b33;
   --border-strong: #4a525f;
+  --border-hover: #6b7382;
+  --fill-muted: #4a525f;
 
   --accent: #5b82fb;
   --accent-hover: #7c9dff;
@@ -285,16 +317,25 @@
   --warning-soft: #382c12;
   --success: #2da44e;
   --success-soft: #16301f;
+  --success-border: #1f4d34;
+  --success-border-strong: #2f7d50;
+  --heat-ink: #eef1f5;
 
   /* Focus (the feature) — plum, lifted for the dark ground. The filled
      Focus controls carry dark text (--text-inverse), so --focus-accent and
      its hover/border ramp all stay light enough to keep that label legible;
-     --plum-700 (the hover, referenced straight from index.css) lifts rather
-     than darkens for the same reason. */
+     --focus-accent-hover lifts rather than darkens for the same reason. */
   --focus-accent: #a988f7;
   --focus-soft: #2a2047;
   --plum-100: #2f2450; /* Focus chip / offer borders */
   --plum-700: #bfa4fa; /* filled Focus control hover */
+  --focus-border: #2f2450;
+  --focus-accent-hover: #bfa4fa;
+
+  /* A Tag chip, dark: the tint sits on a card, and the label is lifted
+     rather than darkened so the chip colour still reads. */
+  --chip-ground: #1b1e24;
+  --chip-ink: #eef1f5;
 
   /* Priority — lightness-only ink ramp, same as light: never hue. */
   --priority-low: var(--text-tertiary);

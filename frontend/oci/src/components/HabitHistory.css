@@ -14,7 +14,7 @@
     outline-offset: 1px;
   }
   .habit-strip button.heatmap-day:hover {
-    outline-color: var(--ink-400);
+    outline-color: var(--border-hover);
   }
   @media (hover: none), (pointer: coarse) {
     .habit-strip button.heatmap-day {
@@ -81,15 +81,15 @@
   }
   .grid-day[aria-pressed="true"] {
     background: var(--heat-1);
-    border-color: var(--green-100);
+    border-color: var(--success-border);
   }
   .grid-day.complete {
     background: var(--heat-2);
-    border-color: var(--green-300);
-    color: var(--green-700);
+    border-color: var(--success-border-strong);
+    color: var(--heat-ink);
   }
   .grid-day:disabled {
-    color: var(--ink-300);
+    color: var(--text-disabled);
     cursor: default;
   }
   .heatmap {

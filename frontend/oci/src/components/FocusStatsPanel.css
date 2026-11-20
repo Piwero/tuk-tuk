@@ -17,7 +17,7 @@
     transition: background var(--duration-fast) var(--ease-out);
   }
   .focus-history > button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .focus-history h2,
   .focus-stats h2 {
@@ -63,7 +63,7 @@
     font-size: var(--text-sm);
   }
   .focus-link {
-    border: 1px solid var(--plum-100);
+    border: 1px solid var(--focus-border);
     background: var(--focus-soft);
     color: var(--focus-accent);
     border-radius: var(--radius-full);

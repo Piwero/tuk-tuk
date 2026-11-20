@@ -81,12 +81,12 @@
 
   form button:hover,
   fieldset button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   form button:active,
   fieldset button:active {
-    background: var(--ink-100);
+    background: var(--surface-hover);
   }
 
   button.btn-primary,
@@ -123,7 +123,7 @@
   }
 
   button.btn-secondary:where(:hover:not(:disabled)) {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   button.btn-quiet {
@@ -142,7 +142,7 @@
   }
 
   button.btn-focus:where(:hover:not(:disabled)) {
-    background: var(--plum-700);
+    background: var(--focus-accent-hover);
   }
 
   button.btn-primary:where(:disabled),
