@@ -74,4 +74,6 @@ a fixture change: the 800-plus tests themselves did not change.
   Removing them was the follow-up ADR 0013 deferred until tests ran on
   PostgreSQL. That condition is now met, but the removal is still its own
   change. Until then the code is kept, with comments saying why it is
-  there.
+  there. *Update:* #508 (migration 0041) moved the delete rules into the
+  schema and removed the hand-written cleanup; the naive-to-UTC handling
+  remains.
