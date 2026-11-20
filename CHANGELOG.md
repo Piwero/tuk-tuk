@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.1.1](https://github.com/Piwero/tuk-tuk/compare/v3.1.0...v3.1.1) - 2026-11-20
+
+### Bug Fixes
+
+- **frontend:** Keep the tapped Task row readable in the dark theme ([cb62a59](https://github.com/Piwero/tuk-tuk/commit/cb62a5955120ed76e9860d446d6887b82135a84e))
+- **frontend:** Give every dark-theme surface a semantic colour alias ([bba9a32](https://github.com/Piwero/tuk-tuk/commit/bba9a32cac00ff432a0fec9a6c523ab85dec187e))
+
 ## [3.1.0](https://github.com/Piwero/tuk-tuk/compare/v3.0.1...v3.1.0) - 2026-11-20
 
 ### Bug Fixes
