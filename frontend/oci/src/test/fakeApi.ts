@@ -280,6 +280,12 @@ export interface FakeUser {
   last_active_at: string | null;
   /** ISO-8601; only the admin record carries it. Defaults when absent. */
   created_at?: string;
+  /** Mirrors the backend's per-User lockout (users.login_locked_until still
+   * in the future, issues #339, #408): seed true and /login answers this
+   * account 429 too_many_attempts before checking the password, as does
+   * /password for its session; an Admin's reset lifts it. The fake never
+   * counts failures itself. */
+  login_locked?: boolean;
 }
 
 export interface FakeApiState {
@@ -322,15 +328,6 @@ export interface FakeApiState {
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
-  /** Mirrors the backend's persisted lockout (issue #339): when true, the
-   * fake /login route answers 429 too_many_attempts regardless of the
-   * submitted password, exercising the frontend's lockout handling without
-   * driving the real threshold through repeated failures. */
-  loginLocked: boolean;
-  /** Mirrors the backend's persisted lockout shared with /login (issue
-   * #340): when true, the fake /password route answers 429
-   * too_many_attempts regardless of the submitted passwords. */
-  passwordChangeLocked: boolean;
   /** The stored client ID, echoed back by /status — not sensitive, unlike
    * the secret, which is never returned (only whether one is set). */
   googleClientId: string | null;
@@ -914,8 +911,6 @@ export function installFakeApi({
   users = [FAKE_ADMIN],
   sessionUserId,
   apiTokens = [],
-  loginLocked = false,
-  passwordChangeLocked = false,
   googleConfigured = false,
   googleClientId = null,
   googleClientSecretSet = false,
@@ -973,14 +968,6 @@ export function installFakeApi({
   sessionUserId?: number;
   /** API tokens of any user (#413); see `fakeApiToken`. */
   apiTokens?: FakeApiToken[];
-  /** Mutate directly (or seed true) to simulate a persisted lockout
-   * (issue #339) — the fake login route then answers 429 regardless of
-   * the submitted password. */
-  loginLocked?: boolean;
-  /** Mutate directly (or seed true) to simulate a persisted lockout
-   * (issue #340) shared with /login — the fake change-password route then
-   * answers 429 regardless of the submitted passwords. */
-  passwordChangeLocked?: boolean;
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
   googleClientId?: string | null;
@@ -1077,8 +1064,6 @@ export function installFakeApi({
     users: users.map((account) => ({ ...account })),
     sessionUserId: sessionUserId ?? users[0]?.id ?? 0,
     apiTokens: apiTokens.map((token) => ({ ...token })),
-    loginLocked,
-    passwordChangeLocked,
     googleConfigured,
     googleClientId,
     googleClientSecretSet,
@@ -1289,7 +1274,12 @@ export function installFakeApi({
       );
       if (losesAdmin && !otherActiveAdmin) {
         return json(
-          { error: { code: "last_admin", message: "The last active admin must stay an admin" } },
+          {
+            error: {
+              code: "last_admin",
+              message: "The last active admin cannot be demoted or disabled",
+            },
+          },
           409,
         );
       }
@@ -1304,6 +1294,10 @@ export function installFakeApi({
       return json(adminUserRecord(target));
     }
     if (method === "POST" && isReset) {
+      // The backend's order: an unknown account before the password rule.
+      if (target === undefined) {
+        return notFound(`User ${match[1]} not found`);
+      }
       const input = body as { temp_password: string };
       if (input.temp_password.length < MIN_PASSWORD_LENGTH) {
         return unprocessable(
@@ -1311,12 +1305,11 @@ export function installFakeApi({
           `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
         );
       }
-      if (target === undefined) {
-        return notFound(`User ${match[1]} not found`);
-      }
       target.password = input.temp_password;
       target.must_change_password = true;
       target.password_changed_at = new Date().toISOString();
+      // A reset is how a User who forgot their password gets back in.
+      target.login_locked = false;
       // A new password ends every session of that account (epoch bump).
       if (target.id === state.sessionUserId) {
         state.loggedIn = false;
@@ -1438,13 +1431,17 @@ export function installFakeApi({
       state.sessionUserId = admin.id;
       return new Response(null, { status: 204 });
     }
+    // The backend's order: the body's shape (FastAPI validates it before the
+    // handler runs), setup, an unknown login, that account's lockout, and
+    // only then the password; a disabled account learns so only with the
+    // right one.
     if (method === "POST" && url.pathname === "/api/v1/auth/login") {
-      if (state.users.length === 0) {
-        return notFound("Setup has not been completed");
-      }
       const input = body as { login?: unknown; password?: unknown };
       if (typeof input.login !== "string" || typeof input.password !== "string") {
         return unprocessable("validation_error", "Request validation failed");
+      }
+      if (state.users.length === 0) {
+        return notFound("Setup has not been completed");
       }
       // Username and email are citext on the backend: case never matters.
       const login = input.login.trim().toLowerCase();
@@ -1462,7 +1459,7 @@ export function installFakeApi({
       if (account === undefined) {
         return invalid();
       }
-      if (state.loginLocked) {
+      if (account.login_locked === true) {
         return new Response(
           JSON.stringify({
             error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
@@ -1657,7 +1654,9 @@ export function installFakeApi({
       return new Response(null, { status: 204 });
     }
     if (method === "POST" && url.pathname === "/api/v1/auth/password") {
-      if (state.passwordChangeLocked) {
+      // The same per-User lockout as /login.
+      const account = sessionUser() as FakeUser;
+      if (account.login_locked === true) {
         return new Response(
           JSON.stringify({
             error: { code: "too_many_attempts", message: "Too many attempts. Try again later." },
@@ -1665,7 +1664,6 @@ export function installFakeApi({
           { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "30" } },
         );
       }
-      const account = sessionUser() as FakeUser;
       const input = body as { current_password: string; new_password: string };
       if (input.current_password !== account.password) {
         return json(

@@ -310,7 +310,7 @@ describe("Password", () => {
   });
 
   it("shows the lockout message when changing the password is locked", async () => {
-    installFakeApi({ passwordChangeLocked: true });
+    installFakeApi({ users: [{ ...FAKE_ADMIN, login_locked: true }] });
     const user = await openSettings();
     await user.click(await screen.findByRole("button", { name: "Change password" }));
 
