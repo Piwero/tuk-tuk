@@ -62,6 +62,7 @@
   --surface-card: var(--white);
   --surface-raised: var(--white); /* popovers, detail panel */
   --surface-hover: var(--ink-100);
+  --surface-tint: var(--ink-25); /* faintest lift: list row hover, out-of-month day */
   --surface-selected: var(--blue-50);
   --calendar-offhours-tint: var(--surface-sunken); /* recessed Active-hours off band (#210) */
 
@@ -256,6 +257,7 @@
   --surface-card: #1b1e24;
   --surface-raised: #22262e; /* popovers, detail panel */
   --surface-hover: #262b34;
+  --surface-tint: #1b1e24;
   --surface-selected: #1c2c52;
   --calendar-offhours-tint: var(--surface-sunken);
 

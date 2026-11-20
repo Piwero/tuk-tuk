@@ -242,7 +242,7 @@
 
   .month-cell[data-outside] {
     color: var(--text-tertiary);
-    background: var(--ink-25);
+    background: var(--surface-tint);
   }
 
   /* Today's cell: a tinted background plus an inset accent ring, distinct from
