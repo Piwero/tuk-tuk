@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.0.1](https://github.com/Piwero/tuk-tuk/compare/v3.0.0...v3.0.1) - 2026-11-20
+
+### Bug Fixes
+
+- **backend:** Drop each test database when its test ends ([bf6d0c0](https://github.com/Piwero/tuk-tuk/commit/bf6d0c0350cdcd6387e3dd236731835c1a113c10))
+
 ## [3.0.0](https://github.com/Piwero/tuk-tuk/compare/v2.21.1...v3.0.0) - 2026-11-20
 
 ### Features
