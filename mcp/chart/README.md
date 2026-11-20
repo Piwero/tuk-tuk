@@ -5,18 +5,17 @@ Kustomize chart for the `tuk-mcp` server in Streamable HTTP mode
 `tuk-tuk` namespace. It is reachable **only on the tailnet**, as `tuk-tuk-mcp`.
 Client setup is in [`mcp/oci/README.md`](../oci/README.md).
 
-**One pod serves one User.** It holds that User's API token and acts strictly
-as them ([ADR 0018](../../docs/adr/0018-multi-user-row-level-isolation.md)).
-Pods are not created automatically: this chart is the first one, and the admin
-deploys a pod for any other User on request, following
-[the runbook](../../docs/self-hosting/per-user-mcp-and-voice.md).
+**One pod serves every User** (issue #525). It holds the deployment's MCP
+service key and no User's credential; each client brings its User's own MCP
+token. Setup, migration from per-user pods, rollback and cleanup are in
+[the runbook](../../docs/self-hosting/shared-mcp-server.md).
 
 ## Resources
 
 | File                                        | Kind                          | Purpose                                                                                  |
 | ------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------- |
 | `configmap.yaml`                            | ConfigMap                     | `TUK_BASE_URL`, pointing at the in-cluster backend Service (`mcp-config`)                |
-| `mcp-onepassworditem.yaml`                  | OnePasswordItem               | Syncs `TUK_API_TOKEN` and `MCP_BEARER_TOKEN` (`tuk-tuk-mcp`)                             |
+| `mcp-onepassworditem.yaml`                  | OnePasswordItem               | **Obsolete**, kept until the approved cleanup: the pre-#525 credentials (`tuk-tuk-mcp`)  |
 | `imagerepository.yaml` / `imagepolicy.yaml` | ImageRepository / ImagePolicy | Scans GHCR for new semver `mcp` images                                                   |
 | `deployment.yaml`                           | Deployment                    | Runs `ghcr.io/piwero/tuk-tuk/mcp`: one replica, non-root, `/health` probes               |
 | `service.yaml`                              | Service                       | ClusterIP on port 8901                                                                   |
@@ -36,28 +35,28 @@ not by `kustomize build`. Without Flux, replace them by hand.
 | Variable                     | Used for                                                                                    |
 | ---------------------------- | ------------------------------------------------------------------------------------------- |
 | `TUK_TUK_TAILNET_TAGS`       | The ingress's `tailscale.com/tags` annotation, full value, e.g. `"tag:foo,tag:bar"`         |
-| `TUK_TUK_1PASSWORD_VAULT_ID` | The 1Password vault id behind the `tuk-tuk-mcp` item                                        |
+| `TUK_TUK_1PASSWORD_VAULT_ID` | The 1Password vault id behind the `tuk-tuk-mcp` item (obsolete, until cleanup)              |
 
-## Secret: 1Password item `tuk-tuk-mcp`
+## Secret: `tuk-tuk-mcp-service`
 
-Create it by hand in the vault `TUK_TUK_1PASSWORD_VAULT_ID` points at, before
-applying. The operator copies field labels verbatim into a Secret of the same
-name, loaded with `envFrom`.
+The pod loads the Secret `tuk-tuk-mcp-service`, which the **backend** chart syncs
+from the 1Password item of the same name (`backend/chart/mcp-service-onepassworditem.yaml`),
+so the backend and this pod always share the value.
 
-| Field              | Value                                                                                   |
-| ------------------ | --------------------------------------------------------------------------------------- |
-| `TUK_API_TOKEN`    | The User's API token (`tuk_pat_...`), created by that User in **Settings → My account → API tokens**. The pod sends it as `Authorization: Bearer`. |
-| `MCP_BEARER_TOKEN` | At least 32 characters, e.g. `openssl rand -hex 32`. Shorter and the pod refuses to start. |
+| Field             | Value                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| `MCP_SERVICE_KEY` | At least 32 characters, e.g. `openssl rand -hex 32`. Shorter and the pod refuses to start. Names no User. |
 
-Both tokens come only from this Secret, never from the ConfigMap. The pod
-never holds a password: changing the User's password does not affect it.
-Revoking the API token in **Settings → My account → API tokens** cuts the pod off at once; the User then
-creates a new token and the admin updates `TUK_API_TOKEN`.
+The Deployment also loads the old `tuk-tuk-mcp` Secret, optionally, during the
+migration only: images from #525 on never read it, and the pre-#525 image (and a
+rollback to it) still needs it. It goes in the cleanup step of
+[the runbook](../../docs/self-hosting/shared-mcp-server.md#clean-up-only-once-approved).
 
 ## Notes
 
-- **One replica.** The server holds its id allowlist in process memory and
-  serialises requests. Don't scale it.
+- **One replica.** The server holds each client's read-before-write allowlist
+  in process memory. A second replica would refuse writes the first one's
+  reads allowed. Don't scale it.
 - **Non-root, no service links.** The image runs as uid/gid 1000 (`appuser`);
   `runAsNonRoot` is enforced and all capabilities are dropped.
   `enableServiceLinks: false` stops Kubernetes injecting `MCP_*` service-link
@@ -75,7 +74,7 @@ creates a new token and the admin updates `TUK_API_TOKEN`.
 - The backend chart applied (namespace, `tuk-tuk-ghcr`, image automation, backend Service).
 - [1Password Operator](https://developer.1password.com/docs/k8s/k8s-operator/), Flux image-reflector/automation controllers, Tailscale operator.
 - A published `ghcr.io/piwero/tuk-tuk/mcp` image.
-- The `tuk-tuk-mcp` 1Password item above.
+- The `tuk-tuk-mcp-service` 1Password item above.
 
 ## Deploy
 
@@ -99,10 +98,8 @@ From a tailnet device (`<tailnet>` is your MagicDNS name):
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://tuk-tuk-mcp.<tailnet>.ts.net/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"ping"}'                                   # 401
-curl -s -X POST https://tuk-tuk-mcp.<tailnet>.ts.net/mcp \
-  -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'                              # 14 tools
 ```
 
-Then call `get_agenda` from your MCP client. From a device outside the
+Then a User connects their MCP client with their own MCP token and calls
+`get_agenda`; as the Admin, don't test with anyone's token but your own. From a device outside the
 tailnet, `tuk-tuk-mcp` must not resolve.

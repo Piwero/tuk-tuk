@@ -8,10 +8,10 @@ query here to the signed-in User's own tokens.
 from datetime import datetime
 
 from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 from sqlalchemy import func, select
 
-from app.api_tokens import mint
+from app.api_tokens import TokenKind, kind_of, mint
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.models import ApiToken
@@ -25,6 +25,9 @@ MAX_NAME_LENGTH = 100
 
 class ApiTokenCreate(BaseModel):
     name: str
+    # Which audience (app.api_tokens): the API itself, or the shared MCP
+    # server (issue #525).
+    kind: TokenKind = "api"
 
 
 class ApiTokenRead(BaseModel):
@@ -35,6 +38,11 @@ class ApiTokenRead(BaseModel):
     prefix: str
     created_at: datetime
     last_used_at: datetime | None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def kind(self) -> TokenKind:
+        return kind_of(self.prefix)
 
 
 class ApiTokenCreated(ApiTokenRead):
@@ -58,11 +66,13 @@ async def create_token(
 ) -> ApiTokenCreated:
     """Mints a token for the signed-in User. The response is the only place
     its value ever appears: only a hash is stored."""
-    api_token, plaintext = mint(current_user_id(request), _clean_name(payload.name))
+    api_token, plaintext = mint(current_user_id(request), _clean_name(payload.name), payload.kind)
     api_token.created_at = request.app.state.clock()
     session.add(api_token)
     await session.commit()
-    return ApiTokenCreated(**ApiTokenRead.model_validate(api_token).model_dump(), token=plaintext)
+    return ApiTokenCreated(
+        **ApiTokenRead.model_validate(api_token).model_dump(exclude={"kind"}), token=plaintext
+    )
 
 
 @router.get("")

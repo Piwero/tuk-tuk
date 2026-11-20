@@ -103,8 +103,8 @@ Allow 10 minutes.
    Nobody can sign up on their own.
 
 The command-line client now signs in with a username as well as a
-password. A remote MCP server needs an API token instead of the password:
-see [Give a User their own MCP server or voice agent](per-user-mcp-and-voice.md).
+password. A remote MCP server needs no password either: each User connects
+with their own MCP token, see [Run one MCP server for every User](shared-mcp-server.md).
 
 Background: [ADR 0018](../adr/0018-multi-user-row-level-isolation.md).
 

@@ -31,16 +31,18 @@ app refuses to start with it outside APP_ENV=development
 from datetime import timedelta
 
 from sqlalchemy import or_, update
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from app.api_tokens import find_live_token, mark_used, owner_of
+from app.api_tokens import find_live_token, kind_of, mark_used, owner_of
 from app.app_settings import require_app_settings
 from app.config import Settings
 from app.errors import error_response
-from app.models import User
+from app.mcp_exchange import MCP_EXCHANGE_PATH, is_access, reaches, verify_access
+from app.models import ApiToken, User
 from app.ownership import acting_as
 from app.session import (
     SESSION_COOKIE_NAME,
@@ -53,7 +55,9 @@ from app.users import first_admin, install_has_password
 
 # Exact-match only, never by prefix: a future path that merely starts with
 # one of these strings must not be accidentally opened.
-PUBLIC_PATHS = frozenset({"/health", "/api/v1/auth/login", "/api/v1/auth/setup"})
+# The MCP token exchange is authenticated by the route itself, with the MCP
+# service key rather than a User's credential (app.routers.v1.mcp_exchange).
+PUBLIC_PATHS = frozenset({"/health", "/api/v1/auth/login", "/api/v1/auth/setup", MCP_EXCHANGE_PATH})
 
 # A User's last-active time (issue #478) is coarse on purpose: written at
 # most this often, so serving a request doesn't also mean a write.
@@ -120,10 +124,10 @@ def _bearer_token(request: Request) -> str | None:
 def _forced_step_gate(request: Request, user: User) -> Response | None:
     if (request.method, request.url.path) in FORCED_STEP_ROUTES:
         return None
-    return _forced_step(user)
+    return forced_step(user)
 
 
-def _forced_step(user: User) -> Response | None:
+def forced_step(user: User) -> Response | None:
     # 403, not 401: the session is valid and must not be dropped by the
     # frontend's log-out-on-401 listener; it just can't be used yet.
     if user.must_complete_profile:
@@ -216,17 +220,43 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         """`Authorization: Bearer <API token>` (issue #413): the same user
         checks as a cookie (an active User, no forced step pending), but
         no session epoch: a token is revoked on its own, so changing the
-        password does not end it."""
+        password does not end it.
+
+        Or `Bearer <MCP access credential>` (issue #525, app.mcp_exchange):
+        the same checks, plus that the MCP token it was exchanged for is
+        still live, so revoking that token cuts off a credential already
+        handed out, and only on the routes the MCP tools call. An MCP token
+        itself matches neither and gets 401."""
         unauthorized = error_response(401, "unauthorized", "A valid API token is required")
-        user_id = owner_of(token)
-        if user_id is None:
-            return unauthorized
         session_factory = request.app.state.session_factory
+        if is_access(token):
+            async with session_factory() as db_session:
+                app_settings = await require_app_settings(db_session)
+            claims = verify_access(token, app_settings.session_key, self._clock())
+            if claims is None:
+                return unauthorized
+            user_id = claims.user_id
+
+            async def find(db_session: AsyncSession) -> ApiToken | None:
+                found = await db_session.get(ApiToken, claims.token_id)
+                if found is None or found.revoked_at is not None or kind_of(found.prefix) != "mcp":
+                    return None
+                return found
+
+        else:
+            owner = owner_of(token)
+            if owner is None:
+                return unauthorized
+            user_id = owner
+
+            async def find(db_session: AsyncSession) -> ApiToken | None:
+                return await find_live_token(db_session, token)
+
         # The token is looked up acting as the User it names: only their
         # own tokens are searched (app.api_tokens).
         with acting_as(user_id):
             async with session_factory() as db_session:
-                api_token = await find_live_token(db_session, token)
+                api_token = await find(db_session)
                 user = await db_session.get(User, user_id) if api_token is not None else None
                 if api_token is None or user is None:
                     return unauthorized
@@ -235,7 +265,11 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 blocked = _forced_step_gate(request, user)
                 if blocked is not None:
                     return blocked
-                if _needs_password_session(request):
+                # An MCP access credential reaches only the MCP tools' routes
+                # (app.mcp_exchange.reaches); an API token, all but these.
+                if _needs_password_session(request) or (
+                    is_access(token) and not reaches(request.method, request.url.path)
+                ):
                     return error_response(
                         403, "token_not_allowed", "Sign in with your password to do this"
                     )

@@ -45,18 +45,20 @@ class LoginRequest:
     password: str
 
 
-# Every API token starts with this (the backend's app.api_tokens); a session
-# cookie never does.
+# Every API token, and every access credential the MCP token exchange grants
+# (issue #525), starts with one of these (the backend's app.api_tokens and
+# app.mcp_exchange); a session cookie never does.
 API_TOKEN_PREFIX = "tuk_pat_"
+BEARER_PREFIXES = (API_TOKEN_PREFIX, "tuk_mcpa_")
 
 
 def auth_headers(credential: str) -> dict[str, str]:
     """How a request proves who it is. Every API method's `session_cookie`
     is either the signed session cookie (`tuk login`, the stdio MCP server)
-    or an API token (the MCP server's HTTP mode, ADR 0014's amendment),
-    sent as `Authorization: Bearer`, which the backend never answers with a
-    reissued cookie."""
-    if credential.startswith(API_TOKEN_PREFIX):
+    or a bearer credential (an API token, or the shared MCP server's
+    short-lived access credential), sent as `Authorization: Bearer`, which
+    the backend never answers with a reissued cookie."""
+    if credential.startswith(BEARER_PREFIXES):
         return {"Authorization": f"Bearer {credential}"}
     return {"Cookie": f"{SESSION_COOKIE_NAME}={credential}"}
 

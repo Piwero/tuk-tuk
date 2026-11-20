@@ -17,17 +17,28 @@ import hashlib
 import re
 import secrets
 from datetime import datetime, timedelta
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ApiToken
 
-TOKEN_PREFIX = "tuk_pat_"
+TokenKind = Literal["api", "mcp"]
+
+# A token's kind is its audience, and its prefix says which (issue #525):
+# an `api` token authenticates against this API; an `mcp` token is for the
+# shared MCP server only, which trades it for a short-lived access
+# credential (app.mcp_exchange). The API itself never accepts an `mcp`
+# token, so one stolen from an MCP client cannot be replayed here.
+TOKEN_PREFIXES: dict[TokenKind, str] = {"api": "tuk_pat_", "mcp": "tuk_mcp_"}
 # How much of the token is kept in the clear, after the owner's id, so its
 # owner can tell their tokens apart. 8 of 64 hex digits leaves 224 secret bits.
 _PREFIX_SECRET_DIGITS = 8
-_TOKEN_PATTERN = re.compile(r"^tuk_pat_([1-9][0-9]{0,9})_([0-9a-f]{64})$")
+_TOKEN_PATTERNS: dict[TokenKind, re.Pattern[str]] = {
+    kind: re.compile(rf"^{prefix}([1-9][0-9]{{0,9}})_([0-9a-f]{{64}})$")
+    for kind, prefix in TOKEN_PREFIXES.items()
+}
 
 # `last_used_at` is written at most this often per token: a busy client
 # must not turn every read into a write.
@@ -38,18 +49,23 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def mint(user_id: int, name: str) -> tuple[ApiToken, str]:
+def mint(user_id: int, name: str, kind: TokenKind = "api") -> tuple[ApiToken, str]:
     """A new token for `user_id` (not yet added to a session) and its
     plaintext, which is never stored: the caller shows it once."""
-    token = f"{TOKEN_PREFIX}{user_id}_{secrets.token_hex(32)}"
+    token = f"{TOKEN_PREFIXES[kind]}{user_id}_{secrets.token_hex(32)}"
     prefix = token[: token.rindex("_") + 1 + _PREFIX_SECRET_DIGITS]
     return ApiToken(name=name, token_hash=_hash(token), prefix=prefix), token
 
 
-def owner_of(token: str) -> int | None:
-    """The User id a well-formed token names, or None when it is not a
-    token at all. Says nothing about whether the token is valid."""
-    match = _TOKEN_PATTERN.match(token)
+def kind_of(prefix: str) -> TokenKind:
+    """A stored token's kind, read from its kept prefix."""
+    return "mcp" if prefix.startswith(TOKEN_PREFIXES["mcp"]) else "api"
+
+
+def owner_of(token: str, kind: TokenKind = "api") -> int | None:
+    """The User id a well-formed token of `kind` names, or None when it is
+    not one at all. Says nothing about whether the token is valid."""
+    match = _TOKEN_PATTERNS[kind].match(token)
     return int(match.group(1)) if match else None
 
 

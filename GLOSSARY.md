@@ -15,8 +15,20 @@ A User who can also manage accounts: create Users with a temporary password, dis
 _Avoid_: Superuser, root
 
 **API token**:
-A named, personal credential a User creates in Settings for a client that cannot log in with a password, such as an in-cluster MCP server. Shown once when created, acts strictly as the User who created it, and can be revoked on its own without logging the User out anywhere else.
-_Avoid_: Bearer token (the MCP pod's own shared gate in front of it, ADR 0016), session, password
+A named, personal credential a User creates in Settings for a client that cannot log in with a password. Shown once when created, acts strictly as the User who created it, and can be revoked on its own without logging the User out anywhere else. Has one of two kinds, its audience: an API token proper (`tuk_pat_…`), which the API accepts, or an MCP token.
+_Avoid_: Bearer token (any of these is sent as one), session, password
+
+**MCP token**:
+An API token of the MCP kind (`tuk_mcp_…`), whose only audience is the shared MCP server: the API refuses it. A User puts it in their own AI client; on every MCP request the server trades it, with the MCP service key, for a two-minute access credential for that User (issue #525, ADR 0016's amendment). One per client, so each can be revoked on its own.
+_Avoid_: Bearer token, MCP bearer token (the retired shared `MCP_BEARER_TOKEN`)
+
+**MCP service key**:
+The one secret the shared MCP server deployment holds (`MCP_SERVICE_KEY`), shared with the backend. It lets the server exchange a User's MCP token for an access credential, names no User, and reaches no data without an MCP token.
+_Avoid_: Bearer token, API token
+
+**Access credential**:
+What the MCP token exchange returns (`tuk_mcpa_…`): signed, naming the User and the MCP token it came from, valid for two minutes, and used by the MCP server for one MCP request. It reaches only the routes the MCP tools call, and stops working as soon as its MCP token is revoked or its User disabled.
+_Avoid_: Session, access token (OAuth's term; this is not OAuth)
 
 ## Language
 
@@ -181,7 +193,7 @@ The `tuk` command-line client for the daily loop: capture, review, complete. Fir
 _Avoid_: Console app (says nothing about which contract it speaks)
 
 **MCP server**:
-The `tuk-mcp` package in `mcp/oci/`: a Model Context Protocol server exposing reads plus a bounded write set — idempotent, non-destructive, Task-or-Habit scoped, with no delete tool of any kind. Two transports: stdio (default), run as a subprocess of the owner's own AI client; and Streamable HTTP (`--http`), deployed in the cluster, reachable only on the tailnet behind a bearer token, with each pod serving one User and holding that User's API token. Pods are deployed by the Admin when a User asks, never automatically. Reuses shared HTTP client, session handling and transport seam from `shared/oci`. See ADR 0014 and ADR 0016.
+The `tuk-mcp` package in `mcp/oci/`: a Model Context Protocol server exposing reads plus a bounded write set — idempotent, non-destructive, Task-or-Habit scoped, with no delete tool of any kind. Two transports: stdio (default), run as a subprocess of the owner's own AI client; and Streamable HTTP (`--http`), one shared deployment in the cluster reachable only on the tailnet, serving every User: each client authenticates with its User's own MCP token, and the server holds only the MCP service key, no User's credential. Reuses shared HTTP client, session handling and transport seam from `shared/oci`. See ADR 0014 and ADR 0016.
 _Avoid_: Agent (it takes no actions on its own; the owner's client directs it turn by turn)
 
 **Session file**:

@@ -122,6 +122,11 @@ environment variable as ADR 0008 decided.
 
 ## Decision: MCP pods and voice workers are deployed by the admin, on request
 
+**Amended by issue #525 for MCP:** there are no per-User MCP pods any more.
+One shared deployment serves every User, each with their own MCP token
+([ADR 0016's amendment](0016-mcp-network-transport.md#amendment-one-shared-server-for-every-user-issue-525)).
+The voice half of this decision is unchanged.
+
 The MCP server's HTTP mode authenticates with a personal API token (see
 the amendment to ADR 0014). The Voice Assistant uses each user's own
 LiveKit project (see the amendment to ADR 0015). Neither is provisioned

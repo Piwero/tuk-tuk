@@ -17,6 +17,12 @@ amendment to ADR 0014: the pod now holds one user's personal API token
 Tailnet-only exposure, the static bearer token in front of the pod and
 the single replica are unchanged.
 
+**Amended by issue #525** (see "Amendment: one shared server for every
+User" below): one deployment now serves every User. The static bearer
+token, the pod-held API token, the process-wide write-id allowlist and the
+single request lock are superseded there. Tailnet-only exposure, the
+Streamable HTTP decision and the single replica stand.
+
 ## Context
 
 `tuk-mcp` speaks JSON-RPC over stdio, so it cannot run as a Kubernetes
@@ -134,6 +140,112 @@ and the write set is not widened as part of this work.
   blocks the next request.
 - Restarting the pod drops the session and the allowlist; clients must
   re-read before writing.
+
+## Amendment: one shared server for every User (issue #525)
+
+### Context
+
+After ADR 0018, every further User needed another pod, Secret, Flux
+Kustomization and tailnet hostname, each holding that User's API token and
+a shared `MCP_BEARER_TOKEN`. The request was one deployment and URL for
+every User, with no registry of their credentials in it.
+
+### Authorization review
+
+The MCP specification (2025-06-18) makes authorization optional for HTTP
+transports, but where a server accepts access tokens it must accept only
+tokens issued for itself as their audience, and must not pass a token it
+received on to an upstream API ("token passthrough"). Reusing a User's API
+token (`tuk_pat_…`) as the MCP bearer and forwarding it to the backend
+would be exactly that: its audience is the API. So the shared server does
+not accept API tokens at all.
+
+What it does instead:
+
+- **An MCP token, audience the MCP server.** An API token gains a kind. A
+  User creates an MCP token (`tuk_mcp_<user id>_<64 hex>`) in Settings;
+  only a hash is stored, as for every API token. The API refuses it on
+  every route: it authenticates nowhere but the exchange below, so one
+  stolen from an MCP client cannot be replayed against the API.
+- **Exchange, never passthrough.** On every MCP request the server posts
+  the MCP token to `POST /api/v1/auth/mcp/exchange`, authenticated with
+  the deployment's `MCP_SERVICE_KEY` (one value, shared by the backend and
+  the MCP pod, naming no User). The backend checks the token is live and
+  its User active with no forced step, and returns a signed access
+  credential (`tuk_mcpa_…`) naming the User and the token, valid for two
+  minutes. The tools use only that credential, for that one request. The
+  backend re-checks on every use that its MCP token is still live and its
+  User still active, so revocation does not wait for the expiry. Because
+  it is a bearer for its whole lifetime, it reaches only the routes the
+  MCP tools call (exact method and path); anything else, every delete
+  included, gets 403 `token_not_allowed`.
+- **Fixed destination.** The backend URL is the server's configuration.
+  Nothing a client sends chooses where a credential goes, and redirects
+  are never followed.
+- **Not OAuth.** There is no authorization server, protected-resource
+  metadata or dynamic client registration. Clients that can send a static
+  `Authorization` header to a tailnet URL are supported (Claude Code,
+  Codex CLI, OpenCode). Hosted connectors running in a vendor's cloud
+  cannot reach the tailnet anyway. The docs say this plainly and claim no
+  MCP authorization compliance.
+
+### Decision: every request is authenticated, nothing positive is cached
+
+`initialize`, `ping`, `tools/list` and notifications are authenticated
+exactly like `tools/call`: an `Authorization` header that is not
+MCP-token-shaped gets `401` without a backend call; a shaped one is
+exchanged before the body is read. A refused token gets `401`; an
+unreachable backend or an unexpected answer gets `503` with no body. No
+successful exchange is reused, so a revoked token or a disabled User loses
+access on the next request with no restart.
+
+### Decision: per-client state, keyed by what the backend said
+
+The write-id allowlist (read-before-write) must outlive one request and
+must never be shared. It is now kept per MCP token, keyed by the
+`(user id, token id)` the exchange returned, never by a raw token or
+anything else the client sent. Two tokens of one User are two clients.
+The store is bounded: an entry idle for eight hours is dropped, and past
+256 entries the least recently used goes first. A dropped client reads
+again before writing.
+
+Each request builds its own Toolbox around that client's allowlist and its
+own access credential, so no credential outlives its request or crosses to
+another. Each client entry has its own lock: one client's requests run one
+at a time, different clients' run side by side. The process-wide lock is
+gone.
+
+### What this supersedes and keeps
+
+Superseded in HTTP mode: the shared `MCP_BEARER_TOKEN`, the pod-held
+`TUK_API_TOKEN` (and with it one pod per User, ADR 0018), the process-wide
+allowlist and the single lock. Kept: tailnet-only exposure, Streamable
+HTTP with JSON responses, `Origin` checks, the body limit, the open
+`/health`, secret-free logs, and one replica (the allowlists are in
+process memory). Stdio mode is unchanged.
+
+### Considered options
+
+- **Reuse `tuk_pat_` tokens directly.** Rejected: token passthrough.
+- **MCP tokens forwarded to the API with a service-key header.** Rejected:
+  the audience would be right, but the client's token would still travel
+  upstream on every call.
+- **A full OAuth authorization server.** Rejected for now: a large
+  surface for tailnet-only clients that take static headers. The exchange
+  is the seam it would replace.
+- **State keyed by `Mcp-Session-Id`.** Rejected: a client-chosen
+  identifier must not select state, and not every client keeps a session.
+- **A fresh, empty Toolbox per request.** Rejected: it would make every
+  read-then-write flow across two calls impossible.
+
+### Accepted trade-offs
+
+- One extra backend round trip per MCP request.
+- The service key plus a User's MCP token yields that User's access
+  credential without the MCP server. Both are secrets; the key alone
+  reaches nothing.
+- Restarting the pod drops every client's allowlist; clients read again.
+- One replica: no HA.
 
 ## What would justify revisiting this
 

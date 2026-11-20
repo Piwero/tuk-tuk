@@ -70,6 +70,11 @@ spec:
             # missing Secret named rather than starting with no database.
             - secretRef:
                 name: tuk-tuk-db
+            # Optional: the shared MCP server's service key (issue #525). Absent,
+            # the MCP token exchange is off and the rest of the app is unaffected.
+            - secretRef:
+                name: tuk-tuk-mcp-service
+                optional: true
           readinessProbe:
             httpGet:
               path: /health

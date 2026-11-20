@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ApiError, type ApiToken, createApiToken, fetchApiTokens, revokeApiToken } from "../api";
+import {
+  ApiError,
+  type ApiToken,
+  type ApiTokenKind,
+  createApiToken,
+  fetchApiTokens,
+  revokeApiToken,
+} from "../api";
 import { formatDate, formatTimeAgo } from "../dates";
 import { Modal } from "./Modal";
 
@@ -8,6 +15,21 @@ import { Modal } from "./Modal";
 const MAX_TOKEN_NAME_LENGTH = 100;
 const NAME_RULE = `Name must be 1 to ${MAX_TOKEN_NAME_LENGTH} characters.`;
 const NAME_ERROR_ID = "api-token-name-error";
+
+/** What each kind of token is used by (#525). */
+const KIND_LABELS: Record<ApiTokenKind, string> = { mcp: "MCP server", api: "API" };
+const KIND_CHOICES: { kind: ApiTokenKind; label: string; hint: string }[] = [
+  {
+    kind: "api",
+    label: "Other clients (API)",
+    hint: "Scripts and clients that call Tuk Tuk's API directly.",
+  },
+  {
+    kind: "mcp",
+    label: "MCP server",
+    hint: "Your AI client, through the shared Tuk Tuk MCP server. Works nowhere else.",
+  },
+];
 
 function lastUsed(token: ApiToken): string {
   return token.last_used_at === null
@@ -64,10 +86,11 @@ interface NewTokenFormProps {
   onCancel: () => void;
 }
 
-/** Asks for the token's name, so the User can tell tokens apart. Escape or
- * Cancel closes it without a request. */
+/** Asks for the token's name, so the User can tell tokens apart, and what
+ * it is used by. Escape or Cancel closes it without a request. */
 function NewTokenForm({ onCreated, onCancel }: NewTokenFormProps): JSX.Element {
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<ApiTokenKind>("api");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +115,7 @@ function NewTokenForm({ onCreated, onCancel }: NewTokenFormProps): JSX.Element {
     }
     setPending(true);
     setError(null);
-    createApiToken(trimmed)
+    createApiToken(trimmed, kind)
       .then(({ token, ...listed }) => onCreated(listed, token))
       .catch((err: unknown) => {
         setPending(false);
@@ -145,6 +168,28 @@ function NewTokenForm({ onCreated, onCancel }: NewTokenFormProps): JSX.Element {
           {error}
         </p>
       )}
+      <fieldset className="api-token-kind" role="radiogroup" aria-label="Used by">
+        <legend>Used by</legend>
+        {KIND_CHOICES.map((choice) => (
+          <div key={choice.kind} className="api-token-kind-choice">
+            <label>
+              <input
+                type="radio"
+                name="token-kind"
+                value={choice.kind}
+                checked={kind === choice.kind}
+                disabled={pending}
+                aria-describedby={`api-token-kind-${choice.kind}-hint`}
+                onChange={() => setKind(choice.kind)}
+              />
+              {choice.label}
+            </label>
+            <p className="settings-hint" id={`api-token-kind-${choice.kind}-hint`}>
+              {choice.hint}
+            </p>
+          </div>
+        ))}
+      </fieldset>
     </form>
   );
 }
@@ -254,7 +299,7 @@ export function ApiTokensCard(): JSX.Element {
                 <div>
                   <h3>{token.name}</h3>
                   <p className="settings-hint">
-                    <code>{token.prefix}</code> · Created{" "}
+                    {KIND_LABELS[token.kind]} · <code>{token.prefix}</code> · Created{" "}
                     {formatDate(new Date(token.created_at), "date")} · {lastUsed(token)}
                   </p>
                 </div>

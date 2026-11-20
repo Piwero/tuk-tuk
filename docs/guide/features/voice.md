@@ -6,7 +6,7 @@
 uses their **own** LiveKit project: you create it and save its details in your own
 **Settings → AI helpers → Voice**, so your talking never uses anyone else's free minutes. Then
 your Admin deploys a voice agent into your project for you, following
-[Give a User their own MCP server or voice agent](../../self-hosting/per-user-mcp-and-voice.md#voice-agent-for-a-user).
+[Give a User their own voice agent](../../self-hosting/per-user-mcp-and-voice.md#voice-agent-for-a-user).
 Until your project's details are saved, there is no Voice view in your Assistant, and it
 answers only once the agent is deployed. If you run the server yourself,
 [Set up the Voice Assistant](../../self-hosting/voice.md) covers all of it.

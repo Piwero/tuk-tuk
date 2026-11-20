@@ -25,7 +25,7 @@ only their own data, and an Admin can't see anyone else's either.
 - **Sign out everywhere** by changing your password in **Settings → My
   account**. Every other device of yours is signed out at once; nobody
   else's is.
-- **Everything is locked** until you sign in, including the API. The only exception is the `/health` check.
+- **Everything is locked** until you sign in, including the API. The only exceptions are the `/health` check and the MCP token exchange, which needs the MCP server's service key.
 
 ## The master key
 
@@ -51,22 +51,30 @@ credentials, Google sign-ins and AI API keys. It never appears in the app or the
 
 Optional. If you deploy `tuk-mcp --http` on Kubernetes
 ([`mcp/oci/README.md`](../../mcp/oci/README.md),
-[ADR 0016](../adr/0016-mcp-network-transport.md)), know what it changes.
-Each server serves one User, and the Admin deploys one on that User's request
-([runbook](per-user-mcp-and-voice.md)).
+[ADR 0016](../adr/0016-mcp-network-transport.md)), know what it changes. One
+deployment serves every User ([runbook](shared-mcp-server.md)).
 
 - **Tailnet only.** It is published as `tuk-tuk-mcp` through a Tailscale
   Ingress with Funnel off. Never give it a public hostname.
-- **Bearer token.** Clients must send `MCP_BEARER_TOKEN` (32+ characters).
-  It is one shared secret per server: rotate it by changing the 1Password item and every
-  client. Keep it out of checked-in config.
-- **The pod holds an API token, not a password** (`TUK_API_TOKEN`). It acts
-  only as the User who created the token. Anyone who can read that
-  namespace's secrets or the 1Password item can act as that User through the
-  API, but can't sign in to the web app, change their password, create more
-  tokens or use admin pages. Changing the password doesn't affect the pod.
-  Revoking the token in **Settings → My account → API tokens** cuts it off at once.
-- A bearer-token holder can read that User's tasks and use the write tools, but not delete.
+- **Each User brings their own MCP token.** Users create it in
+  **Settings → My account → API tokens** (Used by: MCP server). It works only
+  at the MCP server: the API refuses it. Revoking it, or disabling the User,
+  cuts it off on the next request, with no restart.
+- **Checked on every request.** The server sends the token, with its service
+  key, to the backend before reading anything else, and caches nothing. A
+  backend it cannot reach means `503`, never data.
+- **The pod holds no User's credential.** Only `MCP_SERVICE_KEY` (32+
+  characters), shared with the backend through the `tuk-tuk-mcp-service`
+  item. Alone, it reaches no data. Anyone who has it and a User's MCP token
+  could get that User's MCP access without the MCP server, so keep both secret;
+  rotate the key by changing the item and restarting the backend and MCP pods.
+- **Users are kept apart.** Each request runs with a 2-minute credential for
+  its own User. The read-before-write allowlist is per MCP token: one User's
+  reads never let another write.
+- An MCP-token holder can read that User's tasks and use the write tools, but
+  not delete, and cannot reach admin pages, other tokens or the password.
+- This is not the MCP specification's OAuth flow. Supported clients are ones
+  that send a static `Authorization` header (Claude Code, Codex CLI, OpenCode).
 
 ## Forgotten password
 
