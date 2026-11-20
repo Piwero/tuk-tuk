@@ -41,10 +41,14 @@ template database, and each test gets its own database cloned from it with
 `CREATE DATABASE … TEMPLATE`. This replaces the per-test SQLite file copy
 from #113 without giving up what it bought.
 
-- **Clone, don't drop.** A clone costs about 15ms with the server's fsync
-  off. Dropping a database costs about 300ms, so test databases are never
-  dropped: the whole server is discarded at the end of the session.
-  Measured overhead across roughly 890 tests: about 13s.
+- **Clone, then drop.** A clone costs about 15ms with the server's fsync
+  off. Each test's database is dropped when the test ends (`DROP DATABASE
+  … WITH (FORCE)`, about 11ms). The first version never dropped them, to
+  save time, but each clone is about 9 MB. By v3.0.0 the suite cloned
+  1,125 of them, leaving roughly 10 GB and 500,000 files in the container.
+  Removing the container at the end of the session then outlasted the
+  Docker client's 60s timeout on GitHub runners, which failed the
+  release, and filled the disk on local machines.
 - **Durability off.** `fsync`, `synchronous_commit` and `full_page_writes`
   are switched off, because the server's data never needs to survive the
   session.
