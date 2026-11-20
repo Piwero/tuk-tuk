@@ -93,6 +93,10 @@ class OwnedMixin:
     session the app opens (issue #411). There is deliberately no default,
     so a row created outside that filter fails the NOT NULL rather than
     landing on some User.
+
+    No ON DELETE rule, unlike every other foreign key (issue #508): no User
+    is ever deleted, and deleting one who still owns rows must be refused
+    rather than cascade their whole account away.
     """
 
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -130,6 +134,7 @@ class UserSettings(Base):
 
     __tablename__ = "user_settings"
 
+    # No ON DELETE rule, like OwnedMixin.owner_id: no User is ever deleted.
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     google_client_id: Mapped[str | None] = mapped_column(String(255), default=None)
     encrypted_google_client_secret: Mapped[str | None] = mapped_column(Text, default=None)
@@ -214,21 +219,21 @@ class TaskList(OwnedMixin, Base):
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
     view_mode: Mapped[str] = mapped_column(String(6), default="list")
     folder_id: Mapped[int | None] = mapped_column(
-        ForeignKey("folders.id"), index=True, default=None
+        ForeignKey("folders.id", ondelete="SET NULL"), index=True, default=None
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     folder: Mapped[Folder | None] = relationship(back_populates="lists")
     tasks: Mapped[list["Task"]] = relationship(
-        back_populates="task_list", cascade="all, delete-orphan"
+        back_populates="task_list", cascade="all, delete-orphan", passive_deletes=True
     )
 
 
 task_tags = Table(
     "task_tags",
     Base.metadata,
-    Column("task_id", ForeignKey("tasks.id"), primary_key=True),
-    Column("tag_id", ForeignKey("tags.id"), primary_key=True),
+    Column("task_id", ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -254,7 +259,7 @@ class Section(OwnedMixin, Base):
     __tablename__ = "sections"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
+    list_id: Mapped[int] = mapped_column(ForeignKey("lists.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255))
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -286,9 +291,9 @@ class Task(OwnedMixin, Base):
     # anchored at the task's due date. Completing a recurring task advances
     # its dates in place instead of completing the row (ADR 0003).
     recurrence: Mapped[str | None] = mapped_column(String(255), default=None)
-    list_id: Mapped[int] = mapped_column(ForeignKey("lists.id"), index=True)
+    list_id: Mapped[int] = mapped_column(ForeignKey("lists.id", ondelete="CASCADE"), index=True)
     section_id: Mapped[int | None] = mapped_column(
-        ForeignKey("sections.id"), index=True, default=None
+        ForeignKey("sections.id", ondelete="SET NULL"), index=True, default=None
     )
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -316,6 +321,7 @@ class Task(OwnedMixin, Base):
     check_items: Mapped[list["CheckItem"]] = relationship(
         back_populates="task",
         cascade="all, delete-orphan",
+        passive_deletes=True,
         order_by="CheckItem.sort_order, CheckItem.id",
         lazy="selectin",
     )
@@ -323,6 +329,7 @@ class Task(OwnedMixin, Base):
     # One-directional: nothing navigates Tag -> Tasks in the ORM.
     tags: Mapped[list[Tag]] = relationship(
         secondary=task_tags,
+        passive_deletes=True,
         order_by="Tag.name, Tag.id",
         lazy="selectin",
     )
@@ -338,7 +345,7 @@ class CheckItem(OwnedMixin, Base):
     __tablename__ = "check_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), index=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(500))
     done: Mapped[bool] = mapped_column(default=False)
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -394,7 +401,7 @@ class Habit(OwnedMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     check_ins: Mapped[list["CheckIn"]] = relationship(
-        back_populates="habit", cascade="all, delete-orphan"
+        back_populates="habit", cascade="all, delete-orphan", passive_deletes=True
     )
 
 
@@ -411,7 +418,7 @@ class CheckIn(OwnedMixin, Base):
     __table_args__ = (UniqueConstraint("habit_id", "date"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id"), index=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"), index=True)
     # The local calendar day the user checked in (the caller's day, like the
     # Smart Lists' `today` parameter) — never a UTC instant.
     date: Mapped[date] = mapped_column(Date)
@@ -450,6 +457,7 @@ class Goal(OwnedMixin, Base):
     key_results: Mapped[list["KeyResult"]] = relationship(
         back_populates="goal",
         cascade="all, delete-orphan",
+        passive_deletes=True,
         order_by="KeyResult.sort_order, KeyResult.id",
         lazy="selectin",
     )
@@ -471,7 +479,7 @@ class KeyResult(OwnedMixin, Base):
     __tablename__ = "key_results"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id"), index=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255))
     source: Mapped[str] = mapped_column(String(16), default="manual")
     start_value: Mapped[float] = mapped_column(default=0.0)
@@ -502,8 +510,12 @@ class FocusSession(OwnedMixin, Base):
     mode: Mapped[str] = mapped_column(String(9))
     # At most one link: a session belongs to a Task or a Habit, never both.
     # Deleting the linked row clears the link; the history stays.
-    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), index=True, default=None)
-    habit_id: Mapped[int | None] = mapped_column(ForeignKey("habits.id"), index=True, default=None)
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), index=True, default=None
+    )
+    habit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("habits.id", ondelete="SET NULL"), index=True, default=None
+    )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # Wall-clock seconds spent paused: recorded focus time stays honest.
@@ -590,6 +602,7 @@ class StandupEntry(OwnedMixin, Base):
     bullets: Mapped[list["StandupBullet"]] = relationship(
         back_populates="entry",
         cascade="all, delete-orphan",
+        passive_deletes=True,
         order_by="StandupBullet.sort_order, StandupBullet.id",
         lazy="selectin",
     )
@@ -607,7 +620,9 @@ class StandupBullet(OwnedMixin, Base):
     __tablename__ = "standup_bullets"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    entry_id: Mapped[int] = mapped_column(ForeignKey("standup_entries.id"), index=True)
+    entry_id: Mapped[int] = mapped_column(
+        ForeignKey("standup_entries.id", ondelete="CASCADE"), index=True
+    )
     section: Mapped[str] = mapped_column(String(9))
     text: Mapped[str] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -632,8 +647,12 @@ class Timer(OwnedMixin, Base):
     duration_seconds: Mapped[int | None] = mapped_column(default=None)
     # At most one link, like the sessions the preset starts. Deleting the
     # linked row clears the link; the preset stays.
-    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), index=True, default=None)
-    habit_id: Mapped[int | None] = mapped_column(ForeignKey("habits.id"), index=True, default=None)
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), index=True, default=None
+    )
+    habit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("habits.id", ondelete="SET NULL"), index=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

@@ -15,6 +15,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 
 from app.db import BACKEND_DIR, run_migrations
+from app.models import Base
 from tests.conftest import drop_database, fresh_database, run_sql
 
 SEED_LIST = (
@@ -642,3 +643,168 @@ class TestLastActiveMigration:
         assert run_sql(empty_database_url, "SELECT username, last_active_at FROM users") == [
             ("ana", None)
         ]
+
+
+# A 0040 install holding one linked row under every parent a delete rule
+# hangs off (issue #508).
+LINKED_ROWS = (
+    "INSERT INTO users (id, username, email) VALUES (1, 'ana', 'ana@example.com')",
+    "INSERT INTO folders (id, name, sort_order, owner_id, created_at) "
+    "VALUES (1, 'Work', 0, 1, now())",
+    "INSERT INTO lists (id, name, is_inbox, is_archived, sort_order, view_mode, folder_id, "
+    "owner_id, created_at) VALUES (1, 'Errands', false, false, 0, 'list', 1, 1, now())",
+    "INSERT INTO sections (id, list_id, name, sort_order, owner_id, created_at) "
+    "VALUES (1, 1, 'Later', 0, 1, now())",
+    "INSERT INTO tasks (id, title, completed, description, priority, is_all_day, reminders, "
+    "list_id, section_id, sort_order, owner_id, created_at) VALUES "
+    "(1, 'Write code', false, '', 'none', false, '[]', 1, 1, 0, 1, now())",
+    "INSERT INTO tags (id, name, owner_id, created_at) VALUES (1, 'Errand', 1, now())",
+    "INSERT INTO task_tags (task_id, tag_id) VALUES (1, 1)",
+    "INSERT INTO check_items (id, task_id, title, done, sort_order, owner_id, created_at) "
+    "VALUES (1, 1, 'Tests', false, 0, 1, now())",
+    "INSERT INTO habits (id, name, type, target, step, encouragement, frequency, is_archived, "
+    "owner_id, created_at) VALUES (1, 'Read', 'boolean', 1, 1, '', 'FREQ=DAILY', false, 1, now())",
+    "INSERT INTO check_ins (id, habit_id, date, value, owner_id) VALUES (1, 1, '2026-01-05', 1, 1)",
+    "INSERT INTO focus_sessions (id, mode, task_id, habit_id, started_at, ended_at, "
+    "pause_seconds, note, owner_id, created_at) VALUES "
+    "(1, 'pomo', 1, NULL, now(), now(), 0, '', 1, now()), "
+    "(2, 'pomo', NULL, 1, now(), now(), 0, '', 1, now())",
+    "INSERT INTO timers (id, name, mode, duration_seconds, task_id, habit_id, owner_id, "
+    "created_at) VALUES (1, 'Coding', 'pomo', 1500, 1, NULL, 1, now()), "
+    "(2, 'Reading', 'pomo', 1500, NULL, 1, 1, now())",
+    "INSERT INTO goals (id, title, description, status, is_focused, owner_id, created_at) "
+    "VALUES (1, 'Ship', '', 'active', false, 1, now())",
+    "INSERT INTO key_results (id, goal_id, name, source, start_value, target_value, "
+    "current_value, sort_order, owner_id, created_at) VALUES "
+    "(1, 1, 'Releases', 'manual', 0, 3, 1, 0, 1, now())",
+    "INSERT INTO standup_entries (id, date, sprint_goal_snapshot, owner_id, created_at) "
+    "VALUES (1, '2026-01-05', '', 1, now())",
+    "INSERT INTO standup_bullets (id, entry_id, section, text, sort_order, owner_id, "
+    "created_at) VALUES (1, 1, 'today', 'Pair', 0, 1, now())",
+)
+
+
+class TestDeleteRulesMigration:
+    """Issue #508: PostgreSQL, not hand-written router sweeps, decides what
+    a delete takes with it. Each case deletes one parent straight in SQL
+    and checks what survives: dependents that mean nothing without it go,
+    history and presets of their own stay with the link cleared."""
+
+    @pytest.mark.parametrize(
+        ("parent", "survivors"),
+        [
+            pytest.param(
+                "folders",
+                {"SELECT id, folder_id FROM lists": [(1, None)]},
+                id="folder-unfiles-its-lists",
+            ),
+            pytest.param(
+                "sections",
+                {"SELECT id, section_id FROM tasks": [(1, None)]},
+                id="section-ungroups-its-tasks",
+            ),
+            pytest.param(
+                "tags",
+                {
+                    "SELECT * FROM task_tags": [],
+                    "SELECT id FROM tasks": [(1,)],
+                },
+                id="tag-detaches-from-tasks",
+            ),
+            pytest.param(
+                "tasks",
+                {
+                    "SELECT * FROM task_tags": [],
+                    "SELECT id FROM check_items": [],
+                    "SELECT id, task_id FROM focus_sessions ORDER BY id": [(1, None), (2, None)],
+                    "SELECT id, task_id FROM timers ORDER BY id": [(1, None), (2, None)],
+                    "SELECT id FROM tags": [(1,)],
+                },
+                id="task-takes-its-items-and-unlinks-its-history",
+            ),
+            pytest.param(
+                "habits",
+                {
+                    "SELECT id FROM check_ins": [],
+                    "SELECT id, habit_id FROM focus_sessions ORDER BY id": [(1, None), (2, None)],
+                    "SELECT id, habit_id FROM timers ORDER BY id": [(1, None), (2, None)],
+                },
+                id="habit-takes-its-check-ins-and-unlinks-its-history",
+            ),
+            pytest.param(
+                "lists",
+                {
+                    "SELECT id FROM sections": [],
+                    "SELECT id FROM tasks": [],
+                    "SELECT id FROM check_items": [],
+                    "SELECT id, task_id FROM focus_sessions ORDER BY id": [(1, None), (2, None)],
+                    "SELECT id FROM folders": [(1,)],
+                },
+                id="list-takes-its-sections-and-tasks",
+            ),
+            pytest.param(
+                "goals",
+                {"SELECT id FROM key_results": []},
+                id="goal-takes-its-key-results",
+            ),
+            pytest.param(
+                "standup_entries",
+                {"SELECT id FROM standup_bullets": []},
+                id="stand-up-entry-takes-its-bullets",
+            ),
+        ],
+    )
+    def test_deleting_a_parent_applies_its_rule(
+        self, empty_database_url: str, parent: str, survivors: dict[str, list[tuple]]
+    ) -> None:
+        config = alembic_config(empty_database_url)
+        command.upgrade(config, "0040")
+        for statement in LINKED_ROWS:
+            run_sql(empty_database_url, statement)
+        command.upgrade(config, "head")
+
+        run_sql(empty_database_url, f"DELETE FROM {parent} WHERE id = 1")  # noqa: S608
+
+        for query, rows in survivors.items():
+            assert run_sql(empty_database_url, query) == rows, query
+
+
+# pg_constraint.confdeltype, as the ON DELETE clause SQLAlchemy writes.
+PG_DELETE_RULES = {"a": None, "r": "RESTRICT", "c": "CASCADE", "n": "SET NULL"}
+
+
+class TestDeleteRulesContract:
+    """Issue #508: the models declare the same delete rules the migrations
+    build, and every foreign key has one. The only exception is the
+    foreign keys to `users`: no User is ever deleted, so one who still owns
+    rows is refused rather than cascading their account away."""
+
+    def declared_rules(self) -> dict[tuple[str, str], str | None]:
+        return {
+            (table.name, foreign_key.parent.name): foreign_key.ondelete
+            for table in Base.metadata.tables.values()
+            for foreign_key in table.foreign_keys
+        }
+
+    def test_every_foreign_key_but_the_owners_declares_a_rule(self) -> None:
+        for (table, column), ondelete in self.declared_rules().items():
+            referred = next(
+                fk.column.table.name
+                for fk in Base.metadata.tables[table].foreign_keys
+                if fk.parent.name == column
+            )
+            if referred == "users":
+                assert ondelete is None, (table, column)
+            else:
+                assert ondelete in {"CASCADE", "SET NULL"}, (table, column)
+
+    def test_the_migrated_database_matches_the_models(self, database_url: str) -> None:
+        rows = run_sql(
+            database_url,
+            "SELECT c.conrelid::regclass::text, a.attname, c.confdeltype "
+            "FROM pg_constraint c JOIN pg_attribute a "
+            "ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1] WHERE c.contype = 'f'",
+        )
+        built = {(table, column): PG_DELETE_RULES[rule] for table, column, rule in rows}
+
+        assert built == self.declared_rules()

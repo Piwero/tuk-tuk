@@ -8,13 +8,13 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.habit_frequency import due_on, validate_frequency
 from app.habit_stats import current_streak, intensity
-from app.models import CheckIn, FocusSession, Habit, KeyResult, Timer
+from app.models import CheckIn, Habit
 from app.schemas import (
     CheckInPut,
     CheckInRead,
@@ -141,15 +141,9 @@ async def delete_habit(habit_id: int, session: SessionDep) -> None:
     """Delete the Habit and its whole Check-in history. Focus Sessions are
     history of their own: they outlive the Habit, only the link goes."""
     habit = await get_habit_or_404(habit_id, session)
-    await session.execute(
-        update(FocusSession).where(FocusSession.habit_id == habit_id).values(habit_id=None)
-    )
-    await session.execute(update(Timer).where(Timer.habit_id == habit_id).values(habit_id=None))
-    # A habit_checkins Key Result stops counting rather than breaking its
-    # Goal when the source Habit goes away (ADR 0012, issue #235).
-    await session.execute(
-        update(KeyResult).where(KeyResult.source_habit_id == habit_id).values(source_habit_id=None)
-    )
+    # The database takes its Check-ins and unlinks its Focus Sessions, Timers
+    # and Key Results: a habit_checkins Key Result stops counting rather than
+    # breaking its Goal (ADR 0012, issue #508).
     await session.delete(habit)
     await session.commit()
 
