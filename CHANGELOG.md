@@ -4,6 +4,75 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.0.0](https://github.com/Piwero/tuk-tuk/compare/v2.21.1...v3.0.0) - 2026-11-20
+
+### Features
+
+- **deploy:** Tailnet egress to postgres-supernova ([702d3fc](https://github.com/Piwero/tuk-tuk/commit/702d3fc95491041a158b6f35ba65bab8bd623680))
+- **deploy:** Enable tuk-tuk-db secret for PostgreSQL cutover ([f0803c9](https://github.com/Piwero/tuk-tuk/commit/f0803c9b64c91763c0874873683cbd121deacbb3))
+- **backend:** PostgreSQL is the only database ([b666354](https://github.com/Piwero/tuk-tuk/commit/b666354c67f183c884a3f868ec97a86fa17e73fb))
+- **frontend:** Settings > Database always reports PostgreSQL ([757d7e5](https://github.com/Piwero/tuk-tuk/commit/757d7e5900f201fd2bdd4046c7ffd2098038d621))
+- **deploy:** Postgres service in both compose files ([1e6600d](https://github.com/Piwero/tuk-tuk/commit/1e6600d05a4ee5440f64fe0f60defc40667cdbd7))
+- **deploy:** DATABASE_URL only from the required tuk-tuk-db secret ([c80872b](https://github.com/Piwero/tuk-tuk/commit/c80872b0536f4baa6521b049fe310d63e3231bbe))
+- **backend:** Add users table and owner_id on every owned table ([0f8a338](https://github.com/Piwero/tuk-tuk/commit/0f8a3380bf7c71ae4ac4d409221a07402084d4b3))
+- Merge #408 users schema and owner_id ([7dc38db](https://github.com/Piwero/tuk-tuk/commit/7dc38dba9e148fcf01a3328d2902a99c14318b6b))
+- **backend:** Per-user login, session epoch and forced steps ([8a91b60](https://github.com/Piwero/tuk-tuk/commit/8a91b60c850d02d415d3ae94531497188c00f134))
+- **backend:** Split settings singleton into per-user user_settings ([56cdab8](https://github.com/Piwero/tuk-tuk/commit/56cdab873dd8405b7e8634c4d9739892f370a5cd))
+- **backend:** Drop settings.password_hash ([ad4fc33](https://github.com/Piwero/tuk-tuk/commit/ad4fc33d74a5dae4c7a977dbe723cc5424dbc4b0))
+- Merge #409 per-user user_settings ([17146df](https://github.com/Piwero/tuk-tuk/commit/17146dfdba65b268c3c3dfd74c92507b5ef42f99))
+- Merge #410 per-user auth ([28169c3](https://github.com/Piwero/tuk-tuk/commit/28169c3e6e957cf1e4e020cd51b3711fdcf39120))
+- **backend:** Admin users API ([e8e86ea](https://github.com/Piwero/tuk-tuk/commit/e8e86ea53bd391766692b8a718d65f8b5296583b))
+- Merge #412 admin users API ([40925ae](https://github.com/Piwero/tuk-tuk/commit/40925ae4cbafdde911d1ced20cff03c0083620a0))
+- **frontend:** Per-user sign-in and first-run setup ([7d71de2](https://github.com/Piwero/tuk-tuk/commit/7d71de2f3f84612b3b411183ccc436f830e99206))
+- Merge #469 #470 sign-in and first-run setup ([07fa51a](https://github.com/Piwero/tuk-tuk/commit/07fa51a683cd6d3413ff0937d19d4cf05daba78f))
+- **backend:** Let a signed-in user edit their own username and email ([2319a13](https://github.com/Piwero/tuk-tuk/commit/2319a13c10f235df4153deda6dd9a77d1c926774))
+- **frontend:** Settings tabs and My account profile ([32a8ee5](https://github.com/Piwero/tuk-tuk/commit/32a8ee580e9b12d528498c0b1cbb6c3ded74cc00))
+- **frontend:** Forced step to replace a temporary password ([a6141b4](https://github.com/Piwero/tuk-tuk/commit/a6141b428d36b7ad4f8dec34170bad0bfd8b5e30))
+- Merge #471 forced password step ([908d840](https://github.com/Piwero/tuk-tuk/commit/908d840d4a92e7da9ddbad576c259a5553b3f556))
+- Merge #474 settings tabs and My account profile ([950c6fd](https://github.com/Piwero/tuk-tuk/commit/950c6fdb365f20521da93e71c3bc6aa5eccbce14))
+- **backend:** Record when each user's password last changed ([f7cce2b](https://github.com/Piwero/tuk-tuk/commit/f7cce2be9196e01afff43dfa7b59e1574c09b66a))
+- **frontend:** Password row and change-password dialog in My account ([2c45945](https://github.com/Piwero/tuk-tuk/commit/2c45945ce19e442a02aa34f01bbc1098eb672060))
+- **backend:** Enforce row ownership centrally ([896674e](https://github.com/Piwero/tuk-tuk/commit/896674ed169444ba651c81c7fe370aa92b70659b))
+- Merge #411 global owner filter and isolation test ([1489507](https://github.com/Piwero/tuk-tuk/commit/1489507ed8faa18eb2cd9efebeccc70af84b23c8))
+- **frontend:** User menu at the top right and at the head of the More sheet ([30eb5be](https://github.com/Piwero/tuk-tuk/commit/30eb5be42372070f0d10d6f2e1d8d29379db7301))
+- Merge #473 user menu ([1d41c40](https://github.com/Piwero/tuk-tuk/commit/1d41c40d4343cc1b4133ec8c2d0c9a0233e4c777))
+- **frontend:** Forced step to complete the upgraded user's profile ([ca0497f](https://github.com/Piwero/tuk-tuk/commit/ca0497ffae18f6d4f6eb49eefd4f47f653a657f2))
+- Merge #472 complete profile step ([5125779](https://github.com/Piwero/tuk-tuk/commit/5125779602c30a4d1890b26710fcd11c982a9f87))
+- Merge #475 change password and password-changed time ([e76ff4a](https://github.com/Piwero/tuk-tuk/commit/e76ff4a793461ec397fea1dc9b423ed72c9e531a))
+- **frontend:** List accounts in Settings › Users for admins ([cbd2d25](https://github.com/Piwero/tuk-tuk/commit/cbd2d25e48597a7cd3ae2845c082fe0a141ea525))
+- Merge #477 users list for admins ([b5a6cf5](https://github.com/Piwero/tuk-tuk/commit/b5a6cf568238f422fce29fee0b5481f796eeac30))
+- **frontend:** Create users with a one-time temporary password ([56ba293](https://github.com/Piwero/tuk-tuk/commit/56ba293a4ff4cf7e9812fea9722c079fba3a14cb))
+- Merge #479 create user with one-time temporary password ([504b017](https://github.com/Piwero/tuk-tuk/commit/504b01779fe261d38b1ca96de49cb033d324a93b))
+- **frontend:** Disable, enable and change a user's role from the Users row menu ([696a5e8](https://github.com/Piwero/tuk-tuk/commit/696a5e8d4b328bda5b3aaea92f8d7ba1e6f2384b))
+- Merge #481 disable, enable and role from the Users row menu ([7fa6c3e](https://github.com/Piwero/tuk-tuk/commit/7fa6c3eba59dce62cefcf83d9bc3d962be714902))
+- **backend:** Record when each account was last active ([9828f75](https://github.com/Piwero/tuk-tuk/commit/9828f756eb77b94ee021535797398c47ba8ae9d0))
+- **frontend:** Show when each account was last active in Settings › Users ([61d34c9](https://github.com/Piwero/tuk-tuk/commit/61d34c9b87126fbd0408f4ff6eb3fe6a09dd1347))
+- Merge #478 last active on accounts ([b2a3e74](https://github.com/Piwero/tuk-tuk/commit/b2a3e74afde0b6d05d703a3ab7a886935138c27d))
+- **frontend:** Reset a user's password from the Users row menu ([bce7fb7](https://github.com/Piwero/tuk-tuk/commit/bce7fb7d42de87e9c2319e5b4badf93e5904ffba))
+- Merge #480 reset a user's password ([0ab4d81](https://github.com/Piwero/tuk-tuk/commit/0ab4d81fa873cc472c77e34833f5a32c04a37d61))
+- **backend:** Personal API tokens with Bearer authentication ([1101c57](https://github.com/Piwero/tuk-tuk/commit/1101c57822ae89a54e0f6f12af7a9f412c4db8ac))
+- **mcp:** Authenticate HTTP mode with TUK_API_TOKEN ([8193663](https://github.com/Piwero/tuk-tuk/commit/81936638967914cccc74e782d1b84f26ad9af41e))
+- Merge #413 personal API tokens ([684fa09](https://github.com/Piwero/tuk-tuk/commit/684fa0949152081a8b1b68094b768404cce57a68))
+- **cli:** Tuk login asks for a username or email ([d9b99e3](https://github.com/Piwero/tuk-tuk/commit/d9b99e3f45f642ee6fda264b5c994f6c11d2698d))
+- **backend:** Voice room names carry the user's id ([a7ad3c6](https://github.com/Piwero/tuk-tuk/commit/a7ad3c65f64ab03cbf1fc8d122315cb6774f7ce6))
+- **deploy:** The MCP chart's secret holds TUK_API_TOKEN ([f0c2356](https://github.com/Piwero/tuk-tuk/commit/f0c2356165752d9b91f900eb2e42dfbbd05bfdb3))
+- **frontend:** API tokens card in My account (#476) ([5555c76](https://github.com/Piwero/tuk-tuk/commit/5555c7661081315236a72ca860e716d0c49e04c7))
+- Merge #476 API tokens UI in My account ([3ed8be0](https://github.com/Piwero/tuk-tuk/commit/3ed8be0f2f5334985b9c2ee604259f1d20b8e325))
+- Merge #416 clients: CLI username login, MCP token, per-user voice ([0bcc125](https://github.com/Piwero/tuk-tuk/commit/0bcc125926bfb41f853d030dca9a45beb2236cd6))
+
+### Bug Fixes
+
+- **backend:** Pin image base to python:3.14-slim and build it in CI ([12f59bd](https://github.com/Piwero/tuk-tuk/commit/12f59bdb63d239b54cbc4b26c22f78ff43dd250e))
+- **backend:** Delete a list whose tasks are filed in its sections ([986c6c1](https://github.com/Piwero/tuk-tuk/commit/986c6c1252d3006111e7f835bbe725e10441958c))
+- **backend:** Make the database settings admin-only and refuse them to API tokens ([40be1b1](https://github.com/Piwero/tuk-tuk/commit/40be1b19c4f912dfa4b73a262be040d6434e9ef9))
+- **backend:** Bind the Google OAuth state to the User who started it ([59000ec](https://github.com/Piwero/tuk-tuk/commit/59000ec98ed830c283ad5e524110d11be6164cdc))
+- **backend:** Stop the multi-user migration on data the new uniqueness refuses ([7ca43f3](https://github.com/Piwero/tuk-tuk/commit/7ca43f32340ce982b69f39bbc1279d0a8ef3b038))
+- **backend:** Report a username or email lost to a race as 409, not 500 ([afc2d78](https://github.com/Piwero/tuk-tuk/commit/afc2d78893de3a9fb9e9de811a1a5d9c40150d41))
+- **backend:** Mark the first Admin active under AUTH_DISABLED ([bcce2f5](https://github.com/Piwero/tuk-tuk/commit/bcce2f5a7e59b6e21fc731d46077e3dd753ea68f))
+- Name the first Admin in the CLI and MCP setup_required message ([c69451e](https://github.com/Piwero/tuk-tuk/commit/c69451e535ae23e0e6d2ff9fb254af10ff4fd620))
+- **frontend:** Say 'at next sign-in' when showing a reset temporary password ([667bfd9](https://github.com/Piwero/tuk-tuk/commit/667bfd96b5bab7c6d7bff2a9727a0cb199e934db))
+- Merge code-review fixes for multi-user ([e000f23](https://github.com/Piwero/tuk-tuk/commit/e000f237b67436674ea34826ebbc156005fd445e))
+
 ## [2.21.1](https://github.com/Piwero/tuk-tuk/compare/v2.21.0...v2.21.1) - 2026-11-19
 
 ### Bug Fixes
