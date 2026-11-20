@@ -131,7 +131,7 @@ def test_login_setup_required_points_at_web_app(
     assert run_login(monkeypatch, httpx.MockTransport(handler)) == 1
 
     err = capsys.readouterr().err
-    assert "web app" in err
+    assert "No Admin account yet — open the web app to create the first Admin." in err
 
 
 def test_login_wrong_password_does_not_point_at_setup(

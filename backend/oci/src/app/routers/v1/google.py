@@ -13,9 +13,10 @@ the browser.
 """
 
 from datetime import datetime
+from typing import Annotated
 from urllib.parse import urlencode, urlparse
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -36,6 +37,7 @@ from app.errors import APIError, NotFoundError
 from app.models import GoogleAccount, GoogleCalendar, UserSettings
 from app.schemas import reject_explicit_null
 from app.user_settings import CurrentUserSettings, google_configured, google_oauth_client
+from app.users import current_user_id
 
 router = APIRouter(prefix="/api/v1/google", tags=["google"])
 
@@ -136,23 +138,26 @@ def _state_serializer(session_key: str) -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(session_key, salt=_STATE_SALT)
 
 
-def _build_state(session_key: str, return_to: str) -> str:
-    token: str = _state_serializer(session_key).dumps({"return_to": return_to})
+def _build_state(session_key: str, return_to: str, user_id: int) -> str:
+    token: str = _state_serializer(session_key).dumps({"return_to": return_to, "user_id": user_id})
     return token
 
 
-def _read_return_to(session_key: str, state: str) -> str:
+def _read_return_to(session_key: str, state: str, user_id: int) -> str:
     """Verifies `state` was minted by this server within the last
-    `_STATE_MAX_AGE_SECONDS` (never trusted from the request alone) and
-    returns the frontend origin to send the browser back to. Raises on a
-    missing, tampered, or expired state — there is then no verified origin
-    left to redirect to."""
+    `_STATE_MAX_AGE_SECONDS` (never trusted from the request alone) for the
+    User now signed in, and returns the frontend origin to send the browser
+    back to. Raises on a missing, tampered, or expired state, or one another
+    User started (or that names no User): a consent begun in one session
+    must never link a Google account in another's."""
     try:
         payload = _state_serializer(session_key).loads(state, max_age=_STATE_MAX_AGE_SECONDS)
     except (BadSignature, SignatureExpired):
         raise _invalid_state_error() from None
-    return_to = payload.get("return_to") if isinstance(payload, dict) else None
-    if not isinstance(return_to, str):
+    if not isinstance(payload, dict):
+        raise _invalid_state_error()
+    return_to = payload.get("return_to")
+    if not isinstance(return_to, str) or payload.get("user_id") != user_id:
         raise _invalid_state_error()
     return return_to
 
@@ -248,7 +253,10 @@ def _oauth_client(request: Request, user_settings: UserSettings) -> GoogleOAuthC
 
 @router.get("/connect")
 async def connect(
-    request: Request, session: SessionDep, user_settings: CurrentUserSettings
+    request: Request,
+    session: SessionDep,
+    user_settings: CurrentUserSettings,
+    user_id: Annotated[int, Depends(current_user_id)],
 ) -> RedirectResponse:
     settings = request.app.state.settings
     require_google_configured(user_settings)
@@ -265,7 +273,7 @@ async def connect(
         # an already-authorized account — without it Google omits
         # refresh_token on a repeat consent.
         "prompt": "consent",
-        "state": _build_state(app_settings.session_key, return_to),
+        "state": _build_state(app_settings.session_key, return_to, user_id),
     }
     return RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
 
@@ -275,6 +283,7 @@ async def callback(
     request: Request,
     session: SessionDep,
     user_settings: CurrentUserSettings,
+    user_id: Annotated[int, Depends(current_user_id)],
     code: str | None = None,
     state: str | None = None,
 ) -> RedirectResponse:
@@ -284,7 +293,7 @@ async def callback(
 
     if state is None:
         raise _invalid_state_error()
-    return_to = _read_return_to(app_settings.session_key, state)
+    return_to = _read_return_to(app_settings.session_key, state, user_id)
 
     if code is None:
         return RedirectResponse(f"{return_to}?googleError=1", status_code=302)

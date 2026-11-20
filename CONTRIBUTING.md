@@ -2,7 +2,7 @@
 
 Developer guide for tuk-tuk. To just run the app, see
 [docs/self-hosting/install.md](docs/self-hosting/install.md). Domain language
-lives in [`CONTEXT.md`](CONTEXT.md); design decisions in [`docs/adr/`](docs/adr/).
+lives in [`GLOSSARY.md`](GLOSSARY.md); design decisions in [`docs/adr/`](docs/adr/).
 
 ## Stack
 

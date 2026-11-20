@@ -75,14 +75,17 @@ FORCED_STEP_ROUTES = frozenset(
 # What an API token may never do (issue #413), so a stolen one stays a
 # credential its owner can simply revoke: mint another token, set the
 # password or complete a forced step, change the account's identity, or,
-# for an Admin's token, manage any account. Exact match on method and path,
-# plus everything under the admin API.
+# for an Admin's token, manage any account or reach the instance's own
+# database (whose connection test makes the server connect anywhere, ADR
+# 0018). Exact match on method and path, plus everything under the admin API.
 TOKEN_REFUSED_ROUTES = frozenset(
     {
         ("POST", "/api/v1/auth/me/tokens"),
         ("POST", "/api/v1/auth/password"),
         ("POST", "/api/v1/auth/complete"),
         ("PATCH", "/api/v1/auth/me"),
+        ("GET", "/api/v1/settings/database"),
+        ("POST", "/api/v1/settings/database/test-connection"),
     }
 )
 ADMIN_PATH = "/api/v1/admin"
@@ -276,7 +279,8 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Local-dev escape hatch (AUTH_DISABLED): no cookie, no forced
-        steps; every request acts as the first Admin. An install with no
+        steps; every request acts as the first Admin, and marks them active
+        like any served request (issue #478). An install with no
         User yet still has to go through `/setup` to create one."""
         session_factory = request.app.state.session_factory
         async with session_factory() as db_session:
@@ -284,5 +288,6 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if admin is None:
             return _setup_required()
         request.state.user_id = admin.id
+        await self._record_activity(request, admin)
         with acting_as(admin.id):
             return await call_next(request)

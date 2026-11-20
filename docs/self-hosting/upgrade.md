@@ -15,8 +15,8 @@ Your data lives in the `postgres` container. While the app is running:
 2. Store `tuk-tuk-backup.sql` **and** your `.env` somewhere safe, such as a
    password manager or an encrypted drive.
 
-The backup contains all your tasks, habits, goals and your password hash. Keep
-it private.
+The backup contains everyone's tasks, habits and goals, and their password
+hashes. Keep it private.
 
 ## Restore a backup
 
@@ -50,6 +50,63 @@ your saved Google and AI credentials can't be read and have to be entered again.
 
 Database changes are applied automatically on start. Check the
 [CHANGELOG](../../CHANGELOG.md) for anything new.
+
+## Upgrading to multi-user
+
+Read this once if your install still has **one password** and no
+usernames. The upgrade turns it into an install with accounts, one per
+person, and gives all your existing data to the first account, the Admin.
+Allow 10 minutes.
+
+> **There is no way back.** An older version can't read the upgraded
+> database. Take a [backup](#back-up) first. To undo the upgrade, restore that
+> backup and go back to the version you had.
+
+1. [Back up](#back-up).
+2. Check for data the upgrade refuses. Two things that used to be allowed
+   are now unique for each account: tag names, ignoring upper and lower
+   case, and the Inbox. While the old version is still running:
+   ```sh
+   docker compose -f docker-compose.prod.yml exec -T postgres psql -U tuktuk -d tuktuk <<'SQL'
+   -- Tags whose names differ only in case, such as "Work" and "work"
+   SELECT id, name FROM tags
+   WHERE lower(name) IN (SELECT lower(name) FROM tags GROUP BY lower(name) HAVING count(*) > 1)
+   ORDER BY lower(name), id;
+   -- Lists marked as an Inbox: there must be at most one
+   SELECT id, name FROM lists WHERE is_inbox ORDER BY id;
+   SQL
+   ```
+   Both empty, or one Inbox: go to step 3. Otherwise fix what it lists:
+   - **Tags:** rename all but one of each clashing set, in the app or with
+     `UPDATE tags SET name = 'work (2)' WHERE id = 9;` (your own id and name).
+   - **Inboxes:** keep one. Turn each other one into an ordinary list, with
+     its tasks intact:
+     `UPDATE lists SET is_inbox = false WHERE id = 5;` (your own id).
+
+   If you skip this step and the data needs fixing, the new version stops
+   on start and changes nothing. Its log
+   (`docker compose -f docker-compose.prod.yml logs backend`) names the same
+   rows. The database keeps running, so fix them with the same commands,
+   then start again with `docker compose -f docker-compose.prod.yml up -d`.
+3. Get the new version and restart, as in [Upgrade](#upgrade-25-min) above
+   (steps 2 and 3).
+4. **Everyone signs in again.** Sessions from before the upgrade no longer
+   work, on every device.
+5. Sign in with the username **`admin`** and your existing password. The app
+   then asks you to complete your profile: choose your own username, add
+   your email, and set a new password. Your lists, tasks, habits and goals
+   are all there.
+
+   If your install never had a password, the app opens the setup screen
+   instead. The account you create there gets all your data.
+6. To let someone else in, create their account in **Settings → Users**.
+   Nobody can sign up on their own.
+
+The command-line client now signs in with a username as well as a
+password. A remote MCP server needs an API token instead of the password:
+see [Give a User their own MCP server or voice agent](per-user-mcp-and-voice.md).
+
+Background: [ADR 0018](../adr/0018-multi-user-row-level-isolation.md).
 
 ## Upgrading from SQLite (v2.21 and earlier)
 

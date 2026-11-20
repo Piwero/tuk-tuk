@@ -4,13 +4,13 @@ import sys
 
 from tuk_core.client import ClientError
 
-SETUP_MESSAGE = "No password set yet — finish first-run setup in the web app."
+SETUP_MESSAGE = "No Admin account yet — open the web app to create the first Admin."
 
 # "Setup has not been completed" reaches a client under two codes. Every gated
 # route answers `setup_required` from the middleware; the login endpoint is a
 # public path, so it never reaches that middleware and answers `not_found` for
-# itself. Both mean the same thing to the owner — go and set a password in the
-# web app, which is the one thing a client deliberately cannot do — so both are
+# itself. Both mean the same thing — go and create the first Admin in the web
+# app, which is the one thing a client deliberately cannot do — so both are
 # accepted here. Keyed off the envelope code, never the bare status: on the
 # login path 404 and 401 both occur, and 401 is also a wrong password.
 #

@@ -69,7 +69,7 @@ describe("AuthGate sign-in", () => {
   });
 
   it("says sign-in is temporarily locked after too many attempts", async () => {
-    installFakeApi({ loggedIn: false, loginLocked: true });
+    installFakeApi({ loggedIn: false, users: [{ ...FAKE_ADMIN, login_locked: true }] });
     const user = userEvent.setup();
     render(<AuthGate />);
 
@@ -77,6 +77,23 @@ describe("AuthGate sign-in", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/too many attempts/i);
     expect(screen.getByLabelText("Username or email")).toBeInTheDocument();
+  });
+
+  it("locks sign-in for that account only: another account still signs in", async () => {
+    installFakeApi({
+      loggedIn: false,
+      users: [{ ...FAKE_ADMIN, login_locked: true }, fakeUser("bea")],
+      tasks: [fakeTask("Buy milk")],
+    });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+    await signIn(user, "admin", FAKE_PASSWORD);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/too many attempts/i);
+
+    await user.clear(screen.getByLabelText("Username or email"));
+    await signIn(user, "bea", FAKE_PASSWORD);
+
+    expect(await screen.findByText("Buy milk")).toBeInTheDocument();
   });
 
   it("tells a disabled account to contact the admin", async () => {

@@ -131,6 +131,18 @@ project, by following the runbook. Self-service provisioning would need
 the app to create cluster workloads, which is a much larger trust surface
 than one admin running a documented step.
 
+## Decision: the database connection test is admin-only
+
+ADR 0013's Database section tests a connection to any URL it is given.
+0013 accepted that server-side request forgery because tuk-tuk had
+"exactly one user". That premise is gone, so the section is now an
+Admin's alone: its status read and its connection test both answer a
+non-admin with 403 `admin_required`. The database is the instance's, not a
+User's, and the Admin is already trusted with the deployment (see
+"Accepted trade-offs"). Neither is reachable with an API token, even an
+Admin's: a stolen token must not be able to make the server connect
+anywhere on its network.
+
 ## What this does not add
 
 Workspaces, sharing, invites, assignees, @-mentions, email delivery, hard
@@ -183,14 +195,6 @@ model until a record decides collaboration.
 - The admin is trusted with the deployment, including the database and
   `APP_MASTER_KEY`. "The admin cannot see users' data" is a property of
   the app, not a promise against the person who runs the host.
-
-## Not yet decided
-
-ADR 0013's Database section tests a connection to any URL a user gives
-it. 0013 accepted that server-side request forgery because tuk-tuk had
-"exactly one user". That premise is gone, so every logged-in user can now
-reach the endpoint. Whether it becomes admin-only is not decided here,
-and it should be settled before a second user is created.
 
 ## What would justify revisiting this
 

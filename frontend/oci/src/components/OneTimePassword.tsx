@@ -4,6 +4,9 @@ import { useRef, useState } from "react";
 interface OneTimePasswordProps {
   /** Whose password it is, named in the reminder to pass it on. */
   username: string;
+  /** When they must replace it: at their first sign-in for a new account,
+   * at their next one after a reset. */
+  signIn: "first" | "next";
   password: string;
   /** Whether the Admin has the password: Copy succeeded, or they ticked
    * "I have it". The dialog holding this keeps itself open until then. */
@@ -17,6 +20,7 @@ interface OneTimePasswordProps {
  * lives only in the caller's state; it is gone once the dialog closes. */
 export function OneTimePassword({
   username,
+  signIn,
   password,
   ready,
   onReadyChange,
@@ -54,7 +58,7 @@ export function OneTimePassword({
       </div>
       <ul className="one-time-password-notes">
         <li>Shown once. Copy it now and pass it to {username} yourself; tuk-tuk sends no email.</li>
-        <li>At first sign-in they must choose a new password before anything else.</li>
+        <li>At {signIn} sign-in they must choose a new password before anything else.</li>
       </ul>
       <label className="one-time-password-confirm">
         <input

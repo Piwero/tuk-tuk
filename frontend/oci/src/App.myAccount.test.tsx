@@ -198,7 +198,7 @@ describe("Profile", () => {
   );
 
   it.each([
-    ["Username", "   ", "Username must be 1 to 64 characters."],
+    ["Username", "   ", "Enter a username of 1 to 64 characters."],
     ["Email", "not-an-email", "Enter a valid email address."],
   ])(
     "catches an invalid %s on its field without asking the server",
@@ -310,7 +310,7 @@ describe("Password", () => {
   });
 
   it("shows the lockout message when changing the password is locked", async () => {
-    installFakeApi({ passwordChangeLocked: true });
+    installFakeApi({ users: [{ ...FAKE_ADMIN, login_locked: true }] });
     const user = await openSettings();
     await user.click(await screen.findByRole("button", { name: "Change password" }));
 

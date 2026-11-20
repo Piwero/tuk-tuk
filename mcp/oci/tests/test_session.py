@@ -79,3 +79,22 @@ def test_never_reads_or_writes_a_session_file(setup) -> None:
 
 def test_file_session_never_retries() -> None:
     assert FileSession().renew() is None
+
+
+def test_an_install_with_no_admin_yet_points_at_the_web_app(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TUK_CONFIG_DIR", str(tmp_path))
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            401, json={"error": {"code": "setup_required", "message": "Initial setup is required"}}
+        )
+    )
+    box = Toolbox(Client("http://x", transport=transport), TokenSession(API_TOKEN))
+
+    result = search(box)
+
+    assert result["isError"]
+    assert result["content"][0]["text"] == (
+        "No Admin account yet — open the web app to create the first Admin."
+    )

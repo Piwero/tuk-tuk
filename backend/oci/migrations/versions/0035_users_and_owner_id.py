@@ -12,6 +12,12 @@ admin, with the password hash and lockout state carried over from
 no user here. There is nothing to own yet, and the app creates the first
 user on boot.
 
+Uniqueness that only now applies (tag names ignoring case, at most one
+Inbox) is checked before anything changes: if the existing data breaks it,
+the upgrade stops with the offending rows named and leaves the data alone.
+Nothing is renamed or merged on the operator's behalf. The same checks, as
+SQL to run before upgrading, are in docs/self-hosting/upgrade.md.
+
 No downgrade: going back to a single `owner` string would have to either
 drop every user but #1 or merge their data, and both lose information. To
 undo this migration, restore the pre-upgrade backup.
@@ -77,7 +83,48 @@ def _holds_data(bind: sa.Connection) -> bool:
     return bind.execute(sa.text(f"SELECT EXISTS ({query})")).scalar_one()
 
 
+UPGRADE_DOC = "docs/self-hosting/upgrade.md, section 'Upgrading to multi-user'"
+
+
+def _rows(rows: Sequence[sa.Row[tuple[int, str]]]) -> str:
+    return ", ".join(f"{name!r} (id {row_id})" for row_id, name in rows)
+
+
+def _refuse_data_breaking_new_uniqueness(bind: sa.Connection) -> None:
+    """Every row is about to become user #1's, so what is now unique per
+    user must already be unique across the install."""
+    problems = []
+    clashing_tags = bind.execute(
+        sa.text(
+            "SELECT id, name FROM tags WHERE lower(name) IN "
+            "(SELECT lower(name) FROM tags GROUP BY lower(name) HAVING count(*) > 1) "
+            "ORDER BY lower(name), id"
+        )
+    ).all()
+    if clashing_tags:
+        problems.append(
+            "Tag names must now be unique ignoring case, but these tags differ only in "
+            f"case: {_rows(clashing_tags)}. Rename all but one of each, so no two names "
+            "match ignoring case."
+        )
+    inboxes = bind.execute(sa.text("SELECT id, name FROM lists WHERE is_inbox ORDER BY id")).all()
+    if len(inboxes) > 1:
+        problems.append(
+            f"There must be at most one Inbox, but these lists are each one: {_rows(inboxes)}. "
+            "Keep one and set is_inbox = false on the others, which makes them ordinary "
+            "lists with their tasks intact."
+        )
+    if problems:
+        raise RuntimeError(
+            "Cannot upgrade to multi-user (migration 0035); nothing has been changed. "
+            + " ".join(problems)
+            + f" Then run the upgrade again. See {UPGRADE_DOC}."
+        )
+
+
 def upgrade() -> None:
+    _refuse_data_breaking_new_uniqueness(op.get_bind())
+
     # citext is a trusted extension (PostgreSQL 13+), so the app's own
     # database owner can create it without superuser rights.
     op.execute("CREATE EXTENSION IF NOT EXISTS citext")

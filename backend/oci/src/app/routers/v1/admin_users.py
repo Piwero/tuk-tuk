@@ -22,8 +22,10 @@ from app.users import (
     check_new_password,
     clean_email,
     clean_username,
+    clear_lockout,
     create_user,
     ensure_identity_free,
+    reporting_taken_identity,
     set_password,
 )
 
@@ -98,18 +100,19 @@ async def create_account(
     email = clean_email(payload.email)
     check_new_password(payload.temp_password)
     await ensure_identity_free(session, username, email)
-    user = await create_user(
-        session,
-        User(
-            username=username,
-            email=email,
-            password_hash=password_hasher.hash(payload.temp_password),
-            is_admin=payload.is_admin,
-            must_change_password=True,
-            password_changed_at=request.app.state.clock(),
-        ),
-    )
-    await session.commit()
+    async with reporting_taken_identity():
+        user = await create_user(
+            session,
+            User(
+                username=username,
+                email=email,
+                password_hash=password_hasher.hash(payload.temp_password),
+                is_admin=payload.is_admin,
+                must_change_password=True,
+                password_changed_at=request.app.state.clock(),
+            ),
+        )
+        await session.commit()
     return AdminUserRead.model_validate(user)
 
 
@@ -169,7 +172,6 @@ async def reset_password(
     check_new_password(payload.temp_password)
     set_password(user, password_hasher.hash(payload.temp_password), now=request.app.state.clock())
     user.must_change_password = True
-    user.login_failed_attempts = 0
-    user.login_locked_until = None
+    clear_lockout(user)
     await session.commit()
     return AdminUserRead.model_validate(user)

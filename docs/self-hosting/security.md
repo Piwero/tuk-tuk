@@ -7,17 +7,25 @@ reachable from the public internet over plain `http://`.
 
 ## How login works
 
-Tuk Tuk has **one password** and no user accounts
-([ADR 0005](../adr/0005-single-user-authentication-gate.md)).
+Everyone has **their own account**: a username, an email and a password
+([ADR 0018](../adr/0018-multi-user-row-level-isolation.md)). Each person sees
+only their own data, and an Admin can't see anyone else's either.
 
-- **Stored safely.** Only a one-way Argon2id hash of the password is saved, never the password itself.
+- **Admins create accounts.** There is no sign-up. An Admin adds a person in
+  **Settings → Users** with a temporary password, and that person must
+  choose their own the first time they sign in. Accounts are disabled, never
+  deleted: a disabled account is signed out at once and its data is kept.
+- **Stored safely.** Only a one-way Argon2id hash of each password is saved, never the password itself.
 - **30-day sessions.** Each visit extends the session, so a browser you use
-  regularly stays logged in. One left unused for 30 days is logged out.
-- **Guessing gets slow.** Each wrong password doubles the wait before the next
-  try, up to 30 seconds. A correct login resets it.
-- **Log out everywhere** by changing the password in **Settings → Security**.
-  Every other device is logged out at once.
-- **Everything is locked** until you log in, including the API. The only exception is the `/health` check.
+  regularly stays signed in. One left unused for 30 days is signed out.
+- **Guessing gets slow, per account.** After 5 wrong passwords in a row, each
+  further wrong one doubles the wait before that account can try again, up
+  to 30 seconds. A correct password resets it, and so does an Admin's
+  password reset. Other accounts are not affected.
+- **Sign out everywhere** by changing your password in **Settings → My
+  account**. Every other device of yours is signed out at once; nobody
+  else's is.
+- **Everything is locked** until you sign in, including the API. The only exception is the `/health` check.
 
 ## The master key
 
@@ -62,15 +70,36 @@ Each server serves one User, and the Admin deploys one on that User's request
 
 ## Forgotten password
 
-There's no reset email. Whoever runs the server can clear the password, and
-the app then shows the "choose a password" screen again. Your data is kept.
+There's no reset email. An Admin resets the password instead: in
+**Settings → Users**, pick the person and reset their password. They get a
+temporary password, are signed out everywhere, and must choose a new one
+when they next sign in. Their data is kept.
 
-1. From the `tuk-tuk` folder, run:
+If the only Admin has forgotten their own password, whoever runs the server
+can give them a temporary one from the command line:
+
+1. From the `tuk-tuk` folder, make a hash of a temporary password. It asks
+   for the password twice and prints the hash:
    ```sh
-   docker compose -f docker-compose.prod.yml exec postgres psql -U tuktuk -d tuktuk -c "UPDATE settings SET password_hash = NULL"
+   docker compose -f docker-compose.prod.yml exec backend python -m app.hash_password
    ```
-2. Open the app and choose a new password **straight away**. Until you do, anyone
-   who can reach the app can set it.
+2. Put it on the account, replacing the hash and the username with your own.
+   This also lifts any wait from wrong guesses and signs the account out
+   everywhere:
+   ```sh
+   docker compose -f docker-compose.prod.yml exec -T postgres psql -U tuktuk -d tuktuk <<'SQL'
+   UPDATE users
+   SET password_hash = 'PASTE-THE-HASH-HERE',
+       password_changed_at = now(),
+       must_change_password = true,
+       login_failed_attempts = 0,
+       login_locked_until = NULL,
+       session_epoch = session_epoch + 1
+   WHERE username = 'your-username';
+   SQL
+   ```
+   It should print `UPDATE 1`.
+3. Sign in with the temporary password and choose a new one.
 
 On your own PostgreSQL server, run the same `UPDATE` with `psql` against it.
 

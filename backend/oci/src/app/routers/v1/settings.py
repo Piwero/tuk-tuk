@@ -9,9 +9,10 @@ import asyncio
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, field_validator, model_validator
 
+from app.current_user import require_admin
 from app.db import DatabaseUrl, SessionDep
 from app.db_probe import ProbeResult, is_valid_postgres_url, probe_connection
 from app.models import UserSettings
@@ -157,7 +158,8 @@ async def update_active_hours_settings(
 # (never the settings table), and the test-connection endpoint only ever
 # probes a candidate URL supplied in the request body — neither can switch
 # the app's engine, and the submitted URL is never logged, stored, or
-# echoed back.
+# echoed back. Both are the instance's own concern, not a User's: Admins
+# only, and never over an API token (ADR 0018, app.middleware).
 class DatabaseStatus(BaseModel):
     # Always "postgresql", the only engine (issue #407); kept so the response
     # shape the Settings screen reads doesn't change.
@@ -177,13 +179,13 @@ class TestConnectionRequest(BaseModel):
         return value
 
 
-@router.get("/database")
+@router.get("/database", dependencies=[Depends(require_admin)])
 async def read_database_status(request: Request) -> DatabaseStatus:
     url = DatabaseUrl(request.app.state.settings.database_url)
     return DatabaseStatus(host=url.hostname, database=url.database)
 
 
-@router.post("/database/test-connection")
+@router.post("/database/test-connection", dependencies=[Depends(require_admin)])
 async def test_database_connection(payload: TestConnectionRequest) -> ProbeResult:
     """A pure probe — see app.db_probe. No path from here touches the
     `settings` row or the app's own engine; validation of the URL's scheme
@@ -193,5 +195,8 @@ async def test_database_connection(payload: TestConnectionRequest) -> ProbeResul
     `probe_connection` blocks for up to its connect timeout, so it runs in a
     thread: an unreachable host must fail only this request, not stall every
     other one sharing the event loop.
+
+    It makes the server connect wherever it is told (server-side request
+    forgery by construction, ADR 0013), so only an Admin may run it.
     """
     return await asyncio.to_thread(probe_connection, payload.connection_url)

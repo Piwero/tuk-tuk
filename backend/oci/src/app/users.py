@@ -3,10 +3,13 @@ with, naming the User a request acts as, finding one to log in, and the
 password and session-epoch rules every auth path shares."""
 
 import re
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import Request
 from sqlalchemy import exists, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import APIError
@@ -105,6 +108,13 @@ def set_password(user: User, password_hash: str, *, now: datetime) -> None:
     user.session_epoch += 1
 
 
+def clear_lockout(user: User) -> None:
+    """Forgets the User's wrong-password streak and lifts any login lockout:
+    after a correct password, and when an Admin resets theirs."""
+    user.login_failed_attempts = 0
+    user.login_locked_until = None
+
+
 async def import_env_password(
     session: AsyncSession, password_hash: str | None, user_settings: UserSettings
 ) -> None:
@@ -160,15 +170,45 @@ def clean_email(email: str) -> str:
     return email
 
 
+def _username_taken() -> APIError:
+    return APIError(409, "username_taken", "That username is already taken")
+
+
+def _email_taken() -> APIError:
+    return APIError(409, "email_taken", "That email is already in use")
+
+
+# The unique constraints migration 0035 gives users.username and users.email.
+_TAKEN_BY_CONSTRAINT = {"users_username_key": _username_taken, "users_email_key": _email_taken}
+
+
 async def ensure_identity_free(
     session: AsyncSession, username: str, email: str | None, *, except_user: User | None = None
 ) -> None:
     """409 when another User already holds `username` or `email` (both
     citext, so case is ignored), reported per field: `username_taken` or
     `email_taken`. A missing email (the migration's seeded user #1) clashes
-    with nobody."""
+    with nobody. A request racing this one can still claim either before
+    the write: wrap that write in `reporting_taken_identity`."""
     others = select(User).where(User.id != except_user.id) if except_user else select(User)
     if await session.scalar(others.where(User.username == username)) is not None:
-        raise APIError(409, "username_taken", "That username is already taken")
+        raise _username_taken()
     if email is not None and await session.scalar(others.where(User.email == email)) is not None:
-        raise APIError(409, "email_taken", "That email is already in use")
+        raise _email_taken()
+
+
+@asynccontextmanager
+async def reporting_taken_identity() -> AsyncIterator[None]:
+    """Reports a write that the unique username or email constraint refuses
+    the same way `ensure_identity_free` does: 409 `username_taken` or
+    `email_taken`. That happens when a concurrent request claimed the value
+    between the check and this write. Any other integrity error propagates
+    unchanged."""
+    try:
+        yield
+    except IntegrityError as error:
+        constraint = getattr(getattr(error.orig, "diag", None), "constraint_name", None)
+        taken = _TAKEN_BY_CONSTRAINT.get(constraint) if isinstance(constraint, str) else None
+        if taken is None:
+            raise
+        raise taken() from error

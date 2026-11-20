@@ -919,6 +919,19 @@ class TestAuthDisabled:
 
             assert client.get("/api/v1/tasks").status_code == 200
 
+    def test_a_served_request_marks_the_first_admin_active(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        """Like any other served request (issue #478), so the admin list
+        doesn't show the account in use as never active."""
+        with self.disabled_app(database_url, fake_clock) as client:
+            create_user_row(client, is_admin=True)
+            fake_clock.advance(timedelta(days=2))
+
+            users = client.get("/api/v1/admin/users").json()["items"]
+
+        assert datetime.fromisoformat(users[0]["last_active_at"]) == fake_clock.now
+
     def test_with_no_user_yet_setup_is_still_required(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:

@@ -2,11 +2,17 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { resetAdminUserPassword } from "./api";
+import { login, resetAdminUserPassword } from "./api";
 import { App } from "./App";
 import { generateTemporaryPassword } from "./auth/temporaryPassword";
 import { AuthGate } from "./AuthGate";
-import { FAKE_ADMIN, type FakeApiState, fakeUser, installFakeApi } from "./test/fakeApi";
+import {
+  FAKE_ADMIN,
+  FAKE_PASSWORD,
+  type FakeApiState,
+  fakeUser,
+  installFakeApi,
+} from "./test/fakeApi";
 
 /** Settings › Users › Reset password (#480): from a row's menu an Admin
  * gives an account a new temporary password, shown once in the same block as
@@ -89,6 +95,11 @@ describe("Reset password", () => {
     expect(
       within(done).getByText(
         "Shown once. Copy it now and pass it to ines yourself; tuk-tuk sends no email.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(done).getByText(
+        "At next sign-in they must choose a new password before anything else.",
       ),
     ).toBeInTheDocument();
 
@@ -241,5 +252,26 @@ describe("The fake admin users API on reset", () => {
     const stored = api.users.find((account) => account.id === ines.id);
     expect(stored?.password_changed_at).not.toBe(before);
     expect(Date.parse(stored?.password_changed_at ?? "")).not.toBeNaN();
+  });
+
+  it("lifts the account's sign-in lockout, like the backend", async () => {
+    const ines = fakeUser("ines", { login_locked: true });
+    installFakeApi({ users: [FAKE_ADMIN, ines] });
+    await expect(login("ines", FAKE_PASSWORD)).rejects.toMatchObject({
+      code: "too_many_attempts",
+    });
+    const password = generateTemporaryPassword();
+
+    await resetAdminUserPassword(ines.id, password);
+
+    await expect(login("ines", password)).resolves.toBeUndefined();
+  });
+
+  it("answers an unknown account 404 before checking the password, like the backend", async () => {
+    installFakeApi();
+
+    await expect(resetAdminUserPassword(9999, "short")).rejects.toMatchObject({
+      code: "not_found",
+    });
   });
 });

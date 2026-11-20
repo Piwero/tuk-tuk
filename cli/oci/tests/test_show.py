@@ -126,4 +126,7 @@ def test_show_setup_required_points_at_web_app(
 
     assert main(["show", "7"], transport=transport) == 1
 
-    assert "web app" in capsys.readouterr().err
+    assert (
+        "No Admin account yet — open the web app to create the first Admin."
+        in capsys.readouterr().err
+    )

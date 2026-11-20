@@ -30,7 +30,7 @@ CurrentUserDep = Annotated[User, Depends(get_current_user)]
 async def require_admin(user: CurrentUserDep) -> User:
     """The signed-in User, provided they are an Admin; 403 otherwise."""
     if not user.is_admin:
-        raise APIError(403, "admin_required", "Only an admin can manage accounts")
+        raise APIError(403, "admin_required", "Only an Admin can do this")
     return user
 
 
