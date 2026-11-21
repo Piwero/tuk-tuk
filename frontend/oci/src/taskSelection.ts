@@ -6,7 +6,7 @@
  * second row, in the order the rows are visible on screen; `clear` drops the
  * whole selection (Escape, or a view change). Selection is a set of Task ids
  * so it survives a re-render that hands back new Task objects. */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 export interface TaskSelection {
   selected: ReadonlySet<number>;
@@ -21,49 +21,78 @@ export interface TaskSelection {
   size: number;
 }
 
-export function useTaskSelection(): TaskSelection {
-  const [selected, setSelected] = useState<Set<number>>(() => new Set());
-  const anchorRef = useRef<number | null>(null);
+interface ScopedSelection {
+  scope: string;
+  ids: ReadonlySet<number>;
+  anchor: number | null;
+}
 
-  const toggle = useCallback((id: number) => {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-    anchorRef.current = id;
-  }, []);
+const NOTHING: ReadonlySet<number> = new Set();
 
-  const extendTo = useCallback((id: number, orderedIds: number[]) => {
-    const anchor = anchorRef.current;
-    if (anchor === null) {
-      setSelected((current) => new Set(current).add(id));
-      anchorRef.current = id;
-      return;
-    }
-    const from = orderedIds.indexOf(anchor);
-    const to = orderedIds.indexOf(id);
-    if (from === -1 || to === -1) {
-      return;
-    }
-    const [lo, hi] = from < to ? [from, to] : [to, from];
-    setSelected((current) => {
-      const next = new Set(current);
-      for (let index = lo; index <= hi; index += 1) {
-        next.add(orderedIds[index]!);
-      }
-      return next;
-    });
-  }, []);
+/** `scope` names the view the selection belongs to. A selection made under one
+ * scope reads as empty under any other, in the same render, so a view change
+ * never shows (or acts on) the previous view's rows. Resetting in render
+ * rather than in an effect also means a late-flushed effect can't wipe a
+ * selection the user has just made. */
+export function useTaskSelection(scope = ""): TaskSelection {
+  const [state, setState] = useState<ScopedSelection>(() => ({
+    scope,
+    ids: NOTHING,
+    anchor: null,
+  }));
+  const current = state.scope === scope ? state : { scope, ids: NOTHING, anchor: null };
+  const selected = current.ids;
+
+  // Every update starts from this scope's selection, never a stale one.
+  const update = useCallback(
+    (change: (previous: ScopedSelection) => ScopedSelection) => {
+      setState((previous) =>
+        change(previous.scope === scope ? previous : { scope, ids: NOTHING, anchor: null }),
+      );
+    },
+    [scope],
+  );
+
+  const toggle = useCallback(
+    (id: number) => {
+      update((previous) => {
+        const ids = new Set(previous.ids);
+        if (ids.has(id)) {
+          ids.delete(id);
+        } else {
+          ids.add(id);
+        }
+        return { ...previous, ids, anchor: id };
+      });
+    },
+    [update],
+  );
+
+  const extendTo = useCallback(
+    (id: number, orderedIds: number[]) => {
+      update((previous) => {
+        if (previous.anchor === null) {
+          return { ...previous, ids: new Set(previous.ids).add(id), anchor: id };
+        }
+        const from = orderedIds.indexOf(previous.anchor);
+        const to = orderedIds.indexOf(id);
+        if (from === -1 || to === -1) {
+          return previous;
+        }
+        const [lo, hi] = from < to ? [from, to] : [to, from];
+        const ids = new Set(previous.ids);
+        for (let index = lo; index <= hi; index += 1) {
+          ids.add(orderedIds[index]!);
+        }
+        return { ...previous, ids };
+      });
+    },
+    [update],
+  );
 
   const clear = useCallback(() => {
-    setSelected(new Set());
-    anchorRef.current = null;
-  }, []);
+    update((previous) => ({ ...previous, ids: NOTHING, anchor: null }));
+  }, [update]);
 
   return {
     selected,
