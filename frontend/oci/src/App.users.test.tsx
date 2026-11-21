@@ -228,10 +228,11 @@ describe("Users list for non-admins", () => {
     if (self) self.is_admin = false;
     await user.click(usersTab);
 
+    // The URL follows in an effect, which React 19 may flush after the DOM.
     await waitFor(() => {
       expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
+      expect(window.location.pathname).toBe("/settings/account");
     });
-    expect(window.location.pathname).toBe("/settings/account");
     expect(screen.getByLabelText("Username")).toHaveValue("admin");
     expect(screen.queryByRole("table", { name: "Users" })).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
