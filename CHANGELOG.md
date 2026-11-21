@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.2.1](https://github.com/Piwero/tuk-tuk/compare/v3.2.0...v3.2.1) - 2026-11-21
+
+### Bug Fixes
+
+- **deps:** Bump backend packages flagged by Dependabot ([03bb721](https://github.com/Piwero/tuk-tuk/commit/03bb721b3d4a8576fcd20e272edcf861125c8b33))
+
 ## [3.2.0](https://github.com/Piwero/tuk-tuk/compare/v3.1.1...v3.2.0) - 2026-11-21
 
 ### Features
