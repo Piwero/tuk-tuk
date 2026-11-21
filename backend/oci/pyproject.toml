@@ -34,7 +34,7 @@ dev = [
     "mypy>=2.4.1",
     "pre-commit>=4.7.0",
     "types-python-dateutil>=2.9.0.20261029",
-    "testcontainers[postgres]>=4.8",
+    "testcontainers[postgres]>=4.15.0",
     "pytest-xdist>=3.6",
 ]
 
