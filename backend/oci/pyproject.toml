@@ -11,10 +11,10 @@ requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "Piwero" }]
 dependencies = [
-    "fastapi>=0.162.5",
+    "fastapi>=0.162.7",
     "uvicorn[standard]>=0.52.4",
     "pydantic>=2.14.3",
-    "pydantic-settings>=2.16.2",
+    "pydantic-settings>=2.16.3",
     "sqlalchemy[asyncio]>=2.1.6",
     "psycopg[binary]>=3.2.0",
     "alembic>=1.20.1",
@@ -29,8 +29,8 @@ dependencies = [
 dev = [
     "pytest>=9.2.0",
     "pytest-cov>=5.0.0",
-    "pytest-asyncio>=1.4.1.post1",
-    "ruff>=0.17.4",
+    "pytest-asyncio>=1.5.0",
+    "ruff>=0.17.5",
     "mypy>=2.4.1",
     "pre-commit>=4.7.0",
     "types-python-dateutil>=2.9.0.20261029",
