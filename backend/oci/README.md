@@ -38,12 +38,16 @@ testcontainers and gives each test a fresh database
 
 ## Common commands
 
-| Task     | Command                 |
-| -------- | ----------------------- |
-| Lint     | `uv run ruff check .`   |
-| Format   | `uv run ruff format .`  |
-| Type     | `uv run mypy src`       |
-| Test     | `uv run pytest`         |
+| Task            | Command                 |
+| --------------- | ----------------------- |
+| Lint            | `uv run ruff check .`   |
+| Format          | `uv run ruff format .`  |
+| Type            | `uv run mypy src`       |
+| Test            | `uv run pytest`         |
+| Test (parallel) | `uv run pytest -n auto` |
+
+`-n auto` (pytest-xdist) is what CI runs: each worker starts its own
+PostgreSQL container, so the tests need no changes to run side by side.
 
 The Assistant also has a **manual** eval suite (`evals/`) that runs real,
 billed calls against a real model to answer whether it plans a day well.

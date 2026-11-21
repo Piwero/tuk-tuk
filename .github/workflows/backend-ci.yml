@@ -54,7 +54,7 @@ jobs:
       # The suite starts its own PostgreSQL through testcontainers (#407),
       # using the runner's Docker daemon — no service container needed.
       - name: Pytest
-        run: uv run pytest --cov=app --cov-report=xml
+        run: uv run pytest -n auto --cov=app --cov-report=xml
 
       - name: Upload coverage
         if: always()
