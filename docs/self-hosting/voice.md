@@ -21,7 +21,7 @@ Design record: [ADR 0015](../adr/0015-voice-assistant-cloud-agent-browser-relaye
 
 **Several Users?** Each User has their own LiveKit project and saves its credentials in their
 own Settings. The Admin deploys the agent into each User's project on request:
-[Give a User their own MCP server or voice agent](per-user-mcp-and-voice.md#voice-agent-for-a-user).
+[Give a User their own voice agent](per-user-mcp-and-voice.md#voice-agent-for-a-user).
 
 ## 1. Create a free LiveKit project (5 min)
 

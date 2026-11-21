@@ -35,6 +35,7 @@ from app.routers.v1 import (
     habits,
     key_results,
     lists,
+    mcp_exchange,
     sections,
     stand_up,
     tags,
@@ -125,6 +126,7 @@ def create_app(
     app.include_router(habits.check_ins_router)
     app.include_router(key_results.router)
     app.include_router(lists.router)
+    app.include_router(mcp_exchange.router)
     app.include_router(sections.router)
     app.include_router(settings_router.router)
     app.include_router(stand_up.router)

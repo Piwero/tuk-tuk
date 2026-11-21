@@ -13,9 +13,9 @@ import httpx
 from tuk_core.client import Client
 from tuk_core.store import resolve_base_url
 
+from .auth import Exchanger
 from .http import make_server
 from .protocol import error, handle
-from .session import TokenSession
 from .tools import Toolbox
 
 
@@ -48,20 +48,19 @@ def main(transport: httpx.BaseTransport | None = None, argv: list[str] | None = 
         finally:
             client.close()
         return 0
-    token, api_token = os.environ.get("MCP_BEARER_TOKEN", ""), os.environ.get("TUK_API_TOKEN", "")
-    if not api_token:
-        print("tuk-mcp: TUK_API_TOKEN is required with --http.", file=sys.stderr)
-        return 1
-    client = Client(resolve_base_url(None), transport=transport)
-    origins = frozenset(filter(None, os.environ.get("MCP_ALLOWED_ORIGINS", "").split(",")))
+    # One shared server for every User (issue #525): it holds the
+    # deployment's MCP service key and no User's credential. Clients bring
+    # their own MCP tokens; the backend address is this server's own
+    # configuration, never a client's choice.
+    base_url = resolve_base_url(None)
     try:
-        server = make_server(
-            Toolbox(client, TokenSession(api_token)), token, args.host, args.port, origins
-        )
+        exchanger = Exchanger(base_url, os.environ.get("MCP_SERVICE_KEY", ""), transport)
     except ValueError as exc:
-        client.close()
         print(f"tuk-mcp: {exc}", file=sys.stderr)
         return 1
+    client = Client(base_url, transport=transport)
+    origins = frozenset(filter(None, os.environ.get("MCP_ALLOWED_ORIGINS", "").split(",")))
+    server = make_server(client, exchanger, args.host, args.port, origins)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -69,4 +68,5 @@ def main(transport: httpx.BaseTransport | None = None, argv: list[str] | None = 
     finally:
         server.server_close()
         client.close()
+        exchanger.close()
     return 0

@@ -174,11 +174,17 @@ export function updateProfile(fields: { username?: string; email?: string }): Pr
   return request("/api/v1/auth/me", { method: "PATCH", body: JSON.stringify(fields) });
 }
 
+/** What a token is for (#525): `api` authenticates against the API
+ * itself; `mcp` only at the shared MCP server, which the API never accepts. */
+export type ApiTokenKind = "api" | "mcp";
+
 /** One of the signed-in User's API tokens (#413), as listed: never its value. */
 export interface ApiToken {
   id: number;
   name: string;
-  /** `tuk_pat_<user id>_` plus the first 8 hex characters of the secret. */
+  kind: ApiTokenKind;
+  /** `tuk_pat_<user id>_` (`tuk_mcp_` for an MCP token) plus the first 8
+   * hex characters of the secret. */
   prefix: string;
   created_at: string;
   /** Null until a client first uses it; moved at most every few minutes. */
@@ -200,8 +206,11 @@ export function fetchApiTokens(): Promise<Page<ApiToken>> {
 
 /** Creates a token for clients acting as the User. Its value is in this
  * response only. Rejects 422 `invalid_token_name` (1 to 100 characters). */
-export function createApiToken(name: string): Promise<CreatedApiToken> {
-  return request("/api/v1/auth/me/tokens", { method: "POST", body: JSON.stringify({ name }) });
+export function createApiToken(name: string, kind: ApiTokenKind = "api"): Promise<CreatedApiToken> {
+  return request("/api/v1/auth/me/tokens", {
+    method: "POST",
+    body: JSON.stringify({ name, kind }),
+  });
 }
 
 /** Revokes a token; it stops working at once. Rejects 404 `not_found` for

@@ -125,7 +125,8 @@ than `.env` ([ADR 0008](docs/adr/0008-ui-managed-settings.md)).
 ### How it works
 
 - **First run.** A fresh database has no Users. Every route other than
-  `/health`, `/api/v1/auth/login`, and `/api/v1/auth/setup` responds
+  `/health`, `/api/v1/auth/login`, `/api/v1/auth/setup` and the MCP token
+  exchange responds
   `401 setup_required` until someone can log in, and the frontend shows a
   one-time setup screen instead of the login screen.
   `POST /api/v1/auth/setup` takes `{"username", "email", "password"}`,
@@ -146,8 +147,9 @@ than `.env` ([ADR 0008](docs/adr/0008-ui-managed-settings.md)).
   when there is no valid cookie (`unauthorized`), the User is disabled
   (`account_disabled`), or the cookie's epoch is not the User's current one
   (`unauthorized`). Only `/health`, `/api/v1/auth/login`, and
-  `/api/v1/auth/setup` are public. Every other path, including `/docs` and
-  the OpenAPI schema, is gated by default.
+  `/api/v1/auth/setup` are public, plus `/api/v1/auth/mcp/exchange`, which
+  the route itself gates with the MCP service key (issue #525). Every other
+  path, including `/docs` and the OpenAPI schema, is gated by default.
 - **Forced steps.** A User with a temporary password (`must_change_password`)
   or an unfinished profile (`must_complete_profile`, the upgraded user #1)
   can reach only `GET /api/v1/auth/me`, `POST /api/v1/auth/complete` and

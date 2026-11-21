@@ -10,6 +10,7 @@ resources:
   - auth-onepassworditem.yaml
   - google-onepassworditem.yaml
   - db-onepassworditem.yaml
+  - mcp-service-onepassworditem.yaml
   - imagerepository.yaml
   - imagepolicy.yaml
   - gitrepository.yaml

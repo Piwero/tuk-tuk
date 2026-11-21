@@ -108,6 +108,26 @@
   .api-token-form {
     margin-bottom: var(--space-4);
   }
+  .api-token-kind {
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    border: 0;
+  }
+  .api-token-kind legend {
+    margin-bottom: var(--space-2);
+    padding: 0;
+  }
+  .api-token-kind-choice + .api-token-kind-choice {
+    margin-top: var(--space-2);
+  }
+  .api-token-kind-choice label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .api-token-kind-choice .settings-hint {
+    margin: 0 0 0 calc(var(--space-2) + 1em);
+  }
   .api-tokens {
     margin: 0;
     padding: 0;

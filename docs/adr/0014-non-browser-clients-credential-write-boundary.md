@@ -26,6 +26,10 @@ unaffected.
 single-user premise behind the credential decision. See "Amendment:
 multi-user credentials" below.
 
+**Amended again by issue #525** for the MCP server's HTTP mode: one shared
+server serves every User with their own MCP tokens. See "Amendment: one
+shared MCP server" below.
+
 ## Context
 
 tuk-tuk is reachable from two non-browser clients sharing `tuk-core`
@@ -255,6 +259,21 @@ now"), for the client that stopped running on a trusted machine and the
 premise that stopped holding. The write principle, the tool-list
 enforcement boundary, the no-delete rule and description egress are
 unchanged.
+
+## Amendment: one shared MCP server (issue #525)
+
+The HTTP-mode half of the multi-user amendment above is superseded; the
+CLI and stdio halves stand. The MCP pod no longer holds `TUK_API_TOKEN`,
+and pods are no longer deployed per User. One deployment serves every User.
+Each client sends its User's **MCP token**: an API token whose audience is
+the MCP server alone, which the API refuses. The server trades it, on every
+request, for a two-minute access credential acting as that User. Tokens and
+credentials are refused on the same routes as before
+(`token_not_allowed`), so a stolen one still cannot mint more, change the
+password or reach the admin API. The write-id allowlist is per MCP token.
+The write principle, the tool-list enforcement boundary, the no-delete rule
+and description egress are unchanged. The full record is
+[ADR 0016's amendment](0016-mcp-network-transport.md#amendment-one-shared-server-for-every-user-issue-525).
 
 ## What would justify revisiting this
 

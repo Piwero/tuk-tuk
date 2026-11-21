@@ -1,5 +1,5 @@
 """TokenSession through the Toolbox, with a mock backend: every request
-carries the API token as a Bearer credential, nothing logs in, a rejected
+carries the bearer credential, nothing logs in, a rejected
 token is reported once without retrying, and nothing touches disk."""
 
 import json
@@ -59,7 +59,7 @@ def test_a_rejected_token_is_reported_once_without_retrying(setup) -> None:
     backend.revoked = True
     result = search(box)
     assert result["isError"]
-    assert "TUK_API_TOKEN" in result["content"][0]["text"]
+    assert "refused this MCP token" in result["content"][0]["text"]
     assert len(backend.requests) == 1
 
 

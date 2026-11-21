@@ -11,8 +11,10 @@ non-destructive, scoped to Tasks and Habits. There is no delete tool of any
 kind and there will not be one. tests/test_mcp.py pins the roster, so adding
 or removing a tool fails loudly.
 
-Writable ids come only from reads in this process (the allowlist): an id the
-model never received is rejected, not attempted.
+Writable ids come only from reads by the same client (the allowlist): an id
+the model never received is rejected, not attempted. In stdio mode the
+process is the client; the shared HTTP server keeps one allowlist per MCP
+token (tuk_mcp.clients), so one User's reads never admit another's writes.
 """
 
 import concurrent.futures
@@ -92,11 +94,20 @@ def _items(page: dict[str, object]) -> list[dict[str, object]]:
 
 
 class Toolbox:
-    def __init__(self, client: Client, session: Session | None = None) -> None:
+    def __init__(
+        self,
+        client: Client,
+        session: Session | None = None,
+        task_ids: set[int] | None = None,
+        habit_ids: set[int] | None = None,
+    ) -> None:
+        """`task_ids` and `habit_ids` are the allowlist: shared, not copied,
+        so the shared HTTP server can hand one client's sets to the Toolbox
+        it builds for each of that client's requests (tuk_mcp.clients)."""
         self.client = client
         self.session = session or FileSession()
-        self.task_ids: set[int] = set()
-        self.habit_ids: set[int] = set()
+        self.task_ids: set[int] = set() if task_ids is None else task_ids
+        self.habit_ids: set[int] = set() if habit_ids is None else habit_ids
         self._cookie = ""
 
     # -- plumbing ---------------------------------------------------------

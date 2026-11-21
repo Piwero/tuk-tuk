@@ -1,10 +1,11 @@
 """Where the Toolbox gets its backend credential.
 
 `FileSession` is the stdio mode: the cookie `tuk login` saved on disk.
-`TokenSession` is the network mode: the owner's API token (ADR 0014's
-amendment), held in memory only and sent as `Authorization: Bearer` on
-every request — nothing is read from or written to disk, so a pod needs no
-login step and no volume, and never holds the owner's password.
+`TokenSession` is the shared HTTP server's (issue #525): the short-lived
+access credential the MCP token exchange granted for one MCP request
+(tuk_mcp.auth), held in memory for that request only and sent as
+`Authorization: Bearer` on every backend call. Nothing is read from or
+written to disk, and the pod holds no User's credential at all.
 """
 
 from typing import Protocol
@@ -39,19 +40,19 @@ class FileSession:
 
 
 class TokenSession:
-    """An API token is the credential itself: there is nothing to log in
-    with, nothing reissued to keep, and no way to renew a revoked one."""
+    """A bearer credential is the credential itself: there is nothing to log
+    in with, nothing reissued to keep, and no way to renew a revoked one."""
 
     expired_hint = (
-        "The backend rejected TUK_API_TOKEN — it was revoked, or its owner is disabled. "
-        "Create a new token in Settings and update the pod's secret."
+        "The backend refused this MCP token: it was revoked, or its owner is disabled. "
+        "Create a new MCP token in Settings → My account → API tokens and update this client."
     )
 
-    def __init__(self, api_token: str) -> None:
-        self._api_token = api_token
+    def __init__(self, credential: str) -> None:
+        self._credential = credential
 
     def cookie(self) -> str | None:
-        return self._api_token
+        return self._credential
 
     def keep(self, refreshed: str) -> None:
         pass

@@ -1,34 +1,40 @@
 """MCP Streamable HTTP, JSON responses only (ADR 0016). Stdlib server, no SDK.
 
-`POST /mcp` needs a bearer token (checked before the body is read or parsed)
-and a known `Origin` if one is sent. `GET /health` is open, for probes. The
-Toolbox is not thread-safe, so requests run one at a time behind a lock.
+One shared server for every User (issue #525). `POST /mcp` needs the
+caller's MCP token as its bearer and a known `Origin` if one is sent. Every
+such request, including `initialize`, `ping` and `tools/list`, is
+authenticated afresh at the backend's MCP token exchange (tuk_mcp.auth)
+before its body is read or parsed; it then runs with that exchange's
+short-lived credential only, against that client's own allowlist
+(tuk_mcp.clients). One client's requests run one at a time; different
+clients' run side by side. `GET /health` is open, for probes, and touches
+nothing else.
 """
 
-import hmac
 import json
-import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+from tuk_core.client import Client
+
+from .auth import BackendUnavailableError, Exchanger, TokenRejectedError, bearer_token
+from .clients import ClientStates
 from .protocol import error, handle
+from .session import TokenSession
 from .tools import Toolbox
 
-MIN_TOKEN_LENGTH = 32
 MAX_BODY = 1_048_576
 
 
 def make_server(
-    box: Toolbox,
-    token: str,
+    client: Client,
+    exchanger: Exchanger,
     host: str,
     port: int,
     allowed_origins: frozenset[str] = frozenset(),
+    states: ClientStates | None = None,
 ) -> ThreadingHTTPServer:
-    if len(token) < MIN_TOKEN_LENGTH:
-        raise ValueError(f"MCP_BEARER_TOKEN must be at least {MIN_TOKEN_LENGTH} characters.")
-    expected = f"Bearer {token}".encode()
-    lock = threading.Lock()
+    clients = states if states is not None else ClientStates()
 
     class Handler(BaseHTTPRequestHandler):
         timeout = 10
@@ -55,6 +61,9 @@ def make_server(
         def _json(self, status: int, payload: dict[str, Any]) -> None:
             self._send(status, json.dumps(payload).encode())
 
+        def _unauthorized(self) -> None:
+            self._send(401, headers={"WWW-Authenticate": "Bearer"})
+
         def do_GET(self) -> None:  # noqa: N802 - http.server hook name
             if self.path == "/health":
                 self._json(200, {"status": "ok"})
@@ -67,9 +76,9 @@ def make_server(
             if self.path != "/mcp":
                 self._send(404)
                 return
-            presented = self.headers.get("Authorization", "").encode("latin-1")
-            if not hmac.compare_digest(presented, expected):
-                self._send(401, headers={"WWW-Authenticate": "Bearer"})
+            token = bearer_token(self.headers.get("Authorization", ""))
+            if token is None:
+                self._unauthorized()
                 return
             origin = self.headers.get("Origin")
             if origin is not None and origin not in allowed_origins:
@@ -83,14 +92,26 @@ def make_server(
             if not 0 <= length <= MAX_BODY:
                 self._send(413)
                 return
+            try:
+                grant = exchanger.exchange(token)
+            except TokenRejectedError:
+                self._unauthorized()
+                return
+            except BackendUnavailableError:
+                self._send(503)
+                return
             raw = self.rfile.read(length)
             try:
                 message = json.loads(raw)
             except ValueError:
                 self._json(400, error(None, -32700, "Parse error"))
                 return
+            state = clients.get(grant.client_key)
             try:
-                with lock:
+                with state.lock:
+                    box = Toolbox(
+                        client, TokenSession(grant.access_token), state.task_ids, state.habit_ids
+                    )
                     response = handle(box, message)
             except Exception:  # noqa: BLE001 - a bug must not kill the listener or leak details
                 self._json(500, error(None, -32603, "Internal error"))

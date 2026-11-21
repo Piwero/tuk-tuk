@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # not a distance from expiry: a session older than this is reissued on
     # its next request, however long before expiry that falls.
     auth_session_reissue_threshold_days: int = 1
+    # The shared MCP server's service key (issue #525, ADR 0016's
+    # amendment): the one credential that may trade a User's MCP token for
+    # a short-lived access credential (app.mcp_exchange). The same value is
+    # given to the MCP pod; it names no User. Unset, the exchange answers
+    # 404 and MCP tokens authenticate nothing.
+    mcp_service_key: str | None = None
 
     # Encrypts sensitive columns of the DB-backed `settings` table (ADR
     # 0008) — the Google client secret, and (app.routers.v1.google /

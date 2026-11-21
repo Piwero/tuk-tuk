@@ -457,7 +457,10 @@ export interface FakeApiToken {
   id: number;
   owner_id: number;
   name: string;
-  /** `tuk_pat_<owner id>_` plus the secret's first 8 hex characters. */
+  /** Its audience (#525): the API itself, or the shared MCP server. */
+  kind: "api" | "mcp";
+  /** `tuk_pat_<owner id>_` (`tuk_mcp_` for an MCP token) plus the
+   * secret's first 8 hex characters. */
   prefix: string;
   created_at: string;
   last_used_at: string | null;
@@ -468,12 +471,15 @@ export interface FakeApiToken {
 
 let nextApiTokenId = 1;
 
-/** A token value in the backend's format: `tuk_pat_<user id>_<64 hex>`. */
-function mintTokenValue(ownerId: number, id: number): string {
+const TOKEN_PREFIXES = { api: "tuk_pat_", mcp: "tuk_mcp_" } as const;
+
+/** A token value in the backend's format: `tuk_pat_<user id>_<64 hex>`,
+ * or `tuk_mcp_...` for an MCP token. */
+function mintTokenValue(ownerId: number, id: number, kind: FakeApiToken["kind"]): string {
   const secret = Array.from({ length: 8 }, (_, i) =>
     ((id * 2654435761 + i * 40503) >>> 0).toString(16).padStart(8, "0"),
   ).join("");
-  return `tuk_pat_${ownerId}_${secret}`;
+  return `${TOKEN_PREFIXES[kind]}${ownerId}_${secret}`;
 }
 
 /** A live, never-used token owned by `ownerId` for
@@ -484,12 +490,14 @@ export function fakeApiToken(
   overrides: Partial<FakeApiToken> = {},
 ): FakeApiToken {
   const id = nextApiTokenId++;
-  const token = mintTokenValue(ownerId, id);
+  const kind = overrides.kind ?? "api";
+  const token = mintTokenValue(ownerId, id, kind);
   return {
     id,
     owner_id: ownerId,
     name,
-    prefix: token.slice(0, `tuk_pat_${ownerId}_`.length + 8),
+    kind,
+    prefix: token.slice(0, `${TOKEN_PREFIXES[kind]}${ownerId}_`.length + 8),
     created_at: "2026-01-01T00:00:00Z",
     last_used_at: null,
     revoked_at: null,
@@ -503,6 +511,7 @@ function apiTokenRecord(token: FakeApiToken): Record<string, unknown> {
   return {
     id: token.id,
     name: token.name,
+    kind: token.kind,
     prefix: token.prefix,
     created_at: token.created_at,
     last_used_at: token.last_used_at,
@@ -1174,7 +1183,14 @@ export function installFakeApi({
           `Token name must be 1 to ${MAX_TOKEN_NAME_LENGTH} characters`,
         );
       }
-      const created = fakeApiToken(owner.id, name, { created_at: new Date().toISOString() });
+      const kind = (body as { kind?: unknown }).kind ?? "api";
+      if (kind !== "api" && kind !== "mcp") {
+        return unprocessable("validation_error", "kind must be api or mcp");
+      }
+      const created = fakeApiToken(owner.id, name, {
+        created_at: new Date().toISOString(),
+        kind,
+      });
       state.apiTokens.push(created);
       return json({ ...apiTokenRecord(created), token: created.token }, 201);
     }

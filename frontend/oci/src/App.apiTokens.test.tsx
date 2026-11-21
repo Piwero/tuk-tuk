@@ -166,7 +166,46 @@ describe("Creating an API token", () => {
     expect(within(items[0] as HTMLElement).getByRole("button", { name: "Copy" })).toHaveFocus();
     expect(within(items[1] as HTMLElement).queryByText(/tuk_pat_1_[0-9a-f]{64}/)).toBeNull();
     expect(screen.queryByLabelText("Token name")).not.toBeInTheDocument();
-    expect(tokenCreates(api)).toEqual([{ name: "Claude on laptop" }]);
+    expect(tokenCreates(api)).toEqual([{ name: "Claude on laptop", kind: "api" }]);
+  });
+
+  it("makes an MCP token when asked, for the shared MCP server only", async () => {
+    const api = installFakeApi({
+      apiTokens: [fakeApiToken(FAKE_ADMIN.id, "Script", { created_at: daysAgo(30) })],
+    });
+    const user = await openMyAccount();
+
+    await user.click(await screen.findByRole("button", { name: "New token" }));
+    const use = screen.getByRole("radiogroup", { name: "Used by" });
+    expect(within(use).getByRole("radio", { name: "Other clients (API)" })).toBeChecked();
+    await user.click(within(use).getByRole("radio", { name: "MCP server" }));
+    await user.type(screen.getByLabelText("Token name"), "Claude Code{Enter}");
+
+    const value = api.apiTokens.find((token) => token.name === "Claude Code")?.token ?? "";
+    expect(value).toMatch(/^tuk_mcp_1_[0-9a-f]{64}$/);
+    const card = screen.getByRole("region", { name: "API tokens" });
+    expect(await within(card).findByText(value)).toBeInTheDocument();
+    expect(tokenCreates(api)).toEqual([{ name: "Claude Code", kind: "mcp" }]);
+    expect(within(card).getAllByRole("listitem")[1]).toHaveTextContent("API ·");
+  });
+
+  it("labels each listed token with what it is used by", async () => {
+    installFakeApi({
+      apiTokens: [
+        fakeApiToken(FAKE_ADMIN.id, "Script", { created_at: "2026-10-12T09:00:00Z" }),
+        fakeApiToken(FAKE_ADMIN.id, "Claude Code", {
+          created_at: "2026-10-20T09:00:00Z",
+          kind: "mcp",
+        }),
+      ],
+    });
+    await openMyAccount();
+
+    const card = await screen.findByRole("region", { name: "API tokens" });
+    const items = await within(card).findAllByRole("listitem");
+
+    expect(items[0]).toHaveTextContent(/MCP server · tuk_mcp_1_[0-9a-f]{8}/);
+    expect(items[1]).toHaveTextContent(/API · tuk_pat_1_[0-9a-f]{8}/);
   });
 
   it("never writes the value to browser storage", async () => {
@@ -382,6 +421,7 @@ describe("The fake token endpoints", () => {
       {
         id: created.id,
         name: "CLI",
+        kind: "api",
         prefix: created.prefix,
         created_at: created.created_at,
         last_used_at: null,
