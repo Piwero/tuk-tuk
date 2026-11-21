@@ -40,6 +40,10 @@ describe("playFocusRunEndSound", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    // The spies sit on FakeAudioContext.prototype, which outlives each test;
+    // vi.spyOn on an already-spied method returns that same spy, so an
+    // unrestored one carries its call count into the next test.
+    vi.restoreAllMocks();
     (window as unknown as { AudioContext: typeof AudioContext | undefined }).AudioContext =
       originalAudioContext;
   });
