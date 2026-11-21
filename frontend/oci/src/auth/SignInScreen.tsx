@@ -34,7 +34,7 @@ export function SignInScreen({
 }: {
   notice: SignInNotice | null;
   onSuccess: () => Promise<void>;
-}): JSX.Element {
+}): React.JSX.Element {
   const [loginName, setLoginName] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);

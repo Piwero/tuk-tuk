@@ -20,7 +20,12 @@ interface ModalProps {
  * Deliberately not the native <dialog> element: jsdom 25 (this project's test
  * environment) does not implement showModal(), so a native dialog would be
  * untestable here. */
-export function Modal({ title, onClose, dismissible = true, children }: ModalProps): JSX.Element {
+export function Modal({
+  title,
+  onClose,
+  dismissible = true,
+  children,
+}: ModalProps): React.JSX.Element {
   const panel = useRef<HTMLDivElement>(null);
 
   // Read during the first render, which is the last moment the opener still

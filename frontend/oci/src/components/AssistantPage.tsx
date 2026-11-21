@@ -16,7 +16,7 @@ export function AssistantPage({
 }: {
   textAvailable: boolean;
   voiceAvailable: boolean;
-}): JSX.Element {
+}): React.JSX.Element {
   const [chosen, setChosen] = useState<Mode | null>(null);
   const mode: Mode = chosen ?? (!textAvailable && voiceAvailable ? "voice" : "text");
   const tab = (id: Mode, name: string) => (

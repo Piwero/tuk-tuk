@@ -25,7 +25,7 @@ export function HabitActionsMenu({
   onEdit,
   onToggleArchive,
   onDelete,
-}: HabitActionsMenuProps): JSX.Element {
+}: HabitActionsMenuProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
 

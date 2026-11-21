@@ -90,7 +90,7 @@ export function QuickAddDialog({
   onListCreated,
   onCreated,
   onClose,
-}: QuickAddDialogProps): JSX.Element {
+}: QuickAddDialogProps): React.JSX.Element {
   const inboxId = lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? null;
   const [title, setTitle] = useState("");
   const [listId, setListId] = useState<number | null>(defaultListId ?? inboxId);

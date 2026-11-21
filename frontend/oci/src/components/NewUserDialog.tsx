@@ -48,7 +48,7 @@ interface NewUserDialogProps {
 /** Settings › Users › New user (#479): username, email and the Administrator
  * switch; then the generated temporary password, shown once. Until the
  * Admin has copied it or confirmed they have it, nothing closes the dialog. */
-export function NewUserDialog({ onClose, onCreated }: NewUserDialogProps): JSX.Element {
+export function NewUserDialog({ onClose, onCreated }: NewUserDialogProps): React.JSX.Element {
   const [stage, setStage] = useState<Stage>({ kind: "form" });
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");

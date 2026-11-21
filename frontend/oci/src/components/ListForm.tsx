@@ -38,7 +38,7 @@ export function ListForm({
   initialFolderId = null,
   onSubmit,
   onCancel,
-}: ListFormProps): JSX.Element {
+}: ListFormProps): React.JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
   const [color, setColor] = useState(initial?.color ?? DEFAULT_ACCENT);
   const [emoji, setEmoji] = useState(initial?.emoji ?? "");

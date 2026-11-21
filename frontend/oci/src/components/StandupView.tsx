@@ -44,7 +44,7 @@ const emptyDrafts = (): Drafts => ({ yesterday: "", today: "", blockers: "" });
  * in the history list, including today by default) renders an empty,
  * immediately-editable form — the Entry exists only once its first Bullet
  * is saved. */
-export function StandupView(): JSX.Element {
+export function StandupView(): React.JSX.Element {
   const [history, setHistory] = useState<StandupEntrySummary[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => localDayOf(new Date()));
   const selectedDateRef = useRef(selectedDate);
@@ -215,7 +215,11 @@ export function StandupView(): JSX.Element {
     );
   }
 
-  function renderSection(section: StandupSection, label: string, icon: IconName): JSX.Element {
+  function renderSection(
+    section: StandupSection,
+    label: string,
+    icon: IconName,
+  ): React.JSX.Element {
     const bullets = bulletsOf(section);
     const isToday = section === "today";
     const isYesterday = section === "yesterday";
@@ -524,7 +528,7 @@ function BulletRow({
   onMoveBefore: (draggedId: number) => void;
   onEdit: () => void;
   onDelete: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const reveal = useLongPressReveal();
 
   return (

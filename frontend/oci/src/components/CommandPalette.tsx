@@ -250,7 +250,7 @@ export function CommandPalette({
   onListCreated,
   onCreated,
   onClose,
-}: CommandPaletteProps): JSX.Element {
+}: CommandPaletteProps): React.JSX.Element {
   // Scoped mode's verb filter text.
   const [query, setQuery] = useState("");
   // Jump mode's field doubles as a Task-capture bar (issue #204): the typed
@@ -625,7 +625,7 @@ function PaletteOption({
   active: boolean;
   setActive: (index: number) => void;
   onPick: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <div
       id={`command-palette-option-${index}`}
@@ -658,7 +658,7 @@ function PaletteGroupRows({
   indexOffset: number;
   setActive: (index: number) => void;
   choose: (item: PaletteItem) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <div role="group" aria-label={group.heading}>
       <div className="command-palette-heading" aria-hidden="true">

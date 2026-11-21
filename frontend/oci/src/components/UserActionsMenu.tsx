@@ -33,7 +33,7 @@ export function UserActionsMenu({
   /** Opens the reset dialog; focus is back on this menu's button first, so
    * the dialog returns it there. */
   onResetPassword: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [confirmingDisable, setConfirmingDisable] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -55,7 +55,7 @@ export function UserActionsMenu({
     icon: IconName,
     action: () => void,
     { danger = false, blocked = false }: { danger?: boolean; blocked?: boolean } = {},
-  ): JSX.Element {
+  ): React.JSX.Element {
     return (
       <li role="none">
         <button

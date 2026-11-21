@@ -277,7 +277,7 @@ export function App({
   onLogout,
   user: signedInUser,
   voiceProvider = livekitProvider,
-}: AppProps = {}): JSX.Element {
+}: AppProps = {}): React.JSX.Element {
   const [currentUser, setCurrentUser] = useCurrentUser(signedInUser);
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -1967,7 +1967,7 @@ function TaskPalette({
   onListCreated: (list: TaskList) => void;
   onCreated: (task: Task) => void;
   onClose: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const startPomo = useStartPomo();
   const actions: TaskActionHandlers = {
     ...verbs,

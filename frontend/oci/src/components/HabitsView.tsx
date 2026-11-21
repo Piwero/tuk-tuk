@@ -32,7 +32,9 @@ type Editor = { mode: "create" } | { mode: "edit"; habitId: number } | null;
  * like the CalendarView — check-in state is the server's call, not local
  * bookkeeping's.
  */
-export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {}): JSX.Element {
+export function HabitsView({
+  refreshToken = 0,
+}: { refreshToken?: number } = {}): React.JSX.Element {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [editor, setEditor] = useState<Editor>(null);
@@ -211,7 +213,7 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
       : { state: "missed", level: 0, text: "missed" };
   }
 
-  function actionsMenu(habit: Habit): JSX.Element {
+  function actionsMenu(habit: Habit): React.JSX.Element {
     return (
       <HabitActionsMenu
         habit={habit}
@@ -223,7 +225,7 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
     );
   }
 
-  function editForm(habit: Habit): JSX.Element {
+  function editForm(habit: Habit): React.JSX.Element {
     return (
       <HabitForm
         initial={habit}
@@ -233,7 +235,7 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
     );
   }
 
-  function renderRow(habit: Habit): JSX.Element[] {
+  function renderRow(habit: Habit): React.JSX.Element[] {
     if (editor?.mode === "edit" && editor.habitId === habit.id) {
       return [
         <tr key={habit.id}>
@@ -306,7 +308,7 @@ export function HabitsView({ refreshToken = 0 }: { refreshToken?: number } = {})
     return rows;
   }
 
-  function renderArchived(habit: Habit): JSX.Element {
+  function renderArchived(habit: Habit): React.JSX.Element {
     if (editor?.mode === "edit" && editor.habitId === habit.id) {
       return (
         <li key={habit.id} className="habit-editing">

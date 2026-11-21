@@ -104,7 +104,7 @@ export function QuickAdd({
   onListCreated,
   onCreated,
   placeholder = "Add a task…",
-}: QuickAddProps): JSX.Element {
+}: QuickAddProps): React.JSX.Element {
   const [title, setTitle] = useState("");
   const [tagChips, setTagChips] = useState<Tag[]>([]);
   const [listChip, setListChip] = useState<TaskList[]>([]);

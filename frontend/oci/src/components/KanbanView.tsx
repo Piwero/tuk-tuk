@@ -35,7 +35,7 @@ export function KanbanView({
   onSectionsChanged,
   toasts,
   onCreated,
-}: KanbanViewProps): JSX.Element {
+}: KanbanViewProps): React.JSX.Element {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [addingSection, setAddingSection] = useState(false);
 

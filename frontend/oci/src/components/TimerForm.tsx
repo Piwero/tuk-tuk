@@ -22,7 +22,7 @@ export function TimerForm({
   initial,
   onSubmit,
   onCancel,
-}: TimerFormProps): JSX.Element {
+}: TimerFormProps): React.JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
   const [mode, setMode] = useState<FocusMode>(initial?.mode ?? "pomo");
   const [minutes, setMinutes] = useState(

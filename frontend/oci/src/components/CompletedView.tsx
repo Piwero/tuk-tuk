@@ -34,7 +34,7 @@ export function CompletedView({
   listId,
   onChanged,
   onSelect,
-}: CompletedViewProps): JSX.Element {
+}: CompletedViewProps): React.JSX.Element {
   const rows: HistoryRow[] = [
     ...tasks.map((task): HistoryRow => ({
       kind: "task",

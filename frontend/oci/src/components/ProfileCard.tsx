@@ -21,7 +21,7 @@ interface ProfileFieldProps {
 /** One profile field with its own Save: each field saves on its own and
  * reports a taken or invalid value on itself (#474). Save appears once the
  * value differs from the saved one. */
-function ProfileField({ field, label, saved, onSaved }: ProfileFieldProps): JSX.Element {
+function ProfileField({ field, label, saved, onSaved }: ProfileFieldProps): React.JSX.Element {
   const [value, setValue] = useState(saved);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +115,7 @@ interface ProfileCardProps {
 
 /** Settings › My account's Profile card (#474): the signed-in User's own
  * username and email, each saved on its own. */
-export function ProfileCard({ user, onUserChange }: ProfileCardProps): JSX.Element {
+export function ProfileCard({ user, onUserChange }: ProfileCardProps): React.JSX.Element {
   return (
     <section aria-label="Profile" id="settings-profile" className="settings-section">
       <div className="settings-section-head">

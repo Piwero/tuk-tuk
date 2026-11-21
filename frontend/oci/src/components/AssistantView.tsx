@@ -35,7 +35,7 @@ interface SuggestionCard {
  * each turn, so a refresh clears it by design. Suggestions render as cards
  * once a turn's JSON is fully validated; there is no streaming (ADR 0009
  * again — a card can't render before it's known to be safe to show). */
-export function AssistantView(): JSX.Element {
+export function AssistantView(): React.JSX.Element {
   const [transcript, setTranscript] = useState<AssistantChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);

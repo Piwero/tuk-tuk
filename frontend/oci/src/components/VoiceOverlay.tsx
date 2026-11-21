@@ -12,7 +12,7 @@ export function VoiceOverlay({
 }: {
   available: boolean;
   navigation: unknown;
-}): JSX.Element | null {
+}): React.JSX.Element | null {
   const voice = useVoice();
   const [shortcut, setShortcut] = useState(loadOverlayShortcut);
   const [open, setOpen] = useState(false);

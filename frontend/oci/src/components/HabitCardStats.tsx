@@ -56,7 +56,7 @@ export function HabitCardStats({
   today,
   onToggleDay,
   showStreak = true,
-}: HabitCardStatsProps): JSX.Element | null {
+}: HabitCardStatsProps): React.JSX.Element | null {
   if (stats === undefined) {
     return null;
   }
@@ -106,7 +106,7 @@ function StripDay({
   label: string;
   level: number;
   onToggle: (() => void) | null;
-}): JSX.Element {
+}): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   return (
     <span className="habit-strip-day-wrap">

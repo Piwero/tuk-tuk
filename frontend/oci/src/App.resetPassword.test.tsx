@@ -23,7 +23,9 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
-async function openUsers(ui: JSX.Element = <App />): Promise<ReturnType<typeof userEvent.setup>> {
+async function openUsers(
+  ui: React.JSX.Element = <App />,
+): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
   render(ui);
   await user.click(await screen.findByRole("button", { name: "Account menu" }));

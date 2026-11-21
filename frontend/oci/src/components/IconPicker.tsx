@@ -29,7 +29,7 @@ export function IconPicker({
   clearLabel,
   onSelect,
   onClose,
-}: IconPickerProps): JSX.Element {
+}: IconPickerProps): React.JSX.Element {
   return (
     <Modal title={title} onClose={onClose}>
       <div className="icon-picker">

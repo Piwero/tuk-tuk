@@ -60,7 +60,7 @@ interface FocusViewProps {
  * distraction-free — the countdown is the only thing on screen, alongside
  * Pause/Resume, Finish, and Cancel; the Timers presets and statistics/history
  * live behind a tap so nothing else competes with the clock (#162). */
-export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): JSX.Element {
+export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): React.JSX.Element {
   // The live run (ticking clock, pause/resume/finish/cancel) is shared with
   // the nav bar badge — this screen just supplies the pre-start
   // configuration and the Timers presets.

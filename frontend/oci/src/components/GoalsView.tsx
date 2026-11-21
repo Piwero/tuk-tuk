@@ -71,7 +71,7 @@ interface GoalFormProps {
  * ADR 0012) — the If-Then Plan field shows the expected format so what gets
  * written is an implementation intention, not a vague note. Blank dates on
  * create default to the current quarter, filled in server-side. */
-function GoalForm({ initial, onSubmit, onCancel }: GoalFormProps): JSX.Element {
+function GoalForm({ initial, onSubmit, onCancel }: GoalFormProps): React.JSX.Element {
   const [values, setValues] = useState<GoalFormValues>(initial ?? BLANK_VALUES);
 
   function set<K extends keyof GoalFormValues>(key: K, value: GoalFormValues[K]): void {
@@ -190,7 +190,7 @@ function ClickToType({
   onEditingChange: (editing: boolean) => void;
   onCommit: (value: number) => void;
   children?: React.ReactNode;
-}): JSX.Element {
+}): React.JSX.Element {
   if (!editing) {
     return children === undefined ? (
       <></>
@@ -253,7 +253,7 @@ function KeyResultRow({
   onMove: (keyResultId: number, direction: -1 | 1) => void;
   onDropBefore: (keyResultId: number, beforeId: number) => void;
   onDelete: (keyResultId: number) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const [showTasks, setShowTasks] = useState(false);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [editingCurrent, setEditingCurrent] = useState(false);
@@ -392,7 +392,7 @@ function KeyResultRow({
 /** Score on a bar; while the Goal is active a marker shows where today falls
  * in the window and a verdict states how far ahead of or behind pace it is.
  * An unmeasured Goal (no Key Results) and a settled one carry no pace (ADR 0012). */
-function GoalScore({ goal }: { goal: Goal }): JSX.Element {
+function GoalScore({ goal }: { goal: Goal }): React.JSX.Element {
   const today = localDayOf(new Date());
   const delta =
     goal.status === "active"
@@ -455,7 +455,7 @@ function KeyResultsPanel({
   onMove: (keyResultId: number, direction: -1 | 1) => void;
   onDropBefore: (keyResultId: number, beforeId: number) => void;
   onDelete: (keyResultId: number) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<KeyResultFormValues>(BLANK_KEY_RESULT);
 
@@ -643,7 +643,7 @@ function GoalCard({
   onAbandon: () => void;
   onEdit: () => void;
   onDelete: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const actions: OverflowMenuItem[] = [];
   if (goal.status === "active") {
     actions.push(
@@ -726,7 +726,7 @@ type Editor = { mode: "create" } | { mode: "edit"; goalId: number } | null;
 
 /** The Goals view: list, create, edit, delete, Key Results, and focus
  * (ADR 0012). Self-fetching, like the Habits and Stand-up views. */
-export function GoalsView(): JSX.Element {
+export function GoalsView(): React.JSX.Element {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [editor, setEditor] = useState<Editor>(null);
@@ -909,7 +909,7 @@ export function GoalsView(): JSX.Element {
     });
   }
 
-  function renderGoal(goal: Goal): JSX.Element {
+  function renderGoal(goal: Goal): React.JSX.Element {
     if (editor?.mode === "edit" && editor.goalId === goal.id) {
       return (
         <li key={goal.id} className="goal-editing">

@@ -57,7 +57,7 @@ function stateForAuthCode(code: string | null): GateState {
  * and its whole test suite — never need to know authentication exists. */
 export function AuthGate({
   voiceProvider,
-}: { voiceProvider?: import("./voice/session").VoiceProvider } = {}): JSX.Element | null {
+}: { voiceProvider?: import("./voice/session").VoiceProvider } = {}): React.JSX.Element | null {
   const [state, setState] = useState<GateState>({ kind: "checking" });
 
   const resolve = useCallback(

@@ -144,7 +144,7 @@ export function TaskRow({
   selected,
   onSelectToggle,
   onSelectionClear,
-}: TaskRowProps): JSX.Element {
+}: TaskRowProps): React.JSX.Element {
   const overdue = isOverdue(task);
   const settled = settlesOverdue && isSettled(task);
   const dueToday = !completed && isDueToday(task);

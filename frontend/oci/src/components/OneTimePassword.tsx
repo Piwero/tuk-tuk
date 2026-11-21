@@ -24,7 +24,7 @@ export function OneTimePassword({
   password,
   ready,
   onReadyChange,
-}: OneTimePasswordProps): JSX.Element {
+}: OneTimePasswordProps): React.JSX.Element {
   const [copied, setCopied] = useState(false);
   const value = useRef<HTMLElement>(null);
 

@@ -37,7 +37,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof ViewMenu>
  * calling the updater by hand. */
 function renderUnderState(initial: AllFilters): { current: AllFilters } {
   const seen = { current: initial };
-  function Harness(): JSX.Element {
+  function Harness(): React.JSX.Element {
     const [filters, setFilters] = useState(initial);
     seen.current = filters;
     return (

@@ -6,7 +6,11 @@ export interface FolderFormProps {
   onCancel: () => void;
 }
 
-export function FolderForm({ initialName, onSubmit, onCancel }: FolderFormProps): JSX.Element {
+export function FolderForm({
+  initialName,
+  onSubmit,
+  onCancel,
+}: FolderFormProps): React.JSX.Element {
   const [name, setName] = useState(initialName ?? "");
 
   return (

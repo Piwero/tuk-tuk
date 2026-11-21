@@ -26,7 +26,7 @@ export function ResetPasswordDialog({
   isSelf,
   onReset,
   onClose,
-}: ResetPasswordDialogProps): JSX.Element {
+}: ResetPasswordDialogProps): React.JSX.Element {
   const [stage, setStage] = useState<Stage>({ kind: "confirm", pending: false });
   const name = account.username;
 

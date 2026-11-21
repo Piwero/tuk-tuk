@@ -89,7 +89,7 @@ export function TaskDetail({
   sheet = false,
   onStartFocus,
   onDelete,
-}: TaskDetailProps): JSX.Element {
+}: TaskDetailProps): React.JSX.Element {
   const [title, setTitle] = useState(task.title);
   const [goals, setGoals] = useState<Goal[]>([]);
 

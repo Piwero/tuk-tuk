@@ -22,7 +22,7 @@ interface DateRowProps {
 /** Task detail's Date row (#453): reads relatively ("Today, 10:00–11:30")
  * and edits through the shared date panel — quick picks, a calendar, a
  * start/end time and Clear. Picking a day keeps a timed Task's times. */
-export function DateRow({ task, onTaskChanged }: DateRowProps): JSX.Element {
+export function DateRow({ task, onTaskChanged }: DateRowProps): React.JSX.Element {
   const [times, setTimes] = useState(() => timesOf(task));
 
   useEffect(() => {

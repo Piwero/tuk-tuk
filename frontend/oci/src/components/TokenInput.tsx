@@ -98,7 +98,7 @@ export function TokenInput({
   autoFocus = false,
   trailingContent,
   sigilHints,
-}: TokenInputProps): JSX.Element {
+}: TokenInputProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
   const [caret, setCaret] = useState(0);

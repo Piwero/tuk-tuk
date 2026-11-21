@@ -37,7 +37,7 @@ export function FocusSessionForm({
   initial,
   onSubmit,
   onCancel,
-}: FocusSessionFormProps): JSX.Element {
+}: FocusSessionFormProps): React.JSX.Element {
   const [mode, setMode] = useState<FocusMode>(initial?.mode ?? "pomo");
   const [started, setStarted] = useState(initial ? toLocalInput(initial.started_at) : "");
   const [ended, setEnded] = useState(initial ? toLocalInput(initial.ended_at) : "");
