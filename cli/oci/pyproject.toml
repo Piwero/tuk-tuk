@@ -27,7 +27,7 @@ dev = [
     # in-process. Never a runtime dependency — installing the CLI must not
     # pull in the database stack.
     "app",
-    "testcontainers[postgres]>=4.8",
+    "testcontainers[postgres]>=4.15.0",
 ]
 
 [tool.uv.sources]
