@@ -80,3 +80,6 @@ CLAUDE.md
 *.db-shm
 .gstack/
 /voice-agent/livekit.toml
+
+# Git worktrees (see ~/workspace/AGENTS.md)
+.worktrees/
