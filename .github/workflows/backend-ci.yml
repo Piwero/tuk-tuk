@@ -20,14 +20,6 @@ defaults:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # 3.12 is the floor declared by requires-python; 3.14 is what the
-        # runtime image ships (FROM python:3.14-slim in backend/oci/Dockerfile).
-        # Bump both together: the image job below fails if the base has no
-        # wheels for a locked dependency.
-        python-version: ["3.12", "3.14"]
 
     steps:
       - uses: actions/checkout@v7
@@ -37,7 +29,11 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/oci/uv.lock
-          python-version: ${{ matrix.python-version }}
+          # Only what the runtime image ships (FROM python:3.14-slim in
+          # backend/oci/Dockerfile): the backend runs nowhere else. Bump both
+          # together; the image job below fails if the base has no wheels for
+          # a locked dependency.
+          python-version: "3.14"
 
       - name: Install dependencies
         run: uv sync --locked
@@ -54,7 +50,7 @@ jobs:
       # The suite starts its own PostgreSQL through testcontainers (#407),
       # using the runner's Docker daemon — no service container needed.
       - name: Pytest
-        run: uv run pytest --cov=app --cov-report=xml
+        run: uv run pytest -n auto --cov=app --cov-report=xml
 
       - name: Upload coverage
         if: always()
