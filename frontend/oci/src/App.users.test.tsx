@@ -193,7 +193,7 @@ describe("Users list for non-admins", () => {
     render(<App />);
 
     expect(await screen.findByLabelText("Username")).toHaveValue("bea");
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
     expect(screen.queryByRole("region", { name: "Users" })).not.toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Users" })).not.toBeInTheDocument();
     expect(listReads(api)).toEqual([]);
