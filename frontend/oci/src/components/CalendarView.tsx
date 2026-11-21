@@ -264,7 +264,7 @@ export function CalendarView({
   initialMode = "day",
   onModeChange,
   undoQueue,
-}: CalendarViewProps): JSX.Element {
+}: CalendarViewProps): React.JSX.Element {
   const [mode, setMode] = useState<CalendarMode>(initialMode);
   useEffect(() => {
     onModeChange?.(mode);
@@ -753,7 +753,7 @@ export function CalendarView({
    * reason. Mousedown needs no guard: the hour cells that start a drag-create
    * are siblings of a block, not ancestors of it, so a press on a block never
    * reaches one. */
-  function entryCheckbox(entry: Entry): JSX.Element | null {
+  function entryCheckbox(entry: Entry): React.JSX.Element | null {
     if (entry.kind !== "task") {
       return null;
     }
@@ -785,7 +785,7 @@ export function CalendarView({
    * it). Reuses the app's one `.completed` class rather than a
    * calendar-specific copy of the same strike-through, so the Calendar and a
    * List row can't drift on what "done" looks like. */
-  function entryTitleNode(entry: Entry): JSX.Element {
+  function entryTitleNode(entry: Entry): React.JSX.Element {
     return <span className={entryTitleClass(entry, "entry-title")}>{entryTitle(entry)}</span>;
   }
 
@@ -806,7 +806,7 @@ export function CalendarView({
       : {};
   }
 
-  function renderMonth(): JSX.Element {
+  function renderMonth(): React.JSX.Element {
     const days = monthGridDays(anchor);
     const anchorMonth = anchor.slice(0, 7);
     // Read fresh rather than off the `now` state, which only ticks while a
@@ -916,7 +916,7 @@ export function CalendarView({
     entry: Entry,
     day: string,
     placement?: { column: number; columnCount: number },
-  ): JSX.Element | null {
+  ): React.JSX.Element | null {
     const segment = blockSegment(entryTimeShape(entry), day);
     if (segment === null) {
       return null;
@@ -1008,7 +1008,7 @@ export function CalendarView({
     );
   }
 
-  function renderTimeGrid(days: string[]): JSX.Element {
+  function renderTimeGrid(days: string[]): React.JSX.Element {
     const firstDay = days[0] ?? anchor;
     const today = localDayOf(now);
     const nowMinute = now.getHours() * 60 + now.getMinutes();

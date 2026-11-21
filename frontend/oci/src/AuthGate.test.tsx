@@ -392,7 +392,7 @@ describe("AuthGate pending forced step", () => {
     await user.type(screen.getByLabelText("Confirm new password"), "a-long-new-password{Enter}");
 
     expect(await screen.findByRole("heading", { name: "Today", level: 1 })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/today");
+    await waitFor(() => expect(window.location.pathname).toBe("/today"));
     expect(screen.queryByRole("heading", { name: "Choose a new password" })).toBeNull();
     expect(api.requests).toContainEqual({
       method: "POST",
@@ -500,7 +500,7 @@ describe("AuthGate profile to complete", () => {
     });
 
     expect(await screen.findByRole("heading", { name: "Today", level: 1 })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/today");
+    await waitFor(() => expect(window.location.pathname).toBe("/today"));
     expect(screen.queryByRole("heading", { name: "Complete your profile" })).toBeNull();
     expect(api.requests).toContainEqual({
       method: "POST",
@@ -622,7 +622,7 @@ describe("AuthGate first-run setup", () => {
     });
 
     expect(await screen.findByRole("heading", { name: "Today", level: 1 })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/today");
+    await waitFor(() => expect(window.location.pathname).toBe("/today"));
     expect(api.requests).toContainEqual({
       method: "POST",
       url: "/api/v1/auth/setup",

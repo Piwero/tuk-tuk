@@ -142,7 +142,8 @@ describe("Assist settings (ADR 0005)", () => {
 
     await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
-    const select = await screen.findByLabelText("Model");
+    // The installed-models lookup lands after the field first renders.
+    const select = await screen.findByRole("combobox", { name: "Model" });
     expect(select.tagName).toBe("SELECT");
     expect(select).toHaveValue("qwen3:14b");
     expect(screen.getByRole("option", { name: "llama3:8b" })).toBeInTheDocument();
@@ -161,9 +162,9 @@ describe("Assist settings (ADR 0005)", () => {
 
     await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
-    const select = await screen.findByLabelText("Model");
+    const select = await screen.findByRole("combobox", { name: "Model" });
     expect(select).toHaveValue("custom:model");
-    expect(screen.getByRole("option", { name: "custom:model" })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: "custom:model" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "llama3:8b" })).toBeInTheDocument();
   });
 

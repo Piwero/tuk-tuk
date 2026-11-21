@@ -157,7 +157,7 @@ function ListButton({
   collapsed,
   openCount,
   onSelect,
-}: ListButtonProps): JSX.Element {
+}: ListButtonProps): React.JSX.Element {
   // Collapsed, the row is only as wide as its glyph — so a List with neither a
   // color nor an emoji falls back to its initial rather than showing nothing.
   const bare = list.color === null && list.emoji === null;
@@ -244,7 +244,7 @@ function SmartListButton({
   count,
   countId,
   onSelect,
-}: SmartListButtonProps): JSX.Element {
+}: SmartListButtonProps): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   const hintKey = SMART_HINT_KEYS[view];
   const hintId = `smart-hint-${view}`;
@@ -295,7 +295,7 @@ function FolderNameButton({
   collapsed,
   openCount,
   onSelect,
-}: FolderNameButtonProps): JSX.Element {
+}: FolderNameButtonProps): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   return (
     <span className="icon-button-wrap">
@@ -329,7 +329,7 @@ interface TagButtonProps {
 /** Mirrors `ListButton`'s hint: `title` alone only ever reveals a Tag's
  * name on mouse hover, so a collapsed rail leaves keyboard users with
  * nothing (#264) — the popover rides alongside it rather than replacing it. */
-function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): JSX.Element {
+function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   return (
     <span className="icon-button-wrap">
@@ -396,7 +396,7 @@ interface TopNavItemProps {
  * accessible name is carried by aria-label/title so the rail stays usable.
  * The active item is distinguished by an inset accent bar + weight, not by
  * colour alone; `aria-current` marks it for assistive tech. */
-function TopNavItem({ icon, label, href, selected, onClick }: TopNavItemProps): JSX.Element {
+function TopNavItem({ icon, label, href, selected, onClick }: TopNavItemProps): React.JSX.Element {
   const className = selected ? "top-nav-item selected" : "top-nav-item";
   const content = (
     <>
@@ -474,7 +474,7 @@ export function Sidebar({
   onTagSaved,
   onTagDeleted,
   onTaskMoved,
-}: SidebarProps): JSX.Element {
+}: SidebarProps): React.JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
   // Layout preference, not data — persisted per Folder in localStorage
   // (layoutPrefs), independent of selection. Default expanded.
@@ -760,7 +760,7 @@ export function Sidebar({
     }
   }
 
-  function renderListItem(list: TaskList): JSX.Element {
+  function renderListItem(list: TaskList): React.JSX.Element {
     if (editor?.mode === "edit-list" && editor.listId === list.id) {
       return (
         <li key={list.id}>
@@ -816,7 +816,7 @@ export function Sidebar({
     );
   }
 
-  function renderSmartList(view: SmartView): JSX.Element {
+  function renderSmartList(view: SmartView): React.JSX.Element {
     const count = smartOpenCounts[view];
     const countId = `smart-open-count-${view}`;
     return (

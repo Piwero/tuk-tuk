@@ -18,7 +18,11 @@ interface ToastStackProps {
  * `role="status"` + `aria-live="polite"` announce a new toast without
  * stealing focus. Undo and Dismiss are ordinary buttons, so they're already
  * reachable by Tab and activatable with Enter/Space. */
-export function ToastStack({ entries, onUndo, onDismiss }: ToastStackProps): JSX.Element | null {
+export function ToastStack({
+  entries,
+  onUndo,
+  onDismiss,
+}: ToastStackProps): React.JSX.Element | null {
   if (entries.length === 0) {
     return null;
   }

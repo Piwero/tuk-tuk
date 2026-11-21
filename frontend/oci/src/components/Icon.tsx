@@ -108,7 +108,7 @@ interface IconProps {
   size?: number;
 }
 
-export function Icon({ name, size = 16 }: IconProps): JSX.Element {
+export function Icon({ name, size = 16 }: IconProps): React.JSX.Element {
   const Glyph = ICONS[name];
   return <Glyph className="icon" size={size} strokeWidth={1.5} aria-hidden="true" />;
 }

@@ -25,7 +25,7 @@ interface HabitHistoryProps {
 /** A Habit's history: the server-computed Streak, a monthly grid for
  * backfilling missed days, and the yearly heatmap. All numbers come from
  * GET /habits/{id}/stats — the component never recomputes them locally. */
-export function HabitHistory({ habit, onChanged }: HabitHistoryProps): JSX.Element {
+export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX.Element {
   const today = localDayOf(new Date());
   const [year, setYear] = useState(Number(today.slice(0, 4)));
   const [month, setMonth] = useState(Number(today.slice(5, 7)) - 1);

@@ -32,7 +32,7 @@ interface HintProps {
  * two different ways. Wraps its child with a hover/focus-triggered popover
  * wired as an accessible *description* (`aria-describedby`), never a name,
  * so the child's own accessible name is untouched. */
-export function Hint({ hintKey, destructive = false, children }: HintProps): JSX.Element {
+export function Hint({ hintKey, destructive = false, children }: HintProps): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   const id = useId();
   // A non-destructive hint suppresses itself once it has been shown for

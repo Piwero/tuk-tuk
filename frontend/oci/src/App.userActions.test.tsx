@@ -14,7 +14,9 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
-async function openUsers(ui: JSX.Element = <App />): Promise<ReturnType<typeof userEvent.setup>> {
+async function openUsers(
+  ui: React.JSX.Element = <App />,
+): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
   render(ui);
   await user.click(await screen.findByRole("button", { name: "Account menu" }));
@@ -333,7 +335,7 @@ describe("Acting on your own row", () => {
     await waitFor(() => {
       expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
     });
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(writes(api)).toEqual([
       { url: `/api/v1/admin/users/${FAKE_ADMIN.id}`, body: { is_admin: false } },

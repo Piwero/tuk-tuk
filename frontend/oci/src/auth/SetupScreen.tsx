@@ -58,7 +58,7 @@ export function SetupScreen({
 }: {
   onSuccess: () => Promise<void>;
   onAlreadySetUp: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

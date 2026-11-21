@@ -16,7 +16,7 @@ interface FocusNavBadgeProps {
 /** The Pomo/Stopwatch run, visible from every screen next to the brand — a
  * running or just-finished timer shouldn't require being on the Focus
  * screen to notice. */
-export function FocusNavBadge({ onOpen }: FocusNavBadgeProps): JSX.Element | null {
+export function FocusNavBadge({ onOpen }: FocusNavBadgeProps): React.JSX.Element | null {
   const { running, justFinished, elapsedMs, remainingMs, dismissFinished } = useFocusRun();
 
   if (running !== null) {

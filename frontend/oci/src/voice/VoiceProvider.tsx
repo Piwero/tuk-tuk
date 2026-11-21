@@ -58,7 +58,7 @@ export function VoiceProvider({
   /** Voice being switched off (config removed, credit used up) ends a live session. */
   available: boolean | null;
   children: ReactNode;
-}): JSX.Element {
+}): React.JSX.Element {
   const [state, setState] = useState<VoiceState>("idle");
   const [captions, setCaptions] = useState("");
   const captionRef = useRef("");
@@ -66,7 +66,7 @@ export function VoiceProvider({
   const [error, setError] = useState("");
   const [capturing, setCapturing] = useState(false);
   const [mode, setMode] = useState<Voice["mode"]>("push-to-talk");
-  const session = useRef<ReturnType<typeof createVoiceSession>>();
+  const session = useRef<ReturnType<typeof createVoiceSession> | undefined>(undefined);
   const generation = useRef(0);
   const latest = useRef({ createTransport, refresh });
   latest.current = { createTransport, refresh };

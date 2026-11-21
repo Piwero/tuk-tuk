@@ -1,6 +1,6 @@
 import "./TaskListView.css";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   createSection,
@@ -88,22 +88,23 @@ export function TaskListView({
   onOpenActions,
   onFocusTask,
   toasts,
-}: TaskListViewProps): JSX.Element {
+}: TaskListViewProps): React.JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
   const [renamingSectionId, setRenamingSectionId] = useState<number | null>(null);
-  const selection = useTaskSelection();
-  const clearSelection = selection.clear;
+  // The selection is per-view: switching Lists (or to a Smart List) drops it.
+  const selection = useTaskSelection(viewKey);
   // A pending bulk completion greys its rows the same way a single pending
   // completion does — without touching `task.completed` (a recurring Task
   // never flips it), so an Undo simply un-greys them.
   const [bulkPending, setBulkPending] = useState<Set<number>>(() => new Set());
-  const [bulkDialog, setBulkDialog] = useState<"reschedule" | "move" | "tag" | null>(null);
-
-  // The selection is per-view: switching Lists (or to a Smart List) drops it.
-  useEffect(() => {
-    clearSelection();
+  // Pending greys are per-view too, reset in render (not an effect) for the
+  // same reason as the selection.
+  const [pendingViewKey, setPendingViewKey] = useState(viewKey);
+  if (pendingViewKey !== viewKey) {
+    setPendingViewKey(viewKey);
     setBulkPending(new Set());
-  }, [viewKey, clearSelection]);
+  }
+  const [bulkDialog, setBulkDialog] = useState<"reschedule" | "move" | "tag" | null>(null);
   const [quickStart, setQuickStart] = useState<{
     task: Task;
     position: { x: number; y: number };
@@ -385,7 +386,7 @@ export function TaskListView({
     }
   }
 
-  function renderTaskRow(task: Task, group: TaskGroup): JSX.Element {
+  function renderTaskRow(task: Task, group: TaskGroup): React.JSX.Element {
     // The row shows only Actions and Delete (#280): Actions opens the full
     // verb set the hover row used to sample, so Start Focus and the Pomo
     // quick-start stay one click deeper through it. Right-click still opens
@@ -447,7 +448,7 @@ export function TaskListView({
     );
   }
 
-  function renderGroup(group: TaskGroup): JSX.Element {
+  function renderGroup(group: TaskGroup): React.JSX.Element {
     const section =
       typeof group.sectionId === "number"
         ? (sections.find((s) => s.id === group.sectionId) ?? null)

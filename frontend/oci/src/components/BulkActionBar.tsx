@@ -26,7 +26,7 @@ export function BulkActionBar({
   onAddTag,
   onDelete,
   onClear,
-}: BulkActionBarProps): JSX.Element {
+}: BulkActionBarProps): React.JSX.Element {
   return (
     <div className="bulk-action-bar" role="toolbar" aria-label="Bulk actions">
       <span className="bulk-action-count" aria-live="polite">

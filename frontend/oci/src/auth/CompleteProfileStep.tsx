@@ -68,7 +68,7 @@ export function CompleteProfileStep({
   onComplete,
 }: {
   onComplete: () => Promise<void>;
-}): JSX.Element {
+}): React.JSX.Element {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");

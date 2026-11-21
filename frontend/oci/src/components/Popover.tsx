@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } fro
 
 interface PopoverProps {
   open: boolean;
-  triggerRef: RefObject<HTMLElement>;
+  triggerRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   children: ReactNode;
   /** Editable comboboxes keep DOM focus in their input and use aria-activedescendant. */
@@ -26,7 +26,7 @@ export function Popover({
   children,
   focusOnOpen = true,
   anchorPoint,
-}: PopoverProps): JSX.Element | null {
+}: PopoverProps): React.JSX.Element | null {
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;

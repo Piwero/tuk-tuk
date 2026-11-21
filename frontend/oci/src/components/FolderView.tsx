@@ -36,13 +36,13 @@ export function FolderView({
   onSelect,
   onSelectList,
   onStartFocus,
-}: FolderViewProps): JSX.Element {
+}: FolderViewProps): React.JSX.Element {
   async function toggle(task: Task): Promise<void> {
     const updated = await updateTask(task.id, { completed: !task.completed });
     onChanged((current) => current.map((t) => (t.id === updated.id ? updated : t)));
   }
 
-  function renderTaskRow(task: Task): JSX.Element {
+  function renderTaskRow(task: Task): React.JSX.Element {
     return (
       <li key={task.id} data-priority={task.priority} data-overdue={isOverdue(task) || undefined}>
         <label>

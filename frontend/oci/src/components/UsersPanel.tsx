@@ -87,7 +87,7 @@ export function UserRow({
   isSelf: boolean;
   actions?: ReactNode;
   error?: string;
-}): JSX.Element {
+}): React.JSX.Element {
   const status = accountStatus(account);
   return (
     <tr className="users-row" data-status={STATUS_STATE[status]}>
@@ -147,7 +147,7 @@ export function UsersPanel({
 }: {
   currentUser: CurrentUser;
   onAccessLost: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [creating, setCreating] = useState(false);

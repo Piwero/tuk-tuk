@@ -101,7 +101,7 @@ const THEME_OPTIONS: readonly { value: ThemePreference; label: string }[] = [
 function AppearanceSettings({
   themePreference,
   onThemeChange,
-}: Pick<SettingsViewProps, "themePreference" | "onThemeChange">): JSX.Element {
+}: Pick<SettingsViewProps, "themePreference" | "onThemeChange">): React.JSX.Element {
   return (
     <fieldset className="settings-appearance">
       <legend>Theme</legend>
@@ -140,7 +140,7 @@ interface GoogleAccountCalendarsProps {
 function GoogleAccountCalendars({
   account,
   onReconnectRequired,
-}: GoogleAccountCalendarsProps): JSX.Element {
+}: GoogleAccountCalendarsProps): React.JSX.Element {
   const [calendars, setCalendars] = useState<GoogleCalendar[] | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -268,7 +268,7 @@ interface GoogleCredentialsFormProps {
  * an explicit choice to overwrite it. Saving flips every connected account
  * to "needs_reconnect" server-side (a refresh token belongs to the OAuth
  * client that minted it), so `onSaved` re-fetches the account list too. */
-function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps): JSX.Element {
+function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps): React.JSX.Element {
   const [clientId, setClientId] = useState(status.client_id ?? "");
   const [clientSecret, setClientSecret] = useState("");
   const [overwriteSecret, setOverwriteSecret] = useState(!status.client_secret_set);
@@ -394,7 +394,7 @@ interface AssistConfigFormProps {
  * back to a free-text field whenever nothing's been fetched yet (no base URL
  * saved, or the list came back empty), so a blank Ollama never blocks typing
  * a model name ahead of getting it running. */
-function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Element {
+function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): React.JSX.Element {
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState(config.ollama_base_url ?? "");
   const [model, setModel] = useState(config.model ?? "");
   const [pending, setPending] = useState(false);
@@ -619,7 +619,7 @@ interface AssistantConfigFormProps {
  *
  * "Remove" clears every field server-side, the only way back to the
  * unconfigured, invisible state once something is saved. */
-function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX.Element {
+function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): React.JSX.Element {
   const [baseUrl, setBaseUrl] = useState(config.base_url ?? "");
   const [model, setModel] = useState(config.model ?? "");
   const [apiKey, setApiKey] = useState("");
@@ -809,7 +809,7 @@ interface VoiceConfigFormProps {
  * key (a masked placeholder once saved, with an explicit choice to replace
  * it). Saving or removing tells the app shell to re-check availability so
  * the mic button appears or vanishes without a reload. */
-function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): JSX.Element {
+function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): React.JSX.Element {
   const [url, setUrl] = useState(config.livekit_url ?? "");
   const [apiKey, setApiKey] = useState(config.livekit_api_key ?? "");
   const [apiSecret, setApiSecret] = useState("");
@@ -949,7 +949,7 @@ const HALF_HOUR_LABELS: string[] = Array.from({ length: 49 }, (_, index) => {
  * double height. The selects only offer valid half-hour times, so the one
  * reachable invalid state is start ≥ end (which includes a band that would
  * wrap past midnight); that shows inline and isn't saved. */
-function ActiveHoursSettingsForm(): JSX.Element {
+function ActiveHoursSettingsForm(): React.JSX.Element {
   const [settings, setSettings] = useState<ActiveHoursSettings>({
     enabled: false,
     start: "09:00",
@@ -1035,7 +1035,7 @@ function databaseTestConnectionMessage(result: DatabaseTestConnectionResult): st
  * probe that never switches or saves anything — the connection-url field
  * is local component state only, cleared on every mount, and the probe
  * result is never fed back into anything persisted. */
-function DatabaseSettingsForm(): JSX.Element {
+function DatabaseSettingsForm(): React.JSX.Element {
   const [status, setStatus] = useState<DatabaseStatus | null>(null);
   const [connectionUrl, setConnectionUrl] = useState("");
   const [testing, setTesting] = useState(false);
@@ -1106,7 +1106,7 @@ export function SettingsView({
   onTabChange,
   onUserChange,
   ...accountProps
-}: SettingsViewProps): JSX.Element {
+}: SettingsViewProps): React.JSX.Element {
   const [user, setStoredUser] = useState<CurrentUser | null>(null);
   const reportUser = useRef(onUserChange);
   reportUser.current = onUserChange;
@@ -1137,7 +1137,7 @@ export function SettingsView({
     }
   }, [tab, user, onTabChange]);
 
-  function tabLink(target: SettingsTab, label: string): JSX.Element {
+  function tabLink(target: SettingsTab, label: string): React.JSX.Element {
     return (
       <a
         href={pathForSettingsTab(target)}
@@ -1183,7 +1183,7 @@ function MyAccountPanel({
   onThemeChange,
   user,
   onUserChange,
-}: MyAccountPanelProps): JSX.Element {
+}: MyAccountPanelProps): React.JSX.Element {
   const isAdmin = user?.is_admin === true;
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);

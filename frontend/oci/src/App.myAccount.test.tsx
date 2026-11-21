@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -35,7 +35,7 @@ describe("Settings tabs", () => {
       "aria-current",
       "page",
     );
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
     expect(await screen.findByLabelText("Username")).toHaveValue("admin");
     expect(screen.getByLabelText("Email")).toHaveValue("admin@example.com");
   });
@@ -46,14 +46,14 @@ describe("Settings tabs", () => {
 
     await user.click(await screen.findByRole("link", { name: "Users" }));
 
-    expect(window.location.pathname).toBe("/settings/users");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/users"));
     expect(screen.getByRole("link", { name: "Users" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
 
     window.history.back();
 
     expect(await screen.findByLabelText("Username")).toHaveValue("admin");
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
   });
 
   it("opens the Users URL directly for an Admin", async () => {
@@ -66,7 +66,7 @@ describe("Settings tabs", () => {
       "aria-current",
       "page",
     );
-    expect(window.location.pathname).toBe("/settings/users");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/users"));
   });
 
   it("shows a Member no Users tab, and their Users URL resolves to My account", async () => {
@@ -77,7 +77,7 @@ describe("Settings tabs", () => {
     render(<App />);
 
     expect(await screen.findByLabelText("Username")).toHaveValue("bea");
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
     expect(screen.getByRole("link", { name: "My account" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -92,7 +92,7 @@ describe("Settings tabs", () => {
     render(<App />);
 
     expect(await screen.findByLabelText("Username")).toHaveValue("admin");
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
   });
 });
 

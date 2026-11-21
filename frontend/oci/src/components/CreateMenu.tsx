@@ -14,7 +14,7 @@ export interface CreateMenuProps {
  * and, as the quieter second entry, "New folder". A user who has never made
  * a Folder meets the concept here first — never as a permanent, competing
  * button of its own. Dismissal and focus return come from the shared Popover. */
-export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): JSX.Element {
+export function CreateMenu({ onNewList, onNewFolder }: CreateMenuProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
 

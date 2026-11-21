@@ -21,7 +21,7 @@ function FilterSelect<T extends string | number>({
   value: T | null;
   options: { value: T; label: string }[];
   onChange: (value: T | null) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <label>
       {label}
@@ -85,7 +85,7 @@ export function ViewMenu({
   onSortByChange,
   lists,
   tags,
-}: ViewMenuProps): JSX.Element {
+}: ViewMenuProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
 

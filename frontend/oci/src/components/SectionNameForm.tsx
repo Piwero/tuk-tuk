@@ -10,7 +10,7 @@ export function SectionNameForm({
   initialName,
   onSubmit,
   onCancel,
-}: SectionNameFormProps): JSX.Element {
+}: SectionNameFormProps): React.JSX.Element {
   const [name, setName] = useState(initialName ?? "");
 
   return (

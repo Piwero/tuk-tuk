@@ -15,7 +15,7 @@ export interface TagFormProps {
   onCancel: () => void;
 }
 
-export function TagForm({ initial, onSubmit, onCancel }: TagFormProps): JSX.Element {
+export function TagForm({ initial, onSubmit, onCancel }: TagFormProps): React.JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
   const [color, setColor] = useState(initial?.color ?? DEFAULT_ACCENT);
   const [error, setError] = useState<string | null>(null);

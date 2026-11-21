@@ -46,4 +46,19 @@ describe("useTaskSelection", () => {
     act(() => result.current.extendTo(4, ORDER));
     expect([...result.current.selected]).toEqual([4]);
   });
+
+  it("starts empty, with no anchor, once the scope changes", () => {
+    const { result, rerender } = renderHook(({ scope }) => useTaskSelection(scope), {
+      initialProps: { scope: "list:1" },
+    });
+
+    act(() => result.current.toggle(2));
+    rerender({ scope: "list:2" });
+    // Same render, no effect needed: a stale selection never reaches the new view.
+    expect(result.current.size).toBe(0);
+    expect(result.current.isSelected(2)).toBe(false);
+
+    act(() => result.current.extendTo(4, ORDER));
+    expect([...result.current.selected]).toEqual([4]);
+  });
 });

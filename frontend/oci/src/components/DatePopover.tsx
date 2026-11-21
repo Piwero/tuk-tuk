@@ -63,7 +63,7 @@ export function DatePopover({
   onTimeChange,
   className,
   id,
-}: DatePopoverProps): JSX.Element {
+}: DatePopoverProps): React.JSX.Element {
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
 
@@ -129,7 +129,7 @@ export function DatePanel({
   clearable = false,
   nextWeekLabel = "Next Monday",
   children,
-}: DatePanelProps): JSX.Element {
+}: DatePanelProps): React.JSX.Element {
   const grid = useRef<HTMLDivElement>(null);
   const today = localDayOf(new Date());
   const [focused, setFocused] = useState(value === "" ? today : value);

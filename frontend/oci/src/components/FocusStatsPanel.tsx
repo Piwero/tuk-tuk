@@ -42,7 +42,7 @@ function BarChart({
   rows: ChartRow[];
   emptyMessage: string;
   ariaLabel: string;
-}): JSX.Element {
+}): React.JSX.Element {
   if (rows.length === 0) {
     return <p className="focus-chart-empty">{emptyMessage}</p>;
   }
@@ -82,7 +82,7 @@ interface FocusStatsViewProps {
  * can be
  * added retroactively, edited, or deleted (#162). Split out from the Focus
  * timer screen so the running clock never has to share space with this. */
-export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
+export function FocusStatsView({ onBack }: FocusStatsViewProps): React.JSX.Element {
   const today = localDayOf(new Date());
   const [start, setStart] = useState(addDays(today, -6));
   const [end, setEnd] = useState(today);
@@ -163,7 +163,7 @@ export function FocusStatsView({ onBack }: FocusStatsViewProps): JSX.Element {
     await Promise.all([loadSessions(), loadStats()]);
   }
 
-  function renderSession(session: FocusSession): JSX.Element {
+  function renderSession(session: FocusSession): React.JSX.Element {
     if (editor?.mode === "edit" && editor.id === session.id) {
       return (
         <li key={session.id}>

@@ -89,7 +89,7 @@ interface FocusRunContextValue {
 
 const FocusRunContext = createContext<FocusRunContextValue | null>(null);
 
-export function FocusRunProvider({ children }: { children: ReactNode }): JSX.Element {
+export function FocusRunProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [restored] = useState(loadStoredRun);
   const [running, setRunning] = useState<RunningSession | null>(
     restored === null ? null : { ...restored },

@@ -46,7 +46,7 @@ interface FreshToken {
 /** The new token's value with Copy, shown in place of its row. Copy
  * confirms on the button; where the clipboard is unavailable or refused it
  * selects the value so it can be copied by hand. */
-function FreshTokenValue({ name, value }: { name: string; value: string }): JSX.Element {
+function FreshTokenValue({ name, value }: { name: string; value: string }): React.JSX.Element {
   const [copied, setCopied] = useState(false);
   const valueRef = useRef<HTMLElement>(null);
 
@@ -88,7 +88,7 @@ interface NewTokenFormProps {
 
 /** Asks for the token's name, so the User can tell tokens apart, and what
  * it is used by. Escape or Cancel closes it without a request. */
-function NewTokenForm({ onCreated, onCancel }: NewTokenFormProps): JSX.Element {
+function NewTokenForm({ onCreated, onCancel }: NewTokenFormProps): React.JSX.Element {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ApiTokenKind>("api");
   const [pending, setPending] = useState(false);
@@ -198,7 +198,7 @@ function NewTokenForm({ onCreated, onCancel }: NewTokenFormProps): JSX.Element {
  * as the MCP server acting as the signed-in User. A new token's value lives
  * only in this component's state: never stored, gone when the page is left
  * or another token is created. */
-export function ApiTokensCard(): JSX.Element {
+export function ApiTokensCard(): React.JSX.Element {
   const [tokens, setTokens] = useState<ApiToken[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [fresh, setFresh] = useState<FreshToken | null>(null);

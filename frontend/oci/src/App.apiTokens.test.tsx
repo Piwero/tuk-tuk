@@ -227,7 +227,7 @@ describe("Creating an API token", () => {
     expect(await screen.findByText(value)).toBeInTheDocument();
 
     await user.click(screen.getByRole("link", { name: "Users" }));
-    expect(window.location.pathname).toBe("/settings/users");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/users"));
     window.history.back();
 
     const card = await screen.findByRole("region", { name: "API tokens" });

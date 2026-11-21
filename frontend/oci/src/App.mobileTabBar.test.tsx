@@ -78,7 +78,7 @@ describe("Mobile bottom tab bar (issues #170, #462)", () => {
 
     await user.click(getTab("Calendar"));
     await screen.findByRole("heading", { name: "Friday, July 3, 2026" }, { timeout: 10_000 });
-    expect(window.location.pathname).toBe("/calendar/day");
+    await waitFor(() => expect(window.location.pathname).toBe("/calendar/day"));
     expect(getTab("Calendar")).toHaveAttribute("aria-current", "page");
 
     await user.click(getTab("Habits"));
@@ -163,7 +163,7 @@ describe("More sheet (issue #462)", () => {
 
     const sheet = await openMore();
     await user.click(within(sheet).getByRole("button", { name: "Search" }));
-    expect(window.location.pathname).toBe("/search");
+    await waitFor(() => expect(window.location.pathname).toBe("/search"));
   });
 
   it("lists every List, Folder and Tag, and opens one", async () => {
@@ -186,7 +186,7 @@ describe("More sheet (issue #462)", () => {
 
     await user.click(within(lists).getByRole("button", { name: "Reports" }));
     await screen.findByRole("heading", { level: 1, name: /Reports/ });
-    expect(window.location.pathname).toBe(`/lists/${filed.id}`);
+    await waitFor(() => expect(window.location.pathname).toBe(`/lists/${filed.id}`));
 
     const again = await openMore();
     await user.click(
@@ -194,7 +194,7 @@ describe("More sheet (issue #462)", () => {
         name: "urgent",
       }),
     );
-    expect(window.location.pathname).toBe(`/tags/${urgent.id}`);
+    await waitFor(() => expect(window.location.pathname).toBe(`/tags/${urgent.id}`));
   });
 
   it("leaves out destinations disabled in Settings", async () => {
@@ -244,7 +244,7 @@ describe("More sheet (issue #462)", () => {
     expect(within(account).getByRole("switch", { name: "Dark mode" })).toBeChecked();
 
     await user.click(within(account).getByRole("button", { name: "Users" }));
-    expect(window.location.pathname).toBe("/settings/users");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/users"));
     expect(screen.queryByRole("dialog", { name: "More" })).toBeNull();
 
     const again = await openMore();
@@ -264,6 +264,6 @@ describe("More sheet (issue #462)", () => {
     expect(await within(account).findByText("bea")).toBeInTheDocument();
     expect(within(account).queryByRole("button", { name: "Users" })).toBeNull();
     await user.click(within(account).getByRole("button", { name: "My account" }));
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
   });
 });

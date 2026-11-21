@@ -25,7 +25,7 @@ interface PriorityIndicatorProps {
  *
  * Shared by TaskRow (List/Smart List/Search rows) and KanbanView (cards) so
  * the mapping can't drift between surfaces. */
-export function PriorityIndicator({ priority }: PriorityIndicatorProps): JSX.Element | null {
+export function PriorityIndicator({ priority }: PriorityIndicatorProps): React.JSX.Element | null {
   const iconName = PRIORITY_ICON[priority];
   if (iconName === undefined) {
     return null;

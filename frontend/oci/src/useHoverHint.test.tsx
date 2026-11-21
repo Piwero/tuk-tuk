@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LONG_PRESS_MS } from "./longPressReveal";
 import { useHoverHint } from "./useHoverHint";
 
-function Harness(): JSX.Element {
+function Harness(): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   return (
     <div>
