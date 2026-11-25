@@ -16,7 +16,13 @@ import {
 
 import { createFocusSession, type FocusMode } from "./api";
 import { linkFields, type FocusLink } from "./focusLink";
-import { clearStoredRun, loadStoredRun, saveStoredRun, type FocusPhase } from "./focusRun";
+import {
+  clearStoredRun,
+  loadStoredRun,
+  newRunId,
+  saveStoredRun,
+  type FocusPhase,
+} from "./focusRun";
 import { playFocusRunEndSound } from "./notificationSound";
 
 const DEFAULT_BREAK_MS = 5 * 60_000;
@@ -37,6 +43,9 @@ export interface RunningSession {
   pausedMs: number;
   pauseStartedAtMs: number | null;
   link: FocusLink;
+  /** This run's identity (#546): every attempt to record it sends the same
+   * id, so a retry after a lost response never records it twice. */
+  runId: string;
 }
 
 /** Offered right after a Pomo (not a break) finishes: which break to take
@@ -169,6 +178,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): React.J
         started_at: new Date(running.startedAtMs).toISOString(),
         ended_at: new Date(endMs).toISOString(),
         pause_seconds: Math.round(pausedTotalMs / 1000),
+        client_run_id: running.runId,
       });
       setRunning(null);
       setJustFinished(true);
@@ -185,7 +195,8 @@ export function FocusRunProvider({ children }: { children: ReactNode }): React.J
       }
     } finally {
       // A failed save must not wedge the timer: the guard lifts so the next
-      // tick (or tap) retries the finish.
+      // tick (or tap) retries the finish — safely, since the retry carries
+      // the same run id and the server records the run at most once.
       finishing.current = false;
     }
   }, [running]);
@@ -199,7 +210,8 @@ export function FocusRunProvider({ children }: { children: ReactNode }): React.J
   // both are fixed-length countdowns; a Stopwatch only ends via Finish).
   useEffect(() => {
     if (running !== null && running.mode === "pomo" && remainingMs <= 0) {
-      void finish();
+      // A failed save keeps the run; the next tick retries it.
+      finish().catch(() => undefined);
     }
   }, [running, remainingMs, finish]);
 
@@ -224,6 +236,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): React.J
         pausedMs: 0,
         pauseStartedAtMs: null,
         link: config.link,
+        runId: newRunId(),
       });
     },
     [],
@@ -245,6 +258,7 @@ export function FocusRunProvider({ children }: { children: ReactNode }): React.J
       pausedMs: 0,
       pauseStartedAtMs: null,
       link: "",
+      runId: newRunId(),
     });
     setPendingBreak(null);
   }, [pendingBreak]);

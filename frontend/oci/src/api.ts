@@ -1454,6 +1454,9 @@ export interface FocusSessionCreateInput {
   ended_at: string;
   pause_seconds?: number;
   note?: string;
+  /** The run's client-generated identity (#546): repeating a create with it
+   * returns the session already recorded instead of recording another. */
+  client_run_id?: string;
 }
 
 export function createFocusSession(input: FocusSessionCreateInput): Promise<FocusSession> {

@@ -167,6 +167,8 @@ export interface FakeFocusSession {
   ended_at: string;
   pause_seconds: number;
   note: string;
+  /** The client's identity for the run (#546), never shown to readers. */
+  client_run_id?: string | null;
   created_at: string;
 }
 
@@ -316,6 +318,10 @@ export interface FakeApiState {
   /** Write failure (#544): while set, each non-GET request it returns true
    * for answers 500 and changes nothing. Mutate directly in a test. */
   failWrite: ((method: string, pathname: string) => boolean) | null;
+  /** Lost response (#546): while set, each non-GET request it returns true
+   * for is handled in full, then the client sees a network error instead
+   * of the response, as when the connection drops after the save. */
+  loseWriteResponse: ((method: string, pathname: string) => boolean) | null;
   /** Write gate (#544): while set, each non-GET request `match` accepts
    * waits on `gate` before it is handled, so a test can observe a saving
    * state or repeat the activation while the write is in flight. */
@@ -1080,6 +1086,7 @@ export function installFakeApi({
     failRead: null,
     readGate: null,
     failWrite: null,
+    loseWriteResponse: null,
     writeGate: null,
     loggedIn,
     users: users.map((account) => ({ ...account })),
@@ -1416,7 +1423,7 @@ export function installFakeApi({
     task.completed_at = new Date().toISOString();
   };
 
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  const handle = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input), "http://localhost");
     const method = (init?.method ?? "GET").toUpperCase();
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -2902,8 +2909,20 @@ export function installFakeApi({
         mode: "pomo" | "stopwatch";
         started_at: string;
         ended_at: string;
+        client_run_id?: string;
       };
+      // Retry-safe (#546): the same run's id returns the session already
+      // recorded for it, with 200, and records nothing.
+      const runId = input.client_run_id;
+      const recorded =
+        runId === undefined
+          ? undefined
+          : state.focusSessions.find((s) => s.client_run_id === runId);
+      if (recorded) {
+        return json(withDuration(recorded), 200);
+      }
       const created = fakeFocusSession({
+        client_run_id: runId ?? null,
         mode: input.mode,
         task_id: input.task_id ?? null,
         habit_id: input.habit_id ?? null,
@@ -3262,6 +3281,17 @@ export function installFakeApi({
       }
     }
     return notFound(`No route: ${method} ${url.pathname}`);
+  };
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const response = await handle(input, init);
+    const method = (init?.method ?? "GET").toUpperCase();
+    const pathname = new URL(String(input), "http://localhost").pathname;
+    if (method !== "GET" && state.loseWriteResponse?.(method, pathname) === true) {
+      // The write landed, but its response never reaches the client.
+      throw new TypeError("Failed to fetch");
+    }
+    return response;
   });
 
   vi.stubGlobal("fetch", fetchMock);

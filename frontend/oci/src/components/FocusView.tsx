@@ -525,7 +525,8 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                   <button
                     type="button"
                     className="focus-primary btn-focus"
-                    onClick={() => void finish()}
+                    // A failed save keeps the run; tapping again retries it.
+                    onClick={() => void finish().catch(() => undefined)}
                   >
                     Finish
                   </button>
