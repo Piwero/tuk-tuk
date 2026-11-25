@@ -1896,6 +1896,28 @@ export function updateActiveHoursSettings(
   });
 }
 
+/** Planning window (issue #563): the band of each day the Calendar's
+ * capacity summary measures. The User's own choice, separate from Active
+ * hours (which only shapes the grid); off by default, 09:00–17:00 prefilled. */
+export interface PlanningWindowSettings {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export function fetchPlanningWindowSettings(): Promise<PlanningWindowSettings> {
+  return request("/api/v1/settings/planning-window");
+}
+
+export function updatePlanningWindowSettings(
+  settings: PlanningWindowSettings,
+): Promise<PlanningWindowSettings> {
+  return request("/api/v1/settings/planning-window", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
 /** Gentle return (issue #548): when on, Today collapses every earlier overdue
  * Task behind a counted disclosure. Chosen by the User, off by default;
  * presentation only — no Task date changes. */

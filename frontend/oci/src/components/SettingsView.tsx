@@ -6,9 +6,11 @@ import {
   ApiError,
   disconnectGoogleAccount,
   fetchActiveHoursSettings,
+  fetchPlanningWindowSettings,
   fetchGentleReturnSettings,
   updateGentleReturnSettings,
   updateActiveHoursSettings,
+  updatePlanningWindowSettings,
   fetchDatabaseStatus,
   testDatabaseConnection,
   fetchAssistConfig,
@@ -41,6 +43,7 @@ import {
   type AssistConfig,
   type AssistantConfig,
   type ActiveHoursSettings,
+  type PlanningWindowSettings,
   type CurrentUser,
   type DatabaseStatus,
   type DatabaseTestConnectionResult,
@@ -1058,6 +1061,82 @@ function ActiveHoursSettingsForm(): React.JSX.Element {
   );
 }
 
+/** Planning window (issue #563): the band of each day the Calendar's
+ * capacity summary measures. Its own setting, never copied from Active
+ * hours, so moving the grid's band leaves it where the User put it. Same
+ * half-hour selects and start-before-end rule as Active hours. */
+function PlanningWindowSettingsForm(): React.JSX.Element {
+  const [settings, setSettings] = useState<PlanningWindowSettings>({
+    enabled: false,
+    start: "09:00",
+    end: "17:00",
+  });
+
+  useEffect(() => {
+    void fetchPlanningWindowSettings().then(setSettings);
+  }, []);
+
+  const invalid = timeMinutes(settings.start) >= timeMinutes(settings.end);
+
+  function apply(next: PlanningWindowSettings): void {
+    setSettings(next);
+    if (timeMinutes(next.start) < timeMinutes(next.end)) {
+      void updatePlanningWindowSettings(next).then(setSettings);
+    }
+  }
+
+  return (
+    <div className="settings-field">
+      <label>
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          onChange={() => apply({ ...settings, enabled: !settings.enabled })}
+        />
+        Planning window
+      </label>
+      <p className="settings-hint">
+        The part of the day you plan work into. The calendar&rsquo;s Day view says how much of it is
+        still free once Events and Planned work are counted. Tasks without an estimate stay listed
+        as unknown; nothing is guessed.
+      </p>
+      <div className="settings-field-with-action">
+        <label>
+          Start
+          <select
+            value={settings.start}
+            onChange={(event) => apply({ ...settings, start: event.target.value })}
+          >
+            {HALF_HOUR_LABELS.slice(0, -1).map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          End
+          <select
+            value={settings.end}
+            onChange={(event) => apply({ ...settings, end: event.target.value })}
+          >
+            {HALF_HOUR_LABELS.slice(1).map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {invalid && (
+        <p role="alert">
+          The planning window must start before it ends, and can&rsquo;t wrap past midnight.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function databaseTestConnectionMessage(result: DatabaseTestConnectionResult): string {
   if (result.ok) {
     const dataState = result.has_existing_data ? "already holds tuk-tuk data" : "is empty";
@@ -1357,6 +1436,7 @@ function MyAccountPanel({
         <a href="#settings-appearance">Appearance</a>
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
+        <a href="#settings-planning-window">Planning window</a>
         <a href="#settings-gentle-return">Gentle return</a>
         <a href="#settings-reminder-notifications">Reminder notifications</a>
         <a href="#settings-assist">
@@ -1517,6 +1597,16 @@ function MyAccountPanel({
             <h2>Active hours</h2>
           </div>
           <ActiveHoursSettingsForm />
+        </section>
+        <section
+          aria-label="Planning window"
+          id="settings-planning-window"
+          className="settings-section"
+        >
+          <div className="settings-section-head">
+            <h2>Planning window</h2>
+          </div>
+          <PlanningWindowSettingsForm />
         </section>
         <section
           aria-label="Gentle return"

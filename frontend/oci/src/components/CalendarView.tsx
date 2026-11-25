@@ -52,6 +52,7 @@ import {
   type CalendarMode,
   type Entry,
 } from "../calendar";
+import { CapacitySummary } from "./CapacitySummary";
 import { clearedSchedule, formatDate, fromDayIso, localDayOf } from "../dates";
 import { makeListChannel, makePriorityChannel, makeTagChannel } from "../captureChannels";
 import { parseQuickAdd, sameName } from "../quickAdd";
@@ -1251,6 +1252,7 @@ export function CalendarView({
           ))}
         </div>
       )}
+      {mode === "day" && <CapacitySummary day={anchor} events={events} dayTasks={tasks} />}
       {draft !== null && draftLabel !== null && (
         <Modal title={draftLabel} onClose={resetDraft}>
           <form className="calendar-draft" onSubmit={(event) => void submitDraft(event)}>
