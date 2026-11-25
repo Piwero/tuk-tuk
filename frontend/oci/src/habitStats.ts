@@ -3,7 +3,7 @@
  * HeatmapDay's intensity the same way. */
 
 import { localDayOf } from "./dates";
-import { recentScheduledDays } from "./habitFrequency";
+import { habitDueOn, recentScheduledDays } from "./habitFrequency";
 
 /** The Habit start (YYYY-MM-DD): the first day the Habit counts. A day before
  * it reads as "not started", never as missed. The server's `eligible_from`
@@ -11,13 +11,66 @@ import { recentScheduledDays } from "./habitFrequency";
  * zone stands in. That is never earlier than the server's answer (an earlier
  * real Check-in can only pull it back), so a loading screen can't show a miss
  * the server wouldn't. Never after today. */
-export function habitStart(
+function habitStart(
   habit: { created_at: string },
   stats: { eligible_from: string } | null | undefined,
   today: string,
 ): string {
   const start = stats?.eligible_from ?? localDayOf(new Date(habit.created_at));
   return start < today ? start : today;
+}
+
+/** What one of a Habit's days is. The week grid, the recent-days strip and
+ * the history panel all show days, so they all read them here. */
+export type DayState =
+  "done" | "partial" | "open-today" | "missed" | "not-started" | "not-scheduled" | "future";
+
+export interface DayReading {
+  state: DayState;
+  /** The heat-ramp fill (0..4). A partial day stays on 1-3, so only a met
+   * Target ever looks like one. */
+  level: number;
+  /** The words a screen reader hears for the day, after its date. */
+  text: string;
+}
+
+/** Reads one Habit's days as of `today`, with the Habit start worked out once
+ * for all of them. `value` is what the day holds (0 when it has no
+ * Check-in). The order decides overlaps: a recorded value always shows, a
+ * future day is inert, an off day is "not scheduled" even before the Habit
+ * start, and only then does the start turn an empty day "not started"
+ * instead of missed. Today is graced, as in the server's Streak. */
+export function habitDayReader(
+  habit: { created_at: string; frequency: string; target: number; unit: string | null },
+  stats: { eligible_from: string } | null | undefined,
+  today: string,
+): (day: string, value: number) => DayReading {
+  const start = habitStart(habit, stats, today);
+  return (day, value) => {
+    if (value >= habit.target) {
+      return { state: "done", level: 4, text: "checked in" };
+    }
+    if (value > 0) {
+      const unit = habit.unit === null ? "" : ` ${habit.unit}`;
+      return {
+        state: "partial",
+        level: Math.min(3, Math.max(1, heatLevel(value / habit.target))),
+        text: `in progress: ${value} of ${habit.target}${unit}`,
+      };
+    }
+    if (day > today) {
+      return { state: "future", level: 0, text: "future" };
+    }
+    if (!habitDueOn(habit.frequency, day)) {
+      return { state: "not-scheduled", level: 0, text: "not scheduled" };
+    }
+    if (day < start) {
+      return { state: "not-started", level: 0, text: "not started" };
+    }
+    return day === today
+      ? { state: "open-today", level: 0, text: "not yet checked in" }
+      : { state: "missed", level: 0, text: "missed" };
+  };
 }
 
 /** How many of the Habit's most recent scheduled days the card's strip

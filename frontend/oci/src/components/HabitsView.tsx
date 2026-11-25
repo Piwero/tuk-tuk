@@ -15,9 +15,9 @@ import {
   type HabitStats,
 } from "../api";
 import { addDays, formatDate, fromDayIso, localDayOf, shortDayLabel } from "../dates";
-import { habitDueOn, habitFrequencyLabel } from "../habitFrequency";
+import { habitFrequencyLabel } from "../habitFrequency";
 import { tapCheckIn } from "../habitCheckIn";
-import { habitStart, heatLevel, stripDays } from "../habitStats";
+import { habitDayReader, stripDays, type DayState } from "../habitStats";
 import { HabitActionsMenu } from "./HabitActionsMenu";
 import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
@@ -186,38 +186,6 @@ export function HabitsView({
     await load();
   }
 
-  /** The week-grid cell for one Habit's day: its state, fill level and
-   * the words a screen reader hears. Partial Numeric days take a lighter
-   * step of the heat ramp than a met Target. A day before the Habit start
-   * is "not started": the Habit didn't exist yet, so it can't have been
-   * missed. It stays a button, since tapping it is a deliberate backfill. */
-  function cellState(habit: Habit, day: string): { state: CellState; level: number; text: string } {
-    const value = valueOn(habit, day);
-    if (value >= habit.target) {
-      return { state: "done", level: 4, text: "checked in" };
-    }
-    if (value > 0) {
-      const unit = habit.unit === null ? "" : ` ${habit.unit}`;
-      return {
-        state: "partial",
-        level: Math.min(3, Math.max(1, heatLevel(value / habit.target))),
-        text: `in progress: ${value} of ${habit.target}${unit}`,
-      };
-    }
-    if (day > today) {
-      return { state: "future", level: 0, text: "future" };
-    }
-    if (!habitDueOn(habit.frequency, day)) {
-      return { state: "not-scheduled", level: 0, text: "not scheduled" };
-    }
-    if (day < habitStart(habit, statsByHabit.get(habit.id), today)) {
-      return { state: "not-started", level: 0, text: "not started" };
-    }
-    return day === today
-      ? { state: "open-today", level: 0, text: "not yet checked in" }
-      : { state: "missed", level: 0, text: "missed" };
-  }
-
   function actionsMenu(habit: Habit): React.JSX.Element {
     return (
       <HabitActionsMenu
@@ -251,6 +219,10 @@ export function HabitsView({
       ];
     }
     const stats = statsByHabit.get(habit.id);
+    // Before the stats land, the reader falls back to the creation day, so a
+    // loading grid can't show a miss the server wouldn't. A day before the
+    // Habit start stays a button: tapping it is a deliberate backfill.
+    const read = habitDayReader(habit, stats, today);
     const rows = [
       <tr key={habit.id} className="habit-row">
         <th scope="row" className="habit-row-head">
@@ -272,10 +244,10 @@ export function HabitsView({
           </div>
         </th>
         {weekDays.map((day) => {
-          const { state, level, text } = cellState(habit, day);
-          const label = `${habit.name}, ${weekdayLongLabel(day)}: ${text}`;
-          const className = `habit-cell state-${state} heatmap-day level-${level}${day === today ? " today" : ""}`;
           const value = valueOn(habit, day);
+          const { state, level, text } = read(day, value);
+          const label = `${habit.name}, ${weekdayLongLabel(day)}: ${text}`;
+          const className = `habit-cell state-${state} heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}${day === today ? " today" : ""}`;
           return (
             <td key={day}>
               {state === "future" ? (
@@ -289,6 +261,14 @@ export function HabitsView({
                   onClick={() => void toggleDay(habit, day)}
                 >
                   {state === "done" && <Icon name="check" size={12} />}
+                  {state === "open-today" && (
+                    // Today's open cell says what it is and what a tap does,
+                    // on screen: the name alone is only heard.
+                    <span className="habit-cell-today-text">
+                      <span>Not yet</span>
+                      <span className="habit-cell-today-action">Check in</span>
+                    </span>
+                  )}
                   {state === "partial" && (
                     <span className="habit-cell-progress">
                       {value}/{habit.target}
@@ -452,12 +432,9 @@ export function HabitsView({
   );
 }
 
-type CellState =
-  "done" | "partial" | "open-today" | "missed" | "not-started" | "not-scheduled" | "future";
-
 /** What each day square means, in words that are always on screen: the
  * cells' own names are only heard, and the strip's hint needs a hover. */
-const LEGEND: { state: CellState; level: number; text: string }[] = [
+const LEGEND: { state: DayState; level: number; text: string }[] = [
   { state: "done", level: 4, text: "Checked in" },
   { state: "partial", level: 2, text: "In progress" },
   { state: "open-today", level: 0, text: "Not yet: today, still open" },
@@ -474,9 +451,9 @@ function DayLegend(): React.JSX.Element {
         <li key={state}>
           <span
             aria-hidden="true"
-            className={`habit-cell habits-legend-swatch state-${state} heatmap-day level-${level}`}
+            className={`habit-cell habits-legend-swatch state-${state} heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}`}
           >
-            {state === "done" && <Icon name="check" size={10} />}
+            {state === "done" && <Icon name="check" size={14} />}
           </span>
           {text}
         </li>

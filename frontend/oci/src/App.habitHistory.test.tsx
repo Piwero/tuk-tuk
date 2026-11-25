@@ -203,6 +203,23 @@ describe("Habit history", () => {
     expect(await screen.findByRole("button", { name: "2026-06-30: not started" })).toBeEnabled();
   });
 
+  it("explains the month grid's and the yearly heatmap's marks in words, without hover", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate", { created_at: "2026-07-03T10:00:00Z" })] });
+    render(<App />);
+
+    await openHistory("Meditate");
+
+    const key = await screen.findByRole("list", { name: "What the history shows" });
+    expect(key).toBeVisible();
+    expect(
+      within(key)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Checked in", "In progress", "No Check-in", "Not started: before the Habit began"]);
+    // What a heatmap square stands for is on screen, not only in its title.
+    expect(screen.getByText("2026: one square per day, from January 1")).toBeVisible();
+  });
+
   it("keeps history reachable on archived Habits", async () => {
     const api = installFakeApi({
       habits: [fakeHabit("Meditate", { is_archived: true })],

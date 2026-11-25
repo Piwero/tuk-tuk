@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchHabitStats, type Habit, type HabitStats } from "../api";
 import { tapCheckIn } from "../habitCheckIn";
 import { formatDate, localDayOf } from "../dates";
-import { habitStart, heatLevel } from "../habitStats";
+import { habitDayReader, heatLevel } from "../habitStats";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
 
@@ -44,8 +44,8 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
   const valueOf = (day: string): number => entries.get(day)?.value ?? 0;
   // Days before the Habit start read as "not started", never as misses. They
   // stay tappable: backfilling one is a real Check-in, and moves the start back.
-  const start = habitStart(habit, stats, today);
-  const notStarted = (day: string): boolean => day < start && valueOf(day) === 0;
+  const read = habitDayReader(habit, stats, today);
+  const notStarted = (day: string): boolean => read(day, valueOf(day)).state === "not-started";
 
   /** Backfill (or edit) a day's Check-in, on the same rule as the card's
    * recent-days strip (see tapCheckIn). */
@@ -106,6 +106,7 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
           })}
         </div>
       </div>
+      <p className="heatmap-caption">{year}: one square per day, from January 1</p>
       <div className="heatmap" role="img" aria-label="Yearly heatmap">
         {Array.from({ length: 12 }, (_, m) =>
           monthDays(year, m).map((day) => (
@@ -117,6 +118,30 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
           )),
         )}
       </div>
+      <HistoryKey />
     </div>
+  );
+}
+
+/** What the month grid's and the heatmap's marks mean, always on screen: a
+ * heatmap square's date is only in its hover title, and a dash means
+ * nothing until it is named. */
+const HISTORY_KEY: { className: string; text: string }[] = [
+  { className: "level-4", text: "Checked in" },
+  { className: "level-2", text: "In progress" },
+  { className: "level-0", text: "No Check-in" },
+  { className: "level-0 not-started", text: "Not started: before the Habit began" },
+];
+
+function HistoryKey(): React.JSX.Element {
+  return (
+    <ul className="habit-history-key" aria-label="What the history shows">
+      {HISTORY_KEY.map(({ className, text }) => (
+        <li key={text}>
+          <span aria-hidden="true" className={`heatmap-day ${className}`} />
+          {text}
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -32,8 +32,10 @@ two-week history show your progress.
 - Days before you created a habit show a grey dash and read **Not started**,
   never missed. Tap one if you really did it then: that records a check-in
   and the habit counts from that day on.
-- Today stays **Not yet** until you check in. Future days can't be tapped.
+- Today's square in the week reads **Not yet / Check in** until you check
+  in; tap it to check in. Future days can't be tapped.
 - The key under the history strip explains every square, no hovering needed.
+  A habit's **History** has its own key for the month and the yearly squares.
 - The card turns green with **Target met** once today is done.
 - Archive a habit to hide it without losing its history.
 - Link a habit to a [goal](goals-and-standup.md) and its check-ins count
