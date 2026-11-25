@@ -383,6 +383,8 @@ export interface FakeApiState {
   activeHours: { enabled: boolean; start: string; end: string };
   /** Gentle return (issue #548): Today collapses earlier overdue Tasks. */
   gentleReturn: boolean;
+  /** Reminder notifications (issue #557): the User's delivery opt-in. */
+  reminderNotifications: boolean;
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -988,6 +990,7 @@ export function installFakeApi({
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
+  reminderNotifications = false,
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1080,6 +1083,8 @@ export function installFakeApi({
   activeHours?: { enabled: boolean; start: string; end: string };
   /** Gentle return (issue #548). Defaults to off, matching the backend. */
   gentleReturn?: boolean;
+  /** Reminder notifications (issue #557). Defaults to off, matching the backend. */
+  reminderNotifications?: boolean;
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1162,6 +1167,7 @@ export function installFakeApi({
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
     gentleReturn,
+    reminderNotifications,
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -3264,6 +3270,12 @@ export function installFakeApi({
         state.gentleReturn = (body as { enabled: boolean }).enabled;
       }
       return json({ enabled: state.gentleReturn });
+    }
+    if (url.pathname === "/api/v1/settings/reminder-notifications") {
+      if (method === "PUT") {
+        state.reminderNotifications = (body as { enabled: boolean }).enabled;
+      }
+      return json({ enabled: state.reminderNotifications });
     }
     if (url.pathname === "/api/v1/settings/active-hours") {
       if (method === "GET") {

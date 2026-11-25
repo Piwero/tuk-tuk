@@ -51,6 +51,7 @@ import { DateFieldset } from "./DateFieldset";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
+import { ReminderDeliveryNote } from "./ReminderDeliveryNote";
 import { ToastStack } from "./ToastStack";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
@@ -740,6 +741,7 @@ function QuickAddForm({
                   {formatReminderOffset(offset)}
                 </RemovableChip>
               ))}
+              {reminders.length > 0 && <ReminderDeliveryNote />}
             </div>
           )}
         </div>

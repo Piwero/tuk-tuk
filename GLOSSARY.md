@@ -41,7 +41,7 @@ A user-created grouping of Lists in the sidebar. Folders contain only Lists, nev
 _Avoid_: Group, project group
 
 **Task**:
-The core unit of work: has a title, optional dates/reminders/recurrence, priority, tags, and completion state. A Task converted from an Event (issue #111) additionally carries that Event's calendar and Google event id as provenance — otherwise invisible, purely local state that hides the Event it came from and reappears if the Task is deleted — but is otherwise an ordinary Task in every way: draggable, taggable, prioritisable, completable, focusable.
+The core unit of work: has a title, optional dates/reminders/recurrence/Planned work, priority, tags, and completion state. A Task converted from an Event (issue #111) additionally carries that Event's calendar and Google event id as provenance — otherwise invisible, purely local state that hides the Event it came from and reappears if the Task is deleted — but is otherwise an ordinary Task in every way: draggable, taggable, prioritisable, completable, focusable.
 _Avoid_: Todo, item
 
 **Entry**:
@@ -53,11 +53,11 @@ The Calendar shows plans, not history: both the grid and the Unscheduled rail re
 Entries render in different timezones by kind, and this is deliberate, not a bug: a Task renders in whatever timezone it was scheduled in (a commitment the user made), while an Event renders in the **viewer's own** timezone, whatever timezone it was organised in (an artefact of whoever set it up). Rendering a Tokyo-organised meeting at its Tokyo hour would place it in the wrong row of the grid and cause a missed meeting. This asymmetry is the single most likely thing for a future reader to mistake for a bug — do not "fix" it into symmetry.
 
 **Active hours**:
-The band of the day the user marks as when they are usually active (issue #210). Inside it the Week/Day time grid renders at double height (96px/hour) so short tasks stay readable in place; outside it the grid compresses (24px/hour) so dead hours cost little scroll. A per-User setting stored server-side — it describes the User, not a device — disabled by default, prefilling 09:00–17:00 on first enable. The band is aligned to 30 minutes, must start strictly before it ends, and may not wrap past midnight: a wrapping band makes "the start of your day" ambiguous, and night-shift support (a movable day boundary) is out of scope. Degenerate bands (the whole day, or a single 30-minute band) are allowed. Only the Week and Day views are affected; Month has no time axis, and the all-day lane is untouched. See ADR 0010 for the piecewise time-axis invariant this rests on.
+The band of the day the user marks as when they are usually active (issue #210). Inside it the Week/Day time grid renders at double height (96px/hour) so short tasks stay readable in place; outside it the grid compresses (24px/hour) so dead hours cost little scroll. A per-User setting stored server-side — it describes the User, not a device — disabled by default, prefilling 09:00–17:00 on first enable. The band is aligned to 30 minutes, must start strictly before it ends, and may not wrap past midnight: a wrapping band makes "the start of your day" ambiguous, and night-shift support (a movable day boundary) is out of scope. Degenerate bands (the whole day, or a single 30-minute band) are allowed. Only the Week and Day views are affected; Month has no time axis, and the all-day lane is untouched. See ADR 0010 for the piecewise time-axis invariant this rests on. Active hours shapes the calendar layout only: it never decides when Reminders notify — that is Quiet hours, a separate setting.
 _Avoid_: Working hours (the band is about activity, not work), office hours, business hours
 
 **Check Item**:
-A lightweight line in a task's checklist — a title with its own done/undone state and optional reminder. Belongs to exactly one Task and is not a Task itself (no tags, priority, or list). The only nesting mechanism in v1.
+A lightweight line in a task's checklist — a title with its own done/undone state, nothing more. Belongs to exactly one Task and is not a Task itself (no tags, priority, list, dates or Reminders: a Reminder belongs to its Task). The only nesting mechanism in v1.
 _Avoid_: Subtask (a separate recursive-task concept, out of v1), checklist item
 
 **Smart List**:
@@ -87,13 +87,17 @@ _Avoid_: Label
 A named, ordered sub-group inside a List. Sections subdivide the List view and ARE the Kanban columns — one concept, not two.
 _Avoid_: Column, group
 
-**Planned work**:
-Optional reserved time for doing a Task (issue #558), held apart from the Task's own start/due dates: at most one block per Task, carrying a start instant, a positive duration (elapsed minutes, so a block across a DST change keeps its real length), the IANA timezone it was planned in, and an optional **buffer after**. The block plus its buffer stays within one local calendar day of that timezone; it may end exactly at the next midnight, never past it. Moving or removing it never moves or clears the deadline, and changing the Task's dates never moves the plan. It needs no due date and is not a Reminder anchor. Completing or advancing a recurring Task clears the plan — it belonged to the occurrence just done — rather than carrying it to the next one; completing a one-off Task keeps it, so a reopen finds it again. On the wire it is `planned_work` (`null` when unplanned; read adds the computed `end`), written whole or removed with `null` on the Task PATCH; a client that never sends the field leaves it untouched.
-_Avoid_: Schedule, time block, the Task's dates (those are the deadline)
-
 **Reminder**:
-A relative offset from a Task's date (e.g. "9 hours before") at which the user should be notified. Tasks can have several. v1 stores and edits Reminders but does not deliver notifications.
-_Avoid_: Alarm, notification (the delivery mechanism, not the domain concept)
+A relative offset from a Task's date (e.g. "9 hours before") at which the User asks to be notified. Tasks can have several; Check Items have none. Its anchor is always the Task's own date, never its Planned work. Delivery is opt-in, under **Reminder notifications** (issue #557): off by default for every User, so offsets saved before delivery existed never start notifying on their own, and enabled per device with an explicit **Enable on this device** — the browser's permission prompt only ever follows that click. Delivery is **foreground-only**: supported while a signed-in app tab is open on a supported browser served from a secure context (HTTPS or `localhost`); a backgrounded, closed or locked device is unsupported, and tuk-tuk never claims the operating system displayed an alert. A Reminder notifies at most once per Task occurrence however many tabs are open, and a completed, deleted or already-advanced occurrence never notifies. Reminders that fall due while no tab is open are shown in-app as missed reminders, never replayed as a burst of late alerts. Snoozing delays one occurrence's alert without changing the Task's dates. Denied permission, an unsupported browser or a delivery failure leaves Tasks and Reminders fully usable.
+_Avoid_: Alarm, notification (the delivery, not the domain concept), push notification (background push is unsupported)
+
+**Quiet hours**:
+A per-User band of the day during which Reminder notifications are held back: a Reminder falling due inside it is deferred until the band ends and then notifies once, and stays visible in-app meanwhile. A notification setting, not Active hours — Active hours changes only the calendar grid and never delivery, and Quiet hours never changes the grid. Nothing bypasses it: there is no critical-alert exception.
+_Avoid_: Active hours (the calendar layout band), Do not disturb (the operating system's own setting)
+
+**Planned work**:
+An optional block of time a User reserves for working on a Task (issue #558): a start, a positive duration and the timezone it was planned in, plus an optional **Buffer after** — slack kept free after the block. At most one per Task, inside one local calendar day. It is not the Task's schedule: moving or removing it never moves or clears the Task's start or due date, and it is never a Reminder's anchor. Completing or advancing a recurring Task (ADR 0003) clears that occurrence's Planned work rather than carrying it to the next occurrence. On the Calendar it reads as a visibly labelled Planned work block, distinct from both Events and the Task's own schedule. Its duration is an optional estimate used only for planning and never required to capture a Task. The start is an instant and the duration is elapsed minutes, so a block across a DST change keeps its real length; the block plus its buffer may end exactly at the next local midnight, never past it. It needs no due date, and changing the Task's dates never moves it; completing a one-off Task keeps it, so a reopen finds it again. On the wire it is the Task's `planned_work` (`null` when unplanned; a read adds the computed `end`), written whole or removed with `null` on the Task PATCH; a client that never sends the field leaves it untouched.
+_Avoid_: Schedule (the Task's start/due dates), time block, appointment (an Event)
 
 ## Habits
 
@@ -114,6 +118,14 @@ The count of consecutive scheduled days a Habit has been checked in without a mi
 **Habit start**:
 The first local day a Habit can be missed: the User's calendar day when the Habit was created (read in their time zone), or the day of an earlier real Check-in when one exists, and never later than today. Days before it are **not started**: neither missed nor done, and never counted against the Habit. The API calls it `eligible_from`.
 _Avoid_: Start date (no such field is stored), eligibility date
+
+**Pause**:
+An explicit date interval, optionally open-ended, during which a Habit is deliberately not practised (issue #559) — for travel or illness. Paused days are neither missed nor done: they create no Check-in and the Streak steps over them without counting them. **Resume today** ends an open pause; **Edit pause** changes its dates. A pause cannot cover a date that already has a Check-in — the conflicting dates are named and nothing is deleted — and a paused date accepts no Check-in until the pause is removed. For a times-per-week Habit, pausing a whole week excludes that week; a partial-week pause leaves the weekly target unchanged. Settled Goal Scores are never rewritten by a later pause (ADR 0012). The app labels the state **Paused**.
+_Avoid_: Break, freeze, vacation
+
+**Skip**:
+One scheduled day a User explicitly marks as not practised on a Habit — a deliberate choice, unlike a missed day, which is a forgotten Check-in. Like a paused day it creates no Check-in, counts as neither success nor failure, is excluded from the Streak rather than rewarded, and cannot be placed on a date that already has a Check-in; a skipped day accepts no Check-in until the skip is removed. A partial-week skip leaves a times-per-week Habit's weekly target unchanged. The app labels the state **Skipped**.
+_Avoid_: Miss (an unplanned absence), excuse, rest day
 
 ## Goals
 

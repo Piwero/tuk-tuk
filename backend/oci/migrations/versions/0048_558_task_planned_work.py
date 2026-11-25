@@ -7,13 +7,13 @@ duration in minutes, the IANA timezone the block was planned in, and an
 optional buffer after. All null means "no plan"; older clients that never
 send the field leave it untouched.
 
-The revision id carries the ticket number so parallel phase-3 tickets that
-also branch from 0047 don't collide on "0048".
+The revision id carries the ticket number so parallel phase-3 tickets
+don't collide on a bare "0048"; it follows 0048 (issue #557).
 
-No downgrade, like 0035-0047 before it: restore the pre-upgrade backup.
+No downgrade, like 0035-0048 before it: restore the pre-upgrade backup.
 
 Revision ID: 0048_558
-Revises: 0047
+Revises: 0048
 Create Date: 2026-11-25
 
 """
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0048_558"
-down_revision: str | None = "0047"
+down_revision: str | None = "0048"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
