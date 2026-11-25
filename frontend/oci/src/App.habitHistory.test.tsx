@@ -215,7 +215,13 @@ describe("Habit history", () => {
       within(key)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual(["Checked in", "In progress", "No Check-in", "Not started: before the Habit began"]);
+    ).toEqual([
+      "Checked in",
+      "In progress",
+      "No Check-in",
+      "Not started: before the Habit began",
+      "Paused: not counted, neither done nor missed",
+    ]);
     // What a heatmap square stands for is on screen, not only in its title.
     expect(screen.getByText("2026: one square per day, from January 1")).toBeVisible();
   });

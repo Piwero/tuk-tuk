@@ -10,12 +10,15 @@ export interface HabitActionsMenuProps {
   habit: Habit;
   onHistory: () => void;
   onEdit: () => void;
+  /** Starts a pause (issue #559); null where a pause is already current or
+   * planned (its own Edit pause is on the card) or the Habit is archived. */
+  onPause?: (() => void) | null;
   onToggleArchive: () => void;
   onDelete: () => void;
 }
 
-/** A Habit card's single actions menu: History, Edit, Archive/Unarchive and
- * Delete fold behind one kebab trigger rather than four permanent buttons.
+/** A Habit card's single actions menu: History, Edit, Pause, Archive/Unarchive
+ * and Delete fold behind one kebab trigger rather than four permanent buttons.
  * The trigger and every item are real <button>s, so the whole menu is
  * reachable by keyboard and under a coarse pointer where there is no hover.
  * Dismissal and focus return come from the shared Popover. */
@@ -23,6 +26,7 @@ export function HabitActionsMenu({
   habit,
   onHistory,
   onEdit,
+  onPause = null,
   onToggleArchive,
   onDelete,
 }: HabitActionsMenuProps): React.JSX.Element {
@@ -72,6 +76,20 @@ export function HabitActionsMenu({
               Edit
             </button>
           </li>
+          {onPause !== null && (
+            <li role="none">
+              <button
+                className="btn-quiet"
+                type="button"
+                role="menuitem"
+                aria-label={`Pause ${habit.name}`}
+                onClick={() => choose(onPause)}
+              >
+                <Icon name="pause" size={16} />
+                Pause
+              </button>
+            </li>
+          )}
           <li role="none">
             <button
               className="btn-quiet"

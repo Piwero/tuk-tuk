@@ -23,7 +23,32 @@ function habitStart(
 /** What one of a Habit's days is. The week grid, the recent-days strip and
  * the history panel all show days, so they all read them here. */
 export type DayState =
-  "done" | "partial" | "open-today" | "missed" | "not-started" | "not-scheduled" | "future";
+  | "done"
+  | "partial"
+  | "open-today"
+  | "missed"
+  | "not-started"
+  | "not-scheduled"
+  | "paused"
+  | "future";
+
+/** Whether a pause covers the day: both ends inclusive, a null end
+ * open-ended — the server's rule (app.habit_days). */
+export function pauseCovers(
+  pause: { start_date: string; end_date: string | null },
+  day: string,
+): boolean {
+  return pause.start_date <= day && (pause.end_date === null || day <= pause.end_date);
+}
+
+/** The pause a Habit's card shows: the one covering today, else the next
+ * one to come. Past pauses are history only, read off the days. */
+export function currentOrNextPause<P extends { start_date: string; end_date: string | null }>(
+  habit: { pauses?: P[] },
+  today: string,
+): P | undefined {
+  return (habit.pauses ?? []).find((pause) => pause.end_date === null || pause.end_date >= today);
+}
 
 export interface DayReading {
   state: DayState;
@@ -39,9 +64,17 @@ export interface DayReading {
  * Check-in). The order decides overlaps: a recorded value always shows, a
  * future day is inert, an off day is "not scheduled" even before the Habit
  * start, and only then does the start turn an empty day "not started"
- * instead of missed. Today is graced, as in the server's Streak. */
+ * instead of missed, and a pause turns it "paused" — the same order as the
+ * server's day rule (app.habit_days). Today is graced, as in the server's
+ * Streak. */
 export function habitDayReader(
-  habit: { created_at: string; frequency: string; target: number; unit: string | null },
+  habit: {
+    created_at: string;
+    frequency: string;
+    target: number;
+    unit: string | null;
+    pauses?: { start_date: string; end_date: string | null }[];
+  },
   stats: { eligible_from: string } | null | undefined,
   today: string,
 ): (day: string, value: number) => DayReading {
@@ -66,6 +99,9 @@ export function habitDayReader(
     }
     if (day < start) {
       return { state: "not-started", level: 0, text: "not started" };
+    }
+    if ((habit.pauses ?? []).some((pause) => pauseCovers(pause, day))) {
+      return { state: "paused", level: 0, text: "paused" };
     }
     return day === today
       ? { state: "open-today", level: 0, text: "not yet checked in" }

@@ -151,6 +151,19 @@
   .heatmap-day.level-0.not-started {
     background: transparent;
   }
+  /* The "paused" mark (#559), shared like "not started" by every view of a
+   Habit's days: no fill and a solid neutral outline, so it reads apart from
+   a missed day's dashed one and a future day's dotted one. Never red, never
+   green. */
+  .paused,
+  .heatmap-day.level-0.paused,
+  .habits-week-grid .habit-cell.paused {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+  }
+  .grid-day.paused {
+    color: var(--text-tertiary);
+  }
   .heatmap-caption {
     margin: 0;
     font-size: var(--text-2xs);

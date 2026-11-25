@@ -1,0 +1,83 @@
+@layer components {
+  /* A paused Habit's status (#559): quiet, neutral text on the card. Never
+   red and never green: a pause is neither failure nor success. */
+  .habit-pause-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+
+  .habit-pause-interval,
+  .habit-pause-note,
+  .habit-pause-hint {
+    margin: 0;
+  }
+
+  .habit-pause-resumes,
+  .habit-pause-note,
+  .habit-pause-hint {
+    color: var(--text-secondary);
+  }
+
+  .habit-pause-note,
+  .habit-pause-hint {
+    flex-basis: 100%;
+    font-size: var(--text-xs);
+  }
+
+  .habit-pause-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .habit-pause-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .habit-pause-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--text-secondary);
+  }
+
+  /* A refused save says why right beside the fields; text carries the
+   meaning, the danger color only reinforces it. */
+  .habit-pause-error {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-danger);
+  }
+
+  @media (max-width: 720px) {
+    .habit-pause-actions {
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .habit-pause-actions button,
+    .habit-pause-form input {
+      width: 100%;
+      min-height: var(--tap-target);
+    }
+
+    .habit-pause-form label {
+      width: 100%;
+    }
+  }
+}

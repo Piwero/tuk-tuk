@@ -313,10 +313,19 @@
   /* Before the Habit start: the shared dash (HabitHistory.css) on no fill.
    Never the missed outline, never a success green: the Habit didn't exist
    yet. */
+  .habits-week-grid .habit-cell.state-paused,
+  .habits-legend .habit-cell.state-paused,
   .habits-week-grid .habit-cell.state-not-started,
   .habits-legend .habit-cell.state-not-started {
     background: transparent;
     border: 1px solid transparent;
+  }
+  /* Paused (#559): the shared paused mark (HabitHistory.css) plus a pause
+   glyph. Neutral, never the missed outline, red or success green: a pause
+   is neither failure nor success. */
+  .habits-week-grid .habit-cell.state-paused,
+  .habits-legend .habit-cell.state-paused {
+    color: var(--text-tertiary);
   }
   /* The legend: one swatch per cell state, its meaning always in words. */
   .habits-legend {

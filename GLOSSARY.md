@@ -105,11 +105,15 @@ The record of one day's progress on a Habit: a date stamp and, for Numeric habit
 _Avoid_: Completion, log
 
 **Streak**:
-The count of consecutive scheduled days a Habit has been checked in without a miss.
+The count of consecutive **eligible** scheduled days a Habit has been checked in without a miss. An eligible day is scheduled, on or after the Habit start, and not paused. Unscheduled and paused days are stepped over, never counted as done, so a Streak across a Habit pause is shorter than a perfect daily record of the same span. Today is graced until it ends.
 
 **Habit start**:
-The first local day a Habit can be missed: the User's calendar day when the Habit was created (read in their time zone), or the day of an earlier real Check-in when one exists, and never later than today. Days before it are **not started**: neither missed nor done, and never counted against the Habit. The API calls it `eligible_from`.
+The first local day a Habit can be missed: the User's calendar day when the Habit was created (read in their time zone), or the day of an earlier real Check-in when one exists, and never later than today. Days before it are **not started**: neither missed nor done, and never counted against the Habit, even when a Habit pause covers them. It is where eligibility begins; a Habit pause only removes days after it. The API calls it `eligible_from`.
 _Avoid_: Start date (no such field is stored), eligibility date
+
+**Habit pause**:
+An explicit interval of local days, both ends inclusive and optionally open-ended, when a Habit is deliberately set aside (travel, illness). Paused days are neither done nor missed: not eligible, so they never break or extend the Streak. A pause can't cover a date holding a Check-in (the conflict names those dates, and nothing is deleted), and a paused date refuses a Check-in until the pause is edited or removed. **Resume today** ends the pause yesterday. Settled Goal Scores never change because of a pause (ADR 0012).
+_Avoid_: Skip (an explicit single excluded date, a separate rule), break, vacation
 
 ## Goals
 
