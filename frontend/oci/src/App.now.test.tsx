@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { fakeTask, installFakeApi } from "./test/fakeApi";
+import { UNDO_WINDOW_MS } from "./undoQueue";
 
 /* Now (issue #547): one Task the User chose to do next, inside Today. */
 
@@ -114,6 +115,38 @@ describe("Now in Today", () => {
 
     openToday();
     expect(await within(await nowPanel()).findByText("Keep me")).toBeInTheDocument();
+  });
+
+  it("clears to Choose a Task when the Now Task is completed from Today", async () => {
+    const task = fakeTask("Due today", { due_date: "2026-07-03T00:00:00Z", is_all_day: true });
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    expect(await within(await nowPanel()).findByText("Due today")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Complete Due today" }));
+    await vi.advanceTimersByTimeAsync(UNDO_WINDOW_MS);
+
+    const panel = await nowPanel();
+    expect(await within(panel).findByRole("button", { name: "Choose a Task" })).toBeInTheDocument();
+    expect(within(panel).getByText("Pick the one Task to do next.")).toBeInTheDocument();
+  });
+
+  it("clears a recurring Now Task once today's occurrence is completed", async () => {
+    const task = fakeTask("Morning run", {
+      due_date: "2026-07-03T00:00:00Z",
+      is_all_day: true,
+      recurrence: "FREQ=DAILY",
+    });
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    expect(await within(await nowPanel()).findByText("Morning run")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Complete Morning run" }));
+    await vi.advanceTimersByTimeAsync(UNDO_WINDOW_MS);
+
+    const panel = await nowPanel();
+    expect(await within(panel).findByRole("button", { name: "Choose a Task" })).toBeInTheDocument();
+    expect(within(panel).queryByText("Morning run")).not.toBeInTheDocument();
   });
 
   it("is turned on from Settings", async () => {
