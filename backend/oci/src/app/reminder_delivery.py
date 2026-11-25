@@ -19,10 +19,16 @@ Policy, all on the server clock:
 The ledger's unique key (Task, offset, occurrence due date) is what makes
 one occurrence claimable once: two tabs inserting the same key race on the
 index and only one wins.
+
+Overrides of when a Reminder comes due all go through
+`effective_fire_at`: a snooze (issue #566) replaces the nominal fire time
+of its one occurrence, and the window is measured from the effective time.
+Task dates are never changed to get there.
 """
 
 import re
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, tzinfo
 
@@ -66,30 +72,76 @@ def fire_at(task: Task, offset: str, caller_zone: tzinfo) -> datetime | None:
     return shifted + sign * timedelta(hours=hours, minutes=minutes, seconds=seconds)
 
 
+# A ledger key: (task id, offset, occurrence due date in UTC).
+Key = tuple[int, str, datetime]
+
+
+def occurrence_key(task: Task, offset: str) -> Key:
+    """The ledger key of `offset` on the Task's current occurrence."""
+    return (task.id, offset, as_utc(task.due_date))  # type: ignore[arg-type]  # dated Tasks only
+
+
+def effective_fire_at(nominal: datetime, key: Key, snoozes: Mapping[Key, datetime]) -> datetime:
+    """When this occurrence's Reminder actually comes due: its snooze, if the
+    User snoozed it (issue #566), else its nominal fire time. Further
+    deferrals (Quiet hours) compose by adjusting the result here."""
+    return snoozes.get(key, nominal)
+
+
 @dataclass(frozen=True)
 class Due:
-    """One Reminder of one Task occurrence, due now."""
+    """One Reminder of one Task occurrence, due now. `fire_at` is the
+    nominal time (Task date plus offset); `due_at` the effective one."""
 
     task: Task
     offset: str
     fire_at: datetime
+    due_at: datetime
 
 
-def due_reminders(tasks: list[Task], now: datetime, caller_zone: tzinfo) -> list[Due]:
-    """The Reminders of these Tasks inside their delivery window at `now`."""
+def due_reminders(
+    tasks: list[Task],
+    now: datetime,
+    caller_zone: tzinfo,
+    snoozes: Mapping[Key, datetime] | None = None,
+) -> list[Due]:
+    """The Reminders of these Tasks inside their delivery window at `now`,
+    the window measured from each one's effective fire time."""
     found = []
     for task in tasks:
         if task.completed or task.due_date is None:
             continue
         for offset in task.reminders:
-            at = fire_at(task, offset, caller_zone)
-            if at is not None and at <= now < at + DELIVERY_WINDOW:
-                found.append(Due(task=task, offset=offset, fire_at=at))
+            nominal = fire_at(task, offset, caller_zone)
+            if nominal is None:
+                continue
+            at = effective_fire_at(nominal, occurrence_key(task, offset), snoozes or {})
+            if at <= now < at + DELIVERY_WINDOW:
+                found.append(Due(task=task, offset=offset, fire_at=nominal, due_at=at))
     return found
 
 
+async def _snoozes(session: AsyncSession) -> dict[Key, datetime]:
+    rows = await session.execute(
+        select(
+            ReminderDelivery.task_id,
+            ReminderDelivery.offset,
+            ReminderDelivery.occurrence_due,
+            ReminderDelivery.snoozed_until,
+        ).where(ReminderDelivery.snoozed_until.is_not(None))
+    )
+    return {
+        (task_id, offset, as_utc(occurrence)): as_utc(until)  # type: ignore[arg-type]  # filtered non-null
+        for task_id, offset, occurrence, until in rows
+    }
+
+
+def new_lease_token() -> str:
+    return secrets.token_urlsafe(24)
+
+
 def _lease(row: ReminderDelivery, now: datetime) -> None:
-    row.lease_token = secrets.token_urlsafe(24)
+    row.lease_token = new_lease_token()
     row.lease_expires_at = now + LEASE
     row.claimed_at = now
 
@@ -107,7 +159,7 @@ async def claim_due(
         ).all()
     )
     claimed = []
-    for due in due_reminders(tasks, now, caller_zone):
+    for due in due_reminders(tasks, now, caller_zone, await _snoozes(session)):
         row = await _claim_one(session, due, now)
         if row is not None:
             claimed.append(row)
@@ -146,6 +198,13 @@ async def _claim_one(session: AsyncSession, due: Due, now: datetime) -> Reminder
         )
         .with_for_update(skip_locked=True, of=ReminderDelivery)
     )
+    if existing is not None and existing.state == "snoozed":
+        # The snooze came due: a fresh delivery of the same occurrence.
+        existing.state = "claimed"
+        existing.attempts = 1
+        existing.reported_at = None
+        _lease(existing, now)
+        return existing
     if (
         existing is None
         or existing.state != "claimed"

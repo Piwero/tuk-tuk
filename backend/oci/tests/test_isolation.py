@@ -360,6 +360,13 @@ REACHES |= {
             {"lease_token": a.reminder_lease},
         )
     ),
+    "snooze a reminder": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/snooze",
+            {"minutes": 10},
+        )
+    ),
     "skip a habit day": Reach(
         lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=1)}", None)
     ),

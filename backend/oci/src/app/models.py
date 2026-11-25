@@ -518,13 +518,18 @@ class ReminderDelivery(OwnedMixin, Base):
     occurrence_due: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     fire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # "claimed" (a tab holds or held the lease), "shown" (the browser
-    # reported display) or "failed" (the browser refused to show it).
+    # reported display), "failed" (the browser refused to show it) or
+    # "snoozed" (the User asked for it again at `snoozed_until`, issue #566).
     state: Mapped[str] = mapped_column(String(16), default="claimed")
     attempts: Mapped[int] = mapped_column(default=1)
     lease_token: Mapped[str] = mapped_column(String(64))
     lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # The User's snooze (issue #566): while set, this occurrence's Reminder
+    # comes due at this instant instead of `fire_at`. An override on the
+    # delivery only; the Task's dates and offsets never change.
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     # Every read names its Task, so load it with the row.
     task: Mapped[Task] = relationship(lazy="joined")
