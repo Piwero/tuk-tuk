@@ -176,6 +176,24 @@ _Avoid_: Focus record, Pomodoro record, Timing
 A saved Focus Session preset (name + mode + duration) for recurring scenarios like "Reading".
 _Avoid_: Preset
 
+## Now
+
+**Now**:
+The one Task a User chose to do next, shown at the top of Today when the Now setting is on. Picking it changes nothing on the Task. It is saved with the occurrence it was picked for, so deleting, completing or advancing that Task (a recurring one advances in place, ADR 0003) clears it.
+_Avoid_: Current task, Focus task (Focus is the Focus Session feature)
+
+**Now shortlist**:
+A short, ordered list of alternative Tasks kept beside Now, with no cap. A Task appears at most once and never while it is the Now Task; entries are cleared by the same rule as Now.
+_Avoid_: Queue, Up next
+
+**Resume note**:
+A short free-text note on the Now selection saying where the User left off. It belongs to that selection and occurrence: choosing another Task, or the Task going stale, discards it.
+_Avoid_: Task note, Description (the Task's own text)
+
+**Gentle return**:
+A Today setting that collapses earlier overdue Tasks behind one counted disclosure, so returning after time away is not a wall of red. Presentation only: no Task dates change.
+_Avoid_: Auto-reschedule, Overdue Triage (the Assist feature that does propose new dates)
+
 ## Google Calendar
 
 **Google Account**:
