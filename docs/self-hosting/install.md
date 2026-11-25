@@ -75,9 +75,51 @@ use it from your phone or laptop:
    `CORS_ORIGINS=["http://localhost:8080", "http://mybox:8080"]`, then start again.
 
 > **Use HTTPS for anything beyond your home network.** Over plain `http://`,
-> your password and session travel unencrypted. Put the app behind HTTPS (for
-> example `tailscale serve`, or a reverse proxy such as Caddy), then set
-> `AUTH_COOKIE_SECURE=true` in `.env`. Never expose it to the internet over plain http.
+> your password and session travel unencrypted. Put the app behind HTTPS (see
+> [Serve it over HTTPS](#serve-it-over-https)). Never expose it to the internet over plain http.
+
+## Serve it over HTTPS
+
+⏱ 10 min. Needed for Reminder notifications on any device other than the
+computer running Tuk Tuk, and for any use outside your home network.
+
+**Why:** browsers only show notifications to pages from a *secure context*:
+an `https://` address, or `http://localhost` on the same computer. At
+`http://mybox:8080` or `http://192.168.1.20:8080`, the browser hides the
+Notification feature entirely, and **Settings → Reminder notifications** shows
+it as unsupported. Everything else keeps working. Notifications only arrive
+while a Tuk Tuk tab is open; a closed tab or locked phone gets none, even
+over HTTPS.
+
+Pick one way to get an `https://` address:
+
+1. **Tailscale (easiest):** in the Tailscale admin console, under **DNS**,
+   turn on MagicDNS and **HTTPS Certificates**. Then, on the computer running
+   Tuk Tuk:
+   ```sh
+   tailscale serve --bg 8080
+   ```
+   The app is now at `https://<computer-name>.<tailnet>.ts.net`, with a real
+   certificate, reachable only from your own devices.
+2. **Your own domain:** run a reverse proxy such as [Caddy](https://caddyserver.com),
+   which gets and renews a certificate by itself. A whole `Caddyfile`:
+   ```
+   tuk.example.com {
+       reverse_proxy localhost:8080
+   }
+   ```
+   The domain must point at the machine, and ports 80 and 443 must reach it.
+
+Then, in `.env`:
+
+1. Set `AUTH_COOKIE_SECURE=true`, so the session cookie is only sent over HTTPS.
+2. Add the new `https://` address to `CORS_ORIGINS`, for example
+   `CORS_ORIGINS=["http://localhost:8080", "https://mybox.tailnet-name.ts.net"]`.
+3. Using Google Calendar? Add `https://<address>/api/v1/google/callback` as an
+   authorized redirect URI too (see below).
+
+Start the app again and open the `https://` address. **Settings → Reminder
+notifications** should now offer **Enable on this device**.
 
 ## Optional: connect Google Calendar
 
