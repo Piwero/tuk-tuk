@@ -343,6 +343,16 @@ REACHES |= {
     "remove a habit pause": Reach(
         lambda a, me: ("DELETE", f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}", None)
     ),
+    "skip a habit day": Reach(
+        lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=1)}", None)
+    ),
+    "remove a habit skip": Reach(
+        lambda a, me: (
+            "DELETE",
+            f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=3)}",
+            None,
+        )
+    ),
     "revoke api token": Reach(lambda a, me: ("DELETE", f"{TOKENS}/{a.api_token}", None)),
     "PUT check-in": Reach(
         lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/check-ins/{a.today}", {"value": 1})
@@ -660,6 +670,7 @@ def build_alice(
         f"/api/v1/habits/{habit}/pauses",
         {"start_date": str(today + timedelta(days=10)), "end_date": None},
     )["id"]
+    alice.ok("PUT", f"/api/v1/habits/{habit}/skips/{today + timedelta(days=3)}")
     task = alice.ok(
         "POST",
         "/api/v1/tasks",

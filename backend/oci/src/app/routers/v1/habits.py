@@ -16,7 +16,7 @@ from app.errors import APIError, NotFoundError
 from app.habit_days import Pause, is_paused
 from app.habit_frequency import due_on, validate_frequency
 from app.habit_stats import current_streak, eligible_from, intensity
-from app.models import CheckIn, Habit, HabitPause
+from app.models import CheckIn, Habit, HabitPause, HabitSkip
 from app.schemas import (
     CheckInPut,
     CheckInRead,
@@ -26,6 +26,7 @@ from app.schemas import (
     HabitPauseResume,
     HabitPauseUpdate,
     HabitRead,
+    HabitSkipRead,
     HabitStats,
     HabitType,
     HabitUpdate,
@@ -76,6 +77,7 @@ async def create_habit(payload: HabitCreate, session: SessionDep) -> HabitRead:
         encouragement=payload.encouragement,
         frequency=payload.frequency,
         pauses=[],
+        skips=[],
     )
     session.add(habit)
     await session.commit()
@@ -172,6 +174,12 @@ async def put_check_in(
             code="habit_day_paused",
             message=f"{habit.name} is paused on {day.isoformat()}; "
             "remove or edit the pause to check in",
+        )
+    if any(habit_skip.date == day for habit_skip in habit.skips):
+        raise APIError(
+            status_code=409,
+            code="habit_day_skipped",
+            message=f"{day.isoformat()} is skipped for {habit.name}; remove the skip to check in",
         )
     check_in = await session.scalar(
         select(CheckIn).where(CheckIn.habit_id == habit_id, CheckIn.date == day)
@@ -313,6 +321,55 @@ async def delete_pause(habit_id: int, pause_id: int, session: SessionDep) -> Non
     await session.commit()
 
 
+@router.put("/{habit_id}/skips/{day}")
+async def put_skip(habit_id: int, day: date, session: SessionDep) -> HabitSkipRead:
+    """Skip one scheduled day on purpose (issue #564): it creates no
+    Check-in and counts as neither success nor failure. Only a scheduled,
+    unpaused day may be skipped, and never one holding a Check-in — the
+    Check-in stays authoritative, so the conflict names its date and deletes
+    nothing. Skipping a day twice keeps the one skip."""
+    habit = await get_habit_or_404(habit_id, session)
+    if not due_on(habit.frequency, day):
+        raise APIError(
+            status_code=422,
+            code="skip_not_scheduled",
+            message=f"{habit.name} is not scheduled on {day.isoformat()}, so there is nothing to skip",
+        )
+    if is_paused(day, pauses_of(habit)):
+        raise APIError(
+            status_code=409,
+            code="habit_day_paused",
+            message=f"{habit.name} is paused on {day.isoformat()}; a paused day needs no skip",
+        )
+    has_check_in = await session.scalar(
+        select(CheckIn.id).where(CheckIn.habit_id == habit_id, CheckIn.date == day)
+    )
+    if has_check_in is not None:
+        raise APIError(
+            status_code=409,
+            code="skip_conflicts_with_check_in",
+            message=f"A Check-in on {day.isoformat()} prevents this skip; remove it first",
+            details={"dates": [day.isoformat()]},
+        )
+    habit_skip = next((row for row in habit.skips if row.date == day), None)
+    if habit_skip is None:
+        habit_skip = HabitSkip(date=day)
+        habit.skips.append(habit_skip)
+        await session.commit()
+    return HabitSkipRead(habit_id=habit.id, date=day)
+
+
+@router.delete("/{habit_id}/skips/{day}", status_code=204)
+async def delete_skip(habit_id: int, day: date, session: SessionDep) -> None:
+    """Undo a skip: the day is eligible again, and accepts a Check-in."""
+    habit = await get_habit_or_404(habit_id, session)
+    habit_skip = next((row for row in habit.skips if row.date == day), None)
+    if habit_skip is None:
+        raise NotFoundError(f"{day.isoformat()} is not skipped for habit {habit_id}")
+    habit.skips.remove(habit_skip)
+    await session.commit()
+
+
 @router.get("/{habit_id}/stats")
 async def read_habit_stats(
     habit_id: int,
@@ -336,7 +393,14 @@ async def read_habit_stats(
     checked = set(values)
     heatmap_year = year if year is not None else today.year
     return HabitStats(
-        streak=current_streak(habit.frequency, habit.target, pauses_of(habit), values, today),
+        streak=current_streak(
+            habit.frequency,
+            habit.target,
+            pauses_of(habit),
+            values,
+            today,
+            [habit_skip.date for habit_skip in habit.skips],
+        ),
         eligible_from=eligible_from(habit.created_at, zone, checked, today),
         heatmap=[
             HeatmapDay(date=row.date, value=row.value, intensity=intensity(row.value, habit.target))
