@@ -43,6 +43,7 @@ from tests.test_assistant_chat import StubChatProvider
 
 MARKER = "alice"
 TOKENS = "/api/v1/auth/me/tokens"
+ALICES_RUN = "alice-run"
 
 
 @dataclass(frozen=True)
@@ -212,6 +213,22 @@ READS: dict[str, Read] = {
         get(lambda a, me: f"/api/v1/focus-stats?start={a.today}&end={a.today}&tz=UTC")
     ),
     "timers": Read(get(lambda a, me: "/api/v1/timers")),
+    "now": Read(
+        get(lambda a, me: "/api/v1/now"),
+        rows=lambda body, a: [body["task_id"]] if body["task_id"] else [],
+    ),
+    "now resume note": Read(get(lambda a, me: "/api/v1/now/note")),
+    "now shortlist": Read(
+        get(lambda a, me: "/api/v1/now/shortlist"), rows=lambda body, a: list(body["task_ids"])
+    ),
+    "now toggle": Read(
+        get(lambda a, me: "/api/v1/settings/now"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
+    "gentle return toggle": Read(
+        get(lambda a, me: "/api/v1/settings/gentle-return"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
     "stand-up suggestions today": Read(
         get(lambda a, me: f"/api/v1/stand-up/suggestions/today?date={a.today}")
     ),
@@ -435,6 +452,17 @@ PARENTS: dict[str, Reach] = {
             {"habit_id": None, "task_id": a.task},
         )
     ),
+    "now on a task": Reach(lambda a, me: ("PUT", "/api/v1/now", {"task_id": a.task})),
+    "now shortlist of a task": Reach(
+        lambda a, me: ("PUT", "/api/v1/now/shortlist", {"task_ids": [a.task]})
+    ),
+    "check item ticked without auto-complete": Reach(
+        lambda a, me: (
+            "PATCH",
+            f"/api/v1/tasks/{a.task}/check-items/{a.check_item}?auto_complete=false",
+            {"done": True},
+        )
+    ),
     "timer relinked to a habit": Reach(
         lambda a, me: ("PATCH", f"/api/v1/timers/{me.timer}", {"habit_id": a.habit})
     ),
@@ -471,6 +499,23 @@ OWN_WRITES: dict[str, OwnWrite] = {
             "PUT",
             "/api/v1/google/credentials",
             {"client_id": "client-b2", "client_secret": "secret-b2"},
+        )
+    ),
+    "choosing now": OwnWrite(lambda a, me: ("PUT", "/api/v1/now", {"task_id": me.task})),
+    "clearing now": OwnWrite(lambda a, me: ("PUT", "/api/v1/now", {"task_id": None})),
+    "discarding a resume note": OwnWrite(lambda a, me: ("PUT", "/api/v1/now/note", {"note": None})),
+    "a shortlist of my own": OwnWrite(
+        lambda a, me: ("PUT", "/api/v1/now/shortlist", {"task_ids": [me.task]})
+    ),
+    "turning now off": OwnWrite(lambda a, me: ("PUT", "/api/v1/settings/now", {"enabled": False})),
+    "turning gentle return off": OwnWrite(
+        lambda a, me: ("PUT", "/api/v1/settings/gentle-return", {"enabled": False})
+    ),
+    "a focus session reusing another user's run id": OwnWrite(
+        lambda a, me: (
+            "POST",
+            "/api/v1/focus-sessions",
+            {**focus_session(a.today), "client_run_id": ALICES_RUN},
         )
     ),
     "removing google credentials": OwnWrite(
@@ -609,8 +654,16 @@ def build_alice(
         },
     )
     focus = alice.ok(
-        "POST", "/api/v1/focus-sessions", focus_session(today, note="alice focus", task_id=task)
+        "POST",
+        "/api/v1/focus-sessions",
+        {**focus_session(today, note="alice focus", task_id=task), "client_run_id": ALICES_RUN},
     )["id"]
+    shortlisted = alice.ok("POST", "/api/v1/tasks", {"title": "alice shortlisted"})["id"]
+    alice.ok("PUT", "/api/v1/settings/now", {"enabled": True})
+    alice.ok("PUT", "/api/v1/now", {"task_id": task})
+    alice.ok("PUT", "/api/v1/now/note", {"note": "alice resume note"})
+    alice.ok("PUT", "/api/v1/now/shortlist", {"task_ids": [shortlisted]})
+    alice.ok("PUT", "/api/v1/settings/gentle-return", {"enabled": True})
     timer = alice.ok(
         "POST", "/api/v1/timers", {"name": "alice timer", "mode": "stopwatch", "habit_id": habit}
     )["id"]
@@ -756,3 +809,14 @@ def test_one_user_cannot_reach_another_users_rows(pair: Pair, probe: Probe) -> N
             assert probe.rows(response.json(), pair.a) != []
         else:
             assert MARKER in seen(response, probe, pair.assistant)
+
+
+def test_a_run_id_is_only_matched_among_the_users_own_sessions(pair: Pair) -> None:
+    """Retry-safe saves (#546) look a run up by `client_run_id`: Bea reusing
+    Alice's id records her own session rather than being handed Alice's."""
+    body = {**focus_session(pair.a.today, note="bea focus"), "client_run_id": ALICES_RUN}
+
+    response = pair.bea.request("POST", "/api/v1/focus-sessions", body)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["note"] == "bea focus"
