@@ -154,6 +154,67 @@ describe("Now shortlist", () => {
     expect(shortlistWrites(api)).toEqual([["PUT", "/api/v1/now/shortlist", { task_ids: [a.id] }]]);
   });
 
+  // #555 browser check: a row's action removed the focused button, dropping
+  // keyboard focus to <body>.
+  describe("keeps keyboard focus in the shortlist", () => {
+    const addButton = async () =>
+      within(await shortlist()).getByRole("button", { name: "Add to shortlist" });
+
+    it("after removing an entry", async () => {
+      const a = fakeTask("Keep");
+      const b = fakeTask("Drop");
+      installFakeApi({ nowEnabled: true, tasks: [a, b], nowShortlist: [a.id, b.id] });
+      openToday();
+      await waitFor(async () => expect(await entryTitles()).toEqual(["Keep", "Drop"]));
+
+      const remove = within(await shortlist()).getByRole("button", {
+        name: "Remove Drop from shortlist",
+      });
+      remove.focus();
+      fireEvent.click(remove);
+
+      await waitFor(async () => expect(await entryTitles()).toEqual(["Keep"]));
+      expect(document.activeElement).toBe(await addButton());
+    });
+
+    it("after promoting an entry to Now", async () => {
+      const current = fakeTask("Current");
+      const next = fakeTask("Next");
+      installFakeApi({
+        nowEnabled: true,
+        tasks: [current, next],
+        nowTaskId: current.id,
+        nowShortlist: [next.id],
+      });
+      openToday();
+      await waitFor(async () => expect(await entryTitles()).toEqual(["Next"]));
+
+      const promote = within(await shortlist()).getByRole("button", { name: "Make Next Now" });
+      promote.focus();
+      fireEvent.click(promote);
+
+      await waitFor(async () => expect(await entryTitles()).toEqual([]));
+      expect(document.activeElement).toBe(await addButton());
+    });
+
+    it("after moving an entry to the end, onto the other move button", async () => {
+      const a = fakeTask("First");
+      const b = fakeTask("Second");
+      installFakeApi({ nowEnabled: true, tasks: [a, b], nowShortlist: [a.id, b.id] });
+      openToday();
+      await waitFor(async () => expect(await entryTitles()).toEqual(["First", "Second"]));
+
+      const down = within(await shortlist()).getByRole("button", { name: "Move First down" });
+      down.focus();
+      fireEvent.click(down);
+
+      await waitFor(async () => expect(await entryTitles()).toEqual(["Second", "First"]));
+      expect(document.activeElement).toBe(
+        within(await shortlist()).getByRole("button", { name: "Move First up" }),
+      );
+    });
+  });
+
   it("leaves every Task reachable in Today", async () => {
     const a = fakeTask("Listed today", { due_date: "2026-07-03T00:00:00Z", is_all_day: true });
     installFakeApi({ nowEnabled: true, tasks: [a], nowShortlist: [a.id] });
