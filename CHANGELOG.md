@@ -4,6 +4,37 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.4.0](https://github.com/Piwero/tuk-tuk/compare/v3.3.0...v3.4.0) - 2026-11-25
+
+### Features
+
+- **backend:** Per-User gentle return setting (#548) ([0c3b085](https://github.com/Piwero/tuk-tuk/commit/0c3b08523edd88986a7a7449c7e0e726cbb61265))
+- **frontend:** Gentle return collapses earlier overdue Tasks in Today (#548) ([17d7ebd](https://github.com/Piwero/tuk-tuk/commit/17d7ebd293fd9e3ce2def656ba67030a75895259))
+- **backend:** Store one Now Task per User behind its own endpoint (#547) ([0a8bbdd](https://github.com/Piwero/tuk-tuk/commit/0a8bbddaec6c6297178e7bfa4710e3d9a6f68564))
+- **frontend:** Choose, replace and clear a Now Task in Today (#547) ([8f29d01](https://github.com/Piwero/tuk-tuk/commit/8f29d010edcde2da9ad5b40cf75de450a9ea4875))
+- **backend:** Retry-safe Focus Session create via client_run_id (#546) ([6cb4d20](https://github.com/Piwero/tuk-tuk/commit/6cb4d20a9603bdb2e4f3ba0010594af32ba6021b))
+- **frontend:** Send a per-run id so a retried Focus finish records once (#546) ([80d9c95](https://github.com/Piwero/tuk-tuk/commit/80d9c954bc0fdc54705d42543f5b34bdf1af2d57))
+- **backend:** Let a Check Item tick skip auto-completing its Task ([54429a6](https://github.com/Piwero/tuk-tuk/commit/54429a62f814079207daa22af13e413084088c2c))
+- **frontend:** Show and tick the next Check Item in Now ([26c8e09](https://github.com/Piwero/tuk-tuk/commit/26c8e09b3529be8a52cbf245859e5988799c7a64))
+- **frontend:** Offer deliberate Task completion in Now once every Check Item is done ([76920e0](https://github.com/Piwero/tuk-tuk/commit/76920e0ccecda6a27b1744ad268ad1ded3ee6e8d))
+- **backend:** Prune deleted, completed and advanced Now selections on read (#549) ([0312c5f](https://github.com/Piwero/tuk-tuk/commit/0312c5f17f36931fc876dc8d1a78c9fe968d6185))
+- **frontend:** Clear the Now panel when its Task is completed or advanced (#549) ([22f1bdb](https://github.com/Piwero/tuk-tuk/commit/22f1bdbc6eb0c94d10090246d6cba6f8b7a50917))
+- **now:** Work without timer from the Now panel (#553) ([698dc25](https://github.com/Piwero/tuk-tuk/commit/698dc252ff60705fe6af94cdb886fc0ef3255990))
+- **now:** Start 5 min begins a linked five-minute Pomo (#552) ([bf98bc3](https://github.com/Piwero/tuk-tuk/commit/bf98bc33b50d7571487c4f98640ddf7811cf7f9b))
+- **now:** Offer return or pause when Focus is already running (#552) ([df439f0](https://github.com/Piwero/tuk-tuk/commit/df439f024d6c5cdcccc865ba709258c50e20f5f3))
+- **now:** Store an optional resume note on the Now selection ([58058ef](https://github.com/Piwero/tuk-tuk/commit/58058ef0ab8b3da5d875bf635170f14518c12d43))
+- **now:** Offer an optional resume note while Focus is paused ([d7ddba6](https://github.com/Piwero/tuk-tuk/commit/d7ddba6cca2193583e4812c009e8407f9a900a8b))
+- **backend:** Ordered Now shortlist stored per User (#551) ([232b8de](https://github.com/Piwero/tuk-tuk/commit/232b8de39eda349453312ef81a712e05c3788a1b))
+- **frontend:** Ordered shortlist beside Now (#551) ([9b56b19](https://github.com/Piwero/tuk-tuk/commit/9b56b1971e7d4f4c689e9544e5759358c5471682))
+
+### Bug Fixes
+
+- **backend:** Renumber no-downgrade messages in 0043/0044 migrations ([dd3ae11](https://github.com/Piwero/tuk-tuk/commit/dd3ae11a3e634d784d07cf62f6cf6c470a39dfbb))
+- **now:** Meet the 44px tap-target floor across the mobile breakpoint ([1983f6c](https://github.com/Piwero/tuk-tuk/commit/1983f6c8f7f956028b99a1deb8e39d8041e532e7))
+- **now:** Keep keyboard focus in the shortlist after row actions ([01a213a](https://github.com/Piwero/tuk-tuk/commit/01a213a6615485612f25b55d13a5be926e811127))
+- **now:** Reject completed Tasks and keep shortlist snapshots on rewrite (#534) ([f3ee4e1](https://github.com/Piwero/tuk-tuk/commit/f3ee4e19fbc178643e0fc78cdecf8b894e5cb01f))
+- **now:** Announce the confirmed Now Task in the live region (#534) ([4c89987](https://github.com/Piwero/tuk-tuk/commit/4c89987a06a7edb7239b82f0c0f1e50869d6973a))
+
 ## [3.3.0](https://github.com/Piwero/tuk-tuk/compare/v3.2.1...v3.3.0) - 2026-11-25
 
 ### Features
