@@ -108,6 +108,15 @@ export interface FakeReminderClaim {
   lease_expires_at: string;
 }
 
+/** A Reminder held by Quiet hours, as the claim lists it (issue #567). */
+export interface FakeHeldReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  fire_at: string;
+  deliver_at: string;
+}
+
 export interface FakeReminderReport {
   id: number;
   outcome: "shown" | "failed";
@@ -423,6 +432,11 @@ export interface FakeApiState {
   reminderClaims: FakeReminderClaim[];
   /** Every shown/failed report a tab sent, in order. */
   reminderReports: FakeReminderReport[];
+  /** Quiet hours (issue #567): the User's band, and what each claim says
+   * is held and until when. The fake never computes holds itself. */
+  quietHours: { enabled: boolean; start: string; end: string };
+  heldReminders: FakeHeldReminder[];
+  quietUntil: string | null;
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -788,6 +802,22 @@ export function fakeCheckItem(
 
 let nextReminderClaimId = 1;
 
+/** One of `task`'s Reminders, held until quiet hours end (issue #567). */
+export function fakeHeldReminder(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeHeldReminder> = {},
+): FakeHeldReminder {
+  return {
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    fire_at: task.due_date ?? "2026-11-10T23:00:00Z",
+    deliver_at: "2026-11-11T07:00:00Z",
+    ...overrides,
+  };
+}
+
 /** A claim on one of `task`'s Reminders, due now. */
 export function fakeReminderClaim(
   task: FakeTask,
@@ -1063,6 +1093,10 @@ export function installFakeApi({
   gentleReturn = false,
   reminderNotifications = false,
   dueReminders = [],
+  quietHours = { enabled: false, start: "22:00", end: "07:00" },
+  quietHoursError = null,
+  heldReminders = [],
+  quietUntil = null,
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1159,6 +1193,13 @@ export function installFakeApi({
   reminderNotifications?: boolean;
   /** Reminders due now, handed out by the claim endpoint (issue #561). */
   dueReminders?: FakeReminderClaim[];
+  /** Quiet hours (issue #567). Defaults to off, 22:00-07:00, like the backend. */
+  quietHours?: { enabled: boolean; start: string; end: string };
+  /** When set, every Quiet hours save is refused with this message. */
+  quietHoursError?: string | null;
+  /** What claims list as held by Quiet hours, and the band's end. */
+  heldReminders?: FakeHeldReminder[];
+  quietUntil?: string | null;
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1244,6 +1285,9 @@ export function installFakeApi({
     reminderNotifications,
     reminderClaims: dueReminders.map((claim) => ({ ...claim })),
     reminderReports: [],
+    quietHours: { ...quietHours },
+    heldReminders: heldReminders.map((held) => ({ ...held })),
+    quietUntil,
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -3483,10 +3527,14 @@ export function installFakeApi({
       return json({ enabled: state.gentleReturn });
     }
     if (url.pathname === "/api/v1/reminder-deliveries/claim" && method === "POST") {
-      if (!state.reminderNotifications) return json({ items: [] });
+      if (!state.reminderNotifications) return json({ items: [], held: [], quiet_until: null });
       const items = state.reminderClaims.filter((claim) => !handedOut.has(claim.id));
       for (const claim of items) handedOut.add(claim.id);
-      return json({ items: items.map((claim) => ({ ...claim })) });
+      return json({
+        items: items.map((claim) => ({ ...claim })),
+        held: state.heldReminders.map((held) => ({ ...held })),
+        quiet_until: state.quietUntil,
+      });
     }
     const reminderReport = url.pathname.match(
       /^\/api\/v1\/reminder-deliveries\/(\d+)\/(shown|failed)$/,
@@ -3505,6 +3553,19 @@ export function installFakeApi({
       state.reminderReports.push({ id, outcome, lease_token });
       if (claim.state === "claimed") claim.state = outcome;
       return json({ ...claim });
+    }
+    if (url.pathname === "/api/v1/settings/quiet-hours") {
+      if (method === "PUT") {
+        const input = body as { enabled: boolean; start: string; end: string };
+        const refusal =
+          quietHoursError ??
+          (input.start === input.end ? "Quiet hours must start and end at different times" : null);
+        if (refusal !== null) {
+          return json({ error: { code: "invalid_quiet_hours", message: refusal } }, 422);
+        }
+        state.quietHours = { ...input };
+      }
+      return json({ ...state.quietHours });
     }
     if (url.pathname === "/api/v1/settings/reminder-notifications") {
       if (method === "PUT") {

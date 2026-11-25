@@ -26,8 +26,10 @@ import {
   fetchReminderNotificationSettings,
   reportReminderDelivery,
   updateReminderNotificationSettings,
+  type HeldReminder,
   type ReminderClaim,
 } from "./api";
+import { QuietHoursDeferred } from "./components/QuietHoursDeferred";
 import { reminderLabel } from "./reminders";
 
 export type ReminderDeliveryState = "off" | "requesting" | "allowed" | "denied" | "unsupported";
@@ -158,13 +160,16 @@ export const CLAIM_INTERVAL_MS = 30_000;
  * the tab comes back into view; the server's ledger makes sure each
  * occurrence goes to one tab. A failed claim (offline, signed out) is
  * dropped quietly: delivery is optional and never blocks the app. Clicking
- * a notification opens its Task. */
+ * a notification opens its Task. While Quiet hours hold Reminders (issue
+ * #567) it lists them in-app; they notify once when the band ends. */
 export function DueReminderNotifier({
   onOpenTask,
 }: {
   onOpenTask: (taskId: number) => void;
-}): null {
+}): React.JSX.Element | null {
   const { state } = useReminderDelivery();
+  const [held, setHeld] = useState<HeldReminder[]>([]);
+  const [quietUntil, setQuietUntil] = useState<string | null>(null);
   const openTask = useRef(onOpenTask);
   useEffect(() => {
     openTask.current = onOpenTask;
@@ -179,10 +184,13 @@ export function DueReminderNotifier({
       if (claiming) return;
       claiming = true;
       try {
-        const { items } = await claimDueReminders(timeZone);
+        const page = await claimDueReminders(timeZone);
         // Stopped meanwhile (turned off, signed out): show nothing; the
         // unreported leases expire on the server.
-        if (live) for (const item of items) deliver(item, (id) => openTask.current(id));
+        if (!live) return;
+        for (const item of page.items) deliver(item, (id) => openTask.current(id));
+        setHeld(page.held ?? []);
+        setQuietUntil(page.quiet_until ?? null);
       } catch {
         // Retried on the next tick.
       } finally {
@@ -202,7 +210,8 @@ export function DueReminderNotifier({
     };
   }, [state]);
 
-  return null;
+  if (state !== "allowed" || held.length === 0) return null;
+  return <QuietHoursDeferred held={held} quietUntil={quietUntil} onOpenTask={onOpenTask} />;
 }
 
 /** Shows one claimed Reminder and reports what the browser says. The tag

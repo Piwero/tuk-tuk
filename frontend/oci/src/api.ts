@@ -1975,9 +1975,51 @@ export interface ReminderClaim {
   lease_expires_at: string;
 }
 
+/** Quiet hours (issue #567): a band of the day during which Reminder
+ * notifications are held and notify once when it ends. "HH:MM" labels on
+ * the tab's own wall clock; a start after the end wraps past midnight. A
+ * notification setting only: Active hours never change delivery. */
+export interface QuietHoursSettings {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export function fetchQuietHoursSettings(): Promise<QuietHoursSettings> {
+  return request("/api/v1/settings/quiet-hours");
+}
+
+export function updateQuietHoursSettings(
+  settings: QuietHoursSettings,
+): Promise<QuietHoursSettings> {
+  return request("/api/v1/settings/quiet-hours", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** A Reminder that fired inside Quiet hours and waits for `deliver_at`,
+ * the band's end (issue #567). */
+export interface HeldReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  fire_at: string;
+  deliver_at: string;
+}
+
+export interface ReminderClaimPage {
+  items: ReminderClaim[];
+  /** Held by Quiet hours right now (absent from an older server). */
+  held?: HeldReminder[];
+  /** When the Quiet hours band holding now ends; null outside it. */
+  quiet_until?: string | null;
+}
+
 /** Claims the Reminders due now that no other tab holds. `tz` anchors
- * all-day Tasks; nothing is claimed while the User's opt-in is off. */
-export function claimDueReminders(tz: string): Promise<{ items: ReminderClaim[] }> {
+ * all-day Tasks and Quiet hours; nothing is claimed while the User's
+ * opt-in is off or while Quiet hours are on. */
+export function claimDueReminders(tz: string): Promise<ReminderClaimPage> {
   return request(`/api/v1/reminder-deliveries/claim?tz=${encodeURIComponent(tz)}`, {
     method: "POST",
   });
