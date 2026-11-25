@@ -464,11 +464,13 @@ async function habitStatsFor(habit: Habit, today: string): Promise<HabitStats> {
   const pages = await Promise.all(
     years.map(async (year) => fetchHabitStats(habit.id, today, Number(year))),
   );
-  // The Streak is as of `today` whichever year was asked for, so any page's
-  // will do; the heatmaps are disjoint years, so they simply concatenate.
+  // The Streak and the Habit start are as of `today` whichever year was
+  // asked for, so any page's will do; the heatmaps are disjoint years, so
+  // they simply concatenate.
   return {
     streak: pages[0]?.streak ?? 0,
     heatmap: pages.flatMap((page) => page.heatmap),
+    eligible_from: pages[0]?.eligible_from ?? today,
   };
 }
 

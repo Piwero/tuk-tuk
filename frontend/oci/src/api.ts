@@ -1,3 +1,5 @@
+import { browserTimeZone } from "./dates";
+
 /** Empty means same-origin: in dev the Vite server proxies /api to the backend
  * (see vite.config.ts), and a deployment behind a single ingress needs no host
  * either. Set VITE_API_BASE_URL only when the API lives on another origin. */
@@ -1261,22 +1263,27 @@ export interface HeatmapDay {
   intensity: number;
 }
 
-/** The server-computed Habit statistics: the current Streak and one calendar
- * year of heatmap days (sparse — only days with Check-ins). */
+/** The server-computed Habit statistics: the current Streak, one calendar
+ * year of heatmap days (sparse — only days with Check-ins), and the Habit
+ * start `eligible_from` (YYYY-MM-DD, the caller's local day): days before it
+ * are not started, never missed. */
 export interface HabitStats {
   streak: number;
   heatmap: HeatmapDay[];
+  eligible_from: string;
 }
 
-/** Statistics as of `today` (the caller's local day); `year` picks which
- * calendar year the heatmap covers, defaulting to today's. */
+/** Statistics as of `today` (the caller's local day), with the Habit start
+ * read in the browser's time zone; `year` picks which calendar year the
+ * heatmap covers, defaulting to today's. */
 export function fetchHabitStats(
   habitId: number,
   today: string,
   year?: number,
 ): Promise<HabitStats> {
+  const tz = encodeURIComponent(browserTimeZone());
   const scope = year === undefined ? "" : `&year=${year}`;
-  return request(`/api/v1/habits/${habitId}/stats?today=${today}${scope}`);
+  return request(`/api/v1/habits/${habitId}/stats?today=${today}&tz=${tz}${scope}`);
 }
 
 /** A Goal's status (ADR 0012); only "active" is exercised in this slice. */

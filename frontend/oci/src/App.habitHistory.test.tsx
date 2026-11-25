@@ -56,7 +56,7 @@ describe("Habit history", () => {
       api.requests.some(
         (r) =>
           r.method === "GET" &&
-          r.url === `/api/v1/habits/${habitId}/stats?today=2026-07-03&year=2026`,
+          r.url === `/api/v1/habits/${habitId}/stats?today=2026-07-03&tz=UTC&year=2026`,
       ),
     ).toBe(true);
   });
@@ -162,7 +162,7 @@ describe("Habit history", () => {
         api.requests.some(
           (r) =>
             r.method === "GET" &&
-            r.url === `/api/v1/habits/${habitId}/stats?today=2026-07-03&year=2025`,
+            r.url === `/api/v1/habits/${habitId}/stats?today=2026-07-03&tz=UTC&year=2025`,
         ),
       ).toBe(true),
     );
