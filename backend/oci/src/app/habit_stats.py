@@ -10,7 +10,7 @@ due rule and the streak rule the same; a per-week quota walk is future work).
 
 The Habit start (`eligible_from`) is the first local day a Habit can be
 missed: days before it are "not started", never missed. The Streak already
-stops at the earliest Check-in, so the boundary never changes its value.
+stops at the earliest Check-in, so the Habit start never changes its value.
 """
 
 from datetime import date, datetime, timedelta, tzinfo

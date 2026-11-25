@@ -155,7 +155,9 @@ def created_at(database_url: str, habit_id: int, instant: str) -> None:
     run_sql(database_url, "UPDATE habits SET created_at = %s WHERE id = %s", (instant, habit_id))
 
 
-class TestEligibleFrom:
+class TestHabitStart:
+    """The Habit start, served as `eligible_from`."""
+
     def test_is_the_local_creation_day(self, client: TestClient, database_url: str) -> None:
         habit = make_habit(client, "Meditate")
         created_at(database_url, habit["id"], "2026-06-30T10:00:00Z")
@@ -205,7 +207,7 @@ class TestEligibleFrom:
             ("FREQ=WEEKLY;TT_TIMES=3", 3),
         ],
     )
-    def test_every_frequency_gets_the_same_boundary_and_keeps_its_streak(
+    def test_every_frequency_gets_the_same_habit_start_and_keeps_its_streak(
         self, client: TestClient, database_url: str, frequency: str, streak: int
     ) -> None:
         habit = make_habit(client, "Move", frequency=frequency)
@@ -238,7 +240,7 @@ class TestEligibleFrom:
 
         assert stats(client, habit["id"], "2026-07-03")["eligible_from"] == "2026-07-03"
 
-    def test_an_archived_habit_keeps_its_boundary(
+    def test_an_archived_habit_keeps_its_habit_start(
         self, client: TestClient, database_url: str
     ) -> None:
         habit = make_habit(client, "Meditate")
