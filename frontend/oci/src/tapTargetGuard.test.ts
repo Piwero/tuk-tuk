@@ -582,7 +582,10 @@ const QUICK_ADD_CONTROLS: { selector: string; what: string }[] = [
     selector: ".quick-add-dialog .date-actions button",
     what: "the Today / Tomorrow / Next Week / Clear date shortcuts",
   },
-  { selector: ".quick-add-dialog-actions button", what: "the Cancel and Add task commit pair" },
+  {
+    selector: ".quick-add-dialog-actions button",
+    what: "the Cancel / Add task pair and Discard draft (#541)",
+  },
   {
     selector: ".quick-add-dialog .quick-add-assist-chips button",
     what: "the Assist recurrence / reminder chips' remove buttons",
