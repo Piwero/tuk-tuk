@@ -1,5 +1,5 @@
 import "./NowShortlist.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { fetchNowShortlist, type Task, updateNowShortlist } from "../api";
 import { Modal } from "./Modal";
@@ -28,6 +28,21 @@ export function NowShortlist({
   const [ids, setIds] = useState<number[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [picking, setPicking] = useState(false);
+  // Keyboard focus must survive a row action (#555): removing or promoting
+  // an entry drops its buttons, and a move to either end disables the
+  // pressed one. `refocus` names the button to land on once the list renders.
+  const sectionRef = useRef<HTMLElement>(null);
+  const [refocus, setRefocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (refocus === null) return;
+    const target = [...(sectionRef.current?.querySelectorAll("button") ?? [])].find(
+      (b) => b.getAttribute("aria-label") === refocus || b.textContent === refocus,
+    );
+    if (target !== undefined && !target.disabled) {
+      target.focus();
+      setRefocus(null);
+    }
+  });
 
   // Re-read whenever Now or the open Tasks change: the server prunes the
   // promoted, completed or advanced entries by the same rule as Now.
@@ -50,9 +65,12 @@ export function NowShortlist({
     setIds(saved.task_ids);
   }
 
-  function move(index: number, by: number): void {
+  function move(index: number, by: number, title: string): void {
     const next = ids.filter((_, i) => i !== index);
     next.splice(index + by, 0, ids[index] ?? 0);
+    const to = index + by;
+    const atEnd = by < 0 ? to === 0 : to === ids.length - 1;
+    if (atEnd) setRefocus(`Move ${title} ${by < 0 ? "down" : "up"}`);
     void save(next);
   }
 
@@ -62,7 +80,7 @@ export function NowShortlist({
   const offered = tasks.filter((t) => !t.completed && t.id !== nowTaskId && !ids.includes(t.id));
 
   return (
-    <section className="now-shortlist" aria-label="Shortlist">
+    <section ref={sectionRef} className="now-shortlist" aria-label="Shortlist">
       <div className="now-shortlist-head">
         <span className="now-label">Shortlist</span>
         <button type="button" className="btn-quiet" onClick={() => setPicking(true)}>
@@ -82,7 +100,10 @@ export function NowShortlist({
                   type="button"
                   className="btn-quiet"
                   aria-label={`Make ${task.title} Now`}
-                  onClick={() => onPromote(task.id)}
+                  onClick={() => {
+                    setRefocus("Add to shortlist");
+                    onPromote(task.id);
+                  }}
                 >
                   Now
                 </button>
@@ -91,7 +112,7 @@ export function NowShortlist({
                   className="btn-quiet"
                   aria-label={`Move ${task.title} up`}
                   disabled={index === 0}
-                  onClick={() => move(index, -1)}
+                  onClick={() => move(index, -1, task.title)}
                 >
                   ↑
                 </button>
@@ -100,7 +121,7 @@ export function NowShortlist({
                   className="btn-quiet"
                   aria-label={`Move ${task.title} down`}
                   disabled={index === entries.length - 1}
-                  onClick={() => move(index, 1)}
+                  onClick={() => move(index, 1, task.title)}
                 >
                   ↓
                 </button>
@@ -108,7 +129,10 @@ export function NowShortlist({
                   type="button"
                   className="btn-quiet"
                   aria-label={`Remove ${task.title} from shortlist`}
-                  onClick={() => void save(ids.filter((id) => id !== task.id))}
+                  onClick={() => {
+                    setRefocus("Add to shortlist");
+                    void save(ids.filter((id) => id !== task.id));
+                  }}
                 >
                   ×
                 </button>

@@ -59,16 +59,6 @@
     gap: var(--space-1);
   }
 
-  /* Start 5 min (#552) is the panel's primary action; full width on a phone. */
-  @media (max-width: 640px) {
-    .now-actions {
-      width: 100%;
-    }
-    .now-start {
-      flex: 1 0 100%;
-    }
-  }
-
   .now-conflict {
     display: flex;
     flex-wrap: wrap;
@@ -118,14 +108,22 @@
     overflow-wrap: anywhere;
   }
 
-  /* Work without timer stays visible and touch-sized on mobile (#553). */
-  @media (max-width: 640px) {
+  /* Mobile (#552, #553, #555): same breakpoint as the rest of the app.
+   * Start 5 min is full width; every Now control, including Work without
+   * timer and the Check Item row (hit area through its label), meets the
+   * 44px tap-target floor. */
+  @media (max-width: 720px) {
     .now-actions {
-      flex-wrap: wrap;
+      width: 100%;
     }
 
-    .now-secondary {
-      min-height: 44px;
+    .now-start {
+      flex: 1 0 100%;
+    }
+
+    .now-panel button,
+    .now-step {
+      min-height: var(--tap-target);
     }
   }
 }

@@ -26,6 +26,7 @@
 
   .now-shortlist-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
     min-height: 36px;
@@ -46,6 +47,7 @@
 
   .now-shortlist-actions {
     display: flex;
+    flex-wrap: wrap;
     flex: none;
     gap: var(--space-1);
   }
