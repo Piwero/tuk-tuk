@@ -125,3 +125,48 @@ def test_the_scheduled_filter_is_exclusive_with_views_and_ranges(client: TestCli
 
         assert response.status_code == 422, query
         assert response.json()["error"]["code"] == "validation_error"
+
+
+def plan_task(client: TestClient, task_id: int, planned_work: dict[str, object]) -> None:
+    response = client.patch(f"/api/v1/tasks/{task_id}", json={"planned_work": planned_work})
+    assert response.status_code == 200, response.text
+
+
+def test_planned_work_inside_the_window_brings_its_task_in(client: TestClient) -> None:
+    # Issue #562: the Calendar renders Planned work as its own Entry, so the
+    # range query keeps a Task whose plan lands in the window even when its
+    # due date is elsewhere, or absent.
+    later = make_task(client, "Due later", due_date="2026-08-20T15:00:00Z")
+    undated = make_task(client, "Undated")
+    make_task(client, "Unplanned elsewhere", due_date="2026-08-20T15:00:00Z")
+    block = {"start": "2026-07-10T09:00:00Z", "duration_minutes": 60, "time_zone": "UTC"}
+    plan_task(client, later["id"], block)
+    plan_task(client, undated["id"], block)
+
+    assert window(client, "2026-07-01", "2026-07-31") == ["Due later", "Undated"]
+
+
+def test_a_planned_works_day_is_read_in_the_plans_timezone(client: TestClient) -> None:
+    # 03:00 UTC on Aug 1 is still 23:00 on Jul 31 in New York.
+    task = make_task(client, "Late plan")
+    plan_task(
+        client,
+        task["id"],
+        {"start": "2026-08-01T03:00:00Z", "duration_minutes": 30, "time_zone": "America/New_York"},
+    )
+
+    assert window(client, "2026-07-01", "2026-07-31") == ["Late plan"]
+    assert window(client, "2026-08-01", "2026-08-31") == []
+
+
+def test_the_unscheduled_query_reads_the_due_date_not_the_plan(client: TestClient) -> None:
+    task = make_task(client, "Planned but undated")
+    plan_task(
+        client,
+        task["id"],
+        {"start": "2026-07-10T09:00:00Z", "duration_minutes": 60, "time_zone": "UTC"},
+    )
+
+    response = client.get("/api/v1/tasks?scheduled=false")
+
+    assert [item["title"] for item in response.json()["items"]] == ["Planned but undated"]

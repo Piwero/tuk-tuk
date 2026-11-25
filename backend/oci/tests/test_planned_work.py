@@ -285,3 +285,18 @@ def test_another_users_task_cannot_be_planned_or_read(client: TestClient) -> Non
     client.cookies.clear()
     log_in(client)
     assert client.get(f"/api/v1/tasks/{task['id']}").json()["planned_work"] is not None
+
+
+def test_no_event_route_can_write_planned_work(client: TestClient) -> None:
+    # Issue #562: Planned work is written only through the Task PATCH. Events
+    # are read-only Google context (ADR 0006): every route under /events is a
+    # read, so no request can plan work onto an Event.
+    paths = client.get("/openapi.json").json()["paths"]
+    event_paths = {path: ops for path, ops in paths.items() if path.startswith("/api/v1/events")}
+    assert event_paths, "the Events endpoint should exist"
+    for path, operations in event_paths.items():
+        assert set(operations) == {"get"}, path
+
+    for method in ("post", "put", "patch"):
+        response = client.request(method.upper(), "/api/v1/events", json={"planned_work": PLAN})
+        assert response.status_code == 405, (method, response.text)

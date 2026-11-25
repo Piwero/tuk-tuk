@@ -375,10 +375,25 @@ def in_smart_view(task: Task, view: SmartView, today: date) -> bool:
     return first <= today + timedelta(days=6) and last >= today
 
 
+def planned_day(task: Task) -> date | None:
+    """The local calendar day a Task's Planned work occupies, read in the
+    timezone it was planned in, or None when unplanned. One day is enough:
+    the block and its buffer never run past that day's midnight (#558)."""
+    if task.planned_start is None or task.planned_time_zone is None:
+        return None
+    return as_utc(task.planned_start).astimezone(ZoneInfo(task.planned_time_zone)).date()
+
+
 def in_range_window(task: Task, range_start: date, range_end: date) -> bool:
-    """Calendar-window intersection: any scheduled day falls inside the
-    inclusive [range_start, range_end] span.
+    """Calendar-window intersection: any scheduled day, or the day of the
+    Task's Planned work (#562), falls inside the inclusive
+    [range_start, range_end] span. The Calendar renders the plan as its own
+    Entry, so a Task planned in the window is fetched even when its due date
+    is elsewhere or absent.
     """
+    planned = planned_day(task)
+    if planned is not None and range_start <= planned <= range_end:
+        return True
     window = schedule_days(task)
     if window is None:
         return False
