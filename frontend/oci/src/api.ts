@@ -1730,6 +1730,23 @@ export function updateNowSelection(taskId: number | null): Promise<NowSelection>
   return request("/api/v1/now", { method: "PUT", body: JSON.stringify({ task_id: taskId }) });
 }
 
+/** The Now shortlist (issue #551): ordered alternatives beside Now. The
+ * server dedupes, leaves out the Now Task and prunes finished entries. */
+export interface NowShortlist {
+  task_ids: number[];
+}
+
+export function fetchNowShortlist(): Promise<NowShortlist> {
+  return request("/api/v1/now/shortlist");
+}
+
+export function updateNowShortlist(taskIds: number[]): Promise<NowShortlist> {
+  return request("/api/v1/now/shortlist", {
+    method: "PUT",
+    body: JSON.stringify({ task_ids: taskIds }),
+  });
+}
+
 export function updateStandupSettings(enabled: boolean): Promise<StandupSettings> {
   return request("/api/v1/settings/stand-up", {
     method: "PUT",
