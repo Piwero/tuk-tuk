@@ -538,6 +538,67 @@ describe("Run persistence", () => {
   });
 });
 
+describe("Retry-safe finish (#546)", () => {
+  const losesSave = (method: string, pathname: string): boolean =>
+    method === "POST" && pathname === "/api/v1/focus-sessions";
+
+  async function finishLosingTheResponse(api: ReturnType<typeof installFakeApi>): Promise<void> {
+    api.loseWriteResponse = losesSave;
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+    await waitFor(() => expect(api.focusSessions).toHaveLength(1));
+    api.loseWriteResponse = null;
+  }
+
+  it("records one session when a finish is retried after its response was lost", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Stopwatch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(90_000);
+
+    await finishLosingTheResponse(api);
+    tick(5_000);
+    fireEvent.click(await screen.findByRole("button", { name: "Finish" }));
+
+    expect(await screen.findByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(api.focusSessions).toHaveLength(1);
+  });
+
+  it("records one session when the tab reloads between the save and its acknowledgement", async () => {
+    const api = installFakeApi();
+    const first = render(<App />);
+    await openFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Stopwatch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    tick(90_000);
+
+    await finishLosingTheResponse(api);
+    first.unmount();
+    render(<App />);
+    await openFocus();
+    fireEvent.click(await screen.findByRole("button", { name: "Finish" }));
+
+    expect(await screen.findByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(api.focusSessions).toHaveLength(1);
+  });
+
+  it("gives each new run its own identity", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openFocus();
+    for (let run = 0; run < 2; run++) {
+      fireEvent.click(screen.getByRole("button", { name: "Stopwatch" }));
+      fireEvent.click(screen.getByRole("button", { name: "Start" }));
+      tick(60_000);
+      fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+      await screen.findByRole("button", { name: "Start" });
+    }
+
+    expect(api.focusSessions).toHaveLength(2);
+  });
+});
+
 describe("Nav badge", () => {
   it("shows the running countdown next to the brand, from any screen", async () => {
     installFakeApi();

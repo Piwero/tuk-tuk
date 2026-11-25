@@ -167,6 +167,8 @@ export interface FakeFocusSession {
   ended_at: string;
   pause_seconds: number;
   note: string;
+  /** The client's identity for the run (#546), never shown to readers. */
+  client_run_id?: string | null;
   created_at: string;
 }
 
@@ -316,6 +318,10 @@ export interface FakeApiState {
   /** Write failure (#544): while set, each non-GET request it returns true
    * for answers 500 and changes nothing. Mutate directly in a test. */
   failWrite: ((method: string, pathname: string) => boolean) | null;
+  /** Lost response (#546): while set, each non-GET request it returns true
+   * for is handled in full, then the client sees a network error instead
+   * of the response, as when the connection drops after the save. */
+  loseWriteResponse: ((method: string, pathname: string) => boolean) | null;
   /** Write gate (#544): while set, each non-GET request `match` accepts
    * waits on `gate` before it is handled, so a test can observe a saving
    * state or repeat the activation while the write is in flight. */
@@ -348,6 +354,20 @@ export interface FakeApiState {
   /** The Stand-up visibility toggle (issue #140) — server-defaulted to
    * true, matching the backend's default. */
   standupEnabled: boolean;
+  /** Now (issue #547): the Settings toggle (off by default) and the chosen
+   * Task's id, stored apart from every other setting. */
+  nowEnabled: boolean;
+  nowTaskId: number | null;
+  /** The chosen occurrence's schedule (issue #549), mirroring the backend:
+   * a pick whose Task is gone, completed or advanced reads as none.
+   * `undefined` until a PUT, so seeded picks match whatever is seeded. */
+  nowOccurrence?: string;
+  /** The optional resume note on the selection (issue #554); cleared with it. */
+  nowNote: string | null;
+  /** The Now shortlist (issue #551), in order, each entry with its saved
+   * occurrence (`undefined` for seeded entries until first read), pruned on
+   * read by the same rule as the Now pick. */
+  nowShortlist: { taskId: number; occurrence?: string }[];
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature) — server-defaulted to all-true, matching the backend. */
   sectionSettings: {
@@ -358,6 +378,8 @@ export interface FakeApiState {
     assistant: boolean;
   };
   activeHours: { enabled: boolean; start: string; end: string };
+  /** Gentle return (issue #548): Today collapses earlier overdue Tasks. */
+  gentleReturn: boolean;
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -940,8 +962,13 @@ export function installFakeApi({
   standupEntries = [],
   standupYesterdaySuggestions = [],
   standupEnabled = true,
+  nowEnabled = false,
+  nowTaskId = null,
+  nowNote = null,
+  nowShortlist = [],
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
+  gentleReturn = false,
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1014,6 +1041,12 @@ export function installFakeApi({
   /** The Stand-up visibility toggle (issue #140). Defaults to true, matching
    * the backend's server-defaulted-true column. */
   standupEnabled?: boolean;
+  /** Now (issue #547): off by default, nothing selected. */
+  nowEnabled?: boolean;
+  nowTaskId?: number | null;
+  nowNote?: string | null;
+  /** The Now shortlist's Task ids, in order (issue #551). */
+  nowShortlist?: number[];
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature). Defaults to all-true, matching the backend's default. */
   sectionSettings?: {
@@ -1026,6 +1059,8 @@ export function installFakeApi({
   /** Active hours (issue #210) -- the Calendar's double-height band.
    * Defaults to disabled, matching the backend. */
   activeHours?: { enabled: boolean; start: string; end: string };
+  /** Gentle return (issue #548). Defaults to off, matching the backend. */
+  gentleReturn?: boolean;
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1080,6 +1115,7 @@ export function installFakeApi({
     failRead: null,
     readGate: null,
     failWrite: null,
+    loseWriteResponse: null,
     writeGate: null,
     loggedIn,
     users: users.map((account) => ({ ...account })),
@@ -1100,8 +1136,13 @@ export function installFakeApi({
       ...suggestion,
     })),
     standupEnabled,
+    nowEnabled,
+    nowTaskId,
+    nowNote,
+    nowShortlist: nowShortlist.map((taskId) => ({ taskId })),
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
+    gentleReturn,
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -1416,7 +1457,7 @@ export function installFakeApi({
     task.completed_at = new Date().toISOString();
   };
 
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  const handle = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input), "http://localhost");
     const method = (init?.method ?? "GET").toUpperCase();
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -2465,7 +2506,11 @@ export function installFakeApi({
         Object.assign(item, body);
         // Mirror the backend rule: ticking the last open item completes the
         // parent — which advances a recurring parent in place instead.
-        if ((body as { done?: boolean }).done === true && task.check_items.every((i) => i.done)) {
+        if (
+          url.searchParams.get("auto_complete") !== "false" &&
+          (body as { done?: boolean }).done === true &&
+          task.check_items.every((i) => i.done)
+        ) {
           completeTask(task);
         }
         task.check_items.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
@@ -2902,8 +2947,20 @@ export function installFakeApi({
         mode: "pomo" | "stopwatch";
         started_at: string;
         ended_at: string;
+        client_run_id?: string;
       };
+      // Retry-safe (#546): the same run's id returns the session already
+      // recorded for it, with 200, and records nothing.
+      const runId = input.client_run_id;
+      const recorded =
+        runId === undefined
+          ? undefined
+          : state.focusSessions.find((s) => s.client_run_id === runId);
+      if (recorded) {
+        return json(withDuration(recorded), 200);
+      }
       const created = fakeFocusSession({
+        client_run_id: runId ?? null,
         mode: input.mode,
         task_id: input.task_id ?? null,
         habit_id: input.habit_id ?? null,
@@ -3064,6 +3121,93 @@ export function installFakeApi({
         })),
       });
     }
+    if (url.pathname === "/api/v1/settings/now") {
+      if (method === "GET") {
+        return json({ enabled: state.nowEnabled });
+      }
+      if (method === "PUT") {
+        state.nowEnabled = (body as { enabled: boolean }).enabled;
+        return json({ enabled: state.nowEnabled });
+      }
+    }
+    const occurrenceOf = (t: FakeTask): string => `${t.start_date}|${t.due_date}`;
+    if (url.pathname === "/api/v1/now/shortlist") {
+      if (method === "GET") {
+        state.nowShortlist = state.nowShortlist.filter((entry) => {
+          const task = state.tasks.find((t) => t.id === entry.taskId);
+          entry.occurrence ??= task && occurrenceOf(task);
+          return (
+            task !== undefined &&
+            !task.completed &&
+            task.id !== state.nowTaskId &&
+            occurrenceOf(task) === entry.occurrence
+          );
+        });
+        return json({ task_ids: state.nowShortlist.map((e) => e.taskId) });
+      }
+      if (method === "PUT") {
+        const wanted = [...new Set((body as { task_ids: number[] }).task_ids)].filter(
+          (id) => id !== state.nowTaskId,
+        );
+        const tasks = wanted.map((id) => state.tasks.find((t) => t.id === id));
+        if (tasks.some((t) => t === undefined)) {
+          return json({ detail: "Task not found" }, 404);
+        }
+        state.nowShortlist = tasks.map((t) => ({ taskId: t!.id, occurrence: occurrenceOf(t!) }));
+        return json({ task_ids: wanted });
+      }
+    }
+    /** The backend's prune-on-read (#549); the note goes with the pick (#554). */
+    const pruneNow = (): void => {
+      const task = state.tasks.find((t) => t.id === state.nowTaskId);
+      if (state.nowTaskId !== null) {
+        state.nowOccurrence ??= task && occurrenceOf(task);
+        if (!task || task.completed || occurrenceOf(task) !== state.nowOccurrence) {
+          state.nowTaskId = null;
+          state.nowOccurrence = undefined;
+        }
+      }
+      if (state.nowTaskId === null) {
+        state.nowNote = null;
+      }
+    };
+    if (url.pathname === "/api/v1/now/note") {
+      pruneNow();
+      if (method === "GET") {
+        return json({ note: state.nowNote });
+      }
+      if (method === "PUT") {
+        const note = ((body as { note: string | null }).note ?? "").trim() || null;
+        if (state.nowTaskId === null && note !== null) {
+          return json(
+            { error: { code: "no_now_selection", message: "Nothing is selected for Now" } },
+            409,
+          );
+        }
+        state.nowNote = note;
+        return json({ note: state.nowNote });
+      }
+    }
+    if (url.pathname === "/api/v1/now") {
+      if (method === "GET") {
+        pruneNow();
+        return json({ task_id: state.nowTaskId });
+      }
+      if (method === "PUT") {
+        const taskId = (body as { task_id: number | null }).task_id;
+        const task = state.tasks.find((t) => t.id === taskId);
+        if (taskId !== null && !task) {
+          return json({ detail: "Task not found" }, 404);
+        }
+        const occurrence = task && occurrenceOf(task);
+        if (taskId !== state.nowTaskId || occurrence !== state.nowOccurrence) {
+          state.nowNote = null;
+        }
+        state.nowTaskId = taskId;
+        state.nowOccurrence = occurrence;
+        return json({ task_id: state.nowTaskId });
+      }
+    }
     if (url.pathname === "/api/v1/settings/stand-up") {
       if (method === "GET") {
         return json({ enabled: state.standupEnabled });
@@ -3082,6 +3226,12 @@ export function installFakeApi({
         state.sectionSettings = body as typeof state.sectionSettings;
         return json({ ...state.sectionSettings });
       }
+    }
+    if (url.pathname === "/api/v1/settings/gentle-return") {
+      if (method === "PUT") {
+        state.gentleReturn = (body as { enabled: boolean }).enabled;
+      }
+      return json({ enabled: state.gentleReturn });
     }
     if (url.pathname === "/api/v1/settings/active-hours") {
       if (method === "GET") {
@@ -3262,6 +3412,17 @@ export function installFakeApi({
       }
     }
     return notFound(`No route: ${method} ${url.pathname}`);
+  };
+
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const response = await handle(input, init);
+    const method = (init?.method ?? "GET").toUpperCase();
+    const pathname = new URL(String(input), "http://localhost").pathname;
+    if (method !== "GET" && state.loseWriteResponse?.(method, pathname) === true) {
+      // The write landed, but its response never reaches the client.
+      throw new TypeError("Failed to fetch");
+    }
+    return response;
   });
 
   vi.stubGlobal("fetch", fetchMock);

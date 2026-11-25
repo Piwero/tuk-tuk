@@ -180,6 +180,10 @@ class UserSettings(Base):
     active_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     active_hours_start: Mapped[str] = mapped_column(String(5), default="09:00")
     active_hours_end: Mapped[str] = mapped_column(String(5), default="17:00")
+    # Gentle return (issue #548): Today collapses every earlier overdue Task
+    # behind a counted disclosure. Chosen by the User, never inferred; off by
+    # default so Today is unchanged after upgrade.
+    gentle_return_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -505,6 +509,11 @@ class FocusSession(OwnedMixin, Base):
     """
 
     __tablename__ = "focus_sessions"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id", "client_run_id", name="uq_focus_sessions_owner_id_client_run_id"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     mode: Mapped[str] = mapped_column(String(9))
@@ -521,6 +530,9 @@ class FocusSession(OwnedMixin, Base):
     # Wall-clock seconds spent paused: recorded focus time stays honest.
     pause_seconds: Mapped[int] = mapped_column(default=0)
     note: Mapped[str] = mapped_column(Text, default="")
+    # The client's identity for the run this session records (issue #546):
+    # a retried finish for the same run finds this row instead of adding one.
+    client_run_id: Mapped[str | None] = mapped_column(String(64), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -674,3 +686,46 @@ class ApiToken(OwnedMixin, Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class NowSelection(OwnedMixin, Base):
+    """The one Task a User chose to do next in Today (issue #547), and
+    whether the Now panel is shown at all. At most one row per User,
+    created on first write; no row reads as off with nothing selected.
+
+    Its own table rather than `user_settings` columns, so writing the
+    selection can never overwrite another preference. Turning Now off
+    keeps `task_id`; deleting the Task clears it (SET NULL).
+    """
+
+    __tablename__ = "now_selections"
+    __table_args__ = (UniqueConstraint("owner_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(default=False)
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), default=None
+    )
+    # The chosen occurrence's schedule (issue #549): a recurring Task that
+    # advanced in place no longer matches, so it stops reading as Now.
+    task_start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    task_due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # Optional cue for picking the selection back up (issue #554); cleared
+    # whenever the selection changes, is removed or is pruned.
+    resume_note: Mapped[str | None] = mapped_column(Text, default=None)
+
+
+class NowShortlistItem(OwnedMixin, Base):
+    """One entry on a User's Now shortlist (issue #551): an ordered,
+    deduplicated set of alternatives beside Now, with no cap. Deleting the
+    Task removes the entry; the saved schedule prunes completed or advanced
+    occurrences by the same rule as Now (app.now_rule)."""
+
+    __tablename__ = "now_shortlist_items"
+    __table_args__ = (UniqueConstraint("owner_id", "task_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    position: Mapped[int]
+    task_start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    task_due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

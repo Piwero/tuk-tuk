@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeTask, fakeTimer, installFakeApi } from "./test/fakeApi";
+import { fakeCheckItem, fakeTask, fakeTimer, installFakeApi } from "./test/fakeApi";
 
 // All tests pin the clock to Friday 2026-07-03, local noon, so timers and
 // "today" are deterministic in any timezone.
@@ -276,5 +276,112 @@ describe("Pomo quick-start menu", () => {
     const row = screen.getByRole("button", { name: "Open details for Write report" });
     fireEvent.contextMenu(row.closest("li") as HTMLElement);
     await screen.findByRole("menu", { name: "Start Focus for Write report" });
+  });
+});
+
+describe("Start 5 min from Now", () => {
+  function openToday(): void {
+    window.history.replaceState(null, "", "/today");
+    render(<App />);
+  }
+  const nowPanel = () => screen.findByRole("region", { name: "Now" });
+
+  it("starts a running five-minute Pomo linked to the Now Task and shows its next Check Item", async () => {
+    const step = fakeCheckItem("Outline");
+    const task = fakeTask("Write report", { check_items: [step] });
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+
+    fireEvent.click(await within(await nowPanel()).findByRole("button", { name: "Start 5 min" }));
+
+    expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(await stageLink()).toHaveTextContent(task.title);
+    expect(within(screen.getByRole("main")).getByText("Next: Outline")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Focus timer running, 05:00 left" }),
+    ).toBeInTheDocument();
+  });
+
+  async function startFromNowThenReturnToToday(): Promise<void> {
+    fireEvent.click(await within(await nowPanel()).findByRole("button", { name: "Start 5 min" }));
+    await screen.findByRole("heading", { name: "Focus" });
+    tick(60_000);
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
+    await screen.findByRole("heading", { name: "Today" });
+  }
+
+  it("offers return or pause instead of a second session when Focus is already running", async () => {
+    const task = fakeTask("Write report");
+    const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    const confirm = vi.spyOn(window, "confirm");
+    confirm.mockClear();
+    openToday();
+    await startFromNowThenReturnToToday();
+
+    const panel = await nowPanel();
+    fireEvent.click(within(panel).getByRole("button", { name: "Start 5 min" }));
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(within(panel).getByText("A Focus Session is already running.")).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "Pause it" }));
+    expect(await screen.findByRole("button", { name: /Focus timer paused/ })).toBeInTheDocument();
+    expect(api.focusSessions).toHaveLength(0);
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Start 5 min" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Return to Focus" }));
+    expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).getAllByText("04:00").length).toBeGreaterThan(0);
+    expect(api.focusSessions).toHaveLength(0);
+  });
+
+  it("timer completion leaves the Task and its Check Items open and starts no next interval", async () => {
+    const step = fakeCheckItem("Outline");
+    const task = fakeTask("Write report", { check_items: [step] });
+    const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    fireEvent.click(await within(await nowPanel()).findByRole("button", { name: "Start 5 min" }));
+    await screen.findByRole("heading", { name: "Focus" });
+
+    tick(5 * 60_000 + 1_000);
+
+    await waitFor(() => expect(api.focusSessions).toHaveLength(1));
+    expect(api.focusSessions[0]?.task_id).toBe(task.id);
+    expect(await screen.findByRole("button", { name: "Start break" })).toBeInTheDocument();
+    tick(10 * 60_000);
+    expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Focus timer running/ })).not.toBeInTheDocument();
+    const saved = api.tasks.find((t) => t.id === task.id);
+    expect(saved?.completed).toBe(false);
+    expect(saved?.check_items.every((item) => !item.done)).toBe(true);
+    expect(api.focusSessions).toHaveLength(1);
+  });
+
+  it("keeps saved Timers, the default Pomo, custom duration and Stopwatch reachable", async () => {
+    const task = fakeTask("Write report", { due_date: "2026-07-03" });
+    installFakeApi({
+      nowEnabled: true,
+      tasks: [task],
+      nowTaskId: task.id,
+      timers: [fakeTimer("Deep Work 50", { duration_seconds: 3000 })],
+    });
+    openToday();
+    const panel = await nowPanel();
+    expect(within(panel).getByRole("button", { name: "Start 5 min" })).toBeInTheDocument();
+
+    const row = await screen.findByRole("button", { name: "Open details for Write report" });
+    fireEvent.contextMenu(row.closest("li") as HTMLElement);
+    const menu = await screen.findByRole("menu", { name: "Start Focus for Write report" });
+    expect(within(menu).getByRole("menuitem", { name: "Deep Work 50" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Custom…" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Write report" }));
+    const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
+    fireEvent.click(within(dialog).getByRole("option", { name: "Open Focus" }));
+    await screen.findByRole("heading", { name: "Focus" });
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stopwatch" })).toBeInTheDocument();
   });
 });

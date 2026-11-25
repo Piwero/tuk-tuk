@@ -26,6 +26,7 @@ import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import { LinkSelect } from "./LinkSelect";
+import { ResumeNote } from "./ResumeNote";
 import { TimerForm } from "./TimerForm";
 
 function formatClock(ms: number): string {
@@ -216,6 +217,13 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
   // Today's Tasks may not all be in the open-Tasks page; look in both.
   const knownTasks = [...tasks, ...todayTasks.filter((t) => !tasks.some((o) => o.id === t.id))];
   const stageTask = running !== null ? linkLabel(running.link, knownTasks, habits) : null;
+  // The linked Task's next open Check Item (#552), so the stage says what to do.
+  const stageStep =
+    running !== null && running.link.startsWith("task:")
+      ? knownTasks
+          .find((t) => `task:${t.id}` === running.link)
+          ?.check_items.find((item) => !item.done)
+      : undefined;
   const linkedName = linkLabel(link, knownTasks, habits);
   const today = localDayOf(new Date());
   const strip = statDays;
@@ -312,6 +320,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             Focusing on <strong>{stageTask}</strong>
           </p>
         )}
+        {stageStep !== undefined && <p className="focus-stage-step">Next: {stageStep.title}</p>}
         <div className="focus-timer">
           {pendingBreak !== null ? (
             <div className="focus-break-offer">
@@ -525,7 +534,8 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                   <button
                     type="button"
                     className="focus-primary btn-focus"
-                    onClick={() => void finish()}
+                    // A failed save keeps the run; tapping again retries it.
+                    onClick={() => void finish().catch(() => undefined)}
                   >
                     Finish
                   </button>
@@ -551,6 +561,8 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                   </span>
                 </p>
               )}
+              {/* Offered, never required (#554): only while paused. */}
+              {running.phase !== "break" && running.pauseStartedAtMs !== null && <ResumeNote />}
             </>
           )}
         </div>

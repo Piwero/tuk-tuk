@@ -104,6 +104,7 @@ import { DayRail } from "./components/DayRail";
 import { FocusCard } from "./components/FocusCard";
 import { HabitsCard } from "./components/HabitsCard";
 import { HabitStrip } from "./components/HabitStrip";
+import { NowPanel } from "./components/NowPanel";
 import { useTodayHabits } from "./todayHabits";
 import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
@@ -1610,6 +1611,14 @@ export function App({
                   {/* Full-width row under the header: only .view-controls takes the
                   right-hand column of .main-chrome on a phone. */}
                   {showHabitStrip && <HabitStrip habits={todayHabits} />}
+                  {smartView === "today" && !completedMode && (
+                    <NowPanel
+                      tasks={openTasks}
+                      onTaskChanged={applyTaskChange}
+                      onComplete={completeTaskNow}
+                      onOpenFocus={() => switchView({ kind: "focus" })}
+                    />
+                  )}
                   {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
                     <>
                       <QuickAdd

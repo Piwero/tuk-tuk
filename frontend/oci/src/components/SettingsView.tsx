@@ -6,6 +6,8 @@ import {
   ApiError,
   disconnectGoogleAccount,
   fetchActiveHoursSettings,
+  fetchGentleReturnSettings,
+  updateGentleReturnSettings,
   updateActiveHoursSettings,
   fetchDatabaseStatus,
   testDatabaseConnection,
@@ -20,6 +22,7 @@ import {
   fetchGoogleStatus,
   googleConnectUrl,
   refreshGoogleCalendars,
+  fetchNowSettings,
   fetchStandupSettings,
   fetchVoiceConfig,
   fetchSectionSettings,
@@ -32,6 +35,7 @@ import {
   saveGoogleCredentials,
   saveVoiceConfig,
   updateGoogleCalendar,
+  updateNowSettings,
   updateStandupSettings,
   updateSectionSettings,
   type AssistConfig,
@@ -945,6 +949,38 @@ const HALF_HOUR_LABELS: string[] = Array.from({ length: 49 }, (_, index) => {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 });
 
+/** Gentle return (issue #548): the User chooses to have Today collapse every
+ * earlier overdue Task behind a counted disclosure. Nothing is rescheduled. */
+function GentleReturnSettingsForm(): React.JSX.Element {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    void fetchGentleReturnSettings().then((settings) => setEnabled(settings.enabled));
+  }, []);
+
+  function toggle(): void {
+    const next = !enabled;
+    setEnabled(next);
+    void updateGentleReturnSettings({ enabled: next }).then((settings) =>
+      setEnabled(settings.enabled),
+    );
+  }
+
+  return (
+    <div className="settings-field">
+      <label>
+        <input type="checkbox" checked={enabled} onChange={toggle} />
+        Gentle return
+      </label>
+      <p className="settings-hint">
+        For coming back after time away. Today tucks earlier overdue Tasks behind a single counted
+        link, so you can pick one thing to start with. No dates change, and the full list is one
+        click away.
+      </p>
+    </div>
+  );
+}
+
 /** Active hours (issue #210): the band of the day the Calendar renders at
  * double height. The selects only offer valid half-hour times, so the one
  * reachable invalid state is start ≥ end (which includes a band that would
@@ -1190,6 +1226,8 @@ function MyAccountPanel({
   // Enabled by default (issue #140) so the toggle doesn't flash off before
   // the real value loads — mirrors the App-level nav item's own default.
   const [standupEnabled, setStandupEnabled] = useState(true);
+  // Now (issue #547) is off by default, unlike the sections above.
+  const [nowEnabled, setNowEnabled] = useState(false);
   // Enabled by default (this feature), same reasoning as standupEnabled
   // above — mirrors the App-level nav items' own default.
   const [sectionSettings, setSectionSettings] = useState<SectionSettings>({
@@ -1215,6 +1253,10 @@ function MyAccountPanel({
   }, []);
 
   useEffect(() => {
+    void fetchNowSettings().then((settings) => setNowEnabled(settings.enabled));
+  }, []);
+
+  useEffect(() => {
     void fetchAssistConfig().then(setAssistConfig);
   }, []);
 
@@ -1225,6 +1267,11 @@ function MyAccountPanel({
   useEffect(() => {
     void fetchVoiceConfig().then(setVoiceConfig);
   }, []);
+
+  async function handleNowToggle(): Promise<void> {
+    const updated = await updateNowSettings(!nowEnabled);
+    setNowEnabled(updated.enabled);
+  }
 
   async function handleStandupToggle(): Promise<void> {
     const updated = await updateStandupSettings(!standupEnabled);
@@ -1309,6 +1356,7 @@ function MyAccountPanel({
         <a href="#settings-appearance">Appearance</a>
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
+        <a href="#settings-gentle-return">Gentle return</a>
         <a href="#settings-assist">
           Assist
           {assistConfig !== null && (
@@ -1447,6 +1495,19 @@ function MyAccountPanel({
                 <span className="settings-feature-desc">Daily review.</span>
               </span>
             </label>
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={nowEnabled}
+                  onChange={() => void handleNowToggle()}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Now</span>
+                <span className="settings-feature-desc">One Task to do next, in Today.</span>
+              </span>
+            </label>
           </div>
         </section>
         <section aria-label="Active hours" id="settings-active-hours" className="settings-section">
@@ -1454,6 +1515,16 @@ function MyAccountPanel({
             <h2>Active hours</h2>
           </div>
           <ActiveHoursSettingsForm />
+        </section>
+        <section
+          aria-label="Gentle return"
+          id="settings-gentle-return"
+          className="settings-section"
+        >
+          <div className="settings-section-head">
+            <h2>Gentle return</h2>
+          </div>
+          <GentleReturnSettingsForm />
         </section>
       </section>
       {showAiGroup && (

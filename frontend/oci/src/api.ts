@@ -1145,8 +1145,11 @@ export function updateCheckItem(
   taskId: number,
   checkItemId: number,
   patch: CheckItemPatch,
+  options: { autoComplete?: boolean } = {},
 ): Promise<Task> {
-  return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}`, {
+  // autoComplete: false ticks without completing the parent Task (Now, #550).
+  const query = options.autoComplete === false ? "?auto_complete=false" : "";
+  return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}${query}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
@@ -1454,6 +1457,9 @@ export interface FocusSessionCreateInput {
   ended_at: string;
   pause_seconds?: number;
   note?: string;
+  /** The run's client-generated identity (#546): repeating a create with it
+   * returns the session already recorded instead of recording another. */
+  client_run_id?: string;
 }
 
 export function createFocusSession(input: FocusSessionCreateInput): Promise<FocusSession> {
@@ -1696,6 +1702,66 @@ export function fetchStandupSettings(): Promise<StandupSettings> {
   return request("/api/v1/settings/stand-up");
 }
 
+/** Now (issue #547): whether Today shows the Now panel. Off by default;
+ * turning it off never clears the stored selection. */
+export interface NowSettings {
+  enabled: boolean;
+}
+
+export function fetchNowSettings(): Promise<NowSettings> {
+  return request("/api/v1/settings/now");
+}
+
+export function updateNowSettings(enabled: boolean): Promise<NowSettings> {
+  return request("/api/v1/settings/now", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+/** The one Task the User chose as Now, stored per User on its own endpoint
+ * so writing it never touches another setting. Never changes the Task. */
+export interface NowSelection {
+  task_id: number | null;
+}
+
+export function fetchNowSelection(): Promise<NowSelection> {
+  return request("/api/v1/now");
+}
+
+export function updateNowSelection(taskId: number | null): Promise<NowSelection> {
+  return request("/api/v1/now", { method: "PUT", body: JSON.stringify({ task_id: taskId }) });
+}
+
+/** The optional resume note on the Now selection (issue #554): a short cue
+ * for picking the work back up. Null or blank discards it; the server
+ * clears it whenever the selection changes, is removed or is pruned. */
+export interface ResumeNote {
+  note: string | null;
+}
+
+export function fetchResumeNote(): Promise<ResumeNote> {
+  return request("/api/v1/now/note");
+}
+
+export function updateResumeNote(note: string | null): Promise<ResumeNote> {
+  return request("/api/v1/now/note", { method: "PUT", body: JSON.stringify({ note }) });
+}
+
+/** The Now shortlist (issue #551): ordered alternatives beside Now. The
+ * server dedupes, leaves out the Now Task and prunes finished entries. */
+export interface NowShortlist {
+  task_ids: number[];
+}
+
+export function fetchNowShortlist(): Promise<NowShortlist> {
+  return request("/api/v1/now/shortlist");
+}
+
+export function updateNowShortlist(taskIds: number[]): Promise<NowShortlist> {
+  return request("/api/v1/now/shortlist", {
+    method: "PUT",
+    body: JSON.stringify({ task_ids: taskIds }),
+  });
+}
+
 export function updateStandupSettings(enabled: boolean): Promise<StandupSettings> {
   return request("/api/v1/settings/stand-up", {
     method: "PUT",
@@ -1745,6 +1811,26 @@ export function updateActiveHoursSettings(
   settings: ActiveHoursSettings,
 ): Promise<ActiveHoursSettings> {
   return request("/api/v1/settings/active-hours", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** Gentle return (issue #548): when on, Today collapses every earlier overdue
+ * Task behind a counted disclosure. Chosen by the User, off by default;
+ * presentation only — no Task date changes. */
+export interface GentleReturnSettings {
+  enabled: boolean;
+}
+
+export function fetchGentleReturnSettings(): Promise<GentleReturnSettings> {
+  return request("/api/v1/settings/gentle-return");
+}
+
+export function updateGentleReturnSettings(
+  settings: GentleReturnSettings,
+): Promise<GentleReturnSettings> {
+  return request("/api/v1/settings/gentle-return", {
     method: "PUT",
     body: JSON.stringify(settings),
   });

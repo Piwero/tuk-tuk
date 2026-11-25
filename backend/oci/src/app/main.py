@@ -36,6 +36,7 @@ from app.routers.v1 import (
     key_results,
     lists,
     mcp_exchange,
+    now,
     sections,
     stand_up,
     tags,
@@ -118,6 +119,7 @@ def create_app(
     app.include_router(completed_occurrences.router)
     app.include_router(events.router)
     app.include_router(folders.router)
+    app.include_router(now.router)
     app.include_router(focus_sessions.router)
     app.include_router(focus_sessions.stats_router)
     app.include_router(goals.router)

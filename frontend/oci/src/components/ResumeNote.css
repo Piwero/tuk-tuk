@@ -1,0 +1,49 @@
+/* Resume note (#554): a quiet optional field under the paused Focus actions,
+ * never a stop form. Flat, hairline, current tokens only. */
+@layer components {
+  .resume-note {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    width: 100%;
+    max-width: 28rem;
+    margin: var(--space-3) auto 0;
+    text-align: left;
+  }
+
+  .resume-note label {
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+  }
+
+  .resume-note-hint {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .resume-note-field {
+    border-radius: var(--radius-sm);
+  }
+
+  .resume-note-field[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+
+  .resume-note-error {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-danger);
+  }
+
+  .resume-note-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .resume-note-status {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+}
