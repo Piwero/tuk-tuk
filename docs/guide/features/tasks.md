@@ -54,8 +54,11 @@ cards between columns as work moves. Click **List view** to switch back.
 
 - **Repeating tasks** move forward instead of closing. Complete "Weekly sync"
   and it moves to next week. Each finished one is recorded in history.
-- **Reminders are saved but not sent yet.** You can add them ("30 minutes
-  before"), but Tuk Tuk doesn't notify you yet. See the [roadmap](../roadmap.md).
+- **Reminders notify only while Tuk Tuk is open.** Add them ("30 minutes
+  before"), then turn on **Settings → Reminder notifications** and pick
+  **Enable on this device**. A notification appears while a Tuk Tuk tab is
+  open; click it to open the task. A closed tab or locked phone gets nothing,
+  and a completed or deleted task never notifies.
 - **Checklists** are lines inside a task, not separate tasks. Ticking the last
   one completes the task.
 - **Priority** has four levels: None, Low, Medium and High.
