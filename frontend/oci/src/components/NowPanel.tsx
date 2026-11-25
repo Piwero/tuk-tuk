@@ -42,7 +42,10 @@ export function NowPanel({
   const [picking, setPicking] = useState(false);
   // Announced only after the User advances, never on first render.
   const [announcement, setAnnouncement] = useState("");
-  const { start } = useFocusRun();
+  const { running, start, pause } = useFocusRun();
+  // Set when Start 5 min meets a session already running: one session at a
+  // time, so the panel offers that session back instead of a second one.
+  const [conflict, setConflict] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -81,6 +84,10 @@ export function NowPanel({
   }
 
   function startFive(owner: Task): void {
+    if (running !== null) {
+      setConflict(true);
+      return;
+    }
     start({ mode: "pomo", pomoMs: FIVE_MINUTES_MS, link: `task:${owner.id}` });
     onOpenFocus();
   }
@@ -129,6 +136,34 @@ export function NowPanel({
               </div>
             )}
           </div>
+          {conflict && running !== null && (
+            <div className="now-conflict">
+              <p>A Focus Session is already running.</p>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setConflict(false);
+                  onOpenFocus();
+                }}
+              >
+                Return to Focus
+              </button>
+              {running.pauseStartedAtMs === null && (
+                <button
+                  type="button"
+                  className="btn-quiet"
+                  onClick={() => {
+                    pause();
+                    setConflict(false);
+                    setAnnouncement("Focus Session paused");
+                  }}
+                >
+                  Pause it
+                </button>
+              )}
+            </div>
+          )}
           <div className="now-actions">
             <button type="button" className="btn-primary now-start" onClick={() => startFive(task)}>
               Start 5 min

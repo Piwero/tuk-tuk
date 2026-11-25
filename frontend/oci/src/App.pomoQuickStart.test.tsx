@@ -302,4 +302,37 @@ describe("Start 5 min from Now", () => {
       screen.getByRole("button", { name: "Focus timer running, 05:00 left" }),
     ).toBeInTheDocument();
   });
+
+  async function startFromNowThenReturnToToday(): Promise<void> {
+    fireEvent.click(await within(await nowPanel()).findByRole("button", { name: "Start 5 min" }));
+    await screen.findByRole("heading", { name: "Focus" });
+    tick(60_000);
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }));
+    await screen.findByRole("heading", { name: "Today" });
+  }
+
+  it("offers return or pause instead of a second session when Focus is already running", async () => {
+    const task = fakeTask("Write report");
+    const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    const confirm = vi.spyOn(window, "confirm");
+    confirm.mockClear();
+    openToday();
+    await startFromNowThenReturnToToday();
+
+    const panel = await nowPanel();
+    fireEvent.click(within(panel).getByRole("button", { name: "Start 5 min" }));
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(within(panel).getByText("A Focus Session is already running.")).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "Pause it" }));
+    expect(await screen.findByRole("button", { name: /Focus timer paused/ })).toBeInTheDocument();
+    expect(api.focusSessions).toHaveLength(0);
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Start 5 min" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Return to Focus" }));
+    expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).getAllByText("04:00").length).toBeGreaterThan(0);
+    expect(api.focusSessions).toHaveLength(0);
+  });
 });
