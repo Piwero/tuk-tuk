@@ -130,6 +130,12 @@
     font-size: var(--text-sm);
     color: var(--text-secondary);
   }
+  .focus-stage-step {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
   .focus-stage-task strong {
     color: var(--focus-accent);
     font-weight: var(--weight-semibold);
