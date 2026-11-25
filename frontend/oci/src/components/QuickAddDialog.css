@@ -5,12 +5,44 @@
     gap: var(--space-3);
   }
 
-  .quick-add-dialog > label {
+  .quick-add-dialog > label,
+  .quick-add-details > label {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
     font-size: var(--text-sm);
     color: var(--text-secondary);
+  }
+
+  /* Title-first (#540): what the Task will be, readable while Details is
+   collapsed — the quiet destination plus a removable chip per field the
+   title's tokens, the caller or Assist have set. */
+  .quick-add-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    font-size: var(--text-sm);
+  }
+
+  .quick-add-destination {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-secondary);
+  }
+
+  .quick-add-details-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    align-self: flex-start;
+  }
+
+  .quick-add-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
 
   .quick-add-dialog fieldset {
@@ -80,6 +112,18 @@
      a reminder from the Task being filed. */
     .quick-add-dialog .quick-add-assist-chips button {
       min-width: var(--tap-target);
+      min-height: var(--tap-target);
+    }
+
+    /* Same square hit area for the collapsed summary's chips (#540): with
+     Details shut, a chip's remove button is the only touch path to undo a
+     `~list` / `!priority` / `#tag` / `@day` pick. */
+    .quick-add-dialog .quick-add-summary button {
+      min-width: var(--tap-target);
+      min-height: var(--tap-target);
+    }
+
+    .quick-add-dialog .quick-add-details-toggle {
       min-height: var(--tap-target);
     }
 

@@ -588,6 +588,14 @@ const QUICK_ADD_CONTROLS: { selector: string; what: string }[] = [
     what: "the Assist recurrence / reminder chips' remove buttons",
   },
   {
+    selector: ".quick-add-dialog .quick-add-details-toggle",
+    what: "the Details disclosure toggle (#540)",
+  },
+  {
+    selector: ".quick-add-dialog .quick-add-summary button",
+    what: "the collapsed summary's List / Priority / date / Tag chip remove buttons (#540)",
+  },
+  {
     selector: ".quick-add-dialog .token-input-dropdown li",
     what: "the token suggestion dropdown's rows",
   },

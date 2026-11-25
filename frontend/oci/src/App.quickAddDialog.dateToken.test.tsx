@@ -18,6 +18,12 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** The Date fieldset sits behind the dialog's "Details" disclosure (#540). */
+async function openDetails(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  const dialog = screen.getByRole("dialog", { name: "Quick add" });
+  await user.click(within(dialog).getByRole("button", { name: "Details" }));
+}
+
 async function openDialog(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
   await user.click(await screen.findByRole("link", { name: "Inbox" }));
   await user.click(screen.getByRole("button", { name: "Quick add" }));
@@ -61,6 +67,7 @@ describe("Quick add dialog — @ schedule tokens", () => {
 
     await user.type(screen.getByLabelText("Title"), "groceries @tomorrow");
     await user.keyboard("{ArrowDown}{Enter}");
+    await openDetails(user);
 
     expect(screen.getByLabelText("Due day")).toHaveValue("2026-09-02");
     // No chip row — the schedule lives in the fieldset only.
@@ -88,6 +95,7 @@ describe("Quick add dialog — @ schedule tokens", () => {
     await user.keyboard("{ArrowDown}{Enter}");
     await user.type(screen.getByLabelText("Title"), " @9am");
     await user.keyboard("{ArrowDown}{Enter}");
+    await openDetails(user);
 
     expect(screen.getByLabelText("Day")).toHaveValue("2026-09-02");
     expect(screen.getByLabelText("Due time")).toHaveValue("09:00");
@@ -147,6 +155,7 @@ describe("Quick add dialog — @ schedule tokens", () => {
     const dialog = await openDialog(user);
 
     await user.type(screen.getByLabelText("Title"), "plan @tomorrow");
+    await openDetails(user);
     await user.click(within(dialog).getByRole("button", { name: "Next Week" }));
     await user.click(screen.getByRole("button", { name: "Add task" }));
 
