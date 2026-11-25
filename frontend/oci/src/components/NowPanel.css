@@ -40,7 +40,32 @@
 
   .now-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-1);
+  }
+
+  /* Start 5 min (#552) is the panel's primary action; full width on a phone. */
+  @media (max-width: 640px) {
+    .now-actions {
+      width: 100%;
+    }
+    .now-start {
+      flex: 1 0 100%;
+    }
+  }
+
+  .now-conflict {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+  }
+
+  .now-conflict p {
+    margin: 0;
+    font-size: var(--text-md);
+    color: var(--text-secondary);
   }
 
   .now-picker {

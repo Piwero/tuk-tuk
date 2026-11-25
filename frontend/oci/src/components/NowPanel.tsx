@@ -9,8 +9,12 @@ import {
   updateCheckItem,
   updateNowSelection,
 } from "../api";
+import { useFocusRun } from "../focusRunContext";
 import { Modal } from "./Modal";
 import { TimerFreeWork } from "./TimerFreeWork";
+
+/** Start 5 min (#552): a deliberately small first step. */
+const FIVE_MINUTES_MS = 5 * 60_000;
 
 interface NowPanelProps {
   /** The User's open Tasks, undated ones included: what the picker offers
@@ -20,6 +24,8 @@ interface NowPanelProps {
   onTaskChanged: (task: Task) => void;
   /** Completes the Task: offered once every Check Item is done. */
   onComplete: (task: Task) => void;
+  /** Shows the Focus screen, where a started session runs. */
+  onOpenFocus: () => void;
 }
 
 /** Now (issue #547): an optional panel inside Today holding the one Task
@@ -30,6 +36,7 @@ export function NowPanel({
   tasks,
   onTaskChanged,
   onComplete,
+  onOpenFocus,
 }: NowPanelProps): React.JSX.Element | null {
   const [enabled, setEnabled] = useState(false);
   const [taskId, setTaskId] = useState<number | null>(null);
@@ -37,6 +44,10 @@ export function NowPanel({
   const [timerFree, setTimerFree] = useState(false);
   // Announced only after the User advances, never on first render.
   const [announcement, setAnnouncement] = useState("");
+  const { running, start, pause } = useFocusRun();
+  // Set when Start 5 min meets a session already running: one session at a
+  // time, so the panel offers that session back instead of a second one.
+  const [conflict, setConflict] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -98,6 +109,15 @@ export function NowPanel({
     onTaskChanged(updated);
   }
 
+  function startFive(owner: Task): void {
+    if (running !== null) {
+      setConflict(true);
+      return;
+    }
+    start({ mode: "pomo", pomoMs: FIVE_MINUTES_MS, link: `task:${owner.id}` });
+    onOpenFocus();
+  }
+
   const task = chosen?.completed ? undefined : chosen;
   // Check Items arrive in their sort order; the first open one is the next step.
   const next = task?.check_items.find((item) => !item.done);
@@ -142,7 +162,38 @@ export function NowPanel({
               </div>
             )}
           </div>
+          {conflict && running !== null && (
+            <div className="now-conflict">
+              <p>A Focus Session is already running.</p>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setConflict(false);
+                  onOpenFocus();
+                }}
+              >
+                Return to Focus
+              </button>
+              {running.pauseStartedAtMs === null && (
+                <button
+                  type="button"
+                  className="btn-quiet"
+                  onClick={() => {
+                    pause();
+                    setConflict(false);
+                    setAnnouncement("Focus Session paused");
+                  }}
+                >
+                  Pause it
+                </button>
+              )}
+            </div>
+          )}
           <div className="now-actions">
+            <button type="button" className="btn-primary now-start" onClick={() => startFive(task)}>
+              Start 5 min
+            </button>
             <button
               type="button"
               className="btn-secondary now-secondary"
