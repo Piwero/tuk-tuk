@@ -119,6 +119,7 @@ class AliceWorld(World):
     tag: int
     check_item: int
     habit: int
+    habit_pause: int
     key_result: int
     standup_entry: int
     bullet: int
@@ -314,6 +315,33 @@ REACHES |= {
     ),
     "habit stats": Reach(
         get(lambda a, me: f"/api/v1/habits/{a.habit}/stats?today={a.today}&tz=UTC")
+    ),
+    "pause a habit": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/habits/{a.habit}/pauses",
+            {
+                "start_date": str(a.today + timedelta(days=1)),
+                "end_date": str(a.today + timedelta(days=2)),
+            },
+        )
+    ),
+    "edit a habit pause": Reach(
+        lambda a, me: (
+            "PATCH",
+            f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}",
+            {"end_date": str(a.today + timedelta(days=20))},
+        )
+    ),
+    "resume a habit pause": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}/resume",
+            {"today": str(a.today)},
+        )
+    ),
+    "remove a habit pause": Reach(
+        lambda a, me: ("DELETE", f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}", None)
     ),
     "revoke api token": Reach(lambda a, me: ("DELETE", f"{TOKENS}/{a.api_token}", None)),
     "PUT check-in": Reach(
@@ -627,6 +655,11 @@ def build_alice(
     ][0]["id"]
     habit = alice.ok("POST", "/api/v1/habits", {"name": "alice habit"})["id"]
     alice.ok("PUT", f"/api/v1/habits/{habit}/check-ins/{today}", {"value": 1})
+    habit_pause = alice.ok(
+        "POST",
+        f"/api/v1/habits/{habit}/pauses",
+        {"start_date": str(today + timedelta(days=10)), "end_date": None},
+    )["id"]
     task = alice.ok(
         "POST",
         "/api/v1/tasks",
@@ -693,6 +726,7 @@ def build_alice(
         tag=tag,
         check_item=check_item,
         habit=habit,
+        habit_pause=habit_pause,
         key_result=key_result,
         standup_entry=entry["id"],
         bullet=entry["bullets"][0]["id"],

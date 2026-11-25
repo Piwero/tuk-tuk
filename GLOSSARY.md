@@ -113,14 +113,14 @@ The record of one day's progress on a Habit: a date stamp and, for Numeric habit
 _Avoid_: Completion, log
 
 **Streak**:
-The count of consecutive scheduled days a Habit has been checked in without a miss.
+The count of consecutive **eligible** scheduled days a Habit has been checked in without a miss. An eligible day is scheduled, on or after the Habit start, and not paused. Unscheduled and paused days are stepped over, never counted as done, so a Streak across a Pause is shorter than a perfect daily record of the same span. Today is graced until it ends.
 
 **Habit start**:
-The first local day a Habit can be missed: the User's calendar day when the Habit was created (read in their time zone), or the day of an earlier real Check-in when one exists, and never later than today. Days before it are **not started**: neither missed nor done, and never counted against the Habit. The API calls it `eligible_from`.
+The first local day a Habit can be missed: the User's calendar day when the Habit was created (read in their time zone), or the day of an earlier real Check-in when one exists, and never later than today. Days before it are **not started**: neither missed nor done, and never counted against the Habit, even when a Pause covers them. It is where eligibility begins; a Pause only removes days after it. The API calls it `eligible_from`.
 _Avoid_: Start date (no such field is stored), eligibility date
 
 **Pause**:
-An explicit date interval, optionally open-ended, during which a Habit is deliberately not practised (issue #559) — for travel or illness. Paused days are neither missed nor done: they create no Check-in and the Streak steps over them without counting them. **Resume today** ends an open pause; **Edit pause** changes its dates. A pause cannot cover a date that already has a Check-in — the conflicting dates are named and nothing is deleted — and a paused date accepts no Check-in until the pause is removed. For a times-per-week Habit, pausing a whole week excludes that week; a partial-week pause leaves the weekly target unchanged. Settled Goal Scores are never rewritten by a later pause (ADR 0012). The app labels the state **Paused**.
+An explicit date interval, optionally open-ended, during which a Habit is deliberately not practised (issue #559) — for travel or illness. Paused days are neither missed nor done: they create no Check-in and the Streak steps over them without counting them. **Resume today** ends an open pause yesterday, so today is eligible again; **Edit pause** changes its dates. A pause cannot cover a date that already has a Check-in — the conflicting dates are named and nothing is deleted — and a paused date accepts no Check-in until the pause is removed. For a times-per-week Habit, pausing a whole week excludes that week; a partial-week pause leaves the weekly target unchanged. Settled Goal Scores are never rewritten by a later pause (ADR 0012). The app labels the state **Paused**.
 _Avoid_: Break, freeze, vacation
 
 **Skip**:

@@ -46,6 +46,11 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
   // stay tappable: backfilling one is a real Check-in, and moves the start back.
   const read = habitDayReader(habit, stats, today);
   const notStarted = (day: string): boolean => read(day, valueOf(day)).state === "not-started";
+  // A paused day (issue #559) is neither done nor missed, and refuses a
+  // Check-in until its pause is changed.
+  const paused = (day: string): boolean => read(day, valueOf(day)).state === "paused";
+  const dayLabel = (day: string): string =>
+    notStarted(day) ? `${day}: not started` : paused(day) ? `${day}: paused` : day;
 
   /** Backfill (or edit) a day's Check-in, on the same rule as the card's
    * recent-days strip (see tapCheckIn). */
@@ -82,6 +87,7 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
               "grid-day",
               value >= habit.target && "complete",
               notStarted(day) && "not-started",
+              paused(day) && "paused",
             ]
               .filter(Boolean)
               .join(" ");
@@ -90,9 +96,9 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
                 key={day}
                 type="button"
                 className={className}
-                aria-label={notStarted(day) ? `${day}: not started` : day}
+                aria-label={dayLabel(day)}
                 aria-pressed={value > 0}
-                disabled={day > today}
+                disabled={day > today || paused(day)}
                 style={
                   // Align the 1st under its weekday (Monday-first, like the
                   // repeat editor's weekday order).
@@ -113,7 +119,7 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
             <span
               key={day}
               title={day}
-              className={`heatmap-day level-${heatLevel(entries.get(day)?.intensity ?? 0)}${notStarted(day) ? " not-started" : ""}`}
+              className={`heatmap-day level-${heatLevel(entries.get(day)?.intensity ?? 0)}${notStarted(day) ? " not-started" : ""}${paused(day) ? " paused" : ""}`}
             />
           )),
         )}
@@ -131,6 +137,7 @@ const HISTORY_KEY: { className: string; text: string }[] = [
   { className: "level-2", text: "In progress" },
   { className: "level-0", text: "No Check-in" },
   { className: "level-0 not-started", text: "Not started: before the Habit began" },
+  { className: "level-0 paused", text: "Paused: not counted, neither done nor missed" },
 ];
 
 function HistoryKey(): React.JSX.Element {

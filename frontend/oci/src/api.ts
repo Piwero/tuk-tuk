@@ -101,6 +101,9 @@ export class ApiError extends Error {
     public readonly code: string,
     message: string,
     public readonly status?: number,
+    /** The envelope's machine-readable specifics, when it carries any
+     * (a pause's conflicting Check-in dates, issue #559). */
+    public readonly details?: unknown,
   ) {
     super(message);
   }
@@ -136,7 +139,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         listener(body.error.code);
       }
     }
-    throw new ApiError(body.error.code, body.error.message, response.status);
+    throw new ApiError(body.error.code, body.error.message, response.status, body.error.details);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -1180,6 +1183,54 @@ export interface Habit {
   /** Archived Habits leave the today screen but keep their whole history. */
   is_archived: boolean;
   created_at: string;
+  /** The Habit's pauses, oldest first (issue #559). Optional on the wire
+   * only for an older server, which sends none. */
+  pauses?: HabitPause[];
+}
+
+/** A Habit pause (issue #559): an explicit interval of local days, both
+ * ends inclusive, whose days are neither done nor missed. A null
+ * `end_date` is open-ended. */
+export interface HabitPause {
+  id: number;
+  habit_id: number;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface HabitPauseInput {
+  start_date: string;
+  end_date: string | null;
+}
+
+/** Pause a Habit. Refused (409 `pause_conflicts_with_check_ins`, with the
+ * dates in `error.details.dates`) when Check-ins fall inside the interval. */
+export function createHabitPause(habitId: number, input: HabitPauseInput): Promise<HabitPause> {
+  return request(`/api/v1/habits/${habitId}/pauses`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Edit pause: move either end, or a null end for open-ended. */
+export function updateHabitPause(
+  habitId: number,
+  pauseId: number,
+  input: HabitPauseInput,
+): Promise<HabitPause> {
+  return request(`/api/v1/habits/${habitId}/pauses/${pauseId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Resume today: the pause ends yesterday (or goes, if it began today or
+ * later), so `today` is eligible again. Answers with the Habit. */
+export function resumeHabitPause(habitId: number, pauseId: number, today: string): Promise<Habit> {
+  return request(`/api/v1/habits/${habitId}/pauses/${pauseId}/resume`, {
+    method: "POST",
+    body: JSON.stringify({ today }),
+  });
 }
 
 /** A Check-in — one day's progress on a Habit, keyed by (habit, date). */

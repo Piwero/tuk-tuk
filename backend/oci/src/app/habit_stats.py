@@ -1,9 +1,10 @@
 """Habit statistics — the server-computed Streak and yearly heatmap (per the
 PRD: computed, never stored).
 
-The Streak counts consecutive scheduled days checked in, walking back from
-today: a missed scheduled day resets it, unscheduled days are skipped rather
-than broken, and an unticked today is graced — the day isn't over yet.
+The Streak counts consecutive eligible scheduled days checked in, walking
+back from today: a missed scheduled day resets it, unscheduled and paused
+days are skipped rather than broken, and an unticked today is graced — the
+day isn't over yet. Which day is which is app.habit_days' call.
 Check-ins on unscheduled days are history (they show in the heatmap) but
 never streak. N-times-per-week habits are scheduled every day (v1 keeps the
 due rule and the streak rule the same; a per-week quota walk is future work).
@@ -13,31 +14,37 @@ missed: days before it are "not started", never missed. The Streak already
 stops at the earliest Check-in, so the Habit start never changes its value.
 """
 
-from datetime import date, datetime, timedelta, tzinfo
+from collections.abc import Iterable, Mapping
+from datetime import date, datetime, tzinfo
 
-from app.habit_frequency import due_on
+from app.habit_days import HabitDays, Pause
 from app.schemas import as_utc
 
 
-def current_streak(frequency: str, checked: set[date], today: date) -> int:
-    """The Streak as of `today` for a Habit with this frequency, given the
-    set of days it has Check-ins on.
+def current_streak(
+    frequency: str,
+    target: float,
+    pauses: Iterable[Pause],
+    values: Mapping[date, float],
+    today: date,
+) -> int:
+    """The Streak as of `today` for a Habit with this frequency, Target and
+    pauses, given its Check-in values by day. Read by app.habit_days, the one
+    day rule. The walk ends at the earliest Check-in, which is never later
+    than the Habit start, so the creation day (and so the caller's zone) is
+    not needed here.
     """
-    if not checked:
+    if not values:
         return 0
-    day = today
-    if due_on(frequency, day) and day not in checked:
-        # Grace an unticked today: the run is judged from yesterday back.
-        day -= timedelta(days=1)
-    earliest = min(checked)
-    streak = 0
-    while day >= earliest:
-        if due_on(frequency, day):
-            if day not in checked:
-                break
-            streak += 1
-        day -= timedelta(days=1)
-    return streak
+    days = HabitDays(
+        frequency=frequency,
+        target=target,
+        start=min(values),
+        pauses=tuple(pauses),
+        values=values,
+        today=today,
+    )
+    return days.streak()
 
 
 def eligible_from(created_at: datetime, zone: tzinfo, checked: set[date], today: date) -> date:

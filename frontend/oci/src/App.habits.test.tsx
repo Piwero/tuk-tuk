@@ -529,6 +529,7 @@ describe("Habit start: days before it read as not started, never missed", () => 
       "Missed",
       "Not started: before the Habit began",
       "Not scheduled",
+      "Paused: not counted, neither done nor missed",
       "Future",
     ]);
     expect(legend).toBeVisible();
@@ -865,7 +866,13 @@ describe("Managing Habits", () => {
       within(menu)
         .getAllByRole("menuitem")
         .map((item) => item.getAttribute("aria-label")),
-    ).toEqual(["History Meditate", "Edit Meditate", "Archive Meditate", "Delete habit Meditate"]);
+    ).toEqual([
+      "History Meditate",
+      "Edit Meditate",
+      "Pause Meditate",
+      "Archive Meditate",
+      "Delete habit Meditate",
+    ]);
 
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>

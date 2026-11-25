@@ -319,6 +319,39 @@ class HabitUpdate(BaseModel):
     )(reject_explicit_null)
 
 
+class HabitPauseCreate(BaseModel):
+    """A pause's date interval, both ends inclusive local days; no
+    `end_date` (or null) is open-ended."""
+
+    start_date: date
+    end_date: date | None = None
+
+
+class HabitPauseUpdate(BaseModel):
+    """Edit pause: absent fields stay unchanged; `end_date` null makes the
+    pause open-ended."""
+
+    start_date: date | None = None
+    end_date: date | None = None
+
+    _reject_nulls = field_validator("start_date")(reject_explicit_null)
+
+
+class HabitPauseResume(BaseModel):
+    """Resume today: the caller's local day, which becomes eligible again."""
+
+    today: date
+
+
+class HabitPauseRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    habit_id: int
+    start_date: date
+    end_date: date | None
+
+
 class HabitRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -334,6 +367,9 @@ class HabitRead(BaseModel):
     frequency: str
     is_archived: bool
     created_at: datetime
+    # The Habit's pauses (issue #559), oldest first. New in this field, so
+    # an older client that ignores it reads the Habit as before.
+    pauses: list[HabitPauseRead] = []
 
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:

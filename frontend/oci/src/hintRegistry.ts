@@ -25,7 +25,8 @@ export const HINT_REGISTRY = {
     "A line in this Task's checklist. It has its own done state but isn't a Task itself.",
   "check-progress": "Counts done Check Items out of the total on this Task.",
   "list-vs-tag": "A Task lives in exactly one List, but can carry any number of Tags.",
-  streak: "The count of consecutive scheduled days this Habit has been checked in without a miss.",
+  streak:
+    "The count of consecutive scheduled days this Habit has been checked in without a miss. Paused days are skipped, not counted, so it can differ from a perfect daily record.",
   target: "The amount a Count Habit's Check-ins add up to in one day.",
   "habit-checkin": "Today's Check-in for this Habit.",
   "habit-step": "Adds one step toward today's Check-in. Tap a filled day in the strip to clear it.",

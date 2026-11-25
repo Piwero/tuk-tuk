@@ -119,6 +119,14 @@ export interface FakeHabit {
   frequency: string;
   is_archived: boolean;
   created_at: string;
+  pauses: FakeHabitPause[];
+}
+
+export interface FakeHabitPause {
+  id: number;
+  habit_id: number;
+  start_date: string;
+  end_date: string | null;
 }
 
 export interface FakeKeyResult {
@@ -654,6 +662,13 @@ let nextSectionId = 800;
 let nextOccurrenceId = 950;
 let nextHabitId = 300;
 let nextCheckInId = 9000;
+let nextHabitPauseId = 9800;
+
+/** Mirror the backend's pause interval test: both ends inclusive, a null
+ * end open-ended. */
+function pauseCovers(pause: FakeHabitPause, day: string): boolean {
+  return pause.start_date <= day && (pause.end_date === null || day <= pause.end_date);
+}
 let nextGoalId = 1300;
 let nextFocusSessionId = 400;
 let nextTimerId = 450;
@@ -760,6 +775,7 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
     frequency: "FREQ=DAILY",
     is_archived: false,
     created_at: "2025-01-01T10:00:00Z",
+    pauses: [],
     ...overrides,
   };
 }
@@ -2798,6 +2814,86 @@ export function installFakeApi({
         return new Response(null, { status: 204 });
       }
     }
+    const pausesMatch = url.pathname.match(
+      /^\/api\/v1\/habits\/(\d+)\/pauses(?:\/(\d+))?(\/resume)?$/,
+    );
+    if (pausesMatch) {
+      const habit = state.habits.find((h) => h.id === Number(pausesMatch[1]));
+      if (!habit) {
+        return notFound(`Habit ${pausesMatch[1]} not found`);
+      }
+      const pauseId = pausesMatch[2] === undefined ? null : Number(pausesMatch[2]);
+      const existing = habit.pauses.find((pause) => pause.id === pauseId);
+      if (pauseId !== null && !existing) {
+        return notFound(`Pause ${pauseId} not found`);
+      }
+      if (method === "POST" && pausesMatch[3] !== undefined && existing) {
+        // Mirror the backend's Resume today.
+        const today = (body as { today: string }).today;
+        if (existing.start_date >= today) {
+          habit.pauses = habit.pauses.filter((pause) => pause !== existing);
+        } else if (existing.end_date === null || existing.end_date >= today) {
+          existing.end_date = addDays(today, -1);
+        }
+        return json(habit);
+      }
+      if (method === "DELETE" && existing) {
+        habit.pauses = habit.pauses.filter((pause) => pause !== existing);
+        return new Response(null, { status: 204 });
+      }
+      if (method === "POST" || method === "PATCH") {
+        const input = { ...existing, ...(body as Partial<FakeHabitPause>) };
+        const candidate: FakeHabitPause = {
+          id: existing?.id ?? nextHabitPauseId++,
+          habit_id: habit.id,
+          start_date: input.start_date as string,
+          end_date: input.end_date ?? null,
+        };
+        // Mirror the backend's rules: forwards, no overlap, no Check-ins.
+        if (candidate.end_date !== null && candidate.end_date < candidate.start_date) {
+          return json(
+            { error: { code: "invalid_pause", message: "A pause cannot end before it starts" } },
+            422,
+          );
+        }
+        const overlaps = habit.pauses.some(
+          (other) =>
+            other !== existing &&
+            (other.end_date === null || candidate.start_date <= other.end_date) &&
+            (candidate.end_date === null || other.start_date <= candidate.end_date),
+        );
+        if (overlaps) {
+          return json(
+            { error: { code: "pause_overlaps", message: "Already paused over those dates" } },
+            409,
+          );
+        }
+        const dates = state.checkIns
+          .filter((c) => c.habit_id === habit.id && pauseCovers(candidate, c.date))
+          .map((c) => c.date)
+          .sort();
+        if (dates.length > 0) {
+          return json(
+            {
+              error: {
+                code: "pause_conflicts_with_check_ins",
+                message: `Check-ins on ${dates.join(", ")} prevent this pause`,
+                details: { dates },
+              },
+            },
+            409,
+          );
+        }
+        if (existing) {
+          Object.assign(existing, candidate);
+          return json(existing);
+        }
+        habit.pauses = [...habit.pauses, candidate].sort((a, b) =>
+          a.start_date.localeCompare(b.start_date),
+        );
+        return json(candidate, 201);
+      }
+    }
     const statsMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)\/stats$/);
     if (statsMatch && method === "GET") {
       const habitId = Number(statsMatch[1]);
@@ -2829,9 +2925,12 @@ export function installFakeApi({
         if (habitDueOn(habit.frequency, day) && !checked.has(day)) {
           day = addDays(day, -1);
         }
+        // Mirror the backend: paused days (app.habit_days) are stepped over
+        // like unscheduled ones, never counted.
         const earliest = [...checked].sort()[0] as string;
         while (day >= earliest) {
-          if (habitDueOn(habit.frequency, day)) {
+          const isPaused = habit.pauses.some((pause) => pauseCovers(pause, day));
+          if (habitDueOn(habit.frequency, day) && !(isPaused && !checked.has(day))) {
             if (!checked.has(day)) {
               break;
             }
@@ -2863,6 +2962,10 @@ export function installFakeApi({
         return notFound(`Habit ${habitId} not found`);
       }
       const existing = state.checkIns.find((c) => c.habit_id === habitId && c.date === day);
+      const pausedHabit = state.habits.find((h) => h.id === habitId);
+      if (method === "PUT" && pausedHabit?.pauses.some((pause) => pauseCovers(pause, day))) {
+        return json({ error: { code: "habit_day_paused", message: `Paused on ${day}` } }, 409);
+      }
       if (method === "PUT") {
         // Mirror the backend's upsert: one row per (habit, date), whatever
         // the tap count — PUT replaces the day's whole value.
