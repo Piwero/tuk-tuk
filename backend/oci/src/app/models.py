@@ -189,6 +189,13 @@ class UserSettings(Base):
     # notifying after upgrade. Browser permission is per device and stays in
     # the browser; this flag only records the User's choice.
     reminder_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Planning window (issue #563): the band of each day the capacity summary
+    # measures available time against. The User's own choice, stored apart
+    # from Active hours so changing the grid band never moves it. Off by
+    # default; same "HH:MM" 30-minute grid and no-wrap rule (router-validated).
+    planning_window_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    planning_window_start: Mapped[str] = mapped_column(String(5), default="09:00")
+    planning_window_end: Mapped[str] = mapped_column(String(5), default="17:00")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
