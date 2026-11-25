@@ -77,4 +77,15 @@
     color: var(--text-primary);
     overflow-wrap: anywhere;
   }
+
+  /* Work without timer stays visible and touch-sized on mobile (#553). */
+  @media (max-width: 640px) {
+    .now-actions {
+      flex-wrap: wrap;
+    }
+
+    .now-secondary {
+      min-height: 44px;
+    }
+  }
 }

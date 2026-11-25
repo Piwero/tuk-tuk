@@ -10,6 +10,7 @@ import {
   updateNowSelection,
 } from "../api";
 import { Modal } from "./Modal";
+import { TimerFreeWork } from "./TimerFreeWork";
 
 interface NowPanelProps {
   /** The User's open Tasks, undated ones included: what the picker offers
@@ -33,6 +34,7 @@ export function NowPanel({
   const [enabled, setEnabled] = useState(false);
   const [taskId, setTaskId] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
+  const [timerFree, setTimerFree] = useState(false);
   // Announced only after the User advances, never on first render.
   const [announcement, setAnnouncement] = useState("");
 
@@ -141,6 +143,13 @@ export function NowPanel({
             )}
           </div>
           <div className="now-actions">
+            <button
+              type="button"
+              className="btn-secondary now-secondary"
+              onClick={() => setTimerFree(true)}
+            >
+              Work without timer
+            </button>
             <button type="button" className="btn-quiet" onClick={() => setPicking(true)}>
               Choose another
             </button>
@@ -153,6 +162,14 @@ export function NowPanel({
       <p role="status" className="visually-hidden">
         {announcement}
       </p>
+      {timerFree && task !== undefined && (
+        <TimerFreeWork
+          task={task}
+          onTick={(owner, item) => void tick(owner, item)}
+          onComplete={onComplete}
+          onLeave={() => setTimerFree(false)}
+        />
+      )}
       {picking && (
         <Modal title="Choose a Task for Now" onClose={() => setPicking(false)}>
           {open.length === 0 ? (
