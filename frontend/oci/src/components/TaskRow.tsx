@@ -341,12 +341,12 @@ export function TaskRow({
               <button
                 type="button"
                 className="row-action-focus"
-                aria-label={`Focus on ${task.title}`}
-                title={`Focus on ${task.title}`}
+                aria-label={`Open Focus for ${task.title}`}
+                title={`Open Focus for ${task.title}`}
                 onClick={() => onFocus(task)}
               >
                 <Icon name="target" size={14} />
-                Focus
+                Open Focus
               </button>
             )}
             {onOpenActions !== undefined && (

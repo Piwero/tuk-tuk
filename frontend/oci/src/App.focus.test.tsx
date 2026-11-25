@@ -423,7 +423,7 @@ describe("Linking", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Actions for Write report" }));
     const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
-    fireEvent.click(within(dialog).getByRole("option", { name: "Focus" }));
+    fireEvent.click(within(dialog).getByRole("option", { name: "Open Focus" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
     // Linked, but the clock waits for Start (#449).

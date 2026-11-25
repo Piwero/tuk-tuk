@@ -94,7 +94,7 @@ _Avoid_: Alarm, notification (the delivery mechanism, not the domain concept)
 ## Habits
 
 **Habit**:
-A recurring practice tracked by Check-ins rather than completion — either Boolean (done / not done) or Numeric (an amount toward a Target, e.g. 8 glasses of water).
+A recurring practice tracked by Check-ins rather than completion — either Boolean (done / not done) or Numeric (an amount toward a Target, e.g. 8 glasses of water). The app labels these types "Done / not yet" and "Count"; Boolean and Numeric stay the domain and API terms (`boolean` / `numeric`).
 
 **Target**:
 The amount a Numeric Habit's Check-ins count toward in one day. Boolean Habits have a Target of 1, so a single tap fills it. Not a Goal — a Goal is a separate entity with its own window and Key Results (ADR 0012).

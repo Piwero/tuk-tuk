@@ -37,7 +37,7 @@ describe("Focus action on a Task row", () => {
     const api = installFakeApi({ tasks: [fakeTask("Write report")] });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Focus on Write report" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Focus for Write report" }));
 
     await expectFocusReadyFor("Write report");
     noFocusSessionWrites(api);
@@ -55,8 +55,8 @@ describe("Focus action on a Task row", () => {
       row.querySelectorAll<HTMLElement>("button, input, [tabindex]"),
     ).filter((el) => el.tabIndex >= 0);
     const names = focusable.map((el) => el.getAttribute("aria-label"));
-    expect(names).toContain("Focus on Write report");
-    expect(names.indexOf("Focus on Write report")).toBeLessThan(
+    expect(names).toContain("Open Focus for Write report");
+    expect(names.indexOf("Open Focus for Write report")).toBeLessThan(
       names.indexOf("Actions for Write report"),
     );
   });
@@ -67,7 +67,7 @@ describe("Focus action on a Task row", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Actions for Write report" }));
     const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
-    fireEvent.click(within(dialog).getByRole("option", { name: "Focus" }));
+    fireEvent.click(within(dialog).getByRole("option", { name: "Open Focus" }));
 
     await expectFocusReadyFor("Write report");
     noFocusSessionWrites(api);
@@ -76,7 +76,7 @@ describe("Focus action on a Task row", () => {
   it("sits in the long-press reveal, closed at rest", async () => {
     installFakeApi({ tasks: [fakeTask("Write report")] });
     render(<App />);
-    const focusButton = await screen.findByRole("button", { name: "Focus on Write report" });
+    const focusButton = await screen.findByRole("button", { name: "Open Focus for Write report" });
     const row = focusButton.closest("li") as HTMLElement;
 
     expect(row).not.toHaveAttribute("data-actions-open");
@@ -89,7 +89,7 @@ describe("Focus action on a Task row", () => {
     fireEvent.touchEnd(row);
 
     expect(row).toHaveAttribute("data-actions-open", "true");
-    expect(within(row).getByRole("button", { name: "Focus on Write report" })).toBeVisible();
+    expect(within(row).getByRole("button", { name: "Open Focus for Write report" })).toBeVisible();
   });
 
   it("is absent when Focus is disabled in Settings", async () => {
@@ -101,7 +101,9 @@ describe("Focus action on a Task row", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Actions for Write report" }));
     const dialog = await screen.findByRole("dialog", { name: "Actions for Write report" });
 
-    expect(within(dialog).queryByRole("option", { name: "Focus" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Focus on Write report" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("option", { name: "Open Focus" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open Focus for Write report" }),
+    ).not.toBeInTheDocument();
   });
 });
