@@ -1993,6 +1993,40 @@ export function reportReminderDelivery(
   });
 }
 
+/** A Reminder whose delivery window closed unseen (issue #565): listed
+ * in-app, never replayed as a late notification. (`task_id`, `offset`,
+ * `occurrence_due`) names it for dismissal. */
+export interface MissedReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  /** The Task occurrence's due date this Reminder belongs to. */
+  occurrence_due: string;
+  fire_at: string;
+  /** The Task's, so the occurrence reads as the Task shows its date. */
+  is_all_day: boolean;
+  time_zone: string | null;
+}
+
+/** The User's missed Reminders, newest first; empty while the opt-in is
+ * off. `tz` anchors all-day Tasks. */
+export function fetchMissedReminders(tz: string): Promise<{ items: MissedReminder[] }> {
+  return request(`/api/v1/reminder-deliveries/missed?tz=${encodeURIComponent(tz)}`);
+}
+
+/** Dismisses a missed Reminder: the ledger records it, so it never comes
+ * back or notifies. */
+export function dismissMissedReminder(missed: MissedReminder, tz: string): Promise<unknown> {
+  return request(`/api/v1/reminder-deliveries/missed/dismiss?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task_id: missed.task_id,
+      offset: missed.offset,
+      occurrence_due: missed.occurrence_due,
+    }),
+  });
+}
+
 /** The Settings > Database section (issue #256): which engine the running
  * app is actually configured for, and a connection probe for a candidate
  * PostgreSQL URL that never switches anything. `host`/`database` are only

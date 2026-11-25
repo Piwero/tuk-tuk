@@ -114,6 +114,20 @@ export interface FakeReminderReport {
   lease_token: string;
 }
 
+/** A Reminder whose delivery window passed unseen (issue #565). */
+export interface FakeMissedReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  occurrence_due: string;
+  fire_at: string;
+  is_all_day: boolean;
+  time_zone: string | null;
+}
+
+/** The key a dismissal names a missed reminder by. */
+export type FakeMissedDismissal = Pick<FakeMissedReminder, "task_id" | "offset" | "occurrence_due">;
+
 export interface RecordedRequest {
   method: string;
   url: string;
@@ -423,6 +437,11 @@ export interface FakeApiState {
   reminderClaims: FakeReminderClaim[];
   /** Every shown/failed report a tab sent, in order. */
   reminderReports: FakeReminderReport[];
+  /** Missed reminders (issue #565): what the missed list returns while the
+   * opt-in is on, less those dismissed. */
+  missedReminders: FakeMissedReminder[];
+  /** Every dismissal a tab sent, in order. */
+  missedDismissals: FakeMissedDismissal[];
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -810,6 +829,25 @@ export function fakeReminderClaim(
   };
 }
 
+/** One of `task`'s Reminders, missed for its current occurrence. */
+export function fakeMissedReminder(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeMissedReminder> = {},
+): FakeMissedReminder {
+  const due = task.due_date ?? "2026-07-10T15:00:00Z";
+  return {
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    occurrence_due: due,
+    fire_at: due,
+    is_all_day: task.is_all_day,
+    time_zone: task.time_zone,
+    ...overrides,
+  };
+}
+
 export function fakeList(name: string, overrides: Partial<FakeList> = {}): FakeList {
   const id = nextListId++;
   return {
@@ -1063,6 +1101,7 @@ export function installFakeApi({
   gentleReturn = false,
   reminderNotifications = false,
   dueReminders = [],
+  missedReminders = [],
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1159,6 +1198,8 @@ export function installFakeApi({
   reminderNotifications?: boolean;
   /** Reminders due now, handed out by the claim endpoint (issue #561). */
   dueReminders?: FakeReminderClaim[];
+  /** Reminders already missed, listed by the missed endpoint (issue #565). */
+  missedReminders?: FakeMissedReminder[];
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1244,6 +1285,8 @@ export function installFakeApi({
     reminderNotifications,
     reminderClaims: dueReminders.map((claim) => ({ ...claim })),
     reminderReports: [],
+    missedReminders: missedReminders.map((entry) => ({ ...entry })),
+    missedDismissals: [],
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -3487,6 +3530,24 @@ export function installFakeApi({
       const items = state.reminderClaims.filter((claim) => !handedOut.has(claim.id));
       for (const claim of items) handedOut.add(claim.id);
       return json({ items: items.map((claim) => ({ ...claim })) });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed" && method === "GET") {
+      if (!state.reminderNotifications) return json({ items: [] });
+      return json({ items: state.missedReminders.map((entry) => ({ ...entry })) });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed/dismiss" && method === "POST") {
+      const key = body as FakeMissedDismissal;
+      const same = (entry: FakeMissedReminder): boolean =>
+        entry.task_id === key.task_id &&
+        entry.offset === key.offset &&
+        entry.occurrence_due === key.occurrence_due;
+      const entry = state.missedReminders.find(same);
+      if (entry === undefined) {
+        return json({ error: { code: "not_found", message: "Missed reminder not found" } }, 404);
+      }
+      state.missedDismissals.push({ ...key });
+      state.missedReminders = state.missedReminders.filter((candidate) => !same(candidate));
+      return json({ id: 1, ...entry, state: "dismissed", attempt: 0 });
     }
     const reminderReport = url.pathname.match(
       /^\/api\/v1\/reminder-deliveries\/(\d+)\/(shown|failed)$/,

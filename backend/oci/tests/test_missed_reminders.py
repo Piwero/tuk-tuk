@@ -45,7 +45,7 @@ class TestMissedOrDeliverable:
     ) -> None:
         enable_delivery(client)
         due = fake_clock.now - timedelta(hours=1)
-        task = make_task(client, due, ["-PT30M"])
+        task = make_task(client, due, ["-PT30M"], time_zone="Europe/Madrid")
 
         [entry] = missed(client)
 
@@ -54,6 +54,9 @@ class TestMissedOrDeliverable:
         assert entry["offset"] == "-PT30M"
         assert datetime.fromisoformat(entry["occurrence_due"]) == due
         assert datetime.fromisoformat(entry["fire_at"]) == due - timedelta(minutes=30)
+        # Enough to say when the occurrence was due the way the Task shows it.
+        assert entry["is_all_day"] is False
+        assert entry["time_zone"] == "Europe/Madrid"
 
     def test_a_reminder_still_inside_its_window_is_deliverable_not_missed(
         self, client: TestClient, fake_clock: FakeClock
@@ -147,7 +150,8 @@ class TestMissedOrDeliverable:
         )
 
         # Midnight of 10 March in Tokyo was 15:00 UTC on the 9th: long gone.
-        assert len(missed(client, "?tz=Asia/Tokyo")) == 1
+        [entry] = missed(client, "?tz=Asia/Tokyo")
+        assert entry["is_all_day"] is True
         # In Los Angeles it is 10 March 01:00: local midnight was 07:00 UTC.
         assert len(missed(client, "?tz=America/Los_Angeles")) == 1
         # In Honolulu it is still 9 March, 22:00: not yet due.

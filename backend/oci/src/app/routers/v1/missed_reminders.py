@@ -32,6 +32,9 @@ class MissedReminder(BaseModel):
     offset: str
     occurrence_due: datetime
     fire_at: datetime
+    # The Task's, so the occurrence reads as the Task shows its date.
+    is_all_day: bool
+    time_zone: str | None
 
 
 class MissedPage(BaseModel):
@@ -66,6 +69,8 @@ async def list_missed(
                 offset=due.offset,
                 occurrence_due=as_utc(due.task.due_date),  # type: ignore[arg-type]
                 fire_at=due.fire_at,
+                is_all_day=due.task.is_all_day,
+                time_zone=due.task.time_zone,
             )
             for due in found
         ]

@@ -1,0 +1,88 @@
+@layer components {
+  /* Missed reminders (#565): a flat panel under the header listing the
+   * Reminders that came due unseen. Text carries the meaning. */
+  .missed-reminders {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+  }
+
+  .missed-reminders-title {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .missed-reminders-note {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .missed-reminders-list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .missed-reminder {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .missed-reminder-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  /* A link to the Task: underlined text, no button chrome. */
+  .missed-reminder-task {
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-accent);
+    font: inherit;
+    font-size: var(--text-md);
+    text-align: left;
+    text-decoration: underline;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+
+  .missed-reminder-task:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  .missed-reminder-context {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  .missed-reminder-dismiss {
+    flex: none;
+  }
+
+  @media (max-width: 720px) {
+    .missed-reminder-task,
+    .missed-reminder-dismiss {
+      min-height: var(--tap-target);
+    }
+  }
+}
