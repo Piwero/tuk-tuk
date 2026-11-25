@@ -118,8 +118,8 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): Reac
           value={type}
           onChange={(event) => setType(event.target.value as HabitType)}
         >
-          <option value="boolean">Boolean</option>
-          <option value="numeric">Numeric</option>
+          <option value="boolean">Done / not yet</option>
+          <option value="numeric">Count</option>
         </select>
       </label>
       {type === "numeric" && (
