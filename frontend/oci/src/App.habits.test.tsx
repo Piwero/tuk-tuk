@@ -371,6 +371,153 @@ describe("Habit Streak and history strip", () => {
   });
 });
 
+describe("Habit start: days before it read as not started, never missed", () => {
+  /** Every accessible name under `root` that claims a miss. */
+  function misses(root: HTMLElement = document.body): string[] {
+    return [...root.querySelectorAll("[aria-label]")]
+      .map((element) => element.getAttribute("aria-label") ?? "")
+      .filter((label) => label.includes("missed"));
+  }
+
+  it("shows a Habit created today with no misses in the week grid or the strip", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Habit" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Meditate" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    // Today is open, with its check-in control right there.
+    expect(await cell("Meditate", "Friday, Jul 3", "not yet checked in")).toBeInTheDocument();
+    // Earlier this week the Habit did not exist yet: tappable, but not a miss.
+    expect(await cell("Meditate", "Monday, Jun 29", "not started")).toHaveClass(
+      "state-not-started",
+    );
+    expect(await cell("Meditate", "Thursday, Jul 2", "not started")).toBeInTheDocument();
+    const strip = await screen.findByRole("group", { name: "Recent days for Meditate" });
+    const labels = within(strip)
+      .getAllByRole("button")
+      .map((day) => day.getAttribute("aria-label"));
+    expect(labels).toHaveLength(21);
+    expect(labels[0]).toBe("Jun 13: not started");
+    expect(labels.slice(-2)).toEqual(["Jul 2: not started", "Jul 3: not yet checked in"]);
+    expect(labels.filter((label) => label?.endsWith(": not started"))).toHaveLength(20);
+    expect(misses()).toEqual([]);
+    expect(api.habits[0]?.created_at.slice(0, 10)).toBe("2026-07-03");
+  });
+
+  it("starts the Habit at a real Check-in made before it was created", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Meditate", { created_at: "2026-07-01T10:00:00Z" })],
+    });
+    checkIn(api, api.habits[0]?.id ?? 0, "2026-06-29");
+    render(<App />);
+    await openHabits();
+
+    // The days between that Check-in and creation count, so an empty one is a miss.
+    expect(await cell("Meditate", "Monday, Jun 29", "checked in")).toBeInTheDocument();
+    expect(await cell("Meditate", "Tuesday, Jun 30", "missed")).toHaveClass("state-missed");
+    const strip = await screen.findByRole("group", { name: "Recent days for Meditate" });
+    expect(within(strip).getByRole("button", { name: "Jun 28: not started" })).toHaveClass(
+      "level-0",
+      "not-started",
+    );
+    expect(within(strip).getByRole("button", { name: "Jun 30: missed" })).toBeInTheDocument();
+  });
+
+  it("backfills a day before the Habit start from the strip, which moves the start back", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Meditate", { created_at: "2026-07-03T10:00:00Z" })],
+    });
+    const habitId = api.habits[0]?.id ?? 0;
+    render(<App />);
+    await openHabits();
+
+    const strip = await screen.findByRole("group", { name: "Recent days for Meditate" });
+    fireEvent.click(await within(strip).findByRole("button", { name: "Jun 30: not started" }));
+
+    expect(await within(strip).findByRole("button", { name: "Jun 30: checked in" })).toHaveClass(
+      "level-4",
+    );
+    expect(api.checkIns).toEqual([
+      expect.objectContaining({ habit_id: habitId, date: "2026-06-30" }),
+    ]);
+    // The days since the backfill now count; the days before it still don't.
+    expect(await within(strip).findByRole("button", { name: "Jul 1: missed" })).toBeInTheDocument();
+    expect(within(strip).getByRole("button", { name: "Jun 29: not started" })).toBeInTheDocument();
+    expect(await cell("Meditate", "Thursday, Jul 2", "missed")).toBeInTheDocument();
+    expect(await cell("Meditate", "Monday, Jun 29", "not started")).toBeInTheDocument();
+  });
+
+  it("keeps a weekday Habit's off days not scheduled, before and after its start", async () => {
+    installFakeApi({
+      habits: [
+        fakeHabit("Review", {
+          frequency: "FREQ=WEEKLY;BYDAY=MO,WE",
+          created_at: "2026-07-01T10:00:00Z",
+        }),
+      ],
+    });
+    render(<App />);
+    await openHabits();
+
+    expect(await cell("Review", "Monday, Jun 29", "not started")).toBeInTheDocument();
+    expect(await cell("Review", "Tuesday, Jun 30", "not scheduled")).toBeInTheDocument();
+    expect(await cell("Review", "Wednesday, Jul 1", "missed")).toBeInTheDocument();
+    expect(await cell("Review", "Thursday, Jul 2", "not scheduled")).toBeInTheDocument();
+    const strip = await screen.findByRole("group", { name: "Recent days for Review" });
+    // The strip shows scheduled days only: Mondays and Wednesdays.
+    expect(
+      within(strip)
+        .getAllByRole("button")
+        .slice(-3)
+        .map((day) => day.getAttribute("aria-label")),
+    ).toEqual(["Jun 24: not started", "Jun 29: not started", "Jul 1: missed"]);
+  });
+
+  it("explains every day symbol in a visible legend, without relying on hover", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate")] });
+    render(<App />);
+    await openHabits();
+
+    const legend = await screen.findByRole("list", { name: "What the days mean" });
+    expect(
+      within(legend)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Checked in",
+      "In progress",
+      "Not yet: today, still open",
+      "Missed",
+      "Not started: before the Habit began",
+      "Not scheduled",
+      "Future",
+    ]);
+    expect(legend).toBeVisible();
+  });
+
+  it("reads days before the creation day as not started while the stats are still loading", async () => {
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const api = installFakeApi({
+      habits: [fakeHabit("Meditate", { created_at: "2026-07-02T10:00:00Z" })],
+    });
+    api.readGate = { match: (path) => path.endsWith("/stats"), gate };
+    render(<App />);
+    await openHabits();
+
+    expect(await cell("Meditate", "Wednesday, Jul 1", "not started")).toBeInTheDocument();
+    expect(await cell("Meditate", "Thursday, Jul 2", "missed")).toBeInTheDocument();
+    expect(misses().filter((label) => !label.includes("Jul 2"))).toEqual([]);
+    release();
+    expect(await screen.findByRole("group", { name: "Recent days for Meditate" })).toBeVisible();
+  });
+});
+
 describe("Managing Habits", () => {
   it("creates a Numeric Habit on chosen weekdays from the form", async () => {
     const api = installFakeApi();

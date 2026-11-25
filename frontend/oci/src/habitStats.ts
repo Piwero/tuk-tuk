@@ -2,7 +2,23 @@
  * the yearly heatmap and the card's recent-days strip both bucket a
  * HeatmapDay's intensity the same way. */
 
+import { localDayOf } from "./dates";
 import { recentScheduledDays } from "./habitFrequency";
+
+/** The Habit start (YYYY-MM-DD): the first day the Habit counts. A day before
+ * it reads as "not started", never as missed. The server's `eligible_from`
+ * decides once the stats land; until then the creation day in the browser's
+ * zone stands in. That is never earlier than the server's answer (an earlier
+ * real Check-in can only pull it back), so a loading screen can't show a miss
+ * the server wouldn't. Never after today. */
+export function habitStart(
+  habit: { created_at: string },
+  stats: { eligible_from: string } | null | undefined,
+  today: string,
+): string {
+  const start = stats?.eligible_from ?? localDayOf(new Date(habit.created_at));
+  return start < today ? start : today;
+}
 
 /** How many of the Habit's most recent scheduled days the card's strip
  * shows — three weeks, enough to read a pattern (a slipping habit, a

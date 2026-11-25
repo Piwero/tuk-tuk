@@ -168,6 +168,41 @@ describe("Habit history", () => {
     );
   });
 
+  it("marks days before the Habit start as not started, and backfilling one moves the start back", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Meditate", { created_at: "2026-07-03T10:00:00Z" })],
+    });
+    const habitId = api.habits[0]?.id ?? 0;
+    render(<App />);
+
+    await openHistory("Meditate");
+
+    const before = await screen.findByRole("button", { name: "2026-07-01: not started" });
+    expect(before).toHaveClass("not-started");
+    expect(before).toBeEnabled();
+    expect(screen.getByRole("button", { name: "2026-07-02: not started" })).toBeInTheDocument();
+    // Today is the Habit start, so it is an ordinary open day.
+    expect(screen.getByRole("button", { name: "2026-07-03" })).not.toHaveClass("not-started");
+
+    fireEvent.click(before);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "2026-07-01" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    expect(
+      api.requests.some(
+        (r) => r.method === "PUT" && r.url === `/api/v1/habits/${habitId}/check-ins/2026-07-01`,
+      ),
+    ).toBe(true);
+    // The days since the backfill count now; the days before it still don't.
+    expect(screen.getByRole("button", { name: "2026-07-02" })).not.toHaveClass("not-started");
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(await screen.findByRole("button", { name: "2026-06-30: not started" })).toBeEnabled();
+  });
+
   it("keeps history reachable on archived Habits", async () => {
     const api = installFakeApi({
       habits: [fakeHabit("Meditate", { is_archived: true })],

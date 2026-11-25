@@ -88,6 +88,15 @@
     border-color: var(--success-border-strong);
     color: var(--heat-ink);
   }
+  /* Before the Habit start: no outline (an empty day in range has one), a
+   quiet number and a neutral dash under it. Still a button: a tap is a
+   deliberate backfill. */
+  .grid-day.not-started {
+    border-color: transparent;
+    color: var(--text-tertiary);
+    background: linear-gradient(var(--text-tertiary), var(--text-tertiary)) center bottom 5px / 8px
+      2px no-repeat;
+  }
   .grid-day:disabled {
     color: var(--text-disabled);
     cursor: default;
@@ -117,5 +126,9 @@
   }
   .heatmap-day.level-4 {
     background: var(--heat-4);
+  }
+  .heatmap-day.level-0.not-started {
+    background: linear-gradient(var(--text-tertiary), var(--text-tertiary)) center / 6px 2px
+      no-repeat;
   }
 }
