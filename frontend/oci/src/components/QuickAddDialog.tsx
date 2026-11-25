@@ -1,6 +1,6 @@
 import "./QuickAddDialog.css";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   createTag,
@@ -46,10 +46,12 @@ import {
   type QuickAddDraft,
 } from "../quickAddDraft";
 import { useAssistAvailable } from "../useAssistAvailable";
+import { useUndoQueue } from "../undoQueue";
 import { DateFieldset } from "./DateFieldset";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
+import { ToastStack } from "./ToastStack";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
 /** A resolved `@` schedule chip as a Task create payload. */
@@ -127,21 +129,39 @@ interface QuickAddDialogProps {
  * for the signed-in User in this tab's sessionStorage, so dismissing the
  * dialog any way at all loses nothing. Reopening restores it — its List and
  * date over the context the dialog opened with — and says "Draft restored".
- * A save clears it; a failed save keeps it; "Discard draft" drops it.
+ * A save clears it; a failed save keeps it; "Discard draft" drops it, with
+ * the app's usual Undo toast to bring it back.
  */
 export function QuickAddDialog(props: QuickAddDialogProps): React.JSX.Element {
+  const { userId } = props;
   // Discarding starts a fresh form: remounting it resets every field to the
   // opening context and puts the caret back in the title in one move.
   const [generation, setGeneration] = useState(0);
-  return (
-    <QuickAddForm
-      key={generation}
-      {...props}
-      onDiscard={() => {
-        if (props.userId !== null) clearQuickAddDraft(props.userId);
+  // The app's undo toasts sit under a Modal's scrim, out of reach of its Tab
+  // trap, so the dialog keeps its own queue and stack inside the panel.
+  const undo = useUndoQueue();
+
+  function discard(draft: QuickAddDraft): void {
+    setGeneration((current) => current + 1);
+    if (userId === null) return;
+    clearQuickAddDraft(userId);
+    // Undo is "write it back and restore": the remounted form reads the
+    // draft the way any reopen does, and says "Draft restored".
+    undo.push(
+      "Draft discarded",
+      () => {},
+      () => {
+        saveQuickAddDraft(userId, draft);
         setGeneration((current) => current + 1);
-      }}
-    />
+      },
+    );
+  }
+
+  return (
+    <>
+      <QuickAddForm key={generation} {...props} onDiscard={discard} />
+      <ToastStack entries={undo.entries} onUndo={undo.undo} onDismiss={undo.dismiss} />
+    </>
   );
 }
 
@@ -171,7 +191,7 @@ function QuickAddForm({
   onCreated,
   onClose,
   onDiscard,
-}: QuickAddDialogProps & { onDiscard: () => void }): React.JSX.Element {
+}: QuickAddDialogProps & { onDiscard: (draft: QuickAddDraft) => void }): React.JSX.Element {
   const inboxId = lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? null;
   // Read once, on open: the draft this User left unsent, if any.
   const [restored] = useState(() => restorableDraft(userId, lists, tags));
@@ -234,19 +254,21 @@ function QuickAddForm({
   // The draft as it stands: the title and the hand-made choices, never the
   // transient Assist state. Kept on every change, so Escape, the X, Cancel,
   // a backdrop click and a failed save all leave it behind alike.
-  const draft: QuickAddDraft = {
-    title,
-    listId: listChosen ? listId : null,
-    priority,
-    priorityChosen,
-    tagIds,
-    newTag,
-    dateDraft,
-  };
-  const draftJson = JSON.stringify(draft);
+  const draft = useMemo<QuickAddDraft>(
+    () => ({
+      title,
+      listId: listChosen ? listId : null,
+      priority,
+      priorityChosen,
+      tagIds,
+      newTag,
+      dateDraft,
+    }),
+    [title, listChosen, listId, priority, priorityChosen, tagIds, newTag, dateDraft],
+  );
   useEffect(() => {
-    if (userId !== null) saveQuickAddDraft(userId, JSON.parse(draftJson) as QuickAddDraft);
-  }, [userId, draftJson]);
+    if (userId !== null) saveQuickAddDraft(userId, draft);
+  }, [userId, draft]);
 
   /** A title edit re-arms Assist: the next "Add task" parses the new text
    * rather than saving stale suggestions, keeping the behaviour "parse on
@@ -839,7 +861,7 @@ function QuickAddForm({
             className="btn-quiet quick-add-discard"
             type="button"
             onClick={() => {
-              if (!busy.current) onDiscard();
+              if (!busy.current) onDiscard(draft);
             }}
           >
             Discard draft

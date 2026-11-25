@@ -52,6 +52,21 @@ describe("Quick-Add session draft storage (#541)", () => {
     expect(loadQuickAddDraft(1)).toBeNull();
   });
 
+  it("ignores a draft whose priority is not one the app knows", () => {
+    const stored = { ...draft("Call the dentist"), priorityChosen: true };
+    sessionStorage.setItem(
+      "tuktuk.quickAddDraft.1",
+      JSON.stringify({ ...stored, priority: "urgent" }),
+    );
+    expect(loadQuickAddDraft(1)).toBeNull();
+
+    sessionStorage.setItem(
+      "tuktuk.quickAddDraft.1",
+      JSON.stringify({ ...stored, priority: "high" }),
+    );
+    expect(loadQuickAddDraft(1)).toEqual({ ...stored, priority: "high" });
+  });
+
   it("never throws when storage does", () => {
     for (const method of ["getItem", "setItem", "removeItem", "key"] as const) {
       vi.spyOn(Storage.prototype, method).mockImplementation(() => {

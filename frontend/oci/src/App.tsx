@@ -111,6 +111,7 @@ import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 import { EmptyState, LoadError, SkeletonRows } from "./components/TaskViewState";
 import { ToastStack } from "./components/ToastStack";
+import { forgetOtherUsersDrafts } from "./quickAddDraft";
 
 /** What the main pane shows: one List, one Tag, one Folder (its Tasks across
  * every List it contains — #126), one computed Smart List, the Calendar /
@@ -279,6 +280,12 @@ export function App({
   voiceProvider = livekitProvider,
 }: AppProps = {}): React.JSX.Element {
   const [currentUser, setCurrentUser] = useCurrentUser(signedInUser);
+  // A session can end without a log out (a 401 clears no storage), so the
+  // previous User's Quick-Add draft goes the moment this User is known (#541).
+  const currentUserId = currentUser?.id ?? null;
+  useEffect(() => {
+    if (currentUserId !== null) forgetOtherUsersDrafts(currentUserId);
+  }, [currentUserId]);
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
