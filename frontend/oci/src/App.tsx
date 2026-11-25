@@ -1616,6 +1616,7 @@ export function App({
                       tasks={openTasks}
                       onTaskChanged={applyTaskChange}
                       onComplete={completeTaskNow}
+                      onOpenFocus={() => switchView({ kind: "focus" })}
                     />
                   )}
                   {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (

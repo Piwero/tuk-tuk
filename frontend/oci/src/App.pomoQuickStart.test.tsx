@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeTask, fakeTimer, installFakeApi } from "./test/fakeApi";
+import { fakeCheckItem, fakeTask, fakeTimer, installFakeApi } from "./test/fakeApi";
 
 // All tests pin the clock to Friday 2026-07-03, local noon, so timers and
 // "today" are deterministic in any timezone.
@@ -276,5 +276,30 @@ describe("Pomo quick-start menu", () => {
     const row = screen.getByRole("button", { name: "Open details for Write report" });
     fireEvent.contextMenu(row.closest("li") as HTMLElement);
     await screen.findByRole("menu", { name: "Start Focus for Write report" });
+  });
+});
+
+describe("Start 5 min from Now", () => {
+  function openToday(): void {
+    window.history.replaceState(null, "", "/today");
+    render(<App />);
+  }
+  const nowPanel = () => screen.findByRole("region", { name: "Now" });
+
+  it("starts a running five-minute Pomo linked to the Now Task and shows its next Check Item", async () => {
+    const step = fakeCheckItem("Outline");
+    const task = fakeTask("Write report", { check_items: [step] });
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+
+    fireEvent.click(await within(await nowPanel()).findByRole("button", { name: "Start 5 min" }));
+
+    expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+    expect(await stageLink()).toHaveTextContent(task.title);
+    expect(within(screen.getByRole("main")).getByText("Next: Outline")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Focus timer running, 05:00 left" }),
+    ).toBeInTheDocument();
   });
 });

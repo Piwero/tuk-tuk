@@ -9,7 +9,11 @@ import {
   updateCheckItem,
   updateNowSelection,
 } from "../api";
+import { useFocusRun } from "../focusRunContext";
 import { Modal } from "./Modal";
+
+/** Start 5 min (#552): a deliberately small first step. */
+const FIVE_MINUTES_MS = 5 * 60_000;
 
 interface NowPanelProps {
   /** The User's open Tasks, undated ones included: what the picker offers
@@ -19,6 +23,8 @@ interface NowPanelProps {
   onTaskChanged: (task: Task) => void;
   /** Completes the Task: offered once every Check Item is done. */
   onComplete: (task: Task) => void;
+  /** Shows the Focus screen, where a started session runs. */
+  onOpenFocus: () => void;
 }
 
 /** Now (issue #547): an optional panel inside Today holding the one Task
@@ -29,12 +35,14 @@ export function NowPanel({
   tasks,
   onTaskChanged,
   onComplete,
+  onOpenFocus,
 }: NowPanelProps): React.JSX.Element | null {
   const [enabled, setEnabled] = useState(false);
   const [taskId, setTaskId] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
   // Announced only after the User advances, never on first render.
   const [announcement, setAnnouncement] = useState("");
+  const { start } = useFocusRun();
 
   useEffect(() => {
     let live = true;
@@ -70,6 +78,11 @@ export function NowPanel({
     const nextOpen = updated.check_items.find((i) => !i.done);
     setAnnouncement(nextOpen === undefined ? "All Check Items done" : `Next: ${nextOpen.title}`);
     onTaskChanged(updated);
+  }
+
+  function startFive(owner: Task): void {
+    start({ mode: "pomo", pomoMs: FIVE_MINUTES_MS, link: `task:${owner.id}` });
+    onOpenFocus();
   }
 
   const task = taskId === null ? undefined : tasks.find((t) => t.id === taskId);
@@ -117,6 +130,9 @@ export function NowPanel({
             )}
           </div>
           <div className="now-actions">
+            <button type="button" className="btn-primary now-start" onClick={() => startFive(task)}>
+              Start 5 min
+            </button>
             <button type="button" className="btn-quiet" onClick={() => setPicking(true)}>
               Choose another
             </button>
