@@ -269,6 +269,7 @@ describe("Quick add dialog — Assisted Capture (ADR 0005)", () => {
     await user.type(screen.getByLabelText("Title"), "get repaired watch today at 18.00");
     await within(dialog).findByLabelText("Assist available");
     // The user fills the date themselves before submitting.
+    await user.click(within(dialog).getByRole("button", { name: "Details" }));
     await user.click(within(dialog).getByRole("button", { name: "Tomorrow" }));
     const chosenDay = screen.getByLabelText("Day").getAttribute("value");
     await user.click(screen.getByRole("button", { name: "Add task" }));

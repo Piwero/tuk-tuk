@@ -14,6 +14,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** The List / Priority / Date / Tags controls sit behind the dialog's
+ * "Details" disclosure (#540); tests that drive them open it first. */
+async function openDetails(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  const dialog = screen.getByRole("dialog", { name: "Quick add" });
+  await user.click(within(dialog).getByRole("button", { name: "Details" }));
+}
+
 describe("Quick add dialog", () => {
   it("opens from the sidebar, directly below the search box", async () => {
     installFakeApi();
@@ -88,6 +95,7 @@ describe("Quick add dialog", () => {
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Print badge");
+    await openDetails(user);
     await user.selectOptions(screen.getByLabelText("List"), String(errands.id));
     await user.selectOptions(screen.getByLabelText("Priority"), "high");
     await user.click(screen.getByRole("button", { name: "Add task" }));
@@ -112,6 +120,7 @@ describe("Quick add dialog", () => {
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Email boss");
+    await openDetails(user);
     await user.click(screen.getByRole("checkbox", { name: "work" }));
     await user.type(screen.getByLabelText("New tag"), "urgent");
     await user.click(screen.getByRole("button", { name: "Add task" }));
@@ -139,6 +148,7 @@ describe("Quick add dialog", () => {
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Design review");
+    await openDetails(user);
     fireEvent.change(screen.getByLabelText("Day"), { target: { value: "2026-07-10" } });
     fireEvent.change(screen.getByLabelText("Start time"), { target: { value: "14:00" } });
     fireEvent.change(screen.getByLabelText("Due time"), { target: { value: "15:30" } });
@@ -164,6 +174,7 @@ describe("Quick add dialog", () => {
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Conference");
+    await openDetails(user);
     await user.click(screen.getByRole("button", { name: "Tomorrow" }));
     // The quick pick fills the day; the span is then widened by hand.
     await user.click(screen.getByRole("checkbox", { name: "All day" }));
@@ -192,6 +203,7 @@ describe("Quick add dialog", () => {
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Someday"); // no date
     const dialog = screen.getByRole("dialog");
+    await openDetails(user);
     await user.click(within(dialog).getByRole("button", { name: "Today" }));
     await user.click(within(dialog).getByRole("button", { name: "Clear date" }));
     await user.click(screen.getByRole("button", { name: "Add task" }));
@@ -211,6 +223,7 @@ describe("Quick add dialog", () => {
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Call plumber");
+    await openDetails(user);
     // The dialog's own Today quick pick, not the sidebar's Smart List.
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Today" }));
     await user.click(screen.getByRole("button", { name: "Add task" }));
@@ -273,6 +286,7 @@ describe("Quick add dialog", () => {
     ).toEqual(["expenses", 'Create list "expen"']);
 
     await user.keyboard("{ArrowDown}{Enter}");
+    await openDetails(user);
 
     // The pick lands in the List select — this form's one home for it — and
     // takes its token text out of the title.
@@ -309,6 +323,7 @@ describe("Quick add dialog", () => {
 
     await user.click(screen.getByRole("button", { name: "Quick add" }));
     await user.type(await screen.findByLabelText("Title"), "Buy stamps ~expenses");
+    await openDetails(user);
     await user.selectOptions(screen.getByLabelText("List"), String(errands.id));
     await user.click(screen.getByRole("button", { name: "Add task" }));
 
@@ -329,6 +344,7 @@ describe("Quick add dialog", () => {
     const title = await screen.findByRole("combobox", { name: "Title" });
     await user.type(title, "Email boss !hi");
     await user.keyboard("{ArrowDown}{Enter}");
+    await openDetails(user);
     expect(screen.getByLabelText("Priority")).toHaveValue("high");
 
     await user.type(title, "#wo");

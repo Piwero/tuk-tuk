@@ -29,7 +29,12 @@ into a chip. Click its **×** to remove it.
 
 1. Press `N` anywhere, or click **Quick add** (on a phone, tap the blue **+**).
 2. Type the task name, then add any shortcuts.
-3. Press Enter.
+3. Press Enter, or click **Add task**.
+
+A title is all it needs. Under the title you see where the task will go
+(**Inbox** unless you opened it from a list) and a chip for each shortcut you
+picked. Click a chip's **×** to undo it. To set the list, priority, date or
+tags by hand, click **Details**.
 
 ## Good to know
 

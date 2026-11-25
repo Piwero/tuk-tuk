@@ -22,10 +22,12 @@ import {
   addDays,
   browserTimeZone,
   emptyDraft,
+  formatSchedule,
   localDayOf,
   nextMonday,
   scheduleForCreate,
   scheduleFromDraft,
+  shortDayLabel,
   type DateDraft,
 } from "../dates";
 import {
@@ -52,6 +54,28 @@ function chipCreate(chip: ScheduleChip): Partial<TaskCreateInput> {
   };
 }
 
+/** The date chip's text for a draft, worded as Task detail words it
+ * ("Tomorrow", "Fri, 10:00"); null when no day is set. A draft the editor
+ * can't save yet (a start after its due) still names its day. */
+function draftLabel(draft: DateDraft, now: Date): string | null {
+  if (draft.dueDay === "") {
+    return null;
+  }
+  const schedule = scheduleFromDraft(draft);
+  if (schedule === null) {
+    return shortDayLabel(draft.dueDay);
+  }
+  return formatSchedule(
+    {
+      start_date: schedule.start_date ?? null,
+      due_date: schedule.due_date ?? null,
+      is_all_day: schedule.is_all_day ?? true,
+    },
+    "detail",
+    now,
+  );
+}
+
 interface QuickAddDialogProps {
   lists: TaskList[];
   tags: Tag[];
@@ -70,6 +94,13 @@ interface QuickAddDialogProps {
  * but a pick lands in this form's own List/Priority/Tags controls rather than
  * a chip row — one visible source of truth per field, so the two can't
  * disagree about what the task will be.
+ *
+ * Title-first (#540): only the title, a summary and "Add task" show on
+ * open. Those controls wait behind a "Details" disclosure; while it is
+ * collapsed the summary names the destination (quietly "Inbox" by default)
+ * and shows a removable chip for every field already set — the viewed List,
+ * a picked token, an Assist suggestion — so nothing about the Task being
+ * filed is hidden by collapsing.
  *
  * Assisted Capture (ADR 0005; CONTEXT.md) rides that same principle: when
  * Assist is available, the first "Add task" click parses the typed title
@@ -93,7 +124,9 @@ export function QuickAddDialog({
 }: QuickAddDialogProps): React.JSX.Element {
   const inboxId = lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? null;
   const [title, setTitle] = useState("");
-  const [listId, setListId] = useState<number | null>(defaultListId ?? inboxId);
+  // Where a title goes when nobody picks a List: the viewed List, else Inbox.
+  const homeListId = defaultListId ?? inboxId;
+  const [listId, setListId] = useState<number | null>(homeListId);
   const [priority, setPriority] = useState<Priority>("none");
   const [tagIds, setTagIds] = useState<number[]>([]);
   const [newTag, setNewTag] = useState("");
@@ -124,6 +157,11 @@ export function QuickAddDialog({
   // create call only alongside a resolved date.
   const [recurrence, setRecurrence] = useState<string | null>(null);
   const [reminders, setReminders] = useState<string[]>([]);
+  // Title-first (#540): the field controls wait behind "Details". Collapsed,
+  // they are unmounted rather than hidden — Modal's Tab trap matches hidden
+  // focusables too — and every value lives in this component's state, so
+  // collapsing never loses what was chosen.
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   /** A title edit re-arms Assist: the next "Add task" parses the new text
    * rather than saving stale suggestions, keeping the behaviour "parse on
@@ -260,10 +298,24 @@ export function QuickAddDialog({
         setTagIds((current) => [...new Set([...current, ...suggestedTagIds])]);
       }
       setAssistApplied(true);
+      // The populated form is the confirmation beat: open it, so the review
+      // happens on the controls themselves, not only on summary chips.
+      setDetailsOpen(true);
       return true;
     } finally {
       setParsing(false);
     }
+  }
+
+  /** Taking the List chip away steps back one level: a List picked over the
+   * viewed one falls back to the viewed one, and the viewed List itself (or
+   * a pick made from the Inbox) falls back to the Inbox — the destination a
+   * bare title always has. */
+  function removeListChip(): void {
+    setListId(listId !== homeListId ? homeListId : inboxId);
+    // Removing is a choice too: a raw `~list` left in the title no longer
+    // claims the field, it stays literal text, as it would after the select.
+    setListChosen(true);
   }
 
   async function submit(event: React.FormEvent): Promise<void> {
@@ -376,6 +428,8 @@ export function QuickAddDialog({
     setPriorityChosen(true);
   });
   const dateChannel = makeDateChannel(scheduleChip, onScheduleChips, now);
+  const destination = lists.find((list) => list.id === listId) ?? null;
+  const dateLabel = draftLabel(dateDraft, now);
 
   return (
     <form className="quick-add-dialog" onSubmit={(event) => void submit(event)}>
@@ -415,69 +469,72 @@ export function QuickAddDialog({
           }
         />
       </label>
-      <label>
-        List
-        <select
-          aria-label="List"
-          value={listId ?? ""}
-          onChange={(event) => {
-            setListId(Number(event.target.value));
-            setListChosen(true);
-          }}
-        >
-          {lists.map((list) => (
-            <option key={list.id} value={list.id}>
-              {list.name}
-            </option>
+      <div className="quick-add-summary" role="group" aria-label="Summary">
+        {destination === null || destination.is_inbox ? (
+          <span className="quick-add-destination">
+            <Icon name="inbox" size={14} />
+            {destination?.name ?? "Inbox"}
+          </span>
+        ) : (
+          <span className="date-chip token-chip">
+            {destination.name}
+            <IconButton
+              icon="x"
+              size={12}
+              label={`Remove list (${destination.name})`}
+              onClick={removeListChip}
+            />
+          </span>
+        )}
+        {priority !== "none" && (
+          <span className="date-chip token-chip">
+            {PRIORITY_LABELS[priority]} priority
+            <IconButton
+              icon="x"
+              size={12}
+              label={`Remove priority (${PRIORITY_LABELS[priority]})`}
+              onClick={() => {
+                setPriority("none");
+                setPriorityChosen(true);
+              }}
+            />
+          </span>
+        )}
+        {dateLabel !== null && (
+          <span className="date-chip token-chip">
+            {dateLabel}
+            <IconButton
+              icon="x"
+              size={12}
+              label={`Remove date (${dateLabel})`}
+              onClick={() => changeDate(emptyDraft())}
+            />
+          </span>
+        )}
+        {tags
+          .filter((tag) => tagIds.includes(tag.id))
+          .map((tag) => (
+            <span key={tag.id} className="date-chip token-chip">
+              #{tag.name}
+              <IconButton
+                icon="x"
+                size={12}
+                label={`Remove tag (${tag.name})`}
+                onClick={() => toggleTag(tag.id)}
+              />
+            </span>
           ))}
-        </select>
-      </label>
-      <label>
-        Priority
-        <select
-          aria-label="Priority"
-          value={priority}
-          onChange={(event) => {
-            setPriority(event.target.value as Priority);
-            setPriorityChosen(true);
-          }}
-        >
-          {(Object.keys(PRIORITY_LABELS) as Priority[]).map((level) => (
-            <option key={level} value={level}>
-              {PRIORITY_LABELS[level]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <fieldset className="quick-add-dates">
-        <legend>Date</legend>
-        <div className="date-actions">
-          <button
-            className="btn-secondary"
-            type="button"
-            onClick={() => pickDay(localDayOf(new Date()))}
-          >
-            Today
-          </button>
-          <button
-            className="btn-secondary"
-            type="button"
-            onClick={() => pickDay(addDays(localDayOf(new Date()), 1))}
-          >
-            Tomorrow
-          </button>
-          <button
-            className="btn-secondary"
-            type="button"
-            onClick={() => pickDay(nextMonday(localDayOf(new Date())))}
-          >
-            Next Week
-          </button>
-          <button className="btn-secondary" type="button" onClick={() => changeDate(emptyDraft())}>
-            Clear date
-          </button>
-        </div>
-        <DateFieldset draft={dateDraft} onChange={changeDate} />
+        {newTag.trim() !== "" && (
+          <span className="date-chip token-chip">
+            #{newTag.trim()}
+            <IconButton
+              icon="x"
+              size={12}
+              label={`Remove tag (${newTag.trim()})`}
+              onClick={() => setNewTag("")}
+            />
+          </span>
+        )}
         {(recurrence !== null || reminders.length > 0) && (
           <div className="quick-add-assist-chips" role="group" aria-label="Assist suggestions">
             {recurrence !== null && (
@@ -504,30 +561,113 @@ export function QuickAddDialog({
             ))}
           </div>
         )}
-      </fieldset>
-      <fieldset className="quick-add-tags">
-        <legend>Tags</legend>
-        {tags.map((tag) => (
-          <label key={tag.id}>
-            <input
-              type="checkbox"
-              aria-label={tag.name}
-              checked={tagIds.includes(tag.id)}
-              onChange={() => toggleTag(tag.id)}
-            />
-            {tag.name}
+      </div>
+      <button
+        type="button"
+        className="btn-quiet quick-add-details-toggle"
+        aria-expanded={detailsOpen}
+        // Collapsed, the panel is unmounted: point at it only when it exists.
+        aria-controls={detailsOpen ? "quick-add-details" : undefined}
+        onClick={() => setDetailsOpen((open) => !open)}
+      >
+        <Icon name={detailsOpen ? "chevron-up" : "chevron-down"} size={16} />
+        Details
+      </button>
+      {detailsOpen && (
+        <div className="quick-add-details" id="quick-add-details">
+          <label>
+            List
+            <select
+              aria-label="List"
+              value={listId ?? ""}
+              onChange={(event) => {
+                setListId(Number(event.target.value));
+                setListChosen(true);
+              }}
+            >
+              {lists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name}
+                </option>
+              ))}
+            </select>
           </label>
-        ))}
-        <label>
-          New tag
-          <input
-            aria-label="New tag"
-            placeholder="Create a tag…"
-            value={newTag}
-            onChange={(event) => setNewTag(event.target.value)}
-          />
-        </label>
-      </fieldset>
+          <label>
+            Priority
+            <select
+              aria-label="Priority"
+              value={priority}
+              onChange={(event) => {
+                setPriority(event.target.value as Priority);
+                setPriorityChosen(true);
+              }}
+            >
+              {(Object.keys(PRIORITY_LABELS) as Priority[]).map((level) => (
+                <option key={level} value={level}>
+                  {PRIORITY_LABELS[level]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <fieldset className="quick-add-dates">
+            <legend>Date</legend>
+            <div className="date-actions">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => pickDay(localDayOf(new Date()))}
+              >
+                Today
+              </button>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => pickDay(addDays(localDayOf(new Date()), 1))}
+              >
+                Tomorrow
+              </button>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => pickDay(nextMonday(localDayOf(new Date())))}
+              >
+                Next Week
+              </button>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => changeDate(emptyDraft())}
+              >
+                Clear date
+              </button>
+            </div>
+            <DateFieldset draft={dateDraft} onChange={changeDate} />
+          </fieldset>
+          <fieldset className="quick-add-tags">
+            <legend>Tags</legend>
+            {tags.map((tag) => (
+              <label key={tag.id}>
+                <input
+                  type="checkbox"
+                  aria-label={tag.name}
+                  checked={tagIds.includes(tag.id)}
+                  onChange={() => toggleTag(tag.id)}
+                />
+                {tag.name}
+              </label>
+            ))}
+            <label>
+              New tag
+              <input
+                aria-label="New tag"
+                placeholder="Create a tag…"
+                value={newTag}
+                onChange={(event) => setNewTag(event.target.value)}
+              />
+            </label>
+          </fieldset>
+        </div>
+      )}
       <div className="quick-add-dialog-actions">
         <button className="btn-quiet" type="button" onClick={onClose}>
           Cancel
