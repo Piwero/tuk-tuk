@@ -66,6 +66,19 @@ describe("Now in Today", () => {
     ]);
   });
 
+  it("announces the confirmed Now Task once, in the panel's live region", async () => {
+    installFakeApi({ nowEnabled: true, tasks: [fakeTask("Pack the bag")] });
+    openToday();
+    const panel = await nowPanel();
+    expect(within(panel).getByRole("status")).toHaveTextContent("");
+
+    await choose("Pack the bag", "Choose a Task");
+
+    await waitFor(() =>
+      expect(within(panel).getByRole("status")).toHaveTextContent("Now: Pack the bag"),
+    );
+  });
+
   it("returns focus to the opener when the picker is dismissed", async () => {
     installFakeApi({ nowEnabled: true, tasks: [fakeTask("Anything")] });
     openToday();
