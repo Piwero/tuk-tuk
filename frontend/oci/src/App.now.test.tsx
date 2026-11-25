@@ -231,3 +231,63 @@ describe("Now's next Check Item", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("Work without timer", () => {
+  const stage = () => screen.findByRole("dialog", { name: "Work without timer" });
+
+  async function startTimerFree(): Promise<HTMLElement> {
+    const panel = await nowPanel();
+    fireEvent.click(await within(panel).findByRole("button", { name: "Work without timer" }));
+    return stage();
+  }
+
+  it("shows the Now Task and its next Check Item with no clock, and creates no Focus Session", async () => {
+    const task = fakeTask("Pack bags", {
+      check_items: [fakeCheckItem("Socks", { done: true }), fakeCheckItem("Charger")],
+    });
+    const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const mode = await startTimerFree();
+
+    expect(within(mode).getByText("Pack bags")).toBeInTheDocument();
+    expect(within(mode).getByRole("checkbox", { name: "Tick Charger" })).toBeInTheDocument();
+    expect(within(mode).queryByText(/\d+:\d\d/)).not.toBeInTheDocument();
+    expect(within(mode).queryByText(/\bmin(ute)?s?\b/i)).not.toBeInTheDocument();
+    expect(within(mode).queryByRole("timer")).not.toBeInTheDocument();
+    expect(within(mode).queryByRole("progressbar")).not.toBeInTheDocument();
+
+    fireEvent.click(within(mode).getByRole("button", { name: "Leave" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.requests.filter((r) => r.url.startsWith("/api/v1/focus-sessions"))).toEqual([]);
+    expect(api.requests.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  it("ticks Check Items as the Now panel does, then completes the Task", async () => {
+    const socks = fakeCheckItem("Socks");
+    const task = fakeTask("Pack bags", { check_items: [socks] });
+    const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const mode = await startTimerFree();
+
+    fireEvent.click(within(mode).getByRole("checkbox", { name: "Tick Socks" }));
+    expect(await within(mode).findByText("All Check Items done.")).toBeInTheDocument();
+    expect(
+      api.requests.filter((r) => r.method !== "GET").map((r) => [r.method, r.url, r.body]),
+    ).toEqual([
+      [
+        "PATCH",
+        `/api/v1/tasks/${task.id}/check-items/${socks.id}?auto_complete=false`,
+        { done: true },
+      ],
+    ]);
+    expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(false);
+
+    fireEvent.click(within(mode).getByRole("button", { name: "Complete Pack bags" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    await waitFor(() => expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(true));
+    expect(api.requests.filter((r) => r.url.startsWith("/api/v1/focus-sessions"))).toEqual([]);
+  });
+});
