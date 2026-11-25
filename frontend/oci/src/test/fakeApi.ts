@@ -358,6 +358,10 @@ export interface FakeApiState {
    * Task's id, stored apart from every other setting. */
   nowEnabled: boolean;
   nowTaskId: number | null;
+  /** The chosen occurrence's schedule (issue #549), mirroring the backend:
+   * a pick whose Task is gone, completed or advanced reads as none.
+   * `undefined` until a PUT, so seeded picks match whatever is seeded. */
+  nowOccurrence?: string;
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature) — server-defaulted to all-true, matching the backend. */
   sectionSettings: {
@@ -3114,15 +3118,26 @@ export function installFakeApi({
       }
     }
     if (url.pathname === "/api/v1/now") {
+      const occurrenceOf = (t: FakeTask): string => `${t.start_date}|${t.due_date}`;
       if (method === "GET") {
+        const task = state.tasks.find((t) => t.id === state.nowTaskId);
+        if (state.nowTaskId !== null) {
+          state.nowOccurrence ??= task && occurrenceOf(task);
+          if (!task || task.completed || occurrenceOf(task) !== state.nowOccurrence) {
+            state.nowTaskId = null;
+            state.nowOccurrence = undefined;
+          }
+        }
         return json({ task_id: state.nowTaskId });
       }
       if (method === "PUT") {
         const taskId = (body as { task_id: number | null }).task_id;
-        if (taskId !== null && !state.tasks.some((t) => t.id === taskId)) {
+        const task = state.tasks.find((t) => t.id === taskId);
+        if (taskId !== null && !task) {
           return json({ detail: "Task not found" }, 404);
         }
         state.nowTaskId = taskId;
+        state.nowOccurrence = task && occurrenceOf(task);
         return json({ task_id: state.nowTaskId });
       }
     }

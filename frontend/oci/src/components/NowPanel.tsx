@@ -49,6 +49,30 @@ export function NowPanel({
     };
   }, []);
 
+  // Completing the Now Task (here or on another device) removes it from the
+  // open Tasks or advances its schedule in place (recurring, ADR 0003); the
+  // server prunes such a pick on read (issue #549), so ask again whenever the
+  // chosen Task's occurrence changes and fall back to Choose a Task.
+  const chosen = taskId === null ? undefined : tasks.find((t) => t.id === taskId);
+  const occurrence =
+    chosen === undefined
+      ? "missing"
+      : `${chosen.completed}|${chosen.start_date}|${chosen.due_date}`;
+  useEffect(() => {
+    if (!enabled || taskId === null) {
+      return;
+    }
+    let live = true;
+    void fetchNowSelection().then((selection) => {
+      if (live) {
+        setTaskId(selection.task_id);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [enabled, taskId, occurrence]);
+
   if (!enabled) {
     return null;
   }
@@ -72,7 +96,7 @@ export function NowPanel({
     onTaskChanged(updated);
   }
 
-  const task = taskId === null ? undefined : tasks.find((t) => t.id === taskId);
+  const task = chosen?.completed ? undefined : chosen;
   // Check Items arrive in their sort order; the first open one is the next step.
   const next = task?.check_items.find((item) => !item.done);
   const open = tasks.filter((t) => !t.completed);

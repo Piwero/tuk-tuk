@@ -706,3 +706,7 @@ class NowSelection(OwnedMixin, Base):
     task_id: Mapped[int | None] = mapped_column(
         ForeignKey("tasks.id", ondelete="SET NULL"), default=None
     )
+    # The chosen occurrence's schedule (issue #549): a recurring Task that
+    # advanced in place no longer matches, so it stops reading as Now.
+    task_start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    task_due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

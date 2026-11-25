@@ -108,3 +108,48 @@ def test_deleting_the_selected_task_clears_the_selection(client: TestClient) -> 
     client.delete(f"/api/v1/tasks/{task['id']}")
 
     assert client.get(NOW).json() == {"task_id": None}
+
+
+# Issue #549: a selection that is completed or advanced reads as none.
+
+
+def test_completing_the_selected_task_clears_the_selection(client: TestClient) -> None:
+    task = make_task(client)
+    client.put(NOW, json={"task_id": task["id"]})
+
+    client.patch(f"/api/v1/tasks/{task['id']}", json={"completed": True})
+
+    assert client.get(NOW).json() == {"task_id": None}
+
+
+def test_completing_a_recurring_selection_clears_it_though_the_row_stays_open(
+    client: TestClient,
+) -> None:
+    task = make_task(client, due_date="2026-07-10T15:00:00Z", recurrence="FREQ=DAILY")
+    client.put(NOW, json={"task_id": task["id"]})
+
+    advanced = client.patch(f"/api/v1/tasks/{task['id']}", json={"completed": True}).json()
+
+    assert advanced["completed"] is False
+    assert advanced["due_date"].startswith("2026-07-11")
+    assert client.get("/api/v1/completed-occurrences").json()["total"] == 1
+    assert client.get(NOW).json() == {"task_id": None}
+
+
+def test_the_next_occurrence_can_be_chosen_again(client: TestClient) -> None:
+    task = make_task(client, due_date="2026-07-10T15:00:00Z", recurrence="FREQ=DAILY")
+    client.put(NOW, json={"task_id": task["id"]})
+    client.patch(f"/api/v1/tasks/{task['id']}", json={"completed": True})
+
+    client.put(NOW, json={"task_id": task["id"]})
+
+    assert client.get(NOW).json() == {"task_id": task["id"]}
+
+
+def test_editing_an_unrelated_field_keeps_the_selection(client: TestClient) -> None:
+    task = make_task(client, due_date="2026-07-10T15:00:00Z", recurrence="FREQ=DAILY")
+    client.put(NOW, json={"task_id": task["id"]})
+
+    client.patch(f"/api/v1/tasks/{task['id']}", json={"title": "Renamed"})
+
+    assert client.get(NOW).json() == {"task_id": task["id"]}

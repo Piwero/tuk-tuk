@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.db import SessionDep
 from app.errors import NotFoundError
 from app.models import NowSelection, Task
+from app.now_rule import is_current, occurrence_of
 
 router = APIRouter(tags=["now"])
 
@@ -40,18 +41,28 @@ async def _row_for_write(session: SessionDep) -> NowSelection:
 
 @router.get("/api/v1/now")
 async def read_now(session: SessionDep) -> NowRead:
+    """A deleted, completed or advanced selection is pruned here (#549)."""
     row = await _row(session)
-    return NowRead(task_id=row.task_id if row else None)
+    if row is None or row.task_id is None:
+        return NowRead(task_id=None)
+    task = await session.get(Task, row.task_id)
+    if not is_current(task, (row.task_start_date, row.task_due_date)):
+        row.task_id = None
+        row.task_start_date = row.task_due_date = None
+        await session.commit()
+    return NowRead(task_id=row.task_id)
 
 
 @router.put("/api/v1/now")
 async def update_now(payload: NowRead, session: SessionDep) -> NowRead:
     """Selects, replaces or clears the Now Task. Another User's Task is
     invisible here, so it reads exactly like an unknown id."""
-    if payload.task_id is not None and await session.get(Task, payload.task_id) is None:
+    task = None if payload.task_id is None else await session.get(Task, payload.task_id)
+    if payload.task_id is not None and task is None:
         raise NotFoundError("Task not found")
     row = await _row_for_write(session)
     row.task_id = payload.task_id
+    row.task_start_date, row.task_due_date = occurrence_of(task) if task else (None, None)
     await session.commit()
     return NowRead(task_id=row.task_id)
 
