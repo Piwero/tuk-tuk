@@ -446,6 +446,13 @@ class Habit(OwnedMixin, Base):
         lazy="selectin",
         order_by="HabitPause.start_date",
     )
+    skips: Mapped[list["HabitSkip"]] = relationship(
+        back_populates="habit",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+        order_by="HabitSkip.date",
+    )
 
 
 class CheckIn(OwnedMixin, Base):
@@ -521,6 +528,27 @@ class ReminderDelivery(OwnedMixin, Base):
 
     # Every read names its Task, so load it with the row.
     task: Mapped[Task] = relationship(lazy="joined")
+
+
+class HabitSkip(OwnedMixin, Base):
+    """A Habit skip (issue #564) — one scheduled local day the User
+    explicitly marks as not practised: neither done nor missed, unlike a
+    forgotten (missed) day. Keyed by (habit, date); never placed on an
+    unscheduled or paused day, nor on a date holding a Check-in
+    (app.routers.v1.habits).
+
+    Composition under a Habit (deleted with it), carrying its own
+    `owner_id` like a Check-in.
+    """
+
+    __tablename__ = "habit_skips"
+    __table_args__ = (UniqueConstraint("habit_id", "date", name="uq_habit_skips_habit_id_date"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"), index=True)
+    date: Mapped[date] = mapped_column(Date)
+
+    habit: Mapped[Habit] = relationship(back_populates="skips")
 
 
 class Goal(OwnedMixin, Base):

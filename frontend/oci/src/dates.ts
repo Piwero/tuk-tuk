@@ -397,6 +397,15 @@ export function shortDayLabel(dayIso: string): string {
   return formatDate(fromDayIso(dayIso), "short");
 }
 
+/** "Jul 1 and Jul 2", "Jul 1, Jul 2 and Jul 5": the dates a conflict names. */
+export function listDays(days: string[]): string {
+  const labels = days.map(shortDayLabel);
+  if (labels.length <= 1) {
+    return labels.join("");
+  }
+  return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1) ?? ""}`;
+}
+
 /** A weekday-led record label for history rows: "Monday: 10/08/26". */
 export function weekdayRecordLabel(dayIso: string): string {
   const date = fromDayIso(dayIso);

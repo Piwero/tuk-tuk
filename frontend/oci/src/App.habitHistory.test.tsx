@@ -221,6 +221,7 @@ describe("Habit history", () => {
       "No Check-in",
       "Not started: before the Habit began",
       "Paused: not counted, neither done nor missed",
+      "Skipped: on purpose, not counted, neither done nor missed",
     ]);
     // What a heatmap square stands for is on screen, not only in its title.
     expect(screen.getByText("2026: one square per day, from January 1")).toBeVisible();

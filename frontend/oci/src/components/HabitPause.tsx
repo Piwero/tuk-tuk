@@ -2,16 +2,7 @@ import "./HabitPause.css";
 import { useState } from "react";
 
 import { ApiError, type HabitPause, type HabitPauseInput } from "../api";
-import { addDays, shortDayLabel } from "../dates";
-
-/** "Jul 1 and Jul 2", "Jul 1, Jul 2 and Jul 5": the dates a conflict names. */
-function listDays(days: string[]): string {
-  const labels = days.map(shortDayLabel);
-  if (labels.length <= 1) {
-    return labels.join("");
-  }
-  return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1) ?? ""}`;
-}
+import { addDays, listDays, shortDayLabel } from "../dates";
 
 /** What a refused pause write says. A conflict with Check-ins names their
  * dates, and says nothing was deleted: existing Check-ins stay
