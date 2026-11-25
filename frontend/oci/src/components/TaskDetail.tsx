@@ -62,7 +62,7 @@ interface TaskDetailProps {
   sheet?: boolean;
   /** Opens Focus with this Task linked, clock idle. Absent when Focus is
    * turned off, which hides the button. */
-  onStartFocus?: (task: Task) => void;
+  onOpenFocus?: (task: Task) => void;
   /** Deletes the Task (with undo); the caller closes the detail. */
   onDelete: (task: Task) => void;
 }
@@ -87,7 +87,7 @@ export function TaskDetail({
   onTagCreated,
   onClose,
   sheet = false,
-  onStartFocus,
+  onOpenFocus,
   onDelete,
 }: TaskDetailProps): React.JSX.Element {
   const [title, setTitle] = useState(task.title);
@@ -113,7 +113,7 @@ export function TaskDetail({
   const [focusedSeconds, setFocusedSeconds] = useState<number | null>(null);
 
   // Time already focused on this Task: the sum of its linked Focus Sessions.
-  const focusEnabled = onStartFocus !== undefined;
+  const focusEnabled = onOpenFocus !== undefined;
   useEffect(() => {
     if (!focusEnabled) {
       return;
@@ -648,9 +648,9 @@ export function TaskDetail({
         </form>
       </section>
       <div className="task-detail-footer">
-        {onStartFocus !== undefined && (
-          <button type="button" className="btn-focus" onClick={() => onStartFocus(task)}>
-            Start focus
+        {onOpenFocus !== undefined && (
+          <button type="button" className="btn-focus" onClick={() => onOpenFocus(task)}>
+            Open Focus
             {focusedSeconds !== null && focusedSeconds > 0 && (
               <span className="task-detail-focused">
                 {" · "}

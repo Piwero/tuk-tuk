@@ -203,7 +203,7 @@ describe("Task detail as a bottom sheet on phones (issue #456)", () => {
     for (const name of [/^Priority/, /^Repeat/, /^Tags/, /^Date/]) {
       expect(within(panel).getByRole("button", { name })).toBeInTheDocument();
     }
-    expect(within(panel).getByRole("button", { name: "Start focus" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Open Focus" })).toBeInTheDocument();
     expect(within(panel).getByRole("list", { name: "Check items" })).toBeInTheDocument();
   });
 });
