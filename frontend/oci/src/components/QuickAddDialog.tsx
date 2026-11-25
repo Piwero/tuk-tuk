@@ -1,6 +1,6 @@
 import "./QuickAddDialog.css";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import {
   createTag,
@@ -38,6 +38,13 @@ import {
 } from "../captureChannels";
 import { PRIORITY_LABELS } from "../grouping";
 import { parseQuickAdd, sameName } from "../quickAdd";
+import {
+  clearQuickAddDraft,
+  isEmptyDraft,
+  loadQuickAddDraft,
+  saveQuickAddDraft,
+  type QuickAddDraft,
+} from "../quickAddDraft";
 import { useAssistAvailable } from "../useAssistAvailable";
 import { DateFieldset } from "./DateFieldset";
 import { Hint } from "./Hint";
@@ -81,6 +88,9 @@ interface QuickAddDialogProps {
   tags: Tag[];
   /** The viewed List, or null on a view that isn't one List (Inbox then). */
   defaultListId: number | null;
+  /** The signed-in User the unsent draft is kept for (#541); null while
+   * not yet known, when nothing is kept or restored. */
+  userId: number | null;
   onTagCreated: (tag: Tag) => void;
   onListCreated: (list: TaskList) => void;
   onCreated: (task: Task) => void;
@@ -112,25 +122,68 @@ interface QuickAddDialogProps {
  * removable chips. Assist only ever adds value: an unavailable Ollama, a
  * parse that extracts nothing, a failure, or a timeout all just save the
  * task in the single click, exactly as this dialog behaved before.
+ *
+ * Session draft (#541): what was typed or chosen and not yet saved is kept
+ * for the signed-in User in this tab's sessionStorage, so dismissing the
+ * dialog any way at all loses nothing. Reopening restores it — its List and
+ * date over the context the dialog opened with — and says "Draft restored".
+ * A save clears it; a failed save keeps it; "Discard draft" drops it.
  */
-export function QuickAddDialog({
+export function QuickAddDialog(props: QuickAddDialogProps): React.JSX.Element {
+  // Discarding starts a fresh form: remounting it resets every field to the
+  // opening context and puts the caret back in the title in one move.
+  const [generation, setGeneration] = useState(0);
+  return (
+    <QuickAddForm
+      key={generation}
+      {...props}
+      onDiscard={() => {
+        if (props.userId !== null) clearQuickAddDraft(props.userId);
+        setGeneration((current) => current + 1);
+      }}
+    />
+  );
+}
+
+/** A stored draft, trimmed to what still exists: a List or Tag deleted since
+ * it was typed is simply dropped. */
+function restorableDraft(
+  userId: number | null,
+  lists: TaskList[],
+  tags: Tag[],
+): QuickAddDraft | null {
+  const draft = userId === null ? null : loadQuickAddDraft(userId);
+  if (draft === null) return null;
+  return {
+    ...draft,
+    listId: lists.some((list) => list.id === draft.listId) ? draft.listId : null,
+    tagIds: draft.tagIds.filter((id) => tags.some((tag) => tag.id === id)),
+  };
+}
+
+function QuickAddForm({
   lists,
   tags,
   defaultListId,
+  userId,
   onTagCreated,
   onListCreated,
   onCreated,
   onClose,
-}: QuickAddDialogProps): React.JSX.Element {
+  onDiscard,
+}: QuickAddDialogProps & { onDiscard: () => void }): React.JSX.Element {
   const inboxId = lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? null;
-  const [title, setTitle] = useState("");
+  // Read once, on open: the draft this User left unsent, if any.
+  const [restored] = useState(() => restorableDraft(userId, lists, tags));
+  const [title, setTitle] = useState(restored?.title ?? "");
   // Where a title goes when nobody picks a List: the viewed List, else Inbox.
   const homeListId = defaultListId ?? inboxId;
-  const [listId, setListId] = useState<number | null>(homeListId);
-  const [priority, setPriority] = useState<Priority>("none");
-  const [tagIds, setTagIds] = useState<number[]>([]);
-  const [newTag, setNewTag] = useState("");
-  const [dateDraft, setDateDraft] = useState<DateDraft>(emptyDraft);
+  // A List the draft chose wins over the one the dialog opened on.
+  const [listId, setListId] = useState<number | null>(restored?.listId ?? homeListId);
+  const [priority, setPriority] = useState<Priority>(restored?.priority ?? "none");
+  const [tagIds, setTagIds] = useState<number[]>(restored?.tagIds ?? []);
+  const [newTag, setNewTag] = useState(restored?.newTag ?? "");
+  const [dateDraft, setDateDraft] = useState<DateDraft>(() => restored?.dateDraft ?? emptyDraft());
   // The `@day` schedule chip, tracked so the dropdown's "already picked"
   // dedupe still works — but a pick lands in the Date fieldset below (one
   // visible source of truth per field), never in a chip row.
@@ -142,8 +195,10 @@ export function QuickAddDialog({
   // the select or a dropdown pick — rather than left at its default. A raw
   // `~list` / `!priority` token still sitting in the title only claims a
   // field that nobody chose, mirroring how a chip wins in the bar.
-  const [listChosen, setListChosen] = useState(false);
-  const [priorityChosen, setPriorityChosen] = useState(false);
+  // A restored draft restores these too, or a raw token still in its title
+  // would override the List / Priority it had chosen.
+  const [listChosen, setListChosen] = useState(restored?.listId != null);
+  const [priorityChosen, setPriorityChosen] = useState(restored?.priorityChosen ?? false);
   // ADR 0005: invisible, not greyed out, when Ollama isn't reachable.
   const assistAvailable = useAssistAvailable();
   // True while the one parse an "Add task" triggers is in flight — the
@@ -174,6 +229,24 @@ export function QuickAddDialog({
   // How many saves have failed in this dialog; non-zero shows "Task not
   // saved" with Retry. The dialog closes on success, so it never resets.
   const [saveFailures, setSaveFailures] = useState(0);
+  const draftNoteId = useId();
+
+  // The draft as it stands: the title and the hand-made choices, never the
+  // transient Assist state. Kept on every change, so Escape, the X, Cancel,
+  // a backdrop click and a failed save all leave it behind alike.
+  const draft: QuickAddDraft = {
+    title,
+    listId: listChosen ? listId : null,
+    priority,
+    priorityChosen,
+    tagIds,
+    newTag,
+    dateDraft,
+  };
+  const draftJson = JSON.stringify(draft);
+  useEffect(() => {
+    if (userId !== null) saveQuickAddDraft(userId, JSON.parse(draftJson) as QuickAddDraft);
+  }, [userId, draftJson]);
 
   /** A title edit re-arms Assist: the next "Add task" parses the new text
    * rather than saving stale suggestions, keeping the behaviour "parse on
@@ -449,6 +522,9 @@ export function QuickAddDialog({
       ...(scheduleCreate !== null && recurrence !== null ? { recurrence } : {}),
       ...(scheduleCreate !== null && reminders.length > 0 ? { reminders } : {}),
     });
+    // Only this draft is spent: it became the Task. Cleared before closing,
+    // so nothing writes it back.
+    if (userId !== null) clearQuickAddDraft(userId);
     onCreated(task);
     onClose();
   }
@@ -497,7 +573,11 @@ export function QuickAddDialog({
           showChips={false}
           autoFocus
           invalid={titleInvalid}
-          describedBy={titleInvalid ? titleErrorId : undefined}
+          describedBy={
+            [titleInvalid ? titleErrorId : null, restored !== null ? draftNoteId : null]
+              .filter((id) => id !== null)
+              .join(" ") || undefined
+          }
           trailingContent={
             parsing ? (
               <span className="quick-add-assist-busy" aria-label="Assist is parsing" role="status">
@@ -519,6 +599,11 @@ export function QuickAddDialog({
           }
         />
       </label>
+      {restored !== null && (
+        <p className="quick-add-draft-note" id={draftNoteId}>
+          Draft restored
+        </p>
+      )}
       {titleInvalid && (
         <p className="quick-add-field-error" role="alert" id={titleErrorId}>
           Enter a title to add the Task
@@ -741,6 +826,17 @@ export function QuickAddDialog({
         </div>
       )}
       <div className="quick-add-dialog-actions">
+        {!isEmptyDraft(draft) && (
+          <button
+            className="btn-quiet quick-add-discard"
+            type="button"
+            onClick={() => {
+              if (!busy.current) onDiscard();
+            }}
+          >
+            Discard draft
+          </button>
+        )}
         <button className="btn-quiet" type="button" onClick={onClose}>
           Cancel
         </button>

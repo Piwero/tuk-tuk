@@ -1684,6 +1684,7 @@ export function App({
                       lists={lists}
                       tags={tags}
                       defaultListId={selectedList?.id ?? null}
+                      userId={currentUser?.id ?? null}
                       onTagCreated={(tag) => setTags((current) => [...current, tag])}
                       onListCreated={(list) => setLists((current) => [...current, list])}
                       onCreated={addCreatedTask}
