@@ -818,3 +818,29 @@ describe("Task detail sheet is operable on touch (issue #456)", () => {
     expect(offenders, offenderMessage("the Task detail sheet", offenders)).toEqual([]);
   });
 });
+
+/** The Now panel, its shortlist and timer-free work (#547–#555). Fixed list so
+ * deleting the sizing fails the guard. */
+const NOW_CONTROLS = [".now-panel button", ".now-step"];
+
+describe("Now panel is operable on touch (issue #555)", () => {
+  it("meets the 44px floor for every Now, shortlist and timer-free control", () => {
+    const offenders = findOffenders(NOW_CONTROLS);
+    expect(offenders, offenderMessage("the Now panel", offenders)).toEqual([]);
+  });
+
+  it("leaves the Now controls at their desktop size", () => {
+    expect(declaredSize(".now-panel button", DESKTOP)).toBeNull();
+  });
+
+  it("makes Start 5 min full width across the whole mobile breakpoint", () => {
+    expect(declaredValue(".now-start", "flex")).toBe("1 0 100%");
+    expect(declaredValue(".now-start", "flex", GRID_BAND)).toBe("1 0 100%");
+    expect(declaredValue(".now-start", "flex", DESKTOP)).toBeNull();
+  });
+
+  it("stacks shortlist row actions instead of scrolling the page", () => {
+    expect(declaredValue(".now-shortlist-row", "flex-wrap")).toBe("wrap");
+    expect(declaredValue(".now-shortlist-actions", "flex-wrap")).toBe("wrap");
+  });
+});
