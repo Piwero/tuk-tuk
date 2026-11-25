@@ -120,6 +120,8 @@ export function NowPanel({
     setPicking(false);
     const saved = await updateNowSelection(id);
     setTaskId(saved.task_id);
+    const picked = tasks.find((t) => t.id === saved.task_id);
+    setAnnouncement(picked === undefined ? "" : `Now: ${picked.title}`);
   }
 
   async function tick(owner: Task, item: CheckItem): Promise<void> {

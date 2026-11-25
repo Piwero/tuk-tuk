@@ -135,3 +135,28 @@ def test_interleaved_now_and_shortlist_writes_keep_each_other(client: TestClient
 
     assert client.get(SHORTLIST).json() == {"task_ids": [b]}
     assert client.get(NOW).json() == {"task_id": a}
+
+
+def test_rewriting_the_shortlist_keeps_an_advanced_entry_stale(client: TestClient) -> None:
+    """Another client advanced a recurring entry before this one reordered:
+    the reorder must not re-snapshot it as today's occurrence."""
+    daily = make_task(client, "Daily", due_date="2026-07-10T15:00:00Z", recurrence="FREQ=DAILY")
+    other = make_task(client, "Other")["id"]
+    client.put(SHORTLIST, json={"task_ids": [daily["id"], other]})
+    client.patch(f"/api/v1/tasks/{daily['id']}", json={"completed": True})
+
+    client.put(SHORTLIST, json={"task_ids": [other, daily["id"]]})
+
+    assert client.get(SHORTLIST).json() == {"task_ids": [other]}
+
+
+def test_a_completed_task_cannot_be_shortlisted(client: TestClient) -> None:
+    done = make_task(client, "Done")["id"]
+    client.patch(f"/api/v1/tasks/{done}", json={"completed": True})
+
+    response = client.put(SHORTLIST, json={"task_ids": [done]})
+    missing = client.put(SHORTLIST, json={"task_ids": [999_999]})
+
+    assert response.status_code == 404
+    assert response.json() == missing.json()
+    assert client.get(SHORTLIST).json() == {"task_ids": []}
