@@ -200,7 +200,7 @@ describe("Task detail as a bottom sheet on phones (issue #456)", () => {
     installFakeApi({ tasks: [fakeTask("Write report")] });
     render(<App />);
     const panel = await openDetail("Write report");
-    for (const name of [/^Priority/, /^Repeat/, /^Tags/, /^Date/]) {
+    for (const name of [/^Priority/, /^Repeat/, /^Tags/, /^Due date/, /^Planned work/]) {
       expect(within(panel).getByRole("button", { name })).toBeInTheDocument();
     }
     expect(within(panel).getByRole("button", { name: "Open Focus" })).toBeInTheDocument();

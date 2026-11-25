@@ -1,6 +1,6 @@
 """Pydantic request/response models and the shared pagination envelope."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 
 from pydantic import (
@@ -185,6 +185,36 @@ class SectionRead(BaseModel):
     sort_order: int
 
 
+class PlannedWork(BaseModel):
+    """A Task's planned work block (issue #558) as written: reserved work
+    time, never the deadline. Range and day-boundary rules are checked in
+    the router so they answer with the `invalid_planned_work` code."""
+
+    start: datetime
+    duration_minutes: int
+    time_zone: str = Field(max_length=64)
+    buffer_minutes: int | None = None
+
+    _normalize_start = field_validator("start")(normalize_to_utc)
+
+
+class PlannedWorkRead(PlannedWork):
+    """As read: the same block plus its `end` instant (start + duration,
+    elapsed time — so a block across a DST change keeps its real length).
+    The buffer runs after `end`."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def end(self) -> datetime:
+        return self.start + timedelta(minutes=self.duration_minutes)
+
+    @field_serializer("start", "end")
+    def serialize_instants(self, value: datetime) -> str:
+        return utc_z(value)
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     description: str = ""
@@ -211,8 +241,9 @@ class TaskCreate(BaseModel):
 # PATCH fields: absent means "leave unchanged". An explicit null is rejected,
 # except section_id, where null moves the task out of its Section,
 # start_date / due_date / time_zone, where null clears the schedule,
-# recurrence, where null stops the task repeating, and key_result_id, where
-# null detaches the Task from its Key Result.
+# recurrence, where null stops the task repeating, key_result_id, where
+# null detaches the Task from its Key Result, and planned_work, where null
+# removes the planned work block (an object replaces it whole).
 # tag_ids replaces the task's whole tag set; reminders replaces the whole
 # reminder set ([] clears it).
 class TaskUpdate(BaseModel):
@@ -231,6 +262,7 @@ class TaskUpdate(BaseModel):
     reminders: list[str] | None = None
     recurrence: str | None = Field(default=None, max_length=255)
     key_result_id: int | None = None
+    planned_work: PlannedWork | None = None
 
     _reject_nulls = field_validator(
         "title",
@@ -631,6 +663,8 @@ class TaskRead(BaseModel):
     source_google_calendar_id: int | None
     source_google_event_id: str | None
     key_result_id: int | None
+    # Planned work (issue #558): reserved work time, separate from start/due.
+    planned_work: PlannedWorkRead | None = None
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime

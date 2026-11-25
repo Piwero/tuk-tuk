@@ -8,11 +8,13 @@ import {
   type GoalStatus,
   type HabitType,
   type KeyResultSource,
+  type PlannedWork,
+  type PlannedWorkRead,
   type Priority,
   type ViewMode,
 } from "../api";
 import { entryDayWindow } from "../calendar";
-import { addDays, zonedDay } from "../dates";
+import { addDays, zonedDay, zonedTime } from "../dates";
 import { habitDueOn } from "../habitFrequency";
 import { byName, SORT_GAP } from "../ordering";
 import { decrementCount, nextOccurrenceISO } from "./fakeRecurrence";
@@ -85,6 +87,7 @@ export interface FakeTask {
   source_google_calendar_id: number | null;
   source_google_event_id: string | null;
   key_result_id: number | null;
+  planned_work?: PlannedWorkRead | null;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -714,6 +717,22 @@ export function fakeStandupEntry(
     bullets: [],
     ...overrides,
   };
+}
+
+/** Why the fake backend rejects a planned work block, or null when valid. */
+function plannedWorkRejection(block: PlannedWork): string | null {
+  if (block.duration_minutes <= 0) return "Planned work needs a positive duration";
+  const finish = new Date(
+    new Date(block.start).getTime() +
+      (block.duration_minutes + (block.buffer_minutes ?? 0)) * 60000,
+  ).toISOString();
+  const startDay = zonedDay(block.start, block.time_zone);
+  const finishDay = zonedDay(finish, block.time_zone);
+  const atMidnight =
+    finishDay === addDays(startDay, 1) && zonedTime(finish, block.time_zone) === "00:00";
+  return finishDay === startDay || atMidnight
+    ? null
+    : "Planned work must stay within one local day: it would run past midnight";
 }
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
@@ -1509,6 +1528,8 @@ export function installFakeApi({
    * completes for real when its recurrence has ended. */
   const completeTask = (task: FakeTask): void => {
     if (task.recurrence !== null && task.due_date !== null) {
+      // The plan belongs to the occurrence being completed (#558).
+      task.planned_work = null;
       const next = nextOccurrenceISO(task.recurrence, task.due_date, task.is_all_day);
       if (next !== null) {
         state.completedOccurrences.push({
@@ -2650,6 +2671,17 @@ export function installFakeApi({
         }
         if (!("recurrence" in rest) && effectiveDue === null && task.recurrence !== null) {
           rest.recurrence = null;
+        }
+        // Mirror the backend's planned work rules (#558): a positive
+        // duration, kept (buffer included) within one local day.
+        if (rest.planned_work !== undefined && rest.planned_work !== null) {
+          const block = rest.planned_work as PlannedWork;
+          const rejection = plannedWorkRejection(block);
+          if (rejection !== null) {
+            return json({ error: { code: "invalid_planned_work", message: rejection } }, 422);
+          }
+          const end = new Date(new Date(block.start).getTime() + block.duration_minutes * 60000);
+          rest.planned_work = { ...block, end: `${end.toISOString().slice(0, 19)}Z` };
         }
         if (
           typeof rest.list_id === "number" &&
