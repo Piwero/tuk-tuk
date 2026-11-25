@@ -1611,7 +1611,13 @@ export function App({
                   {/* Full-width row under the header: only .view-controls takes the
                   right-hand column of .main-chrome on a phone. */}
                   {showHabitStrip && <HabitStrip habits={todayHabits} />}
-                  {smartView === "today" && !completedMode && <NowPanel tasks={openTasks} />}
+                  {smartView === "today" && !completedMode && (
+                    <NowPanel
+                      tasks={openTasks}
+                      onTaskChanged={applyTaskChange}
+                      onComplete={completeTaskNow}
+                    />
+                  )}
                   {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
                     <>
                       <QuickAdd

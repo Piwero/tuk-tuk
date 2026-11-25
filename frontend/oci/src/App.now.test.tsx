@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeTask, installFakeApi } from "./test/fakeApi";
+import { closestOrThrow, fakeDataTransfer } from "./test/dnd";
+import { fakeCheckItem, fakeTask, installFakeApi } from "./test/fakeApi";
 
 /* Now (issue #547): one Task the User chose to do next, inside Today. */
 
@@ -127,5 +128,106 @@ describe("Now in Today", () => {
     expect(api.requests.some((r) => r.method === "PUT" && r.url === "/api/v1/settings/now")).toBe(
       true,
     );
+  });
+});
+
+describe("Now's next Check Item", () => {
+  it("shows the first incomplete Check Item under the Task title", async () => {
+    const task = fakeTask("Pack bags", {
+      check_items: [
+        fakeCheckItem("Socks", { done: true, sort_order: 1024 }),
+        fakeCheckItem("Charger", { sort_order: 2048 }),
+        fakeCheckItem("Passport", { sort_order: 3072 }),
+      ],
+    });
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const panel = await nowPanel();
+    expect(await within(panel).findByText("Pack bags")).toBeInTheDocument();
+    expect(within(panel).getByRole("checkbox", { name: "Tick Charger" })).not.toBeChecked();
+    expect(within(panel).queryByText("Socks")).not.toBeInTheDocument();
+    expect(within(panel).queryByText("Passport")).not.toBeInTheDocument();
+  });
+
+  it("advances to the next Check Item when the visible one is ticked, without completing the Task", async () => {
+    const socks = fakeCheckItem("Socks", { sort_order: 1024 });
+    const charger = fakeCheckItem("Charger", { sort_order: 2048 });
+    const task = fakeTask("Pack bags", { check_items: [socks, charger] });
+    const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const panel = await nowPanel();
+    fireEvent.click(await within(panel).findByRole("checkbox", { name: "Tick Socks" }));
+
+    expect(
+      await within(panel).findByRole("checkbox", { name: "Tick Charger" }),
+    ).toBeInTheDocument();
+    expect(within(panel).getByRole("status")).toHaveTextContent("Next: Charger");
+    expect(
+      api.requests.filter((r) => r.method !== "GET").map((r) => [r.method, r.url, r.body]),
+    ).toEqual([
+      [
+        "PATCH",
+        `/api/v1/tasks/${task.id}/check-items/${socks.id}?auto_complete=false`,
+        { done: true },
+      ],
+    ]);
+    expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(false);
+  });
+
+  it("shows the Task title alone when it has no Check Items", async () => {
+    const task = fakeTask("Call the bank");
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const panel = await nowPanel();
+    expect(await within(panel).findByText("Call the bank")).toBeInTheDocument();
+    expect(within(panel).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(within(panel).queryByText(/Check Items done/)).not.toBeInTheDocument();
+  });
+
+  it("offers a deliberate completion once every Check Item is done", async () => {
+    const last = fakeCheckItem("Passport");
+    const task = fakeTask("Pack bags", { check_items: [last] });
+    const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const panel = await nowPanel();
+    fireEvent.click(await within(panel).findByRole("checkbox", { name: "Tick Passport" }));
+
+    expect(await within(panel).findByText("All Check Items done.")).toBeInTheDocument();
+    expect(within(panel).getByRole("status")).toHaveTextContent("All Check Items done");
+    expect(within(panel).getByText("Pack bags")).toBeInTheDocument();
+    expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(false);
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Complete Pack bags" }));
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    await waitFor(() => expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(true));
+  });
+
+  it("follows a reorder made in Task detail", async () => {
+    const socks = fakeCheckItem("Socks", { sort_order: 1024 });
+    const passport = fakeCheckItem("Passport", { sort_order: 2048 });
+    const task = fakeTask("Pack bags", {
+      due_date: "2026-07-03T00:00:00Z",
+      is_all_day: true,
+      check_items: [socks, passport],
+    });
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const panel = await nowPanel();
+    expect(await within(panel).findByRole("checkbox", { name: "Tick Socks" })).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open details for Pack bags" }));
+    const detail = await screen.findByRole("complementary", { name: "Task details" });
+    const items = within(detail).getByRole("list", { name: "Check items" });
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(closestOrThrow(within(items).getByText("Passport"), "li"), {
+      dataTransfer,
+    });
+    fireEvent.drop(closestOrThrow(within(items).getByText("Socks"), "li"), { dataTransfer });
+
+    expect(
+      await within(panel).findByRole("checkbox", { name: "Tick Passport" }),
+    ).toBeInTheDocument();
   });
 });

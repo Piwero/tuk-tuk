@@ -50,6 +50,23 @@ def test_ticking_the_last_open_check_item_completes_the_task(client: TestClient)
     assert finished.json()["completed"] is True
 
 
+def test_ticking_the_last_item_with_auto_complete_off_leaves_the_task_open(
+    client: TestClient,
+) -> None:
+    # Now (issue #550): completing a Check Item there never completes the Task.
+    task_id = make_task(client)
+    body = client.post(f"/api/v1/tasks/{task_id}/check-items", json={"title": "Only step"}).json()
+    item_id = body["check_items"][0]["id"]
+
+    ticked = client.patch(
+        f"/api/v1/tasks/{task_id}/check-items/{item_id}?auto_complete=false", json={"done": True}
+    )
+
+    assert ticked.status_code == 200
+    assert ticked.json()["check_items"][0]["done"] is True
+    assert ticked.json()["completed"] is False
+
+
 def test_unticking_a_check_item_does_not_reopen_the_task(client: TestClient) -> None:
     task_id = make_task(client)
     created = client.post(f"/api/v1/tasks/{task_id}/check-items", json={"title": "Only step"})

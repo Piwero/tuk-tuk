@@ -1145,8 +1145,11 @@ export function updateCheckItem(
   taskId: number,
   checkItemId: number,
   patch: CheckItemPatch,
+  options: { autoComplete?: boolean } = {},
 ): Promise<Task> {
-  return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}`, {
+  // autoComplete: false ticks without completing the parent Task (Now, #550).
+  const query = options.autoComplete === false ? "?auto_complete=false" : "";
+  return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}${query}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });

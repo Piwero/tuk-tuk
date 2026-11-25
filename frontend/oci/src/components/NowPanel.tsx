@@ -1,23 +1,40 @@
 import "./NowPanel.css";
 import { useEffect, useState } from "react";
 
-import { fetchNowSelection, fetchNowSettings, type Task, updateNowSelection } from "../api";
+import {
+  type CheckItem,
+  fetchNowSelection,
+  fetchNowSettings,
+  type Task,
+  updateCheckItem,
+  updateNowSelection,
+} from "../api";
 import { Modal } from "./Modal";
 
 interface NowPanelProps {
   /** The User's open Tasks, undated ones included: what the picker offers
    * and where the selected Task's title is read from. */
   tasks: Task[];
+  /** Receives the parent Task a Check Item tick returns (issue #550). */
+  onTaskChanged: (task: Task) => void;
+  /** Completes the Task: offered once every Check Item is done. */
+  onComplete: (task: Task) => void;
 }
 
 /** Now (issue #547): an optional panel inside Today holding the one Task
  * the User chose to do next. Loads its own toggle and selection, so it
  * renders nothing while the feature is off and Today stays as it was.
  * Choosing, replacing or removing writes only the selection. */
-export function NowPanel({ tasks }: NowPanelProps): React.JSX.Element | null {
+export function NowPanel({
+  tasks,
+  onTaskChanged,
+  onComplete,
+}: NowPanelProps): React.JSX.Element | null {
   const [enabled, setEnabled] = useState(false);
   const [taskId, setTaskId] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
+  // Announced only after the User advances, never on first render.
+  const [announcement, setAnnouncement] = useState("");
 
   useEffect(() => {
     let live = true;
@@ -42,7 +59,22 @@ export function NowPanel({ tasks }: NowPanelProps): React.JSX.Element | null {
     setTaskId(saved.task_id);
   }
 
+  async function tick(owner: Task, item: CheckItem): Promise<void> {
+    // Never completes the Task: Now hands completion back to the User.
+    const updated = await updateCheckItem(
+      owner.id,
+      item.id,
+      { done: true },
+      { autoComplete: false },
+    );
+    const nextOpen = updated.check_items.find((i) => !i.done);
+    setAnnouncement(nextOpen === undefined ? "All Check Items done" : `Next: ${nextOpen.title}`);
+    onTaskChanged(updated);
+  }
+
   const task = taskId === null ? undefined : tasks.find((t) => t.id === taskId);
+  // Check Items arrive in their sort order; the first open one is the next step.
+  const next = task?.check_items.find((item) => !item.done);
   const open = tasks.filter((t) => !t.completed);
 
   return (
@@ -57,7 +89,33 @@ export function NowPanel({ tasks }: NowPanelProps): React.JSX.Element | null {
         </div>
       ) : (
         <div className="now-body">
-          <p className="now-title">{task.title}</p>
+          <div className="now-focus">
+            <p className="now-title">{task.title}</p>
+            {next !== undefined && (
+              <label className="now-step">
+                <input
+                  type="checkbox"
+                  checked={false}
+                  aria-label={`Tick ${next.title}`}
+                  onChange={() => void tick(task, next)}
+                />
+                <span>{next.title}</span>
+              </label>
+            )}
+            {next === undefined && task.check_items.length > 0 && (
+              <div className="now-step">
+                <span className="now-empty">All Check Items done.</span>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  aria-label={`Complete ${task.title}`}
+                  onClick={() => onComplete(task)}
+                >
+                  Complete Task
+                </button>
+              </div>
+            )}
+          </div>
           <div className="now-actions">
             <button type="button" className="btn-quiet" onClick={() => setPicking(true)}>
               Choose another
@@ -68,6 +126,9 @@ export function NowPanel({ tasks }: NowPanelProps): React.JSX.Element | null {
           </div>
         </div>
       )}
+      <p role="status" className="visually-hidden">
+        {announcement}
+      </p>
       {picking && (
         <Modal title="Choose a Task for Now" onClose={() => setPicking(false)}>
           {open.length === 0 ? (

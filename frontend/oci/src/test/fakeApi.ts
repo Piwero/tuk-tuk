@@ -2489,7 +2489,11 @@ export function installFakeApi({
         Object.assign(item, body);
         // Mirror the backend rule: ticking the last open item completes the
         // parent — which advances a recurring parent in place instead.
-        if ((body as { done?: boolean }).done === true && task.check_items.every((i) => i.done)) {
+        if (
+          url.searchParams.get("auto_complete") !== "false" &&
+          (body as { done?: boolean }).done === true &&
+          task.check_items.every((i) => i.done)
+        ) {
           completeTask(task);
         }
         task.check_items.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);

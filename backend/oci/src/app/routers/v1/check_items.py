@@ -46,8 +46,14 @@ async def read_check_item(task_id: int, check_item_id: int, session: SessionDep)
 
 @router.patch("/{check_item_id}")
 async def update_check_item(
-    task_id: int, check_item_id: int, payload: CheckItemUpdate, session: SessionDep
+    task_id: int,
+    check_item_id: int,
+    payload: CheckItemUpdate,
+    session: SessionDep,
+    auto_complete: bool = True,
 ) -> TaskRead:
+    """`auto_complete=false` ticks without completing the parent: Now (issue
+    #550) advances to the next step and leaves completion to the User."""
     task = await get_task_or_404(task_id, session)
     item = get_check_item_or_404(task, check_item_id)
     changes = payload.model_dump(exclude_unset=True)
@@ -58,7 +64,7 @@ async def update_check_item(
     # a recurring Task, means advancing it in place (ADR 0003). Un-ticking
     # never reopens it, and re-ticking an already-done item changes nothing —
     # the parent stays as the user set it.
-    if ticked_open_item and all(sibling.done for sibling in task.check_items):
+    if auto_complete and ticked_open_item and all(sibling.done for sibling in task.check_items):
         occurrence = advance_in_place(task)
         if occurrence is not None:
             session.add(occurrence)
