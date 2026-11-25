@@ -1,0 +1,40 @@
+@layer components {
+  /* Planned work row (#558): a plan, never the deadline. */
+  .planned-work-buffer,
+  .planned-work-status {
+    display: block;
+    margin: 0;
+    padding-inline-start: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .planned-work-form {
+    display: grid;
+    gap: var(--space-3);
+    font-size: var(--text-sm);
+  }
+  .planned-work-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .planned-work-fields label {
+    display: grid;
+    gap: 2px;
+  }
+  .planned-work-note,
+  .planned-work-error {
+    margin: 0;
+  }
+  .planned-work-note {
+    color: var(--text-secondary);
+  }
+  .planned-work-error {
+    color: var(--text-danger);
+  }
+  .planned-work-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}

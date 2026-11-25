@@ -29,8 +29,8 @@ function patches(requests: RecordedRequest[], taskId: number): unknown[] {
 }
 
 async function openDateRow(panel: HTMLElement, user: ReturnType<typeof userEvent.setup>) {
-  await user.click(within(panel).getByRole("button", { name: /^Date / }));
-  return within(panel).getByRole("dialog", { name: "Date" });
+  await user.click(within(panel).getByRole("button", { name: /^Due date / }));
+  return within(panel).getByRole("dialog", { name: "Due date" });
 }
 
 describe("Task detail Date row", () => {
@@ -54,7 +54,7 @@ describe("Task detail Date row", () => {
     render(<App />);
 
     const panel = await openDetail("Plan");
-    expect(within(panel).getByRole("button", { name: `Date ${label}` })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: `Due date ${label}` })).toBeInTheDocument();
   });
 
   it("reads quietly when unset", async () => {
@@ -62,7 +62,7 @@ describe("Task detail Date row", () => {
     render(<App />);
 
     const panel = await openDetail("Someday");
-    expect(within(panel).getByRole("button", { name: "Date No date" })).toHaveClass("is-quiet");
+    expect(within(panel).getByRole("button", { name: "Due date No date" })).toHaveClass("is-quiet");
   });
 
   it("Today sets an all-day date and the row reads Today", async () => {
@@ -85,7 +85,9 @@ describe("Task detail Date row", () => {
         },
       ]),
     );
-    expect(await within(panel).findByRole("button", { name: "Date Today" })).toBeInTheDocument();
+    expect(
+      await within(panel).findByRole("button", { name: "Due date Today" }),
+    ).toBeInTheDocument();
   });
 
   it("Tomorrow and Next week pick tomorrow and next Monday", async () => {
@@ -98,7 +100,7 @@ describe("Task detail Date row", () => {
     await user.click(
       within(await openDateRow(panel, user)).getByRole("button", { name: "Tomorrow" }),
     );
-    await within(panel).findByRole("button", { name: "Date Tomorrow" });
+    await within(panel).findByRole("button", { name: "Due date Tomorrow" });
     await user.click(
       within(await openDateRow(panel, user)).getByRole("button", { name: "Next week" }),
     );
@@ -141,7 +143,7 @@ describe("Task detail Date row", () => {
       }),
     );
     expect(
-      await within(panel).findByRole("button", { name: "Date Jul 10, 14:00–15:30" }),
+      await within(panel).findByRole("button", { name: "Due date Jul 10, 14:00–15:30" }),
     ).toBeInTheDocument();
   });
 
@@ -162,7 +164,7 @@ describe("Task detail Date row", () => {
     );
 
     expect(
-      await within(panel).findByRole("button", { name: "Date Tomorrow, 10:00–11:30" }),
+      await within(panel).findByRole("button", { name: "Due date Tomorrow, 10:00–11:30" }),
     ).toBeInTheDocument();
     expect(patches(api.requests, meeting.id)).toMatchObject([
       { start_date: "2026-07-04T10:00:00.000Z", due_date: "2026-07-04T11:30:00.000Z" },
@@ -181,7 +183,9 @@ describe("Task detail Date row", () => {
     render(<App />);
 
     const panel = await openDetail("Conference");
-    expect(within(panel).getByRole("button", { name: "Date Jul 6 – Jul 8" })).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: "Due date Jul 6 – Jul 8" }),
+    ).toBeInTheDocument();
     await user.click(within(await openDateRow(panel, user)).getByRole("button", { name: "Clear" }));
 
     await waitFor(() =>
@@ -189,6 +193,8 @@ describe("Task detail Date row", () => {
         { start_date: null, due_date: null, is_all_day: false, time_zone: null },
       ]),
     );
-    expect(await within(panel).findByRole("button", { name: "Date No date" })).toBeInTheDocument();
+    expect(
+      await within(panel).findByRole("button", { name: "Due date No date" }),
+    ).toBeInTheDocument();
   });
 });

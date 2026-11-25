@@ -300,6 +300,14 @@ class Task(OwnedMixin, Base):
     # anchored at the task's due date. Completing a recurring task advances
     # its dates in place instead of completing the row (ADR 0003).
     recurrence: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Planned work (issue #558): at most one optional block of reserved work
+    # time, held apart from start/due — moving or removing it never touches
+    # the deadline, and it is not a Reminder anchor. Start, duration and
+    # timezone are set together (all null = no plan); the buffer is optional.
+    planned_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    planned_duration_minutes: Mapped[int | None] = mapped_column(default=None)
+    planned_time_zone: Mapped[str | None] = mapped_column(String(64), default=None)
+    planned_buffer_minutes: Mapped[int | None] = mapped_column(default=None)
     list_id: Mapped[int] = mapped_column(ForeignKey("lists.id", ondelete="CASCADE"), index=True)
     section_id: Mapped[int | None] = mapped_column(
         ForeignKey("sections.id", ondelete="SET NULL"), index=True, default=None
@@ -323,6 +331,24 @@ class Task(OwnedMixin, Base):
     key_result_id: Mapped[int | None] = mapped_column(
         ForeignKey("key_results.id", ondelete="SET NULL"), index=True, default=None
     )
+
+    @property
+    def planned_work(self) -> dict[str, object] | None:
+        """The planned work block as one value, or None when unplanned."""
+        if self.planned_start is None or self.planned_duration_minutes is None:
+            return None
+        return {
+            "start": self.planned_start,
+            "duration_minutes": self.planned_duration_minutes,
+            "time_zone": self.planned_time_zone,
+            "buffer_minutes": self.planned_buffer_minutes,
+        }
+
+    def clear_planned_work(self) -> None:
+        self.planned_start = None
+        self.planned_duration_minutes = None
+        self.planned_time_zone = None
+        self.planned_buffer_minutes = None
 
     task_list: Mapped[TaskList] = relationship(back_populates="tasks")
     # Check Items always travel with their Task (composition), so load them
