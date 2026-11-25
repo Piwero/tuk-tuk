@@ -430,7 +430,7 @@ export function TaskListView({
         onSelect={onSelect}
         onDelete={(t) => void remove(t)}
         onOpenActions={onOpenActions}
-        onFocus={onFocusTask}
+        onOpenFocus={onFocusTask}
         draggable
         onDragStart={(event) => startDrag(event, { kind: "task", id: task.id })}
         onDragEnd={endDrag}
