@@ -406,9 +406,9 @@ function QuickAddForm({
         setTagIds((current) => [...new Set([...current, ...suggestedTagIds])]);
       }
       setAssistApplied(true);
-      // The populated form is the confirmation beat: open it, so the review
-      // happens on the controls themselves, not only on summary chips.
-      setDetailsOpen(true);
+      // The populated form is the confirmation beat. Details stays as the
+      // User left it: every field Assist can fill has a summary chip, so the
+      // review is on screen either way.
       return true;
     } finally {
       setParsing(false);
