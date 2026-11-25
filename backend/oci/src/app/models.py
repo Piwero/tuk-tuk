@@ -184,6 +184,11 @@ class UserSettings(Base):
     # behind a counted disclosure. Chosen by the User, never inferred; off by
     # default so Today is unchanged after upgrade.
     gentle_return_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Reminder notifications (issue #557): the User opts in to Reminder
+    # delivery. Off by default so stored Reminder offsets never start
+    # notifying after upgrade. Browser permission is per device and stays in
+    # the browser; this flag only records the User's choice.
+    reminder_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

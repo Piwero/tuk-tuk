@@ -1836,6 +1836,26 @@ export function updateGentleReturnSettings(
   });
 }
 
+/** Reminder notifications (issue #557): the User's opt-in to Reminder
+ * delivery, off by default and private to them. Browser permission is per
+ * device and stays in the browser; it is never sent here. */
+export interface ReminderNotificationSettings {
+  enabled: boolean;
+}
+
+export function fetchReminderNotificationSettings(): Promise<ReminderNotificationSettings> {
+  return request("/api/v1/settings/reminder-notifications");
+}
+
+export function updateReminderNotificationSettings(
+  settings: ReminderNotificationSettings,
+): Promise<ReminderNotificationSettings> {
+  return request("/api/v1/settings/reminder-notifications", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
 /** The Settings > Database section (issue #256): which engine the running
  * app is actually configured for, and a connection probe for a candidate
  * PostgreSQL URL that never switches anything. `host`/`database` are only
