@@ -86,7 +86,7 @@ describe("Resume note", () => {
     const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
     openToday();
     await startAndPause();
-    api.failWrite = (method, pathname) => pathname === "/api/v1/now/note";
+    api.failWrite = (_method, pathname) => pathname === "/api/v1/now/note";
 
     const field = await main().findByLabelText("Resume note");
     fireEvent.change(field, { target: { value: "Pick up at step 3" } });
@@ -130,7 +130,7 @@ describe("Resume note", () => {
       nowTaskId: task.id,
       nowNote: "Cue",
     });
-    api.tasks[0].completed = true;
+    for (const t of api.tasks) t.completed = true;
     openToday();
 
     const panel = await nowPanel();
@@ -149,7 +149,7 @@ describe("Resume note", () => {
     fireEvent.click(main().getByRole("button", { name: "Finish" }));
 
     await vi.waitFor(() => expect(api.focusSessions).toHaveLength(1));
-    expect(api.tasks[0].completed).toBe(false);
+    expect(api.tasks.map((t) => t.completed)).toEqual([false]);
     expect(api.nowNote).toBeNull();
   });
 });
