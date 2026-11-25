@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -171,5 +171,35 @@ describe("Now's next Check Item", () => {
       ],
     ]);
     expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(false);
+  });
+
+  it("shows the Task title alone when it has no Check Items", async () => {
+    const task = fakeTask("Call the bank");
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const panel = await nowPanel();
+    expect(await within(panel).findByText("Call the bank")).toBeInTheDocument();
+    expect(within(panel).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(within(panel).queryByText(/Check Items done/)).not.toBeInTheDocument();
+  });
+
+  it("offers a deliberate completion once every Check Item is done", async () => {
+    const last = fakeCheckItem("Passport");
+    const task = fakeTask("Pack bags", { check_items: [last] });
+    const api = installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const panel = await nowPanel();
+    fireEvent.click(await within(panel).findByRole("checkbox", { name: "Tick Passport" }));
+
+    expect(await within(panel).findByText("All Check Items done.")).toBeInTheDocument();
+    expect(within(panel).getByRole("status")).toHaveTextContent("All Check Items done");
+    expect(within(panel).getByText("Pack bags")).toBeInTheDocument();
+    expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(false);
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Complete Pack bags" }));
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    await waitFor(() => expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(true));
   });
 });

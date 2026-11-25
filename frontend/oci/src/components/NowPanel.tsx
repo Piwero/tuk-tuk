@@ -17,13 +17,19 @@ interface NowPanelProps {
   tasks: Task[];
   /** Receives the parent Task a Check Item tick returns (issue #550). */
   onTaskChanged: (task: Task) => void;
+  /** Completes the Task: offered once every Check Item is done. */
+  onComplete: (task: Task) => void;
 }
 
 /** Now (issue #547): an optional panel inside Today holding the one Task
  * the User chose to do next. Loads its own toggle and selection, so it
  * renders nothing while the feature is off and Today stays as it was.
  * Choosing, replacing or removing writes only the selection. */
-export function NowPanel({ tasks, onTaskChanged }: NowPanelProps): React.JSX.Element | null {
+export function NowPanel({
+  tasks,
+  onTaskChanged,
+  onComplete,
+}: NowPanelProps): React.JSX.Element | null {
   const [enabled, setEnabled] = useState(false);
   const [taskId, setTaskId] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
@@ -61,8 +67,8 @@ export function NowPanel({ tasks, onTaskChanged }: NowPanelProps): React.JSX.Ele
       { done: true },
       { autoComplete: false },
     );
-    const following = updated.check_items.find((i) => !i.done);
-    setAnnouncement(following === undefined ? "All Check Items done" : `Next: ${following.title}`);
+    const nextOpen = updated.check_items.find((i) => !i.done);
+    setAnnouncement(nextOpen === undefined ? "All Check Items done" : `Next: ${nextOpen.title}`);
     onTaskChanged(updated);
   }
 
@@ -95,6 +101,19 @@ export function NowPanel({ tasks, onTaskChanged }: NowPanelProps): React.JSX.Ele
                 />
                 <span>{next.title}</span>
               </label>
+            )}
+            {next === undefined && task.check_items.length > 0 && (
+              <div className="now-step">
+                <span className="now-empty">All Check Items done.</span>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  aria-label={`Complete ${task.title}`}
+                  onClick={() => onComplete(task)}
+                >
+                  Complete Task
+                </button>
+              </div>
             )}
           </div>
           <div className="now-actions">

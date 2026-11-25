@@ -1612,7 +1612,11 @@ export function App({
                   right-hand column of .main-chrome on a phone. */}
                   {showHabitStrip && <HabitStrip habits={todayHabits} />}
                   {smartView === "today" && !completedMode && (
-                    <NowPanel tasks={openTasks} onTaskChanged={applyTaskChange} />
+                    <NowPanel
+                      tasks={openTasks}
+                      onTaskChanged={applyTaskChange}
+                      onComplete={completeTaskNow}
+                    />
                   )}
                   {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
                     <>
