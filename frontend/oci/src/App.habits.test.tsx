@@ -130,6 +130,24 @@ describe("Habits week grid", () => {
     expect(api.checkIns).toHaveLength(0);
   });
 
+  it("shows Not yet and a visible Check in action on today's open cell, in words", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate")] });
+    render(<App />);
+    await openHabits();
+
+    // On screen, not only in the accessible name: the state and what a tap does.
+    const today = await cell("Meditate", "Friday, Jul 3", "not yet checked in");
+    expect(today).toHaveTextContent("Not yet");
+    expect(today).toHaveTextContent("Check in");
+    // Other open days carry no words; only today is still open.
+    expect(await cell("Meditate", "Thursday, Jul 2", "missed")).toHaveTextContent("");
+
+    fireEvent.click(today);
+
+    const done = await cell("Meditate", "Friday, Jul 3", "checked in");
+    expect(done).not.toHaveTextContent("Not yet");
+  });
+
   it("re-taps keep one Check-in row per habit and date", async () => {
     const api = installFakeApi({ habits: [fakeHabit("Meditate")] });
     render(<App />);
@@ -250,6 +268,24 @@ describe("Habit Streak and history strip", () => {
     });
     expect(full).toHaveClass("level-4");
     expect(partial).toHaveClass("level-2");
+  });
+
+  it("reads a nearly met Target as in progress in the strip, as the week grid does", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 5, step: 1, unit: "glasses" })],
+    });
+    checkIn(api, api.habits[0]?.id ?? 0, "2026-07-01", 4);
+    render(<App />);
+    await openHabits();
+
+    // 4 of 5 is not a met Target: neither view may call it checked in.
+    expect(
+      await cell("Drink water", "Wednesday, Jul 1", "in progress: 4 of 5 glasses"),
+    ).toHaveClass("level-3");
+    const strip = await screen.findByRole("group", { name: "Recent days for Drink water" });
+    expect(
+      within(strip).getByRole("button", { name: "Jul 1: in progress: 4 of 5 glasses" }),
+    ).toHaveClass("level-3");
   });
 
   it("backfills a missed day straight from the card strip, and a second tap clears it", async () => {

@@ -190,7 +190,7 @@ describe("Quick add dialog — title-first capture (#540)", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it("opens Details on an applied Assisted Capture parse, so the confirmation beat shows what changed", async () => {
+  it("keeps Details as it was on an applied Assisted Capture parse: the summary shows what changed", async () => {
     const errands = fakeList("Errands");
     const api = installFakeApi({
       lists: [INBOX, errands],
@@ -215,15 +215,16 @@ describe("Quick add dialog — title-first capture (#540)", () => {
     await within(dialog).findByLabelText("Assist available");
     await user.click(within(dialog).getByRole("button", { name: "Add task" }));
 
-    await waitFor(() =>
-      expect(within(dialog).getByRole("button", { name: "Details" })).toHaveAttribute(
-        "aria-expanded",
-        "true",
-      ),
-    );
-    expect(within(dialog).getByRole("combobox", { name: "List" })).toHaveValue(String(errands.id));
+    // The confirmation beat is the summary row: every applied field has a
+    // chip there, so the parse leaves Details collapsed (#540 kept Assisted
+    // Capture's contract as it was).
     const summary = within(dialog).getByRole("group", { name: "Summary" });
-    expect(within(summary).getByText("Errands")).toBeInTheDocument();
+    expect(await within(summary).findByText("Errands")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Details" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(within(dialog).queryByRole("combobox", { name: "List" })).not.toBeInTheDocument();
     expect(within(summary).getByText("Aug 18")).toBeInTheDocument();
     expect(within(summary).getByText("monthly on the 1st")).toBeInTheDocument();
     expect(taskPosts(api.requests)).toHaveLength(0);

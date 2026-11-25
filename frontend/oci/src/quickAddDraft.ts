@@ -1,5 +1,6 @@
 import type { Priority } from "./api";
 import type { DateDraft } from "./dates";
+import { PRIORITY_LABELS } from "./grouping";
 
 /** An unsent Quick-Add capture (#541): the title and the choices the User
  * made by hand. Transient Assist state (recurrence / reminder chips, the
@@ -49,6 +50,7 @@ function isDraft(value: unknown): value is QuickAddDraft {
     typeof draft.title === "string" &&
     (draft.listId === null || typeof draft.listId === "number") &&
     typeof draft.priority === "string" &&
+    Object.keys(PRIORITY_LABELS).includes(draft.priority) &&
     typeof draft.priorityChosen === "boolean" &&
     Array.isArray(draft.tagIds) &&
     draft.tagIds.every((id) => typeof id === "number") &&
@@ -60,10 +62,11 @@ function isDraft(value: unknown): value is QuickAddDraft {
   );
 }
 
-/** The User's own unsent draft, or null. Any draft stored for a different
- * User in this tab — one whose session ended without a log out, say — is
- * dropped on the way, so it can never be shown to whoever signed in next. */
-export function loadQuickAddDraft(userId: number): QuickAddDraft | null {
+/** Drops every draft stored for a User other than `userId` in this tab —
+ * one whose session ended without a log out (a 401 clears no storage), say.
+ * Called as soon as the signed-in User is known, so another User's unsent
+ * text never sits in storage waiting for someone to open Quick-Add. */
+export function forgetOtherUsersDrafts(userId: number): void {
   try {
     const own = keyFor(userId);
     const keys = Array.from({ length: sessionStorage.length }, (_, index) =>
@@ -72,7 +75,17 @@ export function loadQuickAddDraft(userId: number): QuickAddDraft | null {
     for (const key of keys) {
       if (key?.startsWith(KEY_PREFIX) && key !== own) sessionStorage.removeItem(key);
     }
-    const raw = sessionStorage.getItem(own);
+  } catch {
+    // Storage unavailable: then there is nothing in it to forget either.
+  }
+}
+
+/** The User's own unsent draft, or null. Other Users' drafts are dropped on
+ * the way too, so one can never be shown to whoever signed in next. */
+export function loadQuickAddDraft(userId: number): QuickAddDraft | null {
+  forgetOtherUsersDrafts(userId);
+  try {
+    const raw = sessionStorage.getItem(keyFor(userId));
     if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
     return isDraft(parsed) && !isEmptyDraft(parsed) ? parsed : null;

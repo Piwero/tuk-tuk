@@ -44,7 +44,8 @@ again.
 Closing the dialog without saving keeps what you typed for this browser tab.
 Open it again and your draft is back, with a **Draft restored** note. A list
 or date you chose in the draft stays, even if you reopen from another list.
-Click **Discard draft** to start empty. **Cancel** only closes the dialog.
+Click **Discard draft** to start empty; **Undo** on the note that follows
+brings it back. **Cancel** only closes the dialog.
 Saving the task clears the draft. Logging out clears it too, and nobody else
 who signs in on the tab sees it.
 

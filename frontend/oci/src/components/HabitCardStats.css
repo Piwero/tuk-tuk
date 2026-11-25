@@ -54,11 +54,10 @@
     flex-wrap: wrap;
     gap: 3px;
   }
-  /* Before the Habit start: a neutral dash instead of the empty heat square a
-   miss shows, the same mark the week grid uses. */
+  /* Before the Habit start: the shared dash (HabitHistory.css) instead of the
+   empty heat square a miss shows. */
   .habit-strip-day.heatmap-day.not-started {
-    background: linear-gradient(var(--text-tertiary), var(--text-tertiary)) center / 8px 2px
-      no-repeat;
+    background: transparent;
   }
   .habit-strip-day.today {
     box-shadow: inset 0 0 0 1.5px var(--border-strong);

@@ -309,6 +309,25 @@ describe("AuthGate and the Quick-Add session draft (#541)", () => {
     expect(within(dialog).queryByText("Draft restored")).not.toBeInTheDocument();
     expect(JSON.stringify({ ...sessionStorage })).not.toContain("Call the dentist");
   });
+
+  it("forgets the previous User's draft as soon as the next User is signed in", async () => {
+    const api = installFakeApi({ loggedIn: true, users: [FAKE_ADMIN, fakeUser("bea")] });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+    await leaveQuickAddDraft(user, "Call the dentist");
+    expect(JSON.stringify({ ...sessionStorage })).toContain("Call the dentist");
+
+    api.loggedIn = false;
+    await act(() => expect(fetchLists()).rejects.toThrow());
+    await signIn(user, "bea", FAKE_PASSWORD);
+
+    // Gone from storage before Quick add is ever opened, not on its next open.
+    await screen.findByRole("button", { name: "Quick add" });
+    await waitFor(() =>
+      expect(JSON.stringify({ ...sessionStorage })).not.toContain("Call the dentist"),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });
 
 describe("AuthGate pending forced step", () => {

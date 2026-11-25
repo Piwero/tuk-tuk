@@ -4,13 +4,13 @@ A Check-in is keyed by (habit, date) and PUT replaces the day's whole value,
 so re-taps and backfill corrections are idempotent by construction.
 """
 
-from datetime import date, tzinfo
+from datetime import date
 from typing import Annotated
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
+from app.caller_zone import caller_zone
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.habit_frequency import due_on, validate_frequency
@@ -185,19 +185,6 @@ async def delete_check_in(habit_id: int, day: date, session: SessionDep) -> None
     await session.commit()
 
 
-def required_zone(tz: str) -> tzinfo:
-    """The caller's IANA timezone. Required, never defaulted: server UTC
-    midnight is not the User's day."""
-    try:
-        return ZoneInfo(tz)
-    except (KeyError, ValueError):
-        raise APIError(
-            status_code=422,
-            code="validation_error",
-            message=f"Unknown IANA timezone {tz!r}",
-        ) from None
-
-
 @router.get("/{habit_id}/stats")
 async def read_habit_stats(
     habit_id: int,
@@ -213,7 +200,8 @@ async def read_habit_stats(
     `eligible_from`, the creation instant read in `tz` (the caller's IANA
     timezone, required).
     """
-    zone = required_zone(tz)
+    # Required, never defaulted: server UTC midnight is not the User's day.
+    zone = caller_zone(tz)
     habit = await get_habit_or_404(habit_id, session)
     rows = (await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit_id))).all()
     checked = {row.date for row in rows}

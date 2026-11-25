@@ -143,6 +143,34 @@ describe("Quick add dialog session draft", () => {
     expect(within(dialog).queryByText("Draft restored")).not.toBeInTheDocument();
   });
 
+  it("offers Undo inside the dialog after Discard draft, which brings the draft back", async () => {
+    installFakeApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("link", { name: "Inbox" });
+
+    const dialog = await openQuickAdd(user);
+    await user.type(within(dialog).getByLabelText("Title"), "Call the dentist");
+    await user.click(within(dialog).getByRole("button", { name: "Discard draft" }));
+
+    // The undo toast lives in the dialog: the app's own toasts sit under the
+    // scrim, out of reach of the dialog's Tab trap.
+    expect(within(dialog).getByLabelText("Title")).toHaveValue("");
+    expect(within(dialog).getByRole("status")).toHaveTextContent("Draft discarded");
+    await user.click(within(dialog).getByRole("button", { name: "Undo" }));
+
+    const title = within(dialog).getByLabelText("Title");
+    await waitFor(() => expect(title).toHaveValue("Call the dentist"));
+    expect(title).toHaveFocus();
+    expect(within(dialog).getByText("Draft restored")).toBeVisible();
+    expect(within(dialog).queryByRole("status")).not.toBeInTheDocument();
+    // Undone for real: it survives closing and reopening, like any draft.
+    await escapeDialog(user);
+    expect(within(await openQuickAdd(user)).getByLabelText("Title")).toHaveValue(
+      "Call the dentist",
+    );
+  });
+
   it("clears the draft once it is saved as a Task", async () => {
     const api = installFakeApi();
     const user = userEvent.setup();

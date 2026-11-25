@@ -1,6 +1,6 @@
 import "./QuickAddDialog.css";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   createTag,
@@ -46,10 +46,12 @@ import {
   type QuickAddDraft,
 } from "../quickAddDraft";
 import { useAssistAvailable } from "../useAssistAvailable";
+import { useUndoQueue } from "../undoQueue";
 import { DateFieldset } from "./DateFieldset";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
+import { ToastStack } from "./ToastStack";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
 /** A resolved `@` schedule chip as a Task create payload. */
@@ -127,21 +129,62 @@ interface QuickAddDialogProps {
  * for the signed-in User in this tab's sessionStorage, so dismissing the
  * dialog any way at all loses nothing. Reopening restores it — its List and
  * date over the context the dialog opened with — and says "Draft restored".
- * A save clears it; a failed save keeps it; "Discard draft" drops it.
+ * A save clears it; a failed save keeps it; "Discard draft" drops it, with
+ * the app's usual Undo toast to bring it back.
  */
 export function QuickAddDialog(props: QuickAddDialogProps): React.JSX.Element {
+  const { userId } = props;
   // Discarding starts a fresh form: remounting it resets every field to the
   // opening context and puts the caret back in the title in one move.
   const [generation, setGeneration] = useState(0);
-  return (
-    <QuickAddForm
-      key={generation}
-      {...props}
-      onDiscard={() => {
-        if (props.userId !== null) clearQuickAddDraft(props.userId);
+  // The app's undo toasts sit under a Modal's scrim, out of reach of its Tab
+  // trap, so the dialog keeps its own queue and stack inside the panel.
+  const undo = useUndoQueue();
+
+  function discard(draft: QuickAddDraft): void {
+    setGeneration((current) => current + 1);
+    if (userId === null) return;
+    clearQuickAddDraft(userId);
+    // Undo is "write it back and restore": the remounted form reads the
+    // draft the way any reopen does, and says "Draft restored".
+    undo.push(
+      "Draft discarded",
+      () => {},
+      () => {
+        saveQuickAddDraft(userId, draft);
         setGeneration((current) => current + 1);
-      }}
-    />
+      },
+    );
+  }
+
+  return (
+    <>
+      <QuickAddForm key={generation} {...props} onDiscard={discard} />
+      <ToastStack entries={undo.entries} onUndo={undo.undo} onDismiss={undo.dismiss} />
+    </>
+  );
+}
+
+/** One summary chip (#540): what a field is set to, and an "x" that takes
+ * it away. `kind` picks the shared chip look the rest of the app gives that
+ * field (a List, a Tag-like label, a schedule), as the command palette's
+ * capture preview does. */
+function RemovableChip({
+  kind,
+  removeLabel,
+  onRemove,
+  children,
+}: {
+  kind: "list" | "tag" | "date";
+  removeLabel: string;
+  onRemove: () => void;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <span className={`${kind}-chip token-chip`}>
+      {children}
+      <IconButton icon="x" size={12} label={removeLabel} onClick={onRemove} />
+    </span>
   );
 }
 
@@ -171,7 +214,7 @@ function QuickAddForm({
   onCreated,
   onClose,
   onDiscard,
-}: QuickAddDialogProps & { onDiscard: () => void }): React.JSX.Element {
+}: QuickAddDialogProps & { onDiscard: (draft: QuickAddDraft) => void }): React.JSX.Element {
   const inboxId = lists.find((list) => list.is_inbox)?.id ?? lists[0]?.id ?? null;
   // Read once, on open: the draft this User left unsent, if any.
   const [restored] = useState(() => restorableDraft(userId, lists, tags));
@@ -217,6 +260,7 @@ function QuickAddForm({
   // focusables too — and every value lives in this component's state, so
   // collapsing never loses what was chosen.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
   // Save feedback (#544). `busy` is the in-flight guard: a ref, because a
   // second click or Enter repeat lands in the same tick as the first, before
   // any state it set has re-rendered. `saving` is what the button shows.
@@ -234,19 +278,21 @@ function QuickAddForm({
   // The draft as it stands: the title and the hand-made choices, never the
   // transient Assist state. Kept on every change, so Escape, the X, Cancel,
   // a backdrop click and a failed save all leave it behind alike.
-  const draft: QuickAddDraft = {
-    title,
-    listId: listChosen ? listId : null,
-    priority,
-    priorityChosen,
-    tagIds,
-    newTag,
-    dateDraft,
-  };
-  const draftJson = JSON.stringify(draft);
+  const draft = useMemo<QuickAddDraft>(
+    () => ({
+      title,
+      listId: listChosen ? listId : null,
+      priority,
+      priorityChosen,
+      tagIds,
+      newTag,
+      dateDraft,
+    }),
+    [title, listChosen, listId, priority, priorityChosen, tagIds, newTag, dateDraft],
+  );
   useEffect(() => {
-    if (userId !== null) saveQuickAddDraft(userId, JSON.parse(draftJson) as QuickAddDraft);
-  }, [userId, draftJson]);
+    if (userId !== null) saveQuickAddDraft(userId, draft);
+  }, [userId, draft]);
 
   /** A title edit re-arms Assist: the next "Add task" parses the new text
    * rather than saving stale suggestions, keeping the behaviour "parse on
@@ -384,9 +430,9 @@ function QuickAddForm({
         setTagIds((current) => [...new Set([...current, ...suggestedTagIds])]);
       }
       setAssistApplied(true);
-      // The populated form is the confirmation beat: open it, so the review
-      // happens on the controls themselves, not only on summary chips.
-      setDetailsOpen(true);
+      // The populated form is the confirmation beat. Details stays as the
+      // User left it: every field Assist can fill has a summary chip, so the
+      // review is on screen either way.
       return true;
     } finally {
       setParsing(false);
@@ -623,88 +669,76 @@ function QuickAddForm({
               {destination?.name ?? "Inbox"}
             </span>
           ) : (
-            <span className="date-chip token-chip">
+            <RemovableChip
+              kind="list"
+              removeLabel={`Remove list (${destination.name})`}
+              onRemove={removeListChip}
+            >
               {destination.name}
-              <IconButton
-                icon="x"
-                size={12}
-                label={`Remove list (${destination.name})`}
-                onClick={removeListChip}
-              />
-            </span>
+            </RemovableChip>
           )}
           {priority !== "none" && (
-            <span className="date-chip token-chip">
+            <RemovableChip
+              kind="tag"
+              removeLabel={`Remove priority (${PRIORITY_LABELS[priority]})`}
+              onRemove={() => {
+                setPriority("none");
+                setPriorityChosen(true);
+              }}
+            >
               {PRIORITY_LABELS[priority]} priority
-              <IconButton
-                icon="x"
-                size={12}
-                label={`Remove priority (${PRIORITY_LABELS[priority]})`}
-                onClick={() => {
-                  setPriority("none");
-                  setPriorityChosen(true);
-                }}
-              />
-            </span>
+            </RemovableChip>
           )}
           {dateLabel !== null && (
-            <span className="date-chip token-chip">
+            <RemovableChip
+              kind="date"
+              removeLabel={`Remove date (${dateLabel})`}
+              onRemove={() => changeDate(emptyDraft())}
+            >
               {dateLabel}
-              <IconButton
-                icon="x"
-                size={12}
-                label={`Remove date (${dateLabel})`}
-                onClick={() => changeDate(emptyDraft())}
-              />
-            </span>
+            </RemovableChip>
           )}
           {tags
             .filter((tag) => tagIds.includes(tag.id))
             .map((tag) => (
-              <span key={tag.id} className="date-chip token-chip">
+              <RemovableChip
+                key={tag.id}
+                kind="tag"
+                removeLabel={`Remove tag (${tag.name})`}
+                onRemove={() => toggleTag(tag.id)}
+              >
                 #{tag.name}
-                <IconButton
-                  icon="x"
-                  size={12}
-                  label={`Remove tag (${tag.name})`}
-                  onClick={() => toggleTag(tag.id)}
-                />
-              </span>
+              </RemovableChip>
             ))}
           {newTag.trim() !== "" && (
-            <span className="date-chip token-chip">
+            <RemovableChip
+              kind="tag"
+              removeLabel={`Remove tag (${newTag.trim()})`}
+              onRemove={() => setNewTag("")}
+            >
               #{newTag.trim()}
-              <IconButton
-                icon="x"
-                size={12}
-                label={`Remove tag (${newTag.trim()})`}
-                onClick={() => setNewTag("")}
-              />
-            </span>
+            </RemovableChip>
           )}
           {(recurrence !== null || reminders.length > 0) && (
             <div className="quick-add-assist-chips" role="group" aria-label="Assist suggestions">
               {recurrence !== null && (
-                <span className="date-chip token-chip">
+                <RemovableChip
+                  kind="date"
+                  removeLabel="Remove recurrence"
+                  onRemove={() => setRecurrence(null)}
+                >
                   {formatRecurrenceRule(recurrence)}
-                  <IconButton
-                    icon="x"
-                    size={12}
-                    label="Remove recurrence"
-                    onClick={() => setRecurrence(null)}
-                  />
-                </span>
+                </RemovableChip>
               )}
               {reminders.map((offset) => (
-                <span key={offset} className="date-chip token-chip">
+                <RemovableChip
+                  key={offset}
+                  kind="date"
+                  removeLabel={`Remove reminder (${formatReminderOffset(offset)})`}
+                  onRemove={() => removeReminder(offset)}
+                >
                   {formatReminderOffset(offset)}
-                  <IconButton
-                    icon="x"
-                    size={12}
-                    label={`Remove reminder (${formatReminderOffset(offset)})`}
-                    onClick={() => removeReminder(offset)}
-                  />
-                </span>
+                </RemovableChip>
               ))}
             </div>
           )}
@@ -714,14 +748,14 @@ function QuickAddForm({
           className="btn-quiet quick-add-details-toggle"
           aria-expanded={detailsOpen}
           // Collapsed, the panel is unmounted: point at it only when it exists.
-          aria-controls={detailsOpen ? "quick-add-details" : undefined}
+          aria-controls={detailsOpen ? detailsId : undefined}
           onClick={() => setDetailsOpen((open) => !open)}
         >
           <Icon name={detailsOpen ? "chevron-up" : "chevron-down"} size={16} />
           Details
         </button>
         {detailsOpen && (
-          <div className="quick-add-details" id="quick-add-details">
+          <div className="quick-add-details" id={detailsId}>
             <label>
               List
               <select
@@ -839,7 +873,7 @@ function QuickAddForm({
             className="btn-quiet quick-add-discard"
             type="button"
             onClick={() => {
-              if (!busy.current) onDiscard();
+              if (!busy.current) onDiscard(draft);
             }}
           >
             Discard draft
