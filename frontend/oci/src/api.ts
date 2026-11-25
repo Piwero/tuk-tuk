@@ -1969,11 +1969,17 @@ export interface ReminderClaim {
   /** The Task occurrence's due date this Reminder belongs to. */
   occurrence_due: string;
   fire_at: string;
-  state: "claimed" | "shown" | "failed";
+  state: "claimed" | "shown" | "failed" | "snoozed";
   attempt: number;
+  /** When a snoozed Reminder comes due again (issue #566); null if never
+   * snoozed. Optional for servers before #566. */
+  snoozed_until?: string | null;
   lease_token: string;
   lease_expires_at: string;
 }
+
+/** A ledger row as the server reports it, without a lease. */
+export type ReminderDeliveryRead = Omit<ReminderClaim, "lease_token" | "lease_expires_at">;
 
 /** Quiet hours (issue #567): a band of the day during which Reminder
  * notifications are held and notify once when it ends. "HH:MM" labels on
@@ -2032,6 +2038,17 @@ export function reportReminderDelivery(
   return request(`/api/v1/reminder-deliveries/${claim.id}/${outcome}`, {
     method: "POST",
     body: JSON.stringify({ lease_token: claim.lease_token }),
+  });
+}
+
+/** Snoozes one delivered Reminder (issue #566): it comes due again
+ * `minutes` from now. Only the delivery ledger changes; the Task's dates
+ * and Reminder offsets stay as they are. 409 `reminder_stale` when the
+ * occurrence is gone (Task completed, redated, Reminder removed). */
+export function snoozeReminder(id: number, minutes: number): Promise<ReminderDeliveryRead> {
+  return request(`/api/v1/reminder-deliveries/${id}/snooze`, {
+    method: "POST",
+    body: JSON.stringify({ minutes }),
   });
 }
 

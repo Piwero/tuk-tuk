@@ -14,7 +14,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.conftest import FakeClock
-from tests.test_reminder_delivery import CLAIM, claim, enable_delivery, ledger, make_task, report
+from tests.test_reminder_delivery import (
+    CLAIM,
+    LEDGER,
+    claim,
+    enable_delivery,
+    ledger,
+    make_task,
+    report,
+)
 
 PATH = "/api/v1/settings/quiet-hours"
 
@@ -252,6 +260,32 @@ class TestHeldRemindersStayVisible:
         assert len(page["items"]) == 1
         assert page["held"] == []
         assert page["quiet_until"] is None
+
+
+class TestSnoozeIntoQuietHours:
+    def test_a_snooze_ending_inside_quiet_hours_is_held_until_they_end(
+        self, client: TestClient, night: FakeClock
+    ) -> None:
+        """Snooze (#566) sets the effective fire time; Quiet hours then
+        defer it: deliver_at(effective_fire_at(...), quiet, zone)."""
+        task = make_task(client, datetime(2026, 11, 10, 21, 55, tzinfo=UTC), ["PT0S"])
+        night.now = datetime(2026, 11, 10, 21, 55, tzinfo=UTC)
+        [item] = claim(client, "?tz=UTC")
+        report(client, item, "shown")
+        snoozed = client.post(f"{LEDGER}/{item['id']}/snooze", json={"minutes": 10})
+        assert snoozed.status_code == 200, snoozed.text
+
+        night.now = datetime(2026, 11, 10, 22, 5, tzinfo=UTC)
+        page = claim_page(client)
+        assert page["items"] == []
+        assert [
+            (held["task_id"], held["fire_at"], held["deliver_at"]) for held in page["held"]
+        ] == [(task["id"], "2026-11-10T21:55:00Z", "2026-11-11T07:00:00Z")]
+
+        night.now = datetime(2026, 11, 11, 7, 0, tzinfo=UTC)
+        [again] = claim(client, "?tz=UTC")
+        assert again["id"] == item["id"]
+        assert claim(client, "?tz=UTC") == []
 
 
 class TestQuietHoursTimezone:

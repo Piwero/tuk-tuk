@@ -102,10 +102,16 @@ export interface FakeReminderClaim {
   offset: string;
   occurrence_due: string;
   fire_at: string;
-  state: "claimed" | "shown" | "failed";
+  state: "claimed" | "shown" | "failed" | "snoozed";
   attempt: number;
+  snoozed_until?: string | null;
   lease_token: string;
   lease_expires_at: string;
+}
+
+export interface FakeReminderSnooze {
+  id: number;
+  minutes: number;
 }
 
 /** A Reminder held by Quiet hours, as the claim lists it (issue #567). */
@@ -432,6 +438,9 @@ export interface FakeApiState {
   reminderClaims: FakeReminderClaim[];
   /** Every shown/failed report a tab sent, in order. */
   reminderReports: FakeReminderReport[];
+  /** Every snooze a tab sent, in order (issue #566). */
+  reminderSnoozes: FakeReminderSnooze[];
+
   /** Quiet hours (issue #567): the User's band, and what each claim says
    * is held and until when. The fake never computes holds itself. */
   quietHours: { enabled: boolean; start: string; end: string };
@@ -1285,6 +1294,8 @@ export function installFakeApi({
     reminderNotifications,
     reminderClaims: dueReminders.map((claim) => ({ ...claim })),
     reminderReports: [],
+    reminderSnoozes: [],
+
     quietHours: { ...quietHours },
     heldReminders: heldReminders.map((held) => ({ ...held })),
     quietUntil,
@@ -3552,6 +3563,42 @@ export function installFakeApi({
       const { lease_token } = body as { lease_token: string };
       state.reminderReports.push({ id, outcome, lease_token });
       if (claim.state === "claimed") claim.state = outcome;
+      return json({ ...claim });
+    }
+    const reminderSnooze = url.pathname.match(/^\/api\/v1\/reminder-deliveries\/(\d+)\/snooze$/);
+    if (reminderSnooze && method === "POST") {
+      // Mirrors the server (issue #566): only the ledger row changes, and
+      // an occurrence that is gone (Task completed, redated, Reminder
+      // removed) is refused as stale.
+      const id = Number(reminderSnooze[1]);
+      const claim = state.reminderClaims.find((candidate) => candidate.id === id);
+      if (claim === undefined) {
+        return json(
+          { error: { code: "not_found", message: `Reminder delivery ${id} not found` } },
+          404,
+        );
+      }
+      const task = state.tasks.find((candidate) => candidate.id === claim.task_id);
+      if (
+        task === undefined ||
+        task.completed ||
+        task.due_date !== claim.occurrence_due ||
+        !task.reminders.includes(claim.offset)
+      ) {
+        return json(
+          {
+            error: {
+              code: "reminder_stale",
+              message: "This reminder's Task occurrence has changed since it was delivered",
+            },
+          },
+          409,
+        );
+      }
+      const { minutes } = body as { minutes: number };
+      state.reminderSnoozes.push({ id, minutes });
+      claim.state = "snoozed";
+      claim.snoozed_until = new Date(Date.now() + minutes * 60_000).toISOString();
       return json({ ...claim });
     }
     if (url.pathname === "/api/v1/settings/quiet-hours") {

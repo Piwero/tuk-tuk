@@ -77,6 +77,23 @@ read through the same filter.
 **Click.** Clicking a notification focuses the tab, closes the
 notification and opens its Task's detail. Check Items carry no Reminders.
 
+**Snooze (amendment, #566).** A page notification can't carry action
+buttons without a Service Worker, so each Reminder a tab showed also stays
+as an in-app card with Open task and Snooze. `POST …/{id}/snooze
+{minutes}` (1 to 1440) sets `snoozed_until` on that ledger row and marks it
+`snoozed`. It is an override for that one occurrence, not a Task edit: the
+Task's start, due date, Reminder offsets and recurrence are never written.
+While `snoozed_until` is set it is the row's effective fire time
+(`effective_fire_at` in `app.reminder_delivery`, the single place a fire
+time is overridden; Quiet hours compose there too). When it comes due, the
+next claim re-leases the same row as a fresh delivery (attempt 1). The
+same window, lease, retry and deduplication rules then apply, measured from
+the snoozed time. Snoozing replaces the lease token, so a tab still holding
+the old one gets `lease_lost`. Snoozing again moves the time. Stale rules
+hold: a completed, advanced or redated Task, or a removed Reminder, yields
+no candidate, so the snooze is cancelled. Snoozing such an occurrence is
+refused with `409 reminder_stale`.
+
 **Quiet hours (#567).** A User may set Quiet hours
 (`GET`/`PUT /api/v1/settings/quiet-hours` with `{enabled, start, end}`,
 off by default, 22:00–07:00). They are a notification setting only. Active
@@ -88,15 +105,16 @@ layout band, and the claim never reads them.
   midnight: a start after the end ends the next day. A start equal to its
   end is refused with `422 invalid_quiet_hours`, as is a label that is not
   a time of day. The start is inside the band and the end is not.
-- A Reminder whose fire time falls inside the band is held. Its delivery
-  time (`deliver_at`) becomes the end of that band. Its delivery window
-  opens there instead of at the fire time, and `fire_at` itself never
-  changes. One helper, `reminder_delivery.deliver_at`, decides the delivery
-  time. A snooze override (#566) belongs there too.
+- A Reminder whose effective fire time falls inside the band is held. Its
+  delivery time (`deliver_at`) becomes the end of that band. Its delivery
+  window opens there instead, and `fire_at` itself never changes. The
+  overrides compose in one order:
+  `deliver_at(effective_fire_at(nominal, occurrence_key(task, offset), snoozes), quiet, zone)`.
+  A snooze that ends inside Quiet hours is therefore held too.
 - Nothing is claimed while `now` is inside the band. A Reminder that fired
   just before the band and was not claimed by then is missed, not held.
 - Held Reminders keep the same ledger key `(task_id, offset,
-  occurrence_due)`, so several tabs coming out of Quiet hours together
+occurrence_due)`, so several tabs coming out of Quiet hours together
   still notify once. Rows are written only when claimed, at the band's end.
 - The claim response adds `held` (the Reminders that already fired and are
   waiting, soonest first, each with `fire_at` and `deliver_at`) and
