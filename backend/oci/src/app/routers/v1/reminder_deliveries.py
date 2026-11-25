@@ -21,7 +21,7 @@ from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/reminder-deliveries", tags=["reminder deliveries"])
 
-DeliveryState = Literal["claimed", "shown", "failed"]
+DeliveryState = Literal["claimed", "shown", "failed", "dismissed"]
 
 
 class ReminderDeliveryRead(BaseModel):

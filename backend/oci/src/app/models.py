@@ -518,7 +518,8 @@ class ReminderDelivery(OwnedMixin, Base):
     occurrence_due: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     fire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # "claimed" (a tab holds or held the lease), "shown" (the browser
-    # reported display) or "failed" (the browser refused to show it).
+    # reported display), "failed" (the browser refused to show it) or
+    # "dismissed" (the User dismissed it as a missed reminder, issue #565).
     state: Mapped[str] = mapped_column(String(16), default="claimed")
     attempts: Mapped[int] = mapped_column(default=1)
     lease_token: Mapped[str] = mapped_column(String(64))

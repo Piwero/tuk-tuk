@@ -98,6 +98,13 @@ notification and opens its Task's detail. Check Items carry no Reminders.
 - Snooze (#566) and Quiet hours (#567) extend the rule that decides when a
   ledger row is due. Missed reminders (#565) read Reminders whose window
   passed without a `shown` row. None of them change the lease protocol.
+- Missed reminders (#565) are worked out from the current open Tasks like
+  a claim, since most have no ledger row, and are listed only while the
+  opt-in is on. A `failed` row or an abandoned claim counts as missed; a
+  claim whose lease is still running does not, yet. Dismissing one writes
+  a `dismissed` ledger row (or settles the existing one, revoking its
+  lease), so it never reappears or notifies. A never-claimed dismissed row
+  carries `attempts` 0 and an already-expired lease.
 - Background or closed-app delivery would need Web Push and a Service
   Worker, verified per browser. That is a separate decision, not part of
   this one.
