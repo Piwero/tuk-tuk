@@ -17,7 +17,7 @@ import {
 import { addDays, formatDate, fromDayIso, localDayOf, shortDayLabel } from "../dates";
 import { habitDueOn, habitFrequencyLabel } from "../habitFrequency";
 import { tapCheckIn } from "../habitCheckIn";
-import { heatLevel, stripDays } from "../habitStats";
+import { habitStart, heatLevel, stripDays } from "../habitStats";
 import { HabitActionsMenu } from "./HabitActionsMenu";
 import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
@@ -188,7 +188,9 @@ export function HabitsView({
 
   /** The week-grid cell for one Habit's day: its state, fill level and
    * the words a screen reader hears. Partial Numeric days take a lighter
-   * step of the heat ramp than a met Target. */
+   * step of the heat ramp than a met Target. A day before the Habit start
+   * is "not started": the Habit didn't exist yet, so it can't have been
+   * missed. It stays a button, since tapping it is a deliberate backfill. */
   function cellState(habit: Habit, day: string): { state: CellState; level: number; text: string } {
     const value = valueOn(habit, day);
     if (value >= habit.target) {
@@ -207,6 +209,9 @@ export function HabitsView({
     }
     if (!habitDueOn(habit.frequency, day)) {
       return { state: "not-scheduled", level: 0, text: "not scheduled" };
+    }
+    if (day < habitStart(habit, statsByHabit.get(habit.id), today)) {
+      return { state: "not-started", level: 0, text: "not started" };
     }
     return day === today
       ? { state: "open-today", level: 0, text: "not yet checked in" }
@@ -418,6 +423,7 @@ export function HabitsView({
               </section>
             </>
           )}
+      {habits.length > 0 && <DayLegend />}
       {archived.length > 0 && (
         <section className="archived-habits">
           <h2>Archived</h2>
@@ -446,7 +452,38 @@ export function HabitsView({
   );
 }
 
-type CellState = "done" | "partial" | "open-today" | "missed" | "not-scheduled" | "future";
+type CellState =
+  "done" | "partial" | "open-today" | "missed" | "not-started" | "not-scheduled" | "future";
+
+/** What each day square means, in words that are always on screen: the
+ * cells' own names are only heard, and the strip's hint needs a hover. */
+const LEGEND: { state: CellState; level: number; text: string }[] = [
+  { state: "done", level: 4, text: "Checked in" },
+  { state: "partial", level: 2, text: "In progress" },
+  { state: "open-today", level: 0, text: "Not yet: today, still open" },
+  { state: "missed", level: 0, text: "Missed" },
+  { state: "not-started", level: 0, text: "Not started: before the Habit began" },
+  { state: "not-scheduled", level: 0, text: "Not scheduled" },
+  { state: "future", level: 0, text: "Future" },
+];
+
+function DayLegend(): React.JSX.Element {
+  return (
+    <ul className="habits-legend" aria-label="What the days mean">
+      {LEGEND.map(({ state, level, text }) => (
+        <li key={state}>
+          <span
+            aria-hidden="true"
+            className={`habit-cell habits-legend-swatch state-${state} heatmap-day level-${level}`}
+          >
+            {state === "done" && <Icon name="check" size={10} />}
+          </span>
+          {text}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /** "Friday, Jul 3" — a week-grid column's spoken day. */
 function weekdayLongLabel(day: string): string {

@@ -719,6 +719,9 @@ export function fakeFolder(name: string, overrides: Partial<FakeFolder> = {}): F
   return { id, name, sort_order: id * SORT_GAP, ...overrides };
 }
 
+/** A Habit as the server holds it. By default an established one, created long
+ * before the suites' pinned "today", so an empty past day reads as missed. Pass
+ * `created_at` to put its Habit start among the days on screen. */
 export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): FakeHabit {
   return {
     id: nextHabitId++,
@@ -732,7 +735,7 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
     encouragement: "",
     frequency: "FREQ=DAILY",
     is_archived: false,
-    created_at: "2026-07-03T10:00:00Z",
+    created_at: "2025-01-01T10:00:00Z",
     ...overrides,
   };
 }
@@ -2592,7 +2595,8 @@ export function installFakeApi({
     }
     if (method === "POST" && url.pathname === "/api/v1/habits") {
       const input = body as { name: string } & Partial<Omit<FakeHabit, "id" | "name">>;
-      const created = fakeHabit(input.name, input);
+      // Like the backend, a new Habit is created now: its Habit start is today.
+      const created = fakeHabit(input.name, { ...input, created_at: new Date().toISOString() });
       state.habits.push(created);
       return json(created, 201);
     }
