@@ -22,6 +22,7 @@ import {
   fetchGoogleStatus,
   googleConnectUrl,
   refreshGoogleCalendars,
+  fetchNowSettings,
   fetchStandupSettings,
   fetchVoiceConfig,
   fetchSectionSettings,
@@ -34,6 +35,7 @@ import {
   saveGoogleCredentials,
   saveVoiceConfig,
   updateGoogleCalendar,
+  updateNowSettings,
   updateStandupSettings,
   updateSectionSettings,
   type AssistConfig,
@@ -1224,6 +1226,8 @@ function MyAccountPanel({
   // Enabled by default (issue #140) so the toggle doesn't flash off before
   // the real value loads — mirrors the App-level nav item's own default.
   const [standupEnabled, setStandupEnabled] = useState(true);
+  // Now (issue #547) is off by default, unlike the sections above.
+  const [nowEnabled, setNowEnabled] = useState(false);
   // Enabled by default (this feature), same reasoning as standupEnabled
   // above — mirrors the App-level nav items' own default.
   const [sectionSettings, setSectionSettings] = useState<SectionSettings>({
@@ -1249,6 +1253,10 @@ function MyAccountPanel({
   }, []);
 
   useEffect(() => {
+    void fetchNowSettings().then((settings) => setNowEnabled(settings.enabled));
+  }, []);
+
+  useEffect(() => {
     void fetchAssistConfig().then(setAssistConfig);
   }, []);
 
@@ -1259,6 +1267,11 @@ function MyAccountPanel({
   useEffect(() => {
     void fetchVoiceConfig().then(setVoiceConfig);
   }, []);
+
+  async function handleNowToggle(): Promise<void> {
+    const updated = await updateNowSettings(!nowEnabled);
+    setNowEnabled(updated.enabled);
+  }
 
   async function handleStandupToggle(): Promise<void> {
     const updated = await updateStandupSettings(!standupEnabled);
@@ -1480,6 +1493,19 @@ function MyAccountPanel({
               <span>
                 <span className="settings-feature-name">Stand-up</span>
                 <span className="settings-feature-desc">Daily review.</span>
+              </span>
+            </label>
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={nowEnabled}
+                  onChange={() => void handleNowToggle()}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Now</span>
+                <span className="settings-feature-desc">One Task to do next, in Today.</span>
               </span>
             </label>
           </div>

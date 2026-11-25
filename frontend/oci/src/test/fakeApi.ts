@@ -348,6 +348,10 @@ export interface FakeApiState {
   /** The Stand-up visibility toggle (issue #140) — server-defaulted to
    * true, matching the backend's default. */
   standupEnabled: boolean;
+  /** Now (issue #547): the Settings toggle (off by default) and the chosen
+   * Task's id, stored apart from every other setting. */
+  nowEnabled: boolean;
+  nowTaskId: number | null;
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature) — server-defaulted to all-true, matching the backend. */
   sectionSettings: {
@@ -942,6 +946,8 @@ export function installFakeApi({
   standupEntries = [],
   standupYesterdaySuggestions = [],
   standupEnabled = true,
+  nowEnabled = false,
+  nowTaskId = null,
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
@@ -1017,6 +1023,9 @@ export function installFakeApi({
   /** The Stand-up visibility toggle (issue #140). Defaults to true, matching
    * the backend's server-defaulted-true column. */
   standupEnabled?: boolean;
+  /** Now (issue #547): off by default, nothing selected. */
+  nowEnabled?: boolean;
+  nowTaskId?: number | null;
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature). Defaults to all-true, matching the backend's default. */
   sectionSettings?: {
@@ -1105,6 +1114,8 @@ export function installFakeApi({
       ...suggestion,
     })),
     standupEnabled,
+    nowEnabled,
+    nowTaskId,
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
     gentleReturn,
@@ -3069,6 +3080,28 @@ export function installFakeApi({
           seconds,
         })),
       });
+    }
+    if (url.pathname === "/api/v1/settings/now") {
+      if (method === "GET") {
+        return json({ enabled: state.nowEnabled });
+      }
+      if (method === "PUT") {
+        state.nowEnabled = (body as { enabled: boolean }).enabled;
+        return json({ enabled: state.nowEnabled });
+      }
+    }
+    if (url.pathname === "/api/v1/now") {
+      if (method === "GET") {
+        return json({ task_id: state.nowTaskId });
+      }
+      if (method === "PUT") {
+        const taskId = (body as { task_id: number | null }).task_id;
+        if (taskId !== null && !state.tasks.some((t) => t.id === taskId)) {
+          return json({ detail: "Task not found" }, 404);
+        }
+        state.nowTaskId = taskId;
+        return json({ task_id: state.nowTaskId });
+      }
     }
     if (url.pathname === "/api/v1/settings/stand-up") {
       if (method === "GET") {

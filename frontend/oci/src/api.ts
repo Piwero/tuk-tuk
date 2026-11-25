@@ -1696,6 +1696,34 @@ export function fetchStandupSettings(): Promise<StandupSettings> {
   return request("/api/v1/settings/stand-up");
 }
 
+/** Now (issue #547): whether Today shows the Now panel. Off by default;
+ * turning it off never clears the stored selection. */
+export interface NowSettings {
+  enabled: boolean;
+}
+
+export function fetchNowSettings(): Promise<NowSettings> {
+  return request("/api/v1/settings/now");
+}
+
+export function updateNowSettings(enabled: boolean): Promise<NowSettings> {
+  return request("/api/v1/settings/now", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+/** The one Task the User chose as Now, stored per User on its own endpoint
+ * so writing it never touches another setting. Never changes the Task. */
+export interface NowSelection {
+  task_id: number | null;
+}
+
+export function fetchNowSelection(): Promise<NowSelection> {
+  return request("/api/v1/now");
+}
+
+export function updateNowSelection(taskId: number | null): Promise<NowSelection> {
+  return request("/api/v1/now", { method: "PUT", body: JSON.stringify({ task_id: taskId }) });
+}
+
 export function updateStandupSettings(enabled: boolean): Promise<StandupSettings> {
   return request("/api/v1/settings/stand-up", {
     method: "PUT",
