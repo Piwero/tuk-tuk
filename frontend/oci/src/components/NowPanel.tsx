@@ -5,9 +5,11 @@ import {
   type CheckItem,
   fetchNowSelection,
   fetchNowSettings,
+  fetchResumeNote,
   type Task,
   updateCheckItem,
   updateNowSelection,
+  updateResumeNote,
 } from "../api";
 import { useFocusRun } from "../focusRunContext";
 import { Modal } from "./Modal";
@@ -48,6 +50,8 @@ export function NowPanel({
   // Set when Start 5 min meets a session already running: one session at a
   // time, so the panel offers that session back instead of a second one.
   const [conflict, setConflict] = useState(false);
+  // The optional resume note (#554), left while a Focus Session was paused.
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -86,8 +90,29 @@ export function NowPanel({
     };
   }, [enabled, taskId, occurrence]);
 
+  useEffect(() => {
+    if (!enabled || taskId === null) {
+      setNote(null);
+      return;
+    }
+    let live = true;
+    void fetchResumeNote()
+      .then((saved) => {
+        if (live) setNote(saved.note);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [enabled, taskId]);
+
   if (!enabled) {
     return null;
+  }
+
+  async function discardNote(): Promise<void> {
+    const saved = await updateResumeNote(null);
+    setNote(saved.note);
   }
 
   async function select(id: number | null): Promise<void> {
@@ -137,6 +162,14 @@ export function NowPanel({
         <div className="now-body">
           <div className="now-focus">
             <p className="now-title">{task.title}</p>
+            {note !== null && (
+              <div className="now-note">
+                <p>{note}</p>
+                <button type="button" className="btn-quiet" onClick={() => void discardNote()}>
+                  Discard note
+                </button>
+              </div>
+            )}
             {next !== undefined && (
               <label className="now-step">
                 <input

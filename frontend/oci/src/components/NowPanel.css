@@ -32,6 +32,21 @@
     overflow-wrap: anywhere;
   }
 
+  /* Resume note (#554): the cue left while paused, shown under the title. */
+  .now-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-md);
+    color: var(--text-secondary);
+  }
+
+  .now-note p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
   .now-empty {
     margin: 0;
     font-size: var(--text-md);
