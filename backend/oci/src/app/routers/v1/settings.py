@@ -173,6 +173,29 @@ async def update_gentle_return_settings(
     return GentleReturnSettings(enabled=user_settings.gentle_return_enabled)
 
 
+class ReminderNotificationSettings(BaseModel):
+    enabled: bool
+
+
+@router.get("/reminder-notifications")
+async def read_reminder_notification_settings(
+    user_settings: CurrentUserSettings,
+) -> ReminderNotificationSettings:
+    return ReminderNotificationSettings(enabled=user_settings.reminder_notifications_enabled)
+
+
+@router.put("/reminder-notifications")
+async def update_reminder_notification_settings(
+    payload: ReminderNotificationSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> ReminderNotificationSettings:
+    """Reminder notifications (issue #557): the User's opt-in to Reminder
+    delivery. Private to the User; browser permission is per device and is
+    never recorded here."""
+    user_settings.reminder_notifications_enabled = payload.enabled
+    await session.commit()
+    return ReminderNotificationSettings(enabled=user_settings.reminder_notifications_enabled)
+
+
 # Database status + connection probe (issue #256). Read-only: the status
 # endpoint only inspects the running app's own configured database_url
 # (never the settings table), and the test-connection endpoint only ever
