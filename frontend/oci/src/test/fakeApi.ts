@@ -358,6 +358,8 @@ export interface FakeApiState {
     assistant: boolean;
   };
   activeHours: { enabled: boolean; start: string; end: string };
+  /** Gentle return (issue #548): Today collapses earlier overdue Tasks. */
+  gentleReturn: boolean;
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -942,6 +944,7 @@ export function installFakeApi({
   standupEnabled = true,
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
+  gentleReturn = false,
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1026,6 +1029,8 @@ export function installFakeApi({
   /** Active hours (issue #210) -- the Calendar's double-height band.
    * Defaults to disabled, matching the backend. */
   activeHours?: { enabled: boolean; start: string; end: string };
+  /** Gentle return (issue #548). Defaults to off, matching the backend. */
+  gentleReturn?: boolean;
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1102,6 +1107,7 @@ export function installFakeApi({
     standupEnabled,
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
+    gentleReturn,
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -3082,6 +3088,12 @@ export function installFakeApi({
         state.sectionSettings = body as typeof state.sectionSettings;
         return json({ ...state.sectionSettings });
       }
+    }
+    if (url.pathname === "/api/v1/settings/gentle-return") {
+      if (method === "PUT") {
+        state.gentleReturn = (body as { enabled: boolean }).enabled;
+      }
+      return json({ enabled: state.gentleReturn });
     }
     if (url.pathname === "/api/v1/settings/active-hours") {
       if (method === "GET") {

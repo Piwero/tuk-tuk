@@ -1750,6 +1750,26 @@ export function updateActiveHoursSettings(
   });
 }
 
+/** Gentle return (issue #548): when on, Today collapses every earlier overdue
+ * Task behind a counted disclosure. Chosen by the User, off by default;
+ * presentation only — no Task date changes. */
+export interface GentleReturnSettings {
+  enabled: boolean;
+}
+
+export function fetchGentleReturnSettings(): Promise<GentleReturnSettings> {
+  return request("/api/v1/settings/gentle-return");
+}
+
+export function updateGentleReturnSettings(
+  settings: GentleReturnSettings,
+): Promise<GentleReturnSettings> {
+  return request("/api/v1/settings/gentle-return", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
 /** The Settings > Database section (issue #256): which engine the running
  * app is actually configured for, and a connection probe for a candidate
  * PostgreSQL URL that never switches anything. `host`/`database` are only

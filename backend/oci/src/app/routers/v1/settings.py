@@ -153,6 +153,26 @@ async def update_active_hours_settings(
     return _active_hours(user_settings)
 
 
+class GentleReturnSettings(BaseModel):
+    enabled: bool
+
+
+@router.get("/gentle-return")
+async def read_gentle_return_settings(user_settings: CurrentUserSettings) -> GentleReturnSettings:
+    return GentleReturnSettings(enabled=user_settings.gentle_return_enabled)
+
+
+@router.put("/gentle-return")
+async def update_gentle_return_settings(
+    payload: GentleReturnSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> GentleReturnSettings:
+    """Gentle return (issue #548): Today collapses earlier overdue Tasks
+    behind a counted disclosure. Presentation only — no Task dates change."""
+    user_settings.gentle_return_enabled = payload.enabled
+    await session.commit()
+    return GentleReturnSettings(enabled=user_settings.gentle_return_enabled)
+
+
 # Database status + connection probe (issue #256). Read-only: the status
 # endpoint only inspects the running app's own configured database_url
 # (never the settings table), and the test-connection endpoint only ever

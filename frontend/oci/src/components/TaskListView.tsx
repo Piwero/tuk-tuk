@@ -1,11 +1,12 @@
 import "./TaskListView.css";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   createSection,
   deleteSection,
   deleteTask,
+  fetchGentleReturnSettings,
   updateSection,
   updateTask,
   type Section,
@@ -91,6 +92,26 @@ export function TaskListView({
 }: TaskListViewProps): React.JSX.Element {
   const [addingSection, setAddingSection] = useState(false);
   const [renamingSectionId, setRenamingSectionId] = useState<number | null>(null);
+  // Gentle return (issue #548): the User's chosen Today presentation, which
+  // collapses earlier overdue Tasks behind a counted disclosure.
+  const [gentleReturn, setGentleReturn] = useState(false);
+  const [overdueRevealed, setOverdueRevealed] = useState(false);
+  useEffect(() => {
+    if (!todaySections) {
+      return;
+    }
+    let active = true;
+    void fetchGentleReturnSettings()
+      .then((settings) => {
+        if (active) {
+          setGentleReturn(settings.enabled);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [todaySections]);
   // The selection is per-view: switching Lists (or to a Smart List) drops it.
   const selection = useTaskSelection(viewKey);
   // A pending bulk completion greys its rows the same way a single pending
@@ -639,7 +660,25 @@ export function TaskListView({
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleDropOnContainer}
       >
-        {groups.map((group) => renderGroup(group))}
+        {groups.map((group) =>
+          gentleReturn && group.key === "today-Overdue" ? (
+            <div key={group.key} className="gentle-return">
+              <button
+                type="button"
+                className="btn-secondary gentle-return-toggle"
+                aria-expanded={overdueRevealed}
+                onClick={() => setOverdueRevealed((revealed) => !revealed)}
+              >
+                {`${overdueRevealed ? "Hide" : "Show"} ${group.tasks.length} earlier overdue ${
+                  group.tasks.length === 1 ? "Task" : "Tasks"
+                }`}
+              </button>
+              {overdueRevealed && renderGroup(group)}
+            </div>
+          ) : (
+            renderGroup(group)
+          ),
+        )}
         {listId !== null &&
           groupBy === "section" &&
           (addingSection ? (
