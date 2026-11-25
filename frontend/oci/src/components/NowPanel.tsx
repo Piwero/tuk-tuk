@@ -14,6 +14,7 @@ import {
 import { useFocusRun } from "../focusRunContext";
 import { Modal } from "./Modal";
 import { TimerFreeWork } from "./TimerFreeWork";
+import { NowShortlist } from "./NowShortlist";
 
 /** Start 5 min (#552): a deliberately small first step. */
 const FIVE_MINUTES_MS = 5 * 60_000;
@@ -243,6 +244,7 @@ export function NowPanel({
           </div>
         </div>
       )}
+      <NowShortlist tasks={open} nowTaskId={task?.id ?? null} onPromote={(id) => void select(id)} />
       <p role="status" className="visually-hidden">
         {announcement}
       </p>

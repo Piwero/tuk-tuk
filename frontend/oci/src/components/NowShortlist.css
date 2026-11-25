@@ -1,0 +1,56 @@
+/* Now shortlist (#551): plain Task rows with hairline dividers under the Now
+ * Task, never cards. Priority keeps its signal-bar indicator. */
+@layer components {
+  .now-shortlist {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border-default);
+  }
+
+  .now-shortlist-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .now-shortlist-rows {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .now-shortlist-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 36px;
+    padding: var(--space-1) 0;
+    font-size: var(--text-md);
+    color: var(--text-primary);
+  }
+
+  .now-shortlist-row + .now-shortlist-row {
+    border-top: 1px solid var(--border-default);
+  }
+
+  .now-shortlist-title {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .now-shortlist-actions {
+    display: flex;
+    flex: none;
+    gap: var(--space-1);
+  }
+
+  .now-shortlist-more {
+    align-self: flex-start;
+  }
+}

@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import NowSelection, Task
+from app.models import NowSelection, NowShortlistItem, Task
 from app.now_rule import is_current, occurrence_of
 
 router = APIRouter(tags=["now"])
@@ -101,6 +101,63 @@ async def update_resume_note(payload: ResumeNote, session: SessionDep) -> Resume
     row.resume_note = note
     await session.commit()
     return ResumeNote(note=row.resume_note)
+
+
+class ShortlistRead(BaseModel):
+    task_ids: list[int]
+
+
+async def _shortlist_rows(session: SessionDep) -> list[NowShortlistItem]:
+    rows = await session.scalars(select(NowShortlistItem).order_by(NowShortlistItem.position))
+    return list(rows)
+
+
+@router.get("/api/v1/now/shortlist")
+async def read_shortlist(session: SessionDep) -> ShortlistRead:
+    """Ordered alternatives beside Now (issue #551). Entries that are
+    deleted, completed, advanced, or now the Now Task are pruned here, by
+    the same rule as the Now selection."""
+    now = await _row(session)
+    now_id = now.task_id if now else None
+    kept: list[int] = []
+    pruned = False
+    for item in await _shortlist_rows(session):
+        task = await session.get(Task, item.task_id)
+        if item.task_id == now_id or not is_current(
+            task, (item.task_start_date, item.task_due_date)
+        ):
+            await session.delete(item)
+            pruned = True
+        else:
+            kept.append(item.task_id)
+    if pruned:
+        await session.commit()
+    return ShortlistRead(task_ids=kept)
+
+
+@router.put("/api/v1/now/shortlist")
+async def update_shortlist(payload: ShortlistRead, session: SessionDep) -> ShortlistRead:
+    """Replaces the whole ordered shortlist. Duplicates keep their first
+    place and the Now Task is left out, so a Task is listed at most once.
+    An unknown or another User's Task is a 404, as for Now."""
+    now = await _row(session)
+    wanted = [i for i in dict.fromkeys(payload.task_ids) if not (now and i == now.task_id)]
+    tasks = [await session.get(Task, i) for i in wanted]
+    if any(t is None for t in tasks):
+        raise NotFoundError("Task not found")
+    for item in await _shortlist_rows(session):
+        await session.delete(item)
+    await session.flush()
+    for position, task in enumerate(tasks):
+        assert task is not None
+        start, due = occurrence_of(task)
+        session.add(
+            NowShortlistItem(
+                task_id=task.id, position=position, task_start_date=start, task_due_date=due
+            )
+        )
+    await session.commit()
+    return ShortlistRead(task_ids=wanted)
 
 
 @router.get("/api/v1/settings/now")

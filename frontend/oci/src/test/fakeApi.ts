@@ -364,6 +364,10 @@ export interface FakeApiState {
   nowOccurrence?: string;
   /** The optional resume note on the selection (issue #554); cleared with it. */
   nowNote: string | null;
+  /** The Now shortlist (issue #551), in order, each entry with its saved
+   * occurrence (`undefined` for seeded entries until first read), pruned on
+   * read by the same rule as the Now pick. */
+  nowShortlist: { taskId: number; occurrence?: string }[];
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature) — server-defaulted to all-true, matching the backend. */
   sectionSettings: {
@@ -961,6 +965,7 @@ export function installFakeApi({
   nowEnabled = false,
   nowTaskId = null,
   nowNote = null,
+  nowShortlist = [],
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
@@ -1040,6 +1045,8 @@ export function installFakeApi({
   nowEnabled?: boolean;
   nowTaskId?: number | null;
   nowNote?: string | null;
+  /** The Now shortlist's Task ids, in order (issue #551). */
+  nowShortlist?: number[];
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature). Defaults to all-true, matching the backend's default. */
   sectionSettings?: {
@@ -1132,6 +1139,7 @@ export function installFakeApi({
     nowEnabled,
     nowTaskId,
     nowNote,
+    nowShortlist: nowShortlist.map((taskId) => ({ taskId })),
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
     gentleReturn,
@@ -3123,6 +3131,32 @@ export function installFakeApi({
       }
     }
     const occurrenceOf = (t: FakeTask): string => `${t.start_date}|${t.due_date}`;
+    if (url.pathname === "/api/v1/now/shortlist") {
+      if (method === "GET") {
+        state.nowShortlist = state.nowShortlist.filter((entry) => {
+          const task = state.tasks.find((t) => t.id === entry.taskId);
+          entry.occurrence ??= task && occurrenceOf(task);
+          return (
+            task !== undefined &&
+            !task.completed &&
+            task.id !== state.nowTaskId &&
+            occurrenceOf(task) === entry.occurrence
+          );
+        });
+        return json({ task_ids: state.nowShortlist.map((e) => e.taskId) });
+      }
+      if (method === "PUT") {
+        const wanted = [...new Set((body as { task_ids: number[] }).task_ids)].filter(
+          (id) => id !== state.nowTaskId,
+        );
+        const tasks = wanted.map((id) => state.tasks.find((t) => t.id === id));
+        if (tasks.some((t) => t === undefined)) {
+          return json({ detail: "Task not found" }, 404);
+        }
+        state.nowShortlist = tasks.map((t) => ({ taskId: t!.id, occurrence: occurrenceOf(t!) }));
+        return json({ task_ids: wanted });
+      }
+    }
     /** The backend's prune-on-read (#549); the note goes with the pick (#554). */
     const pruneNow = (): void => {
       const task = state.tasks.find((t) => t.id === state.nowTaskId);
