@@ -80,9 +80,28 @@ export interface Task {
   source_google_event_id: string | null;
   /** The Key Result this Task's completion counts toward, if any (ADR 0012). */
   key_result_id: number | null;
+  /** Planned work (#558): reserved work time, separate from start/due —
+   * moving or removing it never changes the deadline. Null when unplanned;
+   * optional so older payloads without the field still read as unplanned. */
+  planned_work?: PlannedWorkRead | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
+}
+
+/** A planned work block as written: a start instant, a positive duration,
+ * the IANA timezone it was planned in, and an optional buffer after. Stays
+ * within one local day of that timezone. */
+export interface PlannedWork {
+  start: string;
+  duration_minutes: number;
+  time_zone: string;
+  buffer_minutes: number | null;
+}
+
+/** As read: plus its end instant (start + duration, elapsed). */
+export interface PlannedWorkRead extends PlannedWork {
+  end: string;
 }
 
 export interface Page<T> {
@@ -1119,6 +1138,16 @@ export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {
   return request(`/api/v1/tasks/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
+  });
+}
+
+/** Replaces a Task's planned work block whole (#558); null removes it.
+ * Kept apart from TaskPatch, which optimistic updates spread onto a Task:
+ * the written block has no `end` until the server computes it. */
+export function updatePlannedWork(taskId: number, plannedWork: PlannedWork | null): Promise<Task> {
+  return request(`/api/v1/tasks/${taskId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ planned_work: plannedWork }),
   });
 }
 
