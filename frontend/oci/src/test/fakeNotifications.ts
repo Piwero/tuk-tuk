@@ -8,8 +8,13 @@ import { vi, type Mock } from "vitest";
 export interface FakeNotifications {
   /** The browser's permission prompt; resolves to `answer`. */
   requestPermission: Mock<() => Promise<NotificationPermission>>;
-  /** Every notification the app constructed, in order. */
-  shown: { title: string; options: NotificationOptions | undefined }[];
+  /** Every notification the app constructed, in order. `notification` is
+   * the instance, so a test can click it or see whether the app closed it. */
+  shown: {
+    title: string;
+    options: NotificationOptions | undefined;
+    notification: EventTarget & { closed: boolean };
+  }[];
   /** What the next prompt resolves to. */
   answer: NotificationPermission;
   /** Resolve a prompt the test is holding open (when `holdPrompt` is set). */
@@ -46,13 +51,16 @@ export function installFakeNotifications({
   class FakeNotification extends EventTarget {
     static permission: NotificationPermission = permission;
     static requestPermission = fake.requestPermission;
+    closed = false;
     constructor(title: string, options?: NotificationOptions) {
       super();
       if (display === "throw") throw new TypeError("Illegal constructor");
-      fake.shown.push({ title, options });
+      fake.shown.push({ title, options, notification: this });
       setTimeout(() => this.dispatchEvent(new Event(display === "show" ? "show" : "error")), 0);
     }
-    close(): void {}
+    close(): void {
+      this.closed = true;
+    }
   }
 
   vi.stubGlobal("Notification", FakeNotification);

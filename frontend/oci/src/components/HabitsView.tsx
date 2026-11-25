@@ -10,6 +10,8 @@ import {
   fetchHabits,
   fetchHabitStats,
   resumeHabitPause,
+  skipHabitDay,
+  unskipHabitDay,
   updateHabit,
   updateHabitPause,
   type CheckIn,
@@ -27,6 +29,7 @@ import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
 import { HabitHistory } from "./HabitHistory";
 import { HabitPauseForm, HabitPauseStatus } from "./HabitPause";
+import { HabitSkipStatus } from "./HabitSkip";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 
@@ -206,6 +209,12 @@ export function HabitsView({
     }
   }
 
+  /** Skip today on purpose (issue #564), or undo it. */
+  async function setSkippedToday(habit: Habit, skip: boolean): Promise<void> {
+    await (skip ? skipHabitDay(habit.id, today) : unskipHabitDay(habit.id, today));
+    await load();
+  }
+
   async function handleDelete(habit: Habit): Promise<void> {
     const confirmed = window.confirm(
       `Delete the habit "${habit.name}" and its whole check-in history?`,
@@ -218,6 +227,11 @@ export function HabitsView({
   }
 
   function actionsMenu(habit: Habit): React.JSX.Element {
+    const todayState = habitDayReader(
+      habit,
+      statsByHabit.get(habit.id),
+      today,
+    )(today, valueOn(habit, today)).state;
     return (
       <HabitActionsMenu
         habit={habit}
@@ -227,6 +241,11 @@ export function HabitsView({
           habit.is_archived || currentOrNextPause(habit, today) !== undefined
             ? null
             : () => setEditor({ mode: "pause", habitId: habit.id })
+        }
+        onSkipToday={
+          habit.is_archived || todayState !== "open-today"
+            ? null
+            : () => void setSkippedToday(habit, true)
         }
         onToggleArchive={() => void setArchived(habit, !habit.is_archived)}
         onDelete={() => void handleDelete(habit)}
@@ -286,11 +305,12 @@ export function HabitsView({
           const className = `habit-cell state-${state} heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}${day === today ? " today" : ""}`;
           return (
             <td key={day}>
-              {state === "future" || state === "paused" ? (
-                // Inert: a future day can't be written yet, and a paused
-                // day refuses a Check-in until its pause is changed.
+              {state === "future" || state === "paused" || state === "skipped" ? (
+                // Inert: a future day can't be written yet, and a paused or
+                // skipped day refuses a Check-in until it is changed.
                 <span role="img" className={className} aria-label={label}>
                   {state === "paused" && <Icon name="pause" size={12} />}
+                  {state === "skipped" && <Icon name="skip-forward" size={12} />}
                 </span>
               ) : (
                 <button
@@ -346,6 +366,18 @@ export function HabitsView({
               today={today}
               onEdit={() => setEditor({ mode: "pause", habitId: habit.id })}
               onResume={() => void resumeToday(habit)}
+            />
+          </td>
+        </tr>,
+      );
+    }
+    if (read(today, valueOn(habit, today)).state === "skipped") {
+      rows.push(
+        <tr key={`${habit.id}-skip`}>
+          <td colSpan={8}>
+            <HabitSkipStatus
+              habitName={habit.name}
+              onUndo={() => void setSkippedToday(habit, false)}
             />
           </td>
         </tr>,
@@ -512,6 +544,11 @@ const LEGEND: { state: DayState; level: number; text: string }[] = [
   { state: "not-started", level: 0, text: "Not started: before the Habit began" },
   { state: "not-scheduled", level: 0, text: "Not scheduled" },
   { state: "paused", level: 0, text: "Paused: not counted, neither done nor missed" },
+  {
+    state: "skipped",
+    level: 0,
+    text: "Skipped: on purpose, not counted, neither done nor missed",
+  },
   { state: "future", level: 0, text: "Future" },
 ];
 
@@ -526,6 +563,7 @@ function DayLegend(): React.JSX.Element {
           >
             {state === "done" && <Icon name="check" size={14} />}
             {state === "paused" && <Icon name="pause" size={12} />}
+            {state === "skipped" && <Icon name="skip-forward" size={12} />}
           </span>
           {text}
         </li>

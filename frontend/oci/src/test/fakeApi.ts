@@ -93,6 +93,27 @@ export interface FakeTask {
   created_at: string;
 }
 
+/** A lease on one due Reminder, as the server's claim hands it out (issue
+ * #561). */
+export interface FakeReminderClaim {
+  id: number;
+  task_id: number;
+  task_title: string;
+  offset: string;
+  occurrence_due: string;
+  fire_at: string;
+  state: "claimed" | "shown" | "failed";
+  attempt: number;
+  lease_token: string;
+  lease_expires_at: string;
+}
+
+export interface FakeReminderReport {
+  id: number;
+  outcome: "shown" | "failed";
+  lease_token: string;
+}
+
 export interface RecordedRequest {
   method: string;
   url: string;
@@ -123,6 +144,8 @@ export interface FakeHabit {
   is_archived: boolean;
   created_at: string;
   pauses: FakeHabitPause[];
+  /** Skipped days (issue #564), oldest first. */
+  skips: string[];
 }
 
 export interface FakeHabitPause {
@@ -393,6 +416,13 @@ export interface FakeApiState {
   gentleReturn: boolean;
   /** Reminder notifications (issue #557): the User's delivery opt-in. */
   reminderNotifications: boolean;
+  /** Reminder delivery (issue #561): what claims hand out. The fake plays
+   * the server's ledger simply: each claim is handed out once, and only
+   * while the opt-in is on. Isolation and deduplication are proven by the
+   * backend's tests, never here. */
+  reminderClaims: FakeReminderClaim[];
+  /** Every shown/failed report a tab sent, in order. */
+  reminderReports: FakeReminderReport[];
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -756,6 +786,30 @@ export function fakeCheckItem(
   return { id, title, done: false, sort_order: id * SORT_GAP, ...overrides };
 }
 
+let nextReminderClaimId = 1;
+
+/** A claim on one of `task`'s Reminders, due now. */
+export function fakeReminderClaim(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeReminderClaim> = {},
+): FakeReminderClaim {
+  const id = nextReminderClaimId++;
+  return {
+    id,
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    occurrence_due: task.due_date ?? "2026-07-10T15:00:00Z",
+    fire_at: task.due_date ?? "2026-07-10T15:00:00Z",
+    state: "claimed",
+    attempt: 1,
+    lease_token: `lease-${id}`,
+    lease_expires_at: "2026-07-10T15:01:00Z",
+    ...overrides,
+  };
+}
+
 export function fakeList(name: string, overrides: Partial<FakeList> = {}): FakeList {
   const id = nextListId++;
   return {
@@ -795,6 +849,7 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
     is_archived: false,
     created_at: "2025-01-01T10:00:00Z",
     pauses: [],
+    skips: [],
     ...overrides,
   };
 }
@@ -1007,6 +1062,7 @@ export function installFakeApi({
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
   reminderNotifications = false,
+  dueReminders = [],
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1101,6 +1157,8 @@ export function installFakeApi({
   gentleReturn?: boolean;
   /** Reminder notifications (issue #557). Defaults to off, matching the backend. */
   reminderNotifications?: boolean;
+  /** Reminders due now, handed out by the claim endpoint (issue #561). */
+  dueReminders?: FakeReminderClaim[];
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1184,6 +1242,8 @@ export function installFakeApi({
     activeHours: { ...activeHours },
     gentleReturn,
     reminderNotifications,
+    reminderClaims: dueReminders.map((claim) => ({ ...claim })),
+    reminderReports: [],
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -1211,6 +1271,7 @@ export function installFakeApi({
       state.voiceLivekitUrl !== null && state.voiceLivekitApiKey !== null && state.voiceSecretSet,
   });
 
+  const handedOut = new Set<number>();
   const json = (data: unknown, status = 200): Response =>
     new Response(JSON.stringify(data), {
       status,
@@ -2932,6 +2993,49 @@ export function installFakeApi({
         return json(candidate, 201);
       }
     }
+    const skipMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)\/skips\/(\d{4}-\d{2}-\d{2})$/);
+    if (skipMatch) {
+      const habit = state.habits.find((h) => h.id === Number(skipMatch[1]));
+      if (!habit) {
+        return notFound(`Habit ${skipMatch[1]} not found`);
+      }
+      const day = skipMatch[2] as string;
+      if (method === "DELETE") {
+        if (!habit.skips.includes(day)) {
+          return notFound(`${day} is not skipped`);
+        }
+        habit.skips = habit.skips.filter((skipped) => skipped !== day);
+        return new Response(null, { status: 204 });
+      }
+      if (method === "PUT") {
+        // Mirror the backend's rules: scheduled, unpaused, no Check-in.
+        if (!habitDueOn(habit.frequency, day)) {
+          return json(
+            { error: { code: "skip_not_scheduled", message: `Not scheduled on ${day}` } },
+            422,
+          );
+        }
+        if (habit.pauses.some((pause) => pauseCovers(pause, day))) {
+          return json({ error: { code: "habit_day_paused", message: `Paused on ${day}` } }, 409);
+        }
+        if (state.checkIns.some((c) => c.habit_id === habit.id && c.date === day)) {
+          return json(
+            {
+              error: {
+                code: "skip_conflicts_with_check_in",
+                message: `A Check-in on ${day} prevents this skip`,
+                details: { dates: [day] },
+              },
+            },
+            409,
+          );
+        }
+        if (!habit.skips.includes(day)) {
+          habit.skips = [...habit.skips, day].sort();
+        }
+        return json({ habit_id: habit.id, date: day });
+      }
+    }
     const statsMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)\/stats$/);
     if (statsMatch && method === "GET") {
       const habitId = Number(statsMatch[1]);
@@ -2963,11 +3067,12 @@ export function installFakeApi({
         if (habitDueOn(habit.frequency, day) && !checked.has(day)) {
           day = addDays(day, -1);
         }
-        // Mirror the backend: paused days (app.habit_days) are stepped over
-        // like unscheduled ones, never counted.
+        // Mirror the backend: paused and skipped days (app.habit_days) are
+        // stepped over like unscheduled ones, never counted.
         const earliest = [...checked].sort()[0] as string;
         while (day >= earliest) {
-          const isPaused = habit.pauses.some((pause) => pauseCovers(pause, day));
+          const isPaused =
+            habit.pauses.some((pause) => pauseCovers(pause, day)) || habit.skips.includes(day);
           if (habitDueOn(habit.frequency, day) && !(isPaused && !checked.has(day))) {
             if (!checked.has(day)) {
               break;
@@ -3003,6 +3108,9 @@ export function installFakeApi({
       const pausedHabit = state.habits.find((h) => h.id === habitId);
       if (method === "PUT" && pausedHabit?.pauses.some((pause) => pauseCovers(pause, day))) {
         return json({ error: { code: "habit_day_paused", message: `Paused on ${day}` } }, 409);
+      }
+      if (method === "PUT" && pausedHabit?.skips.includes(day)) {
+        return json({ error: { code: "habit_day_skipped", message: `Skipped on ${day}` } }, 409);
       }
       if (method === "PUT") {
         // Mirror the backend's upsert: one row per (habit, date), whatever
@@ -3379,6 +3487,30 @@ export function installFakeApi({
         state.gentleReturn = (body as { enabled: boolean }).enabled;
       }
       return json({ enabled: state.gentleReturn });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/claim" && method === "POST") {
+      if (!state.reminderNotifications) return json({ items: [] });
+      const items = state.reminderClaims.filter((claim) => !handedOut.has(claim.id));
+      for (const claim of items) handedOut.add(claim.id);
+      return json({ items: items.map((claim) => ({ ...claim })) });
+    }
+    const reminderReport = url.pathname.match(
+      /^\/api\/v1\/reminder-deliveries\/(\d+)\/(shown|failed)$/,
+    );
+    if (reminderReport && method === "POST") {
+      const id = Number(reminderReport[1]);
+      const outcome = reminderReport[2] as "shown" | "failed";
+      const claim = state.reminderClaims.find((candidate) => candidate.id === id);
+      if (claim === undefined) {
+        return json(
+          { error: { code: "not_found", message: `Reminder delivery ${id} not found` } },
+          404,
+        );
+      }
+      const { lease_token } = body as { lease_token: string };
+      state.reminderReports.push({ id, outcome, lease_token });
+      if (claim.state === "claimed") claim.state = outcome;
+      return json({ ...claim });
     }
     if (url.pathname === "/api/v1/settings/reminder-notifications") {
       if (method === "PUT") {

@@ -566,7 +566,8 @@ async def _habit_status(
         for row in await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit.id))
     }
     pauses = [Pause(start=row.start_date, end=row.end_date) for row in habit.pauses]
-    streak = current_streak(habit.frequency, habit.target, pauses, values, local_date)
+    skips = [row.date for row in habit.skips]
+    streak = current_streak(habit.frequency, habit.target, pauses, values, local_date, skips)
     return {"habit_name": habit.name, "current_streak": streak}, set()
 
 

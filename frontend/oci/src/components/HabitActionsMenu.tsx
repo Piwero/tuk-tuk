@@ -13,12 +13,15 @@ export interface HabitActionsMenuProps {
   /** Starts a pause (issue #559); null where a pause is already current or
    * planned (its own Edit pause is on the card) or the Habit is archived. */
   onPause?: (() => void) | null;
+  /** Skips today (issue #564); null unless today is a scheduled, eligible
+   * day still open (no Check-in, not paused, not already skipped). */
+  onSkipToday?: (() => void) | null;
   onToggleArchive: () => void;
   onDelete: () => void;
 }
 
-/** A Habit card's single actions menu: History, Edit, Pause, Archive/Unarchive
- * and Delete fold behind one kebab trigger rather than four permanent buttons.
+/** A Habit card's single actions menu: History, Edit, Pause, Skip today,
+ * Archive/Unarchive and Delete fold behind one kebab trigger rather than four permanent buttons.
  * The trigger and every item are real <button>s, so the whole menu is
  * reachable by keyboard and under a coarse pointer where there is no hover.
  * Dismissal and focus return come from the shared Popover. */
@@ -27,6 +30,7 @@ export function HabitActionsMenu({
   onHistory,
   onEdit,
   onPause = null,
+  onSkipToday = null,
   onToggleArchive,
   onDelete,
 }: HabitActionsMenuProps): React.JSX.Element {
@@ -87,6 +91,20 @@ export function HabitActionsMenu({
               >
                 <Icon name="pause" size={16} />
                 Pause
+              </button>
+            </li>
+          )}
+          {onSkipToday !== null && (
+            <li role="none">
+              <button
+                className="btn-quiet"
+                type="button"
+                role="menuitem"
+                aria-label={`Skip today for ${habit.name}`}
+                onClick={() => choose(onSkipToday)}
+              >
+                <Icon name="skip-forward" size={16} />
+                Skip today
               </button>
             </li>
           )}

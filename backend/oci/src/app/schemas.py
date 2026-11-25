@@ -384,6 +384,15 @@ class HabitPauseRead(BaseModel):
     end_date: date | None
 
 
+class HabitSkipRead(BaseModel):
+    """A Habit skip (issue #564): one scheduled day explicitly not practised."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    habit_id: int
+    date: date
+
+
 class HabitRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -402,6 +411,16 @@ class HabitRead(BaseModel):
     # The Habit's pauses (issue #559), oldest first. New in this field, so
     # an older client that ignores it reads the Habit as before.
     pauses: list[HabitPauseRead] = []
+    # The Habit's skipped days (issue #564), oldest first; additive like
+    # `pauses`.
+    skips: list[date] = []
+
+    @field_validator("skips", mode="before")
+    @classmethod
+    def skip_dates(cls, value: object) -> object:
+        if isinstance(value, list):
+            return [getattr(item, "date", item) for item in value]
+        return value
 
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:
