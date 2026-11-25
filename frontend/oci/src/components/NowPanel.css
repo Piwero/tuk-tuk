@@ -111,7 +111,7 @@
   /* Mobile (#552, #553, #555): same breakpoint as the rest of the app.
    * Start 5 min is full width; every Now control, including Work without
    * timer and the Check Item row (hit area through its label), meets the
-   * 44px tap-target floor. */
+   * tap-target floor (--tap-target). */
   @media (max-width: 720px) {
     .now-actions {
       width: 100%;
