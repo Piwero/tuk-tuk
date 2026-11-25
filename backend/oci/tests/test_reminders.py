@@ -1,4 +1,5 @@
-"""Reminders: ISO-8601 duration offsets stored per task, never delivered."""
+"""Reminders: ISO-8601 duration offsets stored per task. Delivery is
+separate: see test_reminder_delivery.py (issue #561)."""
 
 from fastapi.testclient import TestClient
 

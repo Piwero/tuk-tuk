@@ -294,7 +294,8 @@ class Task(OwnedMixin, Base):
     time_zone: Mapped[str | None] = mapped_column(String(64), default=None)
     # Reminders: signed ISO-8601 duration offsets from the task's date
     # (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
-    # Stored only — v1 delivers no notifications (see the PRD).
+    # Delivered only to an open tab of a User who opted in (issue #561,
+    # ADR 0019; ledger in ReminderDelivery).
     reminders: Mapped[list[str]] = mapped_column(JSON, default=list)
     # Recurrence: iCalendar RRULE content (e.g. "FREQ=WEEKLY;BYDAY=MO,TH"),
     # anchored at the task's due date. Completing a recurring task advances
@@ -487,6 +488,39 @@ class HabitPause(OwnedMixin, Base):
     end_date: Mapped[date | None] = mapped_column(Date, default=None)
 
     habit: Mapped[Habit] = relationship(back_populates="pauses")
+
+
+class ReminderDelivery(OwnedMixin, Base):
+    """One entry of the delivery ledger (issue #561, ADR 0019): a Reminder
+    of one Task occurrence that an open tab claimed for display.
+
+    Keyed by (Task, Reminder offset, occurrence due date): the unique key is
+    what makes one occurrence notify once however many tabs claim it. The
+    lease (`lease_token`, `lease_expires_at`) says which tab holds it; an
+    unreported lease that expires is retried (app.reminder_delivery).
+    `fire_at` is when this occurrence's Reminder came due. History under a
+    Task (deleted with it), carrying its own `owner_id`.
+    """
+
+    __tablename__ = "reminder_deliveries"
+    __table_args__ = (UniqueConstraint("task_id", "offset", "occurrence_due"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
+    offset: Mapped[str] = mapped_column(String(32))
+    occurrence_due: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # "claimed" (a tab holds or held the lease), "shown" (the browser
+    # reported display) or "failed" (the browser refused to show it).
+    state: Mapped[str] = mapped_column(String(16), default="claimed")
+    attempts: Mapped[int] = mapped_column(default=1)
+    lease_token: Mapped[str] = mapped_column(String(64))
+    lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+    # Every read names its Task, so load it with the row.
+    task: Mapped[Task] = relationship(lazy="joined")
 
 
 class Goal(OwnedMixin, Base):

@@ -17,7 +17,7 @@
 | **Tag** | A coloured label you can add to any task. |
 | **Priority** | None, Low, Medium or High. |
 | **Checklist item** | A line inside a task with its own tick box. Not a separate task. |
-| **Reminder** | "30 minutes before" style alert on a task. Saved, not sent yet. |
+| **Reminder** | "30 minutes before" style alert on a task. Notifies once, only while a Tuk Tuk tab is open and you've turned on Reminder notifications. |
 | **Quick-Add** | The one-line box that understands `#` `!` `~` `@`. |
 
 ## Calendar

@@ -12,7 +12,7 @@ These appear in the app or design but don't fully work yet. MCP is available now
 
 | Feature | Today | Planned |
 | --- | --- | --- |
-| **Reminder notifications** | Reminders are saved and editable | Notifications that actually reach you |
+| **Reminder notifications** | Notify while a Tuk Tuk tab is open | Notifications with the app closed or the phone locked (not promised) |
 | **Overdue triage** | Reschedule overdue tasks by hand (select them, then use **Reschedule to…**) | AI proposes a new date for each overdue task |
 
 ## Not planned
