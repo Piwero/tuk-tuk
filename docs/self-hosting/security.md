@@ -41,7 +41,8 @@ credentials, Google sign-ins and AI API keys. It never appears in the app or the
 
 1. **HTTPS outside your home network.** Use HTTPS (for example via
    `tailscale serve` or Caddy) and set `AUTH_COOKIE_SECURE=true` in `.env`.
-   See [Install → Use it from other devices](install.md#use-it-from-other-devices).
+   See [Install → Serve it over HTTPS](install.md#serve-it-over-https). Reminder
+   notifications also need HTTPS on every device except the one running the app.
 2. **One copy of the app per database.** Never run two backends against the same
    database. The wrong-password slowdown would stop working properly, and you'd get no error
    ([ADR 0013](../adr/0013-optional-external-postgres.md)).
