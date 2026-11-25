@@ -1730,6 +1730,21 @@ export function updateNowSelection(taskId: number | null): Promise<NowSelection>
   return request("/api/v1/now", { method: "PUT", body: JSON.stringify({ task_id: taskId }) });
 }
 
+/** The optional resume note on the Now selection (issue #554): a short cue
+ * for picking the work back up. Null or blank discards it; the server
+ * clears it whenever the selection changes, is removed or is pruned. */
+export interface ResumeNote {
+  note: string | null;
+}
+
+export function fetchResumeNote(): Promise<ResumeNote> {
+  return request("/api/v1/now/note");
+}
+
+export function updateResumeNote(note: string | null): Promise<ResumeNote> {
+  return request("/api/v1/now/note", { method: "PUT", body: JSON.stringify({ note }) });
+}
+
 /** The Now shortlist (issue #551): ordered alternatives beside Now. The
  * server dedupes, leaves out the Now Task and prunes finished entries. */
 export interface NowShortlist {

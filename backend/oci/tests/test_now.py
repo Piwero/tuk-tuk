@@ -153,3 +153,103 @@ def test_editing_an_unrelated_field_keeps_the_selection(client: TestClient) -> N
     client.patch(f"/api/v1/tasks/{task['id']}", json={"title": "Renamed"})
 
     assert client.get(NOW).json() == {"task_id": task["id"]}
+
+
+# Issue #554: an optional resume note belongs to the current selection.
+
+NOTE = "/api/v1/now/note"
+
+
+def choose(client: TestClient, **fields: Any) -> dict[str, Any]:
+    task = make_task(client, **fields)
+    client.put(NOW, json={"task_id": task["id"]})
+    return task
+
+
+def test_there_is_no_resume_note_at_first(client: TestClient) -> None:
+    choose(client)
+    assert client.get(NOTE).json() == {"note": None}
+
+
+def test_a_resume_note_can_be_saved_edited_and_discarded(client: TestClient) -> None:
+    choose(client)
+
+    assert client.put(NOTE, json={"note": "Reply to Ana's 2nd para"}).json() == {
+        "note": "Reply to Ana's 2nd para"
+    }
+    client.put(NOTE, json={"note": "Send it"})
+    assert client.get(NOTE).json() == {"note": "Send it"}
+
+    assert client.put(NOTE, json={"note": None}).json() == {"note": None}
+    assert client.get(NOTE).json() == {"note": None}
+
+
+def test_a_note_needs_a_selection(client: TestClient) -> None:
+    assert client.put(NOTE, json={"note": "Pick up here"}).status_code == 409
+    assert client.put(NOTE, json={"note": None}).json() == {"note": None}
+
+
+def test_choosing_another_task_or_removing_it_clears_the_note(client: TestClient) -> None:
+    choose(client)
+    client.put(NOTE, json={"note": "Pick up here"})
+    choose(client, title="Call the bank")
+    assert client.get(NOTE).json() == {"note": None}
+
+    client.put(NOTE, json={"note": "Ask about fees"})
+    client.put(NOW, json={"task_id": None})
+    assert client.get(NOTE).json() == {"note": None}
+
+
+def test_rechoosing_the_same_task_keeps_the_note(client: TestClient) -> None:
+    task = choose(client)
+    client.put(NOTE, json={"note": "Pick up here"})
+    client.put(NOW, json={"task_id": task["id"]})
+    assert client.get(NOTE).json() == {"note": "Pick up here"}
+
+
+def test_deleting_completing_or_advancing_the_selection_clears_the_note(
+    client: TestClient,
+) -> None:
+    deleted = choose(client)
+    client.put(NOTE, json={"note": "a"})
+    client.delete(f"/api/v1/tasks/{deleted['id']}")
+    assert client.get(NOTE).json() == {"note": None}
+
+    done = choose(client)
+    client.put(NOTE, json={"note": "b"})
+    client.patch(f"/api/v1/tasks/{done['id']}", json={"completed": True})
+    assert client.get(NOTE).json() == {"note": None}
+
+    recurring = choose(client, due_date="2026-07-10T15:00:00Z", recurrence="FREQ=DAILY")
+    client.put(NOTE, json={"note": "c"})
+    client.patch(f"/api/v1/tasks/{recurring['id']}", json={"completed": True})
+    client.put(NOW, json={"task_id": recurring["id"]})
+    assert client.get(NOTE).json() == {"note": None}
+
+
+def test_other_users_never_see_the_note(client: TestClient) -> None:
+    choose(client)
+    client.put(NOTE, json={"note": "Mine only"})
+    create_user_row(client, "bea", "bea@example.com")
+    client.cookies.clear()
+    log_in(client, "bea")
+
+    assert client.get(NOTE).json() == {"note": None}
+    assert client.put(NOTE, json={"note": "x"}).status_code == 409
+
+
+def test_a_note_write_leaves_the_selection_and_other_settings_intact(
+    client: TestClient,
+) -> None:
+    client.put(TOGGLE, json={"enabled": True})
+    task = choose(client)
+    sections = client.get("/api/v1/settings/sections").json()
+    active_hours = client.get("/api/v1/settings/active-hours").json()
+
+    client.put(NOTE, json={"note": "Pick up here"})
+
+    assert client.get(NOW).json() == {"task_id": task["id"]}
+    assert client.get(TOGGLE).json() == {"enabled": True}
+    assert client.get("/api/v1/settings/sections").json() == sections
+    assert client.get("/api/v1/settings/active-hours").json() == active_hours
+    assert client.get(f"/api/v1/tasks/{task['id']}").json() == task

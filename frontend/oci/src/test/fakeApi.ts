@@ -362,6 +362,8 @@ export interface FakeApiState {
    * a pick whose Task is gone, completed or advanced reads as none.
    * `undefined` until a PUT, so seeded picks match whatever is seeded. */
   nowOccurrence?: string;
+  /** The optional resume note on the selection (issue #554); cleared with it. */
+  nowNote: string | null;
   /** The Now shortlist (issue #551), in order, each entry with its saved
    * occurrence (`undefined` for seeded entries until first read), pruned on
    * read by the same rule as the Now pick. */
@@ -962,6 +964,7 @@ export function installFakeApi({
   standupEnabled = true,
   nowEnabled = false,
   nowTaskId = null,
+  nowNote = null,
   nowShortlist = [],
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
@@ -1041,6 +1044,7 @@ export function installFakeApi({
   /** Now (issue #547): off by default, nothing selected. */
   nowEnabled?: boolean;
   nowTaskId?: number | null;
+  nowNote?: string | null;
   /** The Now shortlist's Task ids, in order (issue #551). */
   nowShortlist?: number[];
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
@@ -1134,6 +1138,7 @@ export function installFakeApi({
     standupEnabled,
     nowEnabled,
     nowTaskId,
+    nowNote,
     nowShortlist: nowShortlist.map((taskId) => ({ taskId })),
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
@@ -3125,8 +3130,8 @@ export function installFakeApi({
         return json({ enabled: state.nowEnabled });
       }
     }
+    const occurrenceOf = (t: FakeTask): string => `${t.start_date}|${t.due_date}`;
     if (url.pathname === "/api/v1/now/shortlist") {
-      const occurrenceOf = (t: FakeTask): string => `${t.start_date}|${t.due_date}`;
       if (method === "GET") {
         state.nowShortlist = state.nowShortlist.filter((entry) => {
           const task = state.tasks.find((t) => t.id === entry.taskId);
@@ -3152,17 +3157,40 @@ export function installFakeApi({
         return json({ task_ids: wanted });
       }
     }
-    if (url.pathname === "/api/v1/now") {
-      const occurrenceOf = (t: FakeTask): string => `${t.start_date}|${t.due_date}`;
-      if (method === "GET") {
-        const task = state.tasks.find((t) => t.id === state.nowTaskId);
-        if (state.nowTaskId !== null) {
-          state.nowOccurrence ??= task && occurrenceOf(task);
-          if (!task || task.completed || occurrenceOf(task) !== state.nowOccurrence) {
-            state.nowTaskId = null;
-            state.nowOccurrence = undefined;
-          }
+    /** The backend's prune-on-read (#549); the note goes with the pick (#554). */
+    const pruneNow = (): void => {
+      const task = state.tasks.find((t) => t.id === state.nowTaskId);
+      if (state.nowTaskId !== null) {
+        state.nowOccurrence ??= task && occurrenceOf(task);
+        if (!task || task.completed || occurrenceOf(task) !== state.nowOccurrence) {
+          state.nowTaskId = null;
+          state.nowOccurrence = undefined;
         }
+      }
+      if (state.nowTaskId === null) {
+        state.nowNote = null;
+      }
+    };
+    if (url.pathname === "/api/v1/now/note") {
+      pruneNow();
+      if (method === "GET") {
+        return json({ note: state.nowNote });
+      }
+      if (method === "PUT") {
+        const note = ((body as { note: string | null }).note ?? "").trim() || null;
+        if (state.nowTaskId === null && note !== null) {
+          return json(
+            { error: { code: "no_now_selection", message: "Nothing is selected for Now" } },
+            409,
+          );
+        }
+        state.nowNote = note;
+        return json({ note: state.nowNote });
+      }
+    }
+    if (url.pathname === "/api/v1/now") {
+      if (method === "GET") {
+        pruneNow();
         return json({ task_id: state.nowTaskId });
       }
       if (method === "PUT") {
@@ -3171,8 +3199,12 @@ export function installFakeApi({
         if (taskId !== null && !task) {
           return json({ detail: "Task not found" }, 404);
         }
+        const occurrence = task && occurrenceOf(task);
+        if (taskId !== state.nowTaskId || occurrence !== state.nowOccurrence) {
+          state.nowNote = null;
+        }
         state.nowTaskId = taskId;
-        state.nowOccurrence = task && occurrenceOf(task);
+        state.nowOccurrence = occurrence;
         return json({ task_id: state.nowTaskId });
       }
     }

@@ -26,6 +26,7 @@ import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import { LinkSelect } from "./LinkSelect";
+import { ResumeNote } from "./ResumeNote";
 import { TimerForm } from "./TimerForm";
 
 function formatClock(ms: number): string {
@@ -560,6 +561,8 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                   </span>
                 </p>
               )}
+              {/* Offered, never required (#554): only while paused. */}
+              {running.phase !== "break" && running.pauseStartedAtMs !== null && <ResumeNote />}
             </>
           )}
         </div>
