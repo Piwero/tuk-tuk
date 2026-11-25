@@ -286,6 +286,8 @@ const NON_INTERACTIVE_EXACT = new Set([
   ".modal",
   ".modal:focus",
   ".modal-backdrop",
+  // The Quick-Add panel, capped to the viewport around its scrolling body (#542).
+  ".modal:has(> .quick-add-dialog)",
   ".modal-header",
   ".modal-header h2",
   ".modal-header > .icon-button-wrap",
@@ -677,9 +679,82 @@ describe("Quick-Add dialog is operable on touch (issue #288)", () => {
     expect(declaredValue(".modal-backdrop", "position")).toBe("fixed");
     expect(declaredValue(".modal-backdrop", "inset")).toBe("0");
     expect(declaredValue(".modal-backdrop", "overflow-y")).toBe("auto");
-    // Desktop never capped or scrolled the panel, and must not start.
+    // Desktop never capped or scrolled the panel, and must not start: every
+    // other Modal keeps its natural height there. Quick-Add alone caps its
+    // panel at every width (#542, below), through its own scoped selector.
     expect(declaredValue(".modal", "max-height", DESKTOP)).toBeNull();
     expect(declaredValue(".modal", "overflow-y", DESKTOP)).toBeNull();
+  });
+});
+
+/** Exactly `property`, not a longhand ending in it: `flex` must not match
+ * `inline-flex`'s neighbours or `bottom` `padding-bottom`, which
+ * `declaredValue`'s `\b` would. */
+function exactValue(selector: string, property: string, viewport: Viewport): string | null {
+  const matches = [
+    ...declarationsFor(selector, viewport).matchAll(
+      new RegExp(String.raw`(?:^|[;{\s])${property}\s*:\s*([^;]+);`, "g"),
+    ),
+  ];
+  const last = matches[matches.length - 1];
+  return last === undefined ? null : (last[1] as string).trim();
+}
+
+/** Reachable Save (#542). With Details open the form outgrew a phone (the
+ * panel scrolled) and a short desktop (the backdrop scrolled), and "Add task"
+ * sat at the far end of that scroll: off screen until every detail had been
+ * scrolled past, and a pointer aimed at it missed. Now the Quick-Add panel is
+ * capped to the viewport at every width and only its body scrolls; the action
+ * footer sits outside that scroller, so it is always on screen and a focused
+ * detail can never scroll in behind it (WCAG 2.4.11). A sticky footer was
+ * tried first and dropped: browsers stick it inside the scroller's padding,
+ * which left a strip of details showing below "Add task". jsdom has no
+ * layout, so as above this reads the CSS source; the browser pass on #542 is
+ * where the reachability itself was seen. */
+describe("Quick-Add keeps Save in reach at short and narrow viewports (issue #542)", () => {
+  const PANEL = ".modal:has(> .quick-add-dialog)";
+  const FORM = ".quick-add-dialog";
+  const BODY = ".quick-add-body";
+  const FOOTER = ".quick-add-dialog-actions";
+
+  it("caps the Quick-Add panel to the viewport on phones and desktops", () => {
+    for (const viewport of [PHONE, DESKTOP]) {
+      expect(exactValue(PANEL, "max-height", viewport)).toBe("100%");
+      expect(exactValue(PANEL, "display", viewport)).toBe("flex");
+      expect(exactValue(PANEL, "flex-direction", viewport)).toBe("column");
+      // The form is a flex item of the panel: without this it refuses to
+      // shrink below its content and the cap pushes the footer out again.
+      expect(exactValue(FORM, "min-height", viewport)).toBe("0");
+    }
+  });
+
+  it("scrolls the body and keeps the action footer out of the scroll", () => {
+    for (const viewport of [PHONE, DESKTOP]) {
+      expect(exactValue(BODY, "overflow-y", viewport)).toBe("auto");
+      expect(exactValue(BODY, "min-height", viewport)).toBe("0");
+      // The footer never shrinks, and never leaves the dialog for the
+      // viewport ("do not pin controls over the mobile tab bar").
+      expect(exactValue(FOOTER, "flex", viewport)).toBe("none");
+      expect(exactValue(FOOTER, "position", viewport)).toBeNull();
+    }
+  });
+
+  /** A scroller clips its overflow on both axes, and the 3px focus ring is a
+   * box-shadow outside the control: the full-width title and selects would
+   * lose its sides. The body gives it room inside and takes the room back
+   * outside, so the layout doesn't move. */
+  it("leaves room inside the scrolling body for the 3px focus ring", () => {
+    expect(tokens.get("--focus-ring")).toMatch(/\b3px\b/);
+    const padding = exactValue(BODY, "padding", DESKTOP);
+    expect(padding, "the scrolling body declares no padding").not.toBeNull();
+    expect(resolvePx(padding as string) ?? 0).toBeGreaterThanOrEqual(3);
+    expect(exactValue(BODY, "margin", DESKTOP)).toBe(`calc(-1 * ${padding as string})`);
+  });
+
+  it("pads the phone footer clear of the home indicator", () => {
+    expect(exactValue(FOOTER, "padding-bottom", PHONE) ?? "").toContain(
+      "env(safe-area-inset-bottom",
+    );
   });
 });
 
