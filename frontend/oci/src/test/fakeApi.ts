@@ -362,6 +362,10 @@ export interface FakeApiState {
    * a pick whose Task is gone, completed or advanced reads as none.
    * `undefined` until a PUT, so seeded picks match whatever is seeded. */
   nowOccurrence?: string;
+  /** The Now shortlist (issue #551), in order, each entry with its saved
+   * occurrence (`undefined` for seeded entries until first read), pruned on
+   * read by the same rule as the Now pick. */
+  nowShortlist: { taskId: number; occurrence?: string }[];
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature) — server-defaulted to all-true, matching the backend. */
   sectionSettings: {
@@ -958,6 +962,7 @@ export function installFakeApi({
   standupEnabled = true,
   nowEnabled = false,
   nowTaskId = null,
+  nowShortlist = [],
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
@@ -1036,6 +1041,8 @@ export function installFakeApi({
   /** Now (issue #547): off by default, nothing selected. */
   nowEnabled?: boolean;
   nowTaskId?: number | null;
+  /** The Now shortlist's Task ids, in order (issue #551). */
+  nowShortlist?: number[];
   /** The Calendar/Goals/Habits/Focus/Assistant visibility toggles (this
    * feature). Defaults to all-true, matching the backend's default. */
   sectionSettings?: {
@@ -1127,6 +1134,7 @@ export function installFakeApi({
     standupEnabled,
     nowEnabled,
     nowTaskId,
+    nowShortlist: nowShortlist.map((taskId) => ({ taskId })),
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
     gentleReturn,
@@ -3115,6 +3123,33 @@ export function installFakeApi({
       if (method === "PUT") {
         state.nowEnabled = (body as { enabled: boolean }).enabled;
         return json({ enabled: state.nowEnabled });
+      }
+    }
+    if (url.pathname === "/api/v1/now/shortlist") {
+      const occurrenceOf = (t: FakeTask): string => `${t.start_date}|${t.due_date}`;
+      if (method === "GET") {
+        state.nowShortlist = state.nowShortlist.filter((entry) => {
+          const task = state.tasks.find((t) => t.id === entry.taskId);
+          entry.occurrence ??= task && occurrenceOf(task);
+          return (
+            task !== undefined &&
+            !task.completed &&
+            task.id !== state.nowTaskId &&
+            occurrenceOf(task) === entry.occurrence
+          );
+        });
+        return json({ task_ids: state.nowShortlist.map((e) => e.taskId) });
+      }
+      if (method === "PUT") {
+        const wanted = [...new Set((body as { task_ids: number[] }).task_ids)].filter(
+          (id) => id !== state.nowTaskId,
+        );
+        const tasks = wanted.map((id) => state.tasks.find((t) => t.id === id));
+        if (tasks.some((t) => t === undefined)) {
+          return json({ detail: "Task not found" }, 404);
+        }
+        state.nowShortlist = tasks.map((t) => ({ taskId: t!.id, occurrence: occurrenceOf(t!) }));
+        return json({ task_ids: wanted });
       }
     }
     if (url.pathname === "/api/v1/now") {

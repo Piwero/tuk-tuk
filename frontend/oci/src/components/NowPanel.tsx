@@ -10,6 +10,7 @@ import {
   updateNowSelection,
 } from "../api";
 import { Modal } from "./Modal";
+import { NowShortlist } from "./NowShortlist";
 
 interface NowPanelProps {
   /** The User's open Tasks, undated ones included: what the picker offers
@@ -150,6 +151,7 @@ export function NowPanel({
           </div>
         </div>
       )}
+      <NowShortlist tasks={open} nowTaskId={task?.id ?? null} onPromote={(id) => void select(id)} />
       <p role="status" className="visually-hidden">
         {announcement}
       </p>
