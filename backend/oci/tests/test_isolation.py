@@ -291,7 +291,9 @@ REACHES |= {
     "PATCH inbox": Reach(
         lambda a, me: ("PATCH", f"/api/v1/lists/{a.inbox}", {"view_mode": "kanban"})
     ),
-    "habit stats": Reach(get(lambda a, me: f"/api/v1/habits/{a.habit}/stats?today={a.today}")),
+    "habit stats": Reach(
+        get(lambda a, me: f"/api/v1/habits/{a.habit}/stats?today={a.today}&tz=UTC")
+    ),
     "revoke api token": Reach(lambda a, me: ("DELETE", f"{TOKENS}/{a.api_token}", None)),
     "PUT check-in": Reach(
         lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/check-ins/{a.today}", {"value": 1})

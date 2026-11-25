@@ -2739,6 +2739,14 @@ export function installFakeApi({
       if (today === null) {
         return json({ error: { code: "validation_error", message: "today is required" } }, 422);
       }
+      // Like the backend, the zone is required: server UTC is not the User's day.
+      const tz = url.searchParams.get("tz");
+      if (tz === null || !isKnownZone(tz)) {
+        return json(
+          { error: { code: "validation_error", message: `Unknown IANA timezone ${tz}` } },
+          422,
+        );
+      }
       const year = url.searchParams.get("year") ?? today.slice(0, 4);
       const habitCheckIns = state.checkIns.filter((checkIn) => checkIn.habit_id === habitId);
       const checked = new Set(habitCheckIns.map((checkIn) => checkIn.date));
@@ -2770,7 +2778,10 @@ export function installFakeApi({
           value: checkIn.value,
           intensity: Math.min(checkIn.value / habit.target, 1),
         }));
-      return json({ streak, heatmap });
+      // Mirror the backend's Habit start: the creation day in `tz`, pulled
+      // back to an earlier real Check-in, and never after today.
+      const eligibleFrom = [zonedDay(habit.created_at, tz), ...checked, today].sort()[0];
+      return json({ streak, heatmap, eligible_from: eligibleFrom });
     }
     const checkInMatch = url.pathname.match(
       /^\/api\/v1\/habits\/(\d+)\/check-ins\/(\d{4}-\d{2}-\d{2})$/,
