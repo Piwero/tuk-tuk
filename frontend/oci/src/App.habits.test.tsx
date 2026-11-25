@@ -725,3 +725,66 @@ describe("Managing Habits", () => {
     expect(screen.queryByRole("table", { name: "Habits this week" })).not.toBeInTheDocument();
   });
 });
+
+describe("Habit type labels", () => {
+  /** Picks a Habit type by the name a person reads, not by its stored value. */
+  function chooseHabitType(name: string): void {
+    const select = screen.getByRole("combobox", { name: "Habit type" });
+    const option = within(select).getByRole<HTMLOptionElement>("option", { name });
+    fireEvent.change(select, { target: { value: option.value } });
+  }
+
+  it("names the Habit types in plain language", async () => {
+    installFakeApi();
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Habit" }));
+
+    const select = screen.getByRole("combobox", { name: "Habit type" });
+    expect(
+      within(select)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["Done / not yet", "Count"]);
+  });
+
+  it("still sends numeric when a Count Habit is created", async () => {
+    const api = installFakeApi();
+    render(<App />);
+    await openHabits();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Habit" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Drink water" } });
+    chooseHabitType("Count");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Target" }), {
+      target: { value: "8" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(
+        api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/habits")?.body,
+      ).toMatchObject({ name: "Drink water", type: "numeric", target: 8 }),
+    );
+  });
+
+  it("still sends boolean when a Habit is edited to Done / not yet", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Drink water", { type: "numeric", target: 8, unit: "glasses" })],
+    });
+    render(<App />);
+    await openHabits();
+
+    await openHabitMenu("Drink water");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Drink water" }));
+    chooseHabitType("Done / not yet");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(api.requests.find((r) => r.method === "PATCH")?.body).toMatchObject({
+        type: "boolean",
+      }),
+    );
+  });
+});
