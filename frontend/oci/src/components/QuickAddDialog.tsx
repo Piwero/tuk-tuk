@@ -557,257 +557,265 @@ function QuickAddForm({
 
   return (
     <form className="quick-add-dialog" onSubmit={(event) => void submit(event)}>
-      <label>
-        Title
-        <TokenInput
-          ariaLabel="Title"
-          placeholder="What needs doing?"
-          value={title}
-          onValueChange={onTitleChange}
-          channels={[
-            tagChannel as TokenChannel<unknown>,
-            listChannel as TokenChannel<unknown>,
-            priorityChannel as TokenChannel<unknown>,
-            dateChannel as TokenChannel<unknown>,
-          ]}
-          showChips={false}
-          autoFocus
-          invalid={titleInvalid}
-          describedBy={
-            [titleInvalid ? titleErrorId : null, restored !== null ? draftNoteId : null]
-              .filter((id) => id !== null)
-              .join(" ") || undefined
-          }
-          trailingContent={
-            parsing ? (
-              <span className="quick-add-assist-busy" aria-label="Assist is parsing" role="status">
-                <Icon name="sparkles" size={16} />
-              </span>
-            ) : (
-              assistAvailable && (
-                <Hint hintKey="assisted-capture">
-                  <span
-                    className="quick-add-assist-affordance"
-                    aria-label="Assist available"
-                    tabIndex={0}
-                  >
-                    <Icon name="sparkles" size={16} />
-                  </span>
-                </Hint>
+      {/* Only this part scrolls (#542): a failed save's message and the
+      action footer below it stay on screen however long Details gets. */}
+      <div className="quick-add-body">
+        <label>
+          Title
+          <TokenInput
+            ariaLabel="Title"
+            placeholder="What needs doing?"
+            value={title}
+            onValueChange={onTitleChange}
+            channels={[
+              tagChannel as TokenChannel<unknown>,
+              listChannel as TokenChannel<unknown>,
+              priorityChannel as TokenChannel<unknown>,
+              dateChannel as TokenChannel<unknown>,
+            ]}
+            showChips={false}
+            autoFocus
+            invalid={titleInvalid}
+            describedBy={
+              [titleInvalid ? titleErrorId : null, restored !== null ? draftNoteId : null]
+                .filter((id) => id !== null)
+                .join(" ") || undefined
+            }
+            trailingContent={
+              parsing ? (
+                <span
+                  className="quick-add-assist-busy"
+                  aria-label="Assist is parsing"
+                  role="status"
+                >
+                  <Icon name="sparkles" size={16} />
+                </span>
+              ) : (
+                assistAvailable && (
+                  <Hint hintKey="assisted-capture">
+                    <span
+                      className="quick-add-assist-affordance"
+                      aria-label="Assist available"
+                      tabIndex={0}
+                    >
+                      <Icon name="sparkles" size={16} />
+                    </span>
+                  </Hint>
+                )
               )
-            )
-          }
-        />
-      </label>
-      {restored !== null && (
-        <p className="quick-add-draft-note" id={draftNoteId}>
-          Draft restored
-        </p>
-      )}
-      {titleInvalid && (
-        <p className="quick-add-field-error" role="alert" id={titleErrorId}>
-          Enter a title to add the Task
-        </p>
-      )}
-      <div className="quick-add-summary" role="group" aria-label="Summary">
-        {destination === null || destination.is_inbox ? (
-          <span className="quick-add-destination">
-            <Icon name="inbox" size={14} />
-            {destination?.name ?? "Inbox"}
-          </span>
-        ) : (
-          <span className="date-chip token-chip">
-            {destination.name}
-            <IconButton
-              icon="x"
-              size={12}
-              label={`Remove list (${destination.name})`}
-              onClick={removeListChip}
-            />
-          </span>
+            }
+          />
+        </label>
+        {restored !== null && (
+          <p className="quick-add-draft-note" id={draftNoteId}>
+            Draft restored
+          </p>
         )}
-        {priority !== "none" && (
-          <span className="date-chip token-chip">
-            {PRIORITY_LABELS[priority]} priority
-            <IconButton
-              icon="x"
-              size={12}
-              label={`Remove priority (${PRIORITY_LABELS[priority]})`}
-              onClick={() => {
-                setPriority("none");
-                setPriorityChosen(true);
-              }}
-            />
-          </span>
+        {titleInvalid && (
+          <p className="quick-add-field-error" role="alert" id={titleErrorId}>
+            Enter a title to add the Task
+          </p>
         )}
-        {dateLabel !== null && (
-          <span className="date-chip token-chip">
-            {dateLabel}
-            <IconButton
-              icon="x"
-              size={12}
-              label={`Remove date (${dateLabel})`}
-              onClick={() => changeDate(emptyDraft())}
-            />
-          </span>
-        )}
-        {tags
-          .filter((tag) => tagIds.includes(tag.id))
-          .map((tag) => (
-            <span key={tag.id} className="date-chip token-chip">
-              #{tag.name}
+        <div className="quick-add-summary" role="group" aria-label="Summary">
+          {destination === null || destination.is_inbox ? (
+            <span className="quick-add-destination">
+              <Icon name="inbox" size={14} />
+              {destination?.name ?? "Inbox"}
+            </span>
+          ) : (
+            <span className="date-chip token-chip">
+              {destination.name}
               <IconButton
                 icon="x"
                 size={12}
-                label={`Remove tag (${tag.name})`}
-                onClick={() => toggleTag(tag.id)}
+                label={`Remove list (${destination.name})`}
+                onClick={removeListChip}
               />
             </span>
-          ))}
-        {newTag.trim() !== "" && (
-          <span className="date-chip token-chip">
-            #{newTag.trim()}
-            <IconButton
-              icon="x"
-              size={12}
-              label={`Remove tag (${newTag.trim()})`}
-              onClick={() => setNewTag("")}
-            />
-          </span>
-        )}
-        {(recurrence !== null || reminders.length > 0) && (
-          <div className="quick-add-assist-chips" role="group" aria-label="Assist suggestions">
-            {recurrence !== null && (
-              <span className="date-chip token-chip">
-                {formatRecurrenceRule(recurrence)}
+          )}
+          {priority !== "none" && (
+            <span className="date-chip token-chip">
+              {PRIORITY_LABELS[priority]} priority
+              <IconButton
+                icon="x"
+                size={12}
+                label={`Remove priority (${PRIORITY_LABELS[priority]})`}
+                onClick={() => {
+                  setPriority("none");
+                  setPriorityChosen(true);
+                }}
+              />
+            </span>
+          )}
+          {dateLabel !== null && (
+            <span className="date-chip token-chip">
+              {dateLabel}
+              <IconButton
+                icon="x"
+                size={12}
+                label={`Remove date (${dateLabel})`}
+                onClick={() => changeDate(emptyDraft())}
+              />
+            </span>
+          )}
+          {tags
+            .filter((tag) => tagIds.includes(tag.id))
+            .map((tag) => (
+              <span key={tag.id} className="date-chip token-chip">
+                #{tag.name}
                 <IconButton
                   icon="x"
                   size={12}
-                  label="Remove recurrence"
-                  onClick={() => setRecurrence(null)}
-                />
-              </span>
-            )}
-            {reminders.map((offset) => (
-              <span key={offset} className="date-chip token-chip">
-                {formatReminderOffset(offset)}
-                <IconButton
-                  icon="x"
-                  size={12}
-                  label={`Remove reminder (${formatReminderOffset(offset)})`}
-                  onClick={() => removeReminder(offset)}
+                  label={`Remove tag (${tag.name})`}
+                  onClick={() => toggleTag(tag.id)}
                 />
               </span>
             ))}
+          {newTag.trim() !== "" && (
+            <span className="date-chip token-chip">
+              #{newTag.trim()}
+              <IconButton
+                icon="x"
+                size={12}
+                label={`Remove tag (${newTag.trim()})`}
+                onClick={() => setNewTag("")}
+              />
+            </span>
+          )}
+          {(recurrence !== null || reminders.length > 0) && (
+            <div className="quick-add-assist-chips" role="group" aria-label="Assist suggestions">
+              {recurrence !== null && (
+                <span className="date-chip token-chip">
+                  {formatRecurrenceRule(recurrence)}
+                  <IconButton
+                    icon="x"
+                    size={12}
+                    label="Remove recurrence"
+                    onClick={() => setRecurrence(null)}
+                  />
+                </span>
+              )}
+              {reminders.map((offset) => (
+                <span key={offset} className="date-chip token-chip">
+                  {formatReminderOffset(offset)}
+                  <IconButton
+                    icon="x"
+                    size={12}
+                    label={`Remove reminder (${formatReminderOffset(offset)})`}
+                    onClick={() => removeReminder(offset)}
+                  />
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          className="btn-quiet quick-add-details-toggle"
+          aria-expanded={detailsOpen}
+          // Collapsed, the panel is unmounted: point at it only when it exists.
+          aria-controls={detailsOpen ? "quick-add-details" : undefined}
+          onClick={() => setDetailsOpen((open) => !open)}
+        >
+          <Icon name={detailsOpen ? "chevron-up" : "chevron-down"} size={16} />
+          Details
+        </button>
+        {detailsOpen && (
+          <div className="quick-add-details" id="quick-add-details">
+            <label>
+              List
+              <select
+                aria-label="List"
+                value={listId ?? ""}
+                onChange={(event) => {
+                  setListId(Number(event.target.value));
+                  setListChosen(true);
+                }}
+              >
+                {lists.map((list) => (
+                  <option key={list.id} value={list.id}>
+                    {list.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Priority
+              <select
+                aria-label="Priority"
+                value={priority}
+                onChange={(event) => {
+                  setPriority(event.target.value as Priority);
+                  setPriorityChosen(true);
+                }}
+              >
+                {(Object.keys(PRIORITY_LABELS) as Priority[]).map((level) => (
+                  <option key={level} value={level}>
+                    {PRIORITY_LABELS[level]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <fieldset className="quick-add-dates">
+              <legend>Date</legend>
+              <div className="date-actions">
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => pickDay(localDayOf(new Date()))}
+                >
+                  Today
+                </button>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => pickDay(addDays(localDayOf(new Date()), 1))}
+                >
+                  Tomorrow
+                </button>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => pickDay(nextMonday(localDayOf(new Date())))}
+                >
+                  Next Week
+                </button>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => changeDate(emptyDraft())}
+                >
+                  Clear date
+                </button>
+              </div>
+              <DateFieldset draft={dateDraft} onChange={changeDate} />
+            </fieldset>
+            <fieldset className="quick-add-tags">
+              <legend>Tags</legend>
+              {tags.map((tag) => (
+                <label key={tag.id}>
+                  <input
+                    type="checkbox"
+                    aria-label={tag.name}
+                    checked={tagIds.includes(tag.id)}
+                    onChange={() => toggleTag(tag.id)}
+                  />
+                  {tag.name}
+                </label>
+              ))}
+              <label>
+                New tag
+                <input
+                  aria-label="New tag"
+                  placeholder="Create a tag…"
+                  value={newTag}
+                  onChange={(event) => setNewTag(event.target.value)}
+                />
+              </label>
+            </fieldset>
           </div>
         )}
       </div>
-      <button
-        type="button"
-        className="btn-quiet quick-add-details-toggle"
-        aria-expanded={detailsOpen}
-        // Collapsed, the panel is unmounted: point at it only when it exists.
-        aria-controls={detailsOpen ? "quick-add-details" : undefined}
-        onClick={() => setDetailsOpen((open) => !open)}
-      >
-        <Icon name={detailsOpen ? "chevron-up" : "chevron-down"} size={16} />
-        Details
-      </button>
-      {detailsOpen && (
-        <div className="quick-add-details" id="quick-add-details">
-          <label>
-            List
-            <select
-              aria-label="List"
-              value={listId ?? ""}
-              onChange={(event) => {
-                setListId(Number(event.target.value));
-                setListChosen(true);
-              }}
-            >
-              {lists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Priority
-            <select
-              aria-label="Priority"
-              value={priority}
-              onChange={(event) => {
-                setPriority(event.target.value as Priority);
-                setPriorityChosen(true);
-              }}
-            >
-              {(Object.keys(PRIORITY_LABELS) as Priority[]).map((level) => (
-                <option key={level} value={level}>
-                  {PRIORITY_LABELS[level]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <fieldset className="quick-add-dates">
-            <legend>Date</legend>
-            <div className="date-actions">
-              <button
-                className="btn-secondary"
-                type="button"
-                onClick={() => pickDay(localDayOf(new Date()))}
-              >
-                Today
-              </button>
-              <button
-                className="btn-secondary"
-                type="button"
-                onClick={() => pickDay(addDays(localDayOf(new Date()), 1))}
-              >
-                Tomorrow
-              </button>
-              <button
-                className="btn-secondary"
-                type="button"
-                onClick={() => pickDay(nextMonday(localDayOf(new Date())))}
-              >
-                Next Week
-              </button>
-              <button
-                className="btn-secondary"
-                type="button"
-                onClick={() => changeDate(emptyDraft())}
-              >
-                Clear date
-              </button>
-            </div>
-            <DateFieldset draft={dateDraft} onChange={changeDate} />
-          </fieldset>
-          <fieldset className="quick-add-tags">
-            <legend>Tags</legend>
-            {tags.map((tag) => (
-              <label key={tag.id}>
-                <input
-                  type="checkbox"
-                  aria-label={tag.name}
-                  checked={tagIds.includes(tag.id)}
-                  onChange={() => toggleTag(tag.id)}
-                />
-                {tag.name}
-              </label>
-            ))}
-            <label>
-              New tag
-              <input
-                aria-label="New tag"
-                placeholder="Create a tag…"
-                value={newTag}
-                onChange={(event) => setNewTag(event.target.value)}
-              />
-            </label>
-          </fieldset>
-        </div>
-      )}
       {saveFailures > 0 && (
         <div className="quick-add-save-error">
           <p key={saveFailures} role="alert">

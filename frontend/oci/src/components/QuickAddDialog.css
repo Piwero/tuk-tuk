@@ -1,11 +1,38 @@
 @layer components {
+  /* Reachable Save (#542): with Details open the form outgrew a phone and a
+   short desktop, and "Add task" sat at the far end of the scroll. This
+   panel alone is capped to the viewport at every width (other Modals keep
+   Modal.css's sizing), and only the body scrolls: the action footer is
+   outside the scroller, always on screen, and a focused detail can't
+   scroll in behind it. Nothing is pinned to the viewport, so the footer
+   can't land on the mobile tab bar. */
+  .modal:has(> .quick-add-dialog) {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+  }
+
   .quick-add-dialog {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+    min-height: 0;
   }
 
-  .quick-add-dialog > label,
+  /* A scroller clips on both axes and the focus ring is a 3px box-shadow
+   outside the control: room inside for it, taken back outside so nothing
+   moves. */
+  .quick-add-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-1);
+    margin: calc(-1 * var(--space-1));
+  }
+
+  .quick-add-body > label,
   .quick-add-details > label {
     display: flex;
     flex-direction: column;
@@ -111,10 +138,15 @@
   }
 
   .quick-add-dialog-actions {
+    flex: none;
     display: flex;
     justify-content: flex-end;
     gap: var(--space-2);
     margin-top: var(--space-2);
+  }
+
+  .quick-add-save-error {
+    flex: none;
   }
 
   /* Discarding throws away what was typed: it sits apart from the
@@ -193,6 +225,9 @@
      centred on either cannot reach the other. */
     .quick-add-dialog-actions {
       justify-content: space-between;
+      /* The panel's bottom edge, where the footer now always sits, can
+       reach a phone's home indicator. */
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     /* With Discard draft present, let space-between spread all three; an
