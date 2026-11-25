@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.3.0](https://github.com/Piwero/tuk-tuk/compare/v3.2.1...v3.3.0) - 2026-11-25
+
+### Features
+
+- **backend:** Expose the Habit start as eligible_from in Habit statistics ([d07489e](https://github.com/Piwero/tuk-tuk/commit/d07489ebc2d0c54c95bed66670e62539b0e327b2))
+- **frontend:** Send the browser time zone with Habit statistics reads ([2f8f7ea](https://github.com/Piwero/tuk-tuk/commit/2f8f7ea4ff76b32f2ce594b8c2b8f7a0be5edc0e))
+- **frontend:** Label Habit types in plain language ([61babf2](https://github.com/Piwero/tuk-tuk/commit/61babf2477290c1129342ca4664b37e38979b448))
+- **frontend:** Put the Quick-Add title first, with details behind a disclosure ([04d056c](https://github.com/Piwero/tuk-tuk/commit/04d056c196cec6e6bcf0e8bde6024609762c8911))
+- **frontend:** Show saving, validation and failed-save retry in Quick-Add ([a6503c3](https://github.com/Piwero/tuk-tuk/commit/a6503c390ead1e9a7f4d4de7c447b166c7bee35b))
+- **frontend:** Show days before the Habit start as not started, never missed ([fcc92d6](https://github.com/Piwero/tuk-tuk/commit/fcc92d688b788bf7c4c029d7f507d1854571d720))
+- **frontend:** Keep an unsent Quick-Add draft for the signed-in User ([f7b2149](https://github.com/Piwero/tuk-tuk/commit/f7b2149721801b9d4f2695d66b63faf217b4da97))
+
+### Bug Fixes
+
+- **frontend:** Scope task selection to its view in render, not an effect ([fdc020c](https://github.com/Piwero/tuk-tuk/commit/fdc020c80e15c8dd730f40864c4ae0479355507e))
+- **deps:** Finish the React 19 upgrade in frontend/oci ([72eb4ea](https://github.com/Piwero/tuk-tuk/commit/72eb4ea80dd95f6ec115ebb67ab946b50c845d71))
+- **frontend:** Label navigate-only Focus entry points "Open Focus" ([ac551f6](https://github.com/Piwero/tuk-tuk/commit/ac551f6526d11a9afdc6dc48d3c5c8d799d0de4c))
+- **frontend:** Keep Quick-Add's Save on screen at short and narrow viewports ([48efeea](https://github.com/Piwero/tuk-tuk/commit/48efeea78f29692899836ab9d33be9bc31ef1bb5))
+- **frontend:** Read Habit days with one rule and say today's state on screen ([04d4c9c](https://github.com/Piwero/tuk-tuk/commit/04d4c9cad27984f50c8cc7399f1fda053e034aeb))
+- **frontend:** Make a discarded Quick-Add draft undoable and forget others' drafts ([e3be99a](https://github.com/Piwero/tuk-tuk/commit/e3be99a111dc2e7c7c657945e396782d67205813))
+- **frontend:** Leave Quick-Add Details as it was after an Assist parse ([5c6aa44](https://github.com/Piwero/tuk-tuk/commit/5c6aa443111a0eb5ba44e9ca353ba27d757a0a7b))
+
 ## [3.2.1](https://github.com/Piwero/tuk-tuk/compare/v3.2.0...v3.2.1) - 2026-11-21
 
 ### Bug Fixes
