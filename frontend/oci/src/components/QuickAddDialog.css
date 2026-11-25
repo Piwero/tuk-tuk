@@ -76,6 +76,32 @@
     font-size: var(--text-sm);
   }
 
+  /* Save feedback (#544): an invalid title is explained right under the
+   field it is about, and a failed save names itself with Retry beside it —
+   text carries the meaning, the danger color only reinforces it. */
+  .quick-add-field-error,
+  .quick-add-save-error p {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-danger);
+  }
+
+  .quick-add-field-error {
+    margin-top: calc(-1 * var(--space-2));
+  }
+
+  .quick-add-save-error {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-md);
+    background: var(--danger-soft);
+  }
+
   .quick-add-dialog-actions {
     display: flex;
     justify-content: flex-end;
@@ -123,7 +149,8 @@
       min-height: var(--tap-target);
     }
 
-    .quick-add-dialog .quick-add-details-toggle {
+    .quick-add-dialog .quick-add-details-toggle,
+    .quick-add-dialog .quick-add-save-error button {
       min-height: var(--tap-target);
     }
 

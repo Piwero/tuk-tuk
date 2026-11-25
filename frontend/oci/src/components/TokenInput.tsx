@@ -76,6 +76,11 @@ interface TokenInputProps {
    * has content so they never compete with what's being typed. Omitted by
    * the Quick-Add dialog, which is out of scope. */
   sigilHints?: React.ReactNode;
+  /** Marks the text input invalid (`aria-invalid`), for a host that explains
+   * the problem in its own message beside the field. */
+  invalid?: boolean;
+  /** The id of that message, passed through as `aria-describedby`. */
+  describedBy?: string;
 }
 
 /** A row the dropdown can show: an existing item, or the trailing offer to
@@ -98,6 +103,8 @@ export function TokenInput({
   autoFocus = false,
   trailingContent,
   sigilHints,
+  invalid = false,
+  describedBy,
 }: TokenInputProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
@@ -287,6 +294,8 @@ export function TokenInput({
         placeholder={placeholder}
         value={value}
         role="combobox"
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}

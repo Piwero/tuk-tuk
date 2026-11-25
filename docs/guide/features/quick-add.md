@@ -36,6 +36,11 @@ A title is all it needs. Under the title you see where the task will go
 picked. Click a chip's **×** to undo it. To set the list, priority, date or
 tags by hand, click **Details**.
 
+While the task saves, the button reads **Saving…**, and pressing it again
+adds nothing twice. If the save fails, the dialog stays open with everything
+you typed and says **Task not saved**. Click **Retry** to try the same task
+again.
+
 ## Good to know
 
 - **Day and time combine.** `@tomorrow @9am` gives one chip: "Tomorrow 9:00 AM".
