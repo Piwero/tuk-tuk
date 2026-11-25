@@ -326,6 +326,9 @@ export function App({
   // Bumped after "Convert to task" (issue #111) so the Calendar force-reloads:
   // the converted Event disappears and the new Task appears immediately.
   const [calendarRefresh, setCalendarRefresh] = useState(0);
+  // Bumped when the detail panel changes a Task while the Calendar shows, so
+  // a plan edited with its date/time controls moves on the grid (#562).
+  const [calendarTaskChange, setCalendarTaskChange] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   // Whether the current Task view's Tasks have loaded (#441), keyed by what
   // was asked for, so a view that hasn't loaded yet is never shown as empty
@@ -1045,6 +1048,9 @@ export function App({
   /** Apply a server response, evicting the task if it left the current view. */
   function applyTaskChange(updated: Task): void {
     setCalendarTask((current) => (current?.id === updated.id ? updated : current));
+    if (view?.kind === "calendar") {
+      setCalendarTaskChange((current) => current + 1);
+    }
     reconcileOpenTask(updated);
     if (isComputedView) {
       changeTasksAndRecompute((current) =>
@@ -1737,6 +1743,7 @@ export function App({
                     }}
                     onSelectEvent={setSelectedEvent}
                     refreshToken={calendarRefresh}
+                    taskChangeToken={calendarTaskChange}
                     lists={lists}
                     tags={tags}
                     onTagCreated={(tag) => setTags((current) => [...current, tag])}
