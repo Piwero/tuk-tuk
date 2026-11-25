@@ -204,10 +204,11 @@ async def read_habit_stats(
     zone = caller_zone(tz)
     habit = await get_habit_or_404(habit_id, session)
     rows = (await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit_id))).all()
-    checked = {row.date for row in rows}
+    values = {row.date: row.value for row in rows}
+    checked = set(values)
     heatmap_year = year if year is not None else today.year
     return HabitStats(
-        streak=current_streak(habit.frequency, checked, today),
+        streak=current_streak(habit.frequency, habit.target, (), values, today),
         eligible_from=eligible_from(habit.created_at, zone, checked, today),
         heatmap=[
             HeatmapDay(date=row.date, value=row.value, intensity=intensity(row.value, habit.target))

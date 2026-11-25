@@ -560,11 +560,11 @@ async def _habit_status(
     habit = await session.scalar(select(Habit).where(Habit.name == habit_name, ~Habit.is_archived))
     if habit is None:
         return {"error": f"no habit named {habit_name!r}"}, set()
-    checked = {
-        row.date
+    values = {
+        row.date: row.value
         for row in await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit.id))
     }
-    streak = current_streak(habit.frequency, checked, local_date)
+    streak = current_streak(habit.frequency, habit.target, (), values, local_date)
     return {"habit_name": habit.name, "current_streak": streak}, set()
 
 
