@@ -1,6 +1,6 @@
 /** Reminder offsets: signed ISO-8601 durations relative to the task's date
  * (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 minutes before).
- * Stored only — v1 delivers no notifications.
+ * Delivered only to an open tab of a User who opted in (ADR 0019).
  */
 
 export interface ReminderPreset {

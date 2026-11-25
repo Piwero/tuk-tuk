@@ -324,8 +324,17 @@
    glyph. Neutral, never the missed outline, red or success green: a pause
    is neither failure nor success. */
   .habits-week-grid .habit-cell.state-paused,
-  .habits-legend .habit-cell.state-paused {
+  .habits-legend .habit-cell.state-paused,
+  .habits-week-grid .habit-cell.state-skipped,
+  .habits-legend .habit-cell.state-skipped {
     color: var(--text-tertiary);
+  }
+  /* Skipped (#564): no fill, a solid neutral outline and a skip glyph — on
+   purpose, so never the missed dashed outline, red or success green. */
+  .habits-week-grid .habit-cell.state-skipped,
+  .habits-legend .habit-cell.state-skipped {
+    background: transparent;
+    border: 1px solid var(--border-strong);
   }
   /* The legend: one swatch per cell state, its meaning always in words. */
   .habits-legend {

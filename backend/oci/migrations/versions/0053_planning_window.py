@@ -8,10 +8,10 @@ kept apart from Active hours. Off for every existing User, prefilled
 The revision id carries the setting name, not a bare number, so parallel
 phase-3 tickets don't collide.
 
-No downgrade, like 0035-0050 before it: restore the pre-upgrade backup.
+No downgrade, like 0035-0052 before it: restore the pre-upgrade backup.
 
-Revision ID: 0051_planning_window
-Revises: 0050_task_planned_work
+Revision ID: 0053_planning_window
+Revises: 0052_habit_skips
 Create Date: 2026-11-25
 
 """
@@ -21,8 +21,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0051_planning_window"
-down_revision: str | None = "0050_task_planned_work"
+revision: str = "0053_planning_window"
+down_revision: str | None = "0052_habit_skips"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -46,5 +46,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     raise NotImplementedError(
-        "0051_planning_window has no downgrade: restore the database backup taken before upgrading."
+        "0053_planning_window has no downgrade: restore the database backup taken before upgrading."
     )

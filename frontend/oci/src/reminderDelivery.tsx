@@ -8,12 +8,27 @@
  * the browser has answered "denied".
  *
  * Scope is foreground only: a signed-in Tuk Tuk tab open on a supported
- * browser. This module delivers no Reminders itself; it only knows whether
- * delivery is set up, and can show a test notification.
+ * browser. The provider knows whether delivery is set up and can show a
+ * test notification; DueReminderNotifier (issue #561) does the delivering.
  */
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
-import { fetchReminderNotificationSettings, updateReminderNotificationSettings } from "./api";
+import {
+  claimDueReminders,
+  fetchReminderNotificationSettings,
+  reportReminderDelivery,
+  updateReminderNotificationSettings,
+  type ReminderClaim,
+} from "./api";
+import { reminderLabel } from "./reminders";
 
 export type ReminderDeliveryState = "off" | "requesting" | "allowed" | "denied" | "unsupported";
 
@@ -130,6 +145,91 @@ export function reminderDeliveryNote(state: ReminderDeliveryState): string {
     default:
       return "Not notifications yet. Turn on Reminder notifications in Settings.";
   }
+}
+
+/** How often an open tab asks the server for Reminders that came due. The
+ * server's delivery window (5 minutes) leaves room for a background tab
+ * whose timers the browser slows to once a minute. */
+export const CLAIM_INTERVAL_MS = 30_000;
+
+/** Delivers due Reminders on this device (issue #561, ADR 0019), only
+ * while delivery is "allowed" here: the User's opt-in plus the browser's
+ * permission. It claims on start, every CLAIM_INTERVAL_MS, and whenever
+ * the tab comes back into view; the server's ledger makes sure each
+ * occurrence goes to one tab. A failed claim (offline, signed out) is
+ * dropped quietly: delivery is optional and never blocks the app. Clicking
+ * a notification opens its Task. */
+export function DueReminderNotifier({
+  onOpenTask,
+}: {
+  onOpenTask: (taskId: number) => void;
+}): null {
+  const { state } = useReminderDelivery();
+  const openTask = useRef(onOpenTask);
+  useEffect(() => {
+    openTask.current = onOpenTask;
+  }, [onOpenTask]);
+
+  useEffect(() => {
+    if (state !== "allowed") return;
+    let live = true;
+    let claiming = false;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const claim = async (): Promise<void> => {
+      if (claiming) return;
+      claiming = true;
+      try {
+        const { items } = await claimDueReminders(timeZone);
+        // Stopped meanwhile (turned off, signed out): show nothing; the
+        // unreported leases expire on the server.
+        if (live) for (const item of items) deliver(item, (id) => openTask.current(id));
+      } catch {
+        // Retried on the next tick.
+      } finally {
+        claiming = false;
+      }
+    };
+    const onVisibility = (): void => {
+      if (document.visibilityState === "visible") void claim();
+    };
+    void claim();
+    const timer = setInterval(() => void claim(), CLAIM_INTERVAL_MS);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [state]);
+
+  return null;
+}
+
+/** Shows one claimed Reminder and reports what the browser says. The tag
+ * is the ledger row's, so a retry the server hands out after a lost report
+ * replaces the earlier alert rather than stacking a second one. */
+function deliver(claim: ReminderClaim, onOpenTask: (taskId: number) => void): void {
+  const report = (outcome: "shown" | "failed"): void => {
+    reportReminderDelivery(claim, outcome).catch(() => {});
+  };
+  let notification: Notification;
+  try {
+    notification = new window.Notification(claim.task_title, {
+      body: reminderLabel(claim.offset),
+      tag: `tuk-tuk-reminder-${claim.id}`,
+    });
+  } catch {
+    // Android Chrome, for one, has no page-level constructor (ADR 0019).
+    report("failed");
+    return;
+  }
+  notification.addEventListener("show", () => report("shown"), { once: true });
+  notification.addEventListener("error", () => report("failed"), { once: true });
+  notification.addEventListener("click", () => {
+    window.focus();
+    notification.close();
+    onOpenTask(claim.task_id);
+  });
 }
 
 export type TestNotificationResult = "shown" | "error" | "unconfirmed";

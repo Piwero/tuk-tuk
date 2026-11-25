@@ -26,7 +26,7 @@ list and revoke routes are probed like any other owned row.
 import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -126,6 +126,8 @@ class AliceWorld(World):
     google_account: int
     google_calendar: int
     api_token: int
+    reminder_delivery: int
+    reminder_lease: str
 
 
 type Request = Callable[[AliceWorld, World], tuple[str, str, dict[str, Any] | None]]
@@ -230,6 +232,7 @@ READS: dict[str, Read] = {
         get(lambda a, me: "/api/v1/settings/gentle-return"),
         rows=lambda body, a: [body] if body["enabled"] else [],
     ),
+    "reminder delivery ledger": Read(get(lambda a, me: "/api/v1/reminder-deliveries")),
     "reminder notifications toggle": Read(
         get(lambda a, me: "/api/v1/settings/reminder-notifications"),
         rows=lambda body, a: [body] if body["enabled"] else [],
@@ -346,6 +349,30 @@ REACHES |= {
     ),
     "remove a habit pause": Reach(
         lambda a, me: ("DELETE", f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}", None)
+    ),
+    "report a reminder shown": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/shown",
+            {"lease_token": a.reminder_lease},
+        )
+    ),
+    "report a reminder failed": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/failed",
+            {"lease_token": a.reminder_lease},
+        )
+    ),
+    "skip a habit day": Reach(
+        lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=1)}", None)
+    ),
+    "remove a habit skip": Reach(
+        lambda a, me: (
+            "DELETE",
+            f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=3)}",
+            None,
+        )
     ),
     "revoke api token": Reach(lambda a, me: ("DELETE", f"{TOKENS}/{a.api_token}", None)),
     "PUT check-in": Reach(
@@ -547,6 +574,9 @@ OWN_WRITES: dict[str, OwnWrite] = {
     "turning gentle return off": OwnWrite(
         lambda a, me: ("PUT", "/api/v1/settings/gentle-return", {"enabled": False})
     ),
+    "claiming due reminders": OwnWrite(
+        lambda a, me: ("POST", "/api/v1/reminder-deliveries/claim?tz=UTC", None)
+    ),
     "turning reminder notifications off": OwnWrite(
         lambda a, me: ("PUT", "/api/v1/settings/reminder-notifications", {"enabled": False})
     ),
@@ -644,6 +674,7 @@ def build_alice(
     assistant: StubChatProvider,
     today: date,
     api_token: int,
+    now: datetime,
 ) -> AliceWorld:
     """One of every resource type, each named so "alice" finds it.
     `api_token` is minted beforehand: only a password session can."""
@@ -671,6 +702,7 @@ def build_alice(
         f"/api/v1/habits/{habit}/pauses",
         {"start_date": str(today + timedelta(days=10)), "end_date": None},
     )["id"]
+    alice.ok("PUT", f"/api/v1/habits/{habit}/skips/{today + timedelta(days=3)}")
     task = alice.ok(
         "POST",
         "/api/v1/tasks",
@@ -721,6 +753,12 @@ def build_alice(
         "/api/v1/settings/planning-window",
         {"enabled": True, "start": "10:00", "end": "14:00"},
     )
+    alice.ok(
+        "POST",
+        "/api/v1/tasks",
+        {"title": "alice reminder", "due_date": now.isoformat(), "reminders": ["PT0S"]},
+    )
+    [delivery] = alice.ok("POST", "/api/v1/reminder-deliveries/claim?tz=UTC")["items"]
     timer = alice.ok(
         "POST", "/api/v1/timers", {"name": "alice timer", "mode": "stopwatch", "habit_id": habit}
     )["id"]
@@ -743,6 +781,8 @@ def build_alice(
         check_item=check_item,
         habit=habit,
         habit_pause=habit_pause,
+        reminder_delivery=delivery["id"],
+        reminder_lease=delivery["lease_token"],
         key_result=key_result,
         standup_entry=entry["id"],
         bullet=entry["bullets"][0]["id"],
@@ -813,7 +853,9 @@ def pair(
         yield Pair(
             alice=alice,
             bea=bea,
-            a=build_alice(alice, fake_calendar_source, assistant, today, alices_token),
+            a=build_alice(
+                alice, fake_calendar_source, assistant, today, alices_token, fake_clock.now
+            ),
             b=build_bea(bea, assistant, today),
             assistant=assistant,
         )

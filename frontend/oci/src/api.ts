@@ -67,7 +67,7 @@ export interface Task {
   time_zone: string | null;
   /** Reminder offsets from the task's date: signed ISO-8601 durations
    * (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
-   * Stored only — v1 delivers no notifications. */
+   * Delivered only to an open tab of a User who opted in (ADR 0019). */
   reminders: string[];
   /** Recurrence: iCalendar RRULE content (e.g. "FREQ=WEEKLY;BYDAY=MO,TH"),
    * anchored at the due date. Completing a recurring task advances its dates
@@ -1215,6 +1215,9 @@ export interface Habit {
   /** The Habit's pauses, oldest first (issue #559). Optional on the wire
    * only for an older server, which sends none. */
   pauses?: HabitPause[];
+  /** The Habit's skipped days (YYYY-MM-DD), oldest first (issue #564).
+   * Optional on the wire only for an older server, which sends none. */
+  skips?: string[];
 }
 
 /** A Habit pause (issue #559): an explicit interval of local days, both
@@ -1260,6 +1263,23 @@ export function resumeHabitPause(habitId: number, pauseId: number, today: string
     method: "POST",
     body: JSON.stringify({ today }),
   });
+}
+
+/** Skip one scheduled day on purpose (issue #564): no Check-in, neither
+ * done nor missed. Refused on an unscheduled day (422
+ * `skip_not_scheduled`), a paused day (409 `habit_day_paused`) or a day
+ * holding a Check-in (409 `skip_conflicts_with_check_in`, the date in
+ * `error.details.dates`). */
+export function skipHabitDay(
+  habitId: number,
+  day: string,
+): Promise<{ habit_id: number; date: string }> {
+  return request(`/api/v1/habits/${habitId}/skips/${day}`, { method: "PUT" });
+}
+
+/** Undo a skip: the day is eligible again and accepts a Check-in. */
+export function unskipHabitDay(habitId: number, day: string): Promise<void> {
+  return request(`/api/v1/habits/${habitId}/skips/${day}`, { method: "DELETE" });
 }
 
 /** A Check-in — one day's progress on a Habit, keyed by (habit, date). */
@@ -1955,6 +1975,43 @@ export function updateReminderNotificationSettings(
   return request("/api/v1/settings/reminder-notifications", {
     method: "PUT",
     body: JSON.stringify(settings),
+  });
+}
+
+/** Reminder delivery (issue #561, ADR 0019): a lease on one Reminder of
+ * one Task occurrence that came due. The tab that claimed it shows it, then
+ * reports `shown` or `failed` with `lease_token`; an unreported lease
+ * expires and the server may hand it to another claim. */
+export interface ReminderClaim {
+  id: number;
+  task_id: number;
+  task_title: string;
+  /** The Reminder: an ISO-8601 offset from the Task's date. */
+  offset: string;
+  /** The Task occurrence's due date this Reminder belongs to. */
+  occurrence_due: string;
+  fire_at: string;
+  state: "claimed" | "shown" | "failed";
+  attempt: number;
+  lease_token: string;
+  lease_expires_at: string;
+}
+
+/** Claims the Reminders due now that no other tab holds. `tz` anchors
+ * all-day Tasks; nothing is claimed while the User's opt-in is off. */
+export function claimDueReminders(tz: string): Promise<{ items: ReminderClaim[] }> {
+  return request(`/api/v1/reminder-deliveries/claim?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+  });
+}
+
+export function reportReminderDelivery(
+  claim: ReminderClaim,
+  outcome: "shown" | "failed",
+): Promise<unknown> {
+  return request(`/api/v1/reminder-deliveries/${claim.id}/${outcome}`, {
+    method: "POST",
+    body: JSON.stringify({ lease_token: claim.lease_token }),
   });
 }
 

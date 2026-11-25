@@ -30,6 +30,7 @@ export type DayState =
   | "not-started"
   | "not-scheduled"
   | "paused"
+  | "skipped"
   | "future";
 
 /** Whether a pause covers the day: both ends inclusive, a null end
@@ -50,6 +51,8 @@ export function currentOrNextPause<P extends { start_date: string; end_date: str
   return (habit.pauses ?? []).find((pause) => pause.end_date === null || pause.end_date >= today);
 }
 
+const SKIPPED: DayReading = { state: "skipped", level: 0, text: "skipped" };
+
 export interface DayReading {
   state: DayState;
   /** The heat-ramp fill (0..4). A partial day stays on 1-3, so only a met
@@ -64,9 +67,10 @@ export interface DayReading {
  * Check-in). The order decides overlaps: a recorded value always shows, a
  * future day is inert, an off day is "not scheduled" even before the Habit
  * start, and only then does the start turn an empty day "not started"
- * instead of missed, and a pause turns it "paused" — the same order as the
- * server's day rule (app.habit_days). Today is graced, as in the server's
- * Streak. */
+ * instead of missed, a pause turns it "paused" and a skip "skipped" — the
+ * same order as the server's day rule (app.habit_days). A skip still to come
+ * reads "skipped" ahead of its day, so a planned skip shows. Today is
+ * graced, as in the server's Streak. */
 export function habitDayReader(
   habit: {
     created_at: string;
@@ -74,6 +78,7 @@ export function habitDayReader(
     target: number;
     unit: string | null;
     pauses?: { start_date: string; end_date: string | null }[];
+    skips?: string[];
   },
   stats: { eligible_from: string } | null | undefined,
   today: string,
@@ -91,17 +96,25 @@ export function habitDayReader(
         text: `in progress: ${value} of ${habit.target}${unit}`,
       };
     }
+    const scheduled = habitDueOn(habit.frequency, day);
+    const paused = (habit.pauses ?? []).some((pause) => pauseCovers(pause, day));
+    const skipped = (habit.skips ?? []).includes(day);
     if (day > today) {
-      return { state: "future", level: 0, text: "future" };
+      return skipped && scheduled && !paused
+        ? SKIPPED
+        : { state: "future", level: 0, text: "future" };
     }
-    if (!habitDueOn(habit.frequency, day)) {
+    if (!scheduled) {
       return { state: "not-scheduled", level: 0, text: "not scheduled" };
     }
     if (day < start) {
       return { state: "not-started", level: 0, text: "not started" };
     }
-    if ((habit.pauses ?? []).some((pause) => pauseCovers(pause, day))) {
+    if (paused) {
       return { state: "paused", level: 0, text: "paused" };
+    }
+    if (skipped) {
+      return SKIPPED;
     }
     return day === today
       ? { state: "open-today", level: 0, text: "not yet checked in" }
