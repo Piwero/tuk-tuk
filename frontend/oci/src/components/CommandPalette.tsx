@@ -39,7 +39,7 @@ import { TokenInput, type TokenChannel } from "./TokenInput";
  * verb and (for value-taking verbs) the value. */
 export interface TaskActionHandlers {
   onComplete: (task: Task) => void;
-  onStartFocus: (task: Task) => void;
+  onOpenFocus: (task: Task) => void;
   /** Start a Pomo of `pomoMs` linked to the Task (issue #280's "Start Pomo"
    * picker — the quick-start choices the hover row used to sample). */
   onStartPomo: (task: Task, pomoMs: number) => void;
@@ -106,7 +106,7 @@ function runValuelessVerb(id: TaskVerbId, task: Task, actions: TaskActionHandler
   if (id === "complete") {
     actions.onComplete(task);
   } else if (id === "focus") {
-    actions.onStartFocus(task);
+    actions.onOpenFocus(task);
   } else {
     actions.onDelete(task);
   }
@@ -158,12 +158,14 @@ function pickerChoices(
       return [
         ...fallback,
         // A one-off length lives in the Focus view, where the minutes field
-        // already is — the palette stays a picker, never a form.
+        // already is — the palette stays a picker, never a form. This row only
+        // navigates, so it says "Open Focus" rather than "Custom…", which in
+        // the quick-start menu starts a run (#539).
         {
           key: "pomo-custom",
-          label: "Custom…",
+          label: "Open Focus for a custom length",
           run: () => {
-            actions.onStartFocus(task);
+            actions.onOpenFocus(task);
             close();
           },
         },

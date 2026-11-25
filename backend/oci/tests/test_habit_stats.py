@@ -5,8 +5,10 @@ The Streak counts consecutive scheduled days checked in, walking back from
 an unticked today is graced (the day isn't over yet).
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
+from tests.conftest import run_sql
 from tests.test_habits import make_habit
 
 
@@ -16,8 +18,10 @@ def check_in(client: TestClient, habit_id: int, day: str, value: float | None = 
     assert response.status_code == 200, response.text
 
 
-def stats(client: TestClient, habit_id: int, today: str, year: int | None = None) -> dict:
-    params: dict[str, object] = {"today": today}
+def stats(
+    client: TestClient, habit_id: int, today: str, year: int | None = None, tz: str = "UTC"
+) -> dict:
+    params: dict[str, object] = {"today": today, "tz": tz}
     if year is not None:
         params["year"] = year
     response = client.get(f"/api/v1/habits/{habit_id}/stats", params=params)
@@ -116,9 +120,132 @@ class TestStatsValidation:
     def test_today_is_required(self, client: TestClient) -> None:
         habit = make_habit(client, "Meditate")
 
-        assert client.get(f"/api/v1/habits/{habit['id']}/stats").status_code == 422
+        response = client.get(f"/api/v1/habits/{habit['id']}/stats", params={"tz": "UTC"})
+
+        assert response.status_code == 422
+
+    def test_tz_is_required_never_server_utc(self, client: TestClient) -> None:
+        habit = make_habit(client, "Meditate")
+
+        response = client.get(f"/api/v1/habits/{habit['id']}/stats", params={"today": "2026-07-03"})
+
+        assert response.status_code == 422
+
+    @pytest.mark.parametrize("tz", ["Mars/Olympus_Mons", "", "../etc/passwd"])
+    def test_an_unknown_tz_is_422(self, client: TestClient, tz: str) -> None:
+        habit = make_habit(client, "Meditate")
+
+        response = client.get(
+            f"/api/v1/habits/{habit['id']}/stats", params={"today": "2026-07-03", "tz": tz}
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "validation_error"
 
     def test_unknown_habit_is_404(self, client: TestClient) -> None:
-        response = client.get("/api/v1/habits/999/stats", params={"today": "2026-07-03"})
+        response = client.get(
+            "/api/v1/habits/999/stats", params={"today": "2026-07-03", "tz": "UTC"}
+        )
 
         assert response.status_code == 404
+
+
+def created_at(database_url: str, habit_id: int, instant: str) -> None:
+    """Backdates a Habit's creation instant — no endpoint can write it."""
+    run_sql(database_url, "UPDATE habits SET created_at = %s WHERE id = %s", (instant, habit_id))
+
+
+class TestHabitStart:
+    """The Habit start, served as `eligible_from`."""
+
+    def test_is_the_local_creation_day(self, client: TestClient, database_url: str) -> None:
+        habit = make_habit(client, "Meditate")
+        created_at(database_url, habit["id"], "2026-06-30T10:00:00Z")
+
+        assert stats(client, habit["id"], "2026-07-03")["eligible_from"] == "2026-06-30"
+
+    def test_a_habit_created_today_starts_today_with_no_streak(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = make_habit(client, "Meditate")
+        created_at(database_url, habit["id"], "2026-07-03T10:00:00Z")
+
+        body = stats(client, habit["id"], "2026-07-03")
+
+        assert body["eligible_from"] == "2026-07-03"
+        assert body["streak"] == 0
+
+    def test_an_earlier_real_check_in_pulls_it_back_and_stays_in_history(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = make_habit(client, "Meditate")
+        created_at(database_url, habit["id"], "2026-07-03T10:00:00Z")
+        check_in(client, habit["id"], "2026-06-28")
+
+        body = stats(client, habit["id"], "2026-07-03")
+
+        assert body["eligible_from"] == "2026-06-28"
+        assert [day["date"] for day in body["heatmap"]] == ["2026-06-28"]
+
+    def test_a_later_check_in_leaves_the_creation_day(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = make_habit(client, "Meditate")
+        created_at(database_url, habit["id"], "2026-06-30T10:00:00Z")
+        check_in(client, habit["id"], "2026-07-02")
+
+        assert stats(client, habit["id"], "2026-07-03")["eligible_from"] == "2026-06-30"
+
+    @pytest.mark.parametrize(
+        ("frequency", "streak"),
+        [
+            ("FREQ=DAILY", 3),
+            # Mon/Wed/Fri: Thu 07-02 is unscheduled, so its Check-in is
+            # history, not streak.
+            ("FREQ=WEEKLY;BYDAY=MO,WE,FR", 2),
+            # Times-per-week is due every day in v1.
+            ("FREQ=WEEKLY;TT_TIMES=3", 3),
+        ],
+    )
+    def test_every_frequency_gets_the_same_habit_start_and_keeps_its_streak(
+        self, client: TestClient, database_url: str, frequency: str, streak: int
+    ) -> None:
+        habit = make_habit(client, "Move", frequency=frequency)
+        created_at(database_url, habit["id"], "2026-07-01T10:00:00Z")
+        for day in ("2026-07-01", "2026-07-02", "2026-07-03"):  # Wed, Thu, Fri
+            check_in(client, habit["id"], day)
+
+        body = stats(client, habit["id"], "2026-07-03")
+
+        assert body["eligible_from"] == "2026-07-01"
+        assert body["streak"] == streak
+
+    @pytest.mark.parametrize(
+        ("tz", "local_day"),
+        [("America/New_York", "2026-07-03"), ("UTC", "2026-07-04"), ("Asia/Tokyo", "2026-07-04")],
+    )
+    def test_is_read_in_the_callers_zone_across_local_midnight(
+        self, client: TestClient, database_url: str, tz: str, local_day: str
+    ) -> None:
+        # 03:30Z on the 4th is still 23:30 on the 3rd in New York.
+        habit = make_habit(client, "Meditate")
+        created_at(database_url, habit["id"], "2026-07-04T03:30:00Z")
+
+        assert stats(client, habit["id"], "2026-07-05", tz=tz)["eligible_from"] == local_day
+
+    def test_never_lands_after_today(self, client: TestClient, database_url: str) -> None:
+        # A caller whose clock runs behind still gets today as eligible.
+        habit = make_habit(client, "Meditate")
+        created_at(database_url, habit["id"], "2026-07-04T10:00:00Z")
+
+        assert stats(client, habit["id"], "2026-07-03")["eligible_from"] == "2026-07-03"
+
+    def test_an_archived_habit_keeps_its_habit_start(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = make_habit(client, "Meditate")
+        created_at(database_url, habit["id"], "2026-06-30T10:00:00Z")
+        response = client.patch(f"/api/v1/habits/{habit['id']}", json={"is_archived": True})
+        assert response.status_code == 200, response.text
+
+        assert stats(client, habit["id"], "2026-07-03")["eligible_from"] == "2026-06-30"

@@ -6,12 +6,12 @@ mode, start/end, pause duration, optional note, and at most one link to a
 Task or Habit.
 """
 
-from datetime import UTC, date, datetime, tzinfo
-from zoneinfo import ZoneInfo
+from datetime import date, datetime
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
+from app.caller_zone import caller_zone_or_utc
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.focus_stats import daily_totals, linked_totals, session_day, weekly_totals
@@ -165,16 +165,7 @@ async def read_focus_stats(
             code="validation_error",
             message="start must not be after end",
         )
-    zone: tzinfo = UTC
-    if tz is not None:
-        try:
-            zone = ZoneInfo(tz)
-        except (KeyError, ValueError):
-            raise APIError(
-                status_code=422,
-                code="validation_error",
-                message=f"Unknown IANA timezone {tz!r}",
-            ) from None
+    zone = caller_zone_or_utc(tz)
     rows = (await session.scalars(select(FocusSession).order_by(FocusSession.id))).all()
     # Day membership needs the caller's timezone, which portable SQL can't
     # reach — the range filter runs in Python (like the Smart Lists).

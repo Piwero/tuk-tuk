@@ -88,6 +88,18 @@
     border-color: var(--success-border-strong);
     color: var(--heat-ink);
   }
+  /* Before the Habit start: no outline (an empty day in range has one), a
+   quiet number and the shared dash under it. Still a button: a tap is a
+   deliberate backfill. */
+  .grid-day.not-started {
+    border-color: transparent;
+    color: var(--text-tertiary);
+  }
+  .grid-day.not-started::before {
+    top: auto;
+    bottom: var(--space-1);
+    translate: -50% 0;
+  }
   .grid-day:disabled {
     color: var(--text-disabled);
     cursor: default;
@@ -117,5 +129,47 @@
   }
   .heatmap-day.level-4 {
     background: var(--heat-4);
+  }
+  /* The "not started" mark (#543), the one primitive every view of a Habit's
+   days shares: the week grid, the strip, the month grid, the heatmap and both
+   keys. A flat neutral dash centred on its square (never a fill: the Habit
+   didn't exist yet); a consumer clears its own fill and may only move it. */
+  .not-started {
+    position: relative;
+  }
+  .not-started::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--habit-dash-width);
+    height: var(--habit-dash-height);
+    border-radius: var(--radius-full);
+    background: var(--text-tertiary);
+    translate: -50% -50%;
+  }
+  .heatmap-day.level-0.not-started {
+    background: transparent;
+  }
+  .heatmap-caption {
+    margin: 0;
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+  }
+  /* The history's key: one swatch per mark, its meaning always in words. */
+  .habit-history-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .habit-history-key li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
   }
 }

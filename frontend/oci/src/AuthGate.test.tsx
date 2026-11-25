@@ -261,6 +261,75 @@ describe("AuthGate log out from the user menu (#473)", () => {
   });
 });
 
+async function leaveQuickAddDraft(
+  user: ReturnType<typeof userEvent.setup>,
+  title: string,
+): Promise<void> {
+  await user.click(await screen.findByRole("button", { name: "Quick add" }));
+  const dialog = await screen.findByRole("dialog", { name: "Quick add" });
+  await user.type(within(dialog).getByLabelText("Title"), title);
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
+async function reopenQuickAdd(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+  await user.click(await screen.findByRole("button", { name: "Quick add" }));
+  return screen.findByRole("dialog", { name: "Quick add" });
+}
+
+describe("AuthGate and the Quick-Add session draft (#541)", () => {
+  it("drops the draft on log out, so signing back in opens an empty Quick add", async () => {
+    installFakeApi({ loggedIn: true });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+    await leaveQuickAddDraft(user, "Call the dentist");
+
+    await logOut(user);
+    await signIn(user, "admin", FAKE_PASSWORD);
+
+    const dialog = await reopenQuickAdd(user);
+    expect(within(dialog).getByLabelText("Title")).toHaveValue("");
+    expect(within(dialog).queryByText("Draft restored")).not.toBeInTheDocument();
+  });
+
+  it("never shows one User's draft to the next User signed in on the same tab", async () => {
+    const api = installFakeApi({ loggedIn: true, users: [FAKE_ADMIN, fakeUser("bea")] });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+    await leaveQuickAddDraft(user, "Call the dentist");
+
+    // The session ends without a log out (a 401), so nothing was cleared,
+    // and someone else signs in on this tab.
+    api.loggedIn = false;
+    await act(() => expect(fetchLists()).rejects.toThrow());
+    await signIn(user, "bea", FAKE_PASSWORD);
+
+    const dialog = await reopenQuickAdd(user);
+    expect(within(dialog).getByLabelText("Title")).toHaveValue("");
+    expect(within(dialog).queryByText("Draft restored")).not.toBeInTheDocument();
+    expect(JSON.stringify({ ...sessionStorage })).not.toContain("Call the dentist");
+  });
+
+  it("forgets the previous User's draft as soon as the next User is signed in", async () => {
+    const api = installFakeApi({ loggedIn: true, users: [FAKE_ADMIN, fakeUser("bea")] });
+    const user = userEvent.setup();
+    render(<AuthGate />);
+    await leaveQuickAddDraft(user, "Call the dentist");
+    expect(JSON.stringify({ ...sessionStorage })).toContain("Call the dentist");
+
+    api.loggedIn = false;
+    await act(() => expect(fetchLists()).rejects.toThrow());
+    await signIn(user, "bea", FAKE_PASSWORD);
+
+    // Gone from storage before Quick add is ever opened, not on its next open.
+    await screen.findByRole("button", { name: "Quick add" });
+    await waitFor(() =>
+      expect(JSON.stringify({ ...sessionStorage })).not.toContain("Call the dentist"),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
 describe("AuthGate pending forced step", () => {
   const PENDING_STEPS = [
     ["a temporary password", { must_change_password: true }, "Choose a new password"],

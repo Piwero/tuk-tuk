@@ -7,11 +7,16 @@ than broken, and an unticked today is graced — the day isn't over yet.
 Check-ins on unscheduled days are history (they show in the heatmap) but
 never streak. N-times-per-week habits are scheduled every day (v1 keeps the
 due rule and the streak rule the same; a per-week quota walk is future work).
+
+The Habit start (`eligible_from`) is the first local day a Habit can be
+missed: days before it are "not started", never missed. The Streak already
+stops at the earliest Check-in, so the Habit start never changes its value.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, tzinfo
 
 from app.habit_frequency import due_on
+from app.schemas import as_utc
 
 
 def current_streak(frequency: str, checked: set[date], today: date) -> int:
@@ -33,6 +38,18 @@ def current_streak(frequency: str, checked: set[date], today: date) -> int:
             streak += 1
         day -= timedelta(days=1)
     return streak
+
+
+def eligible_from(created_at: datetime, zone: tzinfo, checked: set[date], today: date) -> date:
+    """The Habit start: the creation instant's local day in `zone`, pulled
+    back to the earliest real Check-in when one is earlier (a backfill is
+    intentional history), and never later than `today` — so today is always
+    eligible, even when the caller's clock runs behind the server's.
+    """
+    start = as_utc(created_at).astimezone(zone).date()
+    if checked:
+        start = min(start, min(checked))
+    return min(start, today)
 
 
 def intensity(value: float, target: float) -> float:

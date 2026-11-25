@@ -30,7 +30,7 @@ describe("A Task row's action glyphs", () => {
 
     expect(new Set(names).size).toBe(names.length);
     expect(names).toEqual([
-      "Focus on Call the plumber",
+      "Open Focus for Call the plumber",
       "Actions for Call the plumber",
       "Delete Call the plumber",
     ]);

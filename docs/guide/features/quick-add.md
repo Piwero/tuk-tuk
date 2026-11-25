@@ -29,7 +29,25 @@ into a chip. Click its **×** to remove it.
 
 1. Press `N` anywhere, or click **Quick add** (on a phone, tap the blue **+**).
 2. Type the task name, then add any shortcuts.
-3. Press Enter.
+3. Press Enter, or click **Add task**.
+
+A title is all it needs. Under the title you see where the task will go
+(**Inbox** unless you opened it from a list) and a chip for each shortcut you
+picked. Click a chip's **×** to undo it. To set the list, priority, date or
+tags by hand, click **Details**.
+
+While the task saves, the button reads **Saving…**, and pressing it again
+adds nothing twice. If the save fails, the dialog stays open with everything
+you typed and says **Task not saved**. Click **Retry** to try the same task
+again.
+
+Closing the dialog without saving keeps what you typed for this browser tab.
+Open it again and your draft is back, with a **Draft restored** note. A list
+or date you chose in the draft stays, even if you reopen from another list.
+Click **Discard draft** to start empty; **Undo** on the note that follows
+brings it back. **Cancel** only closes the dialog.
+Saving the task clears the draft. Logging out clears it too, and nobody else
+who signs in on the tab sees it.
 
 ## Good to know
 

@@ -2,7 +2,7 @@ import "./HabitHistory.css";
 import "./HabitCardStats.css";
 import { type Habit, type HabitStats } from "../api";
 import { shortDayLabel } from "../dates";
-import { heatLevel, stripDays } from "../habitStats";
+import { habitDayReader, stripDays } from "../habitStats";
 import { useHoverHint } from "../useHoverHint";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
@@ -19,27 +19,6 @@ interface HabitCardStatsProps {
   onToggleDay: ((day: string) => void) | null;
   /** False where the Streak is already shown beside the strip (the week grid). */
   showStreak?: boolean;
-}
-
-/** A day cell's fill level plus its accessible status, read from the
- * HeatmapDay the server already computed (or its absence). */
-function dayStatus(
-  habit: Habit,
-  today: string,
-  day: string,
-  entry: { value: number; intensity: number } | undefined,
-): { level: number; text: string } {
-  const level = heatLevel(entry?.intensity ?? 0);
-  if (level >= 4) {
-    return { level, text: "checked in" };
-  }
-  if (level > 0) {
-    const unit = habit.unit === null ? "" : ` ${habit.unit}`;
-    return { level, text: `in progress: ${entry?.value ?? 0} of ${habit.target}${unit}` };
-  }
-  // Today is graced — the day isn't over, so it reads as pending, not missed
-  // (the same grace the server's Streak gives it).
-  return { level, text: day === today ? "not yet checked in" : "missed" };
 }
 
 /** The Streak and a strip of the Habit's most recent scheduled days —
@@ -60,8 +39,9 @@ export function HabitCardStats({
   if (stats === undefined) {
     return null;
   }
-  const entries = new Map(stats.heatmap.map((entry) => [entry.date, entry]));
+  const values = new Map(stats.heatmap.map((entry) => [entry.date, entry.value]));
   const days = stripDays(habit.frequency, today);
+  const read = habitDayReader(habit, stats, today);
 
   return (
     <div className="habit-card-stats">
@@ -75,8 +55,8 @@ export function HabitCardStats({
       )}
       <div className="habit-strip" role="group" aria-label={`Recent days for ${habit.name}`}>
         {days.map((day) => {
-          const { level, text } = dayStatus(habit, today, day, entries.get(day));
-          const className = `habit-strip-day heatmap-day level-${level}${day === today ? " today" : ""}`;
+          const { state, level, text } = read(day, values.get(day) ?? 0);
+          const className = `habit-strip-day heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}${day === today ? " today" : ""}`;
           const label = `${shortDayLabel(day)}: ${text}`;
           return (
             <StripDay

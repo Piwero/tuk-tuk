@@ -19,6 +19,20 @@ Work in focused blocks and see where your time actually went.
 3. Click **Start**. A sound plays when a Pomo ends.
 4. Save setups you reuse as **Timers**, such as "Deep work: 50 min" or "Reading".
 
+## Start from a task
+
+A button's label tells you whether the clock starts:
+
+- **Open Focus** opens Focus with the task linked. The clock waits until you
+  click **Start**. You find it on a task row, in the task's details, in a
+  folder's task list and in the task's **Actions**.
+- **Start Pomo** in the task's **Actions**, or right-clicking a task, starts
+  a Pomo for that task straight away. Pick a saved Timer, the 25 minute
+  default or **Custom…** to type a length. In **Actions**, **Open Focus for a
+  custom length** opens Focus so you can set the length there.
+- If a session is already running, you're asked first. Saying yes finishes it
+  and starts the new one.
+
 ## See your stats
 
 Click **Statistics** for minutes per day, per week, per task and per habit,

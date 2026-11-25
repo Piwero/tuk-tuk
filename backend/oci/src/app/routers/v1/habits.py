@@ -10,10 +10,11 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
+from app.caller_zone import caller_zone
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.habit_frequency import due_on, validate_frequency
-from app.habit_stats import current_streak, intensity
+from app.habit_stats import current_streak, eligible_from, intensity
 from app.models import CheckIn, Habit
 from app.schemas import (
     CheckInPut,
@@ -188,19 +189,26 @@ async def delete_check_in(habit_id: int, day: date, session: SessionDep) -> None
 async def read_habit_stats(
     habit_id: int,
     today: date,
+    tz: str,
     session: SessionDep,
     year: int | None = Query(default=None, ge=1, le=9999),
 ) -> HabitStats:
     """The Habit's computed statistics (per the PRD: computed, never stored):
-    the current Streak as of `today` (the caller's local day), and the heatmap
+    the current Streak as of `today` (the caller's local day), the heatmap
     of one calendar year's Check-ins — `year` picks which, defaulting to
-    today's. Sparse: only days with Check-ins appear.
+    today's; sparse: only days with Check-ins appear — and the Habit start
+    `eligible_from`, the creation instant read in `tz` (the caller's IANA
+    timezone, required).
     """
+    # Required, never defaulted: server UTC midnight is not the User's day.
+    zone = caller_zone(tz)
     habit = await get_habit_or_404(habit_id, session)
     rows = (await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit_id))).all()
+    checked = {row.date for row in rows}
     heatmap_year = year if year is not None else today.year
     return HabitStats(
-        streak=current_streak(habit.frequency, {row.date for row in rows}, today),
+        streak=current_streak(habit.frequency, checked, today),
+        eligible_from=eligible_from(habit.created_at, zone, checked, today),
         heatmap=[
             HeatmapDay(date=row.date, value=row.value, intensity=intensity(row.value, habit.target))
             for row in sorted(rows, key=lambda row: row.date)

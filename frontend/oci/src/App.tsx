@@ -111,6 +111,7 @@ import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 import { EmptyState, LoadError, SkeletonRows } from "./components/TaskViewState";
 import { ToastStack } from "./components/ToastStack";
+import { forgetOtherUsersDrafts } from "./quickAddDraft";
 
 /** What the main pane shows: one List, one Tag, one Folder (its Tasks across
  * every List it contains — #126), one computed Smart List, the Calendar /
@@ -279,6 +280,12 @@ export function App({
   voiceProvider = livekitProvider,
 }: AppProps = {}): React.JSX.Element {
   const [currentUser, setCurrentUser] = useCurrentUser(signedInUser);
+  // A session can end without a log out (a 401 clears no storage), so the
+  // previous User's Quick-Add draft goes the moment this User is known (#541).
+  const currentUserId = currentUser?.id ?? null;
+  useEffect(() => {
+    if (currentUserId !== null) forgetOtherUsersDrafts(currentUserId);
+  }, [currentUserId]);
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -337,6 +344,13 @@ export function App({
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // The last Task-saved confirmation (#544), written into a live region that
+  // is always mounted. `count` remounts the text so saving twice to the same
+  // List is announced twice.
+  const [savedAnnouncement, setSavedAnnouncement] = useState<{
+    text: string;
+    count: number;
+  } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // The command palette opened scoped to one Task (issue #205) — its verb
   // menu. Independent of `paletteOpen` (the jump surface); at most one is
@@ -1124,6 +1138,12 @@ export function App({
 
   function announceCreated(created: Task): void {
     const listName = lists.find((list) => list.id === created.list_id)?.name;
+    // Spoken confirmation (#544): the toast below only exists while shown,
+    // and a live region inserted with its text is announced unreliably.
+    setSavedAnnouncement((previous) => ({
+      text: listName === undefined ? "Task saved" : `Task saved to ${listName}`,
+      count: (previous?.count ?? 0) + 1,
+    }));
     // Issue #259: prose typed into Quick-Add with no `@` token that reads
     // like a date/time phrase ("dentist tuesday 3pm") saves as a plain,
     // undated title — Quick-Add deliberately does not parse it (CONTEXT.md:
@@ -1374,7 +1394,7 @@ export function App({
               }
               actions={{
                 onComplete: completeTaskNow,
-                onStartFocus: (task) => switchView({ kind: "focus", task }),
+                onOpenFocus: (task) => switchView({ kind: "focus", task }),
                 onReschedule: (task, day) =>
                   patchTaskNow(
                     task.id,
@@ -1671,6 +1691,7 @@ export function App({
                       lists={lists}
                       tags={tags}
                       defaultListId={selectedList?.id ?? null}
+                      userId={currentUser?.id ?? null}
                       onTagCreated={(tag) => setTags((current) => [...current, tag])}
                       onListCreated={(list) => setLists((current) => [...current, list])}
                       onCreated={addCreatedTask}
@@ -1758,7 +1779,7 @@ export function App({
                     onChanged={changeTasks}
                     onSelect={setSelectedTaskId}
                     onSelectList={(listId) => switchView({ kind: "list", id: listId })}
-                    onStartFocus={(task) => switchView({ kind: "focus", task })}
+                    onOpenFocus={(task) => switchView({ kind: "focus", task })}
                   />
                 ) : completedMode ? (
                   <CompletedView
@@ -1908,7 +1929,7 @@ export function App({
                 onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onClose={closeTaskDetail}
                 sheet={narrowViewport}
-                onStartFocus={
+                onOpenFocus={
                   sectionSettings.focus
                     ? (task) => {
                         closeTaskDetail();
@@ -1932,6 +1953,14 @@ export function App({
             too — the task views used to each own one and could only cover
             themselves (#191). */}
             <ToastStack entries={toasts.entries} onUndo={toasts.undo} onDismiss={toasts.dismiss} />
+            {/* Always mounted, so a Task-saved confirmation lands in a region
+            the screen reader already watches. No role="status": the toasts
+            own that role, and tests (and users) find them by it. */}
+            <div className="visually-hidden" aria-live="polite" aria-atomic="true">
+              {savedAnnouncement !== null && (
+                <span key={savedAnnouncement.count}>{savedAnnouncement.text}</span>
+              )}
+            </div>
           </div>
         </ShortcutsProvider>
       </FocusRunProvider>

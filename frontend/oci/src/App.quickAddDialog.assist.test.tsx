@@ -59,6 +59,8 @@ describe("Quick add dialog — Assisted Capture (ADR 0005)", () => {
     expect(taskPosts(api.requests)).toHaveLength(0);
     expect(screen.getByRole("dialog", { name: "Quick add" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("get repaired watch"));
+    // Details stays collapsed; the controls behind it hold the parse.
+    await user.click(within(dialog).getByRole("button", { name: "Details" }));
     expect(screen.getByLabelText("Day")).toHaveValue("2026-08-27");
     expect(screen.getByLabelText("Due time")).toHaveValue("18:00");
 
@@ -102,7 +104,10 @@ describe("Quick add dialog — Assisted Capture (ADR 0005)", () => {
     await within(dialog).findByLabelText("Assist available");
     await user.click(screen.getByRole("button", { name: "Add task" }));
 
-    await waitFor(() => expect(screen.getByLabelText("List")).toHaveValue(String(errands.id)));
+    const summary = within(dialog).getByRole("group", { name: "Summary" });
+    expect(await within(summary).findByText("High priority")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Details" }));
+    expect(screen.getByLabelText("List")).toHaveValue(String(errands.id));
     expect(screen.getByLabelText("Priority")).toHaveValue("high");
     expect(screen.getByRole("checkbox", { name: "Urgent" })).toBeChecked();
 
@@ -245,7 +250,9 @@ describe("Quick add dialog — Assisted Capture (ADR 0005)", () => {
     await within(dialog).findByLabelText("Assist available");
     await user.click(screen.getByRole("button", { name: "Add task" }));
 
-    await waitFor(() => expect(screen.getByLabelText("Due time")).toHaveValue("18:00"));
+    await waitFor(() => expect(screen.getByLabelText("Title")).toHaveValue("get repaired watch"));
+    await user.click(within(dialog).getByRole("button", { name: "Details" }));
+    expect(screen.getByLabelText("Due time")).toHaveValue("18:00");
     fireEvent.change(screen.getByLabelText("Due time"), { target: { value: "19:30" } });
     await user.click(screen.getByRole("button", { name: "Add task" }));
 
@@ -269,6 +276,7 @@ describe("Quick add dialog — Assisted Capture (ADR 0005)", () => {
     await user.type(screen.getByLabelText("Title"), "get repaired watch today at 18.00");
     await within(dialog).findByLabelText("Assist available");
     // The user fills the date themselves before submitting.
+    await user.click(within(dialog).getByRole("button", { name: "Details" }));
     await user.click(within(dialog).getByRole("button", { name: "Tomorrow" }));
     const chosenDay = screen.getByLabelText("Day").getAttribute("value");
     await user.click(screen.getByRole("button", { name: "Add task" }));

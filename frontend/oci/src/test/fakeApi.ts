@@ -313,6 +313,13 @@ export interface FakeApiState {
   /** Read gate (#442): while set, each `GET` whose pathname `match` accepts
    * waits on `gate`, so a test can observe a view's loading state. */
   readGate: { match: (pathname: string) => boolean; gate: Promise<void> } | null;
+  /** Write failure (#544): while set, each non-GET request it returns true
+   * for answers 500 and changes nothing. Mutate directly in a test. */
+  failWrite: ((method: string, pathname: string) => boolean) | null;
+  /** Write gate (#544): while set, each non-GET request `match` accepts
+   * waits on `gate` before it is handled, so a test can observe a saving
+   * state or repeat the activation while the write is in flight. */
+  writeGate: { match: (method: string, pathname: string) => boolean; gate: Promise<void> } | null;
   /** Whether this browser holds a valid session cookie. Mutate directly to
    * simulate a session lapsing mid-test (the backend's epoch bump). */
   loggedIn: boolean;
@@ -712,6 +719,9 @@ export function fakeFolder(name: string, overrides: Partial<FakeFolder> = {}): F
   return { id, name, sort_order: id * SORT_GAP, ...overrides };
 }
 
+/** A Habit as the server holds it. By default an established one, created long
+ * before the suites' pinned "today", so an empty past day reads as missed. Pass
+ * `created_at` to put its Habit start among the days on screen. */
 export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): FakeHabit {
   return {
     id: nextHabitId++,
@@ -725,7 +735,7 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
     encouragement: "",
     frequency: "FREQ=DAILY",
     is_archived: false,
-    created_at: "2026-07-03T10:00:00Z",
+    created_at: "2025-01-01T10:00:00Z",
     ...overrides,
   };
 }
@@ -1069,6 +1079,8 @@ export function installFakeApi({
     taskReadGate: null,
     failRead: null,
     readGate: null,
+    failWrite: null,
+    writeGate: null,
     loggedIn,
     users: users.map((account) => ({ ...account })),
     sessionUserId: sessionUserId ?? users[0]?.id ?? 0,
@@ -1413,6 +1425,12 @@ export function installFakeApi({
       await state.readGate.gate;
     }
     if (method === "GET" && state.failRead?.(url.pathname) === true) {
+      return json({ error: { code: "internal_error", message: "Unavailable" } }, 500);
+    }
+    if (method !== "GET" && state.writeGate?.match(method, url.pathname) === true) {
+      await state.writeGate.gate;
+    }
+    if (method !== "GET" && state.failWrite?.(method, url.pathname) === true) {
       return json({ error: { code: "internal_error", message: "Unavailable" } }, 500);
     }
 
@@ -2577,7 +2595,8 @@ export function installFakeApi({
     }
     if (method === "POST" && url.pathname === "/api/v1/habits") {
       const input = body as { name: string } & Partial<Omit<FakeHabit, "id" | "name">>;
-      const created = fakeHabit(input.name, input);
+      // Like the backend, a new Habit is created now: its Habit start is today.
+      const created = fakeHabit(input.name, { ...input, created_at: new Date().toISOString() });
       state.habits.push(created);
       return json(created, 201);
     }
@@ -2739,6 +2758,14 @@ export function installFakeApi({
       if (today === null) {
         return json({ error: { code: "validation_error", message: "today is required" } }, 422);
       }
+      // Like the backend, the zone is required: server UTC is not the User's day.
+      const tz = url.searchParams.get("tz");
+      if (tz === null || !isKnownZone(tz)) {
+        return json(
+          { error: { code: "validation_error", message: `Unknown IANA timezone ${tz}` } },
+          422,
+        );
+      }
       const year = url.searchParams.get("year") ?? today.slice(0, 4);
       const habitCheckIns = state.checkIns.filter((checkIn) => checkIn.habit_id === habitId);
       const checked = new Set(habitCheckIns.map((checkIn) => checkIn.date));
@@ -2770,7 +2797,10 @@ export function installFakeApi({
           value: checkIn.value,
           intensity: Math.min(checkIn.value / habit.target, 1),
         }));
-      return json({ streak, heatmap });
+      // Mirror the backend's Habit start: the creation day in `tz`, pulled
+      // back to an earlier real Check-in, and never after today.
+      const eligibleFrom = [zonedDay(habit.created_at, tz), ...checked, today].sort()[0];
+      return json({ streak, heatmap, eligible_from: eligibleFrom });
     }
     const checkInMatch = url.pathname.match(
       /^\/api\/v1\/habits\/(\d+)\/check-ins\/(\d{4}-\d{2}-\d{2})$/,

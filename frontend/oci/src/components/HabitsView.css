@@ -278,17 +278,70 @@
   .habit-cell.state-open-today {
     border: 2px solid var(--border-strong);
   }
+  /* Today, still open, says so on screen and names what a tap does: the
+   cell grows to fit two short lines rather than leaving it to the name. */
+  .habits-week-grid .habit-cell.state-open-today {
+    width: auto;
+    min-width: 32px;
+    padding: 0 var(--space-1);
+  }
+  .habit-cell-today-text {
+    display: flex;
+    flex-direction: column;
+    line-height: var(--leading-tight);
+    white-space: nowrap;
+    color: var(--text-secondary);
+  }
+  .habit-cell-today-action {
+    color: var(--text-accent);
+    font-weight: var(--weight-medium);
+  }
   .habit-cell.state-missed {
     border: 1px dashed var(--border-strong);
   }
-  .habits-week-grid .habit-cell.state-not-scheduled {
+  .habits-week-grid .habit-cell.state-not-scheduled,
+  .habits-legend .habit-cell.state-not-scheduled {
     background: transparent;
     border-color: var(--border-default);
     opacity: 0.5;
   }
-  .habits-week-grid .habit-cell.state-future {
+  .habits-week-grid .habit-cell.state-future,
+  .habits-legend .habit-cell.state-future {
     background: transparent;
     border: 1px dotted var(--border-default);
+  }
+  /* Before the Habit start: the shared dash (HabitHistory.css) on no fill.
+   Never the missed outline, never a success green: the Habit didn't exist
+   yet. */
+  .habits-week-grid .habit-cell.state-not-started,
+  .habits-legend .habit-cell.state-not-started {
+    background: transparent;
+    border: 1px solid transparent;
+  }
+  /* The legend: one swatch per cell state, its meaning always in words. */
+  .habits-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin: 0 0 var(--space-4);
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .habits-legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .habits-legend .habits-legend-swatch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: var(--habit-legend-swatch);
+    height: var(--habit-legend-swatch);
+    border-radius: var(--radius-xs);
   }
   .habit-cell.today {
     box-shadow:

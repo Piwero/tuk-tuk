@@ -9,6 +9,10 @@ import { beforeEach, vi } from "vitest";
 // landing view; root-URL tests set "/" themselves.
 beforeEach(() => {
   window.history.replaceState(null, "", "/all");
+  // sessionStorage persists across tests within a file too, and the
+  // Quick-Add session draft (#541) lives there: one test's dismissed
+  // capture must not reopen as the next test's "Draft restored".
+  sessionStorage.clear();
 });
 
 // jsdom has no PointerEvent; without it `fireEvent.pointerMove(el, { clientX })` and user-event's
