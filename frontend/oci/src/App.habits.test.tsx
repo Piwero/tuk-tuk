@@ -530,6 +530,7 @@ describe("Habit start: days before it read as not started, never missed", () => 
       "Not started: before the Habit began",
       "Not scheduled",
       "Paused: not counted, neither done nor missed",
+      "Skipped: on purpose, not counted, neither done nor missed",
       "Future",
     ]);
     expect(legend).toBeVisible();
@@ -870,6 +871,7 @@ describe("Managing Habits", () => {
       "History Meditate",
       "Edit Meditate",
       "Pause Meditate",
+      "Skip today for Meditate",
       "Archive Meditate",
       "Delete habit Meditate",
     ]);

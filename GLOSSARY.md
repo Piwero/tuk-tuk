@@ -113,7 +113,7 @@ The record of one day's progress on a Habit: a date stamp and, for Numeric habit
 _Avoid_: Completion, log
 
 **Streak**:
-The count of consecutive **eligible** scheduled days a Habit has been checked in without a miss. An eligible day is scheduled, on or after the Habit start, and not paused. Unscheduled and paused days are stepped over, never counted as done, so a Streak across a Pause is shorter than a perfect daily record of the same span. Today is graced until it ends.
+The count of consecutive **eligible** scheduled days a Habit has been checked in without a miss. An eligible day is scheduled, on or after the Habit start, and neither paused nor skipped. Unscheduled, paused and skipped days are stepped over, never counted as done, so a Streak across a Pause or Skip is shorter than a perfect daily record of the same span. Today is graced until it ends.
 
 **Habit start**:
 The first local day a Habit can be missed: the User's calendar day when the Habit was created (read in their time zone), or the day of an earlier real Check-in when one exists, and never later than today. Days before it are **not started**: neither missed nor done, and never counted against the Habit, even when a Pause covers them. It is where eligibility begins; a Pause only removes days after it. The API calls it `eligible_from`.

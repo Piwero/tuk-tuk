@@ -1215,6 +1215,9 @@ export interface Habit {
   /** The Habit's pauses, oldest first (issue #559). Optional on the wire
    * only for an older server, which sends none. */
   pauses?: HabitPause[];
+  /** The Habit's skipped days (YYYY-MM-DD), oldest first (issue #564).
+   * Optional on the wire only for an older server, which sends none. */
+  skips?: string[];
 }
 
 /** A Habit pause (issue #559): an explicit interval of local days, both
@@ -1260,6 +1263,23 @@ export function resumeHabitPause(habitId: number, pauseId: number, today: string
     method: "POST",
     body: JSON.stringify({ today }),
   });
+}
+
+/** Skip one scheduled day on purpose (issue #564): no Check-in, neither
+ * done nor missed. Refused on an unscheduled day (422
+ * `skip_not_scheduled`), a paused day (409 `habit_day_paused`) or a day
+ * holding a Check-in (409 `skip_conflicts_with_check_in`, the date in
+ * `error.details.dates`). */
+export function skipHabitDay(
+  habitId: number,
+  day: string,
+): Promise<{ habit_id: number; date: string }> {
+  return request(`/api/v1/habits/${habitId}/skips/${day}`, { method: "PUT" });
+}
+
+/** Undo a skip: the day is eligible again and accepts a Check-in. */
+export function unskipHabitDay(habitId: number, day: string): Promise<void> {
+  return request(`/api/v1/habits/${habitId}/skips/${day}`, { method: "DELETE" });
 }
 
 /** A Check-in — one day's progress on a Habit, keyed by (habit, date). */

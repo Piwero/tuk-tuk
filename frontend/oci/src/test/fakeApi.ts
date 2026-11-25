@@ -123,6 +123,8 @@ export interface FakeHabit {
   is_archived: boolean;
   created_at: string;
   pauses: FakeHabitPause[];
+  /** Skipped days (issue #564), oldest first. */
+  skips: string[];
 }
 
 export interface FakeHabitPause {
@@ -795,6 +797,7 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
     is_archived: false,
     created_at: "2025-01-01T10:00:00Z",
     pauses: [],
+    skips: [],
     ...overrides,
   };
 }
@@ -2926,6 +2929,49 @@ export function installFakeApi({
         return json(candidate, 201);
       }
     }
+    const skipMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)\/skips\/(\d{4}-\d{2}-\d{2})$/);
+    if (skipMatch) {
+      const habit = state.habits.find((h) => h.id === Number(skipMatch[1]));
+      if (!habit) {
+        return notFound(`Habit ${skipMatch[1]} not found`);
+      }
+      const day = skipMatch[2] as string;
+      if (method === "DELETE") {
+        if (!habit.skips.includes(day)) {
+          return notFound(`${day} is not skipped`);
+        }
+        habit.skips = habit.skips.filter((skipped) => skipped !== day);
+        return new Response(null, { status: 204 });
+      }
+      if (method === "PUT") {
+        // Mirror the backend's rules: scheduled, unpaused, no Check-in.
+        if (!habitDueOn(habit.frequency, day)) {
+          return json(
+            { error: { code: "skip_not_scheduled", message: `Not scheduled on ${day}` } },
+            422,
+          );
+        }
+        if (habit.pauses.some((pause) => pauseCovers(pause, day))) {
+          return json({ error: { code: "habit_day_paused", message: `Paused on ${day}` } }, 409);
+        }
+        if (state.checkIns.some((c) => c.habit_id === habit.id && c.date === day)) {
+          return json(
+            {
+              error: {
+                code: "skip_conflicts_with_check_in",
+                message: `A Check-in on ${day} prevents this skip`,
+                details: { dates: [day] },
+              },
+            },
+            409,
+          );
+        }
+        if (!habit.skips.includes(day)) {
+          habit.skips = [...habit.skips, day].sort();
+        }
+        return json({ habit_id: habit.id, date: day });
+      }
+    }
     const statsMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)\/stats$/);
     if (statsMatch && method === "GET") {
       const habitId = Number(statsMatch[1]);
@@ -2957,11 +3003,12 @@ export function installFakeApi({
         if (habitDueOn(habit.frequency, day) && !checked.has(day)) {
           day = addDays(day, -1);
         }
-        // Mirror the backend: paused days (app.habit_days) are stepped over
-        // like unscheduled ones, never counted.
+        // Mirror the backend: paused and skipped days (app.habit_days) are
+        // stepped over like unscheduled ones, never counted.
         const earliest = [...checked].sort()[0] as string;
         while (day >= earliest) {
-          const isPaused = habit.pauses.some((pause) => pauseCovers(pause, day));
+          const isPaused =
+            habit.pauses.some((pause) => pauseCovers(pause, day)) || habit.skips.includes(day);
           if (habitDueOn(habit.frequency, day) && !(isPaused && !checked.has(day))) {
             if (!checked.has(day)) {
               break;
@@ -2997,6 +3044,9 @@ export function installFakeApi({
       const pausedHabit = state.habits.find((h) => h.id === habitId);
       if (method === "PUT" && pausedHabit?.pauses.some((pause) => pauseCovers(pause, day))) {
         return json({ error: { code: "habit_day_paused", message: `Paused on ${day}` } }, 409);
+      }
+      if (method === "PUT" && pausedHabit?.skips.includes(day)) {
+        return json({ error: { code: "habit_day_skipped", message: `Skipped on ${day}` } }, 409);
       }
       if (method === "PUT") {
         // Mirror the backend's upsert: one row per (habit, date), whatever
