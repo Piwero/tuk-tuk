@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
+import { closestOrThrow, fakeDataTransfer } from "./test/dnd";
 import { fakeCheckItem, fakeTask, installFakeApi } from "./test/fakeApi";
 
 /* Now (issue #547): one Task the User chose to do next, inside Today. */
@@ -201,5 +202,32 @@ describe("Now's next Check Item", () => {
       vi.advanceTimersByTime(5_000);
     });
     await waitFor(() => expect(api.tasks.find((t) => t.id === task.id)?.completed).toBe(true));
+  });
+
+  it("follows a reorder made in Task detail", async () => {
+    const socks = fakeCheckItem("Socks", { sort_order: 1024 });
+    const passport = fakeCheckItem("Passport", { sort_order: 2048 });
+    const task = fakeTask("Pack bags", {
+      due_date: "2026-07-03T00:00:00Z",
+      is_all_day: true,
+      check_items: [socks, passport],
+    });
+    installFakeApi({ nowEnabled: true, tasks: [task], nowTaskId: task.id });
+    openToday();
+    const panel = await nowPanel();
+    expect(await within(panel).findByRole("checkbox", { name: "Tick Socks" })).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open details for Pack bags" }));
+    const detail = await screen.findByRole("complementary", { name: "Task details" });
+    const items = within(detail).getByRole("list", { name: "Check items" });
+    const dataTransfer = fakeDataTransfer();
+    fireEvent.dragStart(closestOrThrow(within(items).getByText("Passport"), "li"), {
+      dataTransfer,
+    });
+    fireEvent.drop(closestOrThrow(within(items).getByText("Socks"), "li"), { dataTransfer });
+
+    expect(
+      await within(panel).findByRole("checkbox", { name: "Tick Passport" }),
+    ).toBeInTheDocument();
   });
 });
