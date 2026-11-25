@@ -8,7 +8,7 @@ link to one Task or Habit.
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import make_task
+from tests.conftest import create_user_row, log_in, make_task
 from tests.test_habits import make_habit
 
 
@@ -243,3 +243,66 @@ def test_unknown_focus_session_is_404(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
+
+
+RUN_ID = "6f1c2b0e-3a4d-4e5f-8a9b-0c1d2e3f4a5b"
+
+
+class TestRetrySafeCreate:
+    """Issue #546: a finished run carries a client-generated `client_run_id`,
+    so a create retried after a lost response records one session, not two."""
+
+    def test_a_retried_create_for_the_same_run_records_one_session(
+        self, client: TestClient
+    ) -> None:
+        first = make_session(client, client_run_id=RUN_ID)
+
+        # The response was lost; the client retries, its end a little later.
+        retry = client.post(
+            "/api/v1/focus-sessions",
+            json={
+                "mode": "stopwatch",
+                "started_at": "2026-07-03T10:00:00Z",
+                "ended_at": "2026-07-03T10:30:05Z",
+                "client_run_id": RUN_ID,
+            },
+        )
+
+        assert retry.status_code == 200, retry.text
+        assert retry.json() == first
+        assert client.get("/api/v1/focus-sessions").json()["total"] == 1
+
+    def test_different_runs_record_different_sessions(self, client: TestClient) -> None:
+        make_session(client, client_run_id=RUN_ID)
+        make_session(client, client_run_id="0a6e0c4f-1111-4222-8333-944455556666")
+
+        assert client.get("/api/v1/focus-sessions").json()["total"] == 2
+
+    def test_creates_without_a_run_id_are_never_merged(self, client: TestClient) -> None:
+        make_session(client)
+        make_session(client)
+
+        assert client.get("/api/v1/focus-sessions").json()["total"] == 2
+
+    def test_the_run_id_is_scoped_to_its_user(self, client: TestClient) -> None:
+        alice_session = make_session(client, client_run_id=RUN_ID)
+        create_user_row(client, "bea", "bea@example.com")
+        log_in(client, "bea")
+
+        bea_session = make_session(client, client_run_id=RUN_ID)
+
+        assert bea_session["id"] != alice_session["id"]
+        assert client.get("/api/v1/focus-sessions").json()["total"] == 1
+
+    def test_rejects_a_blank_run_id(self, client: TestClient) -> None:
+        response = client.post(
+            "/api/v1/focus-sessions",
+            json={
+                "mode": "stopwatch",
+                "started_at": "2026-07-03T10:00:00Z",
+                "ended_at": "2026-07-03T10:30:00Z",
+                "client_run_id": "",
+            },
+        )
+
+        assert response.status_code == 422
