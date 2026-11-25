@@ -9,14 +9,16 @@ from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from sqlalchemy import select
 
 from app.caller_zone import caller_zone_or_utc
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import ReminderDelivery
-from app.reminder_delivery import claim_due
+from app.models import ReminderDelivery, UserSettings
+from app.quiet_hours import QuietHours, held_until
+from app.reminder_delivery import claim_due, held_reminders, open_dated_tasks
+from app.schemas import utc_z
 from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/reminder-deliveries", tags=["reminder deliveries"])
@@ -56,8 +58,31 @@ class ReminderClaim(ReminderDeliveryRead):
     lease_expires_at: datetime
 
 
+class HeldReminder(BaseModel):
+    """A Reminder that fired inside Quiet hours (issue #567) and waits for
+    the band's end, listed in-app while it waits."""
+
+    task_id: int
+    task_title: str
+    offset: str
+    fire_at: datetime
+    deliver_at: datetime
+
+    @field_serializer("fire_at", "deliver_at")
+    def serialize_instants(self, value: datetime) -> str:
+        return utc_z(value)
+
+
 class ClaimPage(BaseModel):
     items: list[ReminderClaim]
+    # Quiet hours (issue #567): what is held right now, and when the band
+    # holding `now` ends (null outside the band or with Quiet hours off).
+    held: list[HeldReminder] = []
+    quiet_until: datetime | None = None
+
+    @field_serializer("quiet_until")
+    def serialize_quiet_until(self, value: datetime | None) -> str | None:
+        return None if value is None else utc_z(value)
 
 
 class LedgerPage(BaseModel):
@@ -66,6 +91,14 @@ class LedgerPage(BaseModel):
 
 class DeliveryReport(BaseModel):
     lease_token: str
+
+
+def quiet_hours(user_settings: UserSettings) -> QuietHours | None:
+    """The User's Quiet hours band, or None while it is off. Active hours
+    are never read: they shape the Calendar only."""
+    if not user_settings.quiet_hours_enabled:
+        return None
+    return QuietHours.parse(user_settings.quiet_hours_start, user_settings.quiet_hours_end)
 
 
 @router.post("/claim")
@@ -81,8 +114,22 @@ async def claim(
     zone = caller_zone_or_utc(tz)
     if not user_settings.reminder_notifications_enabled:
         return ClaimPage(items=[])
-    rows = await claim_due(session, request.app.state.clock(), zone)
+    now = request.app.state.clock()
+    quiet = quiet_hours(user_settings)
+    rows = await claim_due(session, now, zone, quiet)
+    held = held_reminders(await open_dated_tasks(session), now, zone, quiet)
     return ClaimPage(
+        held=[
+            HeldReminder(
+                task_id=due.task.id,
+                task_title=due.task.title,
+                offset=due.offset,
+                fire_at=due.fire_at,
+                deliver_at=due.deliver_at,
+            )
+            for due in held
+        ],
+        quiet_until=held_until(now, quiet, zone),
         items=[
             ReminderClaim(
                 **ReminderDeliveryRead.of(row).model_dump(),
@@ -90,7 +137,7 @@ async def claim(
                 lease_expires_at=row.lease_expires_at,
             )
             for row in rows
-        ]
+        ],
     )
 
 

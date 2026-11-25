@@ -16,6 +16,11 @@ Policy, all on the server clock:
   tab, up to this many claims in all and only inside the window. A
   `failed` report is final: the browser refused, so retrying would too.
 
+Quiet hours (issue #567) move when a Reminder is delivered, never its
+`fire_at`: one falling due inside the band is held, its window opens at the
+band's end instead (`deliver_at`), and nothing at all is claimed while the
+band is on. The ledger key is unchanged, so a held Reminder notifies once.
+
 The ledger's unique key (Task, offset, occurrence due date) is what makes
 one occurrence claimable once: two tabs inserting the same key race on the
 index and only one wins.
@@ -31,6 +36,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ReminderDelivery, Task
+from app.quiet_hours import QuietHours, held_until
 from app.recurrence import local_zone
 from app.schemas import as_utc
 
@@ -66,6 +72,13 @@ def fire_at(task: Task, offset: str, caller_zone: tzinfo) -> datetime | None:
     return shifted + sign * timedelta(hours=hours, minutes=minutes, seconds=seconds)
 
 
+def deliver_at(at: datetime, quiet: QuietHours | None, caller_zone: tzinfo) -> datetime:
+    """When a Reminder firing at `at` is delivered: `at` itself, or the end
+    of the Quiet hours band it falls in. Its delivery window opens here.
+    The one place an override of the fire time belongs (snooze, #566)."""
+    return held_until(at, quiet, caller_zone) or at
+
+
 @dataclass(frozen=True)
 class Due:
     """One Reminder of one Task occurrence, due now."""
@@ -73,19 +86,48 @@ class Due:
     task: Task
     offset: str
     fire_at: datetime
+    deliver_at: datetime
 
 
-def due_reminders(tasks: list[Task], now: datetime, caller_zone: tzinfo) -> list[Due]:
-    """The Reminders of these Tasks inside their delivery window at `now`."""
+def _open_reminders(tasks: list[Task], caller_zone: tzinfo) -> list[tuple[Task, str, datetime]]:
+    """Every Reminder of these open, dated Tasks, with its fire time."""
     found = []
     for task in tasks:
         if task.completed or task.due_date is None:
             continue
         for offset in task.reminders:
             at = fire_at(task, offset, caller_zone)
-            if at is not None and at <= now < at + DELIVERY_WINDOW:
-                found.append(Due(task=task, offset=offset, fire_at=at))
+            if at is not None:
+                found.append((task, offset, at))
     return found
+
+
+def due_reminders(
+    tasks: list[Task], now: datetime, caller_zone: tzinfo, quiet: QuietHours | None = None
+) -> list[Due]:
+    """The Reminders of these Tasks inside their delivery window at `now`.
+    None while `now` is inside Quiet hours."""
+    if quiet is not None and quiet.contains(now, caller_zone):
+        return []
+    found = []
+    for task, offset, at in _open_reminders(tasks, caller_zone):
+        when = deliver_at(at, quiet, caller_zone)
+        if when <= now < when + DELIVERY_WINDOW:
+            found.append(Due(task=task, offset=offset, fire_at=at, deliver_at=when))
+    return found
+
+
+def held_reminders(
+    tasks: list[Task], now: datetime, caller_zone: tzinfo, quiet: QuietHours | None
+) -> list[Due]:
+    """The Reminders that already fired but are held by Quiet hours at `now`,
+    soonest delivery first: what the app lists while the band is on."""
+    found = []
+    for task, offset, at in _open_reminders(tasks, caller_zone):
+        when = deliver_at(at, quiet, caller_zone)
+        if at <= now < when:
+            found.append(Due(task=task, offset=offset, fire_at=at, deliver_at=when))
+    return sorted(found, key=lambda due: (due.deliver_at, due.fire_at, due.task.id))
 
 
 def _lease(row: ReminderDelivery, now: datetime) -> None:
@@ -94,20 +136,28 @@ def _lease(row: ReminderDelivery, now: datetime) -> None:
     row.claimed_at = now
 
 
-async def claim_due(
-    session: AsyncSession, now: datetime, caller_zone: tzinfo
-) -> list[ReminderDelivery]:
-    """Claims every Reminder due now that no tab holds: new ones, and
-    unreported ones whose lease expired with attempts left. Commits."""
-    tasks = list(
+async def open_dated_tasks(session: AsyncSession) -> list[Task]:
+    """The User's open Tasks with a date: every Task a Reminder can be due on."""
+    return list(
         (
             await session.scalars(
                 select(Task).where(Task.completed.is_(False), Task.due_date.is_not(None))
             )
         ).all()
     )
+
+
+async def claim_due(
+    session: AsyncSession,
+    now: datetime,
+    caller_zone: tzinfo,
+    quiet: QuietHours | None = None,
+) -> list[ReminderDelivery]:
+    """Claims every Reminder due now that no tab holds: new ones, and
+    unreported ones whose lease expired with attempts left. Commits."""
+    tasks = await open_dated_tasks(session)
     claimed = []
-    for due in due_reminders(tasks, now, caller_zone):
+    for due in due_reminders(tasks, now, caller_zone, quiet):
         row = await _claim_one(session, due, now)
         if row is not None:
             claimed.append(row)

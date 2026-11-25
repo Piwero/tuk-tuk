@@ -189,6 +189,14 @@ class UserSettings(Base):
     # notifying after upgrade. Browser permission is per device and stays in
     # the browser; this flag only records the User's choice.
     reminder_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Quiet hours (issue #567): a band of the day during which Reminder
+    # notifications are held and delivered once when it ends. "HH:MM"
+    # wall-clock labels read in the claiming tab's zone; the band may wrap
+    # past midnight (start after end). Not Active hours, which only shapes
+    # the Calendar grid and never delivery.
+    quiet_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    quiet_hours_start: Mapped[str] = mapped_column(String(5), default="22:00")
+    quiet_hours_end: Mapped[str] = mapped_column(String(5), default="07:00")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

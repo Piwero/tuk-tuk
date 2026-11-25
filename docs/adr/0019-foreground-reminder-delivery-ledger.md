@@ -77,6 +77,34 @@ read through the same filter.
 **Click.** Clicking a notification focuses the tab, closes the
 notification and opens its Task's detail. Check Items carry no Reminders.
 
+**Quiet hours (#567).** A User may set Quiet hours
+(`GET`/`PUT /api/v1/settings/quiet-hours` with `{enabled, start, end}`,
+off by default, 22:00–07:00). They are a notification setting only. Active
+hours ([ADR 0010](0010-calendar-piecewise-time-axis.md)) stay a Calendar
+layout band, and the claim never reads them.
+
+- The band is two `HH:MM` wall-clock labels, read in the claiming tab's
+  zone (`tz`), the same zone that anchors all-day Tasks. It may wrap past
+  midnight: a start after the end ends the next day. A start equal to its
+  end is refused with `422 invalid_quiet_hours`, as is a label that is not
+  a time of day. The start is inside the band and the end is not.
+- A Reminder whose fire time falls inside the band is held. Its delivery
+  time (`deliver_at`) becomes the end of that band. Its delivery window
+  opens there instead of at the fire time, and `fire_at` itself never
+  changes. One helper, `reminder_delivery.deliver_at`, decides the delivery
+  time. A snooze override (#566) belongs there too.
+- Nothing is claimed while `now` is inside the band. A Reminder that fired
+  just before the band and was not claimed by then is missed, not held.
+- Held Reminders keep the same ledger key `(task_id, offset,
+  occurrence_due)`, so several tabs coming out of Quiet hours together
+  still notify once. Rows are written only when claimed, at the band's end.
+- The claim response adds `held` (the Reminders that already fired and are
+  waiting, soonest first, each with `fire_at` and `deliver_at`) and
+  `quiet_until` (the end of the band holding `now`, or `null`). The app
+  lists `held` in a "Quiet hours deferred" panel while the band is on.
+- Turning Quiet hours off does not release held Reminders as late alerts.
+  Each one falls back to its own window, which has usually passed.
+
 ## Consequences
 
 - Exactly-once display is not promised. A tab that crashes after the

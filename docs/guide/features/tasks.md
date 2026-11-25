@@ -59,6 +59,11 @@ cards between columns as work moves. Click **List view** to switch back.
   **Enable on this device**. A notification appears while a Tuk Tuk tab is
   open; click it to open the task. A closed tab or locked phone gets nothing,
   and a completed or deleted task never notifies.
+- **Quiet hours hold reminders.** Set them in **Settings → Quiet hours**
+  (22:00–07:00 by default; a band can run past midnight). A reminder due
+  during quiet hours waits and notifies once when they end, and stays listed
+  in Tuk Tuk meanwhile. Quiet hours are not Active hours: Active hours only
+  change the calendar.
 - **Checklists** are lines inside a task, not separate tasks. Ticking the last
   one completes the task.
 - **Priority** has four levels: None, Low, Medium and High.
