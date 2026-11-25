@@ -8,10 +8,10 @@ tabs. A new owned table under `tasks`, so existing rows are untouched.
 The revision id carries the table name, so tickets of the same phase can be
 re-chained without a clash.
 
-No downgrade, like 0035-0049 before it: restore the pre-upgrade backup.
+No downgrade, like 0035-0050 before it: restore the pre-upgrade backup.
 
-Revision ID: 0050_reminder_deliveries
-Revises: 0049_habit_pauses
+Revision ID: 0051_reminder_deliveries
+Revises: 0050_task_planned_work
 Create Date: 2026-11-25
 
 """
@@ -21,8 +21,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0050_reminder_deliveries"
-down_revision: str | None = "0049_habit_pauses"
+revision: str = "0051_reminder_deliveries"
+down_revision: str | None = "0050_task_planned_work"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -55,6 +55,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     raise NotImplementedError(
-        "0050_reminder_deliveries has no downgrade: restore the database backup taken "
+        "0051_reminder_deliveries has no downgrade: restore the database backup taken "
         "before upgrading."
     )
