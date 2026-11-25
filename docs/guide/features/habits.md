@@ -16,12 +16,12 @@ two-week history show your progress.
 
 | Kind | Use for | You tap |
 | --- | --- | --- |
-| **Yes / no** | "Morning walk", "Meditate" | The circle, once |
+| **Done / not yet** | "Morning walk", "Meditate" | The circle, once |
 | **Count** | "Drink water: 8 glasses" | **+1** until you reach the target |
 
 ## How to use it
 
-1. Click **Add Habit**. Pick a name, an icon and the kind.
+1. Click **Add Habit**. Pick a name, an icon and the type.
 2. For a count habit, set the daily **target** and unit (for example 8 glasses).
 3. Check in each day from the habit card.
 4. Forgot yesterday? Fill it in from the history strip.
