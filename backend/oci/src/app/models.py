@@ -407,6 +407,13 @@ class Habit(OwnedMixin, Base):
     check_ins: Mapped[list["CheckIn"]] = relationship(
         back_populates="habit", cascade="all, delete-orphan", passive_deletes=True
     )
+    pauses: Mapped[list["HabitPause"]] = relationship(
+        back_populates="habit",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+        order_by="HabitPause.start_date",
+    )
 
 
 class CheckIn(OwnedMixin, Base):
@@ -429,6 +436,26 @@ class CheckIn(OwnedMixin, Base):
     value: Mapped[float] = mapped_column(default=1.0)
 
     habit: Mapped[Habit] = relationship(back_populates="check_ins")
+
+
+class HabitPause(OwnedMixin, Base):
+    """A Habit pause (issue #559) — an explicit date interval, both ends
+    inclusive local days, whose days are not eligible: neither done nor
+    missed. `end_date` None is open-ended. A Habit's pauses never overlap,
+    and never cover a date holding a Check-in (app.routers.v1.habits).
+
+    Composition under a Habit (deleted with it), carrying its own
+    `owner_id` like a Check-in.
+    """
+
+    __tablename__ = "habit_pauses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"), index=True)
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date, default=None)
+
+    habit: Mapped[Habit] = relationship(back_populates="pauses")
 
 
 class Goal(OwnedMixin, Base):
