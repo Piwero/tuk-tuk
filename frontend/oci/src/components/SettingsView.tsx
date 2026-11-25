@@ -6,6 +6,8 @@ import {
   ApiError,
   disconnectGoogleAccount,
   fetchActiveHoursSettings,
+  fetchGentleReturnSettings,
+  updateGentleReturnSettings,
   updateActiveHoursSettings,
   fetchDatabaseStatus,
   testDatabaseConnection,
@@ -945,6 +947,38 @@ const HALF_HOUR_LABELS: string[] = Array.from({ length: 49 }, (_, index) => {
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 });
 
+/** Gentle return (issue #548): the User chooses to have Today collapse every
+ * earlier overdue Task behind a counted disclosure. Nothing is rescheduled. */
+function GentleReturnSettingsForm(): React.JSX.Element {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    void fetchGentleReturnSettings().then((settings) => setEnabled(settings.enabled));
+  }, []);
+
+  function toggle(): void {
+    const next = !enabled;
+    setEnabled(next);
+    void updateGentleReturnSettings({ enabled: next }).then((settings) =>
+      setEnabled(settings.enabled),
+    );
+  }
+
+  return (
+    <div className="settings-field">
+      <label>
+        <input type="checkbox" checked={enabled} onChange={toggle} />
+        Gentle return
+      </label>
+      <p className="settings-hint">
+        For coming back after time away. Today tucks earlier overdue Tasks behind a single counted
+        link, so you can pick one thing to start with. No dates change, and the full list is one
+        click away.
+      </p>
+    </div>
+  );
+}
+
 /** Active hours (issue #210): the band of the day the Calendar renders at
  * double height. The selects only offer valid half-hour times, so the one
  * reachable invalid state is start ≥ end (which includes a band that would
@@ -1309,6 +1343,7 @@ function MyAccountPanel({
         <a href="#settings-appearance">Appearance</a>
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
+        <a href="#settings-gentle-return">Gentle return</a>
         <a href="#settings-assist">
           Assist
           {assistConfig !== null && (
@@ -1454,6 +1489,16 @@ function MyAccountPanel({
             <h2>Active hours</h2>
           </div>
           <ActiveHoursSettingsForm />
+        </section>
+        <section
+          aria-label="Gentle return"
+          id="settings-gentle-return"
+          className="settings-section"
+        >
+          <div className="settings-section-head">
+            <h2>Gentle return</h2>
+          </div>
+          <GentleReturnSettingsForm />
         </section>
       </section>
       {showAiGroup && (
