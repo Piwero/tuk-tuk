@@ -596,6 +596,10 @@ const QUICK_ADD_CONTROLS: { selector: string; what: string }[] = [
     what: "the collapsed summary's List / Priority / date / Tag chip remove buttons (#540)",
   },
   {
+    selector: ".quick-add-dialog .quick-add-save-error button",
+    what: "the Retry button beside a failed save's message (#544)",
+  },
+  {
     selector: ".quick-add-dialog .token-input-dropdown li",
     what: "the token suggestion dropdown's rows",
   },

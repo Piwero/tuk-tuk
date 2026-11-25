@@ -337,6 +337,13 @@ export function App({
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // The last Task-saved confirmation (#544), written into a live region that
+  // is always mounted. `count` remounts the text so saving twice to the same
+  // List is announced twice.
+  const [savedAnnouncement, setSavedAnnouncement] = useState<{
+    text: string;
+    count: number;
+  } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // The command palette opened scoped to one Task (issue #205) — its verb
   // menu. Independent of `paletteOpen` (the jump surface); at most one is
@@ -1124,6 +1131,12 @@ export function App({
 
   function announceCreated(created: Task): void {
     const listName = lists.find((list) => list.id === created.list_id)?.name;
+    // Spoken confirmation (#544): the toast below only exists while shown,
+    // and a live region inserted with its text is announced unreliably.
+    setSavedAnnouncement((previous) => ({
+      text: listName === undefined ? "Task saved" : `Task saved to ${listName}`,
+      count: (previous?.count ?? 0) + 1,
+    }));
     // Issue #259: prose typed into Quick-Add with no `@` token that reads
     // like a date/time phrase ("dentist tuesday 3pm") saves as a plain,
     // undated title — Quick-Add deliberately does not parse it (CONTEXT.md:
@@ -1932,6 +1945,14 @@ export function App({
             too — the task views used to each own one and could only cover
             themselves (#191). */}
             <ToastStack entries={toasts.entries} onUndo={toasts.undo} onDismiss={toasts.dismiss} />
+            {/* Always mounted, so a Task-saved confirmation lands in a region
+            the screen reader already watches. No role="status": the toasts
+            own that role, and tests (and users) find them by it. */}
+            <div className="visually-hidden" aria-live="polite" aria-atomic="true">
+              {savedAnnouncement !== null && (
+                <span key={savedAnnouncement.count}>{savedAnnouncement.text}</span>
+              )}
+            </div>
           </div>
         </ShortcutsProvider>
       </FocusRunProvider>

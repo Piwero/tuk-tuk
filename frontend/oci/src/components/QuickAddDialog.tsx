@@ -1,6 +1,6 @@
 import "./QuickAddDialog.css";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import {
   createTag,
@@ -162,6 +162,18 @@ export function QuickAddDialog({
   // focusables too — and every value lives in this component's state, so
   // collapsing never loses what was chosen.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // Save feedback (#544). `busy` is the in-flight guard: a ref, because a
+  // second click or Enter repeat lands in the same tick as the first, before
+  // any state it set has re-rendered. `saving` is what the button shows.
+  const busy = useRef(false);
+  const [saving, setSaving] = useState(false);
+  // A submit whose title has no words left once tokens are parsed out: the
+  // reason is shown beside the Title field, and the typed text stays put.
+  const [titleInvalid, setTitleInvalid] = useState(false);
+  const titleErrorId = useId();
+  // How many saves have failed in this dialog; non-zero shows "Task not
+  // saved" with Retry. The dialog closes on success, so it never resets.
+  const [saveFailures, setSaveFailures] = useState(0);
 
   /** A title edit re-arms Assist: the next "Add task" parses the new text
    * rather than saving stale suggestions, keeping the behaviour "parse on
@@ -170,6 +182,7 @@ export function QuickAddDialog({
    * control of their own, so a fresh parse must own them outright. */
   function onTitleChange(next: string): void {
     setTitle(next);
+    setTitleInvalid(false);
     if (assistApplied) {
       setAssistApplied(false);
       setRecurrence(null);
@@ -318,11 +331,31 @@ export function QuickAddDialog({
     setListChosen(true);
   }
 
-  async function submit(event: React.FormEvent): Promise<void> {
+  function submit(event: React.FormEvent): void {
     event.preventDefault();
-    if (parsing) {
+    void attempt({ assist: true });
+  }
+
+  /** Retry repeats the failed save with the form exactly as it stands. It
+   * skips Assist: the save already got past the parse once, so a retry must
+   * not stop short of saving to offer a new suggestion. */
+  function retry(): void {
+    void attempt({ assist: false });
+  }
+
+  async function attempt({ assist }: { assist: boolean }): Promise<void> {
+    if (busy.current) {
       return;
     }
+    busy.current = true;
+    try {
+      await parseAndSave(assist);
+    } finally {
+      busy.current = false;
+    }
+  }
+
+  async function parseAndSave(assist: boolean): Promise<void> {
     // Tokens typed but never picked from the dropdown are still honoured at
     // submit, exactly as in the bar — otherwise a fully-typed `~expenses`
     // would be saved as literal title text.
@@ -338,14 +371,29 @@ export function QuickAddDialog({
     });
     const trimmed = plan.title.trim();
     if (trimmed === "") {
+      setTitleInvalid(true);
       return;
     }
     // First submit with Assist available: parse into the form and wait for
     // the confirmation click. A parse that applies nothing (or fails) falls
     // straight through to the save below, so Assist never costs a click.
-    if (assistAvailable && !assistApplied && (await runAssist(plan))) {
+    if (assist && assistAvailable && !assistApplied && (await runAssist(plan))) {
       return;
     }
+    setSaving(true);
+    try {
+      await save(plan, trimmed);
+    } catch {
+      // Never pretend: the dialog stays open on the same input, says the
+      // Task was not saved, and offers Retry beside that message. Each
+      // failure remounts the alert so a repeat failure is announced again.
+      setSaveFailures((count) => count + 1);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function save(plan: ReturnType<typeof parseQuickAdd>, trimmed: string): Promise<void> {
     // A typed name that matches nothing creates the Tag first — the same
     // on-the-fly rule the Quick-Add bar applies to an unknown #tag.
     const chosen = [...tagIds];
@@ -448,6 +496,8 @@ export function QuickAddDialog({
           ]}
           showChips={false}
           autoFocus
+          invalid={titleInvalid}
+          describedBy={titleInvalid ? titleErrorId : undefined}
           trailingContent={
             parsing ? (
               <span className="quick-add-assist-busy" aria-label="Assist is parsing" role="status">
@@ -469,6 +519,11 @@ export function QuickAddDialog({
           }
         />
       </label>
+      {titleInvalid && (
+        <p className="quick-add-field-error" role="alert" id={titleErrorId}>
+          Enter a title to add the Task
+        </p>
+      )}
       <div className="quick-add-summary" role="group" aria-label="Summary">
         {destination === null || destination.is_inbox ? (
           <span className="quick-add-destination">
@@ -668,12 +723,31 @@ export function QuickAddDialog({
           </fieldset>
         </div>
       )}
+      {saveFailures > 0 && (
+        <div className="quick-add-save-error">
+          <p key={saveFailures} role="alert">
+            Task not saved
+          </p>
+          {/* aria-disabled while a save is in flight, like "Add task": the
+          button keeps focus, and the busy ref ignores the extra press. */}
+          <button
+            className="btn-secondary"
+            type="button"
+            aria-disabled={saving || undefined}
+            onClick={retry}
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className="quick-add-dialog-actions">
         <button className="btn-quiet" type="button" onClick={onClose}>
           Cancel
         </button>
-        <button className="btn-primary" type="submit">
-          Add task
+        {/* aria-disabled, not disabled: a disabled button drops focus to
+        <body>, out of the dialog's Tab trap; the busy ref ignores it instead. */}
+        <button className="btn-primary" type="submit" aria-disabled={saving || undefined}>
+          {saving ? "Saving…" : "Add task"}
         </button>
       </div>
     </form>
