@@ -230,6 +230,10 @@ READS: dict[str, Read] = {
         get(lambda a, me: "/api/v1/settings/gentle-return"),
         rows=lambda body, a: [body] if body["enabled"] else [],
     ),
+    "reminder notifications toggle": Read(
+        get(lambda a, me: "/api/v1/settings/reminder-notifications"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
     "stand-up suggestions today": Read(
         get(lambda a, me: f"/api/v1/stand-up/suggestions/today?date={a.today}")
     ),
@@ -539,6 +543,9 @@ OWN_WRITES: dict[str, OwnWrite] = {
     "turning gentle return off": OwnWrite(
         lambda a, me: ("PUT", "/api/v1/settings/gentle-return", {"enabled": False})
     ),
+    "turning reminder notifications off": OwnWrite(
+        lambda a, me: ("PUT", "/api/v1/settings/reminder-notifications", {"enabled": False})
+    ),
     "a focus session reusing another user's run id": OwnWrite(
         lambda a, me: (
             "POST",
@@ -697,6 +704,7 @@ def build_alice(
     alice.ok("PUT", "/api/v1/now/note", {"note": "alice resume note"})
     alice.ok("PUT", "/api/v1/now/shortlist", {"task_ids": [shortlisted]})
     alice.ok("PUT", "/api/v1/settings/gentle-return", {"enabled": True})
+    alice.ok("PUT", "/api/v1/settings/reminder-notifications", {"enabled": True})
     timer = alice.ok(
         "POST", "/api/v1/timers", {"name": "alice timer", "mode": "stopwatch", "habit_id": habit}
     )["id"]

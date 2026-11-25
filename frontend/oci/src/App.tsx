@@ -42,6 +42,7 @@ import {
   rescheduledToDay,
 } from "./dates";
 import { FocusRunProvider, useStartPomo } from "./focusRunContext";
+import { ReminderDeliveryProvider } from "./reminderDelivery";
 import { groupTodayTasks, type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
@@ -1376,7 +1377,7 @@ export function App({
       refresh={refreshAfterVoiceWrite}
       available={voiceStatus}
     >
-      <FocusRunProvider>
+      <SessionProviders>
         <ShortcutsProvider>
           <ShellShortcuts
             onQuickAdd={() => setQuickAddOpen(true)}
@@ -1972,8 +1973,18 @@ export function App({
             </div>
           </div>
         </ShortcutsProvider>
-      </FocusRunProvider>
+      </SessionProviders>
     </VoiceProvider>
+  );
+}
+
+/** Signed-in, app-wide state shared outside any one screen: the live focus
+ * run, and whether Reminders notify on this device (issue #557). */
+function SessionProviders({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <FocusRunProvider>
+      <ReminderDeliveryProvider>{children}</ReminderDeliveryProvider>
+    </FocusRunProvider>
   );
 }
 

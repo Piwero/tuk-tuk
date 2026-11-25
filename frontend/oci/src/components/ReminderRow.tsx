@@ -5,6 +5,7 @@ import { updateTask, type Task } from "../api";
 import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
 import { IconButton } from "./IconButton";
 import { Popover } from "./Popover";
+import { ReminderDeliveryNote } from "./ReminderDeliveryNote";
 
 interface ReminderRowProps {
   task: Task;
@@ -80,6 +81,7 @@ export function ReminderRow({ task, onTaskChanged }: ReminderRowProps): React.JS
             aria-expanded={open}
             onClick={() => (open ? close() : setOpen(true))}
           />
+          {task.reminders.length > 0 && <ReminderDeliveryNote />}
           <Popover open={open} triggerRef={anchor} onClose={close}>
             {custom === null ? (
               <ul
