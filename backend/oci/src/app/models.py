@@ -710,3 +710,6 @@ class NowSelection(OwnedMixin, Base):
     # advanced in place no longer matches, so it stops reading as Now.
     task_start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     task_due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # Optional cue for picking the selection back up (issue #554); cleared
+    # whenever the selection changes, is removed or is pruned.
+    resume_note: Mapped[str | None] = mapped_column(Text, default=None)

@@ -6,11 +6,11 @@ selection itself (`/api/v1/now`) and the Settings toggle
 """
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.db import SessionDep
-from app.errors import NotFoundError
+from app.errors import APIError, NotFoundError
 from app.models import NowSelection, Task
 from app.now_rule import is_current, occurrence_of
 
@@ -19,6 +19,10 @@ router = APIRouter(tags=["now"])
 
 class NowRead(BaseModel):
     task_id: int | None
+
+
+class ResumeNote(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
 
 
 class NowToggle(BaseModel):
@@ -42,15 +46,23 @@ async def _row_for_write(session: SessionDep) -> NowSelection:
 @router.get("/api/v1/now")
 async def read_now(session: SessionDep) -> NowRead:
     """A deleted, completed or advanced selection is pruned here (#549)."""
+    row = await _current_row(session)
+    return NowRead(task_id=row.task_id if row else None)
+
+
+async def _current_row(session: SessionDep) -> NowSelection | None:
+    """The User's row, with a stale selection (and its note) pruned."""
     row = await _row(session)
-    if row is None or row.task_id is None:
-        return NowRead(task_id=None)
-    task = await session.get(Task, row.task_id)
-    if not is_current(task, (row.task_start_date, row.task_due_date)):
+    if row is None:
+        return None
+    task = None if row.task_id is None else await session.get(Task, row.task_id)
+    stale = task is None or not is_current(task, (row.task_start_date, row.task_due_date))
+    if stale and (row.task_id is not None or row.resume_note is not None):
         row.task_id = None
         row.task_start_date = row.task_due_date = None
+        row.resume_note = None
         await session.commit()
-    return NowRead(task_id=row.task_id)
+    return row
 
 
 @router.put("/api/v1/now")
@@ -61,10 +73,34 @@ async def update_now(payload: NowRead, session: SessionDep) -> NowRead:
     if payload.task_id is not None and task is None:
         raise NotFoundError("Task not found")
     row = await _row_for_write(session)
+    occurrence = occurrence_of(task) if task else (None, None)
+    if (row.task_id, (row.task_start_date, row.task_due_date)) != (payload.task_id, occurrence):
+        row.resume_note = None  # a different selection or occurrence (#554)
     row.task_id = payload.task_id
-    row.task_start_date, row.task_due_date = occurrence_of(task) if task else (None, None)
+    row.task_start_date, row.task_due_date = occurrence
     await session.commit()
     return NowRead(task_id=row.task_id)
+
+
+@router.get("/api/v1/now/note")
+async def read_resume_note(session: SessionDep) -> ResumeNote:
+    row = await _current_row(session)
+    return ResumeNote(note=row.resume_note if row else None)
+
+
+@router.put("/api/v1/now/note")
+async def update_resume_note(payload: ResumeNote, session: SessionDep) -> ResumeNote:
+    """Saves, edits or (with null/blank) discards the resume note (#554).
+    It belongs to the current selection, so there must be one."""
+    row = await _current_row(session)
+    note = (payload.note or "").strip() or None
+    if row is None or row.task_id is None:
+        if note is None:
+            return ResumeNote(note=None)
+        raise APIError(409, "no_now_selection", "Nothing is selected for Now")
+    row.resume_note = note
+    await session.commit()
+    return ResumeNote(note=row.resume_note)
 
 
 @router.get("/api/v1/settings/now")
