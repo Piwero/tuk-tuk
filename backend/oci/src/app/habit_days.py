@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
 
-from app.habit_frequency import due_on
+from app.habit_frequency import due_on, times_per_week
 
 DayState = Literal[
     "done",
@@ -53,6 +53,24 @@ class Pause:
         return (other.end is None or self.start <= other.end) and (
             self.end is None or other.start <= self.end
         )
+
+
+@dataclass(frozen=True)
+class Week:
+    """A times-per-week Habit's week, Monday to Sunday (issue #568). `done`
+    counts days whose Check-in met the Target; `remaining` is what is still
+    to do. The Target is never reduced by a pause or skip inside the week:
+    only a pause covering every day of the week from the Habit start on
+    `excluded`s it, so it counts as neither met nor missed."""
+
+    start: date
+    end: date
+    target: int
+    done: int
+    remaining: int
+    paused_days: int
+    skipped_days: int
+    excluded: bool
 
 
 def is_paused(day: date, pauses: Iterable[Pause]) -> bool:
@@ -94,6 +112,28 @@ class HabitDays:
             and due_on(self.frequency, day)
             and day >= self.start
             and not is_paused(day, self.pauses)
+        )
+
+    def week(self, day: date) -> Week | None:
+        """The week holding `day`, for a times-per-week Habit; None for any
+        other frequency, whose days carry their own schedule."""
+        target = times_per_week(self.frequency)
+        if target is None:
+            return None
+        start = day - timedelta(days=day.weekday())
+        days = [start + timedelta(days=offset) for offset in range(7)]
+        states = [self.state(each) for each in days]
+        started = [each for each in days if each >= self.start]
+        done = states.count("done")
+        return Week(
+            start=start,
+            end=days[-1],
+            target=target,
+            done=done,
+            remaining=max(target - done, 0),
+            paused_days=sum(1 for each in started if is_paused(each, self.pauses)),
+            skipped_days=states.count("skipped"),
+            excluded=bool(started) and all(is_paused(each, self.pauses) for each in started),
         )
 
     def streak(self) -> int:

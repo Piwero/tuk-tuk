@@ -10,7 +10,7 @@ a skipped date refuses a Check-in until the skip is removed.
 from fastapi.testclient import TestClient
 
 from tests.test_habit_pauses import pause
-from tests.test_habit_stats import check_in, stats
+from tests.test_habit_stats import check_in, created_at, stats
 from tests.test_habits import make_habit
 
 
@@ -167,3 +167,186 @@ class TestStreakAcrossASkip:
         client.delete(f"/api/v1/habits/{habit['id']}/skips/2026-07-03")
 
         assert stats(client, habit["id"], "2026-07-04")["streak"] == 1
+
+
+class TestWeeklyTarget:
+    """A times-per-week Habit's week under pause and skip (issue #568): only a
+    pause covering the whole week excludes it; a partial-week pause or any
+    skip leaves the weekly Target unchanged and shows what remains. The week
+    runs Monday to Sunday; here Mon 2026-07-06 to Sun 2026-07-12."""
+
+    def weekly(self, client: TestClient, database_url: str, times: int = 3) -> dict:
+        habit = make_habit(client, "Run", frequency=f"FREQ=WEEKLY;TT_TIMES={times}")
+        created_at(database_url, habit["id"], "2026-06-01T10:00:00Z")
+        return habit
+
+    def test_a_partially_paused_week_keeps_its_target(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = self.weekly(client, database_url)
+        check_in(client, habit["id"], "2026-07-06")
+        pause(client, habit["id"], "2026-07-07", "2026-07-09")
+
+        week = stats(client, habit["id"], "2026-07-10")["week"]
+
+        assert week == {
+            "start": "2026-07-06",
+            "end": "2026-07-12",
+            "target": 3,
+            "done": 1,
+            "remaining": 2,
+            "paused_days": 3,
+            "skipped_days": 0,
+            "excluded": False,
+        }
+
+    def test_a_fully_paused_week_is_excluded(self, client: TestClient, database_url: str) -> None:
+        habit = self.weekly(client, database_url)
+        pause(client, habit["id"], "2026-07-06", "2026-07-12")
+
+        week = stats(client, habit["id"], "2026-07-08")["week"]
+
+        assert week["excluded"] is True
+        assert week["paused_days"] == 7
+        assert week["target"] == 3
+
+    def test_an_open_ended_pause_from_monday_excludes_the_week(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = self.weekly(client, database_url)
+        pause(client, habit["id"], "2026-07-06")
+
+        assert stats(client, habit["id"], "2026-07-08")["week"]["excluded"] is True
+
+    def test_a_pause_missing_one_day_of_the_week_does_not_exclude_it(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = self.weekly(client, database_url)
+        pause(client, habit["id"], "2026-07-07", "2026-07-12")  # Monday stays eligible
+
+        week = stats(client, habit["id"], "2026-07-08")["week"]
+
+        assert week["excluded"] is False
+        assert week["target"] == 3
+        assert week["remaining"] == 3
+
+    def test_a_week_paused_from_the_habit_start_on_is_excluded(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        # Created on Thursday and paused Thursday to Sunday: no day of the
+        # week could be practised.
+        habit = make_habit(client, "Run", frequency="FREQ=WEEKLY;TT_TIMES=3")
+        created_at(database_url, habit["id"], "2026-07-09T10:00:00Z")
+        pause(client, habit["id"], "2026-07-09", "2026-07-12")
+
+        assert stats(client, habit["id"], "2026-07-10")["week"]["excluded"] is True
+
+    def test_a_skip_inside_the_week_keeps_its_target(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = self.weekly(client, database_url)
+        check_in(client, habit["id"], "2026-07-06")
+        skip(client, habit["id"], "2026-07-07")
+        skip(client, habit["id"], "2026-07-11")  # a planned skip still to come
+
+        week = stats(client, habit["id"], "2026-07-08")["week"]
+
+        assert week["target"] == 3
+        assert week["done"] == 1
+        assert week["remaining"] == 2
+        assert week["skipped_days"] == 2
+        assert week["excluded"] is False
+
+    def test_a_fully_skipped_week_is_not_excluded(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        # Only a pause excludes a week; seven skips keep the Target.
+        habit = self.weekly(client, database_url)
+        for day in range(6, 13):
+            skip(client, habit["id"], f"2026-07-{day:02d}")
+
+        week = stats(client, habit["id"], "2026-07-12")["week"]
+
+        assert week["excluded"] is False
+        assert week["skipped_days"] == 7
+        assert week["remaining"] == 3
+
+    def test_a_met_target_has_nothing_remaining(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = self.weekly(client, database_url, times=2)
+        for day in ("2026-07-06", "2026-07-07", "2026-07-08"):
+            check_in(client, habit["id"], day)
+
+        week = stats(client, habit["id"], "2026-07-08")["week"]
+
+        assert week["done"] == 3
+        assert week["remaining"] == 0
+
+    def test_a_partial_numeric_day_is_not_done(self, client: TestClient, database_url: str) -> None:
+        habit = make_habit(
+            client,
+            "Swim",
+            type="numeric",
+            target=20,
+            unit="laps",
+            frequency="FREQ=WEEKLY;TT_TIMES=2",
+        )
+        created_at(database_url, habit["id"], "2026-06-01T10:00:00Z")
+        check_in(client, habit["id"], "2026-07-06", value=20)
+        check_in(client, habit["id"], "2026-07-07", value=5)
+
+        week = stats(client, habit["id"], "2026-07-08")["week"]
+
+        assert week["done"] == 1
+        assert week["remaining"] == 1
+
+    def test_a_frequency_change_during_a_pause_applies_to_the_whole_week(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        # No versioned schedule: the current frequency reads every week, the
+        # paused one included, and a lower Target is the User's explicit choice.
+        habit = self.weekly(client, database_url)
+        check_in(client, habit["id"], "2026-07-06")
+        pause(client, habit["id"], "2026-07-07", "2026-07-09")
+        changed = client.patch(
+            f"/api/v1/habits/{habit['id']}", json={"frequency": "FREQ=WEEKLY;TT_TIMES=2"}
+        )
+        assert changed.status_code == 200, changed.text
+
+        week = stats(client, habit["id"], "2026-07-08")["week"]
+
+        assert week["target"] == 2
+        assert week["remaining"] == 1
+        assert week["paused_days"] == 3
+        assert week["excluded"] is False
+
+    def test_changing_to_daily_during_a_pause_drops_the_week(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = self.weekly(client, database_url)
+        pause(client, habit["id"], "2026-07-06", "2026-07-12")
+        client.patch(f"/api/v1/habits/{habit['id']}", json={"frequency": "FREQ=DAILY"})
+
+        body = stats(client, habit["id"], "2026-07-08")
+
+        assert body["week"] is None
+        assert body["streak"] == 0
+
+    def test_a_fully_paused_week_keeps_the_streak_across_it(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        habit = self.weekly(client, database_url)
+        for day in ("2026-07-04", "2026-07-05"):
+            check_in(client, habit["id"], day)
+        pause(client, habit["id"], "2026-07-06", "2026-07-12")
+        check_in(client, habit["id"], "2026-07-13")
+
+        assert stats(client, habit["id"], "2026-07-13")["streak"] == 3
+
+    def test_daily_and_weekday_habits_have_no_week(self, client: TestClient) -> None:
+        daily = make_habit(client, "Meditate")
+        weekdays = make_habit(client, "Lift", frequency="FREQ=WEEKLY;BYDAY=MO,WE")
+
+        assert stats(client, daily["id"], "2026-07-08")["week"] is None
+        assert stats(client, weekdays["id"], "2026-07-08")["week"] is None

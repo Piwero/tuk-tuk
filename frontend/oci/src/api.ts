@@ -1374,6 +1374,24 @@ export interface HabitStats {
   streak: number;
   heatmap: HeatmapDay[];
   eligible_from: string;
+  /** The week holding `today` for an N-times-per-week Habit (issue #568);
+   * null (or absent, from an older server) for daily and weekday Habits. */
+  week?: HabitWeek | null;
+}
+
+/** A times-per-week Habit's week, Monday to Sunday. A pause or skip inside it
+ * never lowers `target`; only a pause over the whole week (from the Habit
+ * start) sets `excluded`, and then it counts as neither met nor missed. */
+export interface HabitWeek {
+  start: string;
+  end: string;
+  target: number;
+  /** Days whose Check-in met the Habit's Target. */
+  done: number;
+  remaining: number;
+  paused_days: number;
+  skipped_days: number;
+  excluded: boolean;
 }
 
 /** Statistics as of `today` (the caller's local day), with the Habit start

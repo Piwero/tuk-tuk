@@ -702,6 +702,42 @@ let nextHabitPauseId = 9800;
 function pauseCovers(pause: FakeHabitPause, day: string): boolean {
   return pause.start_date <= day && (pause.end_date === null || day <= pause.end_date);
 }
+
+/** Mirrors the backend's times-per-week week (app.habit_days.HabitDays.week):
+ * the Monday-to-Sunday week holding `today`, its Target never lowered by a
+ * pause or skip, and excluded only when every day from the Habit start on is
+ * paused. Null for other frequencies. */
+function fakeHabitWeek(
+  habit: FakeHabit,
+  checkIns: { date: string; value: number }[],
+  start: string,
+  today: string,
+) {
+  const times = /TT_TIMES=(\d)/.exec(habit.frequency)?.[1];
+  if (times === undefined) {
+    return null;
+  }
+  const target = Number(times);
+  const monday = addDays(today, -((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7));
+  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const valueOf = (day: string): number | undefined =>
+    checkIns.find((checkIn) => checkIn.date === day)?.value;
+  const isPaused = (day: string): boolean => habit.pauses.some((pause) => pauseCovers(pause, day));
+  const started = days.filter((day) => day >= start);
+  const done = days.filter((day) => (valueOf(day) ?? 0) >= habit.target).length;
+  return {
+    start: monday,
+    end: days[6],
+    target,
+    done,
+    remaining: Math.max(target - done, 0),
+    paused_days: started.filter(isPaused).length,
+    skipped_days: started.filter(
+      (day) => habit.skips.includes(day) && !isPaused(day) && valueOf(day) === undefined,
+    ).length,
+    excluded: started.length > 0 && started.every(isPaused),
+  };
+}
 let nextGoalId = 1300;
 let nextFocusSessionId = 400;
 let nextTimerId = 450;
@@ -3086,8 +3122,13 @@ export function installFakeApi({
         }));
       // Mirror the backend's Habit start: the creation day in `tz`, pulled
       // back to an earlier real Check-in, and never after today.
-      const eligibleFrom = [zonedDay(habit.created_at, tz), ...checked, today].sort()[0];
-      return json({ streak, heatmap, eligible_from: eligibleFrom });
+      const eligibleFrom = [zonedDay(habit.created_at, tz), ...checked, today].sort()[0] as string;
+      return json({
+        streak,
+        heatmap,
+        eligible_from: eligibleFrom,
+        week: fakeHabitWeek(habit, habitCheckIns, eligibleFrom, today),
+      });
     }
     const checkInMatch = url.pathname.match(
       /^\/api\/v1\/habits\/(\d+)\/check-ins\/(\d{4}-\d{2}-\d{2})$/,
