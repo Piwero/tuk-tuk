@@ -165,6 +165,29 @@ export function QuickAddDialog(props: QuickAddDialogProps): React.JSX.Element {
   );
 }
 
+/** One summary chip (#540): what a field is set to, and an "x" that takes
+ * it away. `kind` picks the shared chip look the rest of the app gives that
+ * field (a List, a Tag-like label, a schedule), as the command palette's
+ * capture preview does. */
+function RemovableChip({
+  kind,
+  removeLabel,
+  onRemove,
+  children,
+}: {
+  kind: "list" | "tag" | "date";
+  removeLabel: string;
+  onRemove: () => void;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <span className={`${kind}-chip token-chip`}>
+      {children}
+      <IconButton icon="x" size={12} label={removeLabel} onClick={onRemove} />
+    </span>
+  );
+}
+
 /** A stored draft, trimmed to what still exists: a List or Tag deleted since
  * it was typed is simply dropped. */
 function restorableDraft(
@@ -237,6 +260,7 @@ function QuickAddForm({
   // focusables too — and every value lives in this component's state, so
   // collapsing never loses what was chosen.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
   // Save feedback (#544). `busy` is the in-flight guard: a ref, because a
   // second click or Enter repeat lands in the same tick as the first, before
   // any state it set has re-rendered. `saving` is what the button shows.
@@ -645,88 +669,76 @@ function QuickAddForm({
               {destination?.name ?? "Inbox"}
             </span>
           ) : (
-            <span className="date-chip token-chip">
+            <RemovableChip
+              kind="list"
+              removeLabel={`Remove list (${destination.name})`}
+              onRemove={removeListChip}
+            >
               {destination.name}
-              <IconButton
-                icon="x"
-                size={12}
-                label={`Remove list (${destination.name})`}
-                onClick={removeListChip}
-              />
-            </span>
+            </RemovableChip>
           )}
           {priority !== "none" && (
-            <span className="date-chip token-chip">
+            <RemovableChip
+              kind="tag"
+              removeLabel={`Remove priority (${PRIORITY_LABELS[priority]})`}
+              onRemove={() => {
+                setPriority("none");
+                setPriorityChosen(true);
+              }}
+            >
               {PRIORITY_LABELS[priority]} priority
-              <IconButton
-                icon="x"
-                size={12}
-                label={`Remove priority (${PRIORITY_LABELS[priority]})`}
-                onClick={() => {
-                  setPriority("none");
-                  setPriorityChosen(true);
-                }}
-              />
-            </span>
+            </RemovableChip>
           )}
           {dateLabel !== null && (
-            <span className="date-chip token-chip">
+            <RemovableChip
+              kind="date"
+              removeLabel={`Remove date (${dateLabel})`}
+              onRemove={() => changeDate(emptyDraft())}
+            >
               {dateLabel}
-              <IconButton
-                icon="x"
-                size={12}
-                label={`Remove date (${dateLabel})`}
-                onClick={() => changeDate(emptyDraft())}
-              />
-            </span>
+            </RemovableChip>
           )}
           {tags
             .filter((tag) => tagIds.includes(tag.id))
             .map((tag) => (
-              <span key={tag.id} className="date-chip token-chip">
+              <RemovableChip
+                key={tag.id}
+                kind="tag"
+                removeLabel={`Remove tag (${tag.name})`}
+                onRemove={() => toggleTag(tag.id)}
+              >
                 #{tag.name}
-                <IconButton
-                  icon="x"
-                  size={12}
-                  label={`Remove tag (${tag.name})`}
-                  onClick={() => toggleTag(tag.id)}
-                />
-              </span>
+              </RemovableChip>
             ))}
           {newTag.trim() !== "" && (
-            <span className="date-chip token-chip">
+            <RemovableChip
+              kind="tag"
+              removeLabel={`Remove tag (${newTag.trim()})`}
+              onRemove={() => setNewTag("")}
+            >
               #{newTag.trim()}
-              <IconButton
-                icon="x"
-                size={12}
-                label={`Remove tag (${newTag.trim()})`}
-                onClick={() => setNewTag("")}
-              />
-            </span>
+            </RemovableChip>
           )}
           {(recurrence !== null || reminders.length > 0) && (
             <div className="quick-add-assist-chips" role="group" aria-label="Assist suggestions">
               {recurrence !== null && (
-                <span className="date-chip token-chip">
+                <RemovableChip
+                  kind="date"
+                  removeLabel="Remove recurrence"
+                  onRemove={() => setRecurrence(null)}
+                >
                   {formatRecurrenceRule(recurrence)}
-                  <IconButton
-                    icon="x"
-                    size={12}
-                    label="Remove recurrence"
-                    onClick={() => setRecurrence(null)}
-                  />
-                </span>
+                </RemovableChip>
               )}
               {reminders.map((offset) => (
-                <span key={offset} className="date-chip token-chip">
+                <RemovableChip
+                  key={offset}
+                  kind="date"
+                  removeLabel={`Remove reminder (${formatReminderOffset(offset)})`}
+                  onRemove={() => removeReminder(offset)}
+                >
                   {formatReminderOffset(offset)}
-                  <IconButton
-                    icon="x"
-                    size={12}
-                    label={`Remove reminder (${formatReminderOffset(offset)})`}
-                    onClick={() => removeReminder(offset)}
-                  />
-                </span>
+                </RemovableChip>
               ))}
             </div>
           )}
@@ -736,14 +748,14 @@ function QuickAddForm({
           className="btn-quiet quick-add-details-toggle"
           aria-expanded={detailsOpen}
           // Collapsed, the panel is unmounted: point at it only when it exists.
-          aria-controls={detailsOpen ? "quick-add-details" : undefined}
+          aria-controls={detailsOpen ? detailsId : undefined}
           onClick={() => setDetailsOpen((open) => !open)}
         >
           <Icon name={detailsOpen ? "chevron-up" : "chevron-down"} size={16} />
           Details
         </button>
         {detailsOpen && (
-          <div className="quick-add-details" id="quick-add-details">
+          <div className="quick-add-details" id={detailsId}>
             <label>
               List
               <select
