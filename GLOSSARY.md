@@ -87,6 +87,10 @@ _Avoid_: Label
 A named, ordered sub-group inside a List. Sections subdivide the List view and ARE the Kanban columns — one concept, not two.
 _Avoid_: Column, group
 
+**Planned work**:
+Optional reserved time for doing a Task (issue #558), held apart from the Task's own start/due dates: at most one block per Task, carrying a start instant, a positive duration (elapsed minutes, so a block across a DST change keeps its real length), the IANA timezone it was planned in, and an optional **buffer after**. The block plus its buffer stays within one local calendar day of that timezone; it may end exactly at the next midnight, never past it. Moving or removing it never moves or clears the deadline, and changing the Task's dates never moves the plan. It needs no due date and is not a Reminder anchor. Completing or advancing a recurring Task clears the plan — it belonged to the occurrence just done — rather than carrying it to the next one; completing a one-off Task keeps it, so a reopen finds it again. On the wire it is `planned_work` (`null` when unplanned; read adds the computed `end`), written whole or removed with `null` on the Task PATCH; a client that never sends the field leaves it untouched.
+_Avoid_: Schedule, time block, the Task's dates (those are the deadline)
+
 **Reminder**:
 A relative offset from a Task's date (e.g. "9 hours before") at which the user should be notified. Tasks can have several. v1 stores and edits Reminders but does not deliver notifications.
 _Avoid_: Alarm, notification (the delivery mechanism, not the domain concept)

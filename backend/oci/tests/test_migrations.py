@@ -105,6 +105,25 @@ def test_0028_task_key_result_migration_preserves_existing_task_rows(
     ]
 
 
+def test_0048_planned_work_migration_leaves_existing_tasks_unplanned(
+    empty_database_url: str,
+) -> None:
+    """Issue #558: an existing Task survives the upgrade to head with every
+    planned work column null — no plan, and its dates untouched."""
+    config = alembic_config(empty_database_url)
+    command.upgrade(config, "0027")
+    run_sql(empty_database_url, SEED_LIST)
+    run_sql(empty_database_url, SEED_TASK)
+
+    command.upgrade(config, "head")
+
+    assert run_sql(
+        empty_database_url,
+        "SELECT title, due_date, planned_start, planned_duration_minutes, "
+        "planned_time_zone, planned_buffer_minutes FROM tasks WHERE id = 1",
+    ) == [("Write code", None, None, None, None, None)]
+
+
 def test_seed_migration_carries_sprint_goal_text_and_preserves_standup_snapshots(
     empty_database_url: str,
 ) -> None:

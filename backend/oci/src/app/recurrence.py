@@ -93,6 +93,10 @@ def advance_in_place(task: Task) -> CompletedOccurrence | None:
     """
     if task.recurrence is None or task.due_date is None:  # guarded by the caller
         return None
+    # A planned work block belongs to the occurrence being completed: clear
+    # it rather than silently carry it onto the next one (issue #558) — and
+    # likewise when this was the last occurrence.
+    task.clear_planned_work()
     nxt = next_occurrence(task.recurrence, task.due_date, task.is_all_day, task.time_zone)
     if nxt is None:
         return None
