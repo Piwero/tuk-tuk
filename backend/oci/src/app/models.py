@@ -710,3 +710,19 @@ class NowSelection(OwnedMixin, Base):
     # advanced in place no longer matches, so it stops reading as Now.
     task_start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     task_due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
+class NowShortlistItem(OwnedMixin, Base):
+    """One entry on a User's Now shortlist (issue #551): an ordered,
+    deduplicated set of alternatives beside Now, with no cap. Deleting the
+    Task removes the entry; the saved schedule prunes completed or advanced
+    occurrences by the same rule as Now (app.now_rule)."""
+
+    __tablename__ = "now_shortlist_items"
+    __table_args__ = (UniqueConstraint("owner_id", "task_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    position: Mapped[int]
+    task_start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    task_due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
