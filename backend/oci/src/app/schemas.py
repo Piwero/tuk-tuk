@@ -391,6 +391,9 @@ class FocusSessionCreate(BaseModel):
     ended_at: datetime
     pause_seconds: int = Field(default=0, ge=0)
     note: str = Field(default="", max_length=2000)
+    # The client's identity for the run (issue #546): repeating a create
+    # with the same id returns the session already recorded for it.
+    client_run_id: str | None = Field(default=None, min_length=1, max_length=64)
 
     _normalize_dates = field_validator("started_at", "ended_at")(normalize_to_utc)
 

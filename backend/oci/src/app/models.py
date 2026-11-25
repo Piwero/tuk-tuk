@@ -505,6 +505,11 @@ class FocusSession(OwnedMixin, Base):
     """
 
     __tablename__ = "focus_sessions"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id", "client_run_id", name="uq_focus_sessions_owner_id_client_run_id"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     mode: Mapped[str] = mapped_column(String(9))
@@ -521,6 +526,9 @@ class FocusSession(OwnedMixin, Base):
     # Wall-clock seconds spent paused: recorded focus time stays honest.
     pause_seconds: Mapped[int] = mapped_column(default=0)
     note: Mapped[str] = mapped_column(Text, default="")
+    # The client's identity for the run this session records (issue #546):
+    # a retried finish for the same run finds this row instead of adding one.
+    client_run_id: Mapped[str | None] = mapped_column(String(64), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

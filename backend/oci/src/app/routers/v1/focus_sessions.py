@@ -8,8 +8,9 @@ Task or Habit.
 
 from datetime import date, datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.caller_zone import caller_zone_or_utc
 from app.db import SessionDep
@@ -56,10 +57,25 @@ async def validate_link(session: SessionDep, task_id: int | None, habit_id: int 
         raise NotFoundError(f"Habit {habit_id} not found")
 
 
+async def find_run(session: SessionDep, client_run_id: str | None) -> FocusSession | None:
+    if client_run_id is None:
+        return None
+    return await session.scalar(
+        select(FocusSession).where(FocusSession.client_run_id == client_run_id)
+    )
+
+
 @router.post("", status_code=201)
 async def create_focus_session(
-    payload: FocusSessionCreate, session: SessionDep
+    payload: FocusSessionCreate, session: SessionDep, response: Response
 ) -> FocusSessionRead:
+    """Record a finished session. Retry-safe (issue #546): a create carrying
+    the `client_run_id` of a run already recorded returns that session with
+    200 and records nothing — the first save wins, whatever the retry says."""
+    existing = await find_run(session, payload.client_run_id)
+    if existing is not None:
+        response.status_code = 200
+        return FocusSessionRead.model_validate(existing)
     validate_period(payload.started_at, payload.ended_at, payload.pause_seconds)
     await validate_link(session, payload.task_id, payload.habit_id)
     focus_session = FocusSession(
@@ -70,9 +86,19 @@ async def create_focus_session(
         ended_at=payload.ended_at,
         pause_seconds=payload.pause_seconds,
         note=payload.note,
+        client_run_id=payload.client_run_id,
     )
     session.add(focus_session)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # A concurrent retry of the same run committed first: return its row.
+        await session.rollback()
+        existing = await find_run(session, payload.client_run_id)
+        if existing is None:
+            raise
+        response.status_code = 200
+        return FocusSessionRead.model_validate(existing)
     return FocusSessionRead.model_validate(focus_session)
 
 
