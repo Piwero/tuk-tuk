@@ -21,7 +21,7 @@ interface FolderViewProps {
   onChanged: (update: (current: Task[]) => Task[]) => void;
   onSelect: (taskId: number) => void;
   onSelectList: (listId: number) => void;
-  onStartFocus: (task: Task) => void;
+  onOpenFocus: (task: Task) => void;
 }
 
 /** The Folder view (#126): Tasks across every List in a Folder, grouped by
@@ -35,7 +35,7 @@ export function FolderView({
   onChanged,
   onSelect,
   onSelectList,
-  onStartFocus,
+  onOpenFocus,
 }: FolderViewProps): React.JSX.Element {
   async function toggle(task: Task): Promise<void> {
     const updated = await updateTask(task.id, { completed: !task.completed });
@@ -78,10 +78,10 @@ export function FolderView({
         <button
           className="btn-secondary"
           type="button"
-          aria-label={`Start Focus for ${task.title}`}
-          onClick={() => onStartFocus(task)}
+          aria-label={`Open Focus for ${task.title}`}
+          onClick={() => onOpenFocus(task)}
         >
-          Focus
+          Open Focus
         </button>
       </li>
     );

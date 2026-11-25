@@ -1374,7 +1374,7 @@ export function App({
               }
               actions={{
                 onComplete: completeTaskNow,
-                onStartFocus: (task) => switchView({ kind: "focus", task }),
+                onOpenFocus: (task) => switchView({ kind: "focus", task }),
                 onReschedule: (task, day) =>
                   patchTaskNow(
                     task.id,
@@ -1758,7 +1758,7 @@ export function App({
                     onChanged={changeTasks}
                     onSelect={setSelectedTaskId}
                     onSelectList={(listId) => switchView({ kind: "list", id: listId })}
-                    onStartFocus={(task) => switchView({ kind: "focus", task })}
+                    onOpenFocus={(task) => switchView({ kind: "focus", task })}
                   />
                 ) : completedMode ? (
                   <CompletedView
@@ -1908,7 +1908,7 @@ export function App({
                 onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onClose={closeTaskDetail}
                 sheet={narrowViewport}
-                onStartFocus={
+                onOpenFocus={
                   sectionSettings.focus
                     ? (task) => {
                         closeTaskDetail();
