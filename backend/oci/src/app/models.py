@@ -180,6 +180,10 @@ class UserSettings(Base):
     active_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     active_hours_start: Mapped[str] = mapped_column(String(5), default="09:00")
     active_hours_end: Mapped[str] = mapped_column(String(5), default="17:00")
+    # Gentle return (issue #548): Today collapses every earlier overdue Task
+    # behind a counted disclosure. Chosen by the User, never inferred; off by
+    # default so Today is unchanged after upgrade.
+    gentle_return_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
