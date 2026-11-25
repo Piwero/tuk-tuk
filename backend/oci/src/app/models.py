@@ -674,3 +674,23 @@ class ApiToken(OwnedMixin, Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class NowSelection(OwnedMixin, Base):
+    """The one Task a User chose to do next in Today (issue #547), and
+    whether the Now panel is shown at all. At most one row per User,
+    created on first write; no row reads as off with nothing selected.
+
+    Its own table rather than `user_settings` columns, so writing the
+    selection can never overwrite another preference. Turning Now off
+    keeps `task_id`; deleting the Task clears it (SET NULL).
+    """
+
+    __tablename__ = "now_selections"
+    __table_args__ = (UniqueConstraint("owner_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(default=False)
+    task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), default=None
+    )
