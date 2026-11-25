@@ -43,5 +43,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     raise NotImplementedError(
-        "0042 has no downgrade: restore the database backup taken before upgrading."
+        "0043 has no downgrade: restore the database backup taken before upgrading."
     )
