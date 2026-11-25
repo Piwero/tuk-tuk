@@ -1,0 +1,9 @@
+@layer components {
+  /* Reminder delivery status beside Reminder chips (issue #557). Text
+   * carries the meaning; it takes its own line under the chips. */
+  .reminder-delivery-note {
+    flex-basis: 100%;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+}

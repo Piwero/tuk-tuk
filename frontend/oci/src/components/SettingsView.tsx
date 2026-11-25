@@ -65,6 +65,7 @@ import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
 import { Hint } from "./Hint";
 import { ProfileCard } from "./ProfileCard";
+import { ReminderNotificationsSettings } from "./ReminderNotificationsSettings";
 import { ApiTokensCard } from "./ApiTokensCard";
 import { UsersPanel } from "./UsersPanel";
 
@@ -1357,6 +1358,7 @@ function MyAccountPanel({
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
         <a href="#settings-gentle-return">Gentle return</a>
+        <a href="#settings-reminder-notifications">Reminder notifications</a>
         <a href="#settings-assist">
           Assist
           {assistConfig !== null && (
@@ -1525,6 +1527,13 @@ function MyAccountPanel({
             <h2>Gentle return</h2>
           </div>
           <GentleReturnSettingsForm />
+        </section>
+        <section
+          aria-label="Reminder notifications"
+          id="settings-reminder-notifications"
+          className="settings-section"
+        >
+          <ReminderNotificationsSettings />
         </section>
       </section>
       {showAiGroup && (

@@ -88,8 +88,12 @@ A named, ordered sub-group inside a List. Sections subdivide the List view and A
 _Avoid_: Column, group
 
 **Reminder**:
-A relative offset from a Task's date (e.g. "9 hours before") at which the user should be notified. Tasks can have several. v1 stores and edits Reminders but does not deliver notifications.
+A relative offset from a Task's date (e.g. "9 hours before") at which the user should be notified. Tasks can have several. A Reminder is stored and edited whether or not it is delivered; it notifies only once Reminder notifications are on for this device.
 _Avoid_: Alarm, notification (the delivery mechanism, not the domain concept)
+
+**Reminder notifications**:
+The User's opt-in to having Reminders delivered as browser notifications, off by default and private to that User. Delivery on a device also needs that browser's permission, so "on" is per User and per device. Foreground only: a signed-in Tuk Tuk tab open on a supported browser; background, closed and locked-device delivery is unsupported.
+_Avoid_: Push notifications (no web-push service is involved)
 
 ## Habits
 
