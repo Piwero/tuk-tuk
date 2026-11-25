@@ -1,8 +1,9 @@
 """Now (issue #547): the one Task the acting User chose to do next in Today.
 
-Two small endpoints over the User's own `now_selections` row: the
-selection itself (`/api/v1/now`) and the Settings toggle
-(`/api/v1/settings/now`). Neither touches `user_settings` or the Task.
+Endpoints over the User's own Now rows: the selection (`/api/v1/now`),
+its resume note (`/api/v1/now/note`, #554), the shortlist
+(`/api/v1/now/shortlist`, #551) and the Settings toggle
+(`/api/v1/settings/now`). None touches `user_settings` or the Task.
 """
 
 from fastapi import APIRouter
@@ -27,6 +28,15 @@ class ResumeNote(BaseModel):
 
 class NowToggle(BaseModel):
     enabled: bool
+
+
+async def _open_task(session: SessionDep, task_id: int) -> Task:
+    """A Task that may be picked: the User's own and not completed. A
+    completed one reads exactly like an unknown id, as another User's does."""
+    task = await session.get(Task, task_id)
+    if task is None or task.completed:
+        raise NotFoundError("Task not found")
+    return task
 
 
 async def _row(session: SessionDep) -> NowSelection | None:
@@ -69,9 +79,7 @@ async def _current_row(session: SessionDep) -> NowSelection | None:
 async def update_now(payload: NowRead, session: SessionDep) -> NowRead:
     """Selects, replaces or clears the Now Task. Another User's Task is
     invisible here, so it reads exactly like an unknown id."""
-    task = None if payload.task_id is None else await session.get(Task, payload.task_id)
-    if payload.task_id is not None and task is None:
-        raise NotFoundError("Task not found")
+    task = None if payload.task_id is None else await _open_task(session, payload.task_id)
     row = await _row_for_write(session)
     occurrence = occurrence_of(task) if task else (None, None)
     if (row.task_id, (row.task_start_date, row.task_due_date)) != (payload.task_id, occurrence):
@@ -139,21 +147,28 @@ async def read_shortlist(session: SessionDep) -> ShortlistRead:
 async def update_shortlist(payload: ShortlistRead, session: SessionDep) -> ShortlistRead:
     """Replaces the whole ordered shortlist. Duplicates keep their first
     place and the Now Task is left out, so a Task is listed at most once.
-    An unknown or another User's Task is a 404, as for Now."""
+    An unknown, completed or another User's Task is a 404, as for Now.
+
+    An entry already listed keeps the occurrence it was listed for, so one
+    advanced meanwhile by another client is still pruned; only new entries
+    are snapshotted from the Task's current schedule."""
     now = await _row(session)
     wanted = [i for i in dict.fromkeys(payload.task_ids) if not (now and i == now.task_id)]
-    tasks = [await session.get(Task, i) for i in wanted]
-    if any(t is None for t in tasks):
-        raise NotFoundError("Task not found")
-    for item in await _shortlist_rows(session):
+    listed = {item.task_id: item for item in await _shortlist_rows(session)}
+    occurrences = {
+        i: (listed[i].task_start_date, listed[i].task_due_date)
+        if i in listed
+        else occurrence_of(await _open_task(session, i))
+        for i in wanted
+    }
+    for item in listed.values():
         await session.delete(item)
     await session.flush()
-    for position, task in enumerate(tasks):
-        assert task is not None
-        start, due = occurrence_of(task)
+    for position, task_id in enumerate(wanted):
+        start, due = occurrences[task_id]
         session.add(
             NowShortlistItem(
-                task_id=task.id, position=position, task_start_date=start, task_due_date=due
+                task_id=task_id, position=position, task_start_date=start, task_due_date=due
             )
         )
     await session.commit()

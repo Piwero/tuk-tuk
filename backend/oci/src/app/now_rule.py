@@ -1,5 +1,5 @@
 """Whether a saved Now pick still names the same unfinished occurrence
-(issue #549). Shared by the Now selection and, later, the shortlist.
+(issue #549). Shared by the Now selection and the shortlist (#551).
 
 A pick is current only when its Task still exists for the acting User
 (callers load it through the owner-scoped session, so another User's Task

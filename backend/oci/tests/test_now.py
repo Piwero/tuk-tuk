@@ -253,3 +253,15 @@ def test_a_note_write_leaves_the_selection_and_other_settings_intact(
     assert client.get("/api/v1/settings/sections").json() == sections
     assert client.get("/api/v1/settings/active-hours").json() == active_hours
     assert client.get(f"/api/v1/tasks/{task['id']}").json() == task
+
+
+def test_a_completed_task_cannot_be_chosen(client: TestClient) -> None:
+    done = make_task(client)["id"]
+    client.patch(f"/api/v1/tasks/{done}", json={"completed": True})
+
+    response = client.put(NOW, json={"task_id": done})
+    missing = client.put(NOW, json={"task_id": 999_999})
+
+    assert response.status_code == 404
+    assert response.json() == missing.json()
+    assert client.get(NOW).json() == {"task_id": None}
