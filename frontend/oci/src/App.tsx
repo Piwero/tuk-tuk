@@ -14,6 +14,7 @@ import {
   fetchSectionSettings,
   type SectionSettings,
   fetchTags,
+  fetchTask,
   fetchTasks,
   fetchTasksByTag,
   deleteTask,
@@ -42,7 +43,7 @@ import {
   rescheduledToDay,
 } from "./dates";
 import { FocusRunProvider, useStartPomo } from "./focusRunContext";
-import { ReminderDeliveryProvider } from "./reminderDelivery";
+import { DueReminderNotifier, ReminderDeliveryProvider } from "./reminderDelivery";
 import { groupTodayTasks, type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
@@ -1138,6 +1139,13 @@ export function App({
     setCalendarTask(task);
   }
 
+  /** A delivered Reminder was clicked (issue #561): open its Task, read
+   * fresh, since it may not be loaded in the view on screen. A Task gone
+   * meanwhile opens nothing. */
+  function openRemindedTask(taskId: number): void {
+    fetchTask(taskId).then(openTaskDetail, () => {});
+  }
+
   function announceCreated(created: Task): void {
     const listName = lists.find((list) => list.id === created.list_id)?.name;
     // Spoken confirmation (#544): the toast below only exists while shown,
@@ -1378,6 +1386,7 @@ export function App({
       available={voiceStatus}
     >
       <SessionProviders>
+        <DueReminderNotifier onOpenTask={openRemindedTask} />
         <ShortcutsProvider>
           <ShellShortcuts
             onQuickAdd={() => setQuickAddOpen(true)}

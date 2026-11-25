@@ -90,6 +90,27 @@ export interface FakeTask {
   created_at: string;
 }
 
+/** A lease on one due Reminder, as the server's claim hands it out (issue
+ * #561). */
+export interface FakeReminderClaim {
+  id: number;
+  task_id: number;
+  task_title: string;
+  offset: string;
+  occurrence_due: string;
+  fire_at: string;
+  state: "claimed" | "shown" | "failed";
+  attempt: number;
+  lease_token: string;
+  lease_expires_at: string;
+}
+
+export interface FakeReminderReport {
+  id: number;
+  outcome: "shown" | "failed";
+  lease_token: string;
+}
+
 export interface RecordedRequest {
   method: string;
   url: string;
@@ -390,6 +411,13 @@ export interface FakeApiState {
   gentleReturn: boolean;
   /** Reminder notifications (issue #557): the User's delivery opt-in. */
   reminderNotifications: boolean;
+  /** Reminder delivery (issue #561): what claims hand out. The fake plays
+   * the server's ledger simply: each claim is handed out once, and only
+   * while the opt-in is on. Isolation and deduplication are proven by the
+   * backend's tests, never here. */
+  reminderClaims: FakeReminderClaim[];
+  /** Every shown/failed report a tab sent, in order. */
+  reminderReports: FakeReminderReport[];
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -737,6 +765,30 @@ export function fakeCheckItem(
   return { id, title, done: false, sort_order: id * SORT_GAP, ...overrides };
 }
 
+let nextReminderClaimId = 1;
+
+/** A claim on one of `task`'s Reminders, due now. */
+export function fakeReminderClaim(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeReminderClaim> = {},
+): FakeReminderClaim {
+  const id = nextReminderClaimId++;
+  return {
+    id,
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    occurrence_due: task.due_date ?? "2026-07-10T15:00:00Z",
+    fire_at: task.due_date ?? "2026-07-10T15:00:00Z",
+    state: "claimed",
+    attempt: 1,
+    lease_token: `lease-${id}`,
+    lease_expires_at: "2026-07-10T15:01:00Z",
+    ...overrides,
+  };
+}
+
 export function fakeList(name: string, overrides: Partial<FakeList> = {}): FakeList {
   const id = nextListId++;
   return {
@@ -988,6 +1040,7 @@ export function installFakeApi({
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
   reminderNotifications = false,
+  dueReminders = [],
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1082,6 +1135,8 @@ export function installFakeApi({
   gentleReturn?: boolean;
   /** Reminder notifications (issue #557). Defaults to off, matching the backend. */
   reminderNotifications?: boolean;
+  /** Reminders due now, handed out by the claim endpoint (issue #561). */
+  dueReminders?: FakeReminderClaim[];
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1165,6 +1220,8 @@ export function installFakeApi({
     activeHours: { ...activeHours },
     gentleReturn,
     reminderNotifications,
+    reminderClaims: dueReminders.map((claim) => ({ ...claim })),
+    reminderReports: [],
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -1192,6 +1249,7 @@ export function installFakeApi({
       state.voiceLivekitUrl !== null && state.voiceLivekitApiKey !== null && state.voiceSecretSet,
   });
 
+  const handedOut = new Set<number>();
   const json = (data: unknown, status = 200): Response =>
     new Response(JSON.stringify(data), {
       status,
@@ -3341,6 +3399,30 @@ export function installFakeApi({
         state.gentleReturn = (body as { enabled: boolean }).enabled;
       }
       return json({ enabled: state.gentleReturn });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/claim" && method === "POST") {
+      if (!state.reminderNotifications) return json({ items: [] });
+      const items = state.reminderClaims.filter((claim) => !handedOut.has(claim.id));
+      for (const claim of items) handedOut.add(claim.id);
+      return json({ items: items.map((claim) => ({ ...claim })) });
+    }
+    const reminderReport = url.pathname.match(
+      /^\/api\/v1\/reminder-deliveries\/(\d+)\/(shown|failed)$/,
+    );
+    if (reminderReport && method === "POST") {
+      const id = Number(reminderReport[1]);
+      const outcome = reminderReport[2] as "shown" | "failed";
+      const claim = state.reminderClaims.find((candidate) => candidate.id === id);
+      if (claim === undefined) {
+        return json(
+          { error: { code: "not_found", message: `Reminder delivery ${id} not found` } },
+          404,
+        );
+      }
+      const { lease_token } = body as { lease_token: string };
+      state.reminderReports.push({ id, outcome, lease_token });
+      if (claim.state === "claimed") claim.state = outcome;
+      return json({ ...claim });
     }
     if (url.pathname === "/api/v1/settings/reminder-notifications") {
       if (method === "PUT") {
