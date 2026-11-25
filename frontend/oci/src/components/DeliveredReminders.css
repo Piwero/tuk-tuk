@@ -1,0 +1,99 @@
+/* Delivered reminders with Snooze (issue #566): a flat panel with a
+ hairline border, bottom right, above page content and below a modal. */
+@layer components {
+  .delivered-reminders {
+    position: fixed;
+    right: var(--space-6);
+    bottom: var(--space-6);
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column-reverse;
+    gap: var(--space-2);
+    width: min(360px, calc(100vw - 32px));
+  }
+
+  .delivered-reminder {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font-size: var(--text-md);
+    box-shadow: var(--shadow-md);
+  }
+
+  .delivered-reminder-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .delivered-reminder-title {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .delivered-reminder-when,
+  .delivered-reminder-note,
+  .delivered-reminder-error {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .delivered-reminder-when,
+  .delivered-reminder-note {
+    color: var(--text-secondary);
+  }
+
+  /* Text carries the meaning; the danger colour only reinforces it. */
+  .delivered-reminder-error {
+    color: var(--text-danger);
+  }
+
+  .delivered-reminder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .delivered-reminder-dismiss {
+    display: flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: var(--space-1);
+    color: var(--text-secondary);
+  }
+
+  button.delivered-reminder-open {
+    align-self: flex-start;
+  }
+
+  /* Phones: full width inside the 16px gutters, above the tab bar, with
+   44px hit areas. */
+  @media (max-width: 720px) {
+    .delivered-reminders {
+      right: 16px;
+      left: 16px;
+      bottom: calc(var(--mobile-tab-bar-height) + var(--space-4));
+      width: auto;
+    }
+
+    .delivered-reminder-actions button,
+    button.delivered-reminder-open {
+      flex: 1 1 100%;
+      height: 44px;
+    }
+
+    .delivered-reminder-dismiss {
+      min-width: 44px;
+      min-height: 44px;
+      justify-content: center;
+    }
+  }
+}

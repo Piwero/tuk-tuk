@@ -77,6 +77,23 @@ read through the same filter.
 **Click.** Clicking a notification focuses the tab, closes the
 notification and opens its Task's detail. Check Items carry no Reminders.
 
+**Snooze (amendment, #566).** A page notification can't carry action
+buttons without a Service Worker, so each Reminder a tab showed also stays
+as an in-app card with Open task and Snooze. `POST …/{id}/snooze
+{minutes}` (1 to 1440) sets `snoozed_until` on that ledger row and marks it
+`snoozed`. It is an override for that one occurrence, not a Task edit: the
+Task's start, due date, Reminder offsets and recurrence are never written.
+While `snoozed_until` is set it is the row's effective fire time
+(`effective_fire_at` in `app.reminder_delivery`, the single place a fire
+time is overridden; Quiet hours compose there too). When it comes due, the
+next claim re-leases the same row as a fresh delivery (attempt 1). The
+same window, lease, retry and deduplication rules then apply, measured from
+the snoozed time. Snoozing replaces the lease token, so a tab still holding
+the old one gets `lease_lost`. Snoozing again moves the time. Stale rules
+hold: a completed, advanced or redated Task, or a removed Reminder, yields
+no candidate, so the snooze is cancelled. Snoozing such an occurrence is
+refused with `409 reminder_stale`.
+
 ## Consequences
 
 - Exactly-once display is not promised. A tab that crashes after the

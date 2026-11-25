@@ -28,6 +28,7 @@ import {
   updateReminderNotificationSettings,
   type ReminderClaim,
 } from "./api";
+import { DeliveredReminders, type DeliveredReminder } from "./components/DeliveredReminders";
 import { reminderLabel } from "./reminders";
 
 export type ReminderDeliveryState = "off" | "requesting" | "allowed" | "denied" | "unsupported";
@@ -158,13 +159,15 @@ export const CLAIM_INTERVAL_MS = 30_000;
  * the tab comes back into view; the server's ledger makes sure each
  * occurrence goes to one tab. A failed claim (offline, signed out) is
  * dropped quietly: delivery is optional and never blocks the app. Clicking
- * a notification opens its Task. */
+ * a notification opens its Task. Each Reminder the browser showed also
+ * stays in the app until dismissed, with Open task and Snooze (#566). */
 export function DueReminderNotifier({
   onOpenTask,
 }: {
   onOpenTask: (taskId: number) => void;
-}): null {
+}): React.JSX.Element | null {
   const { state } = useReminderDelivery();
+  const [delivered, setDelivered] = useState<DeliveredReminder[]>([]);
   const openTask = useRef(onOpenTask);
   useEffect(() => {
     openTask.current = onOpenTask;
@@ -182,7 +185,15 @@ export function DueReminderNotifier({
         const { items } = await claimDueReminders(timeZone);
         // Stopped meanwhile (turned off, signed out): show nothing; the
         // unreported leases expire on the server.
-        if (live) for (const item of items) deliver(item, (id) => openTask.current(id));
+        if (live) {
+          for (const item of items) {
+            deliver(
+              item,
+              (id) => openTask.current(id),
+              () => setDelivered((shown) => [...shown.filter((r) => r.id !== item.id), item]),
+            );
+          }
+        }
       } catch {
         // Retried on the next tick.
       } finally {
@@ -202,13 +213,23 @@ export function DueReminderNotifier({
     };
   }, [state]);
 
-  return null;
+  return (
+    <DeliveredReminders
+      reminders={delivered}
+      onOpenTask={(id) => openTask.current(id)}
+      onDismiss={(id) => setDelivered((shown) => shown.filter((r) => r.id !== id))}
+    />
+  );
 }
 
 /** Shows one claimed Reminder and reports what the browser says. The tag
  * is the ledger row's, so a retry the server hands out after a lost report
  * replaces the earlier alert rather than stacking a second one. */
-function deliver(claim: ReminderClaim, onOpenTask: (taskId: number) => void): void {
+function deliver(
+  claim: ReminderClaim,
+  onOpenTask: (taskId: number) => void,
+  onShown: () => void,
+): void {
   const report = (outcome: "shown" | "failed"): void => {
     reportReminderDelivery(claim, outcome).catch(() => {});
   };
@@ -223,7 +244,14 @@ function deliver(claim: ReminderClaim, onOpenTask: (taskId: number) => void): vo
     report("failed");
     return;
   }
-  notification.addEventListener("show", () => report("shown"), { once: true });
+  notification.addEventListener(
+    "show",
+    () => {
+      report("shown");
+      onShown();
+    },
+    { once: true },
+  );
   notification.addEventListener("error", () => report("failed"), { once: true });
   notification.addEventListener("click", () => {
     window.focus();
