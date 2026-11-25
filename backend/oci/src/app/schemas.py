@@ -366,11 +366,14 @@ class HeatmapDay(BaseModel):
 
 
 class HabitStats(BaseModel):
-    """The server-computed Habit statistics: the current Streak and one
-    calendar year of heatmap days (sparse — only days with Check-ins)."""
+    """The server-computed Habit statistics: the current Streak, one
+    calendar year of heatmap days (sparse — only days with Check-ins), and
+    the Habit start (`eligible_from`, a local day): days before it are not
+    started, never missed."""
 
     streak: int
     heatmap: list[HeatmapDay]
+    eligible_from: date
 
 
 # The two Focus Session modes: a Pomo counts down, a Stopwatch counts up.

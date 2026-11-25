@@ -107,6 +107,10 @@ _Avoid_: Completion, log
 **Streak**:
 The count of consecutive scheduled days a Habit has been checked in without a miss.
 
+**Habit start**:
+The first local day a Habit can be missed: the User's calendar day when the Habit was created (read in their time zone), or the day of an earlier real Check-in when one exists, and never later than today. Days before it are **not started**: neither missed nor done, and never counted against the Habit. The API calls it `eligible_from`.
+_Avoid_: Start date (no such field is stored), eligibility date
+
 ## Goals
 
 **Goal**:
