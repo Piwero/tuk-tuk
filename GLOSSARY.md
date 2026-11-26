@@ -2,17 +2,25 @@
 
 An all-in-one personal productivity app — task management, calendar, habits, and focus — with a clean, conventional HTTP API.
 
-One instance serves several Users, and each sees only their own data (ADR 0018). Nothing is shared between Users: there are no shared Lists, assignees or invites.
+One instance serves several Users, and each sees only their own data (ADR 0018). Nothing is shared between Users: there are no shared Lists or assignees. An Invitation admits a person to the instance; it never shares anything (ADR 0021).
 
 ## Accounts
 
 **User**:
-A person with their own account on the instance: a username, an email and a password. Everything a User creates belongs to them alone, and no other User can see it. A User is disabled rather than deleted, which ends their sessions and keeps their data.
+A person with their own account on the instance: a username, an email, and a password, a Google sign-in, or both. Everything a User creates belongs to them alone, and no other User can see it. A User is disabled rather than deleted, which ends their sessions, revokes their API tokens and keeps their data.
 _Avoid_: Member, tenant (nothing is shared, so a User belongs to no group)
 
 **Admin**:
-A User who can also manage accounts: create Users with a temporary password, disable or re-enable them, reset their passwords, and grant or remove Admin. Only an Admin creates accounts; there is no sign-up. Being Admin grants no access to other Users' data.
+A User who can also manage accounts: invite people, create Users with a temporary password, disable or re-enable them, reset their passwords, change their email, remove a lost Google sign-in, and grant or remove Admin. Only an Admin admits people; there is no sign-up. Being Admin grants no access to other Users' data.
 _Avoid_: Superuser, root
+
+**Invitation**:
+An Admin's offer of an account to one email address (ADR 0021): a single-use link, valid for seven days, emailed when SMTP is configured or copied by the Admin. Accepting it with a Google account whose verified email matches, and choosing a username, creates a regular User; nothing exists before then. Pending, accepted, expired or canceled; separately, emailed, not emailed yet, or failed to email. Resending gives a new link and voids the old one. Account admission only: it shares nothing.
+_Avoid_: Invite (as a collaboration feature), sign-up
+
+**Google sign-in**:
+A User's login identity at Google (ADR 0021): the Google account they sign in with, matched by Google's stable account id, never by email, and linked to one User at most. Set by accepting an Invitation, or linked by an existing User after confirming their password, with the same verified email. Only an Admin removes it, to recover a lost Google account. Never a Google Account (a Calendar connection), even for the same Google identity.
+_Avoid_: SSO account, Google Account (the Calendar connection)
 
 **API token**:
 A named, personal credential a User creates in Settings for a client that cannot log in with a password. Shown once when created, acts strictly as the User who created it, and can be revoked on its own without logging the User out anywhere else. Has one of two kinds, its audience: an API token proper (`tuk_pat_…`), which the API accepts, or an MCP token.

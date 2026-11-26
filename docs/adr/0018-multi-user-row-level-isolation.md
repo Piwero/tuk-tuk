@@ -28,6 +28,13 @@ otherwise left unedited.
 
 Spec: issue #405.
 
+Amended by [0021](0021-invite-only-google-sign-in.md) (issue #586): an
+Admin may invite an email address, which is emailed, and accepting creates
+a regular User who may have no password and signs in with Google.
+Invitations are account admission only; nothing below about isolation or
+collaboration changes. Disabling a User now also revokes their API and MCP
+tokens.
+
 ## Context
 
 Several people want to use one self-hosted instance, each seeing only

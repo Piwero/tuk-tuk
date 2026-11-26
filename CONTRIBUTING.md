@@ -115,9 +115,11 @@ frontend tests, lint, typecheck and build after each migration.
 
 ## Authentication
 
-One instance serves several Users, each with their own username, email and
-password ([ADR 0018](docs/adr/0018-multi-user-row-level-isolation.md)). There
-is no signup: the first Admin is created by first-run setup, and Admins create
+One instance serves several Users, each with their own username, email, and
+a password, a Google sign-in, or both
+([ADR 0018](docs/adr/0018-multi-user-row-level-isolation.md),
+[ADR 0021](docs/adr/0021-invite-only-google-sign-in.md)). There is no signup:
+the first Admin is created by first-run setup, and Admins create or invite
 everyone else. Passwords live on `users.password_hash`; the session signing
 key lives in the single-row `settings` table, managed by the app itself rather
 than `.env` ([ADR 0008](docs/adr/0008-ui-managed-settings.md)).
@@ -148,13 +150,26 @@ than `.env` ([ADR 0008](docs/adr/0008-ui-managed-settings.md)).
   (`account_disabled`), or the cookie's epoch is not the User's current one
   (`unauthorized`). Only `/health`, `/api/v1/auth/login`, and
   `/api/v1/auth/setup` are public, plus `/api/v1/auth/mcp/exchange`, which
-  the route itself gates with the MCP service key (issue #525). Every other
-  path, including `/docs` and the OpenAPI schema, is gated by default.
+  the route itself gates with the MCP service key (issue #525), and the
+  Google sign-in and invitation routes listed in `PUBLIC_PATHS`
+  (`app.middleware`, issue #586). Every other path, including `/docs` and
+  the OpenAPI schema, is gated by default.
+- **Google sign-in (optional, ADR 0021).** With `GOOGLE_OAUTH_CLIENT_ID` and
+  `GOOGLE_OAUTH_CLIENT_SECRET` set, the sign-in screen offers Continue with
+  Google. It asks Google for identity only and signs in the User whose
+  linked Google account id matches, never one matched by email. Nobody gets
+  an account this way except by accepting an Admin's invitation
+  (`/invite#token=…`). Each round trip's state, nonce and PKCE verifier live
+  in a short-lived signed cookie (`app.oauth_transaction`). Existing Users
+  link Google from Settings after confirming their password. Setup:
+  [Google sign-in and invitations](docs/self-hosting/google-sign-in.md).
 - **Forced steps.** A User with a temporary password (`must_change_password`)
   or an unfinished profile (`must_complete_profile`, the upgraded user #1)
   can reach only `GET /api/v1/auth/me`, `POST /api/v1/auth/complete` and
   `POST /api/v1/auth/logout`. Everything else answers `403
-  password_change_required` or `403 profile_completion_required`.
+  password_change_required` or `403 profile_completion_required`. A
+  temporary password is replaced at the next password login only: a session
+  signed in with Google is never asked for one.
   `/auth/complete` takes `{"new_password"}`, plus `username` and `email` for
   a profile; the new password must differ from the current one.
 - **Rolling window.** Sessions last `AUTH_SESSION_LIFETIME_DAYS` (30). Once a
@@ -168,7 +183,8 @@ than `.env` ([ADR 0008](docs/adr/0008-ui-managed-settings.md)).
 - **Logout and revocation.** `POST /api/v1/auth/logout` deletes this
   device's cookie. Changing a password (`POST /api/v1/auth/password`, or
   completing a forced step) bumps the User's `session_epoch`, which logs out
-  every other session of that User and nobody else's. Rotating the session
+  every other session of that User and nobody else's. Disabling a User also
+  bumps it and revokes all their API and MCP tokens. Rotating the session
   key in `settings` logs out every User, so it is an operator action.
 - **`AUTH_DISABLED` (local development only).** No cookie is needed and every
   request acts as the first Admin, with no forced steps. A database with no

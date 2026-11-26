@@ -8,6 +8,11 @@ every other setting moves to a per-user `user_settings` row, leaving only
 the session signing key on `settings`. Settings stay UI-managed, and
 `APP_MASTER_KEY` stays a single environment variable, as decided here.
 
+Amended by [0021](0021-invite-only-google-sign-in.md): the shared Google
+OAuth client and SMTP settings are operator-managed environment variables,
+not UI-managed. A User's own Google client stays UI-managed and keeps
+working for the connections it made.
+
 ## Context
 
 Three pieces of configuration currently live only in `.env`, set before the
