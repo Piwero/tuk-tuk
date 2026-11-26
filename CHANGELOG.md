@@ -4,6 +4,46 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.5.0](https://github.com/Piwero/tuk-tuk/compare/v3.4.1...v3.5.0) - 2026-11-26
+
+### Features
+
+- **habits:** Pause a Habit for a date range (#559) ([4687461](https://github.com/Piwero/tuk-tuk/commit/4687461271853fd1f32dc59c617575893da3ed4f))
+- **habits:** Show paused Habits with Edit pause and Resume today (#559) ([d0d1ca8](https://github.com/Piwero/tuk-tuk/commit/d0d1ca87693d78972ff27af0f29dbe62554de5f5))
+- **backend:** Per-User reminder notifications setting (#557) ([54799c9](https://github.com/Piwero/tuk-tuk/commit/54799c929630cdb31c8c9f5676c4ef3bbc9e7219))
+- **frontend:** Opt-in Reminder notifications setup with honest limits (#557) ([1987d4c](https://github.com/Piwero/tuk-tuk/commit/1987d4c790c722551f200c09f2c19d8c20716fe3))
+- **tasks:** Planned work block on a Task, separate from the due date (#558) ([d3ff292](https://github.com/Piwero/tuk-tuk/commit/d3ff2923de0fa73af61b54b72f81296952d6c21f))
+- **frontend:** Planned work row in Task detail (#558) ([18b8dcf](https://github.com/Piwero/tuk-tuk/commit/18b8dcf276497ad5e45b6323cd225bbd148749a2))
+- **calendar:** Include Planned work in the Task range window (#562) ([74f6d9a](https://github.com/Piwero/tuk-tuk/commit/74f6d9a4d965434f9d9f8f4f6bf1300216589641))
+- **calendar:** Render Planned work as its own labelled Entry (#562) ([59842cc](https://github.com/Piwero/tuk-tuk/commit/59842cc48e7464bafab952f309e7fb00677f8b5b))
+- **backend:** Reminder delivery ledger with claim/lease for open tabs (#561) ([c345a62](https://github.com/Piwero/tuk-tuk/commit/c345a62ee6f9b3751937f5b480623fe0298ee571))
+- **frontend:** Show due Reminders as notifications in an open tab (#561) ([d95d04f](https://github.com/Piwero/tuk-tuk/commit/d95d04fba951ae0f4c685dd3d1a1cf520e4172ea))
+- **habits:** Skip one scheduled Habit day on purpose (#564) ([c143f52](https://github.com/Piwero/tuk-tuk/commit/c143f5245f9958eb851a8e9274facb63d8a85b90))
+- **habits:** Skip today or any scheduled day, and undo it (#564) ([bc3b67e](https://github.com/Piwero/tuk-tuk/commit/bc3b67e22b32cbb04eca76d114b6a88407031452))
+- **habits:** Weekly target under pause and skip for times-per-week Habits (#568) ([9d9d46b](https://github.com/Piwero/tuk-tuk/commit/9d9d46bc72b07557b44ea6e360578e9bd7dbddae))
+- **reminders:** Hold reminders during quiet hours (#567) ([8bb03e8](https://github.com/Piwero/tuk-tuk/commit/8bb03e8594b8b7ca0659a5d419c88b4c7ae40069))
+- **frontend:** Quiet hours settings and deferred state (#567) ([9e0f141](https://github.com/Piwero/tuk-tuk/commit/9e0f14174b1b691b07add20cb3027a0252e6a002))
+- **reminders:** Snooze a delivered reminder as a ledger override (#566) ([ecdbc3a](https://github.com/Piwero/tuk-tuk/commit/ecdbc3a82eb848904cad0dbb238f35961e8e9e10))
+- **reminders:** Offer snooze on delivered reminders with deadline-unchanged copy (#566) ([226d1e8](https://github.com/Piwero/tuk-tuk/commit/226d1e8cd5daabc6f49a4356cb6e825dc3d338bc))
+- **reminders:** List and dismiss missed reminders (#565) ([492abfe](https://github.com/Piwero/tuk-tuk/commit/492abfeb57b45bc35046705fcbc62a820607d71c))
+- **reminders:** Show missed reminders in-app instead of late alerts (#565) ([f624627](https://github.com/Piwero/tuk-tuk/commit/f6246274e2485e3ae11fb6d5fd478d25b531133e))
+- **settings:** Per-User planning window kept apart from Active hours (#563) ([dac40f0](https://github.com/Piwero/tuk-tuk/commit/dac40f01a7d78d347e165924abfda4d25f80fef6))
+- **frontend:** Capacity of a planning window, overlaps counted once (#563) ([8d2a9fb](https://github.com/Piwero/tuk-tuk/commit/8d2a9fb53b51d9ef042c6032b01d9ee4c1670f84))
+- **frontend:** Capacity summary for the planning window in the Day view (#563) ([3e92706](https://github.com/Piwero/tuk-tuk/commit/3e927060f4aafcbe4a3d4cd7f44f93ef30392358))
+- **reminders:** Offer snooze from the missed list (#566) ([fe61efc](https://github.com/Piwero/tuk-tuk/commit/fe61efc9ddc76c4b029b95ae6778e49326940a13))
+- **tasks:** Optional duration estimate for work planning (#563) ([2ef22b8](https://github.com/Piwero/tuk-tuk/commit/2ef22b8147f1ea76adcfa415f12e03e4701c840d))
+
+### Bug Fixes
+
+- **migrations:** Chain planned-work migration after habit pauses (#558) ([32fa058](https://github.com/Piwero/tuk-tuk/commit/32fa058cc8cd1e4f0654cf7b665f4aeb1f7d7e25))
+- **migrations:** Chain reminder deliveries after planned work (#561) ([9a99e0d](https://github.com/Piwero/tuk-tuk/commit/9a99e0dda98ce6b01ced6e0fcfc8683cc8a2609b))
+- **migrations:** Chain habit skips after reminder deliveries (#564) ([c0efe26](https://github.com/Piwero/tuk-tuk/commit/c0efe26491e4f57c50de529a61ca9e5f8d559e0f))
+- **migrations:** Chain planning window after quiet hours (#563) ([b6a9dff](https://github.com/Piwero/tuk-tuk/commit/b6a9dff6a8d1c11d4fada4330d2c46451f9a5671))
+- **frontend:** Close Phase 3 accessibility and phone layout gaps (#569) ([2d70773](https://github.com/Piwero/tuk-tuk/commit/2d70773a1f04cf0204b368ae803fd9797f107245))
+- **reminders:** Bound missed list by opt-in time (#565) ([1710a37](https://github.com/Piwero/tuk-tuk/commit/1710a37b16c741a0c3a02c38501ba45bd96ff096))
+- **reminders:** Per-device opt-in and honest background-tab copy (#557, #561) ([088340a](https://github.com/Piwero/tuk-tuk/commit/088340a6c19319b30af54c69e2c7e9d04fb93c48))
+- **frontend:** Flat Phase 3 marks and token sizes, guarded in CSS source (#562, #564, #566, #567) ([fc3f3ba](https://github.com/Piwero/tuk-tuk/commit/fc3f3ba942558344f6cdc3a0f267ab489ce5bff0))
+
 ## [3.4.1](https://github.com/Piwero/tuk-tuk/compare/v3.4.0...v3.4.1) - 2026-11-25
 
 _Maintenance release; no user-facing changes._
