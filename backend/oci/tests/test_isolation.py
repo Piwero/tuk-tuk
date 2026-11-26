@@ -39,7 +39,13 @@ from app.config import Settings
 from app.main import create_app
 from app.reminder_delivery import DELIVERY_WINDOW
 from app.session import SESSION_COOKIE_NAME
-from tests.conftest import FakeCalendarSource, FakeClock, create_user_row, log_in
+from tests.conftest import (
+    FakeCalendarSource,
+    FakeClock,
+    FakeGitHubSource,
+    create_user_row,
+    log_in,
+)
 from tests.test_assistant_chat import StubChatProvider
 
 MARKER = "alice"
@@ -126,6 +132,7 @@ class AliceWorld(World):
     bullet: int
     google_account: int
     google_calendar: int
+    github_token: int
     api_token: int
     reminder_delivery: int
     reminder_lease: str
@@ -184,6 +191,7 @@ READS: dict[str, Read] = {
     "sections": Read(get(lambda a, me: "/api/v1/sections")),
     "sections of a list": Read(get(lambda a, me: f"/api/v1/sections?list_id={a.list}")),
     "tags": Read(get(lambda a, me: "/api/v1/tags")),
+    "github tokens": Read(get(lambda a, me: "/api/v1/github/tokens")),
     "tasks": Read(get(lambda a, me: "/api/v1/tasks")),
     "tasks of a list": Read(get(lambda a, me: f"/api/v1/tasks?list_id={a.list}")),
     "tasks with a tag": Read(get(lambda a, me: f"/api/v1/tasks?tag_id={a.tag}")),
@@ -439,6 +447,9 @@ REACHES |= {
     "DELETE google account": Reach(
         lambda a, me: ("DELETE", f"/api/v1/google/accounts/{a.google_account}", None)
     ),
+    "DELETE github token": Reach(
+        lambda a, me: ("DELETE", f"/api/v1/github/tokens/{a.github_token}", None)
+    ),
 }
 
 # Alice's ids named as the parent of, or a link from, one of the requester's
@@ -565,6 +576,11 @@ OWN_WRITES: dict[str, OwnWrite] = {
     ),
     "a tag named like another user's": OwnWrite(
         lambda a, me: ("POST", "/api/v1/tags", {"name": "alice tag"})
+    ),
+    # One GitHub Token per GitHub owner is per User: Bea may cover the same
+    # owner Alice does, with her own token.
+    "a github token for an owner another user covers": OwnWrite(
+        lambda a, me: ("POST", "/api/v1/github/tokens", {"token": "github_pat_alice"})
     ),
     "clearing completed tasks": OwnWrite(
         lambda a, me: ("DELETE", "/api/v1/tasks?completed=true", None)
@@ -706,6 +722,7 @@ def connect_google(
 def build_alice(
     alice: Actor,
     calendar_source: FakeCalendarSource,
+    github_source: FakeGitHubSource,
     assistant: StubChatProvider,
     today: date,
     api_token: int,
@@ -715,6 +732,8 @@ def build_alice(
     `api_token` is minted beforehand: only a password session can."""
     now = clock.now
     google_account, google_calendar = connect_google(alice, calendar_source, MARKER, today)
+    github_source.register_token("github_pat_alice", owner_login=MARKER)
+    github_token = alice.ok("POST", "/api/v1/github/tokens", {"token": "github_pat_alice"})["id"]
     alice.ok(
         "PUT",
         "/api/v1/assistant/config",
@@ -848,6 +867,7 @@ def build_alice(
         bullet=entry["bullets"][0]["id"],
         google_account=google_account,
         google_calendar=google_calendar,
+        github_token=github_token,
         api_token=api_token,
     )
 
@@ -897,11 +917,15 @@ def pair(
     database_url: str,
     fake_clock: FakeClock,
     fake_calendar_source: FakeCalendarSource,
+    fake_github_source: FakeGitHubSource,
     assistant: StubChatProvider,
     sign_in: SignIn,
 ) -> Iterator[Pair]:
     app = create_app(
-        Settings(database_url=database_url), clock=fake_clock, calendar_source=fake_calendar_source
+        Settings(database_url=database_url),
+        clock=fake_clock,
+        calendar_source=fake_calendar_source,
+        github_source=fake_github_source,
     )
     with TestClient(app, follow_redirects=False) as client:
         create_user_row(app, "alice", "alice@example.com")
@@ -913,7 +937,15 @@ def pair(
         yield Pair(
             alice=alice,
             bea=bea,
-            a=build_alice(alice, fake_calendar_source, assistant, today, alices_token, fake_clock),
+            a=build_alice(
+                alice,
+                fake_calendar_source,
+                fake_github_source,
+                assistant,
+                today,
+                alices_token,
+                fake_clock,
+            ),
             b=build_bea(bea, assistant, today),
             assistant=assistant,
         )

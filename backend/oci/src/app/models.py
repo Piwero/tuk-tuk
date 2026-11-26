@@ -795,6 +795,30 @@ class GoogleCalendar(OwnedMixin, Base):
     account: Mapped[GoogleAccount] = relationship(back_populates="calendars")
 
 
+class GitHubToken(OwnedMixin, Base):
+    """A GitHub Token — a fine-grained personal access token a User pasted
+    in Settings (issue #578, ADR 0020), granting read access to one GitHub
+    owner: the User themselves or one organisation. Encrypted at rest
+    (app.crypto, keyed by APP_MASTER_KEY) and never returned by the API.
+    `connection_state` is "connected" or "needs_reconnect". A User holds at
+    most one GitHub Token per GitHub owner.
+    """
+
+    __tablename__ = "github_tokens"
+    __table_args__ = (UniqueConstraint("owner_id", "owner_login"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_login: Mapped[str] = mapped_column(String(255))
+    owner_kind: Mapped[str] = mapped_column(String(16))
+    encrypted_token: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    connection_state: Mapped[str] = mapped_column(String(16), default="connected")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class StandupEntry(OwnedMixin, Base):
     """A Stand-up Entry — one calendar date's daily stand-up: Yesterday /
     Today / Blockers Bullets, plus a Sprint-goal snapshot column (populated
