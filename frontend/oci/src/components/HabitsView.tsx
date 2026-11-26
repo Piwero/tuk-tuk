@@ -345,7 +345,7 @@ export function HabitsView({
     if (stats?.week) {
       rows.push(
         <tr key={`${habit.id}-week`}>
-          <td colSpan={8}>
+          <td colSpan={8} className="habit-detail-cell">
             <HabitWeekTarget label={`${habit.name} this week`} week={stats.week} />
           </td>
         </tr>,
@@ -355,7 +355,7 @@ export function HabitsView({
     if (editor?.mode === "pause" && editor.habitId === habit.id) {
       rows.push(
         <tr key={`${habit.id}-pause`}>
-          <td colSpan={8}>
+          <td colSpan={8} className="habit-detail-cell">
             <HabitPauseForm
               label={pause === undefined ? `Pause ${habit.name}` : `Edit pause for ${habit.name}`}
               initial={pause}
@@ -369,7 +369,7 @@ export function HabitsView({
     } else if (pause !== undefined) {
       rows.push(
         <tr key={`${habit.id}-pause`}>
-          <td colSpan={8}>
+          <td colSpan={8} className="habit-detail-cell">
             <HabitPauseStatus
               habitName={habit.name}
               pause={pause}
@@ -384,7 +384,7 @@ export function HabitsView({
     if (read(today, valueOn(habit, today)).state === "skipped") {
       rows.push(
         <tr key={`${habit.id}-skip`}>
-          <td colSpan={8}>
+          <td colSpan={8} className="habit-detail-cell">
             <HabitSkipStatus
               habitName={habit.name}
               onUndo={() => void setSkippedToday(habit, false)}
@@ -396,7 +396,7 @@ export function HabitsView({
     if (historyId === habit.id) {
       rows.push(
         <tr key={`${habit.id}-history`}>
-          <td colSpan={8}>
+          <td colSpan={8} className="habit-detail-cell">
             <HabitHistory habit={habit} onChanged={() => void load()} />
           </td>
         </tr>,

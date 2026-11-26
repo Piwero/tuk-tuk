@@ -64,7 +64,9 @@ export function CapacitySummary({
 
   if (capacity === null) return null;
   return (
-    <section className="capacity-summary" aria-label="Capacity">
+    // Polite: a moved plan or a new Event rewrites the sentences in place,
+    // and a screen reader hears the new totals without losing its place.
+    <section className="capacity-summary" aria-label="Capacity" aria-live="polite">
       {capacity.lines.map((line) => (
         <p key={line}>{line}</p>
       ))}

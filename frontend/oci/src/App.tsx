@@ -1393,7 +1393,6 @@ export function App({
       available={voiceStatus}
     >
       <SessionProviders>
-        <DueReminderNotifier onOpenTask={openRemindedTask} />
         <ShortcutsProvider>
           <ShellShortcuts
             onQuickAdd={() => setQuickAddOpen(true)}
@@ -1991,6 +1990,9 @@ export function App({
             </div>
           </div>
         </ShortcutsProvider>
+        {/* After the shell (#569): its panels float bottom right, so they
+        come last in tab order instead of before the sidebar. */}
+        <DueReminderNotifier onOpenTask={openRemindedTask} />
       </SessionProviders>
     </VoiceProvider>
   );

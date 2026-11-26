@@ -1113,7 +1113,23 @@ export function CalendarView({
           )}
           <span className="block-head">
             {entryCheckbox(entry)}
-            <span className={entryTitleClass(entry, "block-title")}>{title}</span>
+            {entry.kind === "planned" ? (
+              // The block itself only answers a click; this is the keyboard
+              // way into the plan's date and time controls (#569).
+              <button
+                type="button"
+                className={`${entryTitleClass(entry, "block-title")} block-title-button`}
+                aria-label={`Open planned work: ${title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  selectEntry(entry, onSelect, onSelectEvent);
+                }}
+              >
+                {title}
+              </button>
+            ) : (
+              <span className={entryTitleClass(entry, "block-title")}>{title}</span>
+            )}
           </span>
           <EntryKindLabel entry={entry} />
           <span className="block-time">

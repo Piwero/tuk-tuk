@@ -211,6 +211,21 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
     background: var(--surface-card);
+    /* Lets a detail row measure the visible width, not the table's (#569). */
+    container-type: inline-size;
+  }
+  /* Weekly target, pause, skip and history rows span all eight columns. On
+   a phone the grid scrolls sideways and the table is wider than the
+   screen, so their content holds still at the visible width instead of
+   centring its buttons and notes past the edge (#569). */
+  .habits-week-grid td.habit-detail-cell {
+    text-align: left;
+  }
+  .habit-detail-cell > * {
+    position: sticky;
+    left: var(--space-2);
+    box-sizing: border-box;
+    max-width: calc(100cqi - 2 * var(--space-2));
   }
   .habits-week-grid {
     width: 100%;

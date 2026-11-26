@@ -127,8 +127,11 @@ function PlannedWorkForm({ task, onSaved, onRemove }: PlannedWorkFormProps): Rea
     }
   }
 
+  // A refused plan rarely names one field (a block crossing midnight is the
+  // start, the duration and the buffer together), so every field carries it.
   const field = (key: keyof Draft) => ({
     value: draft[key],
+    "aria-describedby": error === null ? undefined : errorId,
     onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
       setDraft({ ...draft, [key]: event.target.value }),
   });
