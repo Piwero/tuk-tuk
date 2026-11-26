@@ -44,6 +44,7 @@ from tests.conftest import (
     FakeClock,
     FakeGitHubSource,
     create_user_row,
+    fake_pull_request,
     log_in,
 )
 from tests.test_assistant_chat import StubChatProvider
@@ -197,6 +198,7 @@ READS: dict[str, Read] = {
     "github tokens": Read(get(lambda a, me: "/api/v1/github/tokens")),
     "github repository picker": Read(get(lambda a, me: "/api/v1/github/repositories")),
     "watched repositories": Read(get(lambda a, me: "/api/v1/github/watched-repositories")),
+    "github pull requests": Read(get(lambda a, me: "/api/v1/github/pull-requests")),
     "tasks": Read(get(lambda a, me: "/api/v1/tasks")),
     "tasks of a list": Read(get(lambda a, me: f"/api/v1/tasks?list_id={a.list}")),
     "tasks with a tag": Read(get(lambda a, me: f"/api/v1/tasks?tag_id={a.tag}")),
@@ -763,6 +765,11 @@ def build_alice(
         "/api/v1/github/watched-repositories",
         {"github_token_id": github_token, "github_repo_id": ALICES_WATCHED_REPO},
     )["id"]
+    github_source.register_pull_requests(
+        "github_pat_alice",
+        "alice/watched",
+        [fake_pull_request(1, "alice pull request", repository="alice/watched")],
+    )
     alice.ok(
         "PUT",
         "/api/v1/assistant/config",
