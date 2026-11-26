@@ -385,6 +385,13 @@ REACHES |= {
             a.missed_reminder,
         )
     ),
+    "snooze a missed reminder": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/reminder-deliveries/missed/snooze?tz=UTC",
+            {**a.missed_reminder, "minutes": 10},
+        )
+    ),
     "skip a habit day": Reach(
         lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=1)}", None)
     ),

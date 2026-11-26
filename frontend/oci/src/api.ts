@@ -2105,6 +2105,10 @@ export interface MissedReminder {
   /** The Task's, so the occurrence reads as the Task shows its date. */
   is_all_day: boolean;
   time_zone: string | null;
+  /** Its ledger row, when a tab ever claimed it: snoozed with
+   * `snoozeReminder`. Null for a Reminder no tab was open for, snoozed
+   * with `snoozeMissedReminder` instead (#566). */
+  delivery_id?: number | null;
 }
 
 /** The User's missed Reminders, newest first; empty while the opt-in is
@@ -2122,6 +2126,25 @@ export function dismissMissedReminder(missed: MissedReminder, tz: string): Promi
       task_id: missed.task_id,
       offset: missed.offset,
       occurrence_due: missed.occurrence_due,
+    }),
+  });
+}
+
+/** Snoozes a missed Reminder no tab ever claimed (#566): the server
+ * creates its ledger row already snoozed, under the same key. Only the
+ * ledger changes, never the Task. */
+export function snoozeMissedReminder(
+  missed: MissedReminder,
+  minutes: number,
+  tz: string,
+): Promise<ReminderDeliveryRead> {
+  return request(`/api/v1/reminder-deliveries/missed/snooze?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task_id: missed.task_id,
+      offset: missed.offset,
+      occurrence_due: missed.occurrence_due,
+      minutes,
     }),
   });
 }

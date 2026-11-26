@@ -138,10 +138,15 @@ export interface FakeMissedReminder {
   fire_at: string;
   is_all_day: boolean;
   time_zone: string | null;
+  /** Its ledger row, when a tab ever claimed it (#566); null otherwise. */
+  delivery_id: number | null;
 }
 
 /** The key a dismissal names a missed reminder by. */
 export type FakeMissedDismissal = Pick<FakeMissedReminder, "task_id" | "offset" | "occurrence_due">;
+
+/** A snooze sent from the missed list for a never-claimed Reminder. */
+export type FakeMissedSnooze = FakeMissedDismissal & { minutes: number };
 
 export interface RecordedRequest {
   method: string;
@@ -466,6 +471,8 @@ export interface FakeApiState {
   missedReminders: FakeMissedReminder[];
   /** Every dismissal a tab sent, in order. */
   missedDismissals: FakeMissedDismissal[];
+  /** Every snooze sent from the missed list by key (#566), in order. */
+  missedSnoozes: FakeMissedSnooze[];
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -920,6 +927,7 @@ export function fakeMissedReminder(
     fire_at: due,
     is_all_day: task.is_all_day,
     time_zone: task.time_zone,
+    delivery_id: null,
     ...overrides,
   };
 }
@@ -1382,6 +1390,7 @@ export function installFakeApi({
     quietUntil,
     missedReminders: missedReminders.map((entry) => ({ ...entry })),
     missedDismissals: [],
+    missedSnoozes: [],
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -3659,6 +3668,21 @@ export function installFakeApi({
       state.missedReminders = state.missedReminders.filter((candidate) => !same(candidate));
       return json({ id: 1, ...entry, state: "dismissed", attempt: 0 });
     }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed/snooze" && method === "POST") {
+      const key = body as FakeMissedSnooze;
+      const same = (entry: FakeMissedReminder): boolean =>
+        entry.task_id === key.task_id &&
+        entry.offset === key.offset &&
+        entry.occurrence_due === key.occurrence_due;
+      const entry = state.missedReminders.find(same);
+      if (entry === undefined) {
+        return json({ error: { code: "not_found", message: "Missed reminder not found" } }, 404);
+      }
+      state.missedSnoozes.push({ ...key });
+      state.missedReminders = state.missedReminders.filter((candidate) => !same(candidate));
+      const snoozedUntil = new Date(Date.now() + key.minutes * 60_000).toISOString();
+      return json({ id: 1, ...entry, state: "snoozed", attempt: 0, snoozed_until: snoozedUntil });
+    }
     const reminderReport = url.pathname.match(
       /^\/api\/v1\/reminder-deliveries\/(\d+)\/(shown|failed)$/,
     );
@@ -3683,6 +3707,22 @@ export function installFakeApi({
       // an occurrence that is gone (Task completed, redated, Reminder
       // removed) is refused as stale.
       const id = Number(reminderSnooze[1]);
+      const missedRow = state.missedReminders.find((entry) => entry.delivery_id === id);
+      if (missedRow !== undefined) {
+        // A missed Reminder with a ledger row (#566): snoozing it takes it
+        // off the list until it comes due again.
+        const { minutes } = body as { minutes: number };
+        state.reminderSnoozes.push({ id, minutes });
+        state.missedReminders = state.missedReminders.filter((entry) => entry !== missedRow);
+        const snoozedUntil = new Date(Date.now() + minutes * 60_000).toISOString();
+        return json({
+          ...missedRow,
+          id,
+          state: "snoozed",
+          attempt: 1,
+          snoozed_until: snoozedUntil,
+        });
+      }
       const claim = state.reminderClaims.find((candidate) => candidate.id === id);
       if (claim === undefined) {
         return json(

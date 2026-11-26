@@ -92,7 +92,12 @@ the snoozed time. Snoozing replaces the lease token, so a tab still holding
 the old one gets `lease_lost`. Snoozing again moves the time. Stale rules
 hold: a completed, advanced or redated Task, or a removed Reminder, yields
 no candidate, so the snooze is cancelled. Snoozing such an occurrence is
-refused with `409 reminder_stale`.
+refused with `409 reminder_stale`. Snooze is offered from the missed list
+too. A missed entry with a ledger row carries its `delivery_id` and uses
+the same endpoint. A Reminder no tab ever claimed has no row, so
+`POST …/missed/snooze {task_id, offset, occurrence_due, minutes}` creates
+one already `snoozed`, under the same unique key. It is refused with `404`
+unless that entry is on the User's own missed list right now.
 
 **Quiet hours (#567).** A User may set Quiet hours
 (`GET`/`PUT /api/v1/settings/quiet-hours` with `{enabled, start, end}`,

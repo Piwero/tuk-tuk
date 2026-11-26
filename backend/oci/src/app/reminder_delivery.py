@@ -15,6 +15,7 @@ Policy, all on the server clock:
 - `MAX_ATTEMPTS`: an unreported lease that expired is claimed again, by any
   tab, up to this many claims in all and only inside the window. A
   `failed` report is final: the browser refused, so retrying would too.
+- `MAX_SNOOZE`: the longest a snooze may delay one occurrence's alert.
 
 Quiet hours (issue #567) move when a Reminder is delivered, never its
 `fire_at`: one falling due inside the band is held, its window opens at the
@@ -50,6 +51,9 @@ from app.schemas import as_utc
 DELIVERY_WINDOW = timedelta(minutes=5)
 LEASE = timedelta(seconds=60)
 MAX_ATTEMPTS = 3
+# A snooze is a short delay, at most a day: anything longer is a new date,
+# which the User sets on the Task itself.
+MAX_SNOOZE = timedelta(days=1)
 
 _OFFSET_RE = re.compile(r"^(-?)P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$")
 
@@ -187,6 +191,28 @@ async def snoozes_of(session: AsyncSession) -> dict[Key, datetime]:
 
 def new_lease_token() -> str:
     return secrets.token_urlsafe(24)
+
+
+def is_stale(row: ReminderDelivery) -> bool:
+    """Whether the row's occurrence is gone: the Task was completed,
+    advanced or redated, or the Reminder removed. Such a row never notifies
+    again and can't be snoozed."""
+    task = row.task
+    return (
+        task.completed
+        or task.due_date is None
+        or as_utc(task.due_date) != as_utc(row.occurrence_due)
+        or row.offset not in task.reminders
+    )
+
+
+def snooze(row: ReminderDelivery, now: datetime, delay: timedelta) -> None:
+    """Snoozes the row's occurrence (issue #566): it comes due again `delay`
+    from now and is claimed then as a fresh delivery. A new token revokes
+    any lease still out, so a tab holding it gets `lease_lost`."""
+    row.snoozed_until = now + delay
+    row.state = "snoozed"
+    row.lease_token = new_lease_token()
 
 
 def _lease(row: ReminderDelivery, now: datetime) -> None:

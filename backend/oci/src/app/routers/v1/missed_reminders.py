@@ -15,8 +15,8 @@ from pydantic import BaseModel
 from app.caller_zone import caller_zone_or_utc
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.missed_reminders import dismiss_missed, missed_reminders
-from app.routers.v1.reminder_deliveries import ReminderDeliveryRead, quiet_hours
+from app.missed_reminders import dismiss_missed, missed_reminders, snooze_missed
+from app.routers.v1.reminder_deliveries import ReminderDeliveryRead, SnoozeRequest, quiet_hours
 from app.schemas import as_utc
 from app.user_settings import CurrentUserSettings
 
@@ -35,6 +35,10 @@ class MissedReminder(BaseModel):
     # The Task's, so the occurrence reads as the Task shows its date.
     is_all_day: bool
     time_zone: str | None
+    # Its ledger row, when a tab ever claimed it: snooze that row through
+    # the ordinary snooze. Null for a Reminder no tab was open for, which
+    # is snoozed from the list by its key instead (#566).
+    delivery_id: int | None
 
 
 class MissedPage(BaseModel):
@@ -45,6 +49,10 @@ class Dismissal(BaseModel):
     task_id: int
     offset: str
     occurrence_due: datetime
+
+
+class MissedSnooze(Dismissal, SnoozeRequest):
+    """A missed Reminder, by its key, and how long to snooze it."""
 
 
 @router.get("")
@@ -70,15 +78,16 @@ async def list_missed(
     return MissedPage(
         items=[
             MissedReminder(
-                task_id=due.task.id,
-                task_title=due.task.title,
-                offset=due.offset,
-                occurrence_due=as_utc(due.task.due_date),  # type: ignore[arg-type]
-                fire_at=due.fire_at,
-                is_all_day=due.task.is_all_day,
-                time_zone=due.task.time_zone,
+                task_id=missed.due.task.id,
+                task_title=missed.due.task.title,
+                offset=missed.due.offset,
+                occurrence_due=as_utc(missed.due.task.due_date),  # type: ignore[arg-type]
+                fire_at=missed.due.fire_at,
+                is_all_day=missed.due.task.is_all_day,
+                time_zone=missed.due.task.time_zone,
+                delivery_id=None if missed.row is None else missed.row.id,
             )
-            for due in found
+            for missed in found
         ]
     )
 
@@ -101,6 +110,35 @@ async def dismiss(
         payload.task_id,
         payload.offset,
         payload.occurrence_due,
+        user_settings.reminder_notifications_enabled_at,
+        quiet_hours(user_settings),
+    )
+    if row is None:
+        raise NotFoundError("Missed reminder not found")
+    return ReminderDeliveryRead.of(row)
+
+
+@router.post("/snooze")
+async def snooze(
+    payload: MissedSnooze,
+    request: Request,
+    session: SessionDep,
+    user_settings: CurrentUserSettings,
+    tz: Annotated[str | None, Query()] = None,
+) -> ReminderDeliveryRead:
+    """Snoozes one missed Reminder (#566): it notifies once more `minutes`
+    from now. Its ledger row is snoozed, or created already snoozed for a
+    Reminder no tab ever claimed. Only the ledger changes, never the Task.
+    404 when it is not on the User's missed list."""
+    zone = caller_zone_or_utc(tz)
+    row = await snooze_missed(
+        session,
+        request.app.state.clock(),
+        zone,
+        payload.task_id,
+        payload.offset,
+        payload.occurrence_due,
+        payload.minutes,
         user_settings.reminder_notifications_enabled_at,
         quiet_hours(user_settings),
     )

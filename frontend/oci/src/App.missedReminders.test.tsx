@@ -99,6 +99,59 @@ describe("Missed reminders", () => {
     expect(within(region).getAllByRole("listitem")).toHaveLength(1);
   });
 
+  it("snoozes a missed reminder no tab ever claimed, leaving the Task as it was", async () => {
+    const task = fakeTask("Water plants", {
+      due_date: "2026-07-10T15:00:00Z",
+      reminders: ["PT0S"],
+    });
+    const api = installFakeApi({
+      googleConfigured: false,
+      reminderNotifications: true,
+      tasks: [task],
+      missedReminders: [fakeMissedReminder(task, "PT0S")],
+    });
+    installFakeNotifications({ permission: "granted" });
+    render(<App />);
+
+    const region = await screen.findByRole("region", { name: "Missed reminders" });
+    const entry = within(region).getByRole("listitem");
+    expect(entry).toHaveTextContent(
+      "Snoozing delays only this alert. The deadline stays unchanged.",
+    );
+    await userEvent.click(within(entry).getByRole("button", { name: "Snooze 10 minutes" }));
+
+    expect(await within(entry).findByRole("status")).toHaveTextContent(
+      /Snoozed until \d\d:\d\d\. Deadline unchanged\./,
+    );
+    expect(api.missedSnoozes).toEqual([
+      { task_id: task.id, offset: "PT0S", occurrence_due: "2026-07-10T15:00:00Z", minutes: 10 },
+    ]);
+    expect(api.reminderSnoozes).toEqual([]);
+    expect(api.tasks.find((t) => t.id === task.id)?.due_date).toBe("2026-07-10T15:00:00Z");
+  });
+
+  it("snoozes a missed reminder with a ledger row through the ordinary snooze", async () => {
+    const task = fakeTask("Water plants", {
+      due_date: "2026-07-10T15:00:00Z",
+      reminders: ["PT0S"],
+    });
+    const api = installFakeApi({
+      googleConfigured: false,
+      reminderNotifications: true,
+      tasks: [task],
+      missedReminders: [fakeMissedReminder(task, "PT0S", { delivery_id: 41 })],
+    });
+    installFakeNotifications({ permission: "granted" });
+    render(<App />);
+
+    const region = await screen.findByRole("region", { name: "Missed reminders" });
+    await userEvent.click(within(region).getByRole("button", { name: "Snooze 1 hour" }));
+
+    expect(await within(region).findByRole("status")).toHaveTextContent(/Deadline unchanged/);
+    expect(api.reminderSnoozes).toEqual([{ id: 41, minutes: 60 }]);
+    expect(api.missedSnoozes).toEqual([]);
+  });
+
   it("drops the list once its last entry is dismissed", async () => {
     const task = fakeTask("Water plants", {
       due_date: "2026-07-10T15:00:00Z",

@@ -2,10 +2,17 @@ import "./MissedReminders.css";
 
 import { useCallback, useEffect, useId, useState } from "react";
 
-import { dismissMissedReminder, fetchMissedReminders, type MissedReminder } from "../api";
+import {
+  dismissMissedReminder,
+  fetchMissedReminders,
+  snoozeMissedReminder,
+  snoozeReminder,
+  type MissedReminder,
+} from "../api";
 import { formatDate, fromDayIso, taskZonedDate } from "../dates";
 import { CLAIM_INTERVAL_MS, useReminderDelivery } from "../reminderDelivery";
 import { reminderLabel } from "../reminders";
+import { ReminderSnooze } from "./DeliveredReminders";
 
 function keyOf(missed: MissedReminder): string {
   return `${missed.task_id}|${missed.offset}|${missed.occurrence_due}`;
@@ -22,7 +29,10 @@ function dueLabel(missed: MissedReminder): string {
  * window closed while no tab could show them. They are listed here on
  * return, never replayed as a burst of late system notifications. Each
  * entry names its Task (a link to it) and the occurrence it belonged to;
- * dismissing one records it on the server so it never comes back.
+ * dismissing one records it on the server so it never comes back, and
+ * snoozing one (#566) has it notify once more later. An entry with a
+ * ledger row is snoozed like a delivered Reminder; one no tab ever
+ * claimed is snoozed by its key, and the server creates its row.
  *
  * Shown while the User's opt-in is on, even on a device that cannot
  * notify: the list is in-app. It refreshes on start, every claim interval
@@ -97,6 +107,13 @@ export function MissedReminders({
               <span className="missed-reminder-context">
                 {reminderLabel(missed.offset)} · Due {dueLabel(missed)}
               </span>
+              <ReminderSnooze
+                onSnooze={(minutes) =>
+                  missed.delivery_id != null
+                    ? snoozeReminder(missed.delivery_id, minutes)
+                    : snoozeMissedReminder(missed, minutes, timeZone)
+                }
+              />
             </div>
             <button
               type="button"

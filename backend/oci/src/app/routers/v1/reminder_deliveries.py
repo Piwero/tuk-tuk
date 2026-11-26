@@ -18,13 +18,15 @@ from app.errors import APIError, NotFoundError
 from app.models import ReminderDelivery, UserSettings
 from app.quiet_hours import QuietHours, held_until
 from app.reminder_delivery import (
+    MAX_SNOOZE,
     claim_due,
     held_reminders,
-    new_lease_token,
+    is_stale,
     open_dated_tasks,
+    snooze,
     snoozes_of,
 )
-from app.schemas import as_utc, utc_z
+from app.schemas import utc_z
 from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/reminder-deliveries", tags=["reminder deliveries"])
@@ -111,13 +113,8 @@ def quiet_hours(user_settings: UserSettings) -> QuietHours | None:
     return QuietHours.parse(user_settings.quiet_hours_start, user_settings.quiet_hours_end)
 
 
-# A snooze is a short delay, at most a day: anything longer is a new date,
-# which the User sets on the Task itself.
-MAX_SNOOZE_MINUTES = 24 * 60
-
-
 class SnoozeRequest(BaseModel):
-    minutes: int = Field(ge=1, le=MAX_SNOOZE_MINUTES)
+    minutes: int = Field(ge=1, le=MAX_SNOOZE // timedelta(minutes=1))
 
 
 @router.post("/claim")
@@ -214,7 +211,7 @@ async def report_failed(
 
 
 @router.post("/{delivery_id}/snooze")
-async def snooze(
+async def snooze_delivery(
     delivery_id: int, payload: SnoozeRequest, request: Request, session: SessionDep
 ) -> ReminderDeliveryRead:
     """Snoozes this occurrence's Reminder (issue #566): it comes due again
@@ -226,21 +223,12 @@ async def snooze(
     row = await session.get(ReminderDelivery, delivery_id)
     if row is None:
         raise NotFoundError(f"Reminder delivery {delivery_id} not found")
-    task = row.task
-    if (
-        task.completed
-        or task.due_date is None
-        or as_utc(task.due_date) != as_utc(row.occurrence_due)
-        or row.offset not in task.reminders
-    ):
+    if is_stale(row):
         raise APIError(
             status_code=409,
             code="reminder_stale",
             message="This reminder's Task occurrence has changed since it was delivered",
         )
-    row.snoozed_until = request.app.state.clock() + timedelta(minutes=payload.minutes)
-    row.state = "snoozed"
-    # Any tab still holding the old lease can no longer report on it.
-    row.lease_token = new_lease_token()
+    snooze(row, request.app.state.clock(), timedelta(minutes=payload.minutes))
     await session.commit()
     return ReminderDeliveryRead.of(row)

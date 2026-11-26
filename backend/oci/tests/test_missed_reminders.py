@@ -17,6 +17,7 @@ from tests.test_reminder_delivery import claim, enable_delivery, ledger, make_ta
 
 MISSED = "/api/v1/reminder-deliveries/missed"
 DISMISS = MISSED + "/dismiss"
+SNOOZE = MISSED + "/snooze"
 
 
 def missed(client: TestClient, query: str = "") -> list[dict]:
@@ -409,6 +410,115 @@ class TestDismissal:
         assert ledger(client) == []
 
 
+class TestSnoozeFromTheList:
+    """Snooze is offered from the missed list too (#566). An entry with a
+    ledger row names it (`delivery_id`) and is snoozed like any delivered
+    Reminder; a never-claimed miss gets its row created already snoozed,
+    under the same ledger key."""
+
+    def test_a_never_claimed_miss_has_no_ledger_row_to_name(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        opted_in_days_ago(client, fake_clock)
+        make_task(client, fake_clock.now - timedelta(hours=1), ["PT0S"])
+
+        [entry] = missed(client)
+
+        assert entry["delivery_id"] is None
+
+    def test_a_miss_with_a_ledger_row_names_it_for_the_ordinary_snooze(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        opted_in_days_ago(client, fake_clock)
+        make_task(client, fake_clock.now, ["PT0S"])
+        [item] = claim(client)
+        report(client, item, "failed")
+        fake_clock.advance(timedelta(minutes=5))
+        [entry] = missed(client)
+        assert entry["delivery_id"] == item["id"]
+
+        response = client.post(
+            f"/api/v1/reminder-deliveries/{entry['delivery_id']}/snooze", json={"minutes": 10}
+        )
+
+        assert response.status_code == 200, response.text
+        assert missed(client) == []
+
+    def test_snoozing_a_never_claimed_miss_delivers_it_once_at_the_new_time(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        opted_in_days_ago(client, fake_clock)
+        task = make_task(client, fake_clock.now - timedelta(hours=1), ["PT0S"])
+        [entry] = missed(client)
+        snoozed_at = fake_clock.now
+
+        response = client.post(SNOOZE, json={**dismissal(entry), "minutes": 10})
+
+        assert response.status_code == 200, response.text
+        row = response.json()
+        assert row["state"] == "snoozed"
+        assert datetime.fromisoformat(row["snoozed_until"]) == snoozed_at + timedelta(minutes=10)
+        assert [r["id"] for r in ledger(client)] == [row["id"]]
+        assert missed(client) == []
+        fake_clock.advance(timedelta(minutes=10))
+        [again] = claim(client)
+        assert again["id"] == row["id"]
+        assert again["task_id"] == task["id"]
+        assert claim(client) == []
+
+    def test_snoozing_a_miss_leaves_the_task_unchanged(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        opted_in_days_ago(client, fake_clock)
+        task = make_task(client, fake_clock.now - timedelta(hours=1), ["PT0S"])
+        before = client.get(f"/api/v1/tasks/{task['id']}").content
+        [entry] = missed(client)
+
+        client.post(SNOOZE, json={**dismissal(entry), "minutes": 60})
+
+        assert client.get(f"/api/v1/tasks/{task['id']}").content == before
+
+    def test_snoozing_a_miss_from_the_list_again_moves_its_time(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        opted_in_days_ago(client, fake_clock)
+        make_task(client, fake_clock.now - timedelta(hours=1), ["PT0S"])
+        [entry] = missed(client)
+        first = client.post(SNOOZE, json={**dismissal(entry), "minutes": 10}).json()
+        fake_clock.advance(timedelta(minutes=20))
+        [again] = missed(client)
+        assert again["delivery_id"] == first["id"]
+
+        second = client.post(SNOOZE, json={**dismissal(again), "minutes": 10})
+
+        assert second.status_code == 200, second.text
+        assert second.json()["id"] == first["id"]
+        assert len(ledger(client)) == 1
+
+    def test_an_entry_that_is_not_missed_cannot_be_snoozed_from_the_list(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        opted_in_days_ago(client, fake_clock)
+        task = make_task(client, fake_clock.now, ["PT0S"])
+        body = {"task_id": task["id"], "offset": "PT0S", "occurrence_due": task["due_date"]}
+
+        response = client.post(SNOOZE, json={**body, "minutes": 10})
+
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+        assert ledger(client) == []
+
+    def test_the_snooze_length_is_bounded(self, client: TestClient, fake_clock: FakeClock) -> None:
+        opted_in_days_ago(client, fake_clock)
+        make_task(client, fake_clock.now - timedelta(hours=1), ["PT0S"])
+        [entry] = missed(client)
+
+        for minutes in (0, 24 * 60 + 1):
+            response = client.post(SNOOZE, json={**dismissal(entry), "minutes": minutes})
+            assert response.status_code == 422, minutes
+        assert ledger(client) == []
+
+
 class TestOwnership:
     """Missed reminders are the User's own (ADR 0018); the full probe
     matrix is in test_isolation.py."""
@@ -436,6 +546,23 @@ class TestOwnership:
         [entry] = missed(client)
 
         response = bea_client.post(DISMISS, json=dismissal(entry))
+
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
+        assert missed(client) == [entry]
+        assert ledger(client) == []
+        assert ledger(bea_client) == []
+
+    def test_another_users_missed_reminder_cannot_be_snoozed(
+        self, client: TestClient, fake_clock: FakeClock
+    ) -> None:
+        _, bea_client = signed_in_member(client)
+        opted_in_days_ago(client, fake_clock)
+        opted_in_days_ago(bea_client, fake_clock)
+        make_task(client, fake_clock.now - timedelta(hours=1), ["PT0S"])
+        [entry] = missed(client)
+
+        response = bea_client.post(SNOOZE, json={**dismissal(entry), "minutes": 10})
 
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "not_found"

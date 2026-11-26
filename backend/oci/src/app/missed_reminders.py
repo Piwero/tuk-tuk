@@ -15,7 +15,8 @@ Reminder never claimed, or the existing one, whose lease it revokes.
 """
 
 import secrets
-from datetime import datetime, tzinfo
+from dataclasses import dataclass
+from datetime import datetime, timedelta, tzinfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +30,7 @@ from app.reminder_delivery import (
     deliver_at,
     open_dated_tasks,
     open_reminders,
+    snooze,
     snoozes_of,
 )
 from app.schemas import as_utc
@@ -37,13 +39,22 @@ from app.schemas import as_utc
 _SETTLED = ("shown", "dismissed")
 
 
+@dataclass(frozen=True)
+class Missed:
+    """One missed Reminder, with its ledger row when a tab ever claimed it
+    (or the User acted on it): None for a Reminder no tab was open for."""
+
+    due: Due
+    row: ReminderDelivery | None
+
+
 async def missed_reminders(
     session: AsyncSession,
     now: datetime,
     caller_zone: tzinfo,
     since: datetime | None,
     quiet: QuietHours | None = None,
-) -> list[Due]:
+) -> list[Missed]:
     """The User's missed Reminders at `now`, newest first. The window is
     measured from each Reminder's final delivery time, after any snooze
     (#566) and Quiet hours (#567), exactly as a claim measures it: a held or
@@ -67,8 +78,12 @@ async def missed_reminders(
         )
     )
     ledger = {(row.task_id, row.offset, as_utc(row.occurrence_due)): row for row in rows}
-    found = [due for due in candidates if not _accounted_for(ledger.get(_key(due)), now)]
-    return sorted(found, key=lambda due: (due.fire_at, due.task.id), reverse=True)
+    found = [
+        Missed(due=due, row=ledger.get(_key(due)))
+        for due in candidates
+        if not _accounted_for(ledger.get(_key(due)), now)
+    ]
+    return sorted(found, key=lambda m: (m.due.fire_at, m.due.task.id), reverse=True)
 
 
 def _key(due: Due) -> tuple[int, str, datetime]:
@@ -101,16 +116,10 @@ async def dismiss_missed(
     existing = await _ledger_row(session, *key)
     if existing is not None and existing.state == "dismissed":
         return existing
-    due = next(
-        (
-            d
-            for d in await missed_reminders(session, now, caller_zone, since, quiet)
-            if _key(d) == key
-        ),
-        None,
-    )
-    if due is None:
+    missed = await _missed_by_key(session, now, caller_zone, key, since, quiet)
+    if missed is None:
         return None
+    due = missed.due
     if existing is None:
         row = ReminderDelivery(
             task_id=task_id,
@@ -135,6 +144,74 @@ async def dismiss_missed(
     _settle(existing, now)
     await session.commit()
     return existing
+
+
+async def snooze_missed(
+    session: AsyncSession,
+    now: datetime,
+    caller_zone: tzinfo,
+    task_id: int,
+    offset: str,
+    occurrence_due: datetime,
+    minutes: int,
+    since: datetime | None,
+    quiet: QuietHours | None = None,
+) -> ReminderDelivery | None:
+    """Snoozes one missed Reminder from the list (#566): its ledger row,
+    or for a Reminder no tab ever claimed, a new row created already
+    snoozed under the same key. None when no such entry is on the list.
+    Commits."""
+    key = (task_id, offset, as_utc(occurrence_due))
+    missed = await _missed_by_key(session, now, caller_zone, key, since, quiet)
+    if missed is None:
+        return None
+    if missed.row is not None:
+        snooze(missed.row, now, timedelta(minutes=minutes))
+        await session.commit()
+        return missed.row
+    row = ReminderDelivery(
+        task_id=task_id,
+        offset=offset,
+        occurrence_due=key[2],
+        fire_at=missed.due.fire_at,
+        attempts=0,
+        claimed_at=now,
+        lease_expires_at=now,
+    )
+    row.task = missed.due.task
+    snooze(row, now, timedelta(minutes=minutes))
+    try:
+        async with session.begin_nested():
+            session.add(row)
+    except IntegrityError:
+        # Another tab acted on it at the same moment: snooze that row.
+        if row in session:
+            session.expunge(row)
+        existing = await _ledger_row(session, *key)
+        if existing is None:
+            return None
+        snooze(existing, now, timedelta(minutes=minutes))
+        row = existing
+    await session.commit()
+    return row
+
+
+async def _missed_by_key(
+    session: AsyncSession,
+    now: datetime,
+    caller_zone: tzinfo,
+    key: tuple[int, str, datetime],
+    since: datetime | None,
+    quiet: QuietHours | None,
+) -> Missed | None:
+    return next(
+        (
+            missed
+            for missed in await missed_reminders(session, now, caller_zone, since, quiet)
+            if _key(missed.due) == key
+        ),
+        None,
+    )
 
 
 def _settle(row: ReminderDelivery, now: datetime) -> None:
