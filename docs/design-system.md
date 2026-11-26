@@ -121,11 +121,11 @@ cell to a bright green rather than darkening. No other ramp changes meaning.
 Three faces, bundled with the frontend (`src/fonts.css`, variable woff2 split by
 unicode-range) and served by the instance itself — no third-party font host:
 
-| Face                | Token            | Used for                                                           |
-| ------------------- | ---------------- | ------------------------------------------------------------------ |
-| Bricolage Grotesque | `--font-display` | Screen titles (26px), big numbers (focus clock 56px), the wordmark |
-| Instrument Sans | `--font-body` | All UI text; 14px default. Dates, counts, durations, Streaks and Scores add `font-variant-numeric: tabular-nums` so digits align |
-| JetBrains Mono | `--font-mono` | Only things you type: Quick-Add sigil hints, keyboard shortcut caps, code in Markdown |
+| Face                | Token            | Used for                                                                                                                         |
+| ------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Bricolage Grotesque | `--font-display` | Screen titles (26px), big numbers (focus clock 56px), the wordmark                                                               |
+| Instrument Sans     | `--font-body`    | All UI text; 14px default. Dates, counts, durations, Streaks and Scores add `font-variant-numeric: tabular-nums` so digits align |
+| JetBrains Mono      | `--font-mono`    | Only things you type: Quick-Add sigil hints, keyboard shortcut caps, code in Markdown                                            |
 
 Uppercase 12px labels with `--tracking-caps` head sections, folders, and
 sidebar groups. The wordmark is "Tuk Tuk" in Bricolage Grotesque,

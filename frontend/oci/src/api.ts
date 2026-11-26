@@ -1987,15 +1987,63 @@ export interface ReminderClaim {
   /** The Task occurrence's due date this Reminder belongs to. */
   occurrence_due: string;
   fire_at: string;
-  state: "claimed" | "shown" | "failed";
+  state: "claimed" | "shown" | "failed" | "snoozed";
   attempt: number;
+  /** When a snoozed Reminder comes due again (issue #566); null if never
+   * snoozed. Optional for servers before #566. */
+  snoozed_until?: string | null;
   lease_token: string;
   lease_expires_at: string;
 }
 
+/** A ledger row as the server reports it, without a lease. */
+export type ReminderDeliveryRead = Omit<ReminderClaim, "lease_token" | "lease_expires_at">;
+
+/** Quiet hours (issue #567): a band of the day during which Reminder
+ * notifications are held and notify once when it ends. "HH:MM" labels on
+ * the tab's own wall clock; a start after the end wraps past midnight. A
+ * notification setting only: Active hours never change delivery. */
+export interface QuietHoursSettings {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export function fetchQuietHoursSettings(): Promise<QuietHoursSettings> {
+  return request("/api/v1/settings/quiet-hours");
+}
+
+export function updateQuietHoursSettings(
+  settings: QuietHoursSettings,
+): Promise<QuietHoursSettings> {
+  return request("/api/v1/settings/quiet-hours", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** A Reminder that fired inside Quiet hours and waits for `deliver_at`,
+ * the band's end (issue #567). */
+export interface HeldReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  fire_at: string;
+  deliver_at: string;
+}
+
+export interface ReminderClaimPage {
+  items: ReminderClaim[];
+  /** Held by Quiet hours right now (absent from an older server). */
+  held?: HeldReminder[];
+  /** When the Quiet hours band holding now ends; null outside it. */
+  quiet_until?: string | null;
+}
+
 /** Claims the Reminders due now that no other tab holds. `tz` anchors
- * all-day Tasks; nothing is claimed while the User's opt-in is off. */
-export function claimDueReminders(tz: string): Promise<{ items: ReminderClaim[] }> {
+ * all-day Tasks and Quiet hours; nothing is claimed while the User's
+ * opt-in is off or while Quiet hours are on. */
+export function claimDueReminders(tz: string): Promise<ReminderClaimPage> {
   return request(`/api/v1/reminder-deliveries/claim?tz=${encodeURIComponent(tz)}`, {
     method: "POST",
   });
@@ -2008,6 +2056,51 @@ export function reportReminderDelivery(
   return request(`/api/v1/reminder-deliveries/${claim.id}/${outcome}`, {
     method: "POST",
     body: JSON.stringify({ lease_token: claim.lease_token }),
+  });
+}
+
+/** Snoozes one delivered Reminder (issue #566): it comes due again
+ * `minutes` from now. Only the delivery ledger changes; the Task's dates
+ * and Reminder offsets stay as they are. 409 `reminder_stale` when the
+ * occurrence is gone (Task completed, redated, Reminder removed). */
+export function snoozeReminder(id: number, minutes: number): Promise<ReminderDeliveryRead> {
+  return request(`/api/v1/reminder-deliveries/${id}/snooze`, {
+    method: "POST",
+    body: JSON.stringify({ minutes }),
+  });
+}
+
+/** A Reminder whose delivery window closed unseen (issue #565): listed
+ * in-app, never replayed as a late notification. (`task_id`, `offset`,
+ * `occurrence_due`) names it for dismissal. */
+export interface MissedReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  /** The Task occurrence's due date this Reminder belongs to. */
+  occurrence_due: string;
+  fire_at: string;
+  /** The Task's, so the occurrence reads as the Task shows its date. */
+  is_all_day: boolean;
+  time_zone: string | null;
+}
+
+/** The User's missed Reminders, newest first; empty while the opt-in is
+ * off. `tz` anchors all-day Tasks. */
+export function fetchMissedReminders(tz: string): Promise<{ items: MissedReminder[] }> {
+  return request(`/api/v1/reminder-deliveries/missed?tz=${encodeURIComponent(tz)}`);
+}
+
+/** Dismisses a missed Reminder: the ledger records it, so it never comes
+ * back or notifies. */
+export function dismissMissedReminder(missed: MissedReminder, tz: string): Promise<unknown> {
+  return request(`/api/v1/reminder-deliveries/missed/dismiss?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task_id: missed.task_id,
+      offset: missed.offset,
+      occurrence_due: missed.occurrence_due,
+    }),
   });
 }
 

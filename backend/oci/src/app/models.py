@@ -189,6 +189,14 @@ class UserSettings(Base):
     # notifying after upgrade. Browser permission is per device and stays in
     # the browser; this flag only records the User's choice.
     reminder_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Quiet hours (issue #567): a band of the day during which Reminder
+    # notifications are held and delivered once when it ends. "HH:MM"
+    # wall-clock labels read in the claiming tab's zone; the band may wrap
+    # past midnight (start after end). Not Active hours, which only shapes
+    # the Calendar grid and never delivery.
+    quiet_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    quiet_hours_start: Mapped[str] = mapped_column(String(5), default="22:00")
+    quiet_hours_end: Mapped[str] = mapped_column(String(5), default="07:00")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -518,13 +526,19 @@ class ReminderDelivery(OwnedMixin, Base):
     occurrence_due: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     fire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # "claimed" (a tab holds or held the lease), "shown" (the browser
-    # reported display) or "failed" (the browser refused to show it).
+    # reported display), "failed" (the browser refused to show it) or
+    # "snoozed" (the User asked for it again at `snoozed_until`, issue #566).
+    # "dismissed" (the User dismissed it as a missed reminder, issue #565).
     state: Mapped[str] = mapped_column(String(16), default="claimed")
     attempts: Mapped[int] = mapped_column(default=1)
     lease_token: Mapped[str] = mapped_column(String(64))
     lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # The User's snooze (issue #566): while set, this occurrence's Reminder
+    # comes due at this instant instead of `fire_at`. An override on the
+    # delivery only; the Task's dates and offsets never change.
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     # Every read names its Task, so load it with the row.
     task: Mapped[Task] = relationship(lazy="joined")

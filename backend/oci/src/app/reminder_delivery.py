@@ -16,13 +16,25 @@ Policy, all on the server clock:
   tab, up to this many claims in all and only inside the window. A
   `failed` report is final: the browser refused, so retrying would too.
 
+Quiet hours (issue #567) move when a Reminder is delivered, never its
+`fire_at`: one falling due inside the band is held, its window opens at the
+band's end instead (`deliver_at`), and nothing at all is claimed while the
+band is on. The ledger key is unchanged, so a held Reminder notifies once.
+
 The ledger's unique key (Task, offset, occurrence due date) is what makes
 one occurrence claimable once: two tabs inserting the same key race on the
 index and only one wins.
+
+Overrides of when a Reminder comes due compose in one order:
+`effective_fire_at` applies a snooze (issue #566), which replaces the nominal
+fire time of its one occurrence, then `deliver_at` applies Quiet hours. The
+window is measured from that final time. Task dates are never changed to get
+there.
 """
 
 import re
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, tzinfo
 
@@ -31,6 +43,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ReminderDelivery, Task
+from app.quiet_hours import QuietHours, held_until
 from app.recurrence import local_zone
 from app.schemas import as_utc
 
@@ -66,48 +79,144 @@ def fire_at(task: Task, offset: str, caller_zone: tzinfo) -> datetime | None:
     return shifted + sign * timedelta(hours=hours, minutes=minutes, seconds=seconds)
 
 
+# A ledger key: (task id, offset, occurrence due date in UTC).
+Key = tuple[int, str, datetime]
+
+
+def occurrence_key(task: Task, offset: str) -> Key:
+    """The ledger key of `offset` on the Task's current occurrence."""
+    return (task.id, offset, as_utc(task.due_date))  # type: ignore[arg-type]  # dated Tasks only
+
+
+def effective_fire_at(nominal: datetime, key: Key, snoozes: Mapping[Key, datetime]) -> datetime:
+    """When this occurrence's Reminder actually comes due: its snooze, if the
+    User snoozed it (issue #566), else its nominal fire time. Quiet hours
+    then apply on top of it, in `deliver_at`."""
+    return snoozes.get(key, nominal)
+
+
+def deliver_at(at: datetime, quiet: QuietHours | None, caller_zone: tzinfo) -> datetime:
+    """When a Reminder coming due at `at` (its effective fire time) is
+    delivered: `at` itself, or the end of the Quiet hours band it falls in
+    (issue #567). Its delivery window opens here."""
+    return held_until(at, quiet, caller_zone) or at
+
+
 @dataclass(frozen=True)
 class Due:
-    """One Reminder of one Task occurrence, due now."""
+    """One Reminder of one Task occurrence, due now. `fire_at` is the
+    nominal time (Task date plus offset); `deliver_at` the final one, after
+    any snooze and Quiet hours."""
 
     task: Task
     offset: str
     fire_at: datetime
+    deliver_at: datetime
 
 
-def due_reminders(tasks: list[Task], now: datetime, caller_zone: tzinfo) -> list[Due]:
-    """The Reminders of these Tasks inside their delivery window at `now`."""
+def open_reminders(
+    tasks: list[Task], caller_zone: tzinfo, snoozes: Mapping[Key, datetime]
+) -> list[tuple[Task, str, datetime, datetime]]:
+    """Every Reminder of these open, dated Tasks, with its nominal fire time
+    and its effective one (after any snooze)."""
     found = []
     for task in tasks:
         if task.completed or task.due_date is None:
             continue
         for offset in task.reminders:
-            at = fire_at(task, offset, caller_zone)
-            if at is not None and at <= now < at + DELIVERY_WINDOW:
-                found.append(Due(task=task, offset=offset, fire_at=at))
+            nominal = fire_at(task, offset, caller_zone)
+            if nominal is not None:
+                at = effective_fire_at(nominal, occurrence_key(task, offset), snoozes)
+                found.append((task, offset, nominal, at))
     return found
 
 
+def due_reminders(
+    tasks: list[Task],
+    now: datetime,
+    caller_zone: tzinfo,
+    snoozes: Mapping[Key, datetime] | None = None,
+    quiet: QuietHours | None = None,
+) -> list[Due]:
+    """The Reminders of these Tasks inside their delivery window at `now`,
+    the window measured from each one's delivery time: after any snooze,
+    then Quiet hours. None while `now` is inside Quiet hours."""
+    if quiet is not None and quiet.contains(now, caller_zone):
+        return []
+    found = []
+    for task, offset, nominal, at in open_reminders(tasks, caller_zone, snoozes or {}):
+        when = deliver_at(at, quiet, caller_zone)
+        if when <= now < when + DELIVERY_WINDOW:
+            found.append(Due(task=task, offset=offset, fire_at=nominal, deliver_at=when))
+    return found
+
+
+def held_reminders(
+    tasks: list[Task],
+    now: datetime,
+    caller_zone: tzinfo,
+    quiet: QuietHours | None,
+    snoozes: Mapping[Key, datetime] | None = None,
+) -> list[Due]:
+    """The Reminders that came due (after any snooze) but are held by Quiet
+    hours at `now`, soonest delivery first: what the app lists while the
+    band is on."""
+    found = []
+    for task, offset, nominal, at in open_reminders(tasks, caller_zone, snoozes or {}):
+        when = deliver_at(at, quiet, caller_zone)
+        if at <= now < when:
+            found.append(Due(task=task, offset=offset, fire_at=nominal, deliver_at=when))
+    return sorted(found, key=lambda due: (due.deliver_at, due.fire_at, due.task.id))
+
+
+async def snoozes_of(session: AsyncSession) -> dict[Key, datetime]:
+    """Every snoozed occurrence's new fire time, by ledger key."""
+    rows = await session.execute(
+        select(
+            ReminderDelivery.task_id,
+            ReminderDelivery.offset,
+            ReminderDelivery.occurrence_due,
+            ReminderDelivery.snoozed_until,
+        ).where(ReminderDelivery.snoozed_until.is_not(None))
+    )
+    return {
+        (task_id, offset, as_utc(occurrence)): as_utc(until)  # type: ignore[arg-type]  # filtered non-null
+        for task_id, offset, occurrence, until in rows
+    }
+
+
+def new_lease_token() -> str:
+    return secrets.token_urlsafe(24)
+
+
 def _lease(row: ReminderDelivery, now: datetime) -> None:
-    row.lease_token = secrets.token_urlsafe(24)
+    row.lease_token = new_lease_token()
     row.lease_expires_at = now + LEASE
     row.claimed_at = now
 
 
-async def claim_due(
-    session: AsyncSession, now: datetime, caller_zone: tzinfo
-) -> list[ReminderDelivery]:
-    """Claims every Reminder due now that no tab holds: new ones, and
-    unreported ones whose lease expired with attempts left. Commits."""
-    tasks = list(
+async def open_dated_tasks(session: AsyncSession) -> list[Task]:
+    """The User's open Tasks with a date: every Task a Reminder can be due on."""
+    return list(
         (
             await session.scalars(
                 select(Task).where(Task.completed.is_(False), Task.due_date.is_not(None))
             )
         ).all()
     )
+
+
+async def claim_due(
+    session: AsyncSession,
+    now: datetime,
+    caller_zone: tzinfo,
+    quiet: QuietHours | None = None,
+) -> list[ReminderDelivery]:
+    """Claims every Reminder due now that no tab holds: new ones, and
+    unreported ones whose lease expired with attempts left. Commits."""
+    tasks = await open_dated_tasks(session)
     claimed = []
-    for due in due_reminders(tasks, now, caller_zone):
+    for due in due_reminders(tasks, now, caller_zone, await snoozes_of(session), quiet):
         row = await _claim_one(session, due, now)
         if row is not None:
             claimed.append(row)
@@ -146,6 +255,13 @@ async def _claim_one(session: AsyncSession, due: Due, now: datetime) -> Reminder
         )
         .with_for_update(skip_locked=True, of=ReminderDelivery)
     )
+    if existing is not None and existing.state == "snoozed":
+        # The snooze came due: a fresh delivery of the same occurrence.
+        existing.state = "claimed"
+        existing.attempts = 1
+        existing.reported_at = None
+        _lease(existing, now)
+        return existing
     if (
         existing is None
         or existing.state != "claimed"

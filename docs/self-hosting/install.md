@@ -35,12 +35,12 @@ The app builds on your own machine, so it runs on Intel/AMD and Apple Silicon (M
 
 Run these from the `tuk-tuk` folder.
 
-| To… | Run |
-| --- | --- |
-| Stop | `docker compose -f docker-compose.prod.yml down` |
-| Start | `docker compose -f docker-compose.prod.yml up -d` |
-| See logs | `docker compose -f docker-compose.prod.yml logs -f backend` |
-| Check it's running | `docker compose -f docker-compose.prod.yml ps` |
+| To…                | Run                                                         |
+| ------------------ | ----------------------------------------------------------- |
+| Stop               | `docker compose -f docker-compose.prod.yml down`            |
+| Start              | `docker compose -f docker-compose.prod.yml up -d`           |
+| See logs           | `docker compose -f docker-compose.prod.yml logs -f backend` |
+| Check it's running | `docker compose -f docker-compose.prod.yml ps`              |
 
 The app restarts by itself after a reboot as long as Docker is running. Your data
 lives in a PostgreSQL database, in a Docker volume called `tuk-tuk-prod_pgdata`,
@@ -83,7 +83,7 @@ use it from your phone or laptop:
 ⏱ 10 min. Needed for Reminder notifications on any device other than the
 computer running Tuk Tuk, and for any use outside your home network.
 
-**Why:** browsers only show notifications to pages from a *secure context*:
+**Why:** browsers only show notifications to pages from a _secure context_:
 an `https://` address, or `http://localhost` on the same computer. At
 `http://mybox:8080` or `http://192.168.1.20:8080`, the browser hides the
 Notification feature entirely, and **Settings → Reminder notifications** shows

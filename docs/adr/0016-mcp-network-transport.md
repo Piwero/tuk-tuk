@@ -57,7 +57,7 @@ Access control is two layers, neither sufficient alone:
   Ingress as `tuk-tuk-mcp` with Funnel off. It has no public hostname and
   no Cloudflare route. A device outside the tailnet cannot resolve it.
 - **Bearer token.** `POST /mcp` requires `Authorization: Bearer
-  <MCP_BEARER_TOKEN>`, compared with `hmac.compare_digest`. A request
+<MCP_BEARER_TOKEN>`, compared with `hmac.compare_digest`. A request
   without a valid token gets `401` (`WWW-Authenticate: Bearer`) before any
   JSON is parsed. The server refuses to start if the token is unset or
   shorter than 32 characters.

@@ -1,0 +1,58 @@
+/* Quiet hours deferred (issue #567): a flat panel listing held Reminders,
+ placed by the shared .reminder-panels stack (ReminderPanels.css). */
+@layer components {
+  .quiet-hours-deferred {
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+  }
+
+  .quiet-hours-deferred-title {
+    margin: 0 0 var(--space-2);
+    font-weight: var(--weight-semibold);
+  }
+
+  .quiet-hours-deferred-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .quiet-hours-deferred-task {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+
+  .quiet-hours-deferred-task:hover {
+    background: var(--surface-hover);
+  }
+
+  .quiet-hours-deferred-task:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
+  .quiet-hours-deferred-offset,
+  .quiet-hours-deferred-hint {
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+  }
+
+  .quiet-hours-deferred-hint {
+    margin: var(--space-2) 0 0;
+  }
+}

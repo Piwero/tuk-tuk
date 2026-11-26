@@ -102,10 +102,25 @@ export interface FakeReminderClaim {
   offset: string;
   occurrence_due: string;
   fire_at: string;
-  state: "claimed" | "shown" | "failed";
+  state: "claimed" | "shown" | "failed" | "snoozed";
   attempt: number;
+  snoozed_until?: string | null;
   lease_token: string;
   lease_expires_at: string;
+}
+
+export interface FakeReminderSnooze {
+  id: number;
+  minutes: number;
+}
+
+/** A Reminder held by Quiet hours, as the claim lists it (issue #567). */
+export interface FakeHeldReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  fire_at: string;
+  deliver_at: string;
 }
 
 export interface FakeReminderReport {
@@ -113,6 +128,20 @@ export interface FakeReminderReport {
   outcome: "shown" | "failed";
   lease_token: string;
 }
+
+/** A Reminder whose delivery window passed unseen (issue #565). */
+export interface FakeMissedReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  occurrence_due: string;
+  fire_at: string;
+  is_all_day: boolean;
+  time_zone: string | null;
+}
+
+/** The key a dismissal names a missed reminder by. */
+export type FakeMissedDismissal = Pick<FakeMissedReminder, "task_id" | "offset" | "occurrence_due">;
 
 export interface RecordedRequest {
   method: string;
@@ -423,6 +452,18 @@ export interface FakeApiState {
   reminderClaims: FakeReminderClaim[];
   /** Every shown/failed report a tab sent, in order. */
   reminderReports: FakeReminderReport[];
+  /** Every snooze a tab sent, in order (issue #566). */
+  reminderSnoozes: FakeReminderSnooze[];
+  /** Quiet hours (issue #567): the User's band, and what each claim says
+   * is held and until when. The fake never computes holds itself. */
+  quietHours: { enabled: boolean; start: string; end: string };
+  heldReminders: FakeHeldReminder[];
+  quietUntil: string | null;
+  /** Missed reminders (issue #565): what the missed list returns while the
+   * opt-in is on, less those dismissed. */
+  missedReminders: FakeMissedReminder[];
+  /** Every dismissal a tab sent, in order. */
+  missedDismissals: FakeMissedDismissal[];
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -824,6 +865,22 @@ export function fakeCheckItem(
 
 let nextReminderClaimId = 1;
 
+/** One of `task`'s Reminders, held until quiet hours end (issue #567). */
+export function fakeHeldReminder(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeHeldReminder> = {},
+): FakeHeldReminder {
+  return {
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    fire_at: task.due_date ?? "2026-11-10T23:00:00Z",
+    deliver_at: "2026-11-11T07:00:00Z",
+    ...overrides,
+  };
+}
+
 /** A claim on one of `task`'s Reminders, due now. */
 export function fakeReminderClaim(
   task: FakeTask,
@@ -842,6 +899,25 @@ export function fakeReminderClaim(
     attempt: 1,
     lease_token: `lease-${id}`,
     lease_expires_at: "2026-07-10T15:01:00Z",
+    ...overrides,
+  };
+}
+
+/** One of `task`'s Reminders, missed for its current occurrence. */
+export function fakeMissedReminder(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeMissedReminder> = {},
+): FakeMissedReminder {
+  const due = task.due_date ?? "2026-07-10T15:00:00Z";
+  return {
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    occurrence_due: due,
+    fire_at: due,
+    is_all_day: task.is_all_day,
+    time_zone: task.time_zone,
     ...overrides,
   };
 }
@@ -1099,6 +1175,11 @@ export function installFakeApi({
   gentleReturn = false,
   reminderNotifications = false,
   dueReminders = [],
+  quietHours = { enabled: false, start: "22:00", end: "07:00" },
+  quietHoursError = null,
+  heldReminders = [],
+  quietUntil = null,
+  missedReminders = [],
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1195,6 +1276,15 @@ export function installFakeApi({
   reminderNotifications?: boolean;
   /** Reminders due now, handed out by the claim endpoint (issue #561). */
   dueReminders?: FakeReminderClaim[];
+  /** Quiet hours (issue #567). Defaults to off, 22:00-07:00, like the backend. */
+  quietHours?: { enabled: boolean; start: string; end: string };
+  /** When set, every Quiet hours save is refused with this message. */
+  quietHoursError?: string | null;
+  /** What claims list as held by Quiet hours, and the band's end. */
+  heldReminders?: FakeHeldReminder[];
+  quietUntil?: string | null;
+  /** Reminders already missed, listed by the missed endpoint (issue #565). */
+  missedReminders?: FakeMissedReminder[];
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1280,6 +1370,12 @@ export function installFakeApi({
     reminderNotifications,
     reminderClaims: dueReminders.map((claim) => ({ ...claim })),
     reminderReports: [],
+    reminderSnoozes: [],
+    quietHours: { ...quietHours },
+    heldReminders: heldReminders.map((held) => ({ ...held })),
+    quietUntil,
+    missedReminders: missedReminders.map((entry) => ({ ...entry })),
+    missedDismissals: [],
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -3530,10 +3626,32 @@ export function installFakeApi({
       return json({ enabled: state.gentleReturn });
     }
     if (url.pathname === "/api/v1/reminder-deliveries/claim" && method === "POST") {
-      if (!state.reminderNotifications) return json({ items: [] });
+      if (!state.reminderNotifications) return json({ items: [], held: [], quiet_until: null });
       const items = state.reminderClaims.filter((claim) => !handedOut.has(claim.id));
       for (const claim of items) handedOut.add(claim.id);
-      return json({ items: items.map((claim) => ({ ...claim })) });
+      return json({
+        items: items.map((claim) => ({ ...claim })),
+        held: state.heldReminders.map((held) => ({ ...held })),
+        quiet_until: state.quietUntil,
+      });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed" && method === "GET") {
+      if (!state.reminderNotifications) return json({ items: [] });
+      return json({ items: state.missedReminders.map((entry) => ({ ...entry })) });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed/dismiss" && method === "POST") {
+      const key = body as FakeMissedDismissal;
+      const same = (entry: FakeMissedReminder): boolean =>
+        entry.task_id === key.task_id &&
+        entry.offset === key.offset &&
+        entry.occurrence_due === key.occurrence_due;
+      const entry = state.missedReminders.find(same);
+      if (entry === undefined) {
+        return json({ error: { code: "not_found", message: "Missed reminder not found" } }, 404);
+      }
+      state.missedDismissals.push({ ...key });
+      state.missedReminders = state.missedReminders.filter((candidate) => !same(candidate));
+      return json({ id: 1, ...entry, state: "dismissed", attempt: 0 });
     }
     const reminderReport = url.pathname.match(
       /^\/api\/v1\/reminder-deliveries\/(\d+)\/(shown|failed)$/,
@@ -3552,6 +3670,55 @@ export function installFakeApi({
       state.reminderReports.push({ id, outcome, lease_token });
       if (claim.state === "claimed") claim.state = outcome;
       return json({ ...claim });
+    }
+    const reminderSnooze = url.pathname.match(/^\/api\/v1\/reminder-deliveries\/(\d+)\/snooze$/);
+    if (reminderSnooze && method === "POST") {
+      // Mirrors the server (issue #566): only the ledger row changes, and
+      // an occurrence that is gone (Task completed, redated, Reminder
+      // removed) is refused as stale.
+      const id = Number(reminderSnooze[1]);
+      const claim = state.reminderClaims.find((candidate) => candidate.id === id);
+      if (claim === undefined) {
+        return json(
+          { error: { code: "not_found", message: `Reminder delivery ${id} not found` } },
+          404,
+        );
+      }
+      const task = state.tasks.find((candidate) => candidate.id === claim.task_id);
+      if (
+        task === undefined ||
+        task.completed ||
+        task.due_date !== claim.occurrence_due ||
+        !task.reminders.includes(claim.offset)
+      ) {
+        return json(
+          {
+            error: {
+              code: "reminder_stale",
+              message: "This reminder's Task occurrence has changed since it was delivered",
+            },
+          },
+          409,
+        );
+      }
+      const { minutes } = body as { minutes: number };
+      state.reminderSnoozes.push({ id, minutes });
+      claim.state = "snoozed";
+      claim.snoozed_until = new Date(Date.now() + minutes * 60_000).toISOString();
+      return json({ ...claim });
+    }
+    if (url.pathname === "/api/v1/settings/quiet-hours") {
+      if (method === "PUT") {
+        const input = body as { enabled: boolean; start: string; end: string };
+        const refusal =
+          quietHoursError ??
+          (input.start === input.end ? "Quiet hours must start and end at different times" : null);
+        if (refusal !== null) {
+          return json({ error: { code: "invalid_quiet_hours", message: refusal } }, 422);
+        }
+        state.quietHours = { ...input };
+      }
+      return json({ ...state.quietHours });
     }
     if (url.pathname === "/api/v1/settings/reminder-notifications") {
       if (method === "PUT") {

@@ -66,6 +66,7 @@ Allow 10 minutes.
 2. Check for data the upgrade refuses. Two things that used to be allowed
    are now unique for each account: tag names, ignoring upper and lower
    case, and the Inbox. While the old version is still running:
+
    ```sh
    docker compose -f docker-compose.prod.yml exec -T postgres psql -U tuktuk -d tuktuk <<'SQL'
    -- Tags whose names differ only in case, such as "Work" and "work"
@@ -76,6 +77,7 @@ Allow 10 minutes.
    SELECT id, name FROM lists WHERE is_inbox ORDER BY id;
    SQL
    ```
+
    Both empty, or one Inbox: go to step 3. Otherwise fix what it lists:
    - **Tags:** rename all but one of each clashing set, in the app or with
      `UPDATE tags SET name = 'work (2)' WHERE id = 9;` (your own id and name).
@@ -88,6 +90,7 @@ Allow 10 minutes.
    (`docker compose -f docker-compose.prod.yml logs backend`) names the same
    rows. The database keeps running, so fix them with the same commands,
    then start again with `docker compose -f docker-compose.prod.yml up -d`.
+
 3. Get the new version and restart, as in [Upgrade](#upgrade-25-min) above
    (steps 2 and 3).
 4. **Everyone signs in again.** Sessions from before the upgrade no longer
@@ -99,6 +102,7 @@ Allow 10 minutes.
 
    If your install never had a password, the app opens the setup screen
    instead. The account you create there gets all your data.
+
 6. To let someone else in, create their account in **Settings → Users**.
    Nobody can sign up on their own.
 
@@ -161,10 +165,10 @@ version that can read SQLite. Allow 10 minutes.
 
 If the copy refuses:
 
-| Message is about | What to do |
-| --- | --- |
+| Message is about            | What to do                                                                                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Orphaned rows in the source | Run the same `docker run` command again with `--prune-orphans` added at the end. This deletes rows left behind by deleted tasks (tag links, checklist items). Every deleted id is listed. `tuk-tuk-backup.db` stays untouched. |
-| Target already has data | A previous attempt got part of the way. Add `--force` to start over. **This empties the database first**, which is fine here because it holds nothing else yet. |
+| Target already has data     | A previous attempt got part of the way. Add `--force` to start over. **This empties the database first**, which is fine here because it holds nothing else yet.                                                                |
 
 The old `tuk-tuk-prod_data` volume is no longer used. Keep it until you're
 happy, then remove it with `docker volume rm tuk-tuk-prod_data`.

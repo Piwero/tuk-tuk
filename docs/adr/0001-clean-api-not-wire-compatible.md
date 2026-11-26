@@ -4,4 +4,4 @@ tuk-tuk's product behavior and data semantics are informed by the competitive re
 
 Consequence: clients built against the reference product's API cannot point at tuk-tuk unchanged. A compatibility shim was considered and deferred — if ever needed, it can be layered over the clean core.
 
-The research dossier (Part II) remains the reference for *semantics* (priority levels, RRULE recurrence, iCal-style reminder offsets, sparse sort-order scheme), which we do keep.
+The research dossier (Part II) remains the reference for _semantics_ (priority levels, RRULE recurrence, iCal-style reminder offsets, sparse sort-order scheme), which we do keep.

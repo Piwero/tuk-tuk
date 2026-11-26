@@ -36,6 +36,7 @@ from app.routers.v1 import (
     key_results,
     lists,
     mcp_exchange,
+    missed_reminders,
     now,
     reminder_deliveries,
     sections,
@@ -130,6 +131,7 @@ def create_app(
     app.include_router(key_results.router)
     app.include_router(lists.router)
     app.include_router(mcp_exchange.router)
+    app.include_router(missed_reminders.router)
     app.include_router(reminder_deliveries.router)
     app.include_router(sections.router)
     app.include_router(settings_router.router)

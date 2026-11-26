@@ -15,7 +15,9 @@ from pydantic import BaseModel, field_validator, model_validator
 from app.current_user import require_admin
 from app.db import DatabaseUrl, SessionDep
 from app.db_probe import ProbeResult, is_valid_postgres_url, probe_connection
+from app.errors import APIError
 from app.models import UserSettings
+from app.quiet_hours import InvalidQuietHoursError, QuietHours
 from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
@@ -194,6 +196,44 @@ async def update_reminder_notification_settings(
     user_settings.reminder_notifications_enabled = payload.enabled
     await session.commit()
     return ReminderNotificationSettings(enabled=user_settings.reminder_notifications_enabled)
+
+
+class QuietHoursSettings(BaseModel):
+    enabled: bool
+    start: str
+    end: str
+
+
+def _quiet_hours(user_settings: UserSettings) -> QuietHoursSettings:
+    return QuietHoursSettings(
+        enabled=user_settings.quiet_hours_enabled,
+        start=user_settings.quiet_hours_start,
+        end=user_settings.quiet_hours_end,
+    )
+
+
+@router.get("/quiet-hours")
+async def read_quiet_hours_settings(user_settings: CurrentUserSettings) -> QuietHoursSettings:
+    return _quiet_hours(user_settings)
+
+
+@router.put("/quiet-hours")
+async def update_quiet_hours_settings(
+    payload: QuietHoursSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> QuietHoursSettings:
+    """Quiet hours (issue #567): Reminders falling due inside the band are
+    held and notify once when it ends. A notification setting only; Active
+    hours, the Calendar band, is a different setting and never read here.
+    The band may wrap past midnight; a start equal to its end is refused."""
+    try:
+        QuietHours.parse(payload.start, payload.end)
+    except InvalidQuietHoursError as error:
+        raise APIError(status_code=422, code="invalid_quiet_hours", message=str(error)) from None
+    user_settings.quiet_hours_enabled = payload.enabled
+    user_settings.quiet_hours_start = payload.start
+    user_settings.quiet_hours_end = payload.end
+    await session.commit()
+    return _quiet_hours(user_settings)
 
 
 # Database status + connection probe (issue #256). Read-only: the status

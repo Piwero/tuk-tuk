@@ -26,8 +26,12 @@ import {
   fetchReminderNotificationSettings,
   reportReminderDelivery,
   updateReminderNotificationSettings,
+  type HeldReminder,
   type ReminderClaim,
 } from "./api";
+import { DeliveredReminders, type DeliveredReminder } from "./components/DeliveredReminders";
+import { QuietHoursDeferred } from "./components/QuietHoursDeferred";
+import { ReminderPanels } from "./components/ReminderPanels";
 import { reminderLabel } from "./reminders";
 
 export type ReminderDeliveryState = "off" | "requesting" | "allowed" | "denied" | "unsupported";
@@ -158,13 +162,19 @@ export const CLAIM_INTERVAL_MS = 30_000;
  * the tab comes back into view; the server's ledger makes sure each
  * occurrence goes to one tab. A failed claim (offline, signed out) is
  * dropped quietly: delivery is optional and never blocks the app. Clicking
- * a notification opens its Task. */
+ * a notification opens its Task. Each Reminder the browser showed also
+ * stays in the app until dismissed, with Open task and Snooze (#566).
+ * While Quiet hours hold Reminders (#567) it lists them too; they notify
+ * once when the band ends. Both panels share one stack. */
 export function DueReminderNotifier({
   onOpenTask,
 }: {
   onOpenTask: (taskId: number) => void;
-}): null {
+}): React.JSX.Element | null {
   const { state } = useReminderDelivery();
+  const [delivered, setDelivered] = useState<DeliveredReminder[]>([]);
+  const [held, setHeld] = useState<HeldReminder[]>([]);
+  const [quietUntil, setQuietUntil] = useState<string | null>(null);
   const openTask = useRef(onOpenTask);
   useEffect(() => {
     openTask.current = onOpenTask;
@@ -179,10 +189,19 @@ export function DueReminderNotifier({
       if (claiming) return;
       claiming = true;
       try {
-        const { items } = await claimDueReminders(timeZone);
+        const page = await claimDueReminders(timeZone);
         // Stopped meanwhile (turned off, signed out): show nothing; the
         // unreported leases expire on the server.
-        if (live) for (const item of items) deliver(item, (id) => openTask.current(id));
+        if (!live) return;
+        for (const item of page.items) {
+          deliver(
+            item,
+            (id) => openTask.current(id),
+            () => setDelivered((shown) => [...shown.filter((r) => r.id !== item.id), item]),
+          );
+        }
+        setHeld(page.held ?? []);
+        setQuietUntil(page.quiet_until ?? null);
       } catch {
         // Retried on the next tick.
       } finally {
@@ -202,13 +221,34 @@ export function DueReminderNotifier({
     };
   }, [state]);
 
-  return null;
+  const showHeld = state === "allowed" && held.length > 0;
+  if (!showHeld && delivered.length === 0) return null;
+  return (
+    <ReminderPanels>
+      {showHeld && (
+        <QuietHoursDeferred
+          held={held}
+          quietUntil={quietUntil}
+          onOpenTask={(id) => openTask.current(id)}
+        />
+      )}
+      <DeliveredReminders
+        reminders={delivered}
+        onOpenTask={(id) => openTask.current(id)}
+        onDismiss={(id) => setDelivered((shown) => shown.filter((r) => r.id !== id))}
+      />
+    </ReminderPanels>
+  );
 }
 
 /** Shows one claimed Reminder and reports what the browser says. The tag
  * is the ledger row's, so a retry the server hands out after a lost report
  * replaces the earlier alert rather than stacking a second one. */
-function deliver(claim: ReminderClaim, onOpenTask: (taskId: number) => void): void {
+function deliver(
+  claim: ReminderClaim,
+  onOpenTask: (taskId: number) => void,
+  onShown: () => void,
+): void {
   const report = (outcome: "shown" | "failed"): void => {
     reportReminderDelivery(claim, outcome).catch(() => {});
   };
@@ -223,7 +263,14 @@ function deliver(claim: ReminderClaim, onOpenTask: (taskId: number) => void): vo
     report("failed");
     return;
   }
-  notification.addEventListener("show", () => report("shown"), { once: true });
+  notification.addEventListener(
+    "show",
+    () => {
+      report("shown");
+      onShown();
+    },
+    { once: true },
+  );
   notification.addEventListener("error", () => report("failed"), { once: true });
   notification.addEventListener("click", () => {
     window.focus();

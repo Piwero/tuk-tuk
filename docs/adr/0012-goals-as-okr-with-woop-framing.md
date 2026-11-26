@@ -32,7 +32,7 @@ WOOP's contribution is the half OKR is weakest at — actually doing the
 thing. Mental contrasting (naming the obstacle) plus an implementation
 intention (`If <obstacle>, then I will <action>`) is the evidence-carrying
 part, and it costs two nullable text fields. The other two WOOP elements
-need no fields: Wish *is* the Goal's title, Outcome *is* its description.
+need no fields: Wish _is_ the Goal's title, Outcome _is_ its description.
 Adding all four would produce a form with two redundant boxes.
 
 So: OKR spine, `obstacle` and `if_then_plan` on the Goal, both nullable. A
@@ -161,7 +161,7 @@ Habit tracking "an amount toward a Goal".
 
 The column, its schemas, `habit_stats.intensity`, the frontend callers,
 and the `CONTEXT.md` entry all rename to **target**, in a single PR landed
-*before* any Goal code. Keeping the API field named `goal` for
+_before_ any Goal code. Keeping the API field named `goal` for
 compatibility was rejected: ADR 0001 explicitly disclaims wire
 compatibility, there are no third-party clients, and compatibility would
 preserve the ambiguity in the one place it is most confusing.

@@ -93,7 +93,7 @@ The agent reads back the batch of writes it intends for the turn ("I'll
 add three tasks and move two, ok?") and acts only on a spoken yes.
 Confirming each write separately is tedious by voice. Since nothing is
 destructive, a wrong batch costs seconds to undo by hand. This keeps
-ADR 0014's invariant, *no model-initiated destruction*, and drops only
+ADR 0014's invariant, _no model-initiated destruction_, and drops only
 the click.
 
 ## Decision: all inference goes through LiveKit Inference

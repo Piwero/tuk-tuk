@@ -53,9 +53,9 @@ or Stand-up. Your data stays saved and comes back when you switch a part on agai
 
 ## Stop and start
 
-| To… | Run (from the `tuk-tuk` folder) |
-| --- | --- |
-| Stop | `docker compose -f docker-compose.prod.yml down` |
+| To…         | Run (from the `tuk-tuk` folder)                   |
+| ----------- | ------------------------------------------------- |
+| Stop        | `docker compose -f docker-compose.prod.yml down`  |
 | Start again | `docker compose -f docker-compose.prod.yml up -d` |
 
 Your data is kept when you stop. For more (phones, other computers, upgrades),

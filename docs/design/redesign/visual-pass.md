@@ -11,14 +11,14 @@ Refreshed screenshots: `docs/assets/screenshots/{today,mobile-today,task-detail,
 
 ## Per-screen checks
 
-| Screen | Light desktop | Dark desktop | Light phone | Dark phone | Notes |
-| --- | --- | --- | --- | --- | --- |
-| Today | ✓ | ✓ | ✓ | – | Schedule rows fixed (see below); day rail measured |
-| Task detail | ✓ | ✓ | ✓ (sheet) | – | Sheet reduced motion **not measured** (only the More sheet was) |
-| Focus | ✓ | ✓ | ✓ | – | No change needed |
-| Goals | ✓ | ✓ | ✓ | – | Obstacle / If-Then Plan fixed |
-| Habits | ✓ | ✓ | ✓ | – | Heat strip restored |
-| More sheet | – | – | ✓ | – | Reduced motion: `animation: none`, `transition: 0s` |
+| Screen      | Light desktop | Dark desktop | Light phone | Dark phone | Notes                                                           |
+| ----------- | ------------- | ------------ | ----------- | ---------- | --------------------------------------------------------------- |
+| Today       | ✓             | ✓            | ✓           | –          | Schedule rows fixed (see below); day rail measured              |
+| Task detail | ✓             | ✓            | ✓ (sheet)   | –          | Sheet reduced motion **not measured** (only the More sheet was) |
+| Focus       | ✓             | ✓            | ✓           | –          | No change needed                                                |
+| Goals       | ✓             | ✓            | ✓           | –          | Obstacle / If-Then Plan fixed                                   |
+| Habits      | ✓             | ✓            | ✓           | –          | Heat strip restored                                             |
+| More sheet  | –             | –            | ✓           | –          | Reduced motion: `animation: none`, `transition: 0s`             |
 
 ## Measured risks
 

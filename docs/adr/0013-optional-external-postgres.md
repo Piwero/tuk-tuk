@@ -98,7 +98,7 @@ The UI cannot perform the switch. The running process holds an engine bound
 to one URL; cutting over means restarting, which a web request cannot
 survive. In Kubernetes it would mean asking a pod to rewrite its own
 environment and then die. The test endpoint is valuable precisely because it
-catches typos, firewall rules, and wrong passwords *before* the chart is
+catches typos, firewall rules, and wrong passwords _before_ the chart is
 edited and the pod restarts into a crash-loop.
 
 That endpoint accepts a user-supplied URL and makes the server connect to
@@ -173,7 +173,7 @@ is not this tool's business.
 
 ## Decision: multi-replica is explicitly not supported by this change
 
-Moving off the PVC makes horizontal scaling *look* available. It is not, and
+Moving off the PVC makes horizontal scaling _look_ available. It is not, and
 three things stand in the way. This is recorded as a "no" because the most
 dangerous of them fails silently.
 
@@ -184,7 +184,7 @@ to a per-user one" — a premise that dies the moment a second process exists.
 With N replicas behind a round-robin load balancer, the effective
 brute-force delay drops roughly N-fold, with no error surfaced and no effort
 required from an attacker; the load balancer does the work. ADR 0005
-accepted the absence of per-IP rate limiting *because* this counter
+accepted the absence of per-IP rate limiting _because_ this counter
 compensated. It must move to shared storage before any scale-out, not after.
 
 Migrations run on every boot of every replica (`run_migrations` in the
@@ -276,7 +276,7 @@ next foreign-key violation of this class will be found in production.
   `downgrade()` paths are explicitly out of scope; nobody downgrades a
   production database and pretending otherwise costs real work.
 - **Adding `ondelete` to all fourteen bare foreign keys and deleting the
-  hand-written sweeps.** Rejected *for this change*, though it is the
+  hand-written sweeps.** Rejected _for this change_, though it is the
   correct end state. Every one of those deletions is safe only because
   Postgres enforces foreign keys — which is unverifiable on SQLite, where
   the test suite runs. It would remove the only protection those paths have
