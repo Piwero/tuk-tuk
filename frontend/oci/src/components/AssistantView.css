@@ -80,11 +80,13 @@
 
   .assistant-composer {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-2);
   }
 
   .assistant-composer input {
-    flex: 1;
+    flex: 1 1 12rem;
+    min-width: 0;
   }
 
   @media (max-width: 720px) {
