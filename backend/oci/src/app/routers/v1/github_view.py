@@ -42,7 +42,9 @@ from app.users import current_user_id
 router = APIRouter(prefix="/api/v1/github", tags=["github"])
 
 Relationship = Literal["review_requested", "mine", "other"]
-TokenReadStatus = Literal["ok", "unavailable", "needs_reconnect"]
+# `stale`: GitHub could not be reached, so the token's items are its last
+# result from under 10 minutes ago.
+TokenReadStatus = Literal["ok", "stale", "unavailable", "needs_reconnect"]
 
 
 class GitHubLabelRead(BaseModel):
@@ -137,8 +139,8 @@ class _GitHubViewRead(BaseModel):
     repositories: list[RepositoryReadRead]
     tokens: list[TokenReadStatusRead]
     fetched_at: datetime
-    # True when GitHub could not be reached and these items are an earlier
-    # result. Always false while every read is live.
+    # True when GitHub could not be reached for some GitHub Token and its
+    # items are that token's last result, fetched at `fetched_at`.
     stale: bool
 
     @field_serializer("fetched_at")
@@ -179,6 +181,8 @@ class _TokenReads[Result]:
     statuses: list[TokenReadStatusRead]
     # When the oldest result shown was fetched from GitHub.
     fetched_at: datetime
+    # Whether any result shown is a stale one.
+    stale: bool = False
 
 
 async def _read_each_token[Result](
@@ -214,7 +218,10 @@ async def _read_each_token[Result](
                     ],
                 )
             except TransientGitHubSourceError:
-                status = "unavailable"
+                # A blip at GitHub: show the last result if it is recent
+                # enough, labelled stale (spec #576).
+                shown = cache.stale(owner_id, token.id)
+                status = "unavailable" if shown is None else "stale"
             except TerminalGitHubSourceError:
                 # GitHub rejected the token itself (issue #584, ADR 0007); a
                 # transient failure never touches `connection_state`.
@@ -226,6 +233,7 @@ async def _read_each_token[Result](
         if shown is not None:
             reads.results.append(({w.github_repo_id: w for w in watched}, shown.result))
             reads.fetched_at = min(reads.fetched_at, shown.fetched_at)
+            reads.stale = reads.stale or status == "stale"
         reads.statuses.append(TokenReadStatusRead.of(token, status, now))
     return reads
 
@@ -326,7 +334,7 @@ async def list_pull_requests(
         repositories=repositories,
         tokens=reads.statuses,
         fetched_at=reads.fetched_at,
-        stale=False,
+        stale=reads.stale,
     )
 
 
@@ -374,5 +382,5 @@ async def list_issues(
         repositories=repositories,
         tokens=reads.statuses,
         fetched_at=reads.fetched_at,
-        stale=False,
+        stale=reads.stale,
     )

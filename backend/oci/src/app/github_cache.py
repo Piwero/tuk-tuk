@@ -16,6 +16,10 @@ from app.session import Clock
 # Reopening the view within about a minute is instant (spec #576).
 FRESH_FOR = timedelta(seconds=60)
 
+# On a transient GitHub failure, a result this young is still worth
+# showing, labelled stale (spec #576, ADR 0007).
+STALE_FOR = timedelta(minutes=10)
+
 # (owner user id, GitHub Token id)
 _CacheKey = tuple[int, int]
 
@@ -35,8 +39,18 @@ class GitHubReadCache[Result]:
 
     def fresh(self, owner_id: int, token_id: int) -> CachedRead[Result] | None:
         """The token's last read if it was fetched under 60 seconds ago."""
+        return self._younger_than(owner_id, token_id, FRESH_FOR)
+
+    def stale(self, owner_id: int, token_id: int) -> CachedRead[Result] | None:
+        """The token's last read if it was fetched under 10 minutes ago:
+        what to show when GitHub is briefly unreachable."""
+        return self._younger_than(owner_id, token_id, STALE_FOR)
+
+    def _younger_than(
+        self, owner_id: int, token_id: int, age: timedelta
+    ) -> CachedRead[Result] | None:
         entry = self._entries.get((owner_id, token_id))
-        if entry is None or self._clock() - entry.fetched_at >= FRESH_FOR:
+        if entry is None or self._clock() - entry.fetched_at >= age:
             return None
         return entry
 

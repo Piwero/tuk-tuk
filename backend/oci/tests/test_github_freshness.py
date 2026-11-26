@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.github_source import TransientGitHubSourceError
 from tests.conftest import FakeClock, FakeGitHubSource, fake_issue, fake_pull_request
 from tests.test_github_pull_requests import watch_through
 
@@ -124,3 +125,29 @@ def test_pull_requests_and_github_issues_are_cached_apart(
     assert titles(read(client, PULL_REQUESTS)) == ["A pull request"]
     assert len(fake_github_source.issue_calls) == 1
     assert len(fake_github_source.pull_request_calls) == 1
+
+
+def token_statuses(body: dict[str, Any]) -> list[tuple[str, str]]:
+    return [(t["owner_login"], t["status"]) for t in body["tokens"]]
+
+
+def test_a_transient_failure_serves_the_last_result_under_10_minutes_old_as_stale(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    fake_github_source.register_pull_requests(
+        PERSONAL, "octocat/dotfiles", [fake_pull_request(1, "Last seen")]
+    )
+    fetched = fake_clock.now
+    assert read(client)["stale"] is False
+
+    fake_clock.advance(timedelta(minutes=9, seconds=59))
+    fake_github_source.register_pull_requests_error(
+        PERSONAL, TransientGitHubSourceError("rate limited")
+    )
+    body = read(client)
+
+    assert titles(body) == ["Last seen"]
+    assert body["stale"] is True
+    assert fetched_at(body) == fetched
+    assert token_statuses(body) == [("octocat", "stale")]
