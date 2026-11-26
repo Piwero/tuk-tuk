@@ -331,6 +331,51 @@ export interface FakeWatchedRepository {
 
 let nextWatchedRepositoryId = 1;
 
+/** An open Pull Request (#579) as the backend's read lists it: already
+ * classified by `relationship`. Its repository is `repository` (by
+ * `owner/name`); the fake fills in `watched_repository_id`. */
+export interface FakeGitHubPullRequest {
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  is_draft: boolean;
+  review_decision: "approved" | "changes_requested" | "pending";
+  ci_status: "pass" | "fail" | "pending" | null;
+  relationship: "review_requested" | "mine" | "other";
+}
+
+/** An open Pull Request for `installFakeApi({ githubPullRequests })`, in
+ * octocat/dotfiles unless `repository` says otherwise. */
+export function fakeGitHubPullRequest(
+  number: number,
+  title: string,
+  overrides: Partial<FakeGitHubPullRequest> = {},
+): FakeGitHubPullRequest {
+  const repository = overrides.repository ?? "octocat/dotfiles";
+  return {
+    repository,
+    number,
+    title,
+    url: `https://github.com/${repository}/pull/${number}`,
+    author: "hubot",
+    author_is_bot: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    labels: [],
+    is_draft: false,
+    review_decision: "pending",
+    ci_status: null,
+    relationship: "other",
+    ...overrides,
+  };
+}
+
 export interface FakeGoogleAccount {
   id: number;
   google_account_id: string;
@@ -488,6 +533,13 @@ export interface FakeApiState {
   /** Owner logins whose token's repository listing fails, and how: as the
    * backend reports it per token in the picker. */
   githubRepositoryFailures: Record<string, "unavailable" | "needs_reconnect">;
+  /** The open Pull Requests the GitHub view's read answers with (#579), in
+   * the backend's order (grouped, then most recently updated first). Only
+   * those in a Watched Repository are returned. */
+  githubPullRequests: FakeGitHubPullRequest[];
+  /** How many more open Pull Requests each repository (by `owner/name`)
+   * has on GitHub beyond those returned. */
+  githubPullRequestOverflow: Record<string, number>;
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
@@ -1250,6 +1302,8 @@ export function installFakeApi({
   githubReadableRepositories = {},
   watchedRepositories = [],
   githubRepositoryFailures = {},
+  githubPullRequests = [],
+  githubPullRequestOverflow = {},
   events = [],
   eventFailures = [],
   standupEntries = [],
@@ -1333,6 +1387,8 @@ export function installFakeApi({
   watchedRepositories?: (Omit<FakeWatchedRepository, "id" | "private" | "created_at"> &
     Partial<FakeWatchedRepository>)[];
   githubRepositoryFailures?: Record<string, "unavailable" | "needs_reconnect">;
+  githubPullRequests?: FakeGitHubPullRequest[];
+  githubPullRequestOverflow?: Record<string, number>;
   /** Google Calendar Events (issue #107) the calendar's own read-only
    * endpoint answers with — never filtered by calendar `enabled` here,
    * since that filtering is the backend's job (exercised in the backend
@@ -1475,6 +1531,11 @@ export function installFakeApi({
       ...watched,
     })),
     githubRepositoryFailures: { ...githubRepositoryFailures },
+    githubPullRequests: githubPullRequests.map((pr) => ({
+      ...pr,
+      labels: pr.labels.map((label) => ({ ...label })),
+    })),
+    githubPullRequestOverflow: { ...githubPullRequestOverflow },
     events: events.map((event) => ({ ...event })),
     eventFailures: eventFailures.map((failure) => ({ ...failure })),
     standupEntries: standupEntries.map((entry) => ({
@@ -1768,6 +1829,38 @@ export function installFakeApi({
       };
       state.watchedRepositories.push(created);
       return json(created, 201);
+    }
+    if (method === "GET" && url.pathname === "/api/v1/github/pull-requests") {
+      // Shaped as the backend answers: only Watched Repositories, each
+      // with its overflow, and a status for each token that has any.
+      const watched = [...state.watchedRepositories].sort((a, b) =>
+        a.full_name.localeCompare(b.full_name),
+      );
+      const byName = new Map(watched.map((w) => [w.full_name, w]));
+      return json({
+        items: state.githubPullRequests
+          .filter((pr) => byName.has(pr.repository))
+          .map((pr) => ({ ...pr, watched_repository_id: byName.get(pr.repository)?.id })),
+        repositories: watched.map((w) => {
+          const overflow = state.githubPullRequestOverflow[w.full_name] ?? 0;
+          const shown = state.githubPullRequests.filter(
+            (pr) => pr.repository === w.full_name,
+          ).length;
+          return {
+            watched_repository_id: w.id,
+            full_name: w.full_name,
+            total_count: shown + overflow,
+            overflow_count: overflow,
+            overflow_url: `https://github.com/${w.full_name}/pulls`,
+          };
+        }),
+        tokens: [...state.githubTokens]
+          .sort((a, b) => a.id - b.id)
+          .filter((token) => watched.some((w) => w.github_token_id === token.id))
+          .map((token) => ({ id: token.id, owner_login: token.owner_login, status: "ok" })),
+        fetched_at: new Date().toISOString(),
+        stale: false,
+      });
     }
     const watchedMatch = /^\/api\/v1\/github\/watched-repositories\/(\d+)$/.exec(url.pathname);
     if (method === "DELETE" && watchedMatch !== null) {

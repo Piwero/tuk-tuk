@@ -87,6 +87,7 @@ import { EventDetail } from "./components/EventDetail";
 import { FocusStatsView } from "./components/FocusStatsPanel";
 import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
+import { GitHubView } from "./components/GitHubView";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { AssistantPage } from "./components/AssistantPage";
@@ -128,6 +129,7 @@ type View =
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar"; mode: CalendarMode }
   | { kind: "goals" }
+  | { kind: "github" }
   | { kind: "habits" }
   | { kind: "standup" }
   | { kind: "assistant" }
@@ -183,6 +185,7 @@ function staticViewKindOf(view: View): StaticViewKind | null {
   if (
     view?.kind === "calendar" ||
     view?.kind === "goals" ||
+    view?.kind === "github" ||
     view?.kind === "habits" ||
     view?.kind === "standup" ||
     view?.kind === "assistant" ||
@@ -212,6 +215,8 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
       return { kind: "smart", view: smartViewForPath(pathname) ?? "today" };
     case "goals":
       return { kind: "goals" };
+    case "github":
+      return { kind: "github" };
     case "habits":
       return { kind: "habits" };
     case "standup":
@@ -661,6 +666,7 @@ export function App({
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
       view?.kind === "goals" ||
+      view?.kind === "github" ||
       view?.kind === "habits" ||
       view?.kind === "standup" ||
       view?.kind === "assistant" ||
@@ -709,6 +715,7 @@ export function App({
       view === null ||
       view.kind === "calendar" ||
       view.kind === "goals" ||
+      view.kind === "github" ||
       view.kind === "habits" ||
       view.kind === "standup" ||
       view.kind === "assistant" ||
@@ -1246,6 +1253,7 @@ export function App({
   // so the two surfaces never disagree about which destination is active.
   const calendarSelected = view?.kind === "calendar";
   const goalsSelected = view?.kind === "goals";
+  const githubSelected = view?.kind === "github";
   const habitsSelected = view?.kind === "habits";
   const standupSelected = view?.kind === "standup";
   const assistantSelected = view?.kind === "assistant";
@@ -1457,6 +1465,8 @@ export function App({
               calendarEnabled={sectionSettings.calendar}
               goalsSelected={goalsSelected}
               goalsEnabled={sectionSettings.goals}
+              githubSelected={githubSelected}
+              onSelectGitHub={() => switchView({ kind: "github" })}
               habitsSelected={habitsSelected}
               habitsEnabled={sectionSettings.habits}
               standupSelected={standupSelected}
@@ -1530,6 +1540,8 @@ export function App({
                         "Calendar"
                       ) : view?.kind === "goals" ? (
                         "Goals"
+                      ) : view?.kind === "github" ? (
+                        "GitHub"
                       ) : view?.kind === "habits" ? (
                         "Habits"
                       ) : view?.kind === "standup" ? (
@@ -1764,6 +1776,10 @@ export function App({
                   />
                 ) : view?.kind === "goals" ? (
                   <GoalsView />
+                ) : view?.kind === "github" ? (
+                  <GitHubView
+                    onOpenSettings={() => switchView({ kind: "settings", tab: "github" })}
+                  />
                 ) : view?.kind === "habits" ? (
                   <HabitsView refreshToken={habitsRefresh} />
                 ) : view?.kind === "standup" ? (
