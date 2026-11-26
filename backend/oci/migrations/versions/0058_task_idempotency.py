@@ -1,14 +1,14 @@
 """Add per-User request key to Tasks for replay-safe accepted drafts.
 
 Revision ID: 0058_task_idempotency
-Revises: 0057_task_estimate
+Revises: 0058_check_item_receipts
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "0058_task_idempotency"
-down_revision = "0057_task_estimate"
+down_revision = "0058_check_item_receipts"
 branch_labels = None
 depends_on = None
 
