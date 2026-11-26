@@ -276,6 +276,30 @@ def test_a_repository_view_with_no_repositories_reads_nothing(
     assert (body["items"], body["repositories"], body["tokens"]) == ([], [], [])
 
 
+def test_a_repository_view_shares_the_one_minute_cache_with_the_default_view(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    ids = watch_three(client, fake_github_source)
+    view = create_view(client, "Blog", [ids["octocat/blog"]])
+    client.get(f"{PULL_REQUESTS}?view={view['id']}")
+    for full_name in ("octocat/dotfiles", "octocat/blog"):
+        fake_github_source.register_pull_requests(
+            PERSONAL, full_name, [fake_pull_request(9, f"{full_name} newer", repository=full_name)]
+        )
+
+    everything = client.get(PULL_REQUESTS).json()
+    again = client.get(f"{PULL_REQUESTS}?view={view['id']}").json()
+
+    # Within the minute neither read asks GitHub again, and the view's
+    # read never narrowed what the default view shows.
+    assert sorted(item["title"] for item in everything["items"]) == [
+        "acme/api PR",
+        "octocat/blog PR",
+        "octocat/dotfiles PR",
+    ]
+    assert [item["title"] for item in again["items"]] == ["octocat/blog PR"]
+
+
 def test_reading_a_repository_view_that_does_not_exist_is_not_found(client: TestClient) -> None:
     for path in (PULL_REQUESTS, ISSUES):
         response = client.get(f"{path}?view=999999")

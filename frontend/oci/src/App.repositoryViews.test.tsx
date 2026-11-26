@@ -154,6 +154,28 @@ describe("Repository Views", () => {
     );
   });
 
+  it("refreshes its own repositories from GitHub with Refresh", async () => {
+    const work = fakeRepositoryView("Work", [API]);
+    const api = installFakeApi({ ...threeWatched(), repositoryViews: [work] });
+    window.history.replaceState(null, "", `/github/views/${work.id}`);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("link", { name: "acme/api PR" });
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() =>
+      expect(
+        api.requests.some(
+          (r) =>
+            r.method === "GET" &&
+            r.url === `/api/v1/github/pull-requests?view=${work.id}&refresh=true`,
+        ),
+      ).toBe(true),
+    );
+    expect(shownTitles()).toEqual(["acme/api PR"]);
+  });
+
   it("keeps showing a saved filter that nothing open matches any more", async () => {
     const work = fakeRepositoryView("Work", [API], { author: "ghost" });
     installFakeApi({ ...threeWatched(), repositoryViews: [work] });
