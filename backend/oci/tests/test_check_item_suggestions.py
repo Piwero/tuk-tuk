@@ -53,6 +53,74 @@ def test_selected_context_has_no_week_preferences_transcript_or_tools(client: Te
         stub.stop()
 
 
+def test_selected_context_reuses_provider_compatibility_retry(client: TestClient) -> None:
+    task = client.post("/api/v1/tasks", json={"title": "Pack"}).json()
+    stub = StubChatProvider()
+    try:
+        _configure(client, stub.base_url)
+        stub.set_responses(
+            [
+                (400, b'{"error": "Set reasoning_effort to none"}'),
+                (
+                    200,
+                    json.dumps(
+                        {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "content": json.dumps(
+                                            {
+                                                "message": "Steps",
+                                                "suggestions": [
+                                                    {
+                                                        "type": "add_check_items",
+                                                        "task_id": task["id"],
+                                                        "check_item_titles": ["Pack socks"],
+                                                    }
+                                                ],
+                                            }
+                                        )
+                                    }
+                                }
+                            ]
+                        }
+                    ).encode(),
+                ),
+            ]
+        )
+        result = client.post(
+            "/api/v1/assistant/check-item-suggestions", json={"task_id": task["id"]}
+        )
+        assert result.status_code == 200, result.text
+        assert stub.request_count == 2
+        assert stub.request_at(1)["reasoning_effort"] == "none"
+        assert all("tools" not in stub.request_at(i) for i in range(2))
+    finally:
+        stub.stop()
+
+
+@pytest.mark.parametrize("padding", ["", " " * 65536])
+def test_selected_context_rejects_oversized_envelope_and_tool_calls(
+    client: TestClient, padding: str
+) -> None:
+    task = client.post("/api/v1/tasks", json={"title": "Pack"}).json()
+    stub = StubChatProvider()
+    try:
+        _configure(client, stub.base_url)
+        message = {"content": '{"message":"Steps","suggestions":[]}'}
+        if not padding:
+            message["tool_calls"] = [{"id": "unavailable"}]
+        body = json.dumps({"choices": [{"message": message}], "padding": padding}).encode()
+        stub.set_responses([(200, body)])
+        response = client.post(
+            "/api/v1/assistant/check-item-suggestions", json={"task_id": task["id"]}
+        )
+        assert response.status_code == 503
+        assert client.get(f"/api/v1/tasks/{task['id']}").json()["check_items"] == []
+    finally:
+        stub.stop()
+
+
 def test_each_check_item_creation_replays_after_unknown_outcome(client: TestClient) -> None:
     task = client.post("/api/v1/tasks", json={"title": "Pack"}).json()
     path = f"/api/v1/tasks/{task['id']}/check-items"
@@ -81,7 +149,7 @@ def test_concurrent_retries_create_one_check_item(client: TestClient) -> None:
     path = f"/api/v1/tasks/{task['id']}/check-items"
     key = str(uuid4())
 
-    barrier = Barrier(2)
+    barrier = Barrier(3, timeout=10)
     status_codes: list[int] = []
 
     def create() -> None:
@@ -94,7 +162,8 @@ def test_concurrent_retries_create_one_check_item(client: TestClient) -> None:
         thread.start()
     barrier.wait()
     for thread in threads:
-        thread.join()
+        thread.join(timeout=15)
+        assert not thread.is_alive()
     assert status_codes == [201, 201]
     assert len(client.get(f"/api/v1/tasks/{task['id']}").json()["check_items"]) == 1
 

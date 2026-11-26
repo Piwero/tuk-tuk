@@ -6,6 +6,7 @@ import {
   type AssistantConfig,
   type Task,
 } from "../api";
+import { assistantProviderHost } from "../assistantProvider";
 import "./CheckItemSuggestions.css";
 
 type Step = { title: string; requestId: string; saved: boolean };
@@ -48,13 +49,9 @@ export function CheckItemSuggestions({
     };
   }, []);
   if (!config?.base_url || !config.model || !config.api_key_set) return null;
-  let host: string;
-  try {
-    host = new URL(config.base_url).hostname;
-  } catch {
-    return null;
-  }
-  const local = ["localhost", "127.0.0.1", "[::1]"].includes(host);
+  const provider = assistantProviderHost(config.base_url);
+  if (!provider) return null;
+  const { host, local } = provider;
   function close(): void {
     controller.current?.abort();
     setLoading(false);
@@ -135,7 +132,13 @@ export function CheckItemSuggestions({
   }
   return (
     <div className="check-item-suggestions">
-      <button ref={opener} type="button" onClick={() => setOpen(true)} aria-expanded={open}>
+      <button
+        className="btn-secondary"
+        ref={opener}
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-expanded={open}
+      >
         Suggest Check Items
       </button>
       {open && (
@@ -184,13 +187,19 @@ export function CheckItemSuggestions({
             />
           </label>
           <button
+            className="btn-secondary"
             type="button"
             disabled={loading || groups.length > 0}
             onClick={() => void generate()}
           >
             Suggest steps
           </button>
-          <button type="button" disabled={groups.some((g) => g.state === "saving")} onClick={close}>
+          <button
+            className="btn-secondary"
+            type="button"
+            disabled={groups.some((g) => g.state === "saving")}
+            onClick={close}
+          >
             Cancel suggestions
           </button>
           {loading && (
@@ -245,7 +254,7 @@ export function CheckItemSuggestions({
                     <input
                       type="checkbox"
                       checked={group.keepDuplicates}
-                      disabled={locked}
+                      disabled={group.state === "saving" || group.state === "saved"}
                       onChange={(event) =>
                         changeGroup(index, { keepDuplicates: event.target.checked })
                       }
@@ -254,10 +263,11 @@ export function CheckItemSuggestions({
                   </label>
                 )}
                 <button
+                  className="btn-secondary"
                   type="button"
                   disabled={
                     invalid ||
-                    (duplicates && !group.keepDuplicates && group.state !== "failed") ||
+                    (duplicates && !group.keepDuplicates) ||
                     group.state === "saving" ||
                     group.state === "saved" ||
                     groups.some((g) => g.state === "saving")
@@ -267,6 +277,7 @@ export function CheckItemSuggestions({
                   {group.state === "failed" ? "Retry Add" : "Add"}
                 </button>
                 <button
+                  className="btn-secondary"
                   type="button"
                   disabled={group.state === "saving" || group.state === "saved"}
                   onClick={() => setGroups((current) => current.filter((_, i) => i !== index))}

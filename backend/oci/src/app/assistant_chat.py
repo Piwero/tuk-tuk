@@ -422,7 +422,12 @@ def _completion_payload(model: str, messages: list[dict[str, Any]]) -> dict[str,
 
 
 async def _post_completion(
-    client: httpx.AsyncClient, api_key: str, payload: dict[str, Any], remaining_seconds: float
+    client: httpx.AsyncClient,
+    api_key: str,
+    payload: dict[str, Any],
+    remaining_seconds: float,
+    *,
+    max_response_bytes: int | None = None,
 ) -> dict[str, Any] | None:
     """One `/chat/completions` call, given the time left in the turn's
     budget. Returns the raw `message` object, or None on any failure —
@@ -467,6 +472,9 @@ async def _post_completion(
             response.status_code,
             response.text[:_ERROR_BODY_LOG_LIMIT],
         )
+        return None
+    if max_response_bytes is not None and len(response.content) > max_response_bytes:
+        logger.warning("assistant: provider returned an oversized body")
         return None
     try:
         body = response.json()

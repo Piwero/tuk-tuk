@@ -1,25 +1,25 @@
 @layer components {
   .brain-dump {
     display: grid;
-    gap: 12px;
+    gap: var(--space-3);
     min-width: 0;
   }
   .brain-dump article {
     display: grid;
-    gap: 8px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--border-default);
+    border-radius: var(--radius-md);
     min-width: 0;
   }
   .brain-dump input,
   .brain-dump textarea,
   .brain-dump button {
-    min-height: 44px;
+    min-height: var(--tap-target);
     max-width: 100%;
   }
   .brain-dump textarea {
-    min-height: 120px;
+    min-height: var(--capture-textarea-min-height);
     width: 100%;
   }
   .brain-dump pre {
@@ -31,7 +31,7 @@
     overflow-wrap: anywhere;
   }
   .brain-dump :focus-visible {
-    outline: 3px solid var(--accent);
-    outline-offset: 2px;
+    outline: var(--focus-outline-width) solid var(--accent);
+    outline-offset: var(--focus-outline-offset);
   }
 }

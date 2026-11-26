@@ -408,6 +408,18 @@ class Task(OwnedMixin, Base):
     )
 
 
+class TaskCreation(OwnedMixin, Base):
+    """Durable receipt: Task deletion must never re-enable acceptance."""
+
+    __tablename__ = "task_creations"
+    __table_args__ = (UniqueConstraint("owner_id", "request_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(36))
+    # Deliberately no FK: retain tombstone after hard deletion.
+    task_id: Mapped[int] = mapped_column()
+
+
 class CheckItemCreation(OwnedMixin, Base):
     """Durable receipt: deleting a Check Item never re-enables its request."""
 

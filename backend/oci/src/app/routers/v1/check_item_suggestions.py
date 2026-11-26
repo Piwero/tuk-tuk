@@ -6,7 +6,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
-from app.assistant_chat import AddCheckItemsSuggestion
+from app.assistant_chat import AddCheckItemsSuggestion, _post_completion
 from app.crypto import decrypt_credential
 from app.db import SessionDep
 from app.routers.v1.tasks import get_task_or_404
@@ -55,10 +55,10 @@ async def suggest_check_items(
     try:
         key = decrypt_credential(encrypted, key=request.app.state.settings.app_master_key)
         async with httpx.AsyncClient(base_url=base_url, timeout=30) as client:
-            response = await client.post(
-                "/chat/completions",
-                headers={"Authorization": f"Bearer {key}"},
-                json={
+            message = await _post_completion(
+                client,
+                key,
+                {
                     "model": model,
                     "messages": [
                         {
@@ -76,11 +76,11 @@ async def suggest_check_items(
                         },
                     },
                 },
+                30.0,
+                max_response_bytes=65536,
             )
-            response.raise_for_status()
-            if len(response.content) > 65536:
-                raise ValueError("Oversized output")
-            message = response.json()["choices"][0]["message"]
+            if message is None:
+                raise ValueError("Missing or oversized output")
             if message.get("tool_calls"):
                 raise ValueError("Tools unavailable")
             raw = json.loads(message["content"])
