@@ -92,7 +92,7 @@ describe("Habits week grid", () => {
     expect(state("Drink water, Tuesday, Jun 30: in progress: 2 of 4")).toBe("state-partial");
     expect(state("Drink water, Wednesday, Jul 1: missed")).toBe("state-missed");
     expect(state("Drink water, Friday, Jul 3: not yet checked in")).toBe("state-open-today");
-    expect(state("Review week, Friday, Jul 3: not scheduled")).toBe("state-not-scheduled");
+    expect(state("Review week, Friday, Jul 3: not scheduled")).toBe("state-unscheduled");
     // A partial day sits on a lighter step of the heat ramp than a full one.
     expect(within(grid).getByLabelText("Drink water, Monday, Jun 29: checked in")).toHaveClass(
       "level-4",
