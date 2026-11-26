@@ -31,7 +31,7 @@ import {
 } from "./api";
 import { DeliveredReminders, type DeliveredReminder } from "./components/DeliveredReminders";
 import { QuietHoursDeferred } from "./components/QuietHoursDeferred";
-import "./components/ReminderPanels.css";
+import { ReminderPanels } from "./components/ReminderPanels";
 import { reminderLabel } from "./reminders";
 
 export type ReminderDeliveryState = "off" | "requesting" | "allowed" | "denied" | "unsupported";
@@ -224,7 +224,7 @@ export function DueReminderNotifier({
   const showHeld = state === "allowed" && held.length > 0;
   if (!showHeld && delivered.length === 0) return null;
   return (
-    <div className="reminder-panels">
+    <ReminderPanels>
       {showHeld && (
         <QuietHoursDeferred
           held={held}
@@ -237,7 +237,7 @@ export function DueReminderNotifier({
         onOpenTask={(id) => openTask.current(id)}
         onDismiss={(id) => setDelivered((shown) => shown.filter((r) => r.id !== id))}
       />
-    </div>
+    </ReminderPanels>
   );
 }
 
