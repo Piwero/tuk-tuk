@@ -1,7 +1,9 @@
+import "./GitHubFreshness.css";
+
 import { useEffect, useState } from "react";
 
 /** "fetched 42 s ago", "fetched 3 min ago", "fetched 2 h ago". */
-export function formatFetchedAgo(fetchedAt: Date, now: Date): string {
+function formatFetchedAgo(fetchedAt: Date, now: Date): string {
   const seconds = Math.max(0, Math.floor((now.getTime() - fetchedAt.getTime()) / 1000));
   if (seconds < 60) return `fetched ${seconds} s ago`;
   const minutes = Math.floor(seconds / 60);
@@ -38,6 +40,28 @@ export function GitHubFreshness({
       <button type="button" className="btn-secondary" disabled={refreshing} onClick={onRefresh}>
         Refresh
       </button>
+    </div>
+  );
+}
+
+/** Shown when GitHub couldn't be reached and the view shows an earlier
+ * result instead (#583): the backend keeps one for 10 minutes. */
+export function GitHubStaleNotice({
+  fetchedAt,
+  onRetry,
+}: {
+  fetchedAt: string;
+  onRetry: () => void;
+}): React.JSX.Element {
+  const now = useNow();
+  return (
+    <div className="github-stale" role="status" aria-label="Stale GitHub results">
+      <p>
+        {`GitHub couldn’t be reached, so these results were ${formatFetchedAgo(new Date(fetchedAt), now)}. `}
+        <button type="button" className="btn-quiet" onClick={onRetry}>
+          Retry
+        </button>
+      </p>
     </div>
   );
 }

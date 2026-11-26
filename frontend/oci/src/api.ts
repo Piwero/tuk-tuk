@@ -874,11 +874,13 @@ export interface GitHubRepositoryRead {
   overflow_url: string;
 }
 
-/** How one GitHub Token fared in a GitHub view read. */
+/** How one GitHub Token fared in a GitHub view read. `stale`: GitHub
+ * couldn't be reached, so its items are its last result from under 10
+ * minutes ago (#583). */
 export interface GitHubTokenReadStatus {
   id: number;
   owner_login: string;
-  status: "ok" | "unavailable" | "needs_reconnect";
+  status: "ok" | "stale" | "unavailable" | "needs_reconnect";
   expires_at: string | null;
   /** Expires within 7 days, or already has (#584). */
   expires_soon: boolean;
@@ -891,7 +893,9 @@ export interface GitHubViewRead<Item> {
   items: Item[];
   repositories: GitHubRepositoryRead[];
   tokens: GitHubTokenReadStatus[];
+  /** When the oldest items shown were fetched from GitHub (#583). */
   fetched_at: string;
+  /** Some token's items are a stale result: GitHub couldn't be reached. */
   stale: boolean;
 }
 

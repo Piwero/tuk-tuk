@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -103,5 +103,57 @@ describe("GitHub view › freshness", () => {
         (r) => r.method === "GET" && r.url === "/api/v1/github/issues?refresh=true",
       ),
     ).toBe(true);
+  });
+
+  it("keeps showing a stale result, labelled with its age, and offers Retry", async () => {
+    const api = installFakeApi({
+      ...watchedDotfiles(),
+      githubFetchedAt: secondsAgo(4 * 60),
+      githubStaleOwners: ["octocat"],
+      githubPullRequests: [fakeGitHubPullRequest(1, "Add zsh config")],
+    });
+    const user = await openGitHub();
+
+    const notice = await screen.findByRole("status", { name: "Stale GitHub results" });
+    expect(notice).toHaveTextContent(
+      "GitHub couldn’t be reached, so these results were fetched 4 min ago.",
+    );
+    expect(screen.getByRole("link", { name: "Add zsh config" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    // GitHub is back.
+    api.githubStaleOwners = [];
+    api.githubFetchedAt = null;
+    await user.click(within(notice).getByRole("button", { name: "Retry" }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("status", { name: "Stale GitHub results" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("fetched 0 s ago")).toBeInTheDocument();
+    expect(
+      api.requests.some(
+        (r) => r.method === "GET" && r.url === "/api/v1/github/pull-requests?refresh=true",
+      ),
+    ).toBe(true);
+  });
+
+  it("offers Retry where GitHub couldn’t be reached and nothing recent is left", async () => {
+    const api = installFakeApi({
+      ...watchedDotfiles(),
+      githubRepositoryFailures: { octocat: "unavailable" },
+      githubPullRequests: [fakeGitHubPullRequest(1, "Add zsh config")],
+    });
+    const user = await openGitHub();
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent("GitHub couldn’t be reached for octocat’s repositories.");
+    expect(screen.queryByRole("link", { name: "Add zsh config" })).not.toBeInTheDocument();
+
+    delete api.githubRepositoryFailures.octocat;
+    await user.click(within(banner).getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByRole("link", { name: "Add zsh config" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
