@@ -7,6 +7,7 @@ import {
   fetchGitHubPullRequests,
   type GitHubIssue,
   type GitHubPullRequest,
+  type GitHubReadOptions,
   type GitHubRepositoryRead,
   type GitHubViewRead,
   type PullRequestRelationship,
@@ -160,12 +161,13 @@ function GitHubRead<Item>({
   onOpenSettings,
   render,
 }: {
-  load: () => Promise<GitHubViewRead<Item>>;
+  load: (options?: GitHubReadOptions) => Promise<GitHubViewRead<Item>>;
   onOpenSettings: () => void;
   render: (read: GitHubViewRead<Item>) => React.ReactNode;
 }): React.JSX.Element {
   const [read, setRead] = useState<GitHubViewRead<Item> | null>(null);
   const [failed, setFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +183,21 @@ function GitHubRead<Item>({
       cancelled = true;
     };
   }, [load]);
+
+  // Refresh and Retry (#583): read from GitHub now, bypassing the cache,
+  // keeping the current read in view until the new one arrives.
+  const refresh = (): void => {
+    setRefreshing(true);
+    load({ refresh: true })
+      .then(
+        (result) => {
+          setRead(result);
+          setFailed(false);
+        },
+        () => setFailed(true),
+      )
+      .finally(() => setRefreshing(false));
+  };
 
   if (failed) return <p role="alert">GitHub couldn’t be read. Try again in a moment.</p>;
   if (read === null) return <p className="github-loading">Loading…</p>;
@@ -202,7 +219,7 @@ function GitHubRead<Item>({
   }
   return (
     <>
-      <GitHubFreshness fetchedAt={read.fetched_at} />
+      <GitHubFreshness fetchedAt={read.fetched_at} refreshing={refreshing} onRefresh={refresh} />
       <GitHubTokenBanners tokens={read.tokens} onOpenSettings={onOpenSettings} />
       {render(read)}
       <OverflowLinks repositories={read.repositories} />

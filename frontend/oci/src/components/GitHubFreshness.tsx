@@ -20,12 +20,24 @@ function useNow(): Date {
 }
 
 /** How fresh a GitHub view read is (#583): when its data was fetched from
- * GitHub, which the backend caches for a minute. */
-export function GitHubFreshness({ fetchedAt }: { fetchedAt: string }): React.JSX.Element {
+ * GitHub, which the backend caches for a minute, and Refresh to read from
+ * GitHub now. */
+export function GitHubFreshness({
+  fetchedAt,
+  refreshing,
+  onRefresh,
+}: {
+  fetchedAt: string;
+  refreshing: boolean;
+  onRefresh: () => void;
+}): React.JSX.Element {
   const now = useNow();
   return (
     <div className="github-freshness">
       <time dateTime={fetchedAt}>{formatFetchedAgo(new Date(fetchedAt), now)}</time>
+      <button type="button" className="btn-secondary" disabled={refreshing} onClick={onRefresh}>
+        Refresh
+      </button>
     </div>
   );
 }

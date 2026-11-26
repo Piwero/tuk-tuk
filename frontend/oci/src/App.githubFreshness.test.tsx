@@ -62,4 +62,46 @@ describe("GitHub view › freshness", () => {
 
     expect(await screen.findByText("fetched 42 s ago")).toBeInTheDocument();
   });
+
+  it("Refresh reads from GitHub now, bypassing the cache", async () => {
+    const api = installFakeApi({
+      ...watchedDotfiles(),
+      githubFetchedAt: secondsAgo(42),
+      githubPullRequests: [fakeGitHubPullRequest(1, "Add zsh config")],
+    });
+    const user = await openGitHub();
+    await screen.findByRole("link", { name: "Add zsh config" });
+    api.githubPullRequests = [fakeGitHubPullRequest(2, "Opened a moment ago")];
+    api.githubFetchedAt = null;
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(await screen.findByRole("link", { name: "Opened a moment ago" })).toBeInTheDocument();
+    expect(screen.getByText("fetched 0 s ago")).toBeInTheDocument();
+    expect(
+      api.requests.some(
+        (r) => r.method === "GET" && r.url === "/api/v1/github/pull-requests?refresh=true",
+      ),
+    ).toBe(true);
+  });
+
+  it("Refresh on the Issues tab reads GitHub Issues from GitHub now", async () => {
+    const api = installFakeApi({
+      ...watchedDotfiles(),
+      githubIssues: [fakeGitHubIssue(1, "Old issue")],
+    });
+    const user = await openGitHub();
+    await user.click(await screen.findByRole("tab", { name: "Issues" }));
+    await screen.findByRole("link", { name: "Old issue" });
+    api.githubIssues = [fakeGitHubIssue(2, "New issue")];
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(await screen.findByRole("link", { name: "New issue" })).toBeInTheDocument();
+    expect(
+      api.requests.some(
+        (r) => r.method === "GET" && r.url === "/api/v1/github/issues?refresh=true",
+      ),
+    ).toBe(true);
+  });
 });

@@ -899,9 +899,21 @@ export interface GitHubViewRead<Item> {
  * first within each group. */
 export type GitHubPullRequestsRead = GitHubViewRead<GitHubPullRequest>;
 
+/** How a GitHub view read treats the backend's one-minute cache (#583):
+ * `refresh` reads from GitHub now, bypassing and replacing it. */
+export interface GitHubReadOptions {
+  refresh?: boolean;
+}
+
+function githubReadQuery({ refresh = false }: GitHubReadOptions): string {
+  return refresh ? "?refresh=true" : "";
+}
+
 /** The open Pull Requests of every Watched Repository. */
-export function fetchGitHubPullRequests(): Promise<GitHubPullRequestsRead> {
-  return request("/api/v1/github/pull-requests");
+export function fetchGitHubPullRequests(
+  options: GitHubReadOptions = {},
+): Promise<GitHubPullRequestsRead> {
+  return request(`/api/v1/github/pull-requests${githubReadQuery(options)}`);
 }
 
 /** One open GitHub Issue in the GitHub view (#582) — never a Pull
@@ -928,8 +940,8 @@ export interface GitHubIssue {
 export type GitHubIssuesRead = GitHubViewRead<GitHubIssue>;
 
 /** The open GitHub Issues of every Watched Repository. */
-export function fetchGitHubIssues(): Promise<GitHubIssuesRead> {
-  return request("/api/v1/github/issues");
+export function fetchGitHubIssues(options: GitHubReadOptions = {}): Promise<GitHubIssuesRead> {
+  return request(`/api/v1/github/issues${githubReadQuery(options)}`);
 }
 
 export interface GoogleCalendar {
