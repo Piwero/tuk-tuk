@@ -6,6 +6,8 @@ cap and bot flagging happen here, so every client sees the same answer.
 
 The open GitHub Issues read (#582) sits beside the Pull Requests one and
 reuses `_watched_by_token`, the per-token status and `RepositoryReadRead`.
+Each token's read goes through `_read_through`, which marks a token GitHub
+rejects as needing reconnection (issue #584).
 """
 
 from collections.abc import Awaitable, Callable
@@ -27,6 +29,7 @@ from app.github_source import (
     TransientGitHubSourceError,
 )
 from app.models import GitHubToken, WatchedRepository
+from app.routers.v1.github import expires_soon
 from app.schemas import utc_z
 
 router = APIRouter(prefix="/api/v1/github", tags=["github"])
@@ -80,6 +83,25 @@ class TokenReadStatusRead(BaseModel):
     id: int
     owner_login: str
     status: TokenReadStatus
+    # So the GitHub view can warn before a token expires (issue #584).
+    expires_at: datetime | None
+    expires_soon: bool
+
+    @field_serializer("expires_at")
+    def _serialize_expires_at(self, value: datetime | None) -> str | None:
+        return None if value is None else utc_z(value)
+
+    @classmethod
+    def of(
+        cls, token: GitHubToken, status: TokenReadStatus, now: datetime
+    ) -> "TokenReadStatusRead":
+        return cls(
+            id=token.id,
+            owner_login=token.owner_login,
+            status=status,
+            expires_at=token.expires_at,
+            expires_soon=expires_soon(token.expires_at, now),
+        )
 
 
 class PullRequestsRead(BaseModel):
@@ -164,9 +186,7 @@ async def list_pull_requests(request: Request, session: SessionDep) -> PullReque
                 ],
             ),
         )
-        statuses.append(
-            TokenReadStatusRead(id=token.id, owner_login=token.owner_login, status=status)
-        )
+        statuses.append(TokenReadStatusRead.of(token, status, request.app.state.clock()))
         if result is None:
             continue
         for repo in result.repositories:

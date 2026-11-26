@@ -457,6 +457,14 @@ REACHES |= {
     "DELETE github token": Reach(
         lambda a, me: ("DELETE", f"/api/v1/github/tokens/{a.github_token}", None)
     ),
+    # Reconnect (issue #584), with Alice's own token as the replacement.
+    "PATCH github token": Reach(
+        lambda a, me: (
+            "PATCH",
+            f"/api/v1/github/tokens/{a.github_token}",
+            {"token": "github_pat_alice"},
+        )
+    ),
     "DELETE watched repository": Reach(
         lambda a, me: (
             "DELETE",

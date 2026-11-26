@@ -8,12 +8,15 @@ token's Watched Repositories. Settings warns 7 days before a token expires.
 Driven through the HTTP API with the fake GitHub source and the fake clock.
 """
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.crypto import decrypt_credential
 from app.github_source import TerminalGitHubSourceError, TransientGitHubSourceError
-from tests.conftest import FakeGitHubSource
+from tests.conftest import FakeClock, FakeGitHubSource, run_sql
 
 TOKENS = "/api/v1/github/tokens"
 WATCHED = "/api/v1/github/watched-repositories"
@@ -100,3 +103,127 @@ def test_reconnecting_with_a_replacement_for_the_same_owner_keeps_its_watched_re
     assert [w["full_name"] for w in client.get(WATCHED).json()] == ["octocat/dotfiles"]
     client.get(PULL_REQUESTS)
     assert fake_github_source.pull_request_calls[-1] == (REPLACEMENT, ["octocat/dotfiles"])
+
+
+def test_a_replacement_for_a_different_owner_is_refused_and_the_token_is_kept(
+    client: TestClient, fake_github_source: FakeGitHubSource, database_url: str
+) -> None:
+    personal = watch_through(
+        client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")]
+    )
+    fake_github_source.register_token(REPLACEMENT, owner_login="acme", owner_kind="organization")
+
+    response = client.patch(f"{TOKENS}/{personal}", json={"token": REPLACEMENT})
+
+    assert response.status_code == 422, response.text
+    error = response.json()["error"]
+    assert error["code"] == "github_token_owner_mismatch"
+    assert "octocat" in error["message"]
+    assert "acme" in error["message"]
+    [(stored,)] = run_sql(database_url, "SELECT encrypted_token FROM github_tokens")
+    assert decrypt_credential(stored, key="test-master-key") == PERSONAL
+
+
+def test_reconnect_validates_the_replacement_like_a_new_token(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    personal = watch_through(
+        client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")]
+    )
+
+    not_fine_grained = client.patch(f"{TOKENS}/{personal}", json={"token": "ghp_classic"})
+    # Never registered with the fake: GitHub answers 401 Bad credentials.
+    rejected = client.patch(f"{TOKENS}/{personal}", json={"token": REPLACEMENT})
+
+    assert not_fine_grained.json()["error"]["code"] == "github_token_not_fine_grained"
+    assert rejected.json()["error"]["code"] == "github_token_rejected"
+
+
+def test_reconnect_updates_the_expiry(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    personal = watch_through(
+        client,
+        fake_github_source,
+        PERSONAL,
+        "octocat",
+        [(1, "octocat/dotfiles")],
+        expires_at=datetime(2026, 12, 1, tzinfo=UTC),
+    )
+    fake_github_source.register_token(
+        REPLACEMENT, owner_login="octocat", expires_at=datetime(2027, 3, 1, tzinfo=UTC)
+    )
+
+    response = client.patch(f"{TOKENS}/{personal}", json={"token": REPLACEMENT})
+
+    assert datetime.fromisoformat(response.json()["expires_at"]) == datetime(2027, 3, 1, tzinfo=UTC)
+
+
+def test_reconnecting_a_token_that_does_not_exist_is_not_found(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    fake_github_source.register_token(REPLACEMENT, owner_login="octocat")
+
+    response = client.patch(f"{TOKENS}/9999", json={"token": REPLACEMENT})
+
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.parametrize(
+    ("expires_in", "expires_soon"),
+    [
+        (timedelta(days=8), False),
+        (timedelta(days=7), True),
+        (timedelta(hours=1), True),
+        (-timedelta(days=1), True),
+        (None, False),
+    ],
+)
+def test_a_token_expiring_within_7_days_is_flagged(
+    client: TestClient,
+    fake_github_source: FakeGitHubSource,
+    fake_clock: FakeClock,
+    expires_in: timedelta | None,
+    expires_soon: bool,
+) -> None:
+    expires_at = None if expires_in is None else fake_clock.now + expires_in
+    fake_github_source.register_token(PERSONAL, owner_login="octocat", expires_at=expires_at)
+    client.post(TOKENS, json={"token": PERSONAL})
+
+    [token] = client.get(TOKENS).json()
+
+    assert token["expires_soon"] is expires_soon
+
+
+def test_the_expiry_warning_follows_the_clock(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    fake_github_source.register_token(
+        PERSONAL, owner_login="octocat", expires_at=fake_clock.now + timedelta(days=10)
+    )
+    client.post(TOKENS, json={"token": PERSONAL})
+    assert client.get(TOKENS).json()[0]["expires_soon"] is False
+
+    fake_clock.advance(timedelta(days=3, hours=1))
+
+    assert client.get(TOKENS).json()[0]["expires_soon"] is True
+
+
+def test_the_github_view_read_carries_each_tokens_expiry(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    expires_at = fake_clock.now + timedelta(days=2)
+    personal = watch_through(
+        client,
+        fake_github_source,
+        PERSONAL,
+        "octocat",
+        [(1, "octocat/dotfiles")],
+        expires_at=expires_at,
+    )
+
+    [token] = client.get(PULL_REQUESTS).json()["tokens"]
+
+    assert token["id"] == personal
+    assert datetime.fromisoformat(token["expires_at"]) == expires_at
+    assert token["expires_soon"] is True
