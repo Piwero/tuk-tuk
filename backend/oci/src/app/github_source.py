@@ -5,7 +5,7 @@ application factory (see app.main.create_app), with the real adapter
 (app.github_adapter) as the default, so every backend test can run against
 a fake and never touch the network. Issue #578 added *identify token* and
 issue #581 *list accessible repositories*, issue #579 *list open pull
-requests*; a later ticket adds the open GitHub Issue read.
+requests* and issue #582 *list open issues*.
 """
 
 from dataclasses import dataclass
@@ -104,6 +104,46 @@ class OpenPullRequests:
     repositories: tuple[RepositoryPullRequests, ...]
 
 
+@dataclass(frozen=True)
+class GitHubIssue:
+    """One open GitHub Issue as GitHub reports it — never a Pull Request,
+    although GitHub's own issue listing counts those as issues too.
+    `author_login` is absent for an author whose GitHub account was
+    deleted."""
+
+    number: int
+    title: str
+    url: str
+    author_login: str | None
+    author_is_bot: bool
+    created_at: datetime
+    updated_at: datetime
+    assignees: tuple[str, ...]
+    labels: tuple[GitHubLabel, ...]
+    comment_count: int
+
+
+@dataclass(frozen=True)
+class RepositoryIssues:
+    """The open GitHub Issues of one repository, most recently updated
+    first: at most 100 of them in `issues`, `total_count` open in all.
+    `full_name` and `url` are as GitHub reports them now."""
+
+    github_id: int
+    full_name: str
+    url: str
+    total_count: int
+    issues: tuple[GitHubIssue, ...]
+
+
+@dataclass(frozen=True)
+class OpenIssues:
+    """One token's answer to *list open issues*. A repository the token
+    can no longer read is absent from `repositories`."""
+
+    repositories: tuple[RepositoryIssues, ...]
+
+
 class GitHubSourceError(Exception):
     """Base for any failure talking to GitHub. Never raised directly —
     callers catch one of the two subclasses below, which is deliberately
@@ -138,4 +178,13 @@ class GitHubSource(Protocol):
         """The open Pull Requests of each of `repositories`, all read
         through `token` in one round trip: at most 100 most recently updated
         per repository, plus each repository's total open count."""
+        ...
+
+    async def list_open_issues(
+        self, token: str, repositories: list[GitHubRepository]
+    ) -> OpenIssues:
+        """The open GitHub Issues of each of `repositories`, all read
+        through `token` in one round trip: at most 100 most recently updated
+        per repository, plus each repository's total open count. Pull
+        Requests are never among them."""
         ...

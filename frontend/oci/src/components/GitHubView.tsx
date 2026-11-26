@@ -3,13 +3,24 @@ import "./GitHubView.css";
 import { useEffect, useState } from "react";
 
 import {
+  fetchGitHubIssues,
   fetchGitHubPullRequests,
+  type GitHubIssue,
   type GitHubPullRequest,
-  type GitHubPullRequestsRead,
+  type GitHubRepositoryRead,
+  type GitHubViewRead,
   type PullRequestRelationship,
 } from "../api";
 import { formatTimeAgo } from "../dates";
 import { pathForSettingsTab } from "../routes";
+
+/** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
+type GitHubTab = "pull-requests" | "issues";
+
+const TABS: { tab: GitHubTab; label: string }[] = [
+  { tab: "pull-requests", label: "Pull Requests" },
+  { tab: "issues", label: "Issues" },
+];
 
 /** The groups, in the order the backend sorts them. */
 const GROUPS: { relationship: PullRequestRelationship; label: string }[] = [
@@ -34,6 +45,18 @@ function labelStyle(color: string): React.CSSProperties {
   return { ["--chip-color" as string]: `#${color}` };
 }
 
+function Labels({ labels }: { labels: { name: string; color: string }[] }): React.JSX.Element {
+  return (
+    <>
+      {labels.map((label) => (
+        <span key={label.name} className="github-label" style={labelStyle(label.color)}>
+          {label.name}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function PullRequestRow({ pr }: { pr: GitHubPullRequest }): React.JSX.Element {
   return (
     <li className="github-row">
@@ -55,27 +78,96 @@ function PullRequestRow({ pr }: { pr: GitHubPullRequest }): React.JSX.Element {
             {CI_LABELS[pr.ci_status]}
           </span>
         )}
-        {pr.labels.map((label) => (
-          <span key={label.name} className="github-label" style={labelStyle(label.color)}>
-            {label.name}
-          </span>
-        ))}
+        <Labels labels={pr.labels} />
       </div>
     </li>
   );
 }
 
-/** The GitHub view (#579): open Pull Requests across every Watched
- * Repository, grouped by the User's relationship to them. Read live from
- * GitHub on every load; nothing is stored. Each row links out to GitHub,
- * since tuk-tuk never writes there. */
+function IssueRow({ issue }: { issue: GitHubIssue }): React.JSX.Element {
+  return (
+    <li className="github-row">
+      <div className="github-row-title">
+        <a href={issue.url} target="_blank" rel="noreferrer">
+          {issue.title}
+        </a>
+      </div>
+      <div className="github-row-meta">
+        <span>{`${issue.repository}#${issue.number}`}</span>
+        {issue.author !== null && <span>{issue.author}</span>}
+        {issue.assignees.length > 0 && <span>{`Assigned to ${issue.assignees.join(", ")}`}</span>}
+        <time dateTime={issue.updated_at}>{formatTimeAgo(new Date(issue.updated_at))}</time>
+        <span>{issue.comment_count === 1 ? "1 comment" : `${issue.comment_count} comments`}</span>
+        <Labels labels={issue.labels} />
+      </div>
+    </li>
+  );
+}
+
+/** The GitHub view (#579, #582): open Pull Requests and open GitHub Issues
+ * across every Watched Repository, in two tabs. Read live from GitHub each
+ * time a tab opens; nothing is stored. Each row links out to GitHub, since
+ * tuk-tuk never writes there. */
 export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
-  const [read, setRead] = useState<GitHubPullRequestsRead | null>(null);
+  const [tab, setTab] = useState<GitHubTab>("pull-requests");
+
+  return (
+    <div className="github-view">
+      <div role="tablist" aria-label="GitHub" className="github-tabs">
+        {TABS.map(({ tab: id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`github-tab-${id}`}
+            aria-selected={id === tab}
+            aria-controls={`github-panel-${id}`}
+            className="github-tab"
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id={`github-panel-${tab}`} aria-labelledby={`github-tab-${tab}`}>
+        {tab === "pull-requests" ? (
+          <GitHubRead
+            key={tab}
+            load={fetchGitHubPullRequests}
+            onOpenSettings={onOpenSettings}
+            render={(read) => <PullRequestGroups items={read.items} />}
+          />
+        ) : (
+          <GitHubRead
+            key={tab}
+            load={fetchGitHubIssues}
+            onOpenSettings={onOpenSettings}
+            render={(read) => <IssueList items={read.items} />}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One tab's read: loading, failure and the no-Watched-Repositories state
+ * are the same for every tab; `render` draws the items, followed by the
+ * links to whatever GitHub holds beyond the per-repository cap. */
+function GitHubRead<Item>({
+  load,
+  onOpenSettings,
+  render,
+}: {
+  load: () => Promise<GitHubViewRead<Item>>;
+  onOpenSettings: () => void;
+  render: (read: GitHubViewRead<Item>) => React.ReactNode;
+}): React.JSX.Element {
+  const [read, setRead] = useState<GitHubViewRead<Item> | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    fetchGitHubPullRequests().then(
+    load().then(
       (result) => {
         if (!cancelled) setRead(result);
       },
@@ -86,72 +178,84 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [load]);
 
+  if (failed) return <p role="alert">GitHub couldn’t be read. Try again in a moment.</p>;
+  if (read === null) return <p className="github-loading">Loading…</p>;
+  if (read.tokens.length === 0) {
+    return (
+      <div className="github-empty">
+        <p>You aren’t watching any repositories yet.</p>
+        <a
+          href={pathForSettingsTab("github")}
+          onClick={(event) => {
+            event.preventDefault();
+            onOpenSettings();
+          }}
+        >
+          Pick Watched Repositories
+        </a>
+      </div>
+    );
+  }
   return (
-    <div className="github-view">
-      <div role="tablist" aria-label="GitHub" className="github-tabs">
-        <button type="button" role="tab" aria-selected="true" className="github-tab">
-          Pull Requests
-        </button>
-      </div>
-      <div role="tabpanel" aria-label="Pull Requests">
-        {failed ? (
-          <p role="alert">GitHub couldn’t be read. Try again in a moment.</p>
-        ) : read === null ? (
-          <p className="github-loading">Loading…</p>
-        ) : read.tokens.length === 0 ? (
-          <div className="github-empty">
-            <p>You aren’t watching any repositories yet.</p>
-            <a
-              href={pathForSettingsTab("github")}
-              onClick={(event) => {
-                event.preventDefault();
-                onOpenSettings();
-              }}
-            >
-              Pick Watched Repositories
-            </a>
-          </div>
-        ) : (
-          <PullRequestGroups read={read} />
-        )}
-      </div>
-    </div>
+    <>
+      {render(read)}
+      <OverflowLinks repositories={read.repositories} />
+    </>
   );
 }
 
-function PullRequestGroups({ read }: { read: GitHubPullRequestsRead }): React.JSX.Element {
-  const overflowing = read.repositories.filter((repo) => repo.overflow_count > 0);
+function PullRequestGroups({ items }: { items: GitHubPullRequest[] }): React.JSX.Element {
   return (
     <>
-      {read.items.length === 0 && <p className="github-empty">No open Pull Requests.</p>}
+      {items.length === 0 && <p className="github-empty">No open Pull Requests.</p>}
       {GROUPS.map(({ relationship, label }) => {
-        const items = read.items.filter((pr) => pr.relationship === relationship);
-        if (items.length === 0) return null;
+        const grouped = items.filter((pr) => pr.relationship === relationship);
+        if (grouped.length === 0) return null;
         return (
           <section key={relationship} aria-label={label} className="github-group">
             <h2>{label}</h2>
             <ul>
-              {items.map((pr) => (
+              {grouped.map((pr) => (
                 <PullRequestRow key={`${pr.repository}#${pr.number}`} pr={pr} />
               ))}
             </ul>
           </section>
         );
       })}
-      {overflowing.length > 0 && (
-        <ul aria-label="More on GitHub" className="github-overflow">
-          {overflowing.map((repo) => (
-            <li key={repo.watched_repository_id}>
-              <span>{repo.full_name}: </span>
-              <a href={repo.overflow_url} target="_blank" rel="noreferrer">
-                {`${repo.overflow_count} more on GitHub`}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
     </>
+  );
+}
+
+function IssueList({ items }: { items: GitHubIssue[] }): React.JSX.Element {
+  if (items.length === 0) return <p className="github-empty">No open GitHub Issues.</p>;
+  return (
+    <ul className="github-list">
+      {items.map((issue) => (
+        <IssueRow key={`${issue.repository}#${issue.number}`} issue={issue} />
+      ))}
+    </ul>
+  );
+}
+
+function OverflowLinks({
+  repositories,
+}: {
+  repositories: GitHubRepositoryRead[];
+}): React.JSX.Element | null {
+  const overflowing = repositories.filter((repo) => repo.overflow_count > 0);
+  if (overflowing.length === 0) return null;
+  return (
+    <ul aria-label="More on GitHub" className="github-overflow">
+      {overflowing.map((repo) => (
+        <li key={repo.watched_repository_id}>
+          <span>{repo.full_name}: </span>
+          <a href={repo.overflow_url} target="_blank" rel="noreferrer">
+            {`${repo.overflow_count} more on GitHub`}
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
