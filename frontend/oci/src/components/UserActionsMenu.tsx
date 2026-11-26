@@ -22,6 +22,8 @@ export function UserActionsMenu({
   isLastAdmin,
   onChange,
   onResetPassword,
+  onChangeEmail,
+  onUnlinkGoogle,
 }: {
   account: AdminUser;
   isSelf: boolean;
@@ -33,9 +35,14 @@ export function UserActionsMenu({
   /** Opens the reset dialog; focus is back on this menu's button first, so
    * the dialog returns it there. */
   onResetPassword: () => void;
+  /** Opens the change-email dialog (#586): an Admin's reconciliation. */
+  onChangeEmail: () => void;
+  /** Removes the account's Google sign-in (#586), once confirmed. */
+  onUnlinkGoogle: () => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [confirmingDisable, setConfirmingDisable] = useState(false);
+  const [confirmingUnlink, setConfirmingUnlink] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const reasonId = useId();
   const label = `Actions for ${account.username}`;
@@ -88,6 +95,11 @@ export function UserActionsMenu({
       <Popover open={open} triggerRef={trigger} onClose={() => setOpen(false)}>
         <ul role="menu" aria-label={label} className="overflow-menu-list" onKeyDown={moveMenuFocus}>
           {item("Reset password", "key-round", onResetPassword)}
+          {item("Change email", "mail", onChangeEmail)}
+          {/* Never your own: another Admin recovers you (#586). */}
+          {account.google_email !== null &&
+            !isSelf &&
+            item("Remove Google sign-in", "unlink", () => setConfirmingUnlink(true))}
           {account.is_admin
             ? item("Remove admin", "shield-off", () => onChange({ is_admin: false }), {
                 blocked: isLastAdmin,
@@ -107,6 +119,39 @@ export function UserActionsMenu({
           </p>
         )}
       </Popover>
+      {confirmingUnlink && (
+        <Modal
+          title={`Remove Google sign-in for ${account.username}?`}
+          onClose={() => setConfirmingUnlink(false)}
+        >
+          <p className="users-confirm-lead">
+            Do this only once you’ve confirmed, outside the app, that {account.username} lost access
+            to {account.google_email}. Their sessions end; their account and everything they own
+            stay. Give them a temporary password so they can sign in and link their new Google
+            account.
+          </p>
+          <div className="users-confirm-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              autoFocus
+              onClick={() => setConfirmingUnlink(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary users-confirm-danger"
+              onClick={() => {
+                setConfirmingUnlink(false);
+                onUnlinkGoogle();
+              }}
+            >
+              Remove Google sign-in
+            </button>
+          </div>
+        </Modal>
+      )}
       {confirmingDisable && (
         <Modal title={`Disable ${account.username}?`} onClose={() => setConfirmingDisable(false)}>
           <p className="users-confirm-lead">

@@ -9,9 +9,12 @@ import {
   fetchAdminUsers,
   type Page,
   resetAdminUserPassword,
+  unlinkAdminUserGoogle,
   updateAdminUser,
 } from "../api";
 import { formatLastActive } from "../dates";
+import { ChangeEmailDialog } from "./ChangeEmailDialog";
+import { InvitationsPanel } from "./InvitationsPanel";
 import { LoadError, SkeletonRows } from "./TaskViewState";
 import { NewUserDialog } from "./NewUserDialog";
 import { ResetPasswordDialog } from "./ResetPasswordDialog";
@@ -105,6 +108,16 @@ export function UserRow({
               )}
             </span>{" "}
             {account.email !== null && <span className="users-email">{account.email}</span>}
+            {/* How the account signs in (#586), when it isn't just a password. */}
+            {account.google_email !== null ? (
+              <span className="users-sign-in">Google: {account.google_email}</span>
+            ) : (
+              !account.has_password && (
+                <span className="users-sign-in" data-state="warn">
+                  No way to sign in: reset their password
+                </span>
+              )
+            )}
           </span>
         </span>
         {error !== undefined && (
@@ -153,6 +166,8 @@ export function UsersPanel({
   const [creating, setCreating] = useState(false);
   /** The account whose password is being reset, and whether it has been. */
   const [resetting, setResetting] = useState<{ account: AdminUser; reset: boolean } | null>(null);
+  /** The account whose email is being changed (#586). */
+  const [editingEmail, setEditingEmail] = useState<AdminUser | null>(null);
   /** What the last action on a row failed to do, by account id. */
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const onAccessLostRef = useRef(onAccessLost);
@@ -251,6 +266,18 @@ export function UsersPanel({
     );
   }
 
+  /** Removes an account's Google sign-in (#586); the list is re-read so the
+   * row shows how it signs in now. */
+  function unlinkGoogle(account: AdminUser): void {
+    clearRowError(account.id);
+    unlinkAdminUserGoogle(account.id).then(rereadQuietly, () =>
+      setRowErrors((errors) => ({
+        ...errors,
+        [account.id]: `Couldn’t remove Google sign-in from ${account.username}. Try again.`,
+      })),
+    );
+  }
+
   function closeReset(): void {
     if (resetting?.reset === true) rereadQuietly();
     setResetting(null);
@@ -305,12 +332,24 @@ export function UsersPanel({
                       isLastAdmin={isLastActiveAdmin(account, list.page.items)}
                       onChange={(change) => changeAccount(account, change)}
                       onResetPassword={() => setResetting({ account, reset: false })}
+                      onChangeEmail={() => setEditingEmail(account)}
+                      onUnlinkGoogle={() => unlinkGoogle(account)}
                     />
                   }
                 />
               ))}
             </tbody>
           </table>
+          <InvitationsPanel />
+          {editingEmail !== null && (
+            <ChangeEmailDialog
+              account={editingEmail}
+              onSave={(email) =>
+                updateAdminUser(editingEmail.id, { email }).then(() => rereadQuietly())
+              }
+              onClose={() => setEditingEmail(null)}
+            />
+          )}
           {creating && (
             <NewUserDialog onClose={() => setCreating(false)} onCreated={rereadQuietly} />
           )}

@@ -546,6 +546,20 @@ export interface FakeUser {
    * /password for its session; an Admin's reset lifts it. The fake never
    * counts failures itself. */
   login_locked?: boolean;
+  /** The Google account this User signs in with (#586), if any. A User
+   * admitted by invitation has `password: ""`: none at all. */
+  google_email?: string | null;
+}
+
+/** An invitation (#586), as the admin invitations API keeps it. The fake
+ * keeps the link's token in the clear so a test can open it. */
+export interface FakeInvitation {
+  id: number;
+  email: string;
+  token: string;
+  status: "pending" | "accepted" | "canceled" | "expired";
+  delivery: "not_sent" | "sent" | "failed";
+  delivery_error: string | null;
 }
 
 export interface FakeApiState {
@@ -599,6 +613,18 @@ export interface FakeApiState {
   /** Mirrors the backend's google_client_id/secret gate: whether the Google
    * integration is configured server-side. */
   googleConfigured: boolean;
+  /** The instance's shared Google client (#586): Google sign-in,
+   * invitations, and Calendar without a User's own client. */
+  googleSignIn: boolean;
+  /** Whether SMTP is configured, so invitations are emailed (#586). */
+  emailDelivery: boolean;
+  invitations: FakeInvitation[];
+  /** The invitation token this browser just verified with Google, standing
+   * in for the backend's signed acceptance cookie (#586). */
+  verifiedInvitation: string | null;
+  /** The password each Google round trip was started with, standing in for
+   * the link round trip's confirmation (#586). */
+  googleLinkStarts: { password: string; next: string }[];
   /** The stored client ID, echoed back by /status — not sensitive, unlike
    * the secret, which is never returned (only whether one is set). */
   googleClientId: string | null;
@@ -891,6 +917,8 @@ function currentUserRecord(account: FakeUser): Record<string, unknown> {
     must_change_password: account.must_change_password,
     must_complete_profile: account.must_complete_profile,
     password_changed_at: account.password_changed_at,
+    has_password: account.password !== "",
+    google_email: account.google_email ?? null,
   };
 }
 
@@ -907,8 +935,49 @@ function adminUserRecord(account: FakeUser): Record<string, unknown> {
     must_complete_profile: account.must_complete_profile,
     created_at: account.created_at ?? "2026-01-01T00:00:00Z",
     last_active_at: account.last_active_at,
+    has_password: account.password !== "",
+    google_email: account.google_email ?? null,
   };
 }
+
+let nextInvitationId = 7000;
+
+/** A pending invitation (#586) for `email`, its link token derived from it. */
+export function fakeInvitation(
+  email: string,
+  overrides: Partial<FakeInvitation> = {},
+): FakeInvitation {
+  return {
+    id: nextInvitationId++,
+    email,
+    token: `token-for-${email}`,
+    status: "pending",
+    delivery: "sent",
+    delivery_error: null,
+    ...overrides,
+  };
+}
+
+/** What the admin invitations API returns for `invitation`. */
+function invitationRecord(invitation: FakeInvitation): Record<string, unknown> {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    status: invitation.status,
+    delivery: invitation.delivery,
+    delivery_error: invitation.delivery_error,
+    sent_at: invitation.delivery === "sent" ? "2026-01-01T00:00:00Z" : null,
+    created_at: "2026-01-01T00:00:00Z",
+    expires_at: "2026-01-08T00:00:00Z",
+    accepted_at: invitation.status === "accepted" ? "2026-01-02T00:00:00Z" : null,
+    canceled_at: invitation.status === "canceled" ? "2026-01-02T00:00:00Z" : null,
+    accepted_user_id: null,
+  };
+}
+
+/** Where the fake Google consent screen lives: a start route answers it
+ * with the round trip's purpose, so a test can see which one began. */
+export const FAKE_GOOGLE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 /** The backend's per-field 409 (app.users.ensure_identity_free) when a User
  * other than `except` already holds `username` or `email`, ignoring case. */
@@ -1398,6 +1467,10 @@ export function installFakeApi({
   sessionUserId,
   apiTokens = [],
   googleConfigured = false,
+  googleSignIn = false,
+  emailDelivery = true,
+  invitations = [],
+  verifiedInvitation = null,
   googleClientId = null,
   googleClientSecretSet = false,
   googleAccounts = [],
@@ -1483,6 +1556,14 @@ export function installFakeApi({
   apiTokens?: FakeApiToken[];
   /** Absent (false) by default, matching the backend's default-off gate. */
   googleConfigured?: boolean;
+  /** The shared Google client is configured (#586). Off by default. */
+  googleSignIn?: boolean;
+  /** SMTP is configured (#586). On by default. */
+  emailDelivery?: boolean;
+  invitations?: FakeInvitation[];
+  /** The invitation token this browser already verified with Google, as
+   * if it just came back from the consent screen (#586). */
+  verifiedInvitation?: string | null;
   googleClientId?: string | null;
   googleClientSecretSet?: boolean;
   googleAccounts?: FakeGoogleAccount[];
@@ -1627,6 +1708,11 @@ export function installFakeApi({
     sessionUserId: sessionUserId ?? users[0]?.id ?? 0,
     apiTokens: apiTokens.map((token) => ({ ...token })),
     googleConfigured,
+    googleSignIn,
+    emailDelivery,
+    invitations: invitations.map((invitation) => ({ ...invitation })),
+    verifiedInvitation,
+    googleLinkStarts: [],
     googleClientId,
     googleClientSecretSet,
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
@@ -2165,6 +2251,82 @@ export function installFakeApi({
     return null;
   };
 
+  /** The admin invitations API (#586), mirrored. Runs inside the admin
+   * users route, after its Admin check. */
+  const invitationsRoute = (method: string, url: URL, body: unknown): Response => {
+    const conflict = (code: string, message: string): Response =>
+      json({ error: { code, message } }, 409);
+    const deliver = (invitation: FakeInvitation): void => {
+      invitation.delivery = state.emailDelivery ? "sent" : "failed";
+      invitation.delivery_error = state.emailDelivery ? null : "Email delivery is not configured";
+    };
+    if (method === "GET" && url.pathname === "/api/v1/admin/invitations/availability") {
+      return json({ google_sign_in: state.googleSignIn, email_delivery: state.emailDelivery });
+    }
+    if (method === "GET" && url.pathname === "/api/v1/admin/invitations") {
+      const items = [...state.invitations].reverse().map(invitationRecord);
+      return json({ items, total: items.length, limit: 200, offset: 0 });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/admin/invitations") {
+      if (!state.googleSignIn) {
+        return conflict("google_sign_in_unavailable", "Google sign-in is not configured");
+      }
+      const email = (body as { email: string }).email.trim();
+      if (!EMAIL_PATTERN.test(email)) {
+        return unprocessable("invalid_email", "Enter a valid email address");
+      }
+      const lowered = email.toLowerCase();
+      if (state.users.some((account) => account.email?.toLowerCase() === lowered)) {
+        return conflict("email_taken", "That email is already in use");
+      }
+      if (
+        state.invitations.some(
+          (invitation) =>
+            invitation.email.toLowerCase() === lowered &&
+            (invitation.status === "pending" || invitation.status === "expired"),
+        )
+      ) {
+        return conflict("invitation_exists", "That email already has an open invitation");
+      }
+      const invitation = fakeInvitation(email);
+      deliver(invitation);
+      state.invitations.push(invitation);
+      return json(invitationRecord(invitation), 201);
+    }
+    const match = /^\/api\/v1\/admin\/invitations\/(\d+)\/(send|resend|link|cancel)$/.exec(
+      url.pathname,
+    );
+    const invitation = state.invitations.find((candidate) => candidate.id === Number(match?.[1]));
+    if (method !== "POST" || match === null || invitation === undefined) {
+      return notFound("Invitation not found");
+    }
+    const action = match[2];
+    if (action === "cancel") {
+      if (invitation.status === "accepted") {
+        return conflict("invitation_closed", "This invitation was already accepted");
+      }
+      invitation.status = "canceled";
+      return json(invitationRecord(invitation));
+    }
+    if (action === "resend") {
+      if (invitation.status === "accepted" || invitation.status === "canceled") {
+        return conflict("invitation_closed", "This invitation was accepted or canceled");
+      }
+      invitation.status = "pending";
+      invitation.token = `${invitation.token}-again`;
+      deliver(invitation);
+      return json(invitationRecord(invitation));
+    }
+    if (invitation.status !== "pending") {
+      return conflict("invitation_not_pending", "Only a pending invitation can be used");
+    }
+    if (action === "link") {
+      return json({ url: `http://localhost:5900/invite#token=${invitation.token}` });
+    }
+    deliver(invitation);
+    return json(invitationRecord(invitation));
+  };
+
   /** The admin users API (#412), mirrored: list, create, update (with the
    * last-admin guard) and reset password. Null for a path it doesn't own.
    * Runs after the session middleware, so the caller is signed in. */
@@ -2226,6 +2388,24 @@ export function installFakeApi({
       state.users.push(created);
       return json(adminUserRecord(created), 201);
     }
+    const unlink = /^\/api\/v1\/admin\/users\/(\d+)\/google-identity$/.exec(url.pathname);
+    if (method === "DELETE" && unlink !== null) {
+      const account = state.users.find((candidate) => candidate.id === Number(unlink[1]));
+      if (account === undefined) {
+        return notFound(`User ${unlink[1]} not found`);
+      }
+      if (!account.google_email) {
+        return json(
+          { error: { code: "google_not_linked", message: "This account has no Google sign-in" } },
+          409,
+        );
+      }
+      account.google_email = null;
+      return json(adminUserRecord(account));
+    }
+    if (url.pathname.startsWith("/api/v1/admin/invitations")) {
+      return invitationsRoute(method, url, body);
+    }
     const match = /^\/api\/v1\/admin\/users\/(\d+)(\/reset-password)?$/.exec(url.pathname);
     if (match === null) {
       return null;
@@ -2236,7 +2416,18 @@ export function installFakeApi({
       if (target === undefined) {
         return notFound(`User ${match[1]} not found`);
       }
-      const input = body as { is_active?: boolean; is_admin?: boolean };
+      const input = body as { is_active?: boolean; is_admin?: boolean; email?: string };
+      if (input.email !== undefined) {
+        const email = input.email.trim();
+        if (!EMAIL_PATTERN.test(email)) {
+          return unprocessable("invalid_email", "Enter a valid email address");
+        }
+        const conflict = identityConflict(state.users, target, undefined, email);
+        if (conflict !== null) {
+          return conflict;
+        }
+        target.email = email;
+      }
       const losesAdmin =
         target.is_admin &&
         target.is_active &&
@@ -2460,6 +2651,94 @@ export function installFakeApi({
       state.sessionUserId = account.id;
       return new Response(null, { status: 204 });
     }
+    // Google sign-in and invitation acceptance (#586): public, like login.
+    const googleStart = (purpose: string): Response =>
+      json({ authorization_url: `${FAKE_GOOGLE_URL}?purpose=${purpose}` });
+    if (method === "GET" && url.pathname === "/api/v1/auth/providers") {
+      return json({ google: state.googleSignIn });
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/google/login") {
+      if (!state.googleSignIn) {
+        return notFound("Google sign-in is not configured");
+      }
+      return googleStart("login");
+    }
+    if (
+      method === "POST" &&
+      (url.pathname === "/api/v1/auth/invitations/lookup" ||
+        url.pathname === "/api/v1/auth/google/invitation")
+    ) {
+      const { token } = body as { token: string };
+      const invitation = state.invitations.find((candidate) => candidate.token === token);
+      if (invitation === undefined) {
+        return notFound("This invitation link is not valid");
+      }
+      if (url.pathname.endsWith("/lookup")) {
+        return json({ email: invitation.email, status: invitation.status });
+      }
+      if (invitation.status !== "pending") {
+        return json(
+          {
+            error: {
+              code: "invitation_unavailable",
+              message: "This invitation can no longer be accepted.",
+              details: { status: invitation.status },
+            },
+          },
+          409,
+        );
+      }
+      return googleStart("invitation");
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/invitations/accept") {
+      const invitation = state.invitations.find(
+        (candidate) => candidate.token === state.verifiedInvitation,
+      );
+      if (invitation === undefined) {
+        return json(
+          {
+            error: {
+              code: "acceptance_not_started",
+              message: "Open your invitation link and continue with Google first",
+            },
+          },
+          400,
+        );
+      }
+      if (invitation.status !== "pending") {
+        return json(
+          {
+            error: {
+              code: "invitation_unavailable",
+              message: "This invitation can no longer be accepted.",
+            },
+          },
+          409,
+        );
+      }
+      const username = (body as { username: string }).username.trim();
+      if (username === "" || username.length > MAX_USERNAME_LENGTH) {
+        return unprocessable(
+          "invalid_username",
+          `Username must be 1 to ${MAX_USERNAME_LENGTH} characters`,
+        );
+      }
+      const conflict = identityConflict(state.users, null, username, invitation.email);
+      if (conflict !== null) {
+        return conflict;
+      }
+      const created = fakeUser(username, {
+        email: invitation.email,
+        password: "",
+        google_email: invitation.email,
+      });
+      state.users.push(created);
+      invitation.status = "accepted";
+      state.verifiedInvitation = null;
+      state.loggedIn = true;
+      state.sessionUserId = created.id;
+      return new Response(null, { status: 204 });
+    }
     if (url.pathname.startsWith("/api/")) {
       const account = sessionUser();
       if (account === undefined) {
@@ -2560,6 +2839,34 @@ export function installFakeApi({
       if (adminResponse !== null) {
         return adminResponse;
       }
+    }
+    if (method === "POST" && url.pathname === "/api/v1/auth/google/link") {
+      const account = sessionUser() as FakeUser;
+      const input = body as { password: string; next: string };
+      if (account.google_email) {
+        return json(
+          {
+            error: {
+              code: "google_already_linked",
+              message: "This account already signs in with Google",
+            },
+          },
+          409,
+        );
+      }
+      if (input.password !== account.password) {
+        return json(
+          {
+            error: {
+              code: "invalid_current_password",
+              message: "Current password is incorrect",
+            },
+          },
+          400,
+        );
+      }
+      state.googleLinkStarts.push(input);
+      return googleStart("link");
     }
     if (method === "GET" && url.pathname === "/api/v1/auth/session") {
       return new Response(null, { status: 204 });
@@ -2861,7 +3168,8 @@ export function installFakeApi({
         return unauthorized();
       }
       return json({
-        configured: state.googleConfigured,
+        configured: state.googleConfigured || state.googleSignIn,
+        shared_client: state.googleSignIn,
         client_id: state.googleClientId,
         client_secret_set: state.googleClientSecretSet,
       });

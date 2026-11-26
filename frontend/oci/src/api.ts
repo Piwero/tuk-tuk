@@ -185,6 +185,11 @@ export interface CurrentUser {
   /** When the password was last set, ISO-8601 (#475): on creation, an
    * admin's temporary password, or the User's own change. Never null. */
   password_changed_at: string;
+  /** Whether the User can sign in with a password at all (#586): false for
+   * someone admitted by invitation who signs in with Google only. */
+  has_password: boolean;
+  /** The Google account the User signs in with, if any (#586). */
+  google_email: string | null;
 }
 
 /** Who this browser is signed in as — the gate's probe. Reachable while a
@@ -262,6 +267,10 @@ export interface AdminUser {
   /** When the account was last served a signed-in request (#478), ISO-8601,
    * moved at most every few minutes; null if it never has been. */
   last_active_at: string | null;
+  /** How the account signs in (#586): with a password, and/or with the
+   * Google account shown by its email. */
+  has_password: boolean;
+  google_email: string | null;
 }
 
 /** The most accounts one admin users read returns (the backend's cap). */
@@ -293,6 +302,9 @@ export function createAdminUser(input: NewAdminUser): Promise<AdminUser> {
 export interface AdminUserChange {
   is_active?: boolean;
   is_admin?: boolean;
+  /** An Admin's deliberate email reconciliation (#586). It never moves a
+   * linked Google sign-in. */
+  email?: string;
 }
 
 /** Disables / enables an account or changes its role. Disabling ends its
@@ -314,6 +326,143 @@ export function resetAdminUserPassword(id: number, tempPassword: string): Promis
     method: "POST",
     body: JSON.stringify({ temp_password: tempPassword }),
   });
+}
+
+/** Removes an account's Google sign-in (#586), after the Admin verified out
+ * of band that its owner lost that Google account. Ends its sessions; the
+ * account and its data stay. Rejects 409 `google_not_linked`. */
+export function unlinkAdminUserGoogle(id: number): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${id}/google-identity`, { method: "DELETE" });
+}
+
+/** An invitation's lifecycle (#586): only a pending one can be accepted. */
+export type InvitationStatus = "pending" | "accepted" | "canceled" | "expired";
+
+/** What the app knows of emailing the link: never "delivered" — a mail
+ * server taking a message is no receipt it reached an inbox. */
+export type InvitationDelivery = "not_sent" | "sent" | "failed";
+
+export interface Invitation {
+  id: number;
+  email: string;
+  status: InvitationStatus;
+  delivery: InvitationDelivery;
+  /** Why the last delivery failed, safe to show. */
+  delivery_error: string | null;
+  sent_at: string | null;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  canceled_at: string | null;
+  accepted_user_id: number | null;
+}
+
+/** Whether invitations can be accepted (Google sign-in is configured) and
+ * emailed (SMTP is). */
+export interface InvitationAvailability {
+  google_sign_in: boolean;
+  email_delivery: boolean;
+}
+
+const INVITATIONS_PATH = "/api/v1/admin/invitations";
+
+export function fetchInvitations(): Promise<Page<Invitation>> {
+  return request(`${INVITATIONS_PATH}?limit=200`);
+}
+
+export function fetchInvitationAvailability(): Promise<InvitationAvailability> {
+  return request(`${INVITATIONS_PATH}/availability`);
+}
+
+/** Invites an email address and emails the link. Rejects 409
+ * `email_taken`, `invitation_exists` or `google_sign_in_unavailable`, 422
+ * `invalid_email`. A failed email still creates the invitation, with
+ * `delivery` "failed". */
+export function createInvitation(email: string): Promise<Invitation> {
+  return request(INVITATIONS_PATH, { method: "POST", body: JSON.stringify({ email }) });
+}
+
+/** Emails a pending invitation's existing link again. */
+export function retryInvitationDelivery(id: number): Promise<Invitation> {
+  return request(`${INVITATIONS_PATH}/${id}/send`, { method: "POST" });
+}
+
+/** A new link valid for seven days, invalidating earlier ones, emailed. */
+export function resendInvitation(id: number): Promise<Invitation> {
+  return request(`${INVITATIONS_PATH}/${id}/resend`, { method: "POST" });
+}
+
+export function cancelInvitation(id: number): Promise<Invitation> {
+  return request(`${INVITATIONS_PATH}/${id}/cancel`, { method: "POST" });
+}
+
+/** A pending invitation's link, to pass on another way. */
+export function fetchInvitationLink(id: number): Promise<{ url: string }> {
+  return request(`${INVITATIONS_PATH}/${id}/link`, { method: "POST" });
+}
+
+/** Sign-in methods offered besides a password (#586). */
+export interface SignInProviders {
+  google: boolean;
+}
+
+export function fetchSignInProviders(): Promise<SignInProviders> {
+  return request("/api/v1/auth/providers");
+}
+
+/** Where the browser goes next: Google's consent screen. */
+interface AuthorizationStart {
+  authorization_url: string;
+}
+
+/** Starts signing in with Google; resolves to Google's URL, which the
+ * caller navigates to. `next` is a path on this site to land on after. */
+export function startGoogleSignIn(next?: string): Promise<string> {
+  return request<AuthorizationStart>("/api/v1/auth/google/login", {
+    method: "POST",
+    body: JSON.stringify(next === undefined ? {} : { next }),
+  }).then((start) => start.authorization_url);
+}
+
+/** What an invitation link is for. Rejects 404 for an unknown or replaced
+ * link. */
+export function lookupInvitation(
+  token: string,
+): Promise<{ email: string; status: InvitationStatus }> {
+  return request("/api/v1/auth/invitations/lookup", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Starts accepting an invitation with Google. Rejects 404 (unknown link)
+ * or 409 `invitation_unavailable`. */
+export function startInvitationSignIn(token: string): Promise<string> {
+  return request<AuthorizationStart>("/api/v1/auth/google/invitation", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  }).then((start) => start.authorization_url);
+}
+
+/** Accepts the invitation this browser verified with Google, as a new
+ * User named `username`, and signs them in. Rejects 422
+ * `invalid_username`, 409 `username_taken` / `invitation_unavailable` /
+ * `identity_in_use`, 400 `acceptance_not_started`. */
+export function acceptInvitation(username: string): Promise<void> {
+  return request("/api/v1/auth/invitations/accept", {
+    method: "POST",
+    body: JSON.stringify({ username }),
+  });
+}
+
+/** Starts linking Google to the signed-in account after confirming its
+ * password. Rejects 400 `invalid_current_password`, 429
+ * `too_many_attempts`, 409 `google_already_linked`. */
+export function startGoogleLink(password: string, next: string): Promise<string> {
+  return request<AuthorizationStart>("/api/v1/auth/google/link", {
+    method: "POST",
+    body: JSON.stringify({ password, next }),
+  }).then((start) => start.authorization_url);
 }
 
 /** Signs in by username or email (either ignoring case) and sets the
@@ -680,6 +829,9 @@ export function postAssistantChat(input: {
 
 export interface GoogleStatus {
   configured: boolean;
+  /** The instance's shared Google client is set up (#586): Calendar can be
+   * connected without any Google Cloud setup of the User's own. */
+  shared_client: boolean;
   /** The client ID isn't sensitive — Settings shows it back for editing. */
   client_id: string | null;
   /** Whether a client secret is stored; the value itself never round-trips. */
