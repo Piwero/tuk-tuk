@@ -8,6 +8,9 @@ day isn't over yet. Which day is which is app.habit_days' call.
 Check-ins on unscheduled days are history (they show in the heatmap) but
 never streak. N-times-per-week habits are scheduled every day (v1 keeps the
 due rule and the streak rule the same; a per-week quota walk is future work).
+Their Weekly target is read separately (`current_week`, issue #568): the
+current week's progress toward N, never lowered by a pause or skip, and
+excluded only when paused throughout.
 
 The Habit start (`eligible_from`) is the first local day a Habit can be
 missed: days before it are "not started", never missed. The Streak already
@@ -17,7 +20,7 @@ stops at the earliest Check-in, so the Habit start never changes its value.
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, tzinfo
 
-from app.habit_days import HabitDays, Pause
+from app.habit_days import HabitDays, Pause, Week
 from app.schemas import as_utc
 
 
@@ -47,6 +50,29 @@ def current_streak(
         skips=frozenset(skips),
     )
     return days.streak()
+
+
+def current_week(
+    frequency: str,
+    target: float,
+    start: date,
+    pauses: Iterable[Pause],
+    values: Mapping[date, float],
+    today: date,
+    skips: Iterable[date] = (),
+) -> Week | None:
+    """The week holding `today` for a times-per-week Habit (issue #568), read
+    from its Habit start `start`; None for other frequencies."""
+    days = HabitDays(
+        frequency=frequency,
+        target=target,
+        start=start,
+        pauses=tuple(pauses),
+        values=values,
+        today=today,
+        skips=frozenset(skips),
+    )
+    return days.week(today)
 
 
 def eligible_from(created_at: datetime, zone: tzinfo, checked: set[date], today: date) -> date:

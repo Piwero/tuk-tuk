@@ -30,6 +30,7 @@ import { HabitForm, type HabitFormValues } from "./HabitForm";
 import { HabitHistory } from "./HabitHistory";
 import { HabitPauseForm, HabitPauseStatus } from "./HabitPause";
 import { HabitSkipStatus } from "./HabitSkip";
+import { HabitWeekTarget } from "./HabitWeekTarget";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 
@@ -341,6 +342,15 @@ export function HabitsView({
         })}
       </tr>,
     ];
+    if (stats?.week) {
+      rows.push(
+        <tr key={`${habit.id}-week`}>
+          <td colSpan={8}>
+            <HabitWeekTarget label={`${habit.name} this week`} week={stats.week} />
+          </td>
+        </tr>,
+      );
+    }
     const pause = currentOrNextPause(habit, today);
     if (editor?.mode === "pause" && editor.habitId === habit.id) {
       rows.push(
@@ -588,13 +598,14 @@ async function habitStatsFor(habit: Habit, today: string): Promise<HabitStats> {
   const pages = await Promise.all(
     years.map(async (year) => fetchHabitStats(habit.id, today, Number(year))),
   );
-  // The Streak and the Habit start are as of `today` whichever year was
-  // asked for, so any page's will do; the heatmaps are disjoint years, so
-  // they simply concatenate.
+  // The Streak, the Habit start and the week are as of `today` whichever
+  // year was asked for, so any page's will do; the heatmaps are disjoint
+  // years, so they simply concatenate.
   return {
     streak: pages[0]?.streak ?? 0,
     heatmap: pages.flatMap((page) => page.heatmap),
     eligible_from: pages[0]?.eligible_from ?? today,
+    week: pages[0]?.week ?? null,
   };
 }
 

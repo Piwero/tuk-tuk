@@ -167,3 +167,31 @@ describe("A Habit's history with skips", () => {
     expect(api.habits[0]?.skips).toEqual([]);
   });
 });
+
+// Issue #568: a skip inside a times-per-week Habit's week (Mon Jun 29 – Sun
+// Jul 5) never lowers its target.
+describe("A times-per-week Habit with a skipped day", () => {
+  it("keeps the target and says so", async () => {
+    const habit = fakeHabit("Run", { frequency: "FREQ=WEEKLY;TT_TIMES=3", skips: ["2026-07-01"] });
+    const api = installFakeApi({ habits: [habit] });
+    checkIn(api, habit.id, "2026-06-30");
+    render(<App />);
+    await openHabits();
+
+    const week = await screen.findByRole("status", { name: "Run this week" });
+    expect(week).toHaveTextContent("This week: 1 of 3 done, 2 to go");
+    expect(week).toHaveTextContent("Target unchanged: skipped days don't lower it");
+  });
+
+  it("says the target is met once enough days are done", async () => {
+    const habit = fakeHabit("Run", { frequency: "FREQ=WEEKLY;TT_TIMES=2", skips: ["2026-07-01"] });
+    const api = installFakeApi({ habits: [habit] });
+    checkIn(api, habit.id, "2026-06-29");
+    checkIn(api, habit.id, "2026-06-30");
+    render(<App />);
+    await openHabits();
+
+    const week = await screen.findByRole("status", { name: "Run this week" });
+    expect(week).toHaveTextContent("This week: 2 of 2 done, target met");
+  });
+});

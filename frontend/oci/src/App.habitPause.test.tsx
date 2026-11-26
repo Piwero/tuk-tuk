@@ -235,3 +235,72 @@ describe("A paused Habit's history", () => {
     expect(api.requests.filter((r) => r.method === "PUT")).toHaveLength(0);
   });
 });
+
+// Issue #568: a times-per-week Habit's week. Friday 2026-07-03 sits in the
+// week Mon Jun 29 – Sun Jul 5.
+describe("A times-per-week Habit under a pause", () => {
+  it("shows the remaining target and says a partial-week pause leaves it unchanged", async () => {
+    const habit = fakeHabit("Run", { frequency: "FREQ=WEEKLY;TT_TIMES=3" });
+    habit.pauses = [paused(habit.id, "2026-07-01", "2026-07-02")];
+    const api = installFakeApi({ habits: [habit] });
+    checkIn(api, habit.id, "2026-06-29");
+    render(<App />);
+    await openHabits();
+
+    const week = await screen.findByRole("status", { name: "Run this week" });
+    expect(week).toHaveTextContent("This week: 1 of 3 done, 2 to go");
+    expect(week).toHaveTextContent("Target unchanged: paused days don't lower it");
+    expect(week).toHaveTextContent("Change the frequency to aim lower");
+  });
+
+  it("says a fully paused week is not counted", async () => {
+    const habit = fakeHabit("Run", { frequency: "FREQ=WEEKLY;TT_TIMES=3" });
+    habit.pauses = [paused(habit.id, "2026-06-29", "2026-07-05")];
+    installFakeApi({ habits: [habit] });
+    render(<App />);
+    await openHabits();
+
+    const week = await screen.findByRole("status", { name: "Run this week" });
+    expect(week).toHaveTextContent("This week is paused: not counted toward the target");
+    expect(week).not.toHaveTextContent("to go");
+  });
+
+  it("updates the remaining target after a Check-in", async () => {
+    const habit = fakeHabit("Run", { frequency: "FREQ=WEEKLY;TT_TIMES=2" });
+    installFakeApi({ habits: [habit] });
+    render(<App />);
+    await openHabits();
+
+    const week = await screen.findByRole("status", { name: "Run this week" });
+    expect(week).toHaveTextContent("This week: 0 of 2 done, 2 to go");
+    expect(week).not.toHaveTextContent("Target unchanged");
+    fireEvent.click(
+      within(weekGrid()).getByRole("button", { name: "Run, Friday, Jul 3: not yet checked in" }),
+    );
+
+    await waitFor(() => expect(week).toHaveTextContent("This week: 1 of 2 done, 1 to go"));
+  });
+
+  it("shows the same week in the history", async () => {
+    const habit = fakeHabit("Run", { frequency: "FREQ=WEEKLY;TT_TIMES=3" });
+    habit.pauses = [paused(habit.id, "2026-07-01", "2026-07-02")];
+    installFakeApi({ habits: [habit] });
+    render(<App />);
+    await openHabits();
+    await openHabitMenu("Run");
+    fireEvent.click(screen.getByRole("menuitem", { name: "History Run" }));
+
+    const history = await screen.findByRole("status", { name: "Run this week in history" });
+    expect(history).toHaveTextContent("This week: 0 of 3 done, 3 to go");
+    expect(history).toHaveTextContent("Target unchanged");
+  });
+
+  it("shows no weekly target for a daily Habit", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate")] });
+    render(<App />);
+    await openHabits();
+
+    await screen.findByRole("button", { name: "Meditate, Friday, Jul 3: not yet checked in" });
+    expect(screen.queryByRole("status", { name: "Meditate this week" })).not.toBeInTheDocument();
+  });
+});

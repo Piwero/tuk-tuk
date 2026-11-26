@@ -461,6 +461,25 @@ class HabitStats(BaseModel):
     streak: int
     heatmap: list[HeatmapDay]
     eligible_from: date
+    # The week holding `today` for an N-times-per-week Habit (issue #568);
+    # null for daily and weekday Habits.
+    week: "HabitWeek | None" = None
+
+
+class HabitWeek(BaseModel):
+    """A times-per-week Habit's week, Monday to Sunday. A pause or skip inside
+    it never reduces `target`; `remaining` is the Target less the days done.
+    Only a pause covering the whole week (from the Habit start) sets
+    `excluded`: the week counts as neither met nor missed."""
+
+    start: date
+    end: date
+    target: int
+    done: int
+    remaining: int
+    paused_days: int
+    skipped_days: int
+    excluded: bool
 
 
 # The two Focus Session modes: a Pomo counts down, a Stopwatch counts up.

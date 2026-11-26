@@ -68,3 +68,9 @@ def due_on(frequency: str, day: date) -> bool:
     if "BYDAY" not in parts:
         return True
     return WEEKDAYS[day.weekday()] in parts["BYDAY"].split(",")
+
+
+def times_per_week(frequency: str) -> int | None:
+    """N for an N-times-per-week Habit (FREQ=WEEKLY;TT_TIMES=N), else None."""
+    times = parse_frequency(frequency).get("TT_TIMES")
+    return None if times is None else int(times)

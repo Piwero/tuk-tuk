@@ -6,6 +6,7 @@ import { tapCheckIn } from "../habitCheckIn";
 import { formatDate, localDayOf } from "../dates";
 import { habitDayReader, heatLevel } from "../habitStats";
 import { HabitSkipForm } from "./HabitSkip";
+import { HabitWeekTarget } from "./HabitWeekTarget";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
 
@@ -97,6 +98,9 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
           Streak: {stats?.streak ?? 0}
         </p>
       </Hint>
+      {stats?.week && (
+        <HabitWeekTarget label={`${habit.name} this week in history`} week={stats.week} />
+      )}
       <div className="habit-month">
         <div className="habit-month-nav">
           <IconButton icon="chevron-left" label="Previous month" onClick={() => stepMonth(-1)} />
