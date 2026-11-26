@@ -27,8 +27,8 @@ From a terminal:
 The app builds on your own machine, so it runs on Intel/AMD and Apple Silicon (M1 to M4) alike.
 
 > **Back up `.env`.** The master key in it encrypts your saved Google and AI
-> credentials and GitHub Tokens. If you lose it, you'll have to enter those again. Your tasks are
-> not affected. See [Security](security.md#the-master-key). Don't change
+> credentials and GitHub Tokens. If you lose it, you'll have to enter those
+> again. Your tasks are not affected. See [Security](security.md#the-master-key). Don't change
 > `POSTGRES_PASSWORD` later: the database keeps the one it was created with.
 
 ## Everyday commands
@@ -147,16 +147,16 @@ Each redirect address must also be listed in `CORS_ORIGINS` (see above).
 For hands-free Task and Habit changes, see [Set up the Voice Assistant](voice.md).
 It needs a free LiveKit Cloud project and a separately deployed agent.
 
-## What it connects to on the internet
+## Allow outbound hosts
 
 The app needs no inbound access from the internet. The backend makes outbound
 HTTPS calls (port 443) only for the features you turn on:
 
 | Feature | Hosts |
 | --- | --- |
-| [Google Calendar](#optional-connect-google-calendar) | `accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com` |
+| [Google Calendar](#optional-connect-google-calendar) | `oauth2.googleapis.com`, `www.googleapis.com` |
 | [GitHub](../guide/features/github.md) | `api.github.com` |
-| AI and voice | The providers you configure in Settings |
+| AI assistant | The AI provider you set in Settings |
 
 If your firewall, proxy or Kubernetes NetworkPolicy limits outbound traffic,
 allow these hosts from the backend. Without `api.github.com`, adding a GitHub
