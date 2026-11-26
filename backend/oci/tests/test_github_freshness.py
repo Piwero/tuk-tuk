@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from app.github_source import TransientGitHubSourceError
+from app.github_source import TerminalGitHubSourceError, TransientGitHubSourceError
 from tests.conftest import FakeClock, FakeGitHubSource, fake_issue, fake_pull_request
 from tests.test_github_pull_requests import watch_through
 
@@ -151,3 +151,79 @@ def test_a_transient_failure_serves_the_last_result_under_10_minutes_old_as_stal
     assert body["stale"] is True
     assert fetched_at(body) == fetched
     assert token_statuses(body) == [("octocat", "stale")]
+
+
+def test_a_transient_failure_with_no_result_under_10_minutes_old_shows_no_rows(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    fake_github_source.register_pull_requests(
+        PERSONAL, "octocat/dotfiles", [fake_pull_request(1, "Long gone")]
+    )
+    read(client)
+
+    fake_clock.advance(timedelta(minutes=10))
+    fake_github_source.register_pull_requests_error(
+        PERSONAL, TransientGitHubSourceError("rate limited")
+    )
+    body = read(client)
+
+    assert titles(body) == []
+    assert body["stale"] is False
+    assert token_statuses(body) == [("octocat", "unavailable")]
+
+
+def test_serving_a_stale_result_leaves_the_token_connected(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    read(client)
+    fake_github_source.register_pull_requests_error(PERSONAL, TransientGitHubSourceError("5xx"))
+
+    assert read(client, query="?refresh=true")["stale"] is True
+
+    [token] = client.get("/api/v1/github/tokens").json()
+    assert token["connection_state"] == "connected"
+
+
+def test_once_github_rejects_a_token_its_earlier_result_is_never_shown_again(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    fake_github_source.register_pull_requests(
+        PERSONAL, "octocat/dotfiles", [fake_pull_request(1, "Before revocation")]
+    )
+    read(client)
+    fake_github_source.register_pull_requests_error(
+        PERSONAL, TerminalGitHubSourceError("Bad credentials")
+    )
+
+    rejected = read(client, query="?refresh=true")
+    assert titles(rejected) == []
+    assert token_statuses(rejected) == [("octocat", "needs_reconnect")]
+
+    # Neither the cache within the minute nor a later blip brings it back.
+    assert titles(read(client)) == []
+    fake_github_source.register_pull_requests_error(PERSONAL, TransientGitHubSourceError("5xx"))
+    fake_clock.advance(timedelta(minutes=1))
+    assert titles(read(client)) == []
+
+
+def test_a_token_rejected_in_settings_is_read_live_rather_than_from_the_cache(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    fake_github_source.register_pull_requests(
+        PERSONAL, "octocat/dotfiles", [fake_pull_request(1, "Before revocation")]
+    )
+    read(client)
+    revoked = TerminalGitHubSourceError("Bad credentials")
+    fake_github_source.register_repositories_error(PERSONAL, revoked)
+    fake_github_source.register_pull_requests_error(PERSONAL, revoked)
+    # The repository picker in Settings finds the token rejected.
+    client.get("/api/v1/github/repositories")
+
+    body = read(client)
+
+    assert titles(body) == []
+    assert token_statuses(body) == [("octocat", "needs_reconnect")]

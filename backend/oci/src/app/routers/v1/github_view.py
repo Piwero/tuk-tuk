@@ -204,7 +204,10 @@ async def _read_each_token[Result](
     reads = _TokenReads[Result](results=[], statuses=[], fetched_at=now)
     for token, watched in await _watched_by_token(session):
         status: TokenReadStatus = "ok"
-        shown = None if refresh else cache.fresh(owner_id, token.id)
+        # Only live reads may change `connection_state`, and nothing
+        # cached is shown for a token GitHub has rejected (ADR 0007).
+        connected = token.connection_state == "connected"
+        shown = cache.fresh(owner_id, token.id) if connected and not refresh else None
         if shown is None:
             try:
                 result = await source_read(
@@ -220,7 +223,7 @@ async def _read_each_token[Result](
             except TransientGitHubSourceError:
                 # A blip at GitHub: show the last result if it is recent
                 # enough, labelled stale (spec #576).
-                shown = cache.stale(owner_id, token.id)
+                shown = cache.stale(owner_id, token.id) if connected else None
                 status = "unavailable" if shown is None else "stale"
             except TerminalGitHubSourceError:
                 # GitHub rejected the token itself (issue #584, ADR 0007); a
@@ -228,6 +231,7 @@ async def _read_each_token[Result](
                 status = "needs_reconnect"
                 token.connection_state = "needs_reconnect"
                 await session.commit()
+                cache.forget(owner_id, token.id)
             else:
                 shown = cache.store(owner_id, token.id, result)
         if shown is not None:

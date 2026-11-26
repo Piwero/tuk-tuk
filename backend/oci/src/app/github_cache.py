@@ -58,3 +58,7 @@ class GitHubReadCache[Result]:
         entry = CachedRead(result=result, fetched_at=self._clock())
         self._entries[(owner_id, token_id)] = entry
         return entry
+
+    def forget(self, owner_id: int, token_id: int) -> None:
+        """Drops the token's last read, so it is never shown again."""
+        self._entries.pop((owner_id, token_id), None)
