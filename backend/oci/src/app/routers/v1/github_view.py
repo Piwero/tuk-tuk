@@ -11,6 +11,7 @@ GitHub rejects is marked as needing reconnection there (issue #584).
 """
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -168,6 +169,18 @@ async def _watched_by_token(
 type SourceRead[Result] = Callable[[GitHubSource, str, list[GitHubRepository]], Awaitable[Result]]
 
 
+@dataclass
+class _TokenReads[Result]:
+    """What one GitHub view read got from each GitHub Token."""
+
+    # Each token's result with its Watched Repositories by GitHub
+    # repository id, for every token that has one to show.
+    results: list[tuple[dict[int, WatchedRepository], Result]]
+    statuses: list[TokenReadStatusRead]
+    # When the oldest result shown was fetched from GitHub.
+    fetched_at: datetime
+
+
 async def _read_each_token[Result](
     request: Request,
     session: SessionDep,
@@ -175,49 +188,46 @@ async def _read_each_token[Result](
     cache: GitHubReadCache[Result],
     *,
     refresh: bool,
-) -> tuple[list[tuple[dict[int, WatchedRepository], Result]], list[TokenReadStatusRead]]:
+) -> _TokenReads[Result]:
     """Runs `source_read` once per GitHub Token, over the Watched
     Repositories read through it, unless `cache` holds that token's read
-    from under a minute ago and this is no Refresh. Returns each successful token's result with
-    its Watched Repositories by GitHub repository id, and every token's
-    status. One token's failure never hides another's results."""
+    from under a minute ago and this is no Refresh. One token's failure
+    never hides another's results."""
     github_source: GitHubSource = request.app.state.github_source
     key = request.app.state.settings.app_master_key
     owner_id = current_user_id(request)
-    results: list[tuple[dict[int, WatchedRepository], Result]] = []
-    statuses: list[TokenReadStatusRead] = []
+    now = request.app.state.clock()
+    reads = _TokenReads[Result](results=[], statuses=[], fetched_at=now)
     for token, watched in await _watched_by_token(session):
         status: TokenReadStatus = "ok"
-        by_github_id = {w.github_repo_id: w for w in watched}
-        cached = None if refresh else cache.fresh(owner_id, token.id)
-        if cached is not None:
-            results.append((by_github_id, cached.result))
-            statuses.append(TokenReadStatusRead.of(token, status, request.app.state.clock()))
-            continue
-        try:
-            result = await source_read(
-                github_source,
-                decrypt_credential(token.encrypted_token, key=key),
-                [
-                    GitHubRepository(
-                        github_id=w.github_repo_id, full_name=w.full_name, private=w.private
-                    )
-                    for w in watched
-                ],
-            )
-        except TransientGitHubSourceError:
-            status = "unavailable"
-        except TerminalGitHubSourceError:
-            # GitHub rejected the token itself (issue #584, ADR 0007); a
-            # transient failure never touches `connection_state`.
-            status = "needs_reconnect"
-            token.connection_state = "needs_reconnect"
-            await session.commit()
-        else:
-            cache.store(owner_id, token.id, result)
-            results.append((by_github_id, result))
-        statuses.append(TokenReadStatusRead.of(token, status, request.app.state.clock()))
-    return results, statuses
+        shown = None if refresh else cache.fresh(owner_id, token.id)
+        if shown is None:
+            try:
+                result = await source_read(
+                    github_source,
+                    decrypt_credential(token.encrypted_token, key=key),
+                    [
+                        GitHubRepository(
+                            github_id=w.github_repo_id, full_name=w.full_name, private=w.private
+                        )
+                        for w in watched
+                    ],
+                )
+            except TransientGitHubSourceError:
+                status = "unavailable"
+            except TerminalGitHubSourceError:
+                # GitHub rejected the token itself (issue #584, ADR 0007); a
+                # transient failure never touches `connection_state`.
+                status = "needs_reconnect"
+                token.connection_state = "needs_reconnect"
+                await session.commit()
+            else:
+                shown = cache.store(owner_id, token.id, result)
+        if shown is not None:
+            reads.results.append(({w.github_repo_id: w for w in watched}, shown.result))
+            reads.fetched_at = min(reads.fetched_at, shown.fetched_at)
+        reads.statuses.append(TokenReadStatusRead.of(token, status, now))
+    return reads
 
 
 def _repository_read(
@@ -275,7 +285,7 @@ async def list_pull_requests(
     """The open Pull Requests of every Watched Repository, grouped by the
     User's relationship to them (Review requested, then Mine, then Others)
     and most recently updated first within each group."""
-    results, statuses = await _read_each_token(
+    reads = await _read_each_token(
         request,
         session,
         _open_pull_requests,
@@ -284,7 +294,7 @@ async def list_pull_requests(
     )
     items: list[PullRequestRead] = []
     repositories: list[RepositoryReadRead] = []
-    for by_github_id, result in results:
+    for by_github_id, result in reads.results:
         for repo in result.repositories:
             row = by_github_id.get(repo.github_id)
             if row is None:
@@ -314,8 +324,8 @@ async def list_pull_requests(
     return PullRequestsRead(
         items=items,
         repositories=repositories,
-        tokens=statuses,
-        fetched_at=request.app.state.clock(),
+        tokens=reads.statuses,
+        fetched_at=reads.fetched_at,
         stale=False,
     )
 
@@ -326,7 +336,7 @@ async def list_issues(
 ) -> IssuesRead:
     """The open GitHub Issues of every Watched Repository, most recently
     updated first. Pull Requests are never among them."""
-    results, statuses = await _read_each_token(
+    reads = await _read_each_token(
         request,
         session,
         _open_issues,
@@ -335,7 +345,7 @@ async def list_issues(
     )
     items: list[IssueRead] = []
     repositories: list[RepositoryReadRead] = []
-    for by_github_id, result in results:
+    for by_github_id, result in reads.results:
         for repo in result.repositories:
             row = by_github_id.get(repo.github_id)
             if row is None:
@@ -362,7 +372,7 @@ async def list_issues(
     return IssuesRead(
         items=items,
         repositories=repositories,
-        tokens=statuses,
-        fetched_at=request.app.state.clock(),
+        tokens=reads.statuses,
+        fetched_at=reads.fetched_at,
         stale=False,
     )

@@ -8,12 +8,12 @@ the fake clock: a test counts the fake's calls to see whether GitHub was
 asked.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import FakeClock, FakeGitHubSource, fake_pull_request
+from tests.conftest import FakeClock, FakeGitHubSource, fake_issue, fake_pull_request
 from tests.test_github_pull_requests import watch_through
 
 PULL_REQUESTS = "/api/v1/github/pull-requests"
@@ -30,6 +30,10 @@ def read(client: TestClient, path: str = PULL_REQUESTS, query: str = "") -> dict
 
 def titles(body: dict[str, Any]) -> list[str]:
     return [item["title"] for item in body["items"]]
+
+
+def fetched_at(body: dict[str, Any]) -> datetime:
+    return datetime.fromisoformat(body["fetched_at"])
 
 
 def test_a_read_within_60_seconds_is_served_without_asking_github(
@@ -87,3 +91,36 @@ def test_refresh_asks_github_and_replaces_the_cached_result(
     fake_github_source.register_pull_requests(PERSONAL, "octocat/dotfiles", [])
     fake_clock.advance(timedelta(seconds=30))
     assert titles(read(client)) == ["Opened since"]
+
+
+def test_a_cached_read_carries_the_time_it_was_fetched_from_github(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    fetched = fake_clock.now
+    assert fetched_at(read(client)) == fetched
+
+    fake_clock.advance(timedelta(seconds=42))
+
+    assert fetched_at(read(client)) == fetched
+    assert fetched_at(read(client, query="?refresh=true")) == fake_clock.now
+
+
+def test_pull_requests_and_github_issues_are_cached_apart(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    fake_github_source.register_pull_requests(
+        PERSONAL, "octocat/dotfiles", [fake_pull_request(1, "A pull request")]
+    )
+    fake_github_source.register_issues(
+        PERSONAL, "octocat/dotfiles", [fake_issue(2, "A github issue")]
+    )
+    assert titles(read(client, PULL_REQUESTS)) == ["A pull request"]
+
+    assert titles(read(client, ISSUES)) == ["A github issue"]
+    fake_clock.advance(timedelta(seconds=10))
+    assert titles(read(client, ISSUES)) == ["A github issue"]
+    assert titles(read(client, PULL_REQUESTS)) == ["A pull request"]
+    assert len(fake_github_source.issue_calls) == 1
+    assert len(fake_github_source.pull_request_calls) == 1
