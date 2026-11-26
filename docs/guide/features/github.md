@@ -109,6 +109,37 @@ saying that nothing there matches.
 Your choices are not saved. Leave the GitHub view and come back, and it shows
 everything again.
 
+## Keep your tokens working
+
+Fine-grained tokens expire, and you can revoke them on GitHub at any time.
+Tuk Tuk tells you when a token needs attention.
+
+- **Expiry:** **Settings → GitHub** shows each token's expiry date, or
+  **No expiry**. From 7 days before a token expires, a banner in Settings
+  and in the GitHub view names it and its expiry date.
+- **Rejected token:** if GitHub stops accepting a token, for example
+  because it expired or you revoked it, both tabs of the GitHub view show a
+  banner naming that token's owner. The other tokens' repositories still
+  show.
+  Settings marks the token as needing reconnection.
+- **GitHub unreachable:** if GitHub can't be reached for one token, the
+  GitHub view says so for that token and shows the rest. This never marks
+  the token as needing reconnection. Try again in a moment.
+
+To reconnect a token:
+
+1. Create a new fine-grained token on GitHub for the **same** owner, with
+   the same read-only permissions.
+2. In **Settings → GitHub**, choose **Reconnect** next to the token.
+3. Paste the new token into **Replacement token** and choose **Reconnect**.
+
+Tuk Tuk checks the new token with GitHub first. A token for a different
+owner is refused: add that one as a new token instead. Your Watched
+Repositories stay as they were.
+
+You can use **Reconnect** at any time, for example to swap in a new token
+before the old one expires.
+
 ## Good to know
 
 - **The GitHub view reads GitHub each time you open it.** Nothing about your

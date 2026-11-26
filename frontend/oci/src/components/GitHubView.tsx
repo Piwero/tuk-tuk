@@ -15,6 +15,7 @@ import { formatTimeAgo } from "../dates";
 import { applyGitHubFilters, type GitHubFilters, NO_GITHUB_FILTERS } from "../githubFilters";
 import { pathForSettingsTab } from "../routes";
 import { GitHubFilterBar } from "./GitHubFilterBar";
+import { GitHubTokenBanners } from "./GitHubTokenBanners";
 
 /** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
 type GitHubTab = "pull-requests" | "issues";
@@ -227,6 +228,7 @@ function GitHubRead<Item>({
   }
   return (
     <>
+      <GitHubTokenBanners tokens={read.tokens} onOpenSettings={onOpenSettings} />
       {render(read)}
       <OverflowLinks repositories={read.repositories} />
     </>

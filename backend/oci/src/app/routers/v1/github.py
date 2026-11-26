@@ -6,7 +6,7 @@ GitHub owner it grants access to. The token itself is write-only: no
 response ever carries it.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Request
@@ -19,6 +19,7 @@ from app.errors import APIError, NotFoundError
 from app.github_source import (
     GitHubRepository,
     GitHubSource,
+    GitHubTokenIdentity,
     TerminalGitHubSourceError,
     TransientGitHubSourceError,
 )
@@ -27,6 +28,14 @@ from app.models import GitHubToken, WatchedRepository
 router = APIRouter(prefix="/api/v1/github", tags=["github"])
 
 FINE_GRAINED_PREFIX = "github_pat_"
+# How long before a GitHub Token expires the User is warned (spec #576).
+EXPIRY_WARNING = timedelta(days=7)
+
+
+def expires_soon(expires_at: datetime | None, now: datetime) -> bool:
+    """Whether a GitHub Token expiring at `expires_at` is within the expiry
+    warning, or already expired. A token without an expiry never is."""
+    return expires_at is not None and expires_at - now <= EXPIRY_WARNING
 
 
 class GitHubTokenCreate(BaseModel):
@@ -34,14 +43,25 @@ class GitHubTokenCreate(BaseModel):
 
 
 class GitHubTokenRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     owner_login: str
     owner_kind: str
     expires_at: datetime | None
+    expires_soon: bool
     connection_state: str
     created_at: datetime
+
+    @classmethod
+    def of(cls, row: GitHubToken, request: Request) -> "GitHubTokenRead":
+        return cls(
+            id=row.id,
+            owner_login=row.owner_login,
+            owner_kind=row.owner_kind,
+            expires_at=row.expires_at,
+            expires_soon=expires_soon(row.expires_at, request.app.state.clock()),
+            connection_state=row.connection_state,
+            created_at=row.created_at,
+        )
 
 
 def _not_fine_grained_error() -> APIError:
@@ -55,16 +75,14 @@ def _not_fine_grained_error() -> APIError:
 
 
 @router.get("/tokens")
-async def list_tokens(session: SessionDep) -> list[GitHubTokenRead]:
+async def list_tokens(request: Request, session: SessionDep) -> list[GitHubTokenRead]:
     rows = await session.scalars(select(GitHubToken).order_by(GitHubToken.id))
-    return [GitHubTokenRead.model_validate(row) for row in rows]
+    return [GitHubTokenRead.of(row, request) for row in rows]
 
 
-@router.post("/tokens", status_code=201)
-async def add_token(
-    payload: GitHubTokenCreate, request: Request, session: SessionDep
-) -> GitHubTokenRead:
-    token = payload.token.strip()
+async def _validate(request: Request, token: str) -> GitHubTokenIdentity:
+    """Checks a pasted token with GitHub before anything is saved: only a
+    fine-grained token GitHub accepts gets through."""
     # GitHub's own prefix for fine-grained tokens: anything else is refused
     # before it is ever sent to GitHub.
     if not token.startswith(FINE_GRAINED_PREFIX):
@@ -87,6 +105,21 @@ async def add_token(
         ) from None
     if identity.token_type != "fine_grained":
         raise _not_fine_grained_error()
+    return identity
+
+
+def _encrypt(request: Request, token: str) -> str:
+    settings = request.app.state.settings
+    assert settings.app_master_key is not None  # app.main refuses to start without it
+    return encrypt_credential(token, key=settings.app_master_key)
+
+
+@router.post("/tokens", status_code=201)
+async def add_token(
+    payload: GitHubTokenCreate, request: Request, session: SessionDep
+) -> GitHubTokenRead:
+    token = payload.token.strip()
+    identity = await _validate(request, token)
 
     # GitHub logins are case-insensitive; one GitHub Token per owner.
     existing = await session.scalar(
@@ -99,21 +132,48 @@ async def add_token(
             409,
             "github_token_owner_exists",
             f"You already have a GitHub Token for {identity.owner_login}. "
-            "Remove it first to use a different one.",
+            "Reconnect it to use a different one.",
         )
 
-    settings = request.app.state.settings
-    assert settings.app_master_key is not None  # app.main refuses to start without it
     row = GitHubToken(
         owner_login=identity.owner_login,
         owner_kind=identity.owner_kind,
-        encrypted_token=encrypt_credential(token, key=settings.app_master_key),
+        encrypted_token=_encrypt(request, token),
         expires_at=identity.expires_at,
         connection_state="connected",
     )
     session.add(row)
     await session.commit()
-    return GitHubTokenRead.model_validate(row)
+    return GitHubTokenRead.of(row, request)
+
+
+@router.patch("/tokens/{token_id}")
+async def reconnect_token(
+    token_id: int, payload: GitHubTokenCreate, request: Request, session: SessionDep
+) -> GitHubTokenRead:
+    """Reconnect: replaces the token on an existing GitHub Token in place
+    with a replacement for the same owner, so its Watched Repositories
+    survive a rotation (issue #584)."""
+    row = await session.get(GitHubToken, token_id)
+    if row is None:
+        raise NotFoundError(f"GitHub Token {token_id} not found")
+    token = payload.token.strip()
+    identity = await _validate(request, token)
+    # A replacement must grant access to the same owner, or the Watched
+    # Repositories it keeps would be read through someone else's access.
+    if identity.owner_login.lower() != row.owner_login.lower():
+        raise APIError(
+            422,
+            "github_token_owner_mismatch",
+            f"This token grants access to {identity.owner_login}, not "
+            f"{row.owner_login}. Paste a token for {row.owner_login}, or add it as a "
+            "new GitHub Token.",
+        )
+    row.encrypted_token = _encrypt(request, token)
+    row.expires_at = identity.expires_at
+    row.connection_state = "connected"
+    await session.commit()
+    return GitHubTokenRead.of(row, request)
 
 
 class AccessibleRepositoryRead(BaseModel):
