@@ -147,7 +147,10 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
                   filters={filters}
                   onChange={setFilters}
                 />
-                <PullRequestGroups items={applyGitHubFilters(read.items, filters)} />
+                <PullRequestGroups
+                  items={read.items}
+                  shown={applyGitHubFilters(read.items, filters)}
+                />
               </>
             )}
           />
@@ -164,7 +167,7 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
                   filters={filters}
                   onChange={setFilters}
                 />
-                <IssueList items={applyGitHubFilters(read.items, filters)} />
+                <IssueList items={read.items} shown={applyGitHubFilters(read.items, filters)} />
               </>
             )}
           />
@@ -230,21 +233,39 @@ function GitHubRead<Item>({
   );
 }
 
-function PullRequestGroups({ items }: { items: GitHubPullRequest[] }): React.JSX.Element {
+/** The groups in their fixed order. `items` is the whole read, which
+ * decides which groups exist; `shown` is what the filters leave, which
+ * fills and counts them. A group the filters empty says so rather than
+ * vanishing (#585). */
+function PullRequestGroups({
+  items,
+  shown,
+}: {
+  items: GitHubPullRequest[];
+  shown: GitHubPullRequest[];
+}): React.JSX.Element {
   return (
     <>
       {items.length === 0 && <p className="github-empty">No open Pull Requests.</p>}
       {GROUPS.map(({ relationship, label }) => {
-        const grouped = items.filter((pr) => pr.relationship === relationship);
-        if (grouped.length === 0) return null;
+        if (!items.some((pr) => pr.relationship === relationship)) return null;
+        const grouped = shown.filter((pr) => pr.relationship === relationship);
         return (
           <section key={relationship} aria-label={label} className="github-group">
-            <h2>{label}</h2>
-            <ul>
-              {grouped.map((pr) => (
-                <PullRequestRow key={`${pr.repository}#${pr.number}`} pr={pr} />
-              ))}
-            </ul>
+            <h2>
+              {label} <span className="github-group-count">{grouped.length}</span>
+            </h2>
+            {grouped.length === 0 ? (
+              <p role="status" className="github-empty">
+                No Pull Requests here match the filters.
+              </p>
+            ) : (
+              <ul>
+                {grouped.map((pr) => (
+                  <PullRequestRow key={`${pr.repository}#${pr.number}`} pr={pr} />
+                ))}
+              </ul>
+            )}
           </section>
         );
       })}
@@ -252,11 +273,24 @@ function PullRequestGroups({ items }: { items: GitHubPullRequest[] }): React.JSX
   );
 }
 
-function IssueList({ items }: { items: GitHubIssue[] }): React.JSX.Element {
+function IssueList({
+  items,
+  shown,
+}: {
+  items: GitHubIssue[];
+  shown: GitHubIssue[];
+}): React.JSX.Element {
   if (items.length === 0) return <p className="github-empty">No open GitHub Issues.</p>;
+  if (shown.length === 0) {
+    return (
+      <p role="status" className="github-empty">
+        No GitHub Issues match the filters.
+      </p>
+    );
+  }
   return (
     <ul className="github-list">
-      {items.map((issue) => (
+      {shown.map((issue) => (
         <IssueRow key={`${issue.repository}#${issue.number}`} issue={issue} />
       ))}
     </ul>

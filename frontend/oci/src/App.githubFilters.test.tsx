@@ -160,4 +160,81 @@ describe("GitHub view › filters", () => {
     expect(screen.queryByRole("checkbox", { name: "Hide drafts" })).not.toBeInTheDocument();
     expect(shownTitles()).toEqual(["Human report"]);
   });
+
+  it("filters without asking the backend, and so GitHub, again", async () => {
+    const api = installFakeApi({
+      ...watchedDotfiles(),
+      githubPullRequests: [
+        fakeGitHubPullRequest(2, "Parser", { author: "monalisa", is_draft: true }),
+        fakeGitHubPullRequest(1, "Fix", { author: "octocat" }),
+      ],
+    });
+    const user = await openGitHub();
+    await screen.findByRole("link", { name: "Parser" });
+    const reads = (): string[] =>
+      api.requests.filter((r) => r.url.startsWith("/api/v1/github/")).map((r) => r.url);
+    const before = reads();
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Author" }), "octocat");
+    await user.click(screen.getByRole("checkbox", { name: "Hide drafts" }));
+    await user.click(screen.getByRole("checkbox", { name: "Hide bots" }));
+
+    expect(shownTitles()).toEqual(["Fix"]);
+    expect(reads()).toEqual(before);
+  });
+
+  it("keeps the groups in order with their filtered counts, and says when one is emptied", async () => {
+    installFakeApi({
+      ...watchedDotfiles(),
+      githubPullRequests: [
+        fakeGitHubPullRequest(4, "Review my parser", {
+          relationship: "review_requested",
+          author: "monalisa",
+        }),
+        fakeGitHubPullRequest(3, "My refactor", { relationship: "mine", author: "octocat" }),
+        fakeGitHubPullRequest(2, "Their fix", { relationship: "other", author: "monalisa" }),
+        fakeGitHubPullRequest(1, "Their docs", { relationship: "other", author: "hubot" }),
+      ],
+    });
+    const user = await openGitHub();
+    await screen.findByRole("link", { name: "Review my parser" });
+    const groups = (): string[][] =>
+      screen.getAllByRole("region", { name: /Review requested|Mine|Others/ }).map((group) => [
+        within(group).getByRole("heading").textContent ?? "",
+        ...within(group)
+          .queryAllByRole("link")
+          .map((link) => link.textContent ?? ""),
+        ...within(group)
+          .queryAllByRole("status")
+          .map((note) => note.textContent ?? ""),
+      ]);
+    expect(groups()).toEqual([
+      ["Review requested 1", "Review my parser"],
+      ["Mine 1", "My refactor"],
+      ["Others 2", "Their fix", "Their docs"],
+    ]);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Author" }), "monalisa");
+
+    expect(groups()).toEqual([
+      ["Review requested 1", "Review my parser"],
+      ["Mine 0", "No Pull Requests here match the filters."],
+      ["Others 1", "Their fix"],
+    ]);
+  });
+
+  it("says no GitHub Issues match when the filters leave none", async () => {
+    installFakeApi({
+      ...watchedDotfiles(),
+      githubIssues: [fakeGitHubIssue(2, "Bot report", { author: "renovate", author_is_bot: true })],
+    });
+    const user = await openGitHub();
+    await user.click(await screen.findByRole("tab", { name: "Issues" }));
+    await screen.findByRole("link", { name: "Bot report" });
+
+    await user.click(screen.getByRole("checkbox", { name: "Hide bots" }));
+
+    expect(screen.getByText("No GitHub Issues match the filters.")).toBeInTheDocument();
+    expect(screen.queryByText("No open GitHub Issues.")).not.toBeInTheDocument();
+  });
 });
