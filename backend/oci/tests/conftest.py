@@ -54,6 +54,7 @@ from app.config import Settings  # noqa: E402
 from app.db import DatabaseUrl, run_migrations  # noqa: E402
 from app.github_source import (  # noqa: E402
     GitHubOwnerKind,
+    GitHubRepository,
     GitHubTokenIdentity,
     GitHubTokenType,
     TerminalGitHubSourceError,
@@ -395,6 +396,8 @@ class FakeGitHubSource:
     def __init__(self) -> None:
         self._identities: dict[str, GitHubTokenIdentity] = {}
         self._identify_errors: dict[str, Exception] = {}
+        self._repositories: dict[str, list[GitHubRepository]] = {}
+        self._repository_errors: dict[str, Exception] = {}
         self.identify_calls: list[str] = []
 
     def register_token(
@@ -417,6 +420,30 @@ class FakeGitHubSource:
         """Every `identify_token` for this token raises `error` — a
         Transient or Terminal GitHubSourceError."""
         self._identify_errors[token] = error
+
+    def register_repositories(
+        self, token: str, repositories: list[tuple[int, str]], *, private: bool = True
+    ) -> None:
+        """What `list_accessible_repositories` returns for this token, as
+        (GitHub repository id, `owner/name`) pairs. Replaces any earlier
+        registration, so a test can change what a token reads."""
+        self._repositories[token] = [
+            GitHubRepository(github_id=github_id, full_name=full_name, private=private)
+            for github_id, full_name in repositories
+        ]
+
+    def register_repositories_error(self, token: str, error: Exception) -> None:
+        """Every `list_accessible_repositories` for this token raises
+        `error` — a Transient or Terminal GitHubSourceError."""
+        self._repository_errors[token] = error
+
+    async def list_accessible_repositories(self, token: str) -> list[GitHubRepository]:
+        error = self._repository_errors.get(token)
+        if error is not None:
+            raise error
+        if token not in self._identities:
+            raise TerminalGitHubSourceError("Bad credentials")
+        return list(self._repositories.get(token, []))
 
     async def identify_token(self, token: str) -> GitHubTokenIdentity:
         self.identify_calls.append(token)

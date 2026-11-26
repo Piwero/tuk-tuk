@@ -818,6 +818,34 @@ class GitHubToken(OwnedMixin, Base):
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
+    watched_repositories: Mapped[list["WatchedRepository"]] = relationship(
+        back_populates="token", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class WatchedRepository(OwnedMixin, Base):
+    """A Watched Repository (issue #581) — a GitHub repository a User picked
+    from those their GitHub Tokens can read, read through the GitHub Token
+    it was picked with and deleted with it. Unique per User by GitHub's own
+    repository id, so a repository two tokens can read is watched once.
+    `full_name` (`owner/name`) and `private` are cosmetic metadata; nothing
+    else read from GitHub is ever stored (ADR 0006).
+    """
+
+    __tablename__ = "watched_repositories"
+    __table_args__ = (UniqueConstraint("owner_id", "github_repo_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    github_token_id: Mapped[int] = mapped_column(
+        ForeignKey("github_tokens.id", ondelete="CASCADE"), index=True
+    )
+    github_repo_id: Mapped[int] = mapped_column(BigInteger)
+    full_name: Mapped[str] = mapped_column(String(255))
+    private: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    token: Mapped[GitHubToken] = relationship(back_populates="watched_repositories")
+
 
 class StandupEntry(OwnedMixin, Base):
     """A Stand-up Entry — one calendar date's daily stand-up: Yesterday /

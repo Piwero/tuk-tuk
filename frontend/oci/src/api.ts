@@ -766,6 +766,68 @@ export function deleteGitHubToken(tokenId: number): Promise<void> {
   return request(`/api/v1/github/tokens/${tokenId}`, { method: "DELETE" });
 }
 
+/** One repository the Watched Repositories picker offers (#581): readable
+ * through `github_token_id`, and already watched when
+ * `watched_repository_id` is set. Offered once even when several GitHub
+ * Tokens can read it. */
+export interface AccessibleRepository {
+  github_repo_id: number;
+  full_name: string;
+  private: boolean;
+  github_token_id: number;
+  watched_repository_id: number | null;
+}
+
+/** How one GitHub Token fared in the picker. A token GitHub accepted that
+ * reads no repositories usually belongs to an organisation that has not
+ * allowed or approved fine-grained tokens yet. */
+export interface RepositoryPickerToken {
+  id: number;
+  owner_login: string;
+  status: "ok" | "unavailable" | "needs_reconnect";
+  repository_count: number;
+}
+
+export interface RepositoryPicker {
+  repositories: AccessibleRepository[];
+  tokens: RepositoryPickerToken[];
+}
+
+/** A Watched Repository (#581), read through the GitHub Token it was
+ * picked with. */
+export interface WatchedRepository {
+  id: number;
+  github_token_id: number;
+  github_repo_id: number;
+  full_name: string;
+  private: boolean;
+  created_at: string;
+}
+
+export function fetchRepositoryPicker(): Promise<RepositoryPicker> {
+  return request("/api/v1/github/repositories");
+}
+
+export function fetchWatchedRepositories(): Promise<WatchedRepository[]> {
+  return request("/api/v1/github/watched-repositories");
+}
+
+export function watchRepository(
+  githubTokenId: number,
+  githubRepoId: number,
+): Promise<WatchedRepository> {
+  return request("/api/v1/github/watched-repositories", {
+    method: "POST",
+    body: JSON.stringify({ github_token_id: githubTokenId, github_repo_id: githubRepoId }),
+  });
+}
+
+export function unwatchRepository(watchedRepositoryId: number): Promise<void> {
+  return request(`/api/v1/github/watched-repositories/${watchedRepositoryId}`, {
+    method: "DELETE",
+  });
+}
+
 export interface GoogleCalendar {
   id: number;
   google_calendar_id: string;

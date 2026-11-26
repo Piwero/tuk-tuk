@@ -259,7 +259,7 @@ A fine-grained personal access token a User pasted in Settings → GitHub (issue
 _Avoid_: integration, GitHub connection, GitHub Account (there is no OAuth identity), API token (tuk-tuk's own credential), PAT
 
 **Watched Repository**:
-A GitHub repository a User chose, from those their GitHub Tokens can read, to appear in the GitHub view. Read through the GitHub Token it was picked with, and unique per User by GitHub's repository id. Removing that GitHub Token removes it.
+A GitHub repository a User chose, from those their GitHub Tokens can read, to appear in the GitHub view. Picked in Settings → GitHub (issue #581), where a repository two tokens can read is offered once. Read through the GitHub Token it was picked with, and unique per User by GitHub's repository id. Removing that GitHub Token removes it; the picker then offers it again through any other token that can still read it.
 _Avoid_: tracked repo, subscription
 
 **Repository View**:

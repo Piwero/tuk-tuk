@@ -51,6 +51,8 @@ from tests.test_assistant_chat import StubChatProvider
 MARKER = "alice"
 TOKENS = "/api/v1/auth/me/tokens"
 ALICES_RUN = "alice-run"
+ALICES_WATCHED_REPO = 101
+ALICES_SPARE_REPO = 102
 
 
 @dataclass(frozen=True)
@@ -133,6 +135,7 @@ class AliceWorld(World):
     google_account: int
     google_calendar: int
     github_token: int
+    watched_repository: int
     api_token: int
     reminder_delivery: int
     reminder_lease: str
@@ -192,6 +195,8 @@ READS: dict[str, Read] = {
     "sections of a list": Read(get(lambda a, me: f"/api/v1/sections?list_id={a.list}")),
     "tags": Read(get(lambda a, me: "/api/v1/tags")),
     "github tokens": Read(get(lambda a, me: "/api/v1/github/tokens")),
+    "github repository picker": Read(get(lambda a, me: "/api/v1/github/repositories")),
+    "watched repositories": Read(get(lambda a, me: "/api/v1/github/watched-repositories")),
     "tasks": Read(get(lambda a, me: "/api/v1/tasks")),
     "tasks of a list": Read(get(lambda a, me: f"/api/v1/tasks?list_id={a.list}")),
     "tasks with a tag": Read(get(lambda a, me: f"/api/v1/tasks?tag_id={a.tag}")),
@@ -450,11 +455,26 @@ REACHES |= {
     "DELETE github token": Reach(
         lambda a, me: ("DELETE", f"/api/v1/github/tokens/{a.github_token}", None)
     ),
+    "DELETE watched repository": Reach(
+        lambda a, me: (
+            "DELETE",
+            f"/api/v1/github/watched-repositories/{a.watched_repository}",
+            None,
+        )
+    ),
 }
 
 # Alice's ids named as the parent of, or a link from, one of the requester's
 # own rows.
 PARENTS: dict[str, Reach] = {
+    # Alice's token can read alice/spare, which she does not yet watch.
+    "watched repository through a github token": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/github/watched-repositories",
+            {"github_token_id": a.github_token, "github_repo_id": ALICES_SPARE_REPO},
+        )
+    ),
     "section in a list": Reach(
         lambda a, me: ("POST", "/api/v1/sections", {"list_id": a.list, "name": "x"})
     ),
@@ -733,7 +753,16 @@ def build_alice(
     now = clock.now
     google_account, google_calendar = connect_google(alice, calendar_source, MARKER, today)
     github_source.register_token("github_pat_alice", owner_login=MARKER)
+    github_source.register_repositories(
+        "github_pat_alice",
+        [(ALICES_WATCHED_REPO, "alice/watched"), (ALICES_SPARE_REPO, "alice/spare")],
+    )
     github_token = alice.ok("POST", "/api/v1/github/tokens", {"token": "github_pat_alice"})["id"]
+    watched_repository = alice.ok(
+        "POST",
+        "/api/v1/github/watched-repositories",
+        {"github_token_id": github_token, "github_repo_id": ALICES_WATCHED_REPO},
+    )["id"]
     alice.ok(
         "PUT",
         "/api/v1/assistant/config",
@@ -868,6 +897,7 @@ def build_alice(
         google_account=google_account,
         google_calendar=google_calendar,
         github_token=github_token,
+        watched_repository=watched_repository,
         api_token=api_token,
     )
 

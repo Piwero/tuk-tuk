@@ -8,6 +8,7 @@ import {
   type GitHubToken,
 } from "../api";
 import { formatDate } from "../dates";
+import { GitHubRepositoryPicker } from "./GitHubRepositoryPicker";
 import { Modal } from "./Modal";
 
 const TOKEN_ERROR_ID = "github-token-error";
@@ -136,75 +137,78 @@ export function GitHubSettingsPanel(): React.JSX.Element {
   }
 
   return (
-    <section aria-label="GitHub Tokens" id="settings-github" className="settings-section">
-      <div className="settings-section-head">
-        <h2>GitHub Tokens</h2>
-      </div>
-      <p className="settings-lead">
-        Paste a fine-grained personal access token with read-only access to Metadata, Issues and
-        Pull requests. Add one token for your own repositories and one per organisation. Tuk Tuk
-        never writes to GitHub.
-      </p>
-      <AddTokenForm onAdded={(token) => setTokens((previous) => [...(previous ?? []), token])} />
-      {loadFailed && <p role="alert">Couldn’t load your GitHub Tokens.</p>}
-      {tokens !== null && tokens.length === 0 && (
-        <p className="settings-hint">No GitHub Tokens yet.</p>
-      )}
-      {tokens !== null && tokens.length > 0 && (
-        <ul className="api-tokens" aria-label="GitHub Tokens">
-          {tokens.map((token) => (
-            <li key={token.id} className="api-token">
-              <div>
-                <h3>{token.owner_login}</h3>
-                <p className="settings-hint">{describeToken(token)}</p>
-                {token.connection_state === "needs_reconnect" && (
-                  <p role="alert">GitHub no longer accepts this token. Replace it.</p>
-                )}
-              </div>
+    <>
+      <section aria-label="GitHub Tokens" id="settings-github" className="settings-section">
+        <div className="settings-section-head">
+          <h2>GitHub Tokens</h2>
+        </div>
+        <p className="settings-lead">
+          Paste a fine-grained personal access token with read-only access to Metadata, Issues and
+          Pull requests. Add one token for your own repositories and one per organisation. Tuk Tuk
+          never writes to GitHub.
+        </p>
+        <AddTokenForm onAdded={(token) => setTokens((previous) => [...(previous ?? []), token])} />
+        {loadFailed && <p role="alert">Couldn’t load your GitHub Tokens.</p>}
+        {tokens !== null && tokens.length === 0 && (
+          <p className="settings-hint">No GitHub Tokens yet.</p>
+        )}
+        {tokens !== null && tokens.length > 0 && (
+          <ul className="api-tokens" aria-label="GitHub Tokens">
+            {tokens.map((token) => (
+              <li key={token.id} className="api-token">
+                <div>
+                  <h3>{token.owner_login}</h3>
+                  <p className="settings-hint">{describeToken(token)}</p>
+                  {token.connection_state === "needs_reconnect" && (
+                    <p role="alert">GitHub no longer accepts this token. Replace it.</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  aria-label={`Remove GitHub Token for ${token.owner_login}`}
+                  onClick={() => setConfirming(token)}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {removeError !== null && <p role="alert">{removeError}</p>}
+        {confirming !== null && (
+          <Modal
+            title={`Remove the GitHub Token for ${confirming.owner_login}?`}
+            onClose={() => setConfirming(null)}
+          >
+            <p className="api-token-confirm-lead">
+              Tuk Tuk loses access to {confirming.owner_login}’s repositories. You can add a token
+              again later.
+            </p>
+            <div className="api-token-confirm-actions">
               <button
                 type="button"
                 className="btn-secondary"
-                aria-label={`Remove GitHub Token for ${token.owner_login}`}
-                onClick={() => setConfirming(token)}
+                autoFocus
+                onClick={() => setConfirming(null)}
               >
-                Remove
+                Cancel
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {removeError !== null && <p role="alert">{removeError}</p>}
-      {confirming !== null && (
-        <Modal
-          title={`Remove the GitHub Token for ${confirming.owner_login}?`}
-          onClose={() => setConfirming(null)}
-        >
-          <p className="api-token-confirm-lead">
-            Tuk Tuk loses access to {confirming.owner_login}’s repositories. You can add a token
-            again later.
-          </p>
-          <div className="api-token-confirm-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              autoFocus
-              onClick={() => setConfirming(null)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn-primary api-token-confirm-danger"
-              onClick={() => {
-                setConfirming(null);
-                remove(confirming);
-              }}
-            >
-              Remove token
-            </button>
-          </div>
-        </Modal>
-      )}
-    </section>
+              <button
+                type="button"
+                className="btn-primary api-token-confirm-danger"
+                onClick={() => {
+                  setConfirming(null);
+                  remove(confirming);
+                }}
+              >
+                Remove token
+              </button>
+            </div>
+          </Modal>
+        )}
+      </section>
+      <GitHubRepositoryPicker tokens={tokens ?? []} />
+    </>
   );
 }

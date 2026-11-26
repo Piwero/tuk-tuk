@@ -11,6 +11,7 @@ import httpx
 
 from app.github_source import (
     GitHubOwnerKind,
+    GitHubRepository,
     GitHubTokenIdentity,
     GitHubTokenType,
     TerminalGitHubSourceError,
@@ -109,3 +110,27 @@ class GitHubApiSource:
             token_type=_token_type(token, user),
             expires_at=_parse_expiry(user.headers.get(EXPIRY_HEADER)),
         )
+
+    async def list_accessible_repositories(self, token: str) -> list[GitHubRepository]:
+        action = "listing repositories"
+        repositories: list[GitHubRepository] = []
+        async with self._client(token, action) as client:
+            url: str | None = "/user/repos"
+            params: dict[str, int] | None = {"per_page": 100}
+            while url is not None:
+                response = await client.get(url, params=params)
+                if response.status_code != 200:
+                    _raise_for_error_response(response, action)
+                repositories.extend(
+                    GitHubRepository(
+                        github_id=int(r["id"]),
+                        full_name=str(r["full_name"]),
+                        private=bool(r["private"]),
+                    )
+                    for r in response.json()
+                )
+                # GitHub pages with a Link header whose "next" URL already
+                # carries the query string.
+                url = response.links.get("next", {}).get("url")
+                params = None
+        return repositories

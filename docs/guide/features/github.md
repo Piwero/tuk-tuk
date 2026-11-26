@@ -33,12 +33,29 @@ appears under the owner it reads, with its expiry date.
 Add one token for your own repositories and one per organisation. You can
 only have one token per owner.
 
+## Pick Watched Repositories
+
+Once you have a token, **Settings → GitHub** lists every repository your
+tokens can read under **Watched Repositories**.
+
+1. Type part of a repository's `owner/name` into **Search repositories** to
+   narrow the list.
+2. Tick a repository to watch it. Untick it to stop watching.
+
+A repository that two of your tokens can read is listed once. Tuk Tuk reads
+it through the token you picked it with.
+
 ## Good to know
 
 - **Classic tokens are refused.** They can't be limited to read-only access.
 - **An organisation may need to approve your token** before its repositories
-  can be read. Check the organisation's settings on GitHub if nothing shows
-  up.
+  can be read. If GitHub lists no repositories for a token, Settings says so.
+  Check the organisation's settings on GitHub to allow or approve
+  fine-grained tokens.
+- **Removing a token stops watching its repositories.** Any of them that
+  another of your tokens can still read are listed again, ready to tick.
+- **If GitHub can't be reached for one token,** Settings says so and still
+  lists the other tokens' repositories.
 - **If GitHub can't be reached** while you add a token, nothing is saved.
   Try again in a moment.
 - **Remove a token** with **Remove** next to it. Tuk Tuk loses access to that
