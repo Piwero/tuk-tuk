@@ -1,4 +1,4 @@
-import { readStylesheets } from "./test/stylesheets";
+import { cssRuleBody, readStylesheets } from "./test/stylesheets";
 import { describe, expect, it } from "vitest";
 
 /** Today's column wash must span the whole day, not stop part-way down it.
@@ -11,16 +11,9 @@ import { describe, expect, it } from "vitest";
 
 const css = readStylesheets().replace(/\/\*[\s\S]*?\*\//g, "");
 
-function rule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`(^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(css);
-  expect(match, `${selector} rule not found`).not.toBeNull();
-  return (match as RegExpExecArray)[2] ?? "";
-}
-
 describe("today's calendar column wash", () => {
   it("lets the day columns grow to their hour cells inside the capped scroll box", () => {
-    const columns = rule(".time-columns");
+    const columns = cssRuleBody(css, ".time-columns");
     expect(columns).toMatch(/overflow-y:\s*auto/);
     expect(columns).toMatch(/align-items:\s*flex-start/);
   });
