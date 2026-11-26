@@ -84,6 +84,9 @@ export interface Task {
    * moving or removing it never changes the deadline. Null when unplanned;
    * optional so older payloads without the field still read as unplanned. */
   planned_work?: PlannedWorkRead | null;
+  /** Duration estimate in minutes (#563), only for work planning; null
+   * when the User gave none. Never inferred. */
+  estimate_minutes?: number | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
@@ -1135,6 +1138,8 @@ export interface TaskPatch {
   recurrence?: string | null;
   /** null detaches the Task from its Key Result. */
   key_result_id?: number | null;
+  /** Duration estimate in minutes (#563); null removes it. */
+  estimate_minutes?: number | null;
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {

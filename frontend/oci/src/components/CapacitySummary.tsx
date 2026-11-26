@@ -17,7 +17,7 @@ interface CapacitySummaryProps {
   /** The Calendar's Events for the visible range. */
   events: readonly Event[];
   /** The Calendar's open Tasks for the day: those without Planned work are
-   * the unknown estimates. */
+   * the unplanned estimates, or unknown ones when they carry no Estimate. */
   dayTasks: readonly Task[];
 }
 

@@ -83,7 +83,8 @@ function draftOf(task: Task): Draft {
     return {
       day: dueDay(task) ?? localDayOf(new Date()),
       start: "09:00",
-      duration: "60",
+      // The User's own estimate, when given (#563); never inferred.
+      duration: String(task.estimate_minutes ?? 60),
       buffer: "",
     };
   }

@@ -89,6 +89,7 @@ export interface FakeTask {
   source_google_event_id: string | null;
   key_result_id: number | null;
   planned_work?: PlannedWorkRead | null;
+  estimate_minutes?: number | null;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -2837,6 +2838,16 @@ export function installFakeApi({
         }
         if (!("recurrence" in rest) && effectiveDue === null && task.recurrence !== null) {
           rest.recurrence = null;
+        }
+        // Mirror the backend's estimate rule (#563): positive whole minutes,
+        // at most a week; null removes it.
+        const estimate = rest.estimate_minutes;
+        if (
+          estimate !== undefined &&
+          estimate !== null &&
+          !(Number.isInteger(estimate) && Number(estimate) >= 1 && Number(estimate) <= 7 * 24 * 60)
+        ) {
+          return json({ error: { code: "validation_error", message: "Invalid estimate" } }, 422);
         }
         // Mirror the backend's planned work rules (#558): a positive
         // duration, kept (buffer included) within one local day.

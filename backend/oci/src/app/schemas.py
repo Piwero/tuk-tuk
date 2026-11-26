@@ -215,6 +215,11 @@ class PlannedWorkRead(PlannedWork):
         return utc_z(value)
 
 
+# The longest duration estimate a Task takes: a week. A longer job is
+# several Tasks.
+MAX_ESTIMATE_MINUTES = 7 * 24 * 60
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     description: str = ""
@@ -242,8 +247,9 @@ class TaskCreate(BaseModel):
 # except section_id, where null moves the task out of its Section,
 # start_date / due_date / time_zone, where null clears the schedule,
 # recurrence, where null stops the task repeating, key_result_id, where
-# null detaches the Task from its Key Result, and planned_work, where null
-# removes the planned work block (an object replaces it whole).
+# null detaches the Task from its Key Result, planned_work, where null
+# removes the planned work block (an object replaces it whole), and
+# estimate_minutes, where null removes the estimate.
 # tag_ids replaces the task's whole tag set; reminders replaces the whole
 # reminder set ([] clears it).
 class TaskUpdate(BaseModel):
@@ -263,6 +269,8 @@ class TaskUpdate(BaseModel):
     recurrence: str | None = Field(default=None, max_length=255)
     key_result_id: int | None = None
     planned_work: PlannedWork | None = None
+    # Duration estimate (issue #563): positive minutes, at most a week.
+    estimate_minutes: int | None = Field(default=None, gt=0, le=MAX_ESTIMATE_MINUTES)
 
     _reject_nulls = field_validator(
         "title",
@@ -703,6 +711,8 @@ class TaskRead(BaseModel):
     key_result_id: int | None
     # Planned work (issue #558): reserved work time, separate from start/due.
     planned_work: PlannedWorkRead | None = None
+    # Duration estimate (issue #563), in minutes; null when none was given.
+    estimate_minutes: int | None = None
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime

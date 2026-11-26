@@ -523,10 +523,14 @@ export function durationMinutes(task: Pick<Task, "start_date" | "due_date">): nu
 
 export function formatDuration(task: Pick<Task, "start_date" | "due_date">): string | null {
   const minutes = durationMinutes(task);
-  if (minutes === null) return null;
-  return minutes % 60 === 0
-    ? `${minutes / 60}h`
-    : minutes < 60
-      ? `${minutes}m`
-      : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return minutes === null ? null : formatMinutes(minutes);
+}
+
+/** A length of time in whole minutes, the one way the app writes one:
+ * "8h", "1h 30m", "45m" (and "0m"). */
+export function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest}m`;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }

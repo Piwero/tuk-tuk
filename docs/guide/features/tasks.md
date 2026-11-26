@@ -29,7 +29,9 @@ think. Tuk Tuk shows you what matters today.
    day rail beside the list shows your Habits and Focus for today.
 2. Tick the box to complete a task. Changed your mind? Untick it.
 3. Click a task to open its details: priority, dates, reminders, repeat,
-   tags, description and checklist.
+   tags, description and checklist. **Estimate** is how long you expect it to
+   take, in minutes. It's optional, only used for planning, and a new
+   **Planned work** block starts from it.
 4. Drag tasks to reorder them, or drag between sections.
 5. Open **Next 7 Days** on Monday to plan the week.
 

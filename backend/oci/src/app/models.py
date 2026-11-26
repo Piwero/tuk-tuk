@@ -322,6 +322,11 @@ class Task(OwnedMixin, Base):
     # anchored at the task's due date. Completing a recurring task advances
     # its dates in place instead of completing the row (ADR 0003).
     recurrence: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Duration estimate (issue #563): how long the User expects the work to
+    # take, in minutes. Optional, never inferred (not from Focus either),
+    # used only for work planning: the capacity summary and a prefill for
+    # Planned work. Kept apart from the Planned work duration.
+    estimate_minutes: Mapped[int | None] = mapped_column(default=None)
     # Planned work (issue #558): at most one optional block of reserved work
     # time, held apart from start/due — moving or removing it never touches
     # the deadline, and it is not a Reminder anchor. Start, duration and

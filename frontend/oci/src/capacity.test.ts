@@ -36,11 +36,13 @@ let nextId = 1;
 function task(
   title: string,
   plan: { start: string; minutes: number; buffer?: number } | null,
+  estimate: number | null = null,
 ): Task {
   const start = plan === null ? null : `${DAY}T${plan.start}:00Z`;
   return {
     id: nextId++,
     title,
+    estimate_minutes: estimate,
     planned_work:
       plan === null || start === null
         ? null
@@ -71,7 +73,7 @@ describe("capacityOf", () => {
 
     expect(result.windowMinutes).toBe(480);
     expect(result.availableMinutes).toBe(480);
-    expect(result.lines).toEqual(["Planning window 09:00–17:00: 8 h available of 8 h."]);
+    expect(result.lines).toEqual(["Planning window 09:00–17:00: 8h available of 8h."]);
   });
 
   it("counts overlapping Events once", () => {
@@ -82,8 +84,8 @@ describe("capacityOf", () => {
     expect(result.eventMinutes).toBe(90);
     expect(result.availableMinutes).toBe(390);
     expect(result.lines).toEqual([
-      "Planning window 09:00–17:00: 6 h 30 min available of 8 h.",
-      "Events take 1 h 30 min.",
+      "Planning window 09:00–17:00: 6h 30m available of 8h.",
+      "Events take 1h 30m.",
       "Overlapping time is counted once.",
     ]);
   });
@@ -100,9 +102,9 @@ describe("capacityOf", () => {
     expect(result.plannedMinutes).toBe(90);
     expect(result.availableMinutes).toBe(390);
     expect(result.lines).toEqual([
-      "Planning window 09:00–17:00: 6 h 30 min available of 8 h.",
-      "Events take 30 min.",
-      "Planned work takes 1 h 30 min, buffers included.",
+      "Planning window 09:00–17:00: 6h 30m available of 8h.",
+      "Events take 30m.",
+      "Planned work takes 1h 30m, buffers included.",
       "Overlapping time is counted once.",
     ]);
   });
@@ -151,6 +153,39 @@ describe("capacityOf", () => {
     expect(result.lines).toContain("1 Task on this day has no estimate, so its time is unknown.");
   });
 
+  it("counts a Task with an estimate but no plan as known but unplanned, not unknown", () => {
+    const result = summary({
+      dayTasks: [task("Call the bank", null, 30), task("Pay rent", null, 45), task("Tidy", null)],
+    });
+
+    expect(result.unknownEstimates).toBe(1);
+    expect(result.unplannedEstimates).toBe(2);
+    expect(result.unplannedMinutes).toBe(75);
+    // Not placed in the window, so it takes no available time.
+    expect(result.availableMinutes).toBe(480);
+    expect(result.lines).toEqual([
+      "Planning window 09:00–17:00: 8h available of 8h.",
+      "2 Tasks on this day have estimates of 1h 15m in all, not yet planned.",
+      "1 Task on this day has no estimate, so its time is unknown.",
+    ]);
+  });
+
+  it("words a single unplanned estimate in the singular", () => {
+    const result = summary({ dayTasks: [task("Call the bank", null, 30)] });
+
+    expect(result.unknownEstimates).toBe(0);
+    expect(result.lines).toContain("1 Task on this day has an estimate of 30m, not yet planned.");
+  });
+
+  it("measures planned work by its plan even when the Task also has an estimate", () => {
+    const planned = task("Draft report", { start: "10:00", minutes: 60 }, 30);
+    const result = summary({ plannedTasks: [planned], dayTasks: [planned] });
+
+    expect(result.plannedMinutes).toBe(60);
+    expect(result.unplannedEstimates).toBe(0);
+    expect(result.unknownEstimates).toBe(0);
+  });
+
   it("clips Events and Planned work to the window and ignores other days", () => {
     const result = summary({
       events: [
@@ -177,6 +212,6 @@ describe("capacityOf", () => {
 
     expect(result.windowMinutes).toBe(1440);
     expect(result.eventMinutes).toBe(120);
-    expect(result.lines[0]).toBe("Planning window 00:00–24:00: 22 h available of 24 h.");
+    expect(result.lines[0]).toBe("Planning window 00:00–24:00: 22h available of 24h.");
   });
 });

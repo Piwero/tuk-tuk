@@ -4,12 +4,14 @@
  * Occupied time is the union of timed Event intervals and Planned work plus
  * its Buffer after, each clipped to the window, so any overlap is counted
  * once. All-day Events are named, never counted as busy time. A Task on the
- * day without Planned work has no estimate: it is counted, never guessed.
- * Nothing here reads Focus statistics.
+ * day without Planned work is either known but unplanned (it carries the
+ * User's duration estimate, which is reported but takes no time in the
+ * window, since it has no place in it) or unknown (no estimate): counted,
+ * never guessed. Nothing here reads Focus statistics.
  */
 
 import { type Event, type Task } from "./api";
-import { fromDayIso } from "./dates";
+import { formatMinutes, instantOf } from "./dates";
 
 const MINUTE_MS = 60_000;
 
@@ -29,7 +31,7 @@ export interface CapacityInput {
   /** Open Tasks that may carry Planned work; blocks off the window are ignored. */
   plannedTasks: readonly Task[];
   /** Open Tasks scheduled on the day: those without Planned work are the
-   * unknown estimates. */
+   * unplanned estimates, or the unknown ones when they have no estimate. */
   dayTasks: readonly Task[];
 }
 
@@ -40,6 +42,9 @@ export interface Capacity {
   eventMinutes: number;
   /** Union of Planned work blocks and their buffers inside the window. */
   plannedMinutes: number;
+  /** Day Tasks with an estimate but no Planned work, and their total. */
+  unplannedEstimates: number;
+  unplannedMinutes: number;
   unknownEstimates: number;
   allDayEvents: string[];
   /** The summary, sentence by sentence. */
@@ -48,19 +53,8 @@ export interface Capacity {
 
 type Interval = [number, number];
 
-/** "8 h", "1 h 30 min", "45 min". */
-export function formatCapacityMinutes(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${rest} min`;
-  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
-}
-
 function labelInstant(day: string, label: string): number {
-  const [hours = 0, minutes = 0] = label.split(":").map(Number);
-  const date = fromDayIso(day);
-  date.setHours(hours, minutes, 0, 0);
-  return date.getTime();
+  return Date.parse(instantOf(day, label));
 }
 
 function clip([start, end]: Interval, [from, to]: Interval): Interval | null {
@@ -122,13 +116,13 @@ export function capacityOf(input: CapacityInput): Capacity {
   const plannedMinutes = toMinutes(plannedMs);
 
   const lines = [
-    `Planning window ${window.start}–${window.end}: ${formatCapacityMinutes(availableMinutes)} available of ${formatCapacityMinutes(windowMinutes)}.`,
+    `Planning window ${window.start}–${window.end}: ${formatMinutes(availableMinutes)} available of ${formatMinutes(windowMinutes)}.`,
   ];
   if (eventIntervals.length > 0) {
-    lines.push(`Events take ${formatCapacityMinutes(eventMinutes)}.`);
+    lines.push(`Events take ${formatMinutes(eventMinutes)}.`);
   }
   if (plannedIntervals.length > 0) {
-    lines.push(`Planned work takes ${formatCapacityMinutes(plannedMinutes)}, buffers included.`);
+    lines.push(`Planned work takes ${formatMinutes(plannedMinutes)}, buffers included.`);
   }
   if (sumMs(occupied) > occupiedMs) {
     lines.push("Overlapping time is counted once.");
@@ -148,9 +142,24 @@ export function capacityOf(input: CapacityInput): Capacity {
     lines.push(`All-day: ${allDayEvents.join(", ")}. Not counted as busy time.`);
   }
 
-  const unknownEstimates = input.dayTasks.filter(
+  const unplanned = input.dayTasks.filter(
     (task) => task.planned_work === null || task.planned_work === undefined,
-  ).length;
+  );
+  const estimated = unplanned.flatMap((task) =>
+    task.estimate_minutes == null ? [] : [task.estimate_minutes],
+  );
+  const unplannedEstimates = estimated.length;
+  const unplannedMinutes = estimated.reduce((total, minutes) => total + minutes, 0);
+  if (unplannedEstimates === 1) {
+    lines.push(
+      `1 Task on this day has an estimate of ${formatMinutes(unplannedMinutes)}, not yet planned.`,
+    );
+  } else if (unplannedEstimates > 1) {
+    lines.push(
+      `${unplannedEstimates} Tasks on this day have estimates of ${formatMinutes(unplannedMinutes)} in all, not yet planned.`,
+    );
+  }
+  const unknownEstimates = unplanned.length - unplannedEstimates;
   if (unknownEstimates === 1) {
     lines.push("1 Task on this day has no estimate, so its time is unknown.");
   } else if (unknownEstimates > 1) {
@@ -162,6 +171,8 @@ export function capacityOf(input: CapacityInput): Capacity {
     availableMinutes,
     eventMinutes,
     plannedMinutes,
+    unplannedEstimates,
+    unplannedMinutes,
     unknownEstimates,
     allDayEvents,
     lines,
