@@ -42,12 +42,12 @@ async function openIssuesTab(): Promise<ReturnType<typeof userEvent.setup>> {
   render(<App />);
   const nav = await screen.findByRole("navigation", { name: "GitHub" });
   await user.click(within(nav).getByRole("link", { name: "GitHub" }));
-  await user.click(await screen.findByRole("tab", { name: "Issues" }));
+  await user.click(await screen.findByRole("tab", { name: "GitHub Issues" }));
   return user;
 }
 
 describe("GitHub view › Issues", () => {
-  it("switches to the Issues tab without leaving the GitHub view", async () => {
+  it("switches to the GitHub Issues tab without leaving the GitHub view", async () => {
     const api = installFakeApi({
       ...watchedDotfiles(),
       githubIssues: [fakeGitHubIssue(12, "Zsh prompt is slow")],
@@ -56,12 +56,15 @@ describe("GitHub view › Issues", () => {
     await openIssuesTab();
 
     expect(window.location.pathname).toBe("/github");
-    expect(screen.getByRole("tab", { name: "Issues" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "GitHub Issues" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(screen.getByRole("tab", { name: "Pull Requests" })).toHaveAttribute(
       "aria-selected",
       "false",
     );
-    const panel = screen.getByRole("tabpanel", { name: "Issues" });
+    const panel = screen.getByRole("tabpanel", { name: "GitHub Issues" });
     expect(await within(panel).findByRole("link", { name: "Zsh prompt is slow" })).toBeVisible();
     expect(api.requests.some((r) => r.method === "GET" && r.url === "/api/v1/github/issues")).toBe(
       true,
@@ -95,7 +98,7 @@ describe("GitHub view › Issues", () => {
 
     await openIssuesTab();
 
-    const panel = screen.getByRole("tabpanel", { name: "Issues" });
+    const panel = screen.getByRole("tabpanel", { name: "GitHub Issues" });
     await within(panel).findByRole("link", { name: "Newest" });
     expect(
       within(panel)

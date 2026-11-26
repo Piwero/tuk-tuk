@@ -121,9 +121,6 @@ export function RepositoryViewPage({
       {empty && !editing ? (
         <div className="github-empty">
           <p>This view has no repositories.</p>
-          <button type="button" className="btn-secondary" onClick={() => setEditing(true)}>
-            Choose repositories
-          </button>
           <a
             href={pathForSettingsTab("github")}
             onClick={(event) => {

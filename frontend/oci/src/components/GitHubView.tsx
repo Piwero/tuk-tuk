@@ -24,7 +24,7 @@ export type GitHubTab = "pull-requests" | "issues";
 
 const TABS: { tab: GitHubTab; label: string }[] = [
   { tab: "pull-requests", label: "Pull Requests" },
-  { tab: "issues", label: "Issues" },
+  { tab: "issues", label: "GitHub Issues" },
 ];
 
 /** The groups, in the order the backend sorts them. */

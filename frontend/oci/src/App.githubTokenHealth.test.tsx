@@ -86,7 +86,7 @@ describe("GitHub view › token health", () => {
     expect(screen.queryByRole("link", { name: "Tidy dotfiles" })).not.toBeInTheDocument();
   });
 
-  it("names a token GitHub rejects on the Issues tab too", async () => {
+  it("names a token GitHub rejects on the GitHub Issues tab too", async () => {
     installFakeApi({
       ...twoTokens(),
       githubIssues: [
@@ -97,7 +97,7 @@ describe("GitHub view › token health", () => {
     });
     const user = await openGitHub();
 
-    await user.click(await screen.findByRole("tab", { name: "Issues" }));
+    await user.click(await screen.findByRole("tab", { name: "GitHub Issues" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "GitHub no longer accepts the GitHub Token for octocat",

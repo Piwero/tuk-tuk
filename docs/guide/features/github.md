@@ -7,7 +7,7 @@
 
 ## What it's for
 
-See open pull requests and issues from your repositories and your
+See open pull requests and GitHub Issues from your repositories and your
 organisations' repositories in one place. Tuk Tuk only **reads** GitHub. It
 never comments, labels, merges or closes anything.
 
@@ -58,7 +58,7 @@ pull requests of every Watched Repository, in three groups:
 Within each group, the most recently updated come first.
 
 Each row shows the title, `owner/repo#number`, the author, how long ago it
-was updated and its labels. It also shows a **Draft** badge for drafts, the
+was opened and its labels. It also shows a **Draft** badge for drafts, the
 review decision (**Approved**, **Changes requested** or **Review pending**)
 and the CI status (**CI passing**, **CI failing** or **CI pending**). A
 repository without CI checks shows no CI status. Select a title to open the
@@ -71,18 +71,18 @@ rest.
 If you aren't watching any repositories yet, the view links you to
 **Settings → GitHub** to pick some.
 
-## See your open GitHub issues
+## See your open GitHub Issues
 
-In the GitHub view, choose the **Issues** tab. It lists the open GitHub
-issues of every Watched Repository, most recently updated first. Pull
+In the GitHub view, choose the **GitHub Issues** tab. It lists the open
+GitHub Issues of every Watched Repository, most recently updated first. Pull
 requests never appear here, even though GitHub itself counts them as issues.
 Choose **Pull Requests** to switch back.
 
 Each row shows the title, `owner/repo#number`, the author, who it is
-assigned to, how long ago it was updated, how many comments it has and its
-labels. Select a title to open the GitHub issue on GitHub.
+assigned to, how long ago it was opened, how many comments it has and its
+labels. Select a title to open the GitHub Issue on GitHub.
 
-Each repository shows at most 100 open GitHub issues: the most recently
+Each repository shows at most 100 open GitHub Issues: the most recently
 updated ones. A repository with more gets an **N more on GitHub** link to the
 rest.
 
@@ -92,7 +92,8 @@ Above each tab's list, pick what to show:
 
 - **Author**: only items written by one person.
 - **Label**: only items carrying one label.
-- **Assignee** (Issues tab only): only GitHub issues assigned to one person.
+- **Assignee** (**GitHub Issues** tab only): only GitHub Issues assigned to
+  one person.
   Pick yourself and a label such as `ready-for-agent` to see what is waiting
   on you.
 - **Hide drafts** (Pull Requests tab only): leave out draft pull requests.
@@ -147,7 +148,7 @@ example **fetched 42 s ago**.
   minute, so opening the view again, or switching tabs, within that minute
   doesn't wait for GitHub.
 - **Refresh** fetches from GitHub straight away. Use it to see a pull
-  request or GitHub issue you just opened.
+  request or GitHub Issue you just opened.
 - **When GitHub has a temporary problem** (a rate limit, an outage or a
   network blip), the view keeps showing what it last fetched, if that was
   less than 10 minutes ago. A notice says how old it is. Choose **Retry** to
@@ -192,7 +193,7 @@ before the old one expires.
 
 - **The GitHub view reads GitHub when you open it,** at most once a minute
   unless you choose **Refresh**. Nothing about your pull requests or GitHub
-  issues is stored in Tuk Tuk: what it keeps for that minute lives only in
+  Issues is stored in Tuk Tuk: what it keeps for that minute lives only in
   memory.
 - **"Mine" means you wrote it**, as the GitHub account that created the
   token. This also applies to an organisation's token.
@@ -204,6 +205,10 @@ before the old one expires.
   can be read. If GitHub lists no repositories for a token, Settings says so.
   Check the organisation's settings on GitHub to allow or approve
   fine-grained tokens.
+- **A token that reads no repositories yet is listed as "Owner not known
+  yet".** GitHub only tells Tuk Tuk whose token it is once it can read a
+  repository. Tuk Tuk fills in the owner by itself after that, the next time
+  you open Settings → GitHub.
 - **Removing a token stops watching its repositories.** Any of them that
   another of your tokens can still read are listed again, ready to tick.
 - **If GitHub can't be reached for one token,** Settings says so and still

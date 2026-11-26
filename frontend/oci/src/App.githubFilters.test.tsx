@@ -84,7 +84,7 @@ describe("GitHub view › filters", () => {
       ],
     });
     const user = await openGitHub();
-    await user.click(await screen.findByRole("tab", { name: "Issues" }));
+    await user.click(await screen.findByRole("tab", { name: "GitHub Issues" }));
     await screen.findByRole("link", { name: "Slow prompt" });
 
     const label = screen.getByRole("combobox", { name: "Label" });
@@ -108,7 +108,7 @@ describe("GitHub view › filters", () => {
     await screen.findByRole("link", { name: "Parser" });
     expect(screen.queryByRole("combobox", { name: "Assignee" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Issues" }));
+    await user.click(screen.getByRole("tab", { name: "GitHub Issues" }));
     await screen.findByRole("link", { name: "Slow prompt" });
     const assignee = screen.getByRole("combobox", { name: "Assignee" });
     expect(optionsOf(assignee)).toEqual(["Anyone", "monalisa", "octocat"]);
@@ -154,7 +154,7 @@ describe("GitHub view › filters", () => {
     await user.click(screen.getByRole("checkbox", { name: "Hide bots" }));
     expect(shownTitles()).toEqual(["Human fix"]);
 
-    await user.click(screen.getByRole("tab", { name: "Issues" }));
+    await user.click(screen.getByRole("tab", { name: "GitHub Issues" }));
     await screen.findByRole("link", { name: "Human report" });
     expect(screen.getByRole("checkbox", { name: "Hide bots" })).toBeChecked();
     expect(screen.queryByRole("checkbox", { name: "Hide drafts" })).not.toBeInTheDocument();
@@ -255,7 +255,7 @@ describe("GitHub view › filters", () => {
       githubIssues: [fakeGitHubIssue(2, "Bot report", { author: "renovate", author_is_bot: true })],
     });
     const user = await openGitHub();
-    await user.click(await screen.findByRole("tab", { name: "Issues" }));
+    await user.click(await screen.findByRole("tab", { name: "GitHub Issues" }));
     await screen.findByRole("link", { name: "Bot report" });
 
     await user.click(screen.getByRole("checkbox", { name: "Hide bots" }));

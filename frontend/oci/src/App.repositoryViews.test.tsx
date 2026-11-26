@@ -104,7 +104,7 @@ describe("Repository Views", () => {
     await user.click(within(nav).getByRole("button", { name: "Create" }));
 
     expect(await screen.findByText("This view has no repositories.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Choose repositories" }));
+    await user.click(screen.getByRole("button", { name: "Edit view" }));
     await user.click(await screen.findByRole("checkbox", { name: "acme/api" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -138,7 +138,10 @@ describe("Repository Views", () => {
     render(<App />);
 
     await screen.findByRole("link", { name: "Crash" });
-    expect(screen.getByRole("tab", { name: "Issues" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "GitHub Issues" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(screen.getByRole("combobox", { name: "Author" })).toHaveValue("monalisa");
     expect(shownTitles()).toEqual(["Crash", "Typo"]);
 
@@ -225,7 +228,7 @@ describe("Repository Views", () => {
     await screen.findByRole("link", { name: "acme/api PR" });
 
     await user.click(screen.getByRole("checkbox", { name: "Hide bots" }));
-    await user.click(screen.getByRole("tab", { name: "Issues" }));
+    await user.click(screen.getByRole("tab", { name: "GitHub Issues" }));
 
     expect(api.requests.filter((r) => r.url.startsWith("/api/v1/github/views/"))).toEqual([]);
     expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
@@ -240,6 +243,8 @@ describe("Repository Views", () => {
 
     expect(await screen.findByText("This view has no repositories.")).toBeInTheDocument();
     expect(within(repositoryViewsNav()).getByRole("link", { name: "Old work" })).toBeVisible();
+    // One calm sentence plus the primary action (design system).
+    expect(screen.queryByRole("button", { name: "Choose repositories" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "Pick Watched Repositories in Settings" }));
 
     expect(window.location.pathname).toBe("/settings/github");

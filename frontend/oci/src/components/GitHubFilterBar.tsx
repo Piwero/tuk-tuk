@@ -1,3 +1,5 @@
+import "./GitHubFilterBar.css";
+
 import { type Filterable, type GitHubFilters, githubFilterChoices } from "../githubFilters";
 
 /** One choice among the values present in the results, or none. */

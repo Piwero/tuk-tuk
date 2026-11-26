@@ -8,11 +8,11 @@
 
   .github-tabs {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
     border-bottom: 1px solid var(--border-default);
   }
   .github-tab {
-    padding: 6px 10px;
+    padding: var(--space-2) var(--space-3);
     border: none;
     border-bottom: 2px solid transparent;
     background: transparent;
@@ -26,7 +26,7 @@
   }
 
   .github-group h2 {
-    margin: 0 0 6px;
+    margin: 0 0 var(--space-2);
     color: var(--text-secondary);
     font-size: var(--text-sm);
     font-weight: var(--weight-medium);
@@ -36,24 +36,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Filter controls (#585): narrow the read in the browser. */
-  .github-filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2) var(--space-4);
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
-  }
-  .github-filter,
-  .github-filter-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .github-filter select {
-    max-width: 16rem;
-  }
   .github-group ul,
   .github-list,
   .github-overflow {
@@ -65,14 +47,14 @@
   .github-row {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 8px 0;
+    gap: calc(var(--space-1) / 2);
+    padding: var(--space-2) 0;
     border-bottom: 1px solid var(--border-default);
   }
   .github-row-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
   .github-row-title a {
     color: var(--text-primary);
@@ -86,13 +68,14 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px 10px;
+    gap: var(--space-1) var(--space-3);
     color: var(--text-secondary);
     font-size: var(--text-sm);
   }
 
+  /* Chip padding matches a Tag chip's (TaskRow.css). */
   .github-badge {
-    padding: 0 6px;
+    padding: 0 calc(var(--space-1) * 1.5);
     border: 1px solid var(--border-default);
     border-radius: var(--radius-xs);
     color: var(--text-secondary);
@@ -112,7 +95,7 @@
    * (TaskRow.css): a tint of it on the ground, its ink mixed into the
    * label text. */
   .github-label {
-    padding: 1px 6px;
+    padding: 1px calc(var(--space-1) * 1.5);
     border-radius: var(--radius-xs);
     font-weight: var(--weight-medium);
     background: color-mix(

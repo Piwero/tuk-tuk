@@ -85,13 +85,13 @@ describe("GitHub view › freshness", () => {
     ).toBe(true);
   });
 
-  it("Refresh on the Issues tab reads GitHub Issues from GitHub now", async () => {
+  it("Refresh on the GitHub Issues tab reads GitHub Issues from GitHub now", async () => {
     const api = installFakeApi({
       ...watchedDotfiles(),
       githubIssues: [fakeGitHubIssue(1, "Old issue")],
     });
     const user = await openGitHub();
-    await user.click(await screen.findByRole("tab", { name: "Issues" }));
+    await user.click(await screen.findByRole("tab", { name: "GitHub Issues" }));
     await screen.findByRole("link", { name: "Old issue" });
     api.githubIssues = [fakeGitHubIssue(2, "New issue")];
 
