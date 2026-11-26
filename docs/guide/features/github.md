@@ -1,6 +1,6 @@
 # GitHub
 
-⏱ 5 min read · Set up: Settings → GitHub
+⏱ 6 min read · Set up: Settings → GitHub
 
 **Do this first:** create a fine-grained token on GitHub and paste it into
 **Settings → GitHub**.
@@ -107,7 +107,36 @@ how many pull requests it still lists. A group your choices empty stays,
 saying that nothing there matches.
 
 Your choices are not saved. Leave the GitHub view and come back, and it shows
-everything again.
+everything again. To keep them, use a Repository View.
+
+## Save Repository Views
+
+A **Repository View** shows some of your Watched Repositories, for example
+"Work repos" or "Side projects". Your Repository Views are listed under
+**GitHub** in the sidebar. The **GitHub** entry itself always shows every
+Watched Repository.
+
+To make one:
+
+1. Under **GitHub** in the sidebar, choose **New view**.
+2. Type a **View name** and choose **Create**. The new view opens.
+3. Choose **Choose repositories**, tick the repositories it should show, and
+   choose **Save**.
+
+A Repository View remembers what you pick above its lists (author, label,
+assignee, **Hide drafts**, **Hide bots**) and which tab you were on. Open it
+again and it is exactly as you left it. **Reset** clears all of that.
+
+Choose **Edit view** to rename it, change its repositories, **Move up** or
+**Move down** the sidebar, or **Delete view**. Deleting a view doesn't stop
+watching its repositories.
+
+If you stop watching a repository, or remove its token, it leaves every
+Repository View too. A view left with no repositories stays in the sidebar.
+It offers **Choose repositories** and a link to Settings, where you can watch
+more.
+
+Other people on your Tuk Tuk can't see your Repository Views.
 
 ## Keep your tokens working
 
