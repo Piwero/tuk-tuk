@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from app.crypto import decrypt_credential
 from app.db import SessionDep
+from app.errors import NotFoundError
 from app.github_source import (
     GitHubIssue,
     GitHubPullRequest,
@@ -32,7 +33,7 @@ from app.github_source import (
     TerminalGitHubSourceError,
     TransientGitHubSourceError,
 )
-from app.models import GitHubToken, WatchedRepository
+from app.models import GitHubToken, RepositoryView, WatchedRepository
 from app.routers.v1.github import expires_soon
 from app.schemas import utc_z
 
@@ -151,15 +152,32 @@ class IssuesRead(_GitHubViewRead):
     items: list[IssueRead]
 
 
+async def _shown_repositories(session: SessionDep, view_id: int | None) -> set[int] | None:
+    """The ids of the Watched Repositories Repository View `view_id` shows,
+    or None for the default view of every Watched Repository (issue #580)."""
+    if view_id is None:
+        return None
+    view = await session.get(RepositoryView, view_id)
+    if view is None:
+        raise NotFoundError(f"Repository View {view_id} not found")
+    return {member.watched_repository_id for member in view.members}
+
+
 async def _watched_by_token(
-    session: SessionDep,
+    session: SessionDep, shown: set[int] | None = None
 ) -> list[tuple[GitHubToken, list[WatchedRepository]]]:
     """The User's GitHub Tokens that have Watched Repositories, each with
-    the repositories read through it."""
+    the repositories read through it. With `shown`, only the tokens that
+    read one of those Watched Repositories; each still reads all of its
+    own, so a token's read is the same whichever view asks for it."""
     watched = (await session.scalars(select(WatchedRepository))).all()
     tokens = (await session.scalars(select(GitHubToken).order_by(GitHubToken.id))).all()
     groups = [(token, [w for w in watched if w.github_token_id == token.id]) for token in tokens]
-    return [(token, repos) for token, repos in groups if repos]
+    return [
+        (token, repos)
+        for token, repos in groups
+        if repos and (shown is None or any(w.id in shown for w in repos))
+    ]
 
 
 # One GitHub source operation over a batch of repositories under one token.
@@ -167,17 +185,22 @@ type SourceRead[Result] = Callable[[GitHubSource, str, list[GitHubRepository]], 
 
 
 async def _read_each_token[Result](
-    request: Request, session: SessionDep, source_read: SourceRead[Result]
+    request: Request,
+    session: SessionDep,
+    source_read: SourceRead[Result],
+    shown: set[int] | None = None,
 ) -> tuple[list[tuple[dict[int, WatchedRepository], Result]], list[TokenReadStatusRead]]:
     """Runs `source_read` once per GitHub Token, over the Watched
     Repositories read through it. Returns each successful token's result
     with its Watched Repositories by GitHub repository id, and every
-    token's status. One token's failure never hides another's results."""
+    token's status. One token's failure never hides another's results.
+    With `shown` (a Repository View's), only those Watched Repositories'
+    results are returned."""
     github_source: GitHubSource = request.app.state.github_source
     key = request.app.state.settings.app_master_key
     results: list[tuple[dict[int, WatchedRepository], Result]] = []
     statuses: list[TokenReadStatusRead] = []
-    for token, watched in await _watched_by_token(session):
+    for token, watched in await _watched_by_token(session, shown):
         status: TokenReadStatus = "ok"
         try:
             result = await source_read(
@@ -199,7 +222,12 @@ async def _read_each_token[Result](
             token.connection_state = "needs_reconnect"
             await session.commit()
         else:
-            results.append(({w.github_repo_id: w for w in watched}, result))
+            results.append(
+                (
+                    {w.github_repo_id: w for w in watched if shown is None or w.id in shown},
+                    result,
+                )
+            )
         statuses.append(TokenReadStatusRead.of(token, status, request.app.state.clock()))
     return results, statuses
 
@@ -250,11 +278,15 @@ async def _open_issues(
 
 
 @router.get("/pull-requests")
-async def list_pull_requests(request: Request, session: SessionDep) -> PullRequestsRead:
-    """The open Pull Requests of every Watched Repository, grouped by the
-    User's relationship to them (Review requested, then Mine, then Others)
-    and most recently updated first within each group."""
-    results, statuses = await _read_each_token(request, session, _open_pull_requests)
+async def list_pull_requests(
+    request: Request, session: SessionDep, view: int | None = None
+) -> PullRequestsRead:
+    """The open Pull Requests of every Watched Repository, or of Repository
+    View `view`'s, grouped by the User's relationship to them (Review
+    requested, then Mine, then Others) and most recently updated first
+    within each group."""
+    shown = await _shown_repositories(session, view)
+    results, statuses = await _read_each_token(request, session, _open_pull_requests, shown)
     items: list[PullRequestRead] = []
     repositories: list[RepositoryReadRead] = []
     for by_github_id, result in results:
@@ -294,10 +326,12 @@ async def list_pull_requests(request: Request, session: SessionDep) -> PullReque
 
 
 @router.get("/issues")
-async def list_issues(request: Request, session: SessionDep) -> IssuesRead:
-    """The open GitHub Issues of every Watched Repository, most recently
-    updated first. Pull Requests are never among them."""
-    results, statuses = await _read_each_token(request, session, _open_issues)
+async def list_issues(request: Request, session: SessionDep, view: int | None = None) -> IssuesRead:
+    """The open GitHub Issues of every Watched Repository, or of Repository
+    View `view`'s, most recently updated first. Pull Requests are never
+    among them."""
+    shown = await _shown_repositories(session, view)
+    results, statuses = await _read_each_token(request, session, _open_issues, shown)
     items: list[IssueRead] = []
     repositories: list[RepositoryReadRead] = []
     for by_github_id, result in results:

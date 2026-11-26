@@ -9,10 +9,12 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import FakeGitHubSource
-from tests.test_github_pull_requests import TOKENS, WATCHED, watch_through
+from app.github_source import TransientGitHubSourceError
+from tests.conftest import FakeGitHubSource, fake_issue, fake_pull_request
+from tests.test_github_pull_requests import PULL_REQUESTS, TOKENS, WATCHED, watch_through
 
 VIEWS = "/api/v1/github/views"
+ISSUES = "/api/v1/github/issues"
 PERSONAL = "github_pat_11AAAAAAA0personal"
 WORK = "github_pat_11AAAAAAA0work"
 
@@ -203,3 +205,79 @@ def test_removing_a_github_token_drops_its_repositories_from_every_repository_vi
 
     [view] = list_views(client)
     assert view["watched_repository_ids"] == [ids["acme/api"]]
+
+
+def watch_three(client: TestClient, source: FakeGitHubSource) -> dict[str, int]:
+    """Watches octocat/dotfiles and octocat/blog through a personal GitHub
+    Token and acme/api through a work one, each with one open Pull Request
+    and one open GitHub Issue named after it."""
+    watch_through(
+        client, source, PERSONAL, "octocat", [(1, "octocat/dotfiles"), (2, "octocat/blog")]
+    )
+    watch_through(client, source, WORK, "acme", [(3, "acme/api")])
+    for token, full_name in (
+        (PERSONAL, "octocat/dotfiles"),
+        (PERSONAL, "octocat/blog"),
+        (WORK, "acme/api"),
+    ):
+        source.register_pull_requests(
+            token, full_name, [fake_pull_request(1, f"{full_name} PR", repository=full_name)]
+        )
+        source.register_issues(
+            token, full_name, [fake_issue(2, f"{full_name} issue", repository=full_name)]
+        )
+    return watched_ids(client)
+
+
+def test_a_repository_view_reads_pull_requests_of_its_repositories_only(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    ids = watch_three(client, fake_github_source)
+    view = create_view(client, "Mixed", [ids["octocat/blog"], ids["acme/api"]])
+
+    body = client.get(f"{PULL_REQUESTS}?view={view['id']}").json()
+
+    assert sorted(item["title"] for item in body["items"]) == ["acme/api PR", "octocat/blog PR"]
+    assert sorted(r["full_name"] for r in body["repositories"]) == ["acme/api", "octocat/blog"]
+
+
+def test_a_repository_view_reads_github_issues_of_its_repositories_only(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    ids = watch_three(client, fake_github_source)
+    view = create_view(client, "Personal", [ids["octocat/dotfiles"]])
+
+    body = client.get(f"{ISSUES}?view={view['id']}").json()
+
+    assert [item["title"] for item in body["items"]] == ["octocat/dotfiles issue"]
+    assert [t["owner_login"] for t in body["tokens"]] == ["octocat"]
+
+
+def test_a_github_token_with_no_repository_in_the_view_shows_no_banner_there(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    ids = watch_three(client, fake_github_source)
+    fake_github_source.register_pull_requests_error(WORK, TransientGitHubSourceError("503"))
+    view = create_view(client, "Personal", [ids["octocat/blog"]])
+
+    body = client.get(f"{PULL_REQUESTS}?view={view['id']}").json()
+
+    assert [(t["owner_login"], t["status"]) for t in body["tokens"]] == [("octocat", "ok")]
+
+
+def test_a_repository_view_with_no_repositories_reads_nothing(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    watch_three(client, fake_github_source)
+    view = create_view(client, "Empty", [])
+
+    body = client.get(f"{PULL_REQUESTS}?view={view['id']}").json()
+
+    assert (body["items"], body["repositories"], body["tokens"]) == ([], [], [])
+
+
+def test_reading_a_repository_view_that_does_not_exist_is_not_found(client: TestClient) -> None:
+    for path in (PULL_REQUESTS, ISSUES):
+        response = client.get(f"{path}?view=999999")
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "not_found"
