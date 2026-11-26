@@ -19,6 +19,7 @@ from app.errors import APIError, NotFoundError
 from app.github_source import (
     GitHubRepository,
     GitHubSource,
+    GitHubTokenIdentity,
     TerminalGitHubSourceError,
     TransientGitHubSourceError,
 )
@@ -60,11 +61,9 @@ async def list_tokens(session: SessionDep) -> list[GitHubTokenRead]:
     return [GitHubTokenRead.model_validate(row) for row in rows]
 
 
-@router.post("/tokens", status_code=201)
-async def add_token(
-    payload: GitHubTokenCreate, request: Request, session: SessionDep
-) -> GitHubTokenRead:
-    token = payload.token.strip()
+async def _validate(request: Request, token: str) -> GitHubTokenIdentity:
+    """Checks a pasted token with GitHub before anything is saved: only a
+    fine-grained token GitHub accepts gets through."""
     # GitHub's own prefix for fine-grained tokens: anything else is refused
     # before it is ever sent to GitHub.
     if not token.startswith(FINE_GRAINED_PREFIX):
@@ -87,6 +86,21 @@ async def add_token(
         ) from None
     if identity.token_type != "fine_grained":
         raise _not_fine_grained_error()
+    return identity
+
+
+def _encrypt(request: Request, token: str) -> str:
+    settings = request.app.state.settings
+    assert settings.app_master_key is not None  # app.main refuses to start without it
+    return encrypt_credential(token, key=settings.app_master_key)
+
+
+@router.post("/tokens", status_code=201)
+async def add_token(
+    payload: GitHubTokenCreate, request: Request, session: SessionDep
+) -> GitHubTokenRead:
+    token = payload.token.strip()
+    identity = await _validate(request, token)
 
     # GitHub logins are case-insensitive; one GitHub Token per owner.
     existing = await session.scalar(
@@ -99,19 +113,36 @@ async def add_token(
             409,
             "github_token_owner_exists",
             f"You already have a GitHub Token for {identity.owner_login}. "
-            "Remove it first to use a different one.",
+            "Reconnect it to use a different one.",
         )
 
-    settings = request.app.state.settings
-    assert settings.app_master_key is not None  # app.main refuses to start without it
     row = GitHubToken(
         owner_login=identity.owner_login,
         owner_kind=identity.owner_kind,
-        encrypted_token=encrypt_credential(token, key=settings.app_master_key),
+        encrypted_token=_encrypt(request, token),
         expires_at=identity.expires_at,
         connection_state="connected",
     )
     session.add(row)
+    await session.commit()
+    return GitHubTokenRead.model_validate(row)
+
+
+@router.patch("/tokens/{token_id}")
+async def reconnect_token(
+    token_id: int, payload: GitHubTokenCreate, request: Request, session: SessionDep
+) -> GitHubTokenRead:
+    """Reconnect: replaces the token on an existing GitHub Token in place
+    with a replacement for the same owner, so its Watched Repositories
+    survive a rotation (issue #584)."""
+    row = await session.get(GitHubToken, token_id)
+    if row is None:
+        raise NotFoundError(f"GitHub Token {token_id} not found")
+    token = payload.token.strip()
+    identity = await _validate(request, token)
+    row.encrypted_token = _encrypt(request, token)
+    row.expires_at = identity.expires_at
+    row.connection_state = "connected"
     await session.commit()
     return GitHubTokenRead.model_validate(row)
 

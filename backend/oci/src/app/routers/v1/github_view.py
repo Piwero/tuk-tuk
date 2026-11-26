@@ -8,7 +8,9 @@ The open GitHub Issues read (#582) sits beside the Pull Requests one and
 reuses `_watched_by_token`, the per-token status and `RepositoryReadRead`.
 """
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime
+from functools import partial
 from typing import Literal
 
 from fastapi import APIRouter, Request
@@ -105,6 +107,24 @@ async def _watched_by_token(
     return [(token, repos) for token, repos in groups if repos]
 
 
+async def _read_through[T](
+    session: SessionDep, token: GitHubToken, read: Callable[[], Awaitable[T]]
+) -> tuple[TokenReadStatus, T | None]:
+    """Runs one GitHub Token's read and keeps its health in step (issue
+    #584, ADR 0007): GitHub rejecting the token flips it to
+    `needs_reconnect`, a transient failure never touches it. Every view
+    read (Pull Requests, GitHub Issues) goes through here."""
+    try:
+        result = await read()
+    except TransientGitHubSourceError:
+        return "unavailable", None
+    except TerminalGitHubSourceError:
+        token.connection_state = "needs_reconnect"
+        await session.commit()
+        return "needs_reconnect", None
+    return "ok", result
+
+
 def _relationship(pr: GitHubPullRequest, viewer_login: str) -> Relationship:
     # A review requested from the User outranks having written it.
     if pr.review_requested:
@@ -129,10 +149,12 @@ async def list_pull_requests(request: Request, session: SessionDep) -> PullReque
     statuses: list[TokenReadStatusRead] = []
     for token, watched in await _watched_by_token(session):
         by_github_id = {w.github_repo_id: w for w in watched}
-        status: TokenReadStatus = "ok"
         # One token's failure never hides another token's repositories.
-        try:
-            result = await github_source.list_open_pull_requests(
+        status, result = await _read_through(
+            session,
+            token,
+            partial(
+                github_source.list_open_pull_requests,
                 decrypt_credential(token.encrypted_token, key=key),
                 [
                     GitHubRepository(
@@ -140,15 +162,12 @@ async def list_pull_requests(request: Request, session: SessionDep) -> PullReque
                     )
                     for w in watched
                 ],
-            )
-        except TransientGitHubSourceError:
-            status = "unavailable"
-        except TerminalGitHubSourceError:
-            status = "needs_reconnect"
+            ),
+        )
         statuses.append(
             TokenReadStatusRead(id=token.id, owner_login=token.owner_login, status=status)
         )
-        if status != "ok":
+        if result is None:
             continue
         for repo in result.repositories:
             row = by_github_id.get(repo.github_id)
