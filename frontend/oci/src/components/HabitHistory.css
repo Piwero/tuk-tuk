@@ -165,20 +165,14 @@
     color: var(--text-tertiary);
   }
   /* The "skipped" mark (#564), shared by every view of a Habit's days: no
-   fill, a solid neutral outline and one diagonal stroke, so it reads apart
-   from a paused day's plain outline, a missed day's dashed one and a future
-   day's dotted one. Never red, never green: a skip is on purpose. */
+   fill and a double neutral outline, so it reads apart from a paused day's
+   plain outline, a missed day's dashed one and a future day's dotted one
+   without a gradient. Never red, never green: a skip is on purpose. */
   .skipped,
   .heatmap-day.level-0.skipped,
   .habits-week-grid .habit-cell.skipped {
-    background: linear-gradient(
-      to top right,
-      transparent calc(50% - 1px),
-      var(--border-strong) calc(50% - 1px),
-      var(--border-strong) calc(50% + 1px),
-      transparent calc(50% + 1px)
-    );
-    border: 1px solid var(--border-strong);
+    background: transparent;
+    border: 3px double var(--border-strong);
   }
   .grid-day.skipped {
     color: var(--text-tertiary);

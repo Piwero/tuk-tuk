@@ -620,8 +620,10 @@
     border: 1px dashed var(--accent);
   }
 
-  /* The buffer kept free after a plan: a hatched strip under the block,
-   * behind it and never a drop or click target. */
+  /* The buffer kept free after a plan: an empty dashed outline under the
+   * block, flat like every surface (no hatching), behind it and never a
+   * drop or click target. The visible "Buffer after N min" text carries the
+   * meaning. */
   .planned-buffer {
     position: absolute;
     left: 2px;
@@ -629,7 +631,7 @@
     border: 1px dashed var(--accent-border);
     border-top: none;
     border-radius: 0 0 var(--radius-xs) var(--radius-xs);
-    background: repeating-linear-gradient(135deg, transparent 0 4px, var(--accent-soft) 4px 8px);
+    background: transparent;
     pointer-events: none;
     z-index: 2;
   }
