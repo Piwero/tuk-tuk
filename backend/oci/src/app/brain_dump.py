@@ -30,6 +30,13 @@ def invalid_output() -> APIError:
 
 def validate_brain_dump(raw: dict[str, Any]) -> AssistantChatTurn:
     try:
+        allowed = set(CreateTaskSuggestion.model_fields) | {"check_item_titles"}
+        items = raw.get("suggestions")
+        if not isinstance(items, list) or any(
+            not isinstance(item, dict) or set(item) - allowed or item.get("check_item_titles")
+            for item in items
+        ):
+            raise invalid_output()
         output = BrainDumpOutput.model_validate(raw)
         for draft in output.suggestions:
             if (
@@ -54,6 +61,12 @@ async def request_brain_dump(
     base_url: str, model: str, api_key: str, text: str
 ) -> AssistantChatTurn:
     schema = BrainDumpOutput.model_json_schema()
+    # Strict chat-completions schemas require every property, including
+    # nullable defaults, to be required and forbid additional properties.
+    for shape in [schema, *schema.get("$defs", {}).values()]:
+        if shape.get("type") == "object":
+            shape["required"] = list(shape.get("properties", {}))
+            shape["additionalProperties"] = False
     payload = {
         "model": model,
         "messages": [
