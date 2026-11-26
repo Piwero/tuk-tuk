@@ -85,16 +85,26 @@ must also have `contents:write` on `Piwero/tuk-tuk` for image-bump pushes).
 vault you point `TUK_TUK_1PASSWORD_VAULT_ID` at before applying this chart,
 with two fields:
 
-| Field                | Value                                                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------- |
-| `SECRET_KEY`         | A long random value generated once, e.g. `openssl rand -base64 32`. This becomes the session signing key. |
-| `AUTH_PASSWORD_HASH` | The Argon2id hash from `mise run backend:hash-password` (see ADR 0005 / #82).                             |
+| Field                | Value                                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_MASTER_KEY`     | A long random value generated once, e.g. `openssl rand -base64 32`. Encrypts the secrets Users save in Settings. Required to start. |
+| `AUTH_PASSWORD_HASH` | The Argon2id hash from `mise run backend:hash-password` (see ADR 0005 / #82).                                                          |
 
 The operator syncs these field labels directly as Secret keys, matching the
 env vars the backend actually reads (`app.config.Settings`). If your
 `tuk-tuk-auth` 1Password item still has a field named `ADMIN_PASSWORD_HASH`
 from before the auth gate landed, rename it to `AUTH_PASSWORD_HASH` — the app
-looks for that name and won't start without it.
+looks for that name and won't start without it. A leftover `SECRET_KEY`
+field is unread and can go.
+
+### Never rotate `APP_MASTER_KEY`
+
+`APP_MASTER_KEY` encrypts every secret Users save in Settings: Google
+credentials and sign-ins, GitHub Tokens and AI API keys. Keep it unchanged
+across releases and restores. With a different key the backend still starts,
+but none of those secrets can be read: every User has to reconnect Google and
+paste their GitHub Tokens and AI keys again. Tasks and other data are not
+affected. See [Security → The master key](../../docs/self-hosting/security.md#the-master-key).
 
 ### `AUTH_PASSWORD_HASH` holds the hash, never the password
 
