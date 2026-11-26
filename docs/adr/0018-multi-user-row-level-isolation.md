@@ -182,7 +182,8 @@ model until a record decides collaboration.
   need it, and backfilling emails later means chasing every user.
 - **Self-signup.** Rejected. A self-hosted instance is opened to people
   its admin chooses, not to whoever finds the URL.
-- **Server-side sessions for revocation.** Rejected again, as in ADR 0005. The epoch gives per-user revocation with one integer column
+- **Server-side sessions for revocation.** Rejected again, as in ADR
+  0005. The epoch gives per-user revocation with one integer column
   instead of a session store.
 
 ## Accepted trade-offs

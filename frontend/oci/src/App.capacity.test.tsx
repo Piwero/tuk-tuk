@@ -62,12 +62,10 @@ describe("Capacity summary for a planning window (issue #563)", () => {
 
     const summary = await screen.findByRole("region", { name: "Capacity" });
     await waitFor(() =>
-      expect(summary).toHaveTextContent(
-        "Planning window 09:00–17:00: 5 h 15 min available of 8 h.",
-      ),
+      expect(summary).toHaveTextContent("Planning window 09:00–17:00: 5h 15m available of 8h."),
     );
-    expect(summary).toHaveTextContent("Events take 1 h 30 min.");
-    expect(summary).toHaveTextContent("Planned work takes 1 h 15 min, buffers included.");
+    expect(summary).toHaveTextContent("Events take 1h 30m.");
+    expect(summary).toHaveTextContent("Planned work takes 1h 15m, buffers included.");
     expect(summary).toHaveTextContent("Overlapping time is counted once.");
     expect(summary).toHaveTextContent("All-day: Offsite. Not counted as busy time.");
     expect(summary).toHaveTextContent(

@@ -21,14 +21,17 @@ function habitStart(
 }
 
 /** What one of a Habit's days is. The week grid, the recent-days strip and
- * the history panel all show days, so they all read them here. */
+ * the history panel all show days, so they all read them here. The names
+ * are the server's (app.habit_days `DayState`) in kebab case, since they
+ * double as CSS classes: `not_started` is "not-started", `open_today`
+ * "open-today". Keep the two lists in step. */
 export type DayState =
   | "done"
   | "partial"
   | "open-today"
   | "missed"
   | "not-started"
-  | "not-scheduled"
+  | "unscheduled"
   | "paused"
   | "skipped"
   | "future";
@@ -100,12 +103,14 @@ export function habitDayReader(
     const paused = (habit.pauses ?? []).some((pause) => pauseCovers(pause, day));
     const skipped = (habit.skips ?? []).includes(day);
     if (day > today) {
-      return skipped && scheduled && !paused
+      // A planned skip: the server's rule (HabitDays._skipped), start check
+      // included, though today is never before the Habit start.
+      return skipped && scheduled && !paused && day >= start
         ? SKIPPED
         : { state: "future", level: 0, text: "future" };
     }
     if (!scheduled) {
-      return { state: "not-scheduled", level: 0, text: "not scheduled" };
+      return { state: "unscheduled", level: 0, text: "not scheduled" };
     }
     if (day < start) {
       return { state: "not-started", level: 0, text: "not started" };

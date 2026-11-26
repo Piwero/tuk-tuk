@@ -17,6 +17,7 @@ import { entryDayWindow } from "../calendar";
 import { addDays, zonedDay, zonedTime } from "../dates";
 import { habitDueOn } from "../habitFrequency";
 import { byName, SORT_GAP } from "../ordering";
+import { DEVICE_OPT_IN_KEY } from "../reminderDelivery";
 import { decrementCount, nextOccurrenceISO } from "./fakeRecurrence";
 
 /** The fake's stand-in for the backend's IANA validation: unknown zone
@@ -88,6 +89,7 @@ export interface FakeTask {
   source_google_event_id: string | null;
   key_result_id: number | null;
   planned_work?: PlannedWorkRead | null;
+  estimate_minutes?: number | null;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
@@ -138,10 +140,15 @@ export interface FakeMissedReminder {
   fire_at: string;
   is_all_day: boolean;
   time_zone: string | null;
+  /** Its ledger row, when a tab ever claimed it (#566); null otherwise. */
+  delivery_id: number | null;
 }
 
 /** The key a dismissal names a missed reminder by. */
 export type FakeMissedDismissal = Pick<FakeMissedReminder, "task_id" | "offset" | "occurrence_due">;
+
+/** A snooze sent from the missed list for a never-claimed Reminder. */
+export type FakeMissedSnooze = FakeMissedDismissal & { minutes: number };
 
 export interface RecordedRequest {
   method: string;
@@ -466,6 +473,8 @@ export interface FakeApiState {
   missedReminders: FakeMissedReminder[];
   /** Every dismissal a tab sent, in order. */
   missedDismissals: FakeMissedDismissal[];
+  /** Every snooze sent from the missed list by key (#566), in order. */
+  missedSnoozes: FakeMissedSnooze[];
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -920,6 +929,7 @@ export function fakeMissedReminder(
     fire_at: due,
     is_all_day: task.is_all_day,
     time_zone: task.time_zone,
+    delivery_id: null,
     ...overrides,
   };
 }
@@ -1177,6 +1187,7 @@ export function installFakeApi({
   planningWindow = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
   reminderNotifications = false,
+  reminderDeviceEnabled = reminderNotifications,
   dueReminders = [],
   quietHours = { enabled: false, start: "22:00", end: "07:00" },
   quietHoursError = null,
@@ -1279,6 +1290,10 @@ export function installFakeApi({
   gentleReturn?: boolean;
   /** Reminder notifications (issue #557). Defaults to off, matching the backend. */
   reminderNotifications?: boolean;
+  /** Whether this browser was enabled for them ("Enable on this device"),
+   * kept in its localStorage. Defaults to `reminderNotifications`: false
+   * plays another device, where the User opted in but not here. */
+  reminderDeviceEnabled?: boolean;
   /** Reminders due now, handed out by the claim endpoint (issue #561). */
   dueReminders?: FakeReminderClaim[];
   /** Quiet hours (issue #567). Defaults to off, 22:00-07:00, like the backend. */
@@ -1322,6 +1337,10 @@ export function installFakeApi({
   voiceLivekitApiKey?: string | null;
   voiceSecretSet?: boolean;
 } = {}): FakeApiState {
+  // This browser's own "Enable on this device" flag (#557 review): kept in
+  // localStorage, which outlives a test, so every install sets it afresh.
+  if (reminderDeviceEnabled) localStorage.setItem(DEVICE_OPT_IN_KEY, "true");
+  else localStorage.removeItem(DEVICE_OPT_IN_KEY);
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
     folders: folders.map((folder) => ({ ...folder })),
@@ -1382,6 +1401,7 @@ export function installFakeApi({
     quietUntil,
     missedReminders: missedReminders.map((entry) => ({ ...entry })),
     missedDismissals: [],
+    missedSnoozes: [],
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -2819,6 +2839,16 @@ export function installFakeApi({
         if (!("recurrence" in rest) && effectiveDue === null && task.recurrence !== null) {
           rest.recurrence = null;
         }
+        // Mirror the backend's estimate rule (#563): positive whole minutes,
+        // at most a week; null removes it.
+        const estimate = rest.estimate_minutes;
+        if (
+          estimate !== undefined &&
+          estimate !== null &&
+          !(Number.isInteger(estimate) && Number(estimate) >= 1 && Number(estimate) <= 7 * 24 * 60)
+        ) {
+          return json({ error: { code: "validation_error", message: "Invalid estimate" } }, 422);
+        }
         // Mirror the backend's planned work rules (#558): a positive
         // duration, kept (buffer included) within one local day.
         if (rest.planned_work !== undefined && rest.planned_work !== null) {
@@ -3659,6 +3689,21 @@ export function installFakeApi({
       state.missedReminders = state.missedReminders.filter((candidate) => !same(candidate));
       return json({ id: 1, ...entry, state: "dismissed", attempt: 0 });
     }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed/snooze" && method === "POST") {
+      const key = body as FakeMissedSnooze;
+      const same = (entry: FakeMissedReminder): boolean =>
+        entry.task_id === key.task_id &&
+        entry.offset === key.offset &&
+        entry.occurrence_due === key.occurrence_due;
+      const entry = state.missedReminders.find(same);
+      if (entry === undefined) {
+        return json({ error: { code: "not_found", message: "Missed reminder not found" } }, 404);
+      }
+      state.missedSnoozes.push({ ...key });
+      state.missedReminders = state.missedReminders.filter((candidate) => !same(candidate));
+      const snoozedUntil = new Date(Date.now() + key.minutes * 60_000).toISOString();
+      return json({ id: 1, ...entry, state: "snoozed", attempt: 0, snoozed_until: snoozedUntil });
+    }
     const reminderReport = url.pathname.match(
       /^\/api\/v1\/reminder-deliveries\/(\d+)\/(shown|failed)$/,
     );
@@ -3683,6 +3728,22 @@ export function installFakeApi({
       // an occurrence that is gone (Task completed, redated, Reminder
       // removed) is refused as stale.
       const id = Number(reminderSnooze[1]);
+      const missedRow = state.missedReminders.find((entry) => entry.delivery_id === id);
+      if (missedRow !== undefined) {
+        // A missed Reminder with a ledger row (#566): snoozing it takes it
+        // off the list until it comes due again.
+        const { minutes } = body as { minutes: number };
+        state.reminderSnoozes.push({ id, minutes });
+        state.missedReminders = state.missedReminders.filter((entry) => entry !== missedRow);
+        const snoozedUntil = new Date(Date.now() + minutes * 60_000).toISOString();
+        return json({
+          ...missedRow,
+          id,
+          state: "snoozed",
+          attempt: 1,
+          snoozed_until: snoozedUntil,
+        });
+      }
       const claim = state.reminderClaims.find((candidate) => candidate.id === id);
       if (claim === undefined) {
         return json(
@@ -3748,7 +3809,7 @@ export function installFakeApi({
           toMinutes(input.start) >= toMinutes(input.end)
         ) {
           return json(
-            { error: { code: "validation_error", message: "invalid planning window" } },
+            { error: { code: "invalid_planning_window", message: "invalid planning window" } },
             422,
           );
         }

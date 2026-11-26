@@ -15,7 +15,7 @@ from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.habit_days import Pause, is_paused
 from app.habit_frequency import due_on, validate_frequency
-from app.habit_stats import current_streak, current_week, eligible_from, intensity
+from app.habit_stats import current_streak, current_week, eligible_from, habit_days, intensity
 from app.models import CheckIn, Habit, HabitPause, HabitSkip
 from app.schemas import (
     CheckInPut,
@@ -393,12 +393,11 @@ async def read_habit_stats(
     values = {row.date: row.value for row in rows}
     checked = set(values)
     heatmap_year = year if year is not None else today.year
-    pauses = pauses_of(habit)
-    skips = [habit_skip.date for habit_skip in habit.skips]
     start = eligible_from(habit.created_at, zone, checked, today)
-    week = current_week(habit.frequency, habit.target, start, pauses, values, today, skips)
+    days = habit_days(habit, values, today, start)
+    week = current_week(days)
     return HabitStats(
-        streak=current_streak(habit.frequency, habit.target, pauses, values, today, skips),
+        streak=current_streak(days),
         eligible_from=start,
         week=None if week is None else HabitWeek.model_validate(week, from_attributes=True),
         heatmap=[

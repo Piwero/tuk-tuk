@@ -84,9 +84,9 @@ NIGHT = {"enabled": True, "start": "22:00", "end": "07:00"}
 def night(client: TestClient, fake_clock: FakeClock) -> FakeClock:
     """Notifications on, Quiet hours 22:00-07:00, and the clock at 21:00 UTC
     on an ordinary day (no DST change in UTC or Europe/Madrid nearby)."""
+    fake_clock.now = datetime(2026, 11, 10, 21, 0, tzinfo=UTC)
     enable_delivery(client)
     assert client.put(PATH, json=NIGHT).status_code == 200
-    fake_clock.now = datetime(2026, 11, 10, 21, 0, tzinfo=UTC)
     return fake_clock
 
 

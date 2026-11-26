@@ -17,62 +17,43 @@ missed: days before it are "not started", never missed. The Streak already
 stops at the earliest Check-in, so the Habit start never changes its value.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from datetime import date, datetime, tzinfo
 
 from app.habit_days import HabitDays, Pause, Week
+from app.models import Habit
 from app.schemas import as_utc
 
 
-def current_streak(
-    frequency: str,
-    target: float,
-    pauses: Iterable[Pause],
-    values: Mapping[date, float],
-    today: date,
-    skips: Iterable[date] = (),
-) -> int:
-    """The Streak as of `today` for a Habit with this frequency, Target,
-    pauses and skipped days, given its Check-in values by day. Read by app.habit_days, the one
-    day rule. The walk ends at the earliest Check-in, which is never later
-    than the Habit start, so the creation day (and so the caller's zone) is
-    not needed here.
-    """
-    if not values:
-        return 0
-    days = HabitDays(
-        frequency=frequency,
-        target=target,
-        start=min(values),
-        pauses=tuple(pauses),
+def habit_days(
+    habit: Habit, values: Mapping[date, float], today: date, start: date | None = None
+) -> HabitDays:
+    """The Habit's days as of `today`, given its Check-in values by day:
+    its frequency, Target, pauses and skips come from the Habit itself.
+    `start` is the Habit start (`eligible_from`); a caller with no zone to
+    read it in may leave it out, and the earliest Check-in stands in. The
+    Streak walk ends there anyway, so its value is the same either way."""
+    return HabitDays(
+        frequency=habit.frequency,
+        target=habit.target,
+        start=start if start is not None else min(values, default=today),
+        pauses=tuple(Pause(start=row.start_date, end=row.end_date) for row in habit.pauses),
         values=values,
         today=today,
-        skips=frozenset(skips),
+        skips=frozenset(row.date for row in habit.skips),
     )
-    return days.streak()
 
 
-def current_week(
-    frequency: str,
-    target: float,
-    start: date,
-    pauses: Iterable[Pause],
-    values: Mapping[date, float],
-    today: date,
-    skips: Iterable[date] = (),
-) -> Week | None:
+def current_streak(days: HabitDays) -> int:
+    """The Streak as of the days' `today`. Read by app.habit_days, the one
+    day rule."""
+    return days.streak() if days.values else 0
+
+
+def current_week(days: HabitDays) -> Week | None:
     """The week holding `today` for a times-per-week Habit (issue #568), read
-    from its Habit start `start`; None for other frequencies."""
-    days = HabitDays(
-        frequency=frequency,
-        target=target,
-        start=start,
-        pauses=tuple(pauses),
-        values=values,
-        today=today,
-        skips=frozenset(skips),
-    )
-    return days.week(today)
+    from its Habit start; None for other frequencies."""
+    return days.week(days.today)
 
 
 def eligible_from(created_at: datetime, zone: tzinfo, checked: set[date], today: date) -> date:

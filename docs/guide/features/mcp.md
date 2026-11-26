@@ -10,12 +10,12 @@ Write tools use IDs returned by an earlier read from the same client. Task descr
 
 ## Choose a connection
 
-|            | Local (stdio)                                            | Remote (Streamable HTTP)                                                       |
-| ---------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Runs       | On your computer, started by AI client                   | Kubernetes, next to the backend, shared by every User                          |
-| Setup      | Install `tuk-mcp` and sign in with `tuk login`           | Create an MCP token in Settings and add the server to your client              |
-| Reached by | Local process stdin/stdout                               | `POST /mcp` over tailnet                                                       |
-| Guide      | [Package README](../../../mcp/oci/README.md#stdio-local) | [Package README](../../../mcp/oci/README.md#streamable-http-remote-kubernetes) |
+| | Local (stdio) | Remote (Streamable HTTP) |
+|---|---|---|
+| Runs | On your computer, started by AI client | Kubernetes, next to the backend, shared by every User |
+| Setup | Install `tuk-mcp` and sign in with `tuk login` | Create an MCP token in Settings and add the server to your client |
+| Reached by | Local process stdin/stdout | `POST /mcp` over tailnet |
+| Guide | [Package README](../../../mcp/oci/README.md#stdio-local) | [Package README](../../../mcp/oci/README.md#streamable-http-remote-kubernetes) |
 
 ### Local
 

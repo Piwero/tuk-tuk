@@ -14,10 +14,10 @@ two-week history show your progress.
 
 ## Two kinds of habit
 
-| Kind               | Use for                    | You tap                           |
-| ------------------ | -------------------------- | --------------------------------- |
-| **Done / not yet** | "Morning walk", "Meditate" | The circle, once                  |
-| **Count**          | "Drink water: 8 glasses"   | **+1** until you reach the target |
+| Kind | Use for | You tap |
+| --- | --- | --- |
+| **Done / not yet** | "Morning walk", "Meditate" | The circle, once |
+| **Count** | "Drink water: 8 glasses" | **+1** until you reach the target |
 
 ## How to use it
 

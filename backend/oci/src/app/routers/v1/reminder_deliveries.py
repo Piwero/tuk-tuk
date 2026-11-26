@@ -9,55 +9,29 @@ from datetime import datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, field_serializer
 from sqlalchemy import select
 
 from app.caller_zone import caller_zone_or_utc
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import ReminderDelivery, UserSettings
-from app.quiet_hours import QuietHours, held_until
+from app.models import DeliveryState, ReminderDelivery
+from app.quiet_hours import held_until, user_quiet_hours
 from app.reminder_delivery import (
     claim_due,
     held_reminders,
-    new_lease_token,
+    is_stale,
     open_dated_tasks,
+    snooze,
     snoozes_of,
 )
-from app.schemas import as_utc, utc_z
+from app.reminder_schemas import ReminderDeliveryRead, SnoozeRequest
+from app.schemas import utc_z
 from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/reminder-deliveries", tags=["reminder deliveries"])
 
-DeliveryState = Literal["claimed", "shown", "failed", "snoozed", "dismissed"]
-ReportOutcome = Literal["shown", "failed"]
-
-
-class ReminderDeliveryRead(BaseModel):
-    id: int
-    task_id: int
-    task_title: str
-    offset: str
-    occurrence_due: datetime
-    fire_at: datetime
-    state: DeliveryState
-    attempt: int
-    # Set once the User snoozed it (issue #566): when it comes due again.
-    snoozed_until: datetime | None = None
-
-    @classmethod
-    def of(cls, row: ReminderDelivery) -> "ReminderDeliveryRead":
-        return cls(
-            id=row.id,
-            task_id=row.task_id,
-            task_title=row.task.title,
-            offset=row.offset,
-            occurrence_due=row.occurrence_due,
-            fire_at=row.fire_at,
-            state=row.state,
-            attempt=row.attempts,
-            snoozed_until=row.snoozed_until,
-        )
+ReportOutcome = Literal[DeliveryState.SHOWN, DeliveryState.FAILED]
 
 
 class ReminderClaim(ReminderDeliveryRead):
@@ -103,23 +77,6 @@ class DeliveryReport(BaseModel):
     lease_token: str
 
 
-def quiet_hours(user_settings: UserSettings) -> QuietHours | None:
-    """The User's Quiet hours band, or None while it is off. Active hours
-    are never read: they shape the Calendar only."""
-    if not user_settings.quiet_hours_enabled:
-        return None
-    return QuietHours.parse(user_settings.quiet_hours_start, user_settings.quiet_hours_end)
-
-
-# A snooze is a short delay, at most a day: anything longer is a new date,
-# which the User sets on the Task itself.
-MAX_SNOOZE_MINUTES = 24 * 60
-
-
-class SnoozeRequest(BaseModel):
-    minutes: int = Field(ge=1, le=MAX_SNOOZE_MINUTES)
-
-
 @router.post("/claim")
 async def claim(
     request: Request,
@@ -134,7 +91,7 @@ async def claim(
     if not user_settings.reminder_notifications_enabled:
         return ClaimPage(items=[])
     now = request.app.state.clock()
-    quiet = quiet_hours(user_settings)
+    quiet = user_quiet_hours(user_settings)
     rows = await claim_due(session, now, zone, quiet)
     held = held_reminders(
         await open_dated_tasks(session), now, zone, quiet, await snoozes_of(session)
@@ -189,7 +146,7 @@ async def report(
             code="lease_lost",
             message="Another tab has claimed this reminder since",
         )
-    if row.state == "claimed":
+    if row.state == DeliveryState.CLAIMED:
         row.state = outcome
         row.reported_at = request.app.state.clock()
         await session.commit()
@@ -202,7 +159,7 @@ async def report_shown(
 ) -> ReminderDeliveryRead:
     """The browser reported the notification shown, as far as a page can
     tell; never proof the operating system displayed it."""
-    return await report(delivery_id, payload, "shown", request, session)
+    return await report(delivery_id, payload, DeliveryState.SHOWN, request, session)
 
 
 @router.post("/{delivery_id}/failed")
@@ -210,11 +167,11 @@ async def report_failed(
     delivery_id: int, payload: DeliveryReport, request: Request, session: SessionDep
 ) -> ReminderDeliveryRead:
     """The browser refused to show it. Final: it is not retried."""
-    return await report(delivery_id, payload, "failed", request, session)
+    return await report(delivery_id, payload, DeliveryState.FAILED, request, session)
 
 
 @router.post("/{delivery_id}/snooze")
-async def snooze(
+async def snooze_delivery(
     delivery_id: int, payload: SnoozeRequest, request: Request, session: SessionDep
 ) -> ReminderDeliveryRead:
     """Snoozes this occurrence's Reminder (issue #566): it comes due again
@@ -226,21 +183,12 @@ async def snooze(
     row = await session.get(ReminderDelivery, delivery_id)
     if row is None:
         raise NotFoundError(f"Reminder delivery {delivery_id} not found")
-    task = row.task
-    if (
-        task.completed
-        or task.due_date is None
-        or as_utc(task.due_date) != as_utc(row.occurrence_due)
-        or row.offset not in task.reminders
-    ):
+    if is_stale(row):
         raise APIError(
             status_code=409,
             code="reminder_stale",
             message="This reminder's Task occurrence has changed since it was delivered",
         )
-    row.snoozed_until = request.app.state.clock() + timedelta(minutes=payload.minutes)
-    row.state = "snoozed"
-    # Any tab still holding the old lease can no longer report on it.
-    row.lease_token = new_lease_token()
+    snooze(row, request.app.state.clock(), timedelta(minutes=payload.minutes))
     await session.commit()
     return ReminderDeliveryRead.of(row)

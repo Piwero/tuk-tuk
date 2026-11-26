@@ -1157,7 +1157,7 @@ export function CalendarView({
             />
           )}
         </div>
-        {/* The buffer after a plan (#562): its own hatched strip under the
+        {/* The buffer after a plan (#562): its own dashed outline under the
         block, so it reads as slack kept free rather than more work. The
         block's text already states it, so the strip is decorative. */}
         {buffer > 0 && bufferEnd > endMin && (

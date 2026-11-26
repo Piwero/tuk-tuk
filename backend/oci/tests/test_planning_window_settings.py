@@ -56,16 +56,24 @@ class TestPlanningWindowSettings:
         response = client.put(PATH, json={"enabled": True, "start": "17:00", "end": "09:00"})
 
         assert response.status_code == 422
+        # The same shape as Quiet hours, its sibling band setting: a code
+        # of its own and a message the User can read.
+        assert response.json()["error"] == {
+            "code": "invalid_planning_window",
+            "message": "The planning window must start before it ends",
+        }
 
     def test_rejects_a_time_off_the_30_minute_grid(self, client: TestClient) -> None:
         response = client.put(PATH, json={"enabled": True, "start": "09:15", "end": "17:00"})
 
         assert response.status_code == 422
+        assert response.json()["error"]["message"] == "'09:15' is not aligned to 30 minutes"
 
     def test_rejects_a_malformed_time(self, client: TestClient) -> None:
         response = client.put(PATH, json={"enabled": True, "start": "9am", "end": "17:00"})
 
         assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_planning_window"
 
     def test_requires_authentication(self, unauthenticated_client: TestClient) -> None:
         assert unauthenticated_client.get(PATH).status_code == 401

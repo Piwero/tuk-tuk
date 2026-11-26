@@ -314,8 +314,8 @@
   .habit-cell.state-missed {
     border: 1px dashed var(--border-strong);
   }
-  .habits-week-grid .habit-cell.state-not-scheduled,
-  .habits-legend .habit-cell.state-not-scheduled {
+  .habits-week-grid .habit-cell.state-unscheduled,
+  .habits-legend .habit-cell.state-unscheduled {
     background: transparent;
     border-color: var(--border-default);
     opacity: 0.5;

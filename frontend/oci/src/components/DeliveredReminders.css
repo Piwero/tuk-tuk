@@ -76,12 +76,12 @@
     .delivered-reminder-actions button,
     button.delivered-reminder-open {
       flex: 1 1 100%;
-      height: 44px;
+      height: var(--tap-target);
     }
 
     .delivered-reminder-dismiss {
-      min-width: 44px;
-      min-height: 44px;
+      min-width: var(--tap-target);
+      min-height: var(--tap-target);
       justify-content: center;
     }
   }

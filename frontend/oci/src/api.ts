@@ -84,6 +84,9 @@ export interface Task {
    * moving or removing it never changes the deadline. Null when unplanned;
    * optional so older payloads without the field still read as unplanned. */
   planned_work?: PlannedWorkRead | null;
+  /** Duration estimate in minutes (#563), only for work planning; null
+   * when the User gave none. Never inferred. */
+  estimate_minutes?: number | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
@@ -1135,6 +1138,8 @@ export interface TaskPatch {
   recurrence?: string | null;
   /** null detaches the Task from its Key Result. */
   key_result_id?: number | null;
+  /** Duration estimate in minutes (#563); null removes it. */
+  estimate_minutes?: number | null;
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {
@@ -2105,6 +2110,10 @@ export interface MissedReminder {
   /** The Task's, so the occurrence reads as the Task shows its date. */
   is_all_day: boolean;
   time_zone: string | null;
+  /** Its ledger row, when a tab ever claimed it: snoozed with
+   * `snoozeReminder`. Null for a Reminder no tab was open for, snoozed
+   * with `snoozeMissedReminder` instead (#566). */
+  delivery_id?: number | null;
 }
 
 /** The User's missed Reminders, newest first; empty while the opt-in is
@@ -2122,6 +2131,25 @@ export function dismissMissedReminder(missed: MissedReminder, tz: string): Promi
       task_id: missed.task_id,
       offset: missed.offset,
       occurrence_due: missed.occurrence_due,
+    }),
+  });
+}
+
+/** Snoozes a missed Reminder no tab ever claimed (#566): the server
+ * creates its ledger row already snoozed, under the same key. Only the
+ * ledger changes, never the Task. */
+export function snoozeMissedReminder(
+  missed: MissedReminder,
+  minutes: number,
+  tz: string,
+): Promise<ReminderDeliveryRead> {
+  return request(`/api/v1/reminder-deliveries/missed/snooze?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task_id: missed.task_id,
+      offset: missed.offset,
+      occurrence_due: missed.occurrence_due,
+      minutes,
     }),
   });
 }

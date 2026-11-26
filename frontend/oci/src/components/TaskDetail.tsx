@@ -24,6 +24,7 @@ import { PRIORITY_LABELS } from "../grouping";
 import { formatFocusTotal } from "../focusTotals";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { DateRow } from "./DateRow";
+import { EstimateRow } from "./EstimateRow";
 import { PlannedWorkRow } from "./PlannedWorkRow";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
@@ -518,6 +519,7 @@ export function TaskDetail({
         </Hint>
         <DateRow task={task} onTaskChanged={onTaskChanged} />
         <PlannedWorkRow task={task} onTaskChanged={onTaskChanged} />
+        <EstimateRow task={task} onTaskChanged={onTaskChanged} />
         <ReminderRow task={task} onTaskChanged={onTaskChanged} />
       </div>
       <div className="task-description">

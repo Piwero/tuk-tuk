@@ -57,9 +57,9 @@ export function ReminderNotificationsSettings(): React.JSX.Element {
       </div>
       <div className="settings-field">
         <p className="settings-hint">
-          Notifications arrive only while Tuk Tuk is open in a tab, signed in, on a supported
-          browser. They don't arrive when the browser is in the background or closed, or when your
-          device is locked.
+          Notifications are supported only while Tuk Tuk is open in a tab, signed in, on a supported
+          browser. A tab in the background may still deliver them, late or not at all: that is
+          unsupported and not guaranteed. A closed browser or a locked device is not supported.
         </p>
         {state === "off" && (
           <div>
@@ -67,6 +67,11 @@ export function ReminderNotificationsSettings(): React.JSX.Element {
               Enable on this device
             </button>
           </div>
+        )}
+        {state === "off" && delivery.enabled === true && (
+          <p className="settings-hint">
+            You turned them on for another device. This one stays off until you enable it here.
+          </p>
         )}
         {state === "requesting" && (
           <p className="settings-hint" role="status">
@@ -96,9 +101,18 @@ export function ReminderNotificationsSettings(): React.JSX.Element {
           </p>
         )}
         {delivery.enabled === true && state !== "unsupported" && (
-          <div>
-            <button type="button" className="btn-quiet" onClick={() => void delivery.disable()}>
-              Turn off notifications
+          <div className="settings-form-actions">
+            {delivery.deviceEnabled && (
+              <button type="button" className="btn-quiet" onClick={() => void delivery.disable()}>
+                Turn off on this device
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn-quiet"
+              onClick={() => void delivery.disableEverywhere()}
+            >
+              Turn off on all devices
             </button>
           </div>
         )}

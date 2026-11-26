@@ -19,7 +19,6 @@ No. You run it yourself. [Getting started](getting-started.md) takes about 10 mi
 
 **Does it work on my phone?**
 Yes, in the browser. To get an app icon:
-
 1. Open Tuk Tuk in Safari (iPhone) or Chrome (Android).
 2. Tap **Share → Add to Home Screen** (iPhone) or **⋮ → Install app** (Android).
 
@@ -66,11 +65,14 @@ also logs out every device.
 
 **My reminders don't notify me.**
 Check three things. **Settings → Reminder notifications** must say _On for
-this device_. A Tuk Tuk tab must be open: a closed tab, a closed browser or a
-locked phone gets no notification. And Tuk Tuk must be served over
+this device_: turning them on on another device doesn't turn them on here. A
+Tuk Tuk tab must be open: a closed browser or a locked device isn't
+supported, and a tab in the background may notify late or not at all. And
+Tuk Tuk must be served over
 `https://` (or opened at `http://localhost`); see
 [Serve it over HTTPS](../self-hosting/install.md#serve-it-over-https). A
-reminder that comes due while no tab is open is not sent later.
+reminder that comes due while no tab is open is not sent later; it is
+listed under **Missed reminders** instead.
 
 **I have Tuk Tuk open in several tabs. Will I get every reminder twice?**
 No. Each reminder notifies once, in one tab. A task you've completed or

@@ -24,7 +24,7 @@
   .quiet-hours-deferred-task {
     display: flex;
     width: 100%;
-    min-height: 44px;
+    min-height: var(--tap-target);
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);

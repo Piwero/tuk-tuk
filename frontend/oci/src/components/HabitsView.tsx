@@ -552,7 +552,7 @@ const LEGEND: { state: DayState; level: number; text: string }[] = [
   { state: "open-today", level: 0, text: "Not yet: today, still open" },
   { state: "missed", level: 0, text: "Missed" },
   { state: "not-started", level: 0, text: "Not started: before the Habit began" },
-  { state: "not-scheduled", level: 0, text: "Not scheduled" },
+  { state: "unscheduled", level: 0, text: "Not scheduled" },
   { state: "paused", level: 0, text: "Paused: not counted, neither done nor missed" },
   {
     state: "skipped",

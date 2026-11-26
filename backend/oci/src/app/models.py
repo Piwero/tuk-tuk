@@ -2,6 +2,7 @@
 `owner_id` (issue #408)."""
 
 from datetime import UTC, date, datetime
+from enum import StrEnum
 
 from sqlalchemy import (
     JSON,
@@ -189,6 +190,12 @@ class UserSettings(Base):
     # notifying after upgrade. Browser permission is per device and stays in
     # the browser; this flag only records the User's choice.
     reminder_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # When the User last turned them on (review of #565): the missed list
+    # holds only Reminders delivered after it, so old offsets never surface.
+    # Reset on every off-to-on change; null while they have never been on.
+    reminder_notifications_enabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     # Quiet hours (issue #567): a band of the day during which Reminder
     # notifications are held and delivered once when it ends. "HH:MM"
     # wall-clock labels read in the claiming tab's zone; the band may wrap
@@ -316,6 +323,11 @@ class Task(OwnedMixin, Base):
     # anchored at the task's due date. Completing a recurring task advances
     # its dates in place instead of completing the row (ADR 0003).
     recurrence: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Duration estimate (issue #563): how long the User expects the work to
+    # take, in minutes. Optional, never inferred (not from Focus either),
+    # used only for work planning: the capacity summary and a prefill for
+    # Planned work. Kept apart from the Planned work duration.
+    estimate_minutes: Mapped[int | None] = mapped_column(default=None)
     # Planned work (issue #558): at most one optional block of reserved work
     # time, held apart from start/due — moving or removing it never touches
     # the deadline, and it is not a Reminder anchor. Start, duration and
@@ -512,6 +524,23 @@ class HabitPause(OwnedMixin, Base):
     habit: Mapped[Habit] = relationship(back_populates="pauses")
 
 
+class DeliveryState(StrEnum):
+    """Where one Reminder occurrence's delivery stands in the ledger (ADR
+    0019): the one list of states, read by the claim, the missed list and
+    the API."""
+
+    # A tab holds or held the lease.
+    CLAIMED = "claimed"
+    # The browser reported display.
+    SHOWN = "shown"
+    # The browser refused to show it; final.
+    FAILED = "failed"
+    # The User asked for it again at `snoozed_until` (issue #566).
+    SNOOZED = "snoozed"
+    # The User dismissed it as a missed reminder (issue #565).
+    DISMISSED = "dismissed"
+
+
 class ReminderDelivery(OwnedMixin, Base):
     """One entry of the delivery ledger (issue #561, ADR 0019): a Reminder
     of one Task occurrence that an open tab claimed for display.
@@ -532,10 +561,7 @@ class ReminderDelivery(OwnedMixin, Base):
     offset: Mapped[str] = mapped_column(String(32))
     occurrence_due: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     fire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # "claimed" (a tab holds or held the lease), "shown" (the browser
-    # reported display), "failed" (the browser refused to show it) or
-    # "snoozed" (the User asked for it again at `snoozed_until`, issue #566).
-    # "dismissed" (the User dismissed it as a missed reminder, issue #565).
+    # A DeliveryState, stored as its string value.
     state: Mapped[str] = mapped_column(String(16), default="claimed")
     attempts: Mapped[int] = mapped_column(default=1)
     lease_token: Mapped[str] = mapped_column(String(64))

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { ApiError, snoozeReminder } from "../api";
+import { ApiError, snoozeReminder, type ReminderDeliveryRead } from "../api";
 import { localTimeOf } from "../dates";
 import { reminderLabel } from "../reminders";
 import { IconButton } from "./IconButton";
@@ -28,12 +28,16 @@ function snoozeErrorText(error: unknown): string {
   return "The snooze could not be saved. Try again.";
 }
 
-/** Snooze controls for one ledger row (issue #566). A snooze is a delivery
- * override: the Reminder notifies once more later, and the Task's due
- * date, start and Reminders never change, which the copy says in words.
- * Reusable wherever a delivered or missed Reminder with a ledger row is
- * listed. */
-export function ReminderSnooze({ deliveryId }: { deliveryId: number }): React.JSX.Element {
+/** Snooze controls for one Reminder occurrence (issue #566). A snooze is
+ * a delivery override: the Reminder notifies once more later, and the
+ * Task's due date, start and Reminders never change, which the copy says
+ * in words. `onSnooze` sends it: the ordinary snooze of a ledger row, or
+ * the missed list's snooze of a Reminder no tab claimed. */
+export function ReminderSnooze({
+  onSnooze,
+}: {
+  onSnooze: (minutes: number) => Promise<ReminderDeliveryRead>;
+}): React.JSX.Element {
   const [until, setUntil] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -42,7 +46,7 @@ export function ReminderSnooze({ deliveryId }: { deliveryId: number }): React.JS
     setSaving(true);
     setError(null);
     try {
-      const row = await snoozeReminder(deliveryId, minutes);
+      const row = await onSnooze(minutes);
       setUntil(row.snoozed_until ?? new Date(Date.now() + minutes * 60_000).toISOString());
     } catch (caught) {
       setError(snoozeErrorText(caught));
@@ -122,7 +126,7 @@ export function DeliveredReminders({
               onClick={() => onDismiss(reminder.id)}
             />
           </div>
-          <ReminderSnooze deliveryId={reminder.id} />
+          <ReminderSnooze onSnooze={(minutes) => snoozeReminder(reminder.id, minutes)} />
           <button
             type="button"
             className="btn-quiet delivered-reminder-open"
