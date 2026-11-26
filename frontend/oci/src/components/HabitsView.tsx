@@ -283,10 +283,16 @@ export function HabitsView({
       <tr key={habit.id} className="habit-row">
         <th scope="row" className="habit-row-head">
           <div className="habit-head">
-            {habit.color !== null && (
-              <span className="color-dot" style={{ background: habit.color }} />
-            )}
-            {habit.icon !== null && <span className="habit-icon">{habit.icon}</span>}
+            {/* Both slots render even when empty, so every name starts at
+                the same x whether or not the Habit has a colour or icon. */}
+            <span
+              aria-hidden="true"
+              className="color-dot"
+              style={habit.color === null ? undefined : { background: habit.color }}
+            />
+            <span aria-hidden="true" className="habit-icon">
+              {habit.icon}
+            </span>
             <div className="habit-body">
               <span className="habit-name">{habit.name}</span>
               <Hint hintKey="streak">

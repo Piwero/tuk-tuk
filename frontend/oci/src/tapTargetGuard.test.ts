@@ -895,6 +895,66 @@ describe("ADHD Phase 3 controls on a phone (issue #569)", () => {
   });
 });
 
+/** The Habits week grid on a phone. As a table it was a 180px name column
+ * plus seven day columns, about 520px wide: on a 390px screen only three
+ * days showed and today's cell was cut off at the edge. On a phone each
+ * Habit's name takes its own line and the seven days share the width below
+ * it, so the whole week fits without scrolling sideways. */
+describe("Habits week grid fits a phone", () => {
+  it("lays the grid out as one seven-column grid on a phone, a table on desktop", () => {
+    expect(declaredValue(".habits-week-grid", "display")).toBe("grid");
+    expect(declaredValue(".habits-week-grid", "grid-template-columns")).toMatch(/repeat\(7,/);
+    expect(declaredValue(".habits-week-grid", "display", DESKTOP)).toBeNull();
+  });
+
+  it("flattens the rows so every day column lines up with its header", () => {
+    for (const part of [
+      ".habits-week-grid thead",
+      ".habits-week-grid tbody",
+      ".habits-week-grid tr",
+    ]) {
+      expect(declaredValue(part, "display"), part).toBe("contents");
+    }
+  });
+
+  it("gives each Habit's name, and each detail row, a full line of its own", () => {
+    expect(declaredValue(".habits-week-grid .habit-row-head", "grid-column")).toBe("1 / -1");
+    expect(declaredValue(".habits-week-grid .habit-row-head", "min-width")).toBe("0");
+    expect(declaredValue(".habits-week-grid td[colspan]", "grid-column")).toBe("1 / -1");
+  });
+
+  it("puts each Habit's name above its recent-days strip, not beside it", () => {
+    // Beside it, a 140px name left the strip ~200px: three wrapped rows.
+    expect(declaredValue(".habit-long-history-row", "flex-direction")).toBe("column");
+    expect(declaredValue(".habit-long-history-row > .habit-name", "width")).toBe("auto");
+    expect(declaredValue(".habit-long-history-row", "flex-direction", DESKTOP)).toBeNull();
+  });
+
+  it("fits the 21-day strip on one line at 390px", () => {
+    // 21 × (12px square + 2 × side padding) must fit the 359px row.
+    const padding = declaredValue(
+      ".habits-long-history .habit-strip button.heatmap-day",
+      "padding-inline",
+    );
+    expect(padding).not.toBeNull();
+    expect(21 * (12 + 2 * (resolvePx(padding as string) ?? 99))).toBeLessThanOrEqual(359);
+  });
+
+  it("rings today's strip square, not the padded touch area around it", () => {
+    // On touch the square is padded out to 44px; an inset box-shadow on the
+    // button drew a tall empty box over the whole hit area.
+    expect(declaredValue(".habit-strip button.heatmap-day.today", "box-shadow")).toBe("none");
+    const ring = declarationsFor(".habit-strip button.heatmap-day.today::after");
+    expect(ring).toMatch(/box-shadow:\s*inset/);
+    expect(ring).toMatch(/inset:\s*calc\(\(var\(--tap-target\) - 12px\) \/ 2\) var\(--space-1\)/);
+  });
+
+  it("keeps the day cells at the 44px floor", () => {
+    const offenders = findOffenders([".habits-week-grid .habit-cell"]);
+    expect(offenders, offenderMessage("the Habits week grid", offenders)).toEqual([]);
+  });
+});
+
 describe("Calendar resize handles show keyboard focus (issue #569)", () => {
   it("draws the 3px focus ring, not only the faint grip", () => {
     expect(declaredValue(".resize-handle:focus-visible", "box-shadow", DESKTOP)).toBe(
