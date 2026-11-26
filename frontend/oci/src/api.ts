@@ -744,6 +744,9 @@ export function disconnectGoogleAccount(accountId: number): Promise<void> {
 
 export type GitHubOwnerKind = "user" | "organization";
 
+/** Whether GitHub still accepts a GitHub Token (#584). */
+export type GitHubConnectionState = "connected" | "needs_reconnect";
+
 /** A GitHub Token (#578): a fine-grained personal access token, listed by
  * the GitHub owner it grants access to. Its value is write-only: no
  * response ever carries it. The owner is null until GitHub can tell it: a
@@ -756,7 +759,7 @@ export interface GitHubToken {
   expires_at: string | null;
   /** Expires within 7 days, or already has (#584). */
   expires_soon: boolean;
-  connection_state: string;
+  connection_state: GitHubConnectionState;
   created_at: string;
 }
 

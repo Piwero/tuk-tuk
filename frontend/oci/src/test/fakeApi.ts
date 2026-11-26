@@ -287,7 +287,7 @@ export interface FakeGitHubToken {
   /** Expires within 7 days, or already has (#584). The backend works this
    * out from its clock; the fake takes it as given. */
   expires_soon: boolean;
-  connection_state: string;
+  connection_state: "connected" | "needs_reconnect";
   created_at: string;
 }
 
