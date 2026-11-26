@@ -8,20 +8,22 @@ keeps them. The GitHub view reads a Repository View's repositories through
 `?view=<id>` on its read endpoints (app.routers.v1.github_view).
 """
 
-from typing import Literal
-
 from fastapi import APIRouter
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.models import SORT_GAP, RepositoryView, RepositoryViewMember, WatchedRepository
+from app.models import (
+    SORT_GAP,
+    RepositoryView,
+    RepositoryViewMember,
+    RepositoryViewTab,
+    WatchedRepository,
+)
 from app.schemas import reject_explicit_null
 
 router = APIRouter(prefix="/api/v1/github/views", tags=["github"])
-
-ActiveTab = Literal["pull_requests", "issues"]
 
 
 class RepositoryViewCreate(BaseModel):
@@ -41,7 +43,7 @@ class RepositoryViewUpdate(BaseModel):
     assignee: str | None = Field(default=None, max_length=255)
     hide_drafts: bool | None = None
     hide_bots: bool | None = None
-    active_tab: ActiveTab | None = None
+    active_tab: RepositoryViewTab | None = None
 
     _reject_nulls = field_validator(
         "name", "sort_order", "watched_repository_ids", "hide_drafts", "hide_bots", "active_tab"
@@ -49,6 +51,8 @@ class RepositoryViewUpdate(BaseModel):
 
 
 class RepositoryViewRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     sort_order: int
@@ -58,22 +62,7 @@ class RepositoryViewRead(BaseModel):
     assignee: str | None
     hide_drafts: bool
     hide_bots: bool
-    active_tab: ActiveTab
-
-    @classmethod
-    def of(cls, row: RepositoryView) -> "RepositoryViewRead":
-        return cls(
-            id=row.id,
-            name=row.name,
-            sort_order=row.sort_order,
-            watched_repository_ids=[m.watched_repository_id for m in row.members],
-            author=row.author,
-            label=row.label,
-            assignee=row.assignee,
-            hide_drafts=row.hide_drafts,
-            hide_bots=row.hide_bots,
-            active_tab="issues" if row.active_tab == "issues" else "pull_requests",
-        )
+    active_tab: RepositoryViewTab
 
 
 async def _members(session: SessionDep, ids: list[int]) -> list[RepositoryViewMember]:
@@ -99,7 +88,7 @@ async def list_views(session: SessionDep) -> list[RepositoryViewRead]:
     rows = await session.scalars(
         select(RepositoryView).order_by(RepositoryView.sort_order, RepositoryView.id)
     )
-    return [RepositoryViewRead.of(row) for row in rows]
+    return [RepositoryViewRead.model_validate(row) for row in rows]
 
 
 @router.post("", status_code=201)
@@ -114,7 +103,7 @@ async def create_view(payload: RepositoryViewCreate, session: SessionDep) -> Rep
     session.add(row)
     await session.commit()
     await session.refresh(row, ["members"])
-    return RepositoryViewRead.of(row)
+    return RepositoryViewRead.model_validate(row)
 
 
 async def _get(session: SessionDep, view_id: int) -> RepositoryView:
@@ -126,7 +115,7 @@ async def _get(session: SessionDep, view_id: int) -> RepositoryView:
 
 @router.get("/{view_id}")
 async def get_view(view_id: int, session: SessionDep) -> RepositoryViewRead:
-    return RepositoryViewRead.of(await _get(session, view_id))
+    return RepositoryViewRead.model_validate(await _get(session, view_id))
 
 
 @router.patch("/{view_id}")
@@ -147,7 +136,7 @@ async def update_view(
         setattr(row, field, value)
     await session.commit()
     await session.refresh(row, ["members"])
-    return RepositoryViewRead.of(row)
+    return RepositoryViewRead.model_validate(row)
 
 
 @router.delete("/{view_id}", status_code=204)

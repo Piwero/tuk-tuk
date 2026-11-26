@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import Literal, Protocol
 
 GitHubOwnerKind = Literal["user", "organization"]
+# GitHub's own prefix for fine-grained personal access tokens.
+FINE_GRAINED_PREFIX = "github_pat_"
 # Only fine-grained personal access tokens are accepted (ADR 0020); the
 # other kinds exist so a caller can say *why* a token was refused.
 GitHubTokenType = Literal["fine_grained", "classic", "other"]

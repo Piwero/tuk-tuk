@@ -9,11 +9,11 @@ sorting, the per-repository cap and bot flagging happen here, so every
 client sees the same answer.
 
 Both reads share `_read_each_token` (one round trip per GitHub Token, with
-its status) and `_repository_read` (the per-repository overflow). A token
+its status) and `_coverage` (the per-repository overflow). A token
 GitHub rejects is marked as needing reconnection there (issue #584).
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal
@@ -22,24 +22,23 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, field_serializer
 from sqlalchemy import select
 
-from app.crypto import decrypt_credential
 from app.db import SessionDep
 from app.errors import NotFoundError
 from app.github_cache import GitHubReadCache
 from app.github_source import (
+    GitHubCiStatus,
     GitHubIssue,
     GitHubPullRequest,
     GitHubRepository,
+    GitHubReviewDecision,
     GitHubSource,
-    OpenIssues,
-    OpenPullRequests,
     RepositoryIssues,
     RepositoryPullRequests,
     TerminalGitHubSourceError,
     TransientGitHubSourceError,
 )
-from app.models import GitHubToken, RepositoryView, WatchedRepository
-from app.routers.v1.github import expires_soon
+from app.github_tokens import expires_soon, mark_needs_reconnect, plaintext
+from app.models import GitHubConnectionState, GitHubToken, RepositoryView, WatchedRepository
 from app.schemas import utc_z
 from app.users import current_user_id
 
@@ -69,8 +68,8 @@ class PullRequestRead(BaseModel):
     updated_at: datetime
     labels: list[GitHubLabelRead]
     is_draft: bool
-    review_decision: Literal["approved", "changes_requested", "pending"]
-    ci_status: Literal["pass", "fail", "pending"] | None
+    review_decision: GitHubReviewDecision
+    ci_status: GitHubCiStatus | None
     relationship: Relationship
 
     @field_serializer("created_at", "updated_at")
@@ -98,7 +97,7 @@ class IssueRead(BaseModel):
         return utc_z(value)
 
 
-class RepositoryReadRead(BaseModel):
+class RepositoryCoverageRead(BaseModel):
     """How much of one Watched Repository a read shows: `overflow_count`
     more open items exist on GitHub, listed at `overflow_url`."""
 
@@ -140,7 +139,7 @@ class TokenReadStatusRead(BaseModel):
 class _GitHubViewRead(BaseModel):
     """What every GitHub view read carries besides its items."""
 
-    repositories: list[RepositoryReadRead]
+    repositories: list[RepositoryCoverageRead]
     tokens: list[TokenReadStatusRead]
     fetched_at: datetime
     # True when GitHub could not be reached for some GitHub Token and its
@@ -188,8 +187,9 @@ async def _watched_by_token(
     ]
 
 
-# One GitHub source operation over a batch of repositories under one token.
-type SourceRead[Result] = Callable[[GitHubSource, str, list[GitHubRepository]], Awaitable[Result]]
+# One GitHub source read (a bound GitHubSource method) over a batch of
+# repositories under one token.
+type SourceRead[Result] = Callable[[str, list[GitHubRepository]], Awaitable[Result]]
 
 
 @dataclass
@@ -221,8 +221,6 @@ async def _read_each_token[Result](
     never hides another's results. With `in_view` (a Repository View's
     Watched Repositories, issue #580), only the tokens reading one of them
     are read, and only their results are returned."""
-    github_source: GitHubSource = request.app.state.github_source
-    key = request.app.state.settings.app_master_key
     owner_id = current_user_id(request)
     now = request.app.state.clock()
     reads = _TokenReads[Result](results=[], statuses=[], fetched_at=now)
@@ -230,15 +228,14 @@ async def _read_each_token[Result](
         status: TokenReadStatus = "ok"
         # Only live reads may change `connection_state`, and nothing
         # cached is shown for a token GitHub has rejected (ADR 0007).
-        connected = token.connection_state == "connected"
+        connected = token.connection_state == GitHubConnectionState.CONNECTED
         by_github_id = {w.github_repo_id: w for w in watched}
         repositories = frozenset(by_github_id)
         shown = cache.fresh(owner_id, token.id, repositories) if connected and not refresh else None
         if shown is None:
             try:
                 result = await source_read(
-                    github_source,
-                    decrypt_credential(token.encrypted_token, key=key),
+                    plaintext(request, token),
                     [
                         GitHubRepository(
                             github_id=w.github_repo_id, full_name=w.full_name, private=w.private
@@ -255,8 +252,7 @@ async def _read_each_token[Result](
                 # GitHub rejected the token itself (issue #584, ADR 0007); a
                 # transient failure never touches `connection_state`.
                 status = "needs_reconnect"
-                token.connection_state = "needs_reconnect"
-                await session.commit()
+                await mark_needs_reconnect(session, token)
                 cache.forget(owner_id, token.id)
             else:
                 shown = cache.store(owner_id, token.id, repositories, result)
@@ -280,15 +276,15 @@ async def _read_each_token[Result](
     return reads
 
 
-def _repository_read(
+def _coverage(
     row: WatchedRepository,
     repo: RepositoryPullRequests | RepositoryIssues,
     shown: int,
     list_path: Literal["pulls", "issues"],
-) -> RepositoryReadRead:
+) -> RepositoryCoverageRead:
     # The source returns at most 100 per repository (spec #576); the rest
     # are a "N more on GitHub" link to the repository's own list.
-    return RepositoryReadRead(
+    return RepositoryCoverageRead(
         watched_repository_id=row.id,
         full_name=repo.full_name,
         total_count=repo.total_count,
@@ -316,16 +312,17 @@ RefreshQuery = Annotated[bool, Query()]
 _GROUP_ORDER: dict[Relationship, int] = {"review_requested": 0, "mine": 1, "other": 2}
 
 
-async def _open_pull_requests(
-    source: GitHubSource, token: str, repositories: list[GitHubRepository]
-) -> OpenPullRequests:
-    return await source.list_open_pull_requests(token, repositories)
-
-
-async def _open_issues(
-    source: GitHubSource, token: str, repositories: list[GitHubRepository]
-) -> OpenIssues:
-    return await source.list_open_issues(token, repositories)
+def _repositories_shown[Result, Repo: (RepositoryPullRequests, RepositoryIssues)](
+    reads: _TokenReads[Result], repositories_of: Callable[[Result], tuple[Repo, ...]]
+) -> Iterator[tuple[WatchedRepository, Repo, Result]]:
+    """Each repository a read shows, with its Watched Repository and the
+    token result it came in. A repository in a result but not shown (since
+    unwatched, or outside the Repository View) is left out."""
+    for by_github_id, result in reads.results:
+        for repo in repositories_of(result):
+            row = by_github_id.get(repo.github_id)
+            if row is not None:
+                yield row, repo, result
 
 
 @router.get("/pull-requests")
@@ -340,41 +337,38 @@ async def list_pull_requests(
     requested, then Mine, then Others) and most recently updated first
     within each group."""
     in_view = await _view_repositories(session, view)
+    github_source: GitHubSource = request.app.state.github_source
     reads = await _read_each_token(
         request,
         session,
-        _open_pull_requests,
+        github_source.list_open_pull_requests,
         request.app.state.github_pull_request_cache,
         refresh=refresh,
         in_view=in_view,
     )
     items: list[PullRequestRead] = []
-    repositories: list[RepositoryReadRead] = []
-    for by_github_id, result in reads.results:
-        for repo in result.repositories:
-            row = by_github_id.get(repo.github_id)
-            if row is None:
-                continue
-            repositories.append(_repository_read(row, repo, len(repo.pull_requests), "pulls"))
-            items.extend(
-                PullRequestRead(
-                    watched_repository_id=row.id,
-                    repository=repo.full_name,
-                    number=pr.number,
-                    title=pr.title,
-                    url=pr.url,
-                    author=pr.author_login,
-                    author_is_bot=pr.author_is_bot,
-                    created_at=pr.created_at,
-                    updated_at=pr.updated_at,
-                    labels=_labels(pr),
-                    is_draft=pr.is_draft,
-                    review_decision=pr.review_decision,
-                    ci_status=pr.ci_status,
-                    relationship=_relationship(pr, result.viewer_login),
-                )
-                for pr in repo.pull_requests
+    repositories: list[RepositoryCoverageRead] = []
+    for row, repo, result in _repositories_shown(reads, lambda result: result.repositories):
+        repositories.append(_coverage(row, repo, len(repo.pull_requests), "pulls"))
+        items.extend(
+            PullRequestRead(
+                watched_repository_id=row.id,
+                repository=repo.full_name,
+                number=pr.number,
+                title=pr.title,
+                url=pr.url,
+                author=pr.author_login,
+                author_is_bot=pr.author_is_bot,
+                created_at=pr.created_at,
+                updated_at=pr.updated_at,
+                labels=_labels(pr),
+                is_draft=pr.is_draft,
+                review_decision=pr.review_decision,
+                ci_status=pr.ci_status,
+                relationship=_relationship(pr, result.viewer_login),
             )
+            for pr in repo.pull_requests
+        )
     items.sort(key=lambda item: item.updated_at, reverse=True)
     items.sort(key=lambda item: _GROUP_ORDER[item.relationship])
     return PullRequestsRead(
@@ -397,39 +391,36 @@ async def list_issues(
     View `view`'s, most recently updated first. Pull Requests are never
     among them."""
     in_view = await _view_repositories(session, view)
+    github_source: GitHubSource = request.app.state.github_source
     reads = await _read_each_token(
         request,
         session,
-        _open_issues,
+        github_source.list_open_issues,
         request.app.state.github_issue_cache,
         refresh=refresh,
         in_view=in_view,
     )
     items: list[IssueRead] = []
-    repositories: list[RepositoryReadRead] = []
-    for by_github_id, result in reads.results:
-        for repo in result.repositories:
-            row = by_github_id.get(repo.github_id)
-            if row is None:
-                continue
-            repositories.append(_repository_read(row, repo, len(repo.issues), "issues"))
-            items.extend(
-                IssueRead(
-                    watched_repository_id=row.id,
-                    repository=repo.full_name,
-                    number=issue.number,
-                    title=issue.title,
-                    url=issue.url,
-                    author=issue.author_login,
-                    author_is_bot=issue.author_is_bot,
-                    assignees=list(issue.assignees),
-                    created_at=issue.created_at,
-                    updated_at=issue.updated_at,
-                    labels=_labels(issue),
-                    comment_count=issue.comment_count,
-                )
-                for issue in repo.issues
+    repositories: list[RepositoryCoverageRead] = []
+    for row, repo, _ in _repositories_shown(reads, lambda result: result.repositories):
+        repositories.append(_coverage(row, repo, len(repo.issues), "issues"))
+        items.extend(
+            IssueRead(
+                watched_repository_id=row.id,
+                repository=repo.full_name,
+                number=issue.number,
+                title=issue.title,
+                url=issue.url,
+                author=issue.author_login,
+                author_is_bot=issue.author_is_bot,
+                assignees=list(issue.assignees),
+                created_at=issue.created_at,
+                updated_at=issue.updated_at,
+                labels=_labels(issue),
+                comment_count=issue.comment_count,
             )
+            for issue in repo.issues
+        )
     items.sort(key=lambda item: item.updated_at, reverse=True)
     return IssuesRead(
         items=items,

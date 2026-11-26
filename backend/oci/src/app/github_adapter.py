@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from app.github_source import (
+    FINE_GRAINED_PREFIX,
     GitHubCiStatus,
     GitHubIssue,
     GitHubLabel,
@@ -71,7 +72,7 @@ def _token_type(token: str, response: httpx.Response) -> GitHubTokenType:
     # fine-grained tokens have permissions instead and get no such header.
     if "X-OAuth-Scopes" in response.headers:
         return "classic"
-    return "fine_grained" if token.startswith("github_pat_") else "other"
+    return "fine_grained" if token.startswith(FINE_GRAINED_PREFIX) else "other"
 
 
 _OWNER_KINDS: dict[str, GitHubOwnerKind] = {"User": "user", "Organization": "organization"}

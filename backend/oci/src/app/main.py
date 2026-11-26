@@ -35,6 +35,7 @@ from app.routers.v1 import (
     focus_sessions,
     folders,
     github,
+    github_repositories,
     github_view,
     goals,
     google,
@@ -139,6 +140,7 @@ def create_app(
     app.include_router(focus_sessions.router)
     app.include_router(focus_sessions.stats_router)
     app.include_router(github.router)
+    app.include_router(github_repositories.router)
     app.include_router(github_view.router)
     app.include_router(goals.router)
     app.include_router(google.router)
