@@ -20,14 +20,16 @@ and each tab would otherwise show the same Reminder.
 **Channel and scope.** A signed-in tab shows Reminders with the page-level
 `new Notification()` while it is open, on a supported browser, from a
 secure context. Delivery is foreground only. There is no Service Worker and
-no Web Push: a closed tab, a closed browser or a locked device gets
-nothing. Browsers without the page-level constructor (Android Chrome
+no Web Push: a closed tab or a closed browser gets nothing, and a locked
+device is unsupported. A tab in the background keeps claiming on its
+(throttled) timer, so it may still deliver, late or not at all. That is
+unsupported and not guaranteed, and the app's copy says exactly that rather
+than promising it won't arrive. Browsers without the page-level constructor (Android Chrome
 requires `ServiceWorkerRegistration.showNotification`) are unsupported; the
 tab reports the attempt as failed.
 
 **The tab asks; the server decides.** No process wakes up when a Reminder
-falls due. Each tab where delivery is allowed (the User's opt-in plus
-browser permission) calls `POST /api/v1/reminder-deliveries/claim?tz=…`
+falls due. Each tab where delivery is allowed calls `POST /api/v1/reminder-deliveries/claim?tz=…`
 when it starts, every 30 seconds, and when it becomes visible again. The
 claim reloads the User's open Tasks, works out which Reminders are due, and
 hands back a lease on each one that no other tab holds.
@@ -66,6 +68,17 @@ current is accepted. `failed` is final, since a refusing browser would
 refuse again. Repeating a report changes nothing. Each notification's
 `tag` is its ledger row, so a retry on the same device replaces the earlier
 alert instead of stacking on it.
+
+**Allowed, per User and per device.** Delivery is allowed in a tab only
+when three things hold: the User's opt-in on the server
+(`user_settings.reminder_notifications_enabled`, per User), this browser's
+own enable flag (a `localStorage` key, per device, written only by **Enable
+on this device** and cleared on log-out), and the browser's permission. So
+opting in on one device never starts notifications on another that merely
+granted permission once. **Enable on this device** sets both flags; **Turn
+off on this device** clears only the device flag; **Turn off on all
+devices** clears the User's opt-in. Storage that throws reads as "not
+enabled here".
 
 **Who may claim.** Claims and reports need a live session, and the
 existing middleware turns away a logged-out, expired or disabled User with
@@ -106,7 +119,11 @@ hours ([ADR 0010](0010-calendar-piecewise-time-axis.md)) stay a Calendar
 layout band, and the claim never reads them.
 
 - The band is two `HH:MM` wall-clock labels, read in the claiming tab's
-  zone (`tz`), the same zone that anchors all-day Tasks. It may wrap past
+  local time zone (`tz`), the same zone that anchors all-day Tasks. No zone
+  is stored with the band, so tabs in different zones (two devices, or a
+  laptop that travelled) may hold the same Reminder to different instants:
+  each holds it until the band ends on its own wall clock, and whichever
+  tab claims first delivers it, once. It may wrap past
   midnight: a start after the end ends the next day. A start equal to its
   end is refused with `422 invalid_quiet_hours`, as is a label that is not
   a time of day. The start is inside the band and the end is not.

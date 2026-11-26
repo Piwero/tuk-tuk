@@ -23,7 +23,9 @@ no touch hardware. Phone results below are Chrome's mobile emulation
 
 Delivery is foreground-only by design (ADR 0019). "Unsupported" below means
 tuk-tuk does not promise delivery there; "unverified" means nobody has
-watched it on that platform yet.
+watched it on that platform yet. A hidden tab keeps claiming, so a
+background tab may still deliver, late or not at all: that is unsupported
+and not guaranteed, and nowhere does the app say it won't arrive.
 
 Legend: **Observed** = seen in this check · **Unverified** = not yet run on
 real hardware · **Unsupported** = not promised, by design.

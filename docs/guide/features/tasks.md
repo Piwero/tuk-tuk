@@ -55,13 +55,20 @@ cards between columns as work moves. Click **List view** to switch back.
 - **Repeating tasks** move forward instead of closing. Complete "Weekly sync"
   and it moves to next week. Each finished one is recorded in history.
 - **Reminders notify only while Tuk Tuk is open.** Add them ("30 minutes
-  before"), then turn on **Settings → Reminder notifications** and pick
-  **Enable on this device**. A notification appears while a Tuk Tuk tab is
-  open; click it to open the task. A closed tab or locked phone gets nothing,
-  and a completed or deleted task never notifies.
-- **Snooze a reminder** from the card it leaves in the app: **Snooze 10
-  minutes** or **Snooze 1 hour**. It notifies once more then. The deadline
-  stays unchanged, and completing the task cancels the snooze.
+  before"), then open **Settings → Reminder notifications** and pick
+  **Enable on this device** on each device you want notified. A notification
+  appears while a Tuk Tuk tab is open; click it to open the task. A tab in
+  the background may still notify, late or not at all: that isn't supported
+  or guaranteed. A closed browser or a locked device isn't supported, and a
+  completed or deleted task never notifies. **Turn off on this device**
+  stops only this device; **Turn off on all devices** stops them all.
+- **Missed reminders** are listed at the top of Tuk Tuk when you come back:
+  ones that came due after you turned notifications on but were never shown.
+  Open the task, dismiss the entry, or snooze it.
+- **Snooze a reminder** from the card it leaves in the app, or from the
+  missed list: **Snooze 10 minutes** or **Snooze 1 hour**. It notifies once
+  more then. The deadline stays unchanged, and completing the task cancels
+  the snooze.
 - **Quiet hours hold reminders.** Set them in **Settings → Quiet hours**
   (22:00–07:00 by default; a band can run past midnight). A reminder due
   during quiet hours waits and notifies once when they end, and stays listed

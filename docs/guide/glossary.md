@@ -6,20 +6,20 @@
 
 ## Tasks
 
-| Word               | Meaning                                                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Task**           | One thing to do.                                                                                                                        |
-| **List**           | A collection of tasks.                                                                                                                  |
-| **Folder**         | Groups lists in the sidebar. Holds lists, not tasks.                                                                                    |
-| **Section**        | A stage inside a list. Also a column on the board.                                                                                      |
-| **Inbox**          | The default list. Can't be deleted.                                                                                                     |
-| **Smart List**     | A built-in view: Today, Next 7 Days, All. Calculated, not stored.                                                                       |
-| **Tag**            | A coloured label you can add to any task.                                                                                               |
-| **Priority**       | None, Low, Medium or High.                                                                                                              |
-| **Checklist item** | A line inside a task with its own tick box. Not a separate task.                                                                        |
-| **Reminder**       | "30 minutes before" style alert on a task. Notifies once, only while a Tuk Tuk tab is open and you've turned on Reminder notifications. |
-| **Quiet hours**    | A time of day when reminders wait instead of notifying, then notify once when it ends. Separate from Active hours.                      |
-| **Quick-Add**      | The one-line box that understands `#` `!` `~` `@`.                                                                                      |
+| Word               | Meaning                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Task**           | One thing to do.                                                                                                                                       |
+| **List**           | A collection of tasks.                                                                                                                                 |
+| **Folder**         | Groups lists in the sidebar. Holds lists, not tasks.                                                                                                   |
+| **Section**        | A stage inside a list. Also a column on the board.                                                                                                     |
+| **Inbox**          | The default list. Can't be deleted.                                                                                                                    |
+| **Smart List**     | A built-in view: Today, Next 7 Days, All. Calculated, not stored.                                                                                      |
+| **Tag**            | A coloured label you can add to any task.                                                                                                              |
+| **Priority**       | None, Low, Medium or High.                                                                                                                             |
+| **Checklist item** | A line inside a task with its own tick box. Not a separate task.                                                                                       |
+| **Reminder**       | "30 minutes before" style alert on a task. Notifies once, only while a Tuk Tuk tab is open and you've turned on Reminder notifications on that device. |
+| **Quiet hours**    | A time of day when reminders wait instead of notifying, then notify once when it ends. Separate from Active hours.                                     |
+| **Quick-Add**      | The one-line box that understands `#` `!` `~` `@`.                                                                                                     |
 
 ## Calendar
 
