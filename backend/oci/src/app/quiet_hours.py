@@ -11,11 +11,11 @@ This is a notification setting. Active hours, the Calendar's band (ADR
 0010), is a different setting and nothing here reads it.
 """
 
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta, tzinfo
 
-_HH_MM = re.compile(r"^\d{2}:\d{2}$")
+from app.clock_labels import is_hh_mm, minutes_of
+from app.models import UserSettings
 
 
 class InvalidQuietHoursError(ValueError):
@@ -23,12 +23,11 @@ class InvalidQuietHoursError(ValueError):
 
 
 def _minute_of_day(label: str) -> int:
-    if not _HH_MM.match(label):
+    if not is_hh_mm(label):
         raise InvalidQuietHoursError(f"{label!r} is not an HH:MM time")
-    hours, minutes = int(label[:2]), int(label[3:])
-    if hours > 23 or minutes > 59:
+    if int(label[:2]) > 23 or int(label[3:]) > 59:
         raise InvalidQuietHoursError(f"{label!r} is not a time of day")
-    return hours * 60 + minutes
+    return minutes_of(label)
 
 
 @dataclass(frozen=True)
@@ -79,3 +78,11 @@ def held_until(at: datetime, quiet: QuietHours | None, zone: tzinfo) -> datetime
     if quiet is None or not quiet.contains(at, zone):
         return None
     return quiet.end_after(at, zone)
+
+
+def user_quiet_hours(user_settings: UserSettings) -> QuietHours | None:
+    """The User's Quiet hours band, or None while it is off. Active hours
+    are never read: they shape the Calendar only."""
+    if not user_settings.quiet_hours_enabled:
+        return None
+    return QuietHours.parse(user_settings.quiet_hours_start, user_settings.quiet_hours_end)

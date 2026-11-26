@@ -2,6 +2,7 @@
 `owner_id` (issue #408)."""
 
 from datetime import UTC, date, datetime
+from enum import StrEnum
 
 from sqlalchemy import (
     JSON,
@@ -523,6 +524,23 @@ class HabitPause(OwnedMixin, Base):
     habit: Mapped[Habit] = relationship(back_populates="pauses")
 
 
+class DeliveryState(StrEnum):
+    """Where one Reminder occurrence's delivery stands in the ledger (ADR
+    0019): the one list of states, read by the claim, the missed list and
+    the API."""
+
+    # A tab holds or held the lease.
+    CLAIMED = "claimed"
+    # The browser reported display.
+    SHOWN = "shown"
+    # The browser refused to show it; final.
+    FAILED = "failed"
+    # The User asked for it again at `snoozed_until` (issue #566).
+    SNOOZED = "snoozed"
+    # The User dismissed it as a missed reminder (issue #565).
+    DISMISSED = "dismissed"
+
+
 class ReminderDelivery(OwnedMixin, Base):
     """One entry of the delivery ledger (issue #561, ADR 0019): a Reminder
     of one Task occurrence that an open tab claimed for display.
@@ -543,10 +561,7 @@ class ReminderDelivery(OwnedMixin, Base):
     offset: Mapped[str] = mapped_column(String(32))
     occurrence_due: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     fire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # "claimed" (a tab holds or held the lease), "shown" (the browser
-    # reported display), "failed" (the browser refused to show it) or
-    # "snoozed" (the User asked for it again at `snoozed_until`, issue #566).
-    # "dismissed" (the User dismissed it as a missed reminder, issue #565).
+    # A DeliveryState, stored as its string value.
     state: Mapped[str] = mapped_column(String(16), default="claimed")
     attempts: Mapped[int] = mapped_column(default=1)
     lease_token: Mapped[str] = mapped_column(String(64))
