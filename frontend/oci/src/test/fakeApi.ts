@@ -441,6 +441,8 @@ export interface FakeApiState {
     assistant: boolean;
   };
   activeHours: { enabled: boolean; start: string; end: string };
+  /** Planning window (issue #563): the capacity summary's band. */
+  planningWindow: { enabled: boolean; start: string; end: string };
   /** Gentle return (issue #548): Today collapses earlier overdue Tasks. */
   gentleReturn: boolean;
   /** Reminder notifications (issue #557): the User's delivery opt-in. */
@@ -1172,6 +1174,7 @@ export function installFakeApi({
   nowShortlist = [],
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
+  planningWindow = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
   reminderNotifications = false,
   dueReminders = [],
@@ -1270,6 +1273,8 @@ export function installFakeApi({
   /** Active hours (issue #210) -- the Calendar's double-height band.
    * Defaults to disabled, matching the backend. */
   activeHours?: { enabled: boolean; start: string; end: string };
+  /** Planning window (issue #563). Defaults to off, matching the backend. */
+  planningWindow?: { enabled: boolean; start: string; end: string };
   /** Gentle return (issue #548). Defaults to off, matching the backend. */
   gentleReturn?: boolean;
   /** Reminder notifications (issue #557). Defaults to off, matching the backend. */
@@ -1366,6 +1371,7 @@ export function installFakeApi({
     nowShortlist: nowShortlist.map((taskId) => ({ taskId })),
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
+    planningWindow: { ...planningWindow },
     gentleReturn,
     reminderNotifications,
     reminderClaims: dueReminders.map((claim) => ({ ...claim })),
@@ -3725,6 +3731,30 @@ export function installFakeApi({
         state.reminderNotifications = (body as { enabled: boolean }).enabled;
       }
       return json({ enabled: state.reminderNotifications });
+    }
+    if (url.pathname === "/api/v1/settings/planning-window") {
+      if (method === "GET") {
+        return json({ ...state.planningWindow });
+      }
+      if (method === "PUT") {
+        const input = body as { enabled: boolean; start: string; end: string };
+        const toMinutes = (label: string): number =>
+          Number(label.slice(0, 2)) * 60 + Number(label.slice(3));
+        const aligned = (label: string): boolean =>
+          /^\d\d:\d\d$/.test(label) && toMinutes(label) % 30 === 0;
+        if (
+          !aligned(input.start) ||
+          !aligned(input.end) ||
+          toMinutes(input.start) >= toMinutes(input.end)
+        ) {
+          return json(
+            { error: { code: "validation_error", message: "invalid planning window" } },
+            422,
+          );
+        }
+        state.planningWindow = { enabled: input.enabled, start: input.start, end: input.end };
+        return json({ ...state.planningWindow });
+      }
     }
     if (url.pathname === "/api/v1/settings/active-hours") {
       if (method === "GET") {

@@ -101,6 +101,14 @@ _Avoid_: Active hours (the calendar layout band), Do not disturb (the operating 
 An optional block of time a User reserves for working on a Task (issue #558): a start, a positive duration and the timezone it was planned in, plus an optional **Buffer after** — slack kept free after the block. At most one per Task, inside one local calendar day. It is not the Task's schedule: moving or removing it never moves or clears the Task's start or due date, and it is never a Reminder's anchor. Completing or advancing a recurring Task (ADR 0003) clears that occurrence's Planned work rather than carrying it to the next occurrence. On the Calendar it reads as a visibly labelled Planned work block, distinct from both Events and the Task's own schedule. Its duration is an optional estimate used only for planning and never required to capture a Task. The start is an instant and the duration is elapsed minutes, so a block across a DST change keeps its real length; the block plus its buffer may end exactly at the next local midnight, never past it. It needs no due date, and changing the Task's dates never moves it; completing a one-off Task keeps it, so a reopen finds it again. On the wire it is the Task's `planned_work` (`null` when unplanned; a read adds the computed `end`), written whole or removed with `null` on the Task PATCH; a client that never sends the field leaves it untouched.
 _Avoid_: Schedule (the Task's start/due dates), time block, appointment (an Event)
 
+**Planning window**:
+The band of each day a User plans work into (issue #563), chosen by the User in Settings and measured by the capacity summary. A per-User server-side setting kept apart from Active hours: changing either never moves the other, and Active hours never stands in for it. Off by default, prefilling 09:00–17:00; same 30-minute grid, start strictly before end, no wrap past midnight (24:00 is the day's end).
+_Avoid_: Active hours (the calendar layout band), working hours
+
+**Capacity summary**:
+A few quiet sentences in the Calendar's Day view, shown only while the Planning window is on: the time still available in the window, the time Events take, the time Planned work takes with its Buffer after included, and how many of the day's open Tasks have no estimate. Occupied time is the union of timed Event intervals and Planned work plus buffers, clipped to the window, so overlapping time is counted once and the summary says so. All-day Events are named separately and never counted as busy time. A Task's only estimate is its Planned work duration: a Task on the day without Planned work stays counted as unknown, never guessed and never inferred from Focus statistics, and Quick-Add never asks for one. No score, gauge or percentage.
+_Avoid_: Utilisation, load score
+
 ## Habits
 
 **Habit**:

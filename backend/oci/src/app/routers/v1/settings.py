@@ -69,16 +69,37 @@ class ActiveHoursSettings(BaseModel):
 
     @model_validator(mode="after")
     def _check_band(self) -> "ActiveHoursSettings":
-        for label in (self.start, self.end):
-            if not _HH_MM.match(label):
-                raise ValueError(f"{label!r} is not an HH:MM time")
-            minute = _minutes(label)
-            if not 0 <= minute <= 24 * 60:
-                raise ValueError(f"{label!r} is outside the day")
-            if minute % ACTIVE_HOURS_GRANULARITY_MINUTES != 0:
-                raise ValueError(f"{label!r} is not aligned to 30 minutes")
-        if _minutes(self.start) >= _minutes(self.end):
-            raise ValueError("Active hours must start before they end")
+        _check_day_band(self.start, self.end, "Active hours")
+        return self
+
+
+def _check_day_band(start: str, end: str, name: str) -> None:
+    """A band of one day on the 30-minute grid: start strictly before end,
+    no wrap past midnight (24:00 is the day's end)."""
+    for label in (start, end):
+        if not _HH_MM.match(label):
+            raise ValueError(f"{label!r} is not an HH:MM time")
+        minute = _minutes(label)
+        if not 0 <= minute <= 24 * 60:
+            raise ValueError(f"{label!r} is outside the day")
+        if minute % ACTIVE_HOURS_GRANULARITY_MINUTES != 0:
+            raise ValueError(f"{label!r} is not aligned to 30 minutes")
+    if _minutes(start) >= _minutes(end):
+        raise ValueError(f"{name} must start before they end")
+
+
+class PlanningWindowSettings(BaseModel):
+    """Planning window (issue #563): the band of each day the capacity
+    summary measures. Same shape and grid as Active hours, stored apart so
+    changing one never moves the other."""
+
+    enabled: bool
+    start: str
+    end: str
+
+    @model_validator(mode="after")
+    def _check_band(self) -> "PlanningWindowSettings":
+        _check_day_band(self.start, self.end, "The planning window")
         return self
 
 
@@ -153,6 +174,35 @@ async def update_active_hours_settings(
     user_settings.active_hours_end = payload.end
     await session.commit()
     return _active_hours(user_settings)
+
+
+def _planning_window(user_settings: UserSettings) -> PlanningWindowSettings:
+    return PlanningWindowSettings(
+        enabled=user_settings.planning_window_enabled,
+        start=user_settings.planning_window_start,
+        end=user_settings.planning_window_end,
+    )
+
+
+@router.get("/planning-window")
+async def read_planning_window_settings(
+    user_settings: CurrentUserSettings,
+) -> PlanningWindowSettings:
+    return _planning_window(user_settings)
+
+
+@router.put("/planning-window")
+async def update_planning_window_settings(
+    payload: PlanningWindowSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> PlanningWindowSettings:
+    """The planning window (issue #563) is the User's own choice, never
+    derived from Active hours: Active hours shapes the Calendar grid, this
+    band is only what the capacity summary measures."""
+    user_settings.planning_window_enabled = payload.enabled
+    user_settings.planning_window_start = payload.start
+    user_settings.planning_window_end = payload.end
+    await session.commit()
+    return _planning_window(user_settings)
 
 
 class GentleReturnSettings(BaseModel):

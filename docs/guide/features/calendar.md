@@ -45,6 +45,10 @@ You can connect several Google accounts, such as work and personal.
 - **Declined events are hidden.** Invites you haven't answered still show.
 - **Active hours:** **Settings → Active hours** makes your working hours
   taller and the rest of the day compact, so short tasks are easier to read.
+- **Planning window:** turn it on in **Settings → Planning window** and the Day
+  view says how much of that window is still free. It counts events and planned
+  work (with buffers) once, even when they overlap. All-day events are listed
+  but not counted, and tasks without planned work show as "no estimate".
 - If Google access expires, a **Reconnect** banner appears. Your tasks are not affected.
 - Events show in your own time zone. Tasks keep the time zone you scheduled them in.
 
