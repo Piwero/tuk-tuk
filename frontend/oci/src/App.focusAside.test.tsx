@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -21,6 +21,68 @@ function session(day: string, minutes: number): ReturnType<typeof fakeFocusSessi
     ended_at: new Date(start.getTime() + minutes * 60_000).toISOString(),
   });
 }
+
+it("offers optional external accountability without sending Task details or booking", async () => {
+  const api = installFakeApi({ tasks: [fakeTask("Private report")], assistantAvailable: false });
+  window.history.replaceState(null, "", "/focus");
+  render(<App />);
+
+  const entry = await screen.findByText("Work alongside someone (optional)");
+  expect(entry.closest("details")).not.toHaveAttribute("open");
+  fireEvent.click(entry);
+  const link = screen.getByRole("link", { name: "Open Focusmate (external, new tab)" });
+  expect(link).toHaveAttribute("href", "https://www.focusmate.com/");
+  expect(link).toHaveAttribute("target", "_blank");
+  expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  expect(link).toHaveAttribute("referrerpolicy", "no-referrer");
+  expect(
+    screen.getByText(/leaves Tuk Tuk.*No Task details are sent.*no session is booked/),
+  ).toBeVisible();
+  expect(screen.getByText(/Without video.*someone you already know.*continue alone/)).toBeVisible();
+  expect(api.requests.every((request) => request.url.startsWith("/api/v1/"))).toBe(true);
+  expect(api.requests.filter((request) => request.method !== "GET")).toEqual([]);
+  expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+});
+
+it("hides accountability with the existing Focus setting, including direct navigation", async () => {
+  installFakeApi({
+    sectionSettings: { calendar: true, goals: true, habits: true, focus: false, assistant: true },
+  });
+  window.history.replaceState(null, "", "/focus");
+  render(<App />);
+  await waitFor(() => expect(window.location.pathname).not.toBe("/focus"));
+  expect(screen.queryByText("Work alongside someone (optional)")).not.toBeInTheDocument();
+});
+
+it("keeps manual linked Focus intact when accountability is dismissed, running, or paused", async () => {
+  const api = installFakeApi({
+    tasks: [fakeTask("Private report", { due_date: "2026-07-03T00:00:00Z", is_all_day: true })],
+    assistantAvailable: false,
+  });
+  window.history.replaceState(null, "", "/focus");
+  render(<App />);
+  const list = await screen.findByRole("list", { name: "Today's Tasks" });
+  fireEvent.click(await within(list).findByRole("button", { name: "Private report" }));
+  const entry = screen.getByText("Work alongside someone (optional)");
+  fireEvent.click(entry);
+  fireEvent.click(entry);
+  expect(entry.closest("details")).not.toHaveAttribute("open");
+  expect(screen.getByRole("button", { name: "Linked: Private report" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Start" }));
+  expect(screen.queryByText("Work alongside someone (optional)")).not.toBeInTheDocument();
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
+  fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+  expect(screen.getByText("Paused")).toBeInTheDocument();
+  expect(screen.queryByText("Work alongside someone (optional)")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+  fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+  await vi.waitFor(() =>
+    expect(
+      api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/focus-sessions")?.body,
+    ).toMatchObject({ task_id: api.tasks[0]!.id }),
+  );
+  expect(api.requests.some((r) => r.url.includes("assistant/chat"))).toBe(false);
+});
 
 it("lists today's Tasks; clicking one links it and the headline matches", async () => {
   const api = installFakeApi({
@@ -45,7 +107,7 @@ it("lists today's Tasks; clicking one links it and the headline matches", async 
   ).toBe(true);
 
   fireEvent.click(screen.getByRole("button", { name: "Start" }));
-  await vi.advanceTimersByTimeAsync(60_000);
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
   fireEvent.click(screen.getByRole("button", { name: "Finish" }));
   await vi.waitFor(() =>
     expect(
