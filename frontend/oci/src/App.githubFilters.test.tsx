@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -43,7 +43,7 @@ function shownTitles(): string[] {
   const panel = screen.getByRole("tabpanel");
   return within(panel)
     .queryAllByRole("listitem")
-    .map((row) => within(row).getAllByRole("link")[0].textContent ?? "");
+    .map((row) => within(row).getAllByRole("link")[0]?.textContent ?? "");
 }
 
 function optionsOf(select: HTMLElement): string[] {
@@ -221,6 +221,32 @@ describe("GitHub view › filters", () => {
       ["Mine 0", "No Pull Requests here match the filters."],
       ["Others 1", "Their fix"],
     ]);
+  });
+
+  it("forgets the filters when the User leaves the view and comes back", async () => {
+    installFakeApi({
+      ...watchedDotfiles(),
+      githubPullRequests: [
+        fakeGitHubPullRequest(2, "Parser", { author: "monalisa", is_draft: true }),
+        fakeGitHubPullRequest(1, "Fix", { author: "octocat" }),
+      ],
+    });
+    const user = await openGitHub();
+    await screen.findByRole("link", { name: "Parser" });
+    await user.selectOptions(screen.getByRole("combobox", { name: "Author" }), "octocat");
+    await user.click(screen.getByRole("checkbox", { name: "Hide drafts" }));
+    expect(shownTitles()).toEqual(["Fix"]);
+
+    await user.click(screen.getByRole("button", { name: "Account menu" }));
+    await user.click(await screen.findByRole("menuitem", { name: "My account" }));
+    await waitFor(() => expect(screen.queryByRole("tablist", { name: "GitHub" })).toBeNull());
+    const nav = screen.getByRole("navigation", { name: "GitHub" });
+    await user.click(within(nav).getByRole("link", { name: "GitHub" }));
+
+    await screen.findByRole("link", { name: "Parser" });
+    expect(screen.getByRole("combobox", { name: "Author" })).toHaveValue("");
+    expect(screen.getByRole("checkbox", { name: "Hide drafts" })).not.toBeChecked();
+    expect(shownTitles()).toEqual(["Parser", "Fix"]);
   });
 
   it("says no GitHub Issues match when the filters leave none", async () => {
