@@ -594,6 +594,9 @@ export interface FakeApiState {
   /** How many more open GitHub Issues each repository (by `owner/name`)
    * has on GitHub beyond those returned. */
   githubIssueOverflow: Record<string, number>;
+  /** When the GitHub view's reads say their data was fetched from GitHub
+   * (#583); null for the moment of each read. */
+  githubFetchedAt: string | null;
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
@@ -1360,6 +1363,7 @@ export function installFakeApi({
   githubPullRequestOverflow = {},
   githubIssues = [],
   githubIssueOverflow = {},
+  githubFetchedAt = null,
   events = [],
   eventFailures = [],
   standupEntries = [],
@@ -1447,6 +1451,7 @@ export function installFakeApi({
   githubPullRequestOverflow?: Record<string, number>;
   githubIssues?: FakeGitHubIssue[];
   githubIssueOverflow?: Record<string, number>;
+  githubFetchedAt?: string | null;
   /** Google Calendar Events (issue #107) the calendar's own read-only
    * endpoint answers with — never filtered by calendar `enabled` here,
    * since that filtering is the backend's job (exercised in the backend
@@ -1600,6 +1605,7 @@ export function installFakeApi({
       labels: issue.labels.map((label) => ({ ...label })),
     })),
     githubIssueOverflow: { ...githubIssueOverflow },
+    githubFetchedAt,
     events: events.map((event) => ({ ...event })),
     eventFailures: eventFailures.map((failure) => ({ ...failure })),
     standupEntries: standupEntries.map((entry) => ({
@@ -1980,7 +1986,7 @@ export function installFakeApi({
             expires_at: token.expires_at,
             expires_soon: token.expires_soon,
           })),
-        fetched_at: new Date().toISOString(),
+        fetched_at: state.githubFetchedAt ?? new Date().toISOString(),
         stale: false,
       });
     };

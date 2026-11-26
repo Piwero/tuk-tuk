@@ -13,6 +13,7 @@ import {
 } from "../api";
 import { formatTimeAgo } from "../dates";
 import { pathForSettingsTab } from "../routes";
+import { GitHubFreshness } from "./GitHubFreshness";
 import { GitHubTokenBanners } from "./GitHubTokenBanners";
 
 /** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
@@ -201,6 +202,7 @@ function GitHubRead<Item>({
   }
   return (
     <>
+      <GitHubFreshness fetchedAt={read.fetched_at} />
       <GitHubTokenBanners tokens={read.tokens} onOpenSettings={onOpenSettings} />
       {render(read)}
       <OverflowLinks repositories={read.repositories} />
