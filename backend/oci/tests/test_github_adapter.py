@@ -426,3 +426,176 @@ class TestListOpenPullRequests:
 
         with pytest.raises(TransientGitHubSourceError):
             await adapter(handle).list_open_pull_requests(TOKEN, [DOTFILES])
+
+
+def issue_node(number: int, **overrides: Any) -> dict[str, Any]:
+    """One GitHub Issue node as GitHub's GraphQL API returns it."""
+    node: dict[str, Any] = {
+        "__typename": "Issue",
+        "number": number,
+        "title": f"Issue {number}",
+        "url": f"https://github.com/octocat/dotfiles/issues/{number}",
+        "createdAt": "2026-11-20T09:00:00Z",
+        "updatedAt": "2026-11-21T10:30:00Z",
+        "author": {"__typename": "User", "login": "hubot"},
+        "assignees": {"nodes": []},
+        "labels": {"nodes": []},
+        "comments": {"totalCount": 0},
+    }
+    return {**node, **overrides}
+
+
+def issues_repository_node(
+    github_id: int, full_name: str, nodes: list[dict[str, Any]], total: int | None = None
+) -> dict[str, Any]:
+    return {
+        "databaseId": github_id,
+        "nameWithOwner": full_name,
+        "url": f"https://github.com/{full_name}",
+        "issues": {"totalCount": len(nodes) if total is None else total, "nodes": nodes},
+    }
+
+
+def one_issue(node: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "viewer": {"login": "octocat"},
+        "r0": issues_repository_node(1, "octocat/dotfiles", [node]),
+    }
+
+
+class TestListOpenIssues:
+    async def test_all_repositories_are_read_in_one_query_with_an_alias_each(self) -> None:
+        requests: list[dict[str, Any]] = []
+        answer = graphql(
+            {
+                "viewer": {"login": "octocat"},
+                "r0": issues_repository_node(1, "octocat/dotfiles", [issue_node(1)]),
+                "r1": issues_repository_node(2, "acme/api", [issue_node(2)], total=130),
+            }
+        )
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            requests.append(json.loads(request.content))
+            return answer(request)
+
+        result = await adapter(handle).list_open_issues(TOKEN, [DOTFILES, API])
+
+        [sent] = requests
+        assert sent["variables"] == {
+            "owner0": "octocat",
+            "name0": "dotfiles",
+            "owner1": "acme",
+            "name1": "api",
+        }
+        assert "first: 100" in sent["query"]
+        assert [(r.github_id, r.full_name, r.total_count) for r in result.repositories] == [
+            (1, "octocat/dotfiles", 1),
+            (2, "acme/api", 130),
+        ]
+        assert result.repositories[1].url == "https://github.com/acme/api"
+
+    async def test_a_github_issue_is_translated(self) -> None:
+        node = issue_node(
+            12,
+            title="Zsh prompt is slow",
+            assignees={"nodes": [{"login": "octocat"}, {"login": "monalisa"}]},
+            labels={"nodes": [{"name": "bug", "color": "d73a4a"}]},
+            comments={"totalCount": 4},
+        )
+
+        result = await adapter(graphql(one_issue(node))).list_open_issues(TOKEN, [DOTFILES])
+
+        [issue] = result.repositories[0].issues
+        assert issue.number == 12
+        assert issue.title == "Zsh prompt is slow"
+        assert issue.url == "https://github.com/octocat/dotfiles/issues/12"
+        assert issue.author_login == "hubot"
+        assert issue.author_is_bot is False
+        assert issue.assignees == ("octocat", "monalisa")
+        assert issue.labels == (GitHubLabel(name="bug", color="d73a4a"),)
+        assert issue.comment_count == 4
+        assert issue.created_at == datetime(2026, 11, 20, 9, 0, tzinfo=UTC)
+        assert issue.updated_at == datetime(2026, 11, 21, 10, 30, tzinfo=UTC)
+
+    async def test_pull_requests_in_githubs_issue_listing_are_left_out(self) -> None:
+        # GitHub counts every Pull Request as an issue; none may surface.
+        pull_request = issue_node(
+            2, __typename="PullRequest", url="https://github.com/octocat/dotfiles/pull/2"
+        )
+        data = {
+            "viewer": {"login": "octocat"},
+            "r0": issues_repository_node(1, "octocat/dotfiles", [issue_node(1), pull_request]),
+        }
+
+        result = await adapter(graphql(data)).list_open_issues(TOKEN, [DOTFILES])
+
+        assert [issue.number for issue in result.repositories[0].issues] == [1]
+
+    @pytest.mark.parametrize(
+        ("author", "is_bot"),
+        [
+            ({"__typename": "Bot", "login": "renovate"}, True),
+            ({"__typename": "User", "login": "github-actions[bot]"}, True),
+            ({"__typename": "User", "login": "hubot"}, False),
+        ],
+    )
+    async def test_bot_authors_are_detected(self, author: dict[str, str], is_bot: bool) -> None:
+        data = one_issue(issue_node(1, author=author))
+
+        result = await adapter(graphql(data)).list_open_issues(TOKEN, [DOTFILES])
+
+        assert result.repositories[0].issues[0].author_is_bot is is_bot
+
+    async def test_a_deleted_author_has_no_login(self) -> None:
+        data = one_issue(issue_node(1, author=None))
+
+        result = await adapter(graphql(data)).list_open_issues(TOKEN, [DOTFILES])
+
+        [issue] = result.repositories[0].issues
+        assert (issue.author_login, issue.author_is_bot) == (None, False)
+
+    async def test_a_repository_the_token_can_no_longer_read_is_left_out(self) -> None:
+        data = {
+            "viewer": {"login": "octocat"},
+            "r0": None,
+            "r1": issues_repository_node(2, "acme/api", [issue_node(2)]),
+        }
+        errors = [{"type": "NOT_FOUND", "path": ["r0"], "message": "Could not resolve"}]
+
+        result = await adapter(graphql(data, errors)).list_open_issues(TOKEN, [DOTFILES, API])
+
+        assert [r.full_name for r in result.repositories] == ["acme/api"]
+
+    async def test_a_graphql_rate_limit_is_transient(self) -> None:
+        errors = [{"type": "RATE_LIMITED", "message": "API rate limit exceeded"}]
+
+        with pytest.raises(TransientGitHubSourceError):
+            await adapter(graphql({}, errors)).list_open_issues(TOKEN, [DOTFILES])
+
+    async def test_bad_credentials_are_terminal(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"message": "Bad credentials"})
+
+        with pytest.raises(TerminalGitHubSourceError):
+            await adapter(handle).list_open_issues(TOKEN, [DOTFILES])
+
+    @pytest.mark.parametrize(
+        ("status", "headers"),
+        [(403, {"x-ratelimit-remaining": "0"}), (429, {"retry-after": "60"}), (502, {})],
+        ids=["rate limit", "secondary rate limit", "server error"],
+    )
+    async def test_rate_limits_and_server_errors_are_transient(
+        self, status: int, headers: dict[str, str]
+    ) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(status, json={"message": "nope"}, headers=headers)
+
+        with pytest.raises(TransientGitHubSourceError):
+            await adapter(handle).list_open_issues(TOKEN, [DOTFILES])
+
+    async def test_a_network_failure_is_transient(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("down", request=request)
+
+        with pytest.raises(TransientGitHubSourceError):
+            await adapter(handle).list_open_issues(TOKEN, [DOTFILES])
