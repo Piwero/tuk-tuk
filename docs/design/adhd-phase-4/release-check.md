@@ -68,9 +68,9 @@ but it means mouse-pointer use was **not** exercised below the fold.
 
 ## Gate status
 
-**Not met.** One required check failed in a way this check did not fix, and
-several required checks are unverified. See **Open failures** and
-**Unverified**. #575 (human evaluation) has not been run and is a separate gate.
+**Not met.** Both observed zoom failures were fixed and rechecked in the
+follow-up below, but required checks remain unverified. See **Zoom follow-up**
+and **Unverified**. #575 (human evaluation) has not been run and is a separate gate.
 
 ## Observed passes
 
@@ -138,7 +138,49 @@ guard tests and the P4 App tests pass after the fixes.
    `summary` gets the 44 px tap-target floor. Re-measured at 390x844 and
    195x422: no brain-dump control under 44 px, no overflow.
 
-## Open failures
+## Zoom follow-up
+
+User requested both hosting-surface fixes on 2026-11-26. Integration base
+`4f9e38c`. Same isolated stack and fake provider, fresh synthetic Task, same
+Chrome 159 and agent-browser 0.27.0. No real provider or private data.
+
+Runnable browser regression check: `evidence/zoom-check.js`. Run after opening
+a Task detail, then on `/assistant`:
+
+```sh
+agent-browser set viewport 195 422 2
+agent-browser eval --stdin < docs/design/adhd-phase-4/evidence/zoom-check.js
+```
+
+Both checks failed before changing CSS: Task sheet `203 > 179` px (earlier
+fixture `213 > 179`); Assistant main `281 > 195` px, Send's right edge 281 px.
+The check throws on host horizontal overflow or composer controls outside it.
+
+Fixes: Task detail uses a shrinkable grid column, title form can shrink,
+description's grid can shrink and long text wraps. Property rows stack at
+360px and below rather than squeezing values beside the fixed label column.
+Assistant composer wraps, and its input can shrink. No overflow was hidden.
+
+Rechecked in dark/reduced-motion media at both sizes, including the Suggestion
+panel open. Task sheet `scrollWidth == clientWidth == 179` at 195x422 DPR 2,
+`374 == 374` at 390x844 DPR 1. Assistant main `180 == 180` and `390 == 390`
+respectively. At the narrow size the input's right edge was 164 px, Send's
+69.3 px; input → Tab reached Send with a visible 3px ring and 44px height.
+Screenshots were captured and inspected: `evidence/zoom200-task-host-after.png`
+and `evidence/zoom200-chat-host-after.png`. Existing single-line editable title
+inputs scroll their own text as expected; no host horizontal scrolling remains.
+
+Follow-up checks: focused Vitest run (the three P4 App suites, tap-target,
+button, icon-button, Phase 3 style and reduced-motion guards) passed 8 files /
+60 tests. `npm run build` passed. `npm run lint` exited 0 with 11 existing
+warnings outside the changed CSS. The browser assertion was red on both hosts
+before the fix and green afterwards. No test framework was added.
+
+This is still the **195x422 CSS viewport / DPR 2 layout equivalent**, not a real
+browser text-zoom setting, OS font scaling or physical phone. All unverified
+items below remain unverified. The overall release gate is not declared passed.
+
+### Original failures (resolved above)
 
 1. **Task detail sheet scrolls sideways at 200% zoom (not P4 code).** At
    195x422 the `aside.task-detail` scroll width is 213 px against a 179 px
@@ -148,12 +190,11 @@ guard tests and the P4 App tests pass after the fixes.
    (document) does not scroll; the sheet does, so the Suggestions content
    sits inside a horizontally scrolling sheet at 200% on a phone. This
    breaks the "no horizontal page scroll / let content grow rather than clip"
-   contract for the new flow's host. Reported to the parent, not fixed here.
-   Owner needs to decide whether to fix the existing property rows.
+   contract for the new flow's host. Initially reported to the parent; fixed in the follow-up above.
 2. **Assistant page chat input overflows at 200% (not P4 code).** At 195x422
    `Describe your day` and its Send button extend past the main column
    (right edge 281 vs 180). This is the existing text chat that sits above the
-   brain-dump panel on `/assistant`. Reported, not fixed.
+   brain-dump panel on `/assistant`. Initially reported; fixed above.
 
 ## Unverified
 
@@ -207,10 +248,10 @@ Nothing below was run. None of it may be reported as passing.
 | #536 Required states                                 | Observed, except in-flight cancel and Back navigation (unverified)                                    |
 | Keyboard, focus, names, order, errors, announcements | Observed pass in Chrome; screen-reader behaviour unverified                                           |
 | Phone, dark, reduced motion, 44px targets            | Observed pass on the new surfaces                                                                     |
-| 200% text zoom, no horizontal scroll                 | **Failure (existing code)** in the Task detail sheet and Assistant chat; new panels pass              |
+| 200% text zoom, no horizontal scroll                 | Observed pass after follow-up fixes at zoom-equivalent viewport; true text zoom unverified            |
 | Dialog containment                                   | Not applicable as built (inline panels); unconfirmed                                                  |
 | Real devices, other browsers, screen readers         | Unverified                                                                                            |
 
-Because the 200% check failed on a surface that hosts the new flow, and
-screen-reader and real-device checks are unverified, this check does **not**
-declare the release gate passed.
+Both observed host-overflow failures are resolved. Because screen-reader,
+real-device, true text-zoom and other required checks remain unverified,
+this check does **not** declare the release gate passed.
