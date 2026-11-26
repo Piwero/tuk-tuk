@@ -1,5 +1,6 @@
 import "./GitHubFilterBar.css";
 
+import type { GitHubTab } from "../api";
 import { type Filterable, type GitHubFilters, githubFilterChoices } from "../githubFilters";
 
 /** One choice among the values present in the results, or none. */
@@ -43,7 +44,7 @@ export function GitHubFilterBar({
   onChange,
 }: {
   /** Which tab the controls narrow: only GitHub Issues have assignees. */
-  tab: "pull-requests" | "issues";
+  tab: GitHubTab;
   /** The tab's unfiltered results: the choices come from them. */
   items: Filterable[];
   filters: GitHubFilters;
@@ -75,7 +76,7 @@ export function GitHubFilterBar({
           onChange={(assignee) => onChange({ ...filters, assignee })}
         />
       )}
-      {tab === "pull-requests" && (
+      {tab === "pull_requests" && (
         <label className="github-filter-toggle">
           <input
             type="checkbox"

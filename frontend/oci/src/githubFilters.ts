@@ -1,4 +1,4 @@
-import type { GitHubIssue, GitHubPullRequest } from "./api";
+import type { GitHubIssue, GitHubPullRequest, RepositoryViewSavedOptions } from "./api";
 
 /** The GitHub view's filter controls (#585): which of the returned items
  * to show. Applied in the browser over the read, so they never reach the
@@ -26,6 +26,30 @@ export const NO_GITHUB_FILTERS: GitHubFilters = {
   hideDrafts: false,
   hideBots: false,
 };
+
+/** The filters a Repository View saved (#580). */
+export function filtersOf(saved: RepositoryViewSavedOptions): GitHubFilters {
+  return {
+    author: saved.author,
+    label: saved.label,
+    assignee: saved.assignee,
+    hideDrafts: saved.hide_drafts,
+    hideBots: saved.hide_bots,
+  };
+}
+
+/** `filters` as a Repository View saves them. */
+export function savedFilters(
+  filters: GitHubFilters,
+): Omit<RepositoryViewSavedOptions, "active_tab"> {
+  return {
+    author: filters.author,
+    label: filters.label,
+    assignee: filters.assignee,
+    hide_drafts: filters.hideDrafts,
+    hide_bots: filters.hideBots,
+  };
+}
 
 /** Anything the filters can narrow: a Pull Request or a GitHub Issue. */
 export type Filterable =

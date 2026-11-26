@@ -124,10 +124,10 @@ interface SidebarProps {
   onSelectGitHub: () => void;
   /** The User's Repository Views (#580), nested under GitHub in this
    * order, with "New view" to name another. */
-  repositoryViews?: RepositoryView[];
-  selectedRepositoryViewId?: number | null;
-  onSelectRepositoryView?: (viewId: number) => void;
-  onCreateRepositoryView?: (name: string) => Promise<void>;
+  repositoryViews: RepositoryView[];
+  selectedRepositoryViewId: number | null;
+  onSelectRepositoryView: (viewId: number) => void;
+  onCreateRepositoryView: (name: string) => Promise<void>;
   onSelect: (listId: number) => void;
   onSelectFolder: (folderId: number) => void;
   onSelectTag: (tagId: number) => void;
@@ -467,10 +467,10 @@ export function Sidebar({
   focusEnabled,
   githubSelected,
   onSelectGitHub,
-  repositoryViews = [],
-  selectedRepositoryViewId = null,
-  onSelectRepositoryView = () => {},
-  onCreateRepositoryView = async () => {},
+  repositoryViews,
+  selectedRepositoryViewId,
+  onSelectRepositoryView,
+  onCreateRepositoryView,
   assistantSelected,
   assistantAvailable,
   onSelectAssistant,

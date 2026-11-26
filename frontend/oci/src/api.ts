@@ -964,17 +964,26 @@ export function fetchGitHubIssues(options: GitHubReadOptions = {}): Promise<GitH
 /** A Repository View (#580): a named subset of the User's Watched
  * Repositories, listed under GitHub in the sidebar by `sort_order`, with
  * its saved filters and active tab. */
-export interface RepositoryView {
+export interface RepositoryView extends RepositoryViewSavedOptions {
   id: number;
   name: string;
   sort_order: number;
   watched_repository_ids: number[];
+}
+
+/** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
+export type GitHubTab = "pull_requests" | "issues";
+
+/** What a Repository View remembers of how it was left (#580, #585): its
+ * author, label and assignee filters, hide drafts, hide bots and the
+ * active tab. */
+export interface RepositoryViewSavedOptions {
   author: string | null;
   label: string | null;
   assignee: string | null;
   hide_drafts: boolean;
   hide_bots: boolean;
-  active_tab: "pull_requests" | "issues";
+  active_tab: GitHubTab;
 }
 
 export type RepositoryViewChanges = Partial<Omit<RepositoryView, "id">>;

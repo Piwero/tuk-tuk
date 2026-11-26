@@ -9,21 +9,19 @@ import {
   type GitHubPullRequest,
   type GitHubReadOptions,
   type GitHubRepositoryRead,
+  type GitHubTab,
   type GitHubViewRead,
   type PullRequestRelationship,
 } from "../api";
 import { formatTimeAgo } from "../dates";
 import { applyGitHubFilters, type GitHubFilters } from "../githubFilters";
-import { pathForSettingsTab } from "../routes";
 import { GitHubFilterBar } from "./GitHubFilterBar";
 import { GitHubFreshness, GitHubStaleNotice } from "./GitHubFreshness";
+import { GitHubSettingsLink } from "./GitHubSettingsLink";
 import { GitHubTokenBanners } from "./GitHubTokenBanners";
 
-/** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
-export type GitHubTab = "pull-requests" | "issues";
-
 const TABS: { tab: GitHubTab; label: string }[] = [
-  { tab: "pull-requests", label: "Pull Requests" },
+  { tab: "pull_requests", label: "Pull Requests" },
   { tab: "issues", label: "GitHub Issues" },
 ];
 
@@ -158,7 +156,7 @@ export function GitHubView({
         ))}
       </div>
       <div role="tabpanel" id={`github-panel-${tab}`} aria-labelledby={`github-tab-${tab}`}>
-        {tab === "pull-requests" ? (
+        {tab === "pull_requests" ? (
           <GitHubRead
             key={tab}
             load={loadPullRequests}
@@ -166,7 +164,7 @@ export function GitHubView({
             render={(read) => (
               <>
                 <GitHubFilterBar
-                  tab="pull-requests"
+                  tab="pull_requests"
                   items={read.items}
                   filters={filters}
                   onChange={setFilters}
@@ -253,15 +251,9 @@ function GitHubRead<Item>({
     return (
       <div className="github-empty">
         <p>You aren’t watching any repositories yet.</p>
-        <a
-          href={pathForSettingsTab("github")}
-          onClick={(event) => {
-            event.preventDefault();
-            onOpenSettings();
-          }}
-        >
+        <GitHubSettingsLink onOpenSettings={onOpenSettings}>
           Pick Watched Repositories
-        </a>
+        </GitHubSettingsLink>
       </div>
     );
   }

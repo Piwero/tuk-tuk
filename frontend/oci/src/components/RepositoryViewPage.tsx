@@ -5,53 +5,26 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   fetchWatchedRepositories,
+  type GitHubTab,
   type RepositoryView,
   type RepositoryViewChanges,
+  type RepositoryViewSavedOptions,
   type WatchedRepository,
 } from "../api";
-import { type GitHubFilters, NO_GITHUB_FILTERS } from "../githubFilters";
-import { pathForSettingsTab } from "../routes";
+import { filtersOf, type GitHubFilters, NO_GITHUB_FILTERS, savedFilters } from "../githubFilters";
 import type { RepositoryViews } from "../useRepositoryViews";
-import { type GitHubTab, GitHubView } from "./GitHubView";
-
-const TAB_OF: Record<RepositoryView["active_tab"], GitHubTab> = {
-  pull_requests: "pull-requests",
-  issues: "issues",
-};
-
-const ACTIVE_TAB_OF: Record<GitHubTab, RepositoryView["active_tab"]> = {
-  "pull-requests": "pull_requests",
-  issues: "issues",
-};
+import { GitHubSettingsLink } from "./GitHubSettingsLink";
+import { GitHubView } from "./GitHubView";
 
 /** What Reset puts back: no filters, on the Pull Requests tab. */
-const NO_SAVED_OPTIONS: RepositoryViewChanges = {
-  author: null,
-  label: null,
-  assignee: null,
-  hide_drafts: false,
-  hide_bots: false,
+const NO_SAVED_OPTIONS: RepositoryViewSavedOptions = {
+  ...savedFilters(NO_GITHUB_FILTERS),
   active_tab: "pull_requests",
 };
 
-function filtersOf(view: RepositoryView): GitHubFilters {
-  return {
-    author: view.author,
-    label: view.label,
-    assignee: view.assignee,
-    hideDrafts: view.hide_drafts,
-    hideBots: view.hide_bots,
-  };
-}
-
 function hasSavedOptions(view: RepositoryView): boolean {
-  return (
-    view.author !== null ||
-    view.label !== null ||
-    view.assignee !== null ||
-    view.hide_drafts ||
-    view.hide_bots ||
-    view.active_tab !== "pull_requests"
+  return (Object.keys(NO_SAVED_OPTIONS) as (keyof RepositoryViewSavedOptions)[]).some(
+    (option) => view[option] !== NO_SAVED_OPTIONS[option],
   );
 }
 
@@ -62,7 +35,7 @@ export function AllWatchedGitHubView({
 }: {
   onOpenSettings: () => void;
 }): React.JSX.Element {
-  const [tab, setTab] = useState<GitHubTab>("pull-requests");
+  const [tab, setTab] = useState<GitHubTab>("pull_requests");
   const [filters, setFilters] = useState<GitHubFilters>(NO_GITHUB_FILTERS);
   return (
     <GitHubView
@@ -121,32 +94,18 @@ export function RepositoryViewPage({
       {empty && !editing ? (
         <div className="github-empty">
           <p>This view has no repositories.</p>
-          <a
-            href={pathForSettingsTab("github")}
-            onClick={(event) => {
-              event.preventDefault();
-              onOpenSettings();
-            }}
-          >
+          <GitHubSettingsLink onOpenSettings={onOpenSettings}>
             Pick Watched Repositories in Settings
-          </a>
+          </GitHubSettingsLink>
         </div>
       ) : (
         !empty && (
           <GitHubView
             viewId={view.id}
-            tab={TAB_OF[view.active_tab]}
-            onTabChange={(tab) => save({ active_tab: ACTIVE_TAB_OF[tab] })}
+            tab={view.active_tab}
+            onTabChange={(tab) => save({ active_tab: tab })}
             filters={filtersOf(view)}
-            onFiltersChange={(filters) =>
-              save({
-                author: filters.author,
-                label: filters.label,
-                assignee: filters.assignee,
-                hide_drafts: filters.hideDrafts,
-                hide_bots: filters.hideBots,
-              })
-            }
+            onFiltersChange={(filters) => save(savedFilters(filters))}
             onOpenSettings={onOpenSettings}
           />
         )
