@@ -43,6 +43,7 @@ import {
   rescheduledToDay,
 } from "./dates";
 import { FocusRunProvider, useStartPomo } from "./focusRunContext";
+import { MissedReminders } from "./components/MissedReminders";
 import { DueReminderNotifier, ReminderDeliveryProvider } from "./reminderDelivery";
 import { groupTodayTasks, type GroupBy, type SortBy } from "./grouping";
 import {
@@ -1620,6 +1621,7 @@ export function App({
                   </div>
                   {/* Full-width row under the header: only .view-controls takes the
                   right-hand column of .main-chrome on a phone. */}
+                  <MissedReminders onOpenTask={openRemindedTask} />
                   {showHabitStrip && <HabitStrip habits={todayHabits} />}
                   {smartView === "today" && !completedMode && (
                     <NowPanel

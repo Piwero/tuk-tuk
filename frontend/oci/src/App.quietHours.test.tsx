@@ -164,3 +164,34 @@ describe("Quiet hours deferred", () => {
     expect(screen.queryByRole("region", { name: "Quiet hours deferred" })).not.toBeInTheDocument();
   });
 });
+
+describe("Reminder panels", () => {
+  it("stacks the quiet hours panel with delivered reminders instead of overlapping them", async () => {
+    const shown = fakeTask("Water plants", {
+      due_date: "2026-11-10T21:55:00Z",
+      reminders: ["PT0S"],
+    });
+    const held = fakeTask("Call the dentist", {
+      due_date: "2026-11-10T23:00:00Z",
+      reminders: ["PT0S"],
+    });
+    installFakeApi({
+      googleConfigured: false,
+      reminderNotifications: true,
+      tasks: [shown, held],
+      dueReminders: [fakeReminderClaim(shown, "PT0S")],
+      heldReminders: [fakeHeldReminder(held, "PT0S")],
+      quietUntil: "2026-11-11T07:00:00Z",
+    });
+    const notifications = installFakeNotifications({ permission: "granted" });
+    render(<App />);
+
+    const deferred = await screen.findByRole("region", { name: "Quiet hours deferred" });
+    await waitFor(() => expect(notifications.shown).toHaveLength(1));
+    const card = await screen.findByRole("region", { name: "Reminder: Water plants" });
+
+    const stack = deferred.closest(".reminder-panels");
+    expect(stack).not.toBeNull();
+    expect(stack).toContainElement(card);
+  });
+});

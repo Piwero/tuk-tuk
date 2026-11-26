@@ -114,7 +114,7 @@ class Due:
     deliver_at: datetime
 
 
-def _open_reminders(
+def open_reminders(
     tasks: list[Task], caller_zone: tzinfo, snoozes: Mapping[Key, datetime]
 ) -> list[tuple[Task, str, datetime, datetime]]:
     """Every Reminder of these open, dated Tasks, with its nominal fire time
@@ -144,7 +144,7 @@ def due_reminders(
     if quiet is not None and quiet.contains(now, caller_zone):
         return []
     found = []
-    for task, offset, nominal, at in _open_reminders(tasks, caller_zone, snoozes or {}):
+    for task, offset, nominal, at in open_reminders(tasks, caller_zone, snoozes or {}):
         when = deliver_at(at, quiet, caller_zone)
         if when <= now < when + DELIVERY_WINDOW:
             found.append(Due(task=task, offset=offset, fire_at=nominal, deliver_at=when))
@@ -162,7 +162,7 @@ def held_reminders(
     hours at `now`, soonest delivery first: what the app lists while the
     band is on."""
     found = []
-    for task, offset, nominal, at in _open_reminders(tasks, caller_zone, snoozes or {}):
+    for task, offset, nominal, at in open_reminders(tasks, caller_zone, snoozes or {}):
         when = deliver_at(at, quiet, caller_zone)
         if at <= now < when:
             found.append(Due(task=task, offset=offset, fire_at=nominal, deliver_at=when))

@@ -13,12 +13,12 @@ sets its list, tags, priority and date.
 
 ## The four shortcuts
 
-| Type | Sets | Examples |
-| --- | --- | --- |
-| `#` | Tag | `#launch`, `#home` |
-| `!` | Priority | `!high`, `!medium`, `!low` |
-| `~` | List | `~Groceries`, `~Q4 Roadmap` |
-| `@` | Date and time | `@today`, `@tomorrow`, `@monday`, `@weekend`, `@next-week`, `@9am`, `@14:00` |
+| Type | Sets          | Examples                                                                     |
+| ---- | ------------- | ---------------------------------------------------------------------------- |
+| `#`  | Tag           | `#launch`, `#home`                                                           |
+| `!`  | Priority      | `!high`, `!medium`, `!low`                                                   |
+| `~`  | List          | `~Groceries`, `~Q4 Roadmap`                                                  |
+| `@`  | Date and time | `@today`, `@tomorrow`, `@monday`, `@weekend`, `@next-week`, `@9am`, `@14:00` |
 
 Each shortcut opens a suggestions menu as you type. Pick an option and it turns
 into a chip. Click its **×** to remove it.
@@ -60,10 +60,10 @@ who signs in on the tab sees it.
 
 ## Keyboard shortcuts
 
-| Key | Does |
-| --- | --- |
-| `N` | Quick add |
-| `/` | Search |
+| Key                    | Does                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| `N`                    | Quick add                                                                                     |
+| `/`                    | Search                                                                                        |
 | `Cmd + K` / `Ctrl + K` | Command palette: jump anywhere and run actions. The same `#` `!` `~` `@` shortcuts work here. |
 
 ## Next

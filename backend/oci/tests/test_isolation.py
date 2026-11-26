@@ -128,6 +128,7 @@ class AliceWorld(World):
     api_token: int
     reminder_delivery: int
     reminder_lease: str
+    missed_reminder: dict[str, Any]
 
 
 type Request = Callable[[AliceWorld, World], tuple[str, str, dict[str, Any] | None]]
@@ -233,6 +234,7 @@ READS: dict[str, Read] = {
         rows=lambda body, a: [body] if body["enabled"] else [],
     ),
     "reminder delivery ledger": Read(get(lambda a, me: "/api/v1/reminder-deliveries")),
+    "missed reminders": Read(get(lambda a, me: "/api/v1/reminder-deliveries/missed?tz=UTC")),
     "reminder notifications toggle": Read(
         get(lambda a, me: "/api/v1/settings/reminder-notifications"),
         rows=lambda body, a: [body] if body["enabled"] else [],
@@ -369,6 +371,13 @@ REACHES |= {
             "POST",
             f"/api/v1/reminder-deliveries/{a.reminder_delivery}/snooze",
             {"minutes": 10},
+        )
+    ),
+    "dismiss a missed reminder": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/reminder-deliveries/missed/dismiss?tz=UTC",
+            a.missed_reminder,
         )
     ),
     "skip a habit day": Reach(
@@ -761,7 +770,17 @@ def build_alice(
         {"title": "alice reminder", "due_date": now.isoformat(), "reminders": ["PT0S"]},
     )
     [delivery] = alice.ok("POST", "/api/v1/reminder-deliveries/claim?tz=UTC")["items"]
-    # After the claim, so the band never holds Alice's own Reminder.
+    alice.ok(
+        "POST",
+        "/api/v1/tasks",
+        {
+            "title": "alice missed reminder",
+            "due_date": (now - timedelta(hours=1)).isoformat(),
+            "reminders": ["PT0S"],
+        },
+    )
+    [missed] = alice.ok("GET", "/api/v1/reminder-deliveries/missed?tz=UTC")["items"]
+    # After the claim and the missed read, so the band never holds Alice's own Reminder.
     alice.ok(
         "PUT", "/api/v1/settings/quiet-hours", {"enabled": True, "start": "01:00", "end": "02:00"}
     )
@@ -789,6 +808,7 @@ def build_alice(
         habit_pause=habit_pause,
         reminder_delivery=delivery["id"],
         reminder_lease=delivery["lease_token"],
+        missed_reminder={k: missed[k] for k in ("task_id", "offset", "occurrence_due")},
         key_result=key_result,
         standup_entry=entry["id"],
         bullet=entry["bullets"][0]["id"],

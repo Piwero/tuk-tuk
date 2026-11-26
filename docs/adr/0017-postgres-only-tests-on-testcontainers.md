@@ -43,7 +43,7 @@ from #113 without giving up what it bought.
 
 - **Clone, then drop.** A clone costs about 15ms with the server's fsync
   off. Each test's database is dropped when the test ends (`DROP DATABASE
-  … WITH (FORCE)`, about 11ms). The first version never dropped them, to
+… WITH (FORCE)`, about 11ms). The first version never dropped them, to
   save time, but each clone is about 9 MB. By v3.0.0 the suite cloned
   1,125 of them, leaving roughly 10 GB and 500,000 files in the container.
   Removing the container at the end of the session then outlasted the
@@ -74,6 +74,6 @@ a fixture change: the 800-plus tests themselves did not change.
   Removing them was the follow-up ADR 0013 deferred until tests ran on
   PostgreSQL. That condition is now met, but the removal is still its own
   change. Until then the code is kept, with comments saying why it is
-  there. *Update:* #508 (migration 0041) moved the delete rules into the
+  there. _Update:_ #508 (migration 0041) moved the delete rules into the
   schema and removed the hand-written cleanup; the naive-to-UTC handling
   remains.

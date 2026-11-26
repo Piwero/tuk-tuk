@@ -19,6 +19,7 @@ No. You run it yourself. [Getting started](getting-started.md) takes about 10 mi
 
 **Does it work on my phone?**
 Yes, in the browser. To get an app icon:
+
 1. Open Tuk Tuk in Safari (iPhone) or Chrome (Android).
 2. Tap **Share → Add to Home Screen** (iPhone) or **⋮ → Install app** (Android).
 
@@ -64,8 +65,8 @@ Sessions last 30 days after your last visit. Someone changing the password
 also logs out every device.
 
 **My reminders don't notify me.**
-Check three things. **Settings → Reminder notifications** must say *On for
-this device*. A Tuk Tuk tab must be open: a closed tab, a closed browser or a
+Check three things. **Settings → Reminder notifications** must say _On for
+this device_. A Tuk Tuk tab must be open: a closed tab, a closed browser or a
 locked phone gets no notification. And Tuk Tuk must be served over
 `https://` (or opened at `http://localhost`); see
 [Serve it over HTTPS](../self-hosting/install.md#serve-it-over-https). A

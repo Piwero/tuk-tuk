@@ -528,6 +528,7 @@ class ReminderDelivery(OwnedMixin, Base):
     # "claimed" (a tab holds or held the lease), "shown" (the browser
     # reported display), "failed" (the browser refused to show it) or
     # "snoozed" (the User asked for it again at `snoozed_until`, issue #566).
+    # "dismissed" (the User dismissed it as a missed reminder, issue #565).
     state: Mapped[str] = mapped_column(String(16), default="claimed")
     attempts: Mapped[int] = mapped_column(default=1)
     lease_token: Mapped[str] = mapped_column(String(64))

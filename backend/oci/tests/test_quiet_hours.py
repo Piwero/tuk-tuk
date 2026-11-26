@@ -288,6 +288,67 @@ class TestSnoozeIntoQuietHours:
         assert claim(client, "?tz=UTC") == []
 
 
+MISSED = "/api/v1/reminder-deliveries/missed?tz=UTC"
+
+
+def missed(client: TestClient) -> list[dict]:
+    response = client.get(MISSED)
+    assert response.status_code == 200, response.text
+    return response.json()["items"]
+
+
+class TestMissedUsesTheDeliveryTime:
+    """Missed reminders (#565) are measured from the final delivery time,
+    after a snooze and Quiet hours, never from the nominal fire time."""
+
+    def test_a_held_reminder_is_not_missed_while_quiet_hours_hold_it(
+        self, client: TestClient, night: FakeClock
+    ) -> None:
+        make_task(client, datetime(2026, 11, 10, 23, 0, tzinfo=UTC), ["PT0S"])
+
+        night.now = datetime(2026, 11, 11, 3, 0, tzinfo=UTC)
+
+        assert missed(client) == []
+
+    def test_a_held_reminder_no_tab_claimed_is_missed_after_its_window_past_the_band_end(
+        self, client: TestClient, night: FakeClock
+    ) -> None:
+        make_task(client, datetime(2026, 11, 10, 23, 0, tzinfo=UTC), ["PT0S"])
+
+        night.now = datetime(2026, 11, 11, 7, 4, tzinfo=UTC)
+        assert missed(client) == []
+
+        night.now = datetime(2026, 11, 11, 7, 5, tzinfo=UTC)
+        assert [entry["fire_at"] for entry in missed(client)] == ["2026-11-10T23:00:00Z"]
+
+    def test_a_snoozed_reminder_is_not_missed_before_its_snooze_window_passes(
+        self, client: TestClient, night: FakeClock
+    ) -> None:
+        client.put(PATH, json={**NIGHT, "enabled": False})
+        make_task(client, night.now, ["PT0S"])
+        [item] = claim(client, "?tz=UTC")
+        client.post(f"{LEDGER}/{item['id']}/failed", json={"lease_token": item["lease_token"]})
+        assert client.post(f"{LEDGER}/{item['id']}/snooze", json={"minutes": 60}).status_code == 200
+
+        night.now += timedelta(minutes=30)
+        assert missed(client) == []
+
+        night.now += timedelta(minutes=35)
+        assert len(missed(client)) == 1
+
+    def test_a_snooze_ending_inside_quiet_hours_is_not_missed_until_after_the_band(
+        self, client: TestClient, night: FakeClock
+    ) -> None:
+        make_task(client, datetime(2026, 11, 10, 21, 55, tzinfo=UTC), ["PT0S"])
+        night.now = datetime(2026, 11, 10, 21, 55, tzinfo=UTC)
+        [item] = claim(client, "?tz=UTC")
+        report(client, item, "shown")
+        client.post(f"{LEDGER}/{item['id']}/snooze", json={"minutes": 10})
+
+        night.now = datetime(2026, 11, 11, 3, 0, tzinfo=UTC)
+        assert missed(client) == []
+
+
 class TestQuietHoursTimezone:
     def test_the_band_is_read_on_the_claiming_tabs_wall_clock(
         self, client: TestClient, night: FakeClock

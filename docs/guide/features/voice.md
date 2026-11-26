@@ -21,7 +21,7 @@ something to tomorrow, check in a Habit. Works in English and Spanish.
 1. Open **Assistant**, choose **Voice**, and press **Hold to talk** once. Allow the browser's microphone prompt. The first press only connects.
 2. Press and hold the button (or Space/Enter), speak, then release. Slide off the button to cancel. Captions show on screen.
 3. Ask for what you want. It collects your requests, then reads the whole batch back:
-   *"I'll add one task and check in Water twice, ok?"*
+   _"I'll add one task and check in Water twice, ok?"_
 4. Say **yes** and the changes happen. They appear on screen as it does them.
    Say **no**, or change your mind, and nothing is changed.
 5. Choose **End session** when done. There is no silence timeout, so a connected session keeps
@@ -33,14 +33,14 @@ hold-to-talk** to mute the microphone and keep the same session and captions.
 
 ## Things to try
 
-| Say | What happens |
-| --- | --- |
-| "What's on today?" | Spoken summary of Tasks, Habits and Events |
-| "Add buy milk tomorrow" | Reads back the new Task, creates it after your yes |
-| "Check in water, 2" | Records 2 on your Water Habit after your yes |
-| "Añade llamar al dentista para el viernes" | Replies in Spanish, same read-back |
-| "Move the report to Friday" | Reschedules it after your yes |
-| "Find my tasks about taxes" | Searches and reads out the matches |
+| Say                                        | What happens                                       |
+| ------------------------------------------ | -------------------------------------------------- |
+| "What's on today?"                         | Spoken summary of Tasks, Habits and Events         |
+| "Add buy milk tomorrow"                    | Reads back the new Task, creates it after your yes |
+| "Check in water, 2"                        | Records 2 on your Water Habit after your yes       |
+| "Añade llamar al dentista para el viernes" | Replies in Spanish, same read-back                 |
+| "Move the report to Friday"                | Reschedules it after your yes                      |
+| "Find my tasks about taxes"                | Searches and reads out the matches                 |
 
 ## The promise: bounded, and never destructive
 

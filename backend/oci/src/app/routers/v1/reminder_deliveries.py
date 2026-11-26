@@ -29,7 +29,7 @@ from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/reminder-deliveries", tags=["reminder deliveries"])
 
-DeliveryState = Literal["claimed", "shown", "failed", "snoozed"]
+DeliveryState = Literal["claimed", "shown", "failed", "snoozed", "dismissed"]
 ReportOutcome = Literal["shown", "failed"]
 
 

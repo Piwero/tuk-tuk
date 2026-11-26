@@ -31,6 +31,7 @@ import {
 } from "./api";
 import { DeliveredReminders, type DeliveredReminder } from "./components/DeliveredReminders";
 import { QuietHoursDeferred } from "./components/QuietHoursDeferred";
+import "./components/ReminderPanels.css";
 import { reminderLabel } from "./reminders";
 
 export type ReminderDeliveryState = "off" | "requesting" | "allowed" | "denied" | "unsupported";

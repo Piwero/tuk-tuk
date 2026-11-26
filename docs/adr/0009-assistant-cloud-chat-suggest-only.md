@@ -26,7 +26,7 @@ What the owner wants now is a conversational day-planner: describe the day
 in prose, have the app read the week, and get back a plan — tasks created,
 work blocked into the gaps between meetings. That is multi-step planning
 over a broad surface, which is precisely the shape ADR 0005 excluded. It
-is excluded there as a *consequence* of the local-model constraint, not as
+is excluded there as a _consequence_ of the local-model constraint, not as
 an independent judgement about the feature's worth, so the question this
 record answers is whether that constraint should hold everywhere.
 
@@ -121,7 +121,7 @@ allow-list this way cannot be gamed into inventing an id (issue #189).
 Task `description` bodies and Check Item text are never sent. A planner
 needs to know what and when; the substance of a task is where the
 genuinely private text lives, and it buys almost nothing for scheduling. A
-free-text planning-preferences field in Settings *is* sent every turn, and
+free-text planning-preferences field in Settings _is_ sent every turn, and
 is called out in the same egress notice, because the owner will put real
 personal detail in it.
 

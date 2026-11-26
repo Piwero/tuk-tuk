@@ -8,7 +8,7 @@ until you finish step 4.
 
 ## How it fits together
 
-- **The agent** is a small Python program in `voice-agent/`. You deploy it once to *your own*
+- **The agent** is a small Python program in `voice-agent/`. You deploy it once to _your own_
   free LiveKit Cloud project. It listens, thinks and speaks.
 - **Your browser tab** does the real work. When the agent wants to read or change a Task, it
   asks the open tab, and the tab calls your Tuk Tuk API with your normal login. Nothing at
@@ -133,17 +133,17 @@ when the session ends. Saving the credentials is the opt-in. Clearing them is th
 
 ## When something goes wrong
 
-| What you see or hear | Why | What to do |
-| --- | --- | --- |
-| Voice view unavailable | Credentials not saved, or the free minutes ran out this month | Check **Settings → AI helpers → Voice**. See the last row |
-| **Voice agent out of date — redeploy** | You upgraded Tuk Tuk and not the agent | `cd voice-agent && lk agent deploy` |
-| Connects, then silence | Agent not running, or its name doesn't match | `lk agent status`; see step 3 about `tuktuk-voice` |
-| Message about LiveKit being unreachable | LiveKit is down or your network blocks it | Retry later. Setup is fine |
-| Message about bad credentials | URL, key or secret is wrong | Re-enter them from LiveKit **Settings → Keys** |
-| Agent says "I couldn't reach your app" | The tab didn't answer in about 5 seconds | Say it again. The agent never retries on its own |
-| Agent says you need to log in again | Your Tuk Tuk session expired | Log in, then restart the voice session |
-| Agent says free voice minutes are used up | The free plan's monthly credit ran out | Voice is unavailable until next month, using your browser's local clock |
-| The session ends by itself | You closed the tab, or the tab lost its login. There is no silence timeout | Press and hold to talk again |
+| What you see or hear                      | Why                                                                        | What to do                                                              |
+| ----------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Voice view unavailable                    | Credentials not saved, or the free minutes ran out this month              | Check **Settings → AI helpers → Voice**. See the last row               |
+| **Voice agent out of date — redeploy**    | You upgraded Tuk Tuk and not the agent                                     | `cd voice-agent && lk agent deploy`                                     |
+| Connects, then silence                    | Agent not running, or its name doesn't match                               | `lk agent status`; see step 3 about `tuktuk-voice`                      |
+| Message about LiveKit being unreachable   | LiveKit is down or your network blocks it                                  | Retry later. Setup is fine                                              |
+| Message about bad credentials             | URL, key or secret is wrong                                                | Re-enter them from LiveKit **Settings → Keys**                          |
+| Agent says "I couldn't reach your app"    | The tab didn't answer in about 5 seconds                                   | Say it again. The agent never retries on its own                        |
+| Agent says you need to log in again       | Your Tuk Tuk session expired                                               | Log in, then restart the voice session                                  |
+| Agent says free voice minutes are used up | The free plan's monthly credit ran out                                     | Voice is unavailable until next month, using your browser's local clock |
+| The session ends by itself                | You closed the tab, or the tab lost its login. There is no silence timeout | Press and hold to talk again                                            |
 
 ## Cost
 
