@@ -11,6 +11,7 @@ import httpx
 
 from app.github_source import (
     GitHubCiStatus,
+    GitHubIssue,
     GitHubLabel,
     GitHubOwnerKind,
     GitHubPullRequest,
@@ -18,7 +19,9 @@ from app.github_source import (
     GitHubReviewDecision,
     GitHubTokenIdentity,
     GitHubTokenType,
+    OpenIssues,
     OpenPullRequests,
+    RepositoryIssues,
     RepositoryPullRequests,
     TerminalGitHubSourceError,
     TransientGitHubSourceError,
@@ -112,18 +115,35 @@ _CI_STATUSES: dict[str, GitHubCiStatus] = {
 }
 
 
-def _pull_requests_query(count: int) -> str:
-    """One alias per repository (`r0`, `r1`, ...), its owner and name
-    passed as variables so no repository name is spliced into the query."""
+# One GitHub Issue's fields. `__typename` lets the adapter prove no Pull
+# Request slipped in: GitHub counts Pull Requests as issues in its REST
+# listing, though the GraphQL `issues` connection holds Issues only.
+_ISSUE_FIELDS = """
+  __typename number title url createdAt updatedAt
+  author { __typename login }
+  assignees(first: 10) { nodes { login } }
+  labels(first: 20) { nodes { name color } }
+  comments { totalCount }
+"""
+
+# The repository connection each read lists, with its node fields.
+_PULL_REQUESTS = ("pullRequests", _PULL_REQUEST_FIELDS)
+_ISSUES = ("issues", _ISSUE_FIELDS)
+
+
+def _open_items_query(count: int, connection: str, fields: str) -> str:
+    """One alias per repository (`r0`, `r1`, ...) listing the open items of
+    `connection`, most recently updated first. Each repository's owner and
+    name are passed as variables so no name is spliced into the query."""
     variables = ", ".join(f"$owner{i}: String!, $name{i}: String!" for i in range(count))
     aliases = "\n".join(
         f"""  r{i}: repository(owner: $owner{i}, name: $name{i}) {{
     databaseId nameWithOwner url
-    pullRequests(
+    {connection}(
       states: OPEN, first: {ITEMS_PER_REPOSITORY}, orderBy: {{field: UPDATED_AT, direction: DESC}}
     ) {{
       totalCount
-      nodes {{ {_PULL_REQUEST_FIELDS} }}
+      nodes {{ {fields} }}
     }}
   }}"""
         for i in range(count)
@@ -139,6 +159,13 @@ def _is_bot(author: dict[str, Any]) -> bool:
     # GraphQL names an app's account "dependabot" with type Bot; REST and
     # some older accounts show the "[bot]" suffix instead.
     return author.get("__typename") == "Bot" or str(author.get("login", "")).endswith("[bot]")
+
+
+def _labels(node: dict[str, Any]) -> tuple[GitHubLabel, ...]:
+    return tuple(
+        GitHubLabel(name=str(label["name"]), color=str(label["color"]))
+        for label in (node.get("labels") or {}).get("nodes") or []
+    )
 
 
 def _review_requested_from(node: dict[str, Any], viewer_login: str) -> bool:
@@ -164,13 +191,28 @@ def _pull_request(node: dict[str, Any], viewer_login: str) -> GitHubPullRequest:
         created_at=_instant(node["createdAt"]),
         updated_at=_instant(node["updatedAt"]),
         is_draft=bool(node["isDraft"]),
-        labels=tuple(
-            GitHubLabel(name=str(label["name"]), color=str(label["color"]))
-            for label in (node.get("labels") or {}).get("nodes") or []
-        ),
+        labels=_labels(node),
         review_decision=_REVIEW_DECISIONS.get(node.get("reviewDecision") or "", "pending"),
         ci_status=_CI_STATUSES.get(rollup["state"], "pending") if rollup else None,
         review_requested=_review_requested_from(node, viewer_login),
+    )
+
+
+def _issue(node: dict[str, Any]) -> GitHubIssue:
+    author = node.get("author")
+    return GitHubIssue(
+        number=int(node["number"]),
+        title=str(node["title"]),
+        url=str(node["url"]),
+        author_login=str(author["login"]) if author else None,
+        author_is_bot=_is_bot(author) if author else False,
+        created_at=_instant(node["createdAt"]),
+        updated_at=_instant(node["updatedAt"]),
+        assignees=tuple(
+            str(user["login"]) for user in (node.get("assignees") or {}).get("nodes") or [] if user
+        ),
+        labels=_labels(node),
+        comment_count=int((node.get("comments") or {}).get("totalCount") or 0),
     )
 
 
@@ -245,10 +287,18 @@ class GitHubApiSource:
                 params = None
         return repositories
 
-    async def list_open_pull_requests(
-        self, token: str, repositories: list[GitHubRepository]
-    ) -> OpenPullRequests:
-        action = "listing open pull requests"
+    async def _read_open_items(
+        self,
+        token: str,
+        repositories: list[GitHubRepository],
+        listing: tuple[str, str],
+        action: str,
+    ) -> tuple[str, list[tuple[dict[str, Any], dict[str, Any]]]]:
+        """One GraphQL round trip listing the open items of `listing` (a
+        connection and its node fields) in every repository. Returns the
+        viewer's login and, for each repository the token can still read,
+        its repository node and that connection."""
+        connection, fields = listing
         variables: dict[str, str] = {}
         for i, repo in enumerate(repositories):
             owner, _, name = repo.full_name.partition("/")
@@ -257,21 +307,32 @@ class GitHubApiSource:
         async with self._client(token, action) as client:
             response = await client.post(
                 "/graphql",
-                json={"query": _pull_requests_query(len(repositories)), "variables": variables},
+                json={
+                    "query": _open_items_query(len(repositories), connection, fields),
+                    "variables": variables,
+                },
             )
         if response.status_code != 200:
             _raise_for_error_response(response, action)
         body: dict[str, Any] = response.json()
         _raise_for_graphql_errors(body, action)
         data: dict[str, Any] = body["data"]
-        viewer_login = str(data["viewer"]["login"])
-        results: list[RepositoryPullRequests] = []
-        for i in range(len(repositories)):
-            node = data.get(f"r{i}")
-            if node is None:  # no longer readable through this token
-                continue
-            connection = node["pullRequests"]
-            results.append(
+        readable = [
+            (node, node[connection])
+            for node in (data.get(f"r{i}") for i in range(len(repositories)))
+            if node is not None  # no longer readable through this token
+        ]
+        return str(data["viewer"]["login"]), readable
+
+    async def list_open_pull_requests(
+        self, token: str, repositories: list[GitHubRepository]
+    ) -> OpenPullRequests:
+        viewer_login, readable = await self._read_open_items(
+            token, repositories, _PULL_REQUESTS, "listing open pull requests"
+        )
+        return OpenPullRequests(
+            viewer_login=viewer_login,
+            repositories=tuple(
                 RepositoryPullRequests(
                     github_id=int(node["databaseId"]),
                     full_name=str(node["nameWithOwner"]),
@@ -281,5 +342,29 @@ class GitHubApiSource:
                         _pull_request(pr, viewer_login) for pr in connection["nodes"] or [] if pr
                     ),
                 )
+                for node, connection in readable
+            ),
+        )
+
+    async def list_open_issues(
+        self, token: str, repositories: list[GitHubRepository]
+    ) -> OpenIssues:
+        _, readable = await self._read_open_items(
+            token, repositories, _ISSUES, "listing open issues"
+        )
+        return OpenIssues(
+            repositories=tuple(
+                RepositoryIssues(
+                    github_id=int(node["databaseId"]),
+                    full_name=str(node["nameWithOwner"]),
+                    url=str(node["url"]),
+                    total_count=int(connection["totalCount"]),
+                    issues=tuple(
+                        _issue(issue)
+                        for issue in connection["nodes"] or []
+                        if issue and issue.get("__typename") == "Issue"
+                    ),
+                )
+                for node, connection in readable
             )
-        return OpenPullRequests(viewer_login=viewer_login, repositories=tuple(results))
+        )

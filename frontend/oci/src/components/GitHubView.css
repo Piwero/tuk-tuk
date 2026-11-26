@@ -1,5 +1,5 @@
 @layer components {
-  /* ── GitHub view (#579) ──────────────────────────────────────────── */
+  /* ── GitHub view (#579, #582) ─────────────────────────────────────── */
   .github-view {
     display: flex;
     flex-direction: column;
@@ -32,6 +32,7 @@
     font-weight: var(--weight-medium);
   }
   .github-group ul,
+  .github-list,
   .github-overflow {
     margin: 0;
     padding: 0;

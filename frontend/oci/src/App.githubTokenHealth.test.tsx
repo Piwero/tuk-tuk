@@ -3,7 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
-import { fakeGitHubPullRequest, fakeGitHubToken, installFakeApi } from "./test/fakeApi";
+import {
+  fakeGitHubIssue,
+  fakeGitHubPullRequest,
+  fakeGitHubToken,
+  installFakeApi,
+} from "./test/fakeApi";
 
 /** GitHub Token health (#584): per-token banners in the GitHub view,
  * needs_reconnect and Reconnect in Settings, and the expiry warning,
@@ -79,6 +84,26 @@ describe("GitHub view › token health", () => {
     );
     expect(screen.getByRole("link", { name: "Ship the API" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Tidy dotfiles" })).not.toBeInTheDocument();
+  });
+
+  it("names a token GitHub rejects on the Issues tab too", async () => {
+    installFakeApi({
+      ...twoTokens(),
+      githubIssues: [
+        fakeGitHubIssue(3, "Dotfiles bug", { repository: "octocat/dotfiles" }),
+        fakeGitHubIssue(4, "API bug", { repository: "acme/api" }),
+      ],
+      githubRepositoryFailures: { octocat: "needs_reconnect" },
+    });
+    const user = await openGitHub();
+
+    await user.click(await screen.findByRole("tab", { name: "Issues" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "GitHub no longer accepts the GitHub Token for octocat",
+    );
+    expect(await screen.findByRole("link", { name: "API bug" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Dotfiles bug" })).not.toBeInTheDocument();
   });
 
   it("names a token GitHub couldn't be reached through, without asking to reconnect it", async () => {

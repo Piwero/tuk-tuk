@@ -380,6 +380,47 @@ export function fakeGitHubPullRequest(
   };
 }
 
+/** An open GitHub Issue (#582) as the backend's read lists it. Its
+ * repository is `repository` (by `owner/name`); the fake fills in
+ * `watched_repository_id`. */
+export interface FakeGitHubIssue {
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  assignees: string[];
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  comment_count: number;
+}
+
+/** An open GitHub Issue for `installFakeApi({ githubIssues })`, in
+ * octocat/dotfiles unless `repository` says otherwise. */
+export function fakeGitHubIssue(
+  number: number,
+  title: string,
+  overrides: Partial<FakeGitHubIssue> = {},
+): FakeGitHubIssue {
+  const repository = overrides.repository ?? "octocat/dotfiles";
+  return {
+    repository,
+    number,
+    title,
+    url: `https://github.com/${repository}/issues/${number}`,
+    author: "hubot",
+    author_is_bot: false,
+    assignees: [],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    labels: [],
+    comment_count: 0,
+    ...overrides,
+  };
+}
+
 export interface FakeGoogleAccount {
   id: number;
   google_account_id: string;
@@ -546,6 +587,13 @@ export interface FakeApiState {
   /** How many more open Pull Requests each repository (by `owner/name`)
    * has on GitHub beyond those returned. */
   githubPullRequestOverflow: Record<string, number>;
+  /** The open GitHub Issues the GitHub view's read answers with (#582),
+   * in the backend's order (most recently updated first). Only those in a
+   * Watched Repository are returned. */
+  githubIssues: FakeGitHubIssue[];
+  /** How many more open GitHub Issues each repository (by `owner/name`)
+   * has on GitHub beyond those returned. */
+  githubIssueOverflow: Record<string, number>;
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
@@ -1310,6 +1358,8 @@ export function installFakeApi({
   githubRepositoryFailures = {},
   githubPullRequests = [],
   githubPullRequestOverflow = {},
+  githubIssues = [],
+  githubIssueOverflow = {},
   events = [],
   eventFailures = [],
   standupEntries = [],
@@ -1395,6 +1445,8 @@ export function installFakeApi({
   githubRepositoryFailures?: Record<string, "unavailable" | "needs_reconnect">;
   githubPullRequests?: FakeGitHubPullRequest[];
   githubPullRequestOverflow?: Record<string, number>;
+  githubIssues?: FakeGitHubIssue[];
+  githubIssueOverflow?: Record<string, number>;
   /** Google Calendar Events (issue #107) the calendar's own read-only
    * endpoint answers with — never filtered by calendar `enabled` here,
    * since that filtering is the backend's job (exercised in the backend
@@ -1542,6 +1594,12 @@ export function installFakeApi({
       labels: pr.labels.map((label) => ({ ...label })),
     })),
     githubPullRequestOverflow: { ...githubPullRequestOverflow },
+    githubIssues: githubIssues.map((issue) => ({
+      ...issue,
+      assignees: [...issue.assignees],
+      labels: issue.labels.map((label) => ({ ...label })),
+    })),
+    githubIssueOverflow: { ...githubIssueOverflow },
     events: events.map((event) => ({ ...event })),
     eventFailures: eventFailures.map((failure) => ({ ...failure })),
     standupEntries: standupEntries.map((entry) => ({
@@ -1871,7 +1929,11 @@ export function installFakeApi({
       state.watchedRepositories.push(created);
       return json(created, 201);
     }
-    if (method === "GET" && url.pathname === "/api/v1/github/pull-requests") {
+    const githubViewRead = (
+      items: readonly { repository: string }[],
+      overflowByName: Record<string, number>,
+      listPath: "pulls" | "issues",
+    ): Response => {
       // Shaped as the backend answers: only Watched Repositories, each
       // with its overflow, and a status for each token that has any.
       const watched = [...state.watchedRepositories].sort((a, b) =>
@@ -1894,20 +1956,18 @@ export function installFakeApi({
           .map((w) => [w.full_name, w]),
       );
       return json({
-        items: state.githubPullRequests
-          .filter((pr) => byName.has(pr.repository))
-          .map((pr) => ({ ...pr, watched_repository_id: byName.get(pr.repository)?.id })),
+        items: items
+          .filter((item) => byName.has(item.repository))
+          .map((item) => ({ ...item, watched_repository_id: byName.get(item.repository)?.id })),
         repositories: [...byName.values()].map((w) => {
-          const overflow = state.githubPullRequestOverflow[w.full_name] ?? 0;
-          const shown = state.githubPullRequests.filter(
-            (pr) => pr.repository === w.full_name,
-          ).length;
+          const overflow = overflowByName[w.full_name] ?? 0;
+          const shown = items.filter((item) => item.repository === w.full_name).length;
           return {
             watched_repository_id: w.id,
             full_name: w.full_name,
             total_count: shown + overflow,
             overflow_count: overflow,
-            overflow_url: `https://github.com/${w.full_name}/pulls`,
+            overflow_url: `https://github.com/${w.full_name}/${listPath}`,
           };
         }),
         tokens: [...state.githubTokens]
@@ -1923,6 +1983,12 @@ export function installFakeApi({
         fetched_at: new Date().toISOString(),
         stale: false,
       });
+    };
+    if (method === "GET" && url.pathname === "/api/v1/github/pull-requests") {
+      return githubViewRead(state.githubPullRequests, state.githubPullRequestOverflow, "pulls");
+    }
+    if (method === "GET" && url.pathname === "/api/v1/github/issues") {
+      return githubViewRead(state.githubIssues, state.githubIssueOverflow, "issues");
     }
     const watchedMatch = /^\/api\/v1\/github\/watched-repositories\/(\d+)$/.exec(url.pathname);
     if (method === "DELETE" && watchedMatch !== null) {

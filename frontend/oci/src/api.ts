@@ -884,19 +884,52 @@ export interface GitHubTokenReadStatus {
   expires_soon: boolean;
 }
 
-/** A GitHub view read (#579): items in the backend's order, grouped by
- * relationship and most recently updated first within each group. */
-export interface GitHubPullRequestsRead {
-  items: GitHubPullRequest[];
+/** A GitHub view read (#579, #582): the items in the backend's order, how
+ * much of each Watched Repository they cover, and how each GitHub Token
+ * fared. */
+export interface GitHubViewRead<Item> {
+  items: Item[];
   repositories: GitHubRepositoryRead[];
   tokens: GitHubTokenReadStatus[];
   fetched_at: string;
   stale: boolean;
 }
 
+/** Open Pull Requests, grouped by relationship and most recently updated
+ * first within each group. */
+export type GitHubPullRequestsRead = GitHubViewRead<GitHubPullRequest>;
+
 /** The open Pull Requests of every Watched Repository. */
 export function fetchGitHubPullRequests(): Promise<GitHubPullRequestsRead> {
   return request("/api/v1/github/pull-requests");
+}
+
+/** One open GitHub Issue in the GitHub view (#582) — never a Pull
+ * Request. Read live from GitHub and never stored. `author` is null for a
+ * deleted GitHub account. */
+export interface GitHubIssue {
+  watched_repository_id: number;
+  /** `owner/name`. */
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  /** GitHub logins. */
+  assignees: string[];
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  comment_count: number;
+}
+
+/** Open GitHub Issues, most recently updated first. */
+export type GitHubIssuesRead = GitHubViewRead<GitHubIssue>;
+
+/** The open GitHub Issues of every Watched Repository. */
+export function fetchGitHubIssues(): Promise<GitHubIssuesRead> {
+  return request("/api/v1/github/issues");
 }
 
 export interface GoogleCalendar {

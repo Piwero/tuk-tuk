@@ -21,6 +21,7 @@ from tests.conftest import FakeClock, FakeGitHubSource, run_sql
 TOKENS = "/api/v1/github/tokens"
 WATCHED = "/api/v1/github/watched-repositories"
 PULL_REQUESTS = "/api/v1/github/pull-requests"
+ISSUES = "/api/v1/github/issues"
 PERSONAL = "github_pat_11AAAAAAA0personal"
 REPLACEMENT = "github_pat_11AAAAAAA0rotated"
 
@@ -64,6 +65,19 @@ def test_a_token_github_rejects_while_reading_needs_reconnection(
     )
 
     assert client.get(PULL_REQUESTS).status_code == 200
+
+    assert connection_state(client, personal) == "needs_reconnect"
+
+
+def test_a_token_github_rejects_while_reading_github_issues_needs_reconnection(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    personal = watch_through(
+        client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")]
+    )
+    fake_github_source.register_issues_error(PERSONAL, TerminalGitHubSourceError("Bad credentials"))
+
+    assert client.get(ISSUES).status_code == 200
 
     assert connection_state(client, personal) == "needs_reconnect"
 
