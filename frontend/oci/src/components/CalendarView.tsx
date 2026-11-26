@@ -65,6 +65,7 @@ import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import { readDragPayload, startDrag } from "../dnd";
+import { useTouchDrag } from "../touchDrag";
 import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { useTaskCompletion } from "../taskCompletion";
@@ -190,6 +191,39 @@ function taskDragProps(
     draggable: true,
     onDragStart: (event) => startDrag(event, { kind: "task", id: task.id }),
   };
+}
+
+/** A day (and, on the time grid, an hour) a dragged Task can land on. */
+interface DropSlot {
+  day: string;
+  hour: number | null;
+}
+
+/** The attributes that mark an element as a drop slot, so a touch drag can
+ * find the slot under the finger (`slotAt`), plus the flag that lights it up
+ * while a carried Task hovers over it. */
+function dropSlotProps(
+  slot: DropSlot,
+  over: DropSlot | null,
+): { "data-drop-day": string; "data-drop-hour"?: number; "data-drop-over"?: boolean } {
+  return {
+    "data-drop-day": slot.day,
+    ...(slot.hour === null ? {} : { "data-drop-hour": slot.hour }),
+    ...(over !== null && over.day === slot.day && over.hour === slot.hour
+      ? { "data-drop-over": true }
+      : {}),
+  };
+}
+
+/** The drop slot at or around `element`, if any. */
+function slotAt(element: Element | null): DropSlot | null {
+  const slot = element?.closest<HTMLElement>("[data-drop-day]");
+  const day = slot?.dataset.dropDay;
+  if (slot === undefined || slot === null || day === undefined) {
+    return null;
+  }
+  const hour = slot.dataset.dropHour;
+  return { day, hour: hour === undefined ? null : Number(hour) };
 }
 
 /** The same drag-source props, for whichever kind of Entry a calendar row
@@ -806,10 +840,24 @@ export function CalendarView({
     if (task === undefined) {
       return;
     }
-    const patch: TaskPatch = dropPatch(task, day, hour);
+    await scheduleDropped(task, { day, hour });
+  }
+
+  async function scheduleDropped(task: Task, slot: DropSlot): Promise<void> {
+    const patch: TaskPatch = dropPatch(task, slot.day, slot.hour);
     await updateTask(task.id, patch);
     void load();
   }
+
+  /** The phone's way onto the grid: press and hold an Unscheduled card to
+   * pick it up — the sheet steps aside to uncover the grid — then release it
+   * over a slot. Lands exactly as the HTML5 drop on that slot would. */
+  const touchDrag = useTouchDrag<Task, DropSlot>({
+    resolveTarget: slotAt,
+    onPickUp: () => setUnscheduledOpen(false),
+    onDrop: (task, slot) => void scheduleDropped(task, slot),
+  });
+  const dropOver = touchDrag.carried?.target ?? null;
 
   /** The Unscheduled rail is also a drop target (issue #203): dropping a
    * scheduled Task-block onto it clears the Task's schedule, the mirror of
@@ -946,6 +994,7 @@ export function CalendarView({
               onClick={() => openAllDayDraft(day)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => void handleDrop(event, day, null)}
+              {...dropSlotProps({ day, hour: null }, dropOver)}
             >
               <div className="month-cell-head">
                 <span>{Number(day.slice(8))}</span>
@@ -1209,6 +1258,7 @@ export function CalendarView({
               onClick={() => openAllDayDraft(day)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => void handleDrop(event, day, null)}
+              {...dropSlotProps({ day, hour: null }, dropOver)}
             >
               {laneBanners(entries, day, firstDay).map((entry) => (
                 <div
@@ -1294,6 +1344,7 @@ export function CalendarView({
                   }
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => void handleDrop(event, day, hour)}
+                  {...dropSlotProps({ day, hour }, dropOver)}
                 />
               ))}
               {(() => {
@@ -1538,6 +1589,14 @@ export function CalendarView({
                     className="unscheduled-card"
                     {...completingProps(taskEntry(task))}
                     {...taskDragProps(task)}
+                    {...touchDrag.sourceProps(task, taskDragProps(task).onDragStart)}
+                    data-carried={touchDrag.carried?.item.id === task.id || undefined}
+                    onClick={() => {
+                      // Out of the narrow-screen sheet's way, so the Task
+                      // detail panel isn't opened behind it.
+                      setUnscheduledOpen(false);
+                      onSelect?.(task);
+                    }}
                   >
                     {entryCheckbox(taskEntry(task))}
                     {entryTitleNode(taskEntry(task))}
@@ -1548,6 +1607,15 @@ export function CalendarView({
           )}
         </aside>
       </div>
+      {touchDrag.carried !== null && (
+        <div
+          className="touch-drag-ghost"
+          aria-hidden="true"
+          style={{ left: touchDrag.carried.x, top: touchDrag.carried.y }}
+        >
+          {touchDrag.carried.item.title}
+        </div>
+      )}
       {quickStart !== null && (
         <PomoQuickStartMenu
           task={quickStart.task}

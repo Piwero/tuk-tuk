@@ -266,6 +266,17 @@
     display: block;
     font-size: var(--text-sm);
   }
+  /* A fixed-width icon slot, so an emoji's own width (or none) never
+   shifts the name: every row's name starts at the same x. The colour dot
+   is a fixed 10px already and renders empty when the Habit has none. */
+  .habit-row-head .habit-icon {
+    flex: none;
+    width: 24px;
+    text-align: center;
+  }
+  .habit-row-head .color-dot {
+    margin-top: 5px;
+  }
   .habit-streak-count {
     display: inline-flex;
     align-items: center;
@@ -381,6 +392,56 @@
       0 0 0 2px var(--surface-card),
       0 0 0 3px var(--text-secondary);
   }
+  /* On a phone the table was a 180px name column plus seven day columns,
+   about 520px: only three days showed and today's cell was cut off at the
+   edge. Here the whole table becomes one seven-column grid — rows flatten
+   with `display: contents`, so every cell is a grid item and each day
+   column keeps one width from the header down. Each Habit's name and each
+   detail row take a full line; the days share the width below. A column
+   holding today's "Not yet / Check in" grows to fit it (min-content). The
+   cells keep their own spoken names, so the table roles a browser may drop
+   for `display: contents` lose nothing a screen reader needs. */
+  @media (max-width: 720px) {
+    .habits-week-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(min-content, 1fr));
+    }
+    .habits-week-grid thead,
+    .habits-week-grid tbody,
+    .habits-week-grid tr {
+      display: contents;
+    }
+    .habits-week-grid th,
+    .habits-week-grid td {
+      padding: var(--space-1) 2px;
+    }
+    /* The days speak for themselves; the column header stays for screen
+       readers only. */
+    .habits-week-corner {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .habits-week-grid .habit-row-head {
+      grid-column: 1 / -1;
+      min-width: 0;
+      padding: var(--space-2) var(--space-2) 0;
+      border-bottom: none;
+    }
+    .habits-week-grid td[colspan] {
+      grid-column: 1 / -1;
+      padding: var(--space-1) var(--space-2) var(--space-2);
+    }
+    .habits-week-grid .habit-cell,
+    .habits-week-grid .habit-cell.state-open-today {
+      width: 100%;
+      max-width: 56px;
+      height: var(--tap-target);
+    }
+  }
   .habits-long-history {
     display: flex;
     flex-direction: column;
@@ -396,5 +457,30 @@
     flex: none;
     width: 140px;
     color: var(--text-secondary);
+  }
+  /* On a phone a 140px name beside the strip left it ~200px, so the days
+   wrapped into three rows: the name goes above and the strip gets the
+   full width. */
+  @media (max-width: 720px) {
+    .habit-long-history-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+    }
+    .habit-long-history-row > .habit-name {
+      width: auto;
+    }
+  }
+  /* On touch each 12px day is padded out to the tap target (HabitHistory.css);
+   at 4px a side 21 days need 420px and the last few wrap onto a second
+   line. 2px a side fits them in one line at 390px; the hit area keeps its
+   44px height. */
+  @media (max-width: 720px) and (hover: none), (max-width: 720px) and (pointer: coarse) {
+    .habits-long-history .habit-strip button.heatmap-day {
+      padding-inline: 2px;
+    }
+    .habits-long-history .habit-strip button.heatmap-day.today::after {
+      inset-inline: 2px;
+    }
   }
 }

@@ -3,6 +3,7 @@ import "./DatePopover.css";
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { addDays, fromDayIso, localDayOf, nextMonday } from "../dates";
+import { IconButton } from "./IconButton";
 import { Popover } from "./Popover";
 
 interface DatePopoverProps {
@@ -176,33 +177,37 @@ export function DatePanel({
           </button>
         ))}
         {clearable && (
-          <button type="button" className="btn-quiet" onClick={() => onPick("")}>
+          <button type="button" className="btn-quiet date-popover-clear" onClick={() => onPick("")}>
             Clear
           </button>
         )}
       </div>
       <div className="date-popover-nav">
-        <button
-          type="button"
-          className="btn-quiet"
-          aria-label="Previous month"
-          onClick={() => moveTo(addMonths(focused, -1))}
-        >
-          ‹
-        </button>
-        <span id={titleId} aria-live="polite">
+        <span id={titleId} className="date-popover-title" aria-live="polite">
           {monthFormat.format(fromDayIso(focused))}
         </span>
-        <button
-          type="button"
-          className="btn-quiet"
-          aria-label="Next month"
-          onClick={() => moveTo(addMonths(focused, 1))}
-        >
-          ›
-        </button>
+        <span className="date-popover-steppers">
+          <IconButton
+            icon="chevron-left"
+            label="Previous month"
+            className="btn-quiet"
+            onClick={() => moveTo(addMonths(focused, -1))}
+          />
+          <IconButton
+            icon="chevron-right"
+            label="Next month"
+            className="btn-quiet"
+            onClick={() => moveTo(addMonths(focused, 1))}
+          />
+        </span>
       </div>
-      <div role="grid" aria-labelledby={titleId} ref={grid} onKeyDown={onGridKey}>
+      <div
+        role="grid"
+        className="date-popover-grid"
+        aria-labelledby={titleId}
+        ref={grid}
+        onKeyDown={onGridKey}
+      >
         <div role="row" className="date-popover-row">
           {WEEKDAYS.map((name) => (
             <span role="columnheader" key={name}>

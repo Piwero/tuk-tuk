@@ -513,6 +513,10 @@
 
   .time-columns {
     display: flex;
+    /* Columns size to their hour cells, not to this capped scroll box: a
+       stretched column stopped at 70vh, clipping today's wash and rule to a
+       stray block over the first hours (#597). */
+    align-items: flex-start;
     overflow-y: auto;
     max-height: 70vh;
     background: var(--surface-card);
@@ -965,6 +969,43 @@
 
   .unscheduled-card:hover {
     background: var(--surface-hover);
+  }
+
+  /* A card is also picked up by a press-and-hold (touchDrag.ts): the long
+   * press must not select its text or raise the browser's callout. */
+  .unscheduled-card {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  .unscheduled-card[data-carried] {
+    opacity: 0.4;
+  }
+
+  /* The carried card follows the finger, lifted off its point so the finger
+   * doesn't hide it. Never a hit-test target: the slot under the finger is. */
+  .touch-drag-ghost {
+    position: fixed;
+    z-index: calc(var(--z-modal) + 1);
+    max-width: 60vw;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-lg);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    transform: translate(-50%, calc(-100% - var(--space-4)));
+  }
+
+  .hour-cell[data-drop-over],
+  .all-day-cell[data-drop-over],
+  .month-cell[data-drop-over] {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 2px var(--accent);
   }
 
   .calendar-nav-buttons,

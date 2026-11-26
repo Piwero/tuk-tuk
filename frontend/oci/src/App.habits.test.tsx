@@ -71,6 +71,26 @@ describe("Habits week grid", () => {
     ).toBe(true);
   });
 
+  it("lines every Habit's name up, with or without a colour or icon", async () => {
+    installFakeApi({
+      habits: [
+        fakeHabit("Yoga", { icon: "🧘" }),
+        fakeHabit("Tennis", { color: "#22c55e", icon: "🎾" }),
+        fakeHabit("Plain"),
+      ],
+    });
+    render(<App />);
+    await openHabits();
+
+    const grid = await screen.findByRole("table", { name: "Habits this week" });
+    for (const name of ["Yoga", "Tennis", "Plain"]) {
+      const head = within(grid).getByRole("rowheader", { name: new RegExp(name) });
+      // The same leading slots in every row, so the names start at one x.
+      expect(head.querySelectorAll(".habit-head > .color-dot"), name).toHaveLength(1);
+      expect(head.querySelectorAll(".habit-head > .habit-icon"), name).toHaveLength(1);
+    }
+  });
+
   it("tells done, partial, open today, missed, not scheduled and future cells apart", async () => {
     const api = installFakeApi({
       habits: [

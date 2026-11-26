@@ -54,7 +54,8 @@ export const HINT_REGISTRY = {
   "calendar-today": "Jumps the view back to today's date.",
   "calendar-refresh":
     "Refetches Events from your connected Google Calendar. Google Calendar is read only, so this pulls in changes but never pushes any out.",
-  "unscheduled-chips": "Drag a chip onto the calendar to schedule that Task.",
+  "unscheduled-chips":
+    "Drag a chip onto the calendar to schedule that Task — on a touch screen, press and hold it first. Click it to open the Task.",
 } as const satisfies Record<string, string>;
 
 export type HintKey = keyof typeof HINT_REGISTRY;

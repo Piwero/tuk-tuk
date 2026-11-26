@@ -18,35 +18,153 @@
     gap: var(--space-2);
     padding: var(--space-1);
   }
-  .date-popover-quick,
-  .date-popover-nav {
+
+  /* Quick picks: soft pills, with Clear pushed to the end. */
+  .date-popover-quick {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-1);
     align-items: center;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border-default);
+  }
+  .date-popover-quick button.btn-quiet {
+    border-color: var(--border-default);
+    border-radius: var(--radius-full);
+    background: var(--surface-soft);
+    color: var(--text-primary);
+  }
+  .date-popover-quick button.btn-quiet:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+  }
+  .date-popover-quick button.date-popover-clear {
+    margin-left: auto;
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .date-popover-quick button.date-popover-clear:hover:not(:disabled) {
+    border-color: transparent;
+    color: var(--text-danger);
+  }
+
+  /* Month title on the left, the two steppers grouped on the right. */
+  .date-popover-nav {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
+    gap: var(--space-2);
+    padding-inline: var(--space-1);
+  }
+  .date-popover-title {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+  }
+  .date-popover-steppers {
+    display: inline-flex;
+    gap: 2px;
+  }
+  .date-popover-steppers button.btn-quiet {
+    width: 28px;
+    padding: 0;
+    border-radius: var(--radius-full);
+  }
+
+  .date-popover-grid {
+    display: grid;
+    gap: 2px;
   }
   .date-popover-row {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(7, minmax(36px, 1fr));
+    gap: 2px;
+    justify-items: center;
+    align-items: center;
     text-align: center;
-    font-size: var(--text-sm);
   }
-  .date-popover-day {
+  .date-popover-row [role="columnheader"] {
+    padding-block: var(--space-1);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    color: var(--text-tertiary);
+  }
+  .date-popover-row [role="gridcell"] {
+    display: flex;
+    justify-content: center;
     width: 100%;
-    min-height: var(--control-height);
-    border-radius: var(--radius-md);
+  }
+
+  /* A day: a bare round button on the panel's own ground, never the
+     browser's button face (which hid the numbers in dark mode). */
+  .date-popover-day {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
+    transition:
+      background var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out);
+  }
+  .date-popover-day:hover {
+    background: var(--surface-hover);
   }
   .date-popover-day.outside {
-    opacity: 0.5;
+    color: var(--text-tertiary);
+  }
+  .date-popover-day[aria-current="date"] {
+    color: var(--text-accent);
+    font-weight: var(--weight-semibold);
+  }
+  /* Today's dot, under the number; it takes the day's ink, so it stays
+     visible on the picked fill. */
+  .date-popover-day[aria-current="date"]::after {
+    content: "";
+    position: absolute;
+    bottom: 5px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    margin-left: -2px;
+    border-radius: var(--radius-full);
+    background: currentColor;
   }
   .date-popover-day.selected {
-    background: var(--accent, currentColor);
-    color: var(--surface-raised);
+    background: var(--accent);
+    color: var(--text-inverse);
+    font-weight: var(--weight-semibold);
   }
+  .date-popover-day.selected:hover {
+    background: var(--accent-hover);
+  }
+  @media (max-width: 720px), (pointer: coarse) {
+    .date-popover-row {
+      grid-template-columns: repeat(7, minmax(40px, 1fr));
+    }
+    .date-popover-day {
+      width: 40px;
+      height: 40px;
+    }
+  }
+
+  /* Fields under the calendar (times), set apart by a hairline. */
   .date-popover-time {
     display: flex;
     gap: var(--space-2);
     align-items: center;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border-default);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
   }
 }
