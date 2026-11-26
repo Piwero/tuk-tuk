@@ -17,6 +17,7 @@ import { entryDayWindow } from "../calendar";
 import { addDays, zonedDay, zonedTime } from "../dates";
 import { habitDueOn } from "../habitFrequency";
 import { byName, SORT_GAP } from "../ordering";
+import { DEVICE_OPT_IN_KEY } from "../reminderDelivery";
 import { decrementCount, nextOccurrenceISO } from "./fakeRecurrence";
 
 /** The fake's stand-in for the backend's IANA validation: unknown zone
@@ -1185,6 +1186,7 @@ export function installFakeApi({
   planningWindow = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
   reminderNotifications = false,
+  reminderDeviceEnabled = reminderNotifications,
   dueReminders = [],
   quietHours = { enabled: false, start: "22:00", end: "07:00" },
   quietHoursError = null,
@@ -1287,6 +1289,10 @@ export function installFakeApi({
   gentleReturn?: boolean;
   /** Reminder notifications (issue #557). Defaults to off, matching the backend. */
   reminderNotifications?: boolean;
+  /** Whether this browser was enabled for them ("Enable on this device"),
+   * kept in its localStorage. Defaults to `reminderNotifications`: false
+   * plays another device, where the User opted in but not here. */
+  reminderDeviceEnabled?: boolean;
   /** Reminders due now, handed out by the claim endpoint (issue #561). */
   dueReminders?: FakeReminderClaim[];
   /** Quiet hours (issue #567). Defaults to off, 22:00-07:00, like the backend. */
@@ -1330,6 +1336,10 @@ export function installFakeApi({
   voiceLivekitApiKey?: string | null;
   voiceSecretSet?: boolean;
 } = {}): FakeApiState {
+  // This browser's own "Enable on this device" flag (#557 review): kept in
+  // localStorage, which outlives a test, so every install sets it afresh.
+  if (reminderDeviceEnabled) localStorage.setItem(DEVICE_OPT_IN_KEY, "true");
+  else localStorage.removeItem(DEVICE_OPT_IN_KEY);
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
     folders: folders.map((folder) => ({ ...folder })),

@@ -1,9 +1,12 @@
 /** Reminder delivery on this device (issue #557).
  *
- * Two independent facts decide whether Reminders notify here: the User's
- * server-side opt-in (per User, off by default) and the browser's permission
- * (per device, owned by the browser). Only both together mean "allowed".
- * The browser prompt is requested only from `enable()`, which the Settings
+ * Three facts decide whether Reminders notify here: the User's server-side
+ * opt-in (per User, off by default), this browser's own enable flag (per
+ * device, in localStorage, set only by "Enable on this device") and the
+ * browser's permission (per device, owned by the browser). Only all three
+ * together mean "allowed", so opting in on one device never starts
+ * notifications on another that merely granted permission once. The
+ * browser prompt is requested only from `enable()`, which the Settings
  * button calls on an explicit click — never on load — and never again once
  * the browser has answered "denied".
  *
@@ -42,10 +45,39 @@ export interface ReminderDelivery {
   insecure: boolean;
   /** The User's opt-in as stored on the server (null until loaded). */
   enabled: boolean | null;
+  /** Whether this browser was enabled with "Enable on this device". */
+  deviceEnabled: boolean;
   /** Set when saving the opt-in failed; cleared by the next attempt. */
   saveError: boolean;
+  /** Enables this device: asks the browser if needed, then sets both the
+   * User's opt-in and this device's flag. */
   enable: () => Promise<void>;
+  /** Turns off on this device only; the User's opt-in stays as it is. */
   disable: () => Promise<void>;
+  /** Turns off the User's opt-in, which stops every device. */
+  disableEverywhere: () => Promise<void>;
+}
+
+/** Where this browser keeps its own enable flag. A `tuktuk.` key, so
+ * logging out clears it with the rest of the signed-in data. */
+export const DEVICE_OPT_IN_KEY = "tuktuk.reminders.deviceEnabled";
+
+function loadDeviceOptIn(): boolean {
+  try {
+    return localStorage.getItem(DEVICE_OPT_IN_KEY) === "true";
+  } catch {
+    // Storage unavailable: this device was never enabled as far as we know.
+    return false;
+  }
+}
+
+function saveDeviceOptIn(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(DEVICE_OPT_IN_KEY, "true");
+    else localStorage.removeItem(DEVICE_OPT_IN_KEY);
+  } catch {
+    // Storage unavailable: the choice holds for this page only.
+  }
 }
 
 function isInsecure(): boolean {
@@ -61,13 +93,16 @@ const ReminderDeliveryContext = createContext<ReminderDelivery>({
   state: "off",
   insecure: false,
   enabled: null,
+  deviceEnabled: false,
   saveError: false,
   enable: async () => {},
   disable: async () => {},
+  disableEverywhere: async () => {},
 });
 
 export function ReminderDeliveryProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [deviceEnabled, setDeviceEnabled] = useState(loadDeviceOptIn);
   const [permission, setPermission] = useState(readPermission);
   const [requesting, setRequesting] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -82,12 +117,20 @@ export function ReminderDeliveryProvider({ children }: { children: ReactNode }):
     };
   }, []);
 
-  const save = useCallback(async (next: boolean): Promise<void> => {
+  const setDevice = useCallback((on: boolean): void => {
+    saveDeviceOptIn(on);
+    setDeviceEnabled(on);
+  }, []);
+
+  /** Saves the User's opt-in; whether it was saved. */
+  const save = useCallback(async (next: boolean): Promise<boolean> => {
     setSaveError(false);
     try {
       setEnabled((await updateReminderNotificationSettings({ enabled: next })).enabled);
+      return true;
     } catch {
       setSaveError(true);
+      return false;
     }
   }, []);
 
@@ -107,10 +150,14 @@ export function ReminderDeliveryProvider({ children }: { children: ReactNode }):
       setPermission(answer);
       if (answer !== "granted") return;
     }
-    await save(true);
-  }, [save]);
+    if (await save(true)) setDevice(true);
+  }, [save, setDevice]);
 
-  const disable = useCallback(() => save(false), [save]);
+  const disable = useCallback(async (): Promise<void> => setDevice(false), [setDevice]);
+
+  const disableEverywhere = useCallback(async (): Promise<void> => {
+    if (await save(false)) setDevice(false);
+  }, [save, setDevice]);
 
   const state: ReminderDeliveryState =
     permission === "unsupported"
@@ -119,13 +166,22 @@ export function ReminderDeliveryProvider({ children }: { children: ReactNode }):
         ? "requesting"
         : permission === "denied"
           ? "denied"
-          : enabled === true && permission === "granted"
+          : enabled === true && deviceEnabled && permission === "granted"
             ? "allowed"
             : "off";
 
   return (
     <ReminderDeliveryContext.Provider
-      value={{ state, insecure: isInsecure(), enabled, saveError, enable, disable }}
+      value={{
+        state,
+        insecure: isInsecure(),
+        enabled,
+        deviceEnabled,
+        saveError,
+        enable,
+        disable,
+        disableEverywhere,
+      }}
     >
       {children}
     </ReminderDeliveryContext.Provider>

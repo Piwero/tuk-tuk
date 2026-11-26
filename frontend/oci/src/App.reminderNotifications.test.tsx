@@ -10,7 +10,16 @@ import { installFakeNotifications, stubInsecureContext } from "./test/fakeNotifi
 // opt-in, the browser prompt follows only the User's click, and the
 // foreground-only limit is stated before they opt in.
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const OPT_IN = "/api/v1/settings/reminder-notifications";
+
+function claims(api: ReturnType<typeof installFakeApi>): number {
+  return api.requests.filter((r) => r.url.startsWith("/api/v1/reminder-deliveries/claim")).length;
+}
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -33,6 +42,9 @@ describe("Reminder notifications setting", () => {
     const limit = within(section).getByText(/only while Tuk Tuk is open in a tab/);
     expect(limit).toHaveTextContent(/closed/);
     expect(limit).toHaveTextContent(/locked/);
+    // A background tab still claims, so the copy may not promise it won't.
+    expect(limit).toHaveTextContent(/background.*late or not at all.*not guaranteed/);
+    expect(limit).not.toHaveTextContent(/don't arrive|won't arrive/);
     const enable = within(section).getByRole("button", { name: "Enable on this device" });
     expect(limit.compareDocumentPosition(enable) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(notifications.requestPermission).not.toHaveBeenCalled();
@@ -60,7 +72,7 @@ describe("Reminder notifications setting", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("can be turned off again", async () => {
+  it("can be turned off on every device", async () => {
     const api = installFakeApi({ googleConfigured: false, reminderNotifications: true });
     installFakeNotifications({ permission: "granted" });
     const user = userEvent.setup();
@@ -68,10 +80,67 @@ describe("Reminder notifications setting", () => {
 
     const section = await openSection(user);
     expect(await within(section).findByText("On for this device")).toBeInTheDocument();
-    await user.click(within(section).getByRole("button", { name: "Turn off notifications" }));
+    await user.click(within(section).getByRole("button", { name: "Turn off on all devices" }));
 
     await waitFor(() => expect(api.reminderNotifications).toBe(false));
     expect(within(section).getByText("Off")).toBeInTheDocument();
+  });
+
+  it("stays off on a device not enabled here, though the User opted in elsewhere", async () => {
+    const api = installFakeApi({
+      googleConfigured: false,
+      reminderNotifications: true,
+      reminderDeviceEnabled: false,
+    });
+    const notifications = installFakeNotifications({ permission: "granted" });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const section = await openSection(user);
+    expect(within(section).getByText("Off")).toBeInTheDocument();
+    expect(claims(api)).toBe(0);
+
+    await user.click(within(section).getByRole("button", { name: "Enable on this device" }));
+
+    expect(await within(section).findByText("On for this device")).toBeInTheDocument();
+    expect(notifications.requestPermission).not.toHaveBeenCalled();
+    await waitFor(() => expect(claims(api)).toBeGreaterThan(0));
+    expect(api.reminderNotifications).toBe(true);
+  });
+
+  it("turns off on this device only, leaving the User's opt-in for the others", async () => {
+    const api = installFakeApi({ googleConfigured: false, reminderNotifications: true });
+    installFakeNotifications({ permission: "granted" });
+    const user = userEvent.setup();
+    const { unmount } = render(<App />);
+
+    const section = await openSection(user);
+    expect(await within(section).findByText("On for this device")).toBeInTheDocument();
+    await user.click(within(section).getByRole("button", { name: "Turn off on this device" }));
+
+    expect(await within(section).findByText("Off")).toBeInTheDocument();
+    expect(api.reminderNotifications).toBe(true);
+    expect(api.requests.some((r) => r.method === "PUT" && r.url.includes(OPT_IN))).toBe(false);
+
+    // Still off here after a reload: the choice is kept by this browser.
+    unmount();
+    render(<App />);
+    const again = await openSection(user);
+    expect(within(again).getByText("Off")).toBeInTheDocument();
+  });
+
+  it("treats a browser whose storage is unavailable as not enabled here", async () => {
+    installFakeApi({ googleConfigured: false, reminderNotifications: true });
+    installFakeNotifications({ permission: "granted" });
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage disabled");
+    });
+    const user = userEvent.setup();
+    render(<App />);
+
+    const section = await openSection(user);
+    expect(within(section).getByText("Off")).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "Enable on this device" })).toBeVisible();
   });
 
   it("on denial shows instructions, keeps delivery off, and never asks again", async () => {
