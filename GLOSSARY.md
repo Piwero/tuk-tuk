@@ -184,6 +184,14 @@ _Avoid_: Copilot, agent. "AI assistant" as a generic label for the family — th
 The Assist feature that plans a day in conversation: the user describes what they need to do, and the Assistant reads the current week — Tasks, today's Events, List and Tag names, Habits — and answers with prose plus Suggestions to create Tasks, block them into time, and set priorities. Accepted individually; nothing is written until accepted. It plans Tasks *around* Events, never moving an Event (ADR 0006 keeps Google Calendar read-only). The only Assist feature that may be configured against a cloud provider, and the only one that is conversational at all — every other member is a single beat with no transcript. The conversation is ephemeral: held in the browser, sent whole each turn, gone on refresh.
 _Avoid_: Chat, bot, agent (it takes no actions), Copilot
 
+**Check Item Suggestions**:
+An optional, deliberate Assistant interaction for one selected Task: proposes a few concrete steps using only that Task's title, description, existing Check Items and the User's instruction. Temporary and editable, never saved until the User accepts the reviewed Suggestion. Duplicate titles require a deliberate choice; manual Check Item entry remains independent.
+_Avoid_: Subtask generator, automatic breakdown
+
+**Brain-dump Suggestions**:
+An optional, deliberate Assistant interaction that turns the User's supplied text and instruction into temporary, editable Task Suggestions. Each is reviewed and accepted separately; ordinary Task capture remains independent. No unrelated planning context or conversation is carried into it.
+_Avoid_: Automatic capture, bulk import
+
 **Voice Assistant**:
 The Assist feature you talk to (ADR 0015): a spoken session in the browser for organising Tasks, the day and Habits, in English or Spanish. The only Assist member that writes. Its tools follow the MCP server's principle (idempotent, non-destructive, Task-or-Habit scoped, no delete), and each turn's batch of writes is read back and applied only after a spoken yes. The agent (`voice-agent/`) runs on the User's own LiveKit Cloud project, one worker per User deployed by the Admin on request, but every tool call is relayed over LiveKit RPC to that User's open tab, which runs it with its own session cookie. So no backend is ever exposed and no tuk-tuk credential is held at LiveKit. Push-to-talk by default (continuous is opt-in). Sessions start from the Agenda plus the tab's timezone and date, end only when you end them or close the tab, show captions only, and persist nothing. Invisible until that User's own LiveKit credentials are set in Settings; Voice goes unavailable for the rest of the month once free inference credit runs out.
 _Avoid_: Voice mode (it is not the Assistant with a microphone), voice agent (the name of the deployable in `voice-agent/`, not the feature), Assistant without "Voice"

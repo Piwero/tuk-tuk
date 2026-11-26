@@ -25,6 +25,7 @@ from app.routers.v1 import (
     assist,
     assistant,
     auth,
+    check_item_suggestions,
     check_items,
     completed_occurrences,
     events,
@@ -118,6 +119,7 @@ def create_app(
     app.include_router(assistant.router)
     app.include_router(auth.router)
     app.include_router(check_items.router)
+    app.include_router(check_item_suggestions.router)
     app.include_router(completed_occurrences.router)
     app.include_router(events.router)
     app.include_router(folders.router)
