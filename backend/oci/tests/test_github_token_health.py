@@ -82,6 +82,25 @@ def test_a_token_github_rejects_while_reading_github_issues_needs_reconnection(
     assert connection_state(client, personal) == "needs_reconnect"
 
 
+def test_a_token_github_accepts_again_on_a_later_read_is_connected_again(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    # As for a Google Account (ADR 0007): a successful read shows the
+    # token is not currently broken.
+    personal = watch_through(
+        client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")]
+    )
+    fake_github_source.register_pull_requests_error(
+        PERSONAL, TerminalGitHubSourceError("Bad credentials")
+    )
+    client.get(PULL_REQUESTS)
+    fake_github_source.clear_pull_requests_error(PERSONAL)
+
+    assert client.get(PULL_REQUESTS).status_code == 200
+
+    assert connection_state(client, personal) == "connected"
+
+
 def test_a_transient_failure_while_reading_leaves_the_token_connected(
     client: TestClient, fake_github_source: FakeGitHubSource
 ) -> None:

@@ -96,8 +96,9 @@ substitute a fake, the same way they do for the calendar source.
 - **ADR 0007 (per-credential failure isolation).** Every GitHub failure is
   either transient (rate limit, including GitHub's 403 rate-limit answers,
   429, 5xx, network) or terminal (401: revoked, expired or invalid). A
-  terminal failure flips only that GitHub Token to `needs_reconnect`. A
-  transient one never touches `connection_state`. One failing token shows a
+  terminal failure flips only that GitHub Token to `needs_reconnect`, and a
+  later successful read flips it back. A transient one never touches
+  `connection_state`. One failing token shows a
   banner for that token while the others' repositories still render.
 - **ADR 0008 (UI-managed settings).** The instance needs no GitHub
   configuration at all: no environment variables, no app registration.

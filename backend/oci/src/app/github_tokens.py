@@ -37,6 +37,12 @@ async def mark_needs_reconnect(session: AsyncSession, token: GitHubToken) -> Non
     await session.commit()
 
 
+async def mark_connected(session: AsyncSession, token: GitHubToken) -> None:
+    """GitHub accepted the token on a live read after all."""
+    token.connection_state = GitHubConnectionState.CONNECTED
+    await session.commit()
+
+
 def github_unavailable(message: str) -> APIError:
     """GitHub could not be reached (a transient failure): retryable."""
     return APIError(502, "github_unavailable", message)

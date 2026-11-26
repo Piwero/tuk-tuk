@@ -546,6 +546,10 @@ class FakeGitHubSource:
         """Every `list_open_pull_requests` for this token raises `error`."""
         self._pull_request_errors[token] = error
 
+    def clear_pull_requests_error(self, token: str) -> None:
+        """GitHub answers `list_open_pull_requests` for this token again."""
+        self._pull_request_errors.pop(token, None)
+
     async def list_open_pull_requests(
         self, token: str, repositories: list[GitHubRepository]
     ) -> OpenPullRequests:

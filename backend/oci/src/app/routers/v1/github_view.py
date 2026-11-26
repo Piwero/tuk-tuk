@@ -37,7 +37,7 @@ from app.github_source import (
     TerminalGitHubSourceError,
     TransientGitHubSourceError,
 )
-from app.github_tokens import expires_soon, mark_needs_reconnect, plaintext
+from app.github_tokens import expires_soon, mark_connected, mark_needs_reconnect, plaintext
 from app.models import GitHubConnectionState, GitHubToken, RepositoryView, WatchedRepository
 from app.schemas import utc_z
 from app.users import current_user_id
@@ -256,6 +256,10 @@ async def _read_each_token[Result](
                 cache.forget(owner_id, token.id)
             else:
                 shown = cache.store(owner_id, token.id, repositories, result)
+                # A successful read shows the token is not currently
+                # broken, so a stale "needs_reconnect" clears (ADR 0007).
+                if not connected:
+                    await mark_connected(session, token)
         if shown is not None:
             # A repository since unwatched is in a cached result but not
             # in `by_github_id`, so it is left out; so is one outside the
