@@ -222,7 +222,10 @@ export function DueReminderNotifier({
   }, [state]);
 
   const showHeld = state === "allowed" && held.length > 0;
-  if (!showHeld && delivered.length === 0) return null;
+  // While delivery runs the (empty) stack stays mounted: it is the live
+  // region, and a region inserted together with its content is often not
+  // announced (#569).
+  if (state !== "allowed" && delivered.length === 0) return null;
   return (
     <ReminderPanels>
       {showHeld && (

@@ -675,6 +675,25 @@
     text-overflow: ellipsis;
   }
 
+  /* A planned block's title is its keyboard entry point (#569): it reads as
+   the plain title, with the focus ring when tabbed to. */
+  .block-title-button {
+    min-width: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .block-title-button:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+
   .time-block .block-time {
     font-variant-numeric: tabular-nums;
     color: var(--text-secondary);
@@ -768,8 +787,11 @@
     opacity: 0.6;
   }
 
+  /* The grip alone is a faint 3px bar; keyboard focus also gets the house
+   3px ring (#569). */
   .resize-handle:focus-visible {
     outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   .resize-handle-top {

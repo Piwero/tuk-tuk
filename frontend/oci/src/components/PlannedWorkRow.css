@@ -37,4 +37,26 @@
     flex-wrap: wrap;
     gap: var(--space-2);
   }
+
+  /* Phones (#569): fields and actions stack full width inside the sheet's
+   gutters, every control at the 44px floor. */
+  @media (max-width: 720px) {
+    /* The Popover hugs the screen edge; this keeps the 16px gutter. */
+    .planned-work-form {
+      padding: var(--space-2);
+    }
+
+    .planned-work-fields label {
+      flex: 1 1 100%;
+    }
+
+    .planned-work-form input {
+      width: 100%;
+      min-height: var(--tap-target);
+    }
+
+    .planned-work-actions button {
+      flex: 1 1 100%;
+    }
+  }
 }

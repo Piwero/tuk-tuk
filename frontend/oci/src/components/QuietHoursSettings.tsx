@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   ApiError,
@@ -39,6 +39,9 @@ export function QuietHoursSettings(): React.JSX.Element {
   }, []);
 
   const same = band.start === band.end;
+  const sameErrorId = useId();
+  // The refusal is about the pair, so both fields name it.
+  const describedBy = same ? sameErrorId : undefined;
 
   function apply(next: QuietHoursBand): void {
     setBand(next);
@@ -80,6 +83,7 @@ export function QuietHoursSettings(): React.JSX.Element {
             Quiet from
             <select
               value={band.start}
+              aria-describedby={describedBy}
               onChange={(event) => apply({ ...band, start: event.target.value })}
             >
               {labels.map((label) => (
@@ -93,6 +97,8 @@ export function QuietHoursSettings(): React.JSX.Element {
             Quiet until
             <select
               value={band.end}
+              aria-invalid={same || undefined}
+              aria-describedby={describedBy}
               onChange={(event) => apply({ ...band, end: event.target.value })}
             >
               {labels.map((label) => (
@@ -106,7 +112,11 @@ export function QuietHoursSettings(): React.JSX.Element {
         {!same && band.start > band.end && (
           <p className="settings-hint">Ends at {band.end} the next day.</p>
         )}
-        {same && <p role="alert">Quiet hours must start and end at different times.</p>}
+        {same && (
+          <p role="alert" id={sameErrorId}>
+            Quiet hours must start and end at different times.
+          </p>
+        )}
         {saveError !== null && <p role="alert">Couldn&rsquo;t save quiet hours: {saveError}</p>}
       </div>
     </>
