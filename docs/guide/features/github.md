@@ -1,6 +1,6 @@
 # GitHub
 
-⏱ 4 min read · Set up: Settings → GitHub
+⏱ 5 min read · Set up: Settings → GitHub
 
 **Do this first:** create a fine-grained token on GitHub and paste it into
 **Settings → GitHub**.
@@ -71,10 +71,25 @@ rest.
 If you aren't watching any repositories yet, the view links you to
 **Settings → GitHub** to pick some.
 
+## See your open GitHub issues
+
+In the GitHub view, choose the **Issues** tab. It lists the open GitHub
+issues of every Watched Repository, most recently updated first. Pull
+requests never appear here, even though GitHub itself counts them as issues.
+Choose **Pull Requests** to switch back.
+
+Each row shows the title, `owner/repo#number`, the author, who it is
+assigned to, how long ago it was updated, how many comments it has and its
+labels. Select a title to open the GitHub issue on GitHub.
+
+Each repository shows at most 100 open GitHub issues: the most recently
+updated ones. A repository with more gets an **N more on GitHub** link to the
+rest.
+
 ## Good to know
 
 - **The GitHub view reads GitHub each time you open it.** Nothing about your
-  pull requests is stored in Tuk Tuk.
+  pull requests or GitHub issues is stored in Tuk Tuk.
 - **"Mine" means you wrote it**, as the GitHub account that created the
   token. This also applies to an organisation's token.
 - **A review requested from one of your teams** doesn't count as
