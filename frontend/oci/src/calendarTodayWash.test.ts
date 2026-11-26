@@ -21,7 +21,7 @@ const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector = "", 
 
 const TOP_ALIGNED = /align-items:\s*(flex-)?start\b/;
 
-describe("today's calendar column wash", () => {
+describe("today's calendar column wash (issue #597)", () => {
   it("lets the day columns grow to their hour cells inside the capped scroll box", () => {
     const columns = cssRuleBody(css, ".time-columns");
     expect(columns).toMatch(/overflow-y:\s*auto/);
