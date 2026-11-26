@@ -1,0 +1,111 @@
+@layer components {
+  /* ── GitHub view (#579) ──────────────────────────────────────────── */
+  .github-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .github-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .github-tab {
+    padding: 6px 10px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+  .github-tab[aria-selected="true"] {
+    border-bottom-color: var(--text-primary);
+    color: var(--text-primary);
+  }
+
+  .github-group h2 {
+    margin: 0 0 6px;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+  .github-group ul,
+  .github-overflow {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .github-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .github-row-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .github-row-title a {
+    color: var(--text-primary);
+    font-weight: var(--weight-medium);
+    text-decoration: none;
+  }
+  .github-row-title a:hover {
+    text-decoration: underline;
+  }
+  .github-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .github-badge {
+    padding: 0 6px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+  }
+
+  .github-review[data-decision="approved"],
+  .github-ci[data-status="pass"] {
+    color: var(--success);
+  }
+  .github-review[data-decision="changes_requested"],
+  .github-ci[data-status="fail"] {
+    color: var(--danger);
+  }
+
+  /* A label carries its GitHub colour the way a Tag chip does
+   * (TaskRow.css): a tint of it on the ground, its ink mixed into the
+   * label text. */
+  .github-label {
+    padding: 1px 6px;
+    border-radius: var(--radius-xs);
+    font-weight: var(--weight-medium);
+    background: color-mix(
+      in oklab,
+      var(--chip-color, var(--text-tertiary)) 14%,
+      var(--chip-ground)
+    );
+    color: color-mix(in oklab, var(--chip-color, var(--text-tertiary)) 62%, var(--chip-ink));
+  }
+
+  .github-overflow {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .github-empty,
+  .github-loading {
+    color: var(--text-secondary);
+  }
+}

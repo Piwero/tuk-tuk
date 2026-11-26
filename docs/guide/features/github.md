@@ -1,6 +1,6 @@
 # GitHub
 
-⏱ 3 min read · Set up: Settings → GitHub
+⏱ 4 min read · Set up: Settings → GitHub
 
 **Do this first:** create a fine-grained token on GitHub and paste it into
 **Settings → GitHub**.
@@ -45,7 +45,40 @@ tokens can read under **Watched Repositories**.
 A repository that two of your tokens can read is listed once. Tuk Tuk reads
 it through the token you picked it with.
 
+## See your open pull requests
+
+Choose **GitHub** in the sidebar. The **Pull Requests** tab lists the open
+pull requests of every Watched Repository, in three groups:
+
+1. **Review requested**: someone asked you to review it. This group comes
+   first even if you wrote the pull request yourself.
+2. **Mine**: you wrote it.
+3. **Others**: everything else that is open.
+
+Within each group, the most recently updated come first.
+
+Each row shows the title, `owner/repo#number`, the author, how long ago it
+was updated and its labels. It also shows a **Draft** badge for drafts, the
+review decision (**Approved**, **Changes requested** or **Review pending**)
+and the CI status (**CI passing**, **CI failing** or **CI pending**). A
+repository without CI checks shows no CI status. Select a title to open the
+pull request on GitHub.
+
+Each repository shows at most 100 open pull requests: the most recently
+updated ones. A repository with more gets an **N more on GitHub** link to the
+rest.
+
+If you aren't watching any repositories yet, the view links you to
+**Settings → GitHub** to pick some.
+
 ## Good to know
+
+- **The GitHub view reads GitHub each time you open it.** Nothing about your
+  pull requests is stored in Tuk Tuk.
+- **"Mine" means you wrote it**, as the GitHub account that created the
+  token. This also applies to an organisation's token.
+- **A review requested from one of your teams** doesn't count as
+  **Review requested**. Only a request to you in person does.
 
 - **Classic tokens are refused.** They can't be limited to read-only access.
 - **An organisation may need to approve your token** before its repositories

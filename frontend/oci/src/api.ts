@@ -828,6 +828,63 @@ export function unwatchRepository(watchedRepositoryId: number): Promise<void> {
   });
 }
 
+/** A Pull Request's relationship to the User (#579), worked out by the
+ * backend: a review requested from them outranks having written it. */
+export type PullRequestRelationship = "review_requested" | "mine" | "other";
+
+/** One open Pull Request in the GitHub view (#579). Read live from GitHub
+ * and never stored. `author` is null for a deleted GitHub account. */
+export interface GitHubPullRequest {
+  watched_repository_id: number;
+  /** `owner/name`. */
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  is_draft: boolean;
+  review_decision: "approved" | "changes_requested" | "pending";
+  /** Null when the repository runs no checks. */
+  ci_status: "pass" | "fail" | "pending" | null;
+  relationship: PullRequestRelationship;
+}
+
+/** How much of one Watched Repository a GitHub view read shows: at most
+ * 100 items, with `overflow_count` more at `overflow_url` on GitHub. */
+export interface GitHubRepositoryRead {
+  watched_repository_id: number;
+  full_name: string;
+  total_count: number;
+  overflow_count: number;
+  overflow_url: string;
+}
+
+/** How one GitHub Token fared in a GitHub view read. */
+export interface GitHubTokenReadStatus {
+  id: number;
+  owner_login: string;
+  status: "ok" | "unavailable" | "needs_reconnect";
+}
+
+/** A GitHub view read (#579): items in the backend's order, grouped by
+ * relationship and most recently updated first within each group. */
+export interface GitHubPullRequestsRead {
+  items: GitHubPullRequest[];
+  repositories: GitHubRepositoryRead[];
+  tokens: GitHubTokenReadStatus[];
+  fetched_at: string;
+  stale: boolean;
+}
+
+/** The open Pull Requests of every Watched Repository. */
+export function fetchGitHubPullRequests(): Promise<GitHubPullRequestsRead> {
+  return request("/api/v1/github/pull-requests");
+}
+
 export interface GoogleCalendar {
   id: number;
   google_calendar_id: string;

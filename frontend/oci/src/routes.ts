@@ -9,6 +9,7 @@ export type StaticViewKind =
   | "focus-stats"
   | "calendar"
   | "goals"
+  | "github"
   | "habits"
   | "search"
   | "settings"
@@ -16,6 +17,9 @@ export type StaticViewKind =
 
 const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
   calendar: "/calendar/day",
+  // The GitHub view over all Watched Repositories (#579). A Repository
+  // View gets its own path beside it (#580).
+  github: "/github",
   goals: "/goals",
   habits: "/habits",
   standup: "/standup",

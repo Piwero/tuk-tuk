@@ -53,10 +53,16 @@ from app.calendar_source import (  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.db import DatabaseUrl, run_migrations  # noqa: E402
 from app.github_source import (  # noqa: E402
+    GitHubCiStatus,
+    GitHubLabel,
     GitHubOwnerKind,
+    GitHubPullRequest,
     GitHubRepository,
+    GitHubReviewDecision,
     GitHubTokenIdentity,
     GitHubTokenType,
+    OpenPullRequests,
+    RepositoryPullRequests,
     TerminalGitHubSourceError,
 )
 from app.main import create_app  # noqa: E402
@@ -386,6 +392,39 @@ def fake_calendar_source() -> FakeCalendarSource:
     return FakeCalendarSource()
 
 
+def fake_pull_request(
+    number: int,
+    title: str,
+    *,
+    repository: str = "octocat/dotfiles",
+    author: str | None = "hubot",
+    author_is_bot: bool = False,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
+    labels: list[tuple[str, str]] | None = None,
+    is_draft: bool = False,
+    review_decision: GitHubReviewDecision = "pending",
+    ci_status: GitHubCiStatus | None = None,
+    review_requested: bool = False,
+) -> GitHubPullRequest:
+    """An open Pull Request as the GitHub source reports it."""
+    created = created_at or datetime(2026, 11, 1, tzinfo=UTC)
+    return GitHubPullRequest(
+        number=number,
+        title=title,
+        url=f"https://github.com/{repository}/pull/{number}",
+        author_login=author,
+        author_is_bot=author_is_bot,
+        created_at=created,
+        updated_at=updated_at or created,
+        is_draft=is_draft,
+        labels=tuple(GitHubLabel(name=n, color=c) for n, c in labels or []),
+        review_decision=review_decision,
+        ci_status=ci_status,
+        review_requested=review_requested,
+    )
+
+
 class FakeGitHubSource:
     """A fake GitHubSource (spec #576), injected through the application
     factory like FakeCalendarSource. Tests register what each token string
@@ -398,7 +437,12 @@ class FakeGitHubSource:
         self._identify_errors: dict[str, Exception] = {}
         self._repositories: dict[str, list[GitHubRepository]] = {}
         self._repository_errors: dict[str, Exception] = {}
+        self._viewers: dict[str, str] = {}
+        # (token, `owner/name`) -> that repository's open Pull Requests.
+        self._pull_requests: dict[tuple[str, str], list[GitHubPullRequest]] = {}
+        self._pull_request_errors: dict[str, Exception] = {}
         self.identify_calls: list[str] = []
+        self.pull_request_calls: list[tuple[str, list[str]]] = []
 
     def register_token(
         self,
@@ -444,6 +488,54 @@ class FakeGitHubSource:
         if token not in self._identities:
             raise TerminalGitHubSourceError("Bad credentials")
         return list(self._repositories.get(token, []))
+
+    def register_viewer(self, token: str, login: str) -> None:
+        """The GitHub user `token` acts as. Defaults to the owner login it
+        was registered with, as for a User's personal token."""
+        self._viewers[token] = login
+
+    def register_pull_requests(
+        self, token: str, full_name: str, pull_requests: list[GitHubPullRequest]
+    ) -> None:
+        """The open Pull Requests GitHub holds for `full_name`, read
+        through `token`, in any order. Like GitHub, the fake returns the 100
+        most recently updated and the total count."""
+        self._pull_requests[(token, full_name)] = list(pull_requests)
+
+    def register_pull_requests_error(self, token: str, error: Exception) -> None:
+        """Every `list_open_pull_requests` for this token raises `error`."""
+        self._pull_request_errors[token] = error
+
+    async def list_open_pull_requests(
+        self, token: str, repositories: list[GitHubRepository]
+    ) -> OpenPullRequests:
+        self.pull_request_calls.append((token, [r.full_name for r in repositories]))
+        error = self._pull_request_errors.get(token)
+        if error is not None:
+            raise error
+        identity = self._identities.get(token)
+        if identity is None:
+            raise TerminalGitHubSourceError("Bad credentials")
+        results = []
+        for repo in repositories:
+            open_prs = sorted(
+                self._pull_requests.get((token, repo.full_name), []),
+                key=lambda pr: pr.updated_at,
+                reverse=True,
+            )
+            results.append(
+                RepositoryPullRequests(
+                    github_id=repo.github_id,
+                    full_name=repo.full_name,
+                    url=f"https://github.com/{repo.full_name}",
+                    total_count=len(open_prs),
+                    pull_requests=tuple(open_prs[:100]),
+                )
+            )
+        return OpenPullRequests(
+            viewer_login=self._viewers.get(token, identity.owner_login),
+            repositories=tuple(results),
+        )
 
     async def identify_token(self, token: str) -> GitHubTokenIdentity:
         self.identify_calls.append(token)

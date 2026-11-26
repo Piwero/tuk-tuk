@@ -115,6 +115,10 @@ interface SidebarProps {
   /** Settings toggle (this feature): hides the Focus nav item entirely
    * when off, same contract as `standupEnabled` above. */
   focusEnabled: boolean;
+  /** The GitHub view over all Watched Repositories (#579). Always offered:
+   * with nothing watched it explains how to start. */
+  githubSelected: boolean;
+  onSelectGitHub: () => void;
   onSelect: (listId: number) => void;
   onSelectFolder: (folderId: number) => void;
   onSelectTag: (tagId: number) => void;
@@ -452,6 +456,8 @@ export function Sidebar({
   standupEnabled,
   focusSelected,
   focusEnabled,
+  githubSelected,
+  onSelectGitHub,
   assistantSelected,
   assistantAvailable,
   onSelectAssistant,
@@ -914,6 +920,16 @@ export function Sidebar({
               onClick={onSelectAssistant}
             />
           )}
+        </nav>
+        {/* Its own section so Repository Views can nest under it (#580). */}
+        <nav aria-label="GitHub" className="top-nav github-nav">
+          <TopNavItem
+            icon="git-pull-request"
+            label="GitHub"
+            href={pathForStaticView("github")}
+            selected={githubSelected}
+            onClick={onSelectGitHub}
+          />
         </nav>
         <div className="sidebar-search" role="search">
           <button
