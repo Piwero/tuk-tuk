@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readStylesheets } from "./test/stylesheets";
 import { describe, expect, it } from "vitest";
 
 /** Today's column wash must span the whole day, not stop part-way down it.
@@ -10,10 +9,7 @@ import { describe, expect, it } from "vitest";
  * applies no stylesheet, so the layout claim is checked against the CSS
  * source, as contentColumn.test.ts does. */
 
-const css = readFileSync(resolve(process.cwd(), "src/components/CalendarView.css"), "utf8").replace(
-  /\/\*[\s\S]*?\*\//g,
-  "",
-);
+const css = readStylesheets().replace(/\/\*[\s\S]*?\*\//g, "");
 
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
