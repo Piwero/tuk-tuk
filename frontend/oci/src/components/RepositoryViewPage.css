@@ -1,0 +1,52 @@
+@layer components {
+  /* ── Repository Views (#580) ──────────────────────────────────────── */
+  .repository-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .repository-view-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+  }
+
+  .repository-view-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+  }
+  .repository-view-editor fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+  .repository-view-editor legend {
+    margin-bottom: var(--space-1);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+  .repository-view-name,
+  .repository-view-repo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .repository-view-editor-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .github-empty a,
+  .github-empty button {
+    margin-right: var(--space-3);
+  }
+}

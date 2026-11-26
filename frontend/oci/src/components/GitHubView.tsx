@@ -1,6 +1,6 @@
 import "./GitHubView.css";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   fetchGitHubIssues,
@@ -12,13 +12,13 @@ import {
   type PullRequestRelationship,
 } from "../api";
 import { formatTimeAgo } from "../dates";
-import { applyGitHubFilters, type GitHubFilters, NO_GITHUB_FILTERS } from "../githubFilters";
+import { applyGitHubFilters, type GitHubFilters } from "../githubFilters";
 import { pathForSettingsTab } from "../routes";
 import { GitHubFilterBar } from "./GitHubFilterBar";
 import { GitHubTokenBanners } from "./GitHubTokenBanners";
 
 /** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
-type GitHubTab = "pull-requests" | "issues";
+export type GitHubTab = "pull-requests" | "issues";
 
 const TABS: { tab: GitHubTab; label: string }[] = [
   { tab: "pull-requests", label: "Pull Requests" },
@@ -108,13 +108,27 @@ function IssueRow({ issue }: { issue: GitHubIssue }): React.JSX.Element {
 }
 
 /** The GitHub view (#579, #582): open Pull Requests and open GitHub Issues
- * across every Watched Repository, in two tabs. Read live from GitHub each
- * time a tab opens; nothing is stored. Each row links out to GitHub, since
- * tuk-tuk never writes there. */
-export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
-  const [tab, setTab] = useState<GitHubTab>("pull-requests");
-  // Never saved: leaving the view drops them (#585).
-  const [filters, setFilters] = useState<GitHubFilters>(NO_GITHUB_FILTERS);
+ * across every Watched Repository, or a Repository View's (#580), in two
+ * tabs. Read live from GitHub each time a tab opens; nothing is stored.
+ * Each row links out to GitHub, since tuk-tuk never writes there. The
+ * owner holds the tab and the filters, and decides whether they are saved. */
+export function GitHubView({
+  viewId,
+  tab,
+  onTabChange: setTab,
+  filters,
+  onFiltersChange: setFilters,
+  onOpenSettings,
+}: {
+  viewId?: number;
+  tab: GitHubTab;
+  onTabChange: (tab: GitHubTab) => void;
+  filters: GitHubFilters;
+  onFiltersChange: (filters: GitHubFilters) => void;
+  onOpenSettings: () => void;
+}): React.JSX.Element {
+  const loadPullRequests = useCallback(() => fetchGitHubPullRequests({ viewId }), [viewId]);
+  const loadIssues = useCallback(() => fetchGitHubIssues({ viewId }), [viewId]);
 
   return (
     <div className="github-view">
@@ -138,7 +152,7 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
         {tab === "pull-requests" ? (
           <GitHubRead
             key={tab}
-            load={fetchGitHubPullRequests}
+            load={loadPullRequests}
             onOpenSettings={onOpenSettings}
             render={(read) => (
               <>
@@ -158,7 +172,7 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
         ) : (
           <GitHubRead
             key={tab}
-            load={fetchGitHubIssues}
+            load={loadIssues}
             onOpenSettings={onOpenSettings}
             render={(read) => (
               <>

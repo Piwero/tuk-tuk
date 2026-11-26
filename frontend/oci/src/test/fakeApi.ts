@@ -335,6 +335,45 @@ export interface FakeWatchedRepository {
 
 let nextWatchedRepositoryId = 1;
 
+/** A Repository View (#580) as the backend lists it. */
+export interface FakeRepositoryView {
+  id: number;
+  name: string;
+  sort_order: number;
+  watched_repository_ids: number[];
+  author: string | null;
+  label: string | null;
+  assignee: string | null;
+  hide_drafts: boolean;
+  hide_bots: boolean;
+  active_tab: "pull_requests" | "issues";
+}
+
+let nextRepositoryViewId = 1;
+
+/** A Repository View for `installFakeApi({ repositoryViews })`, with no
+ * saved filters, placed after every one made before it. */
+export function fakeRepositoryView(
+  name: string,
+  watchedRepositoryIds: number[],
+  overrides: Partial<FakeRepositoryView> = {},
+): FakeRepositoryView {
+  const id = nextRepositoryViewId++;
+  return {
+    id,
+    name,
+    sort_order: id * 1024,
+    watched_repository_ids: watchedRepositoryIds,
+    author: null,
+    label: null,
+    assignee: null,
+    hide_drafts: false,
+    hide_bots: false,
+    active_tab: "pull_requests",
+    ...overrides,
+  };
+}
+
 /** An open Pull Request (#579) as the backend's read lists it: already
  * classified by `relationship`. Its repository is `repository` (by
  * `owner/name`); the fake fills in `watched_repository_id`. */
@@ -594,6 +633,8 @@ export interface FakeApiState {
   /** How many more open GitHub Issues each repository (by `owner/name`)
    * has on GitHub beyond those returned. */
   githubIssueOverflow: Record<string, number>;
+  /** The signed-in User's Repository Views (#580). */
+  repositoryViews: FakeRepositoryView[];
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
@@ -1360,6 +1401,7 @@ export function installFakeApi({
   githubPullRequestOverflow = {},
   githubIssues = [],
   githubIssueOverflow = {},
+  repositoryViews = [],
   events = [],
   eventFailures = [],
   standupEntries = [],
@@ -1447,6 +1489,7 @@ export function installFakeApi({
   githubPullRequestOverflow?: Record<string, number>;
   githubIssues?: FakeGitHubIssue[];
   githubIssueOverflow?: Record<string, number>;
+  repositoryViews?: FakeRepositoryView[];
   /** Google Calendar Events (issue #107) the calendar's own read-only
    * endpoint answers with — never filtered by calendar `enabled` here,
    * since that filtering is the backend's job (exercised in the backend
@@ -1600,6 +1643,10 @@ export function installFakeApi({
       labels: issue.labels.map((label) => ({ ...label })),
     })),
     githubIssueOverflow: { ...githubIssueOverflow },
+    repositoryViews: repositoryViews.map((view) => ({
+      ...view,
+      watched_repository_ids: [...view.watched_repository_ids],
+    })),
     events: events.map((event) => ({ ...event })),
     eventFailures: eventFailures.map((failure) => ({ ...failure })),
     standupEntries: standupEntries.map((entry) => ({
@@ -1748,11 +1795,67 @@ export function installFakeApi({
     return null;
   };
 
+  /** Unwatching a repository, or removing its GitHub Token, drops it from
+   * every Repository View (#580). */
+  const dropUnwatchedFromViews = (): void => {
+    for (const view of state.repositoryViews) {
+      view.watched_repository_ids = view.watched_repository_ids.filter((id) =>
+        state.watchedRepositories.some((w) => w.id === id),
+      );
+    }
+  };
+
+  /** Repository Views (#580), mirrored: list in sidebar order, create
+   * (last), read, update (any field) and delete. Null for a path it
+   * doesn't own. */
+  const repositoryViewsRoute = (method: string, url: URL, body: unknown): Response | null => {
+    if (url.pathname === "/api/v1/github/views") {
+      if (method === "GET") {
+        return json(
+          [...state.repositoryViews].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id),
+        );
+      }
+      if (method === "POST") {
+        const input = body as { name: string; watched_repository_ids?: number[] };
+        const last = Math.max(0, ...state.repositoryViews.map((v) => v.sort_order));
+        const created = fakeRepositoryView(
+          input.name,
+          [...(input.watched_repository_ids ?? [])].sort((a, b) => a - b),
+          { sort_order: last + 1024 },
+        );
+        state.repositoryViews.push(created);
+        return json(created, 201);
+      }
+      return null;
+    }
+    const match = /^\/api\/v1\/github\/views\/(\d+)$/.exec(url.pathname);
+    if (match === null) return null;
+    const id = Number(match[1]);
+    const view = state.repositoryViews.find((v) => v.id === id);
+    if (view === undefined) return notFound(`Repository View ${id} not found`);
+    if (method === "GET") return json(view);
+    if (method === "PATCH") {
+      const changes = body as Partial<FakeRepositoryView>;
+      Object.assign(view, changes);
+      if (changes.watched_repository_ids !== undefined) {
+        view.watched_repository_ids = [...changes.watched_repository_ids].sort((a, b) => a - b);
+      }
+      return json(view);
+    }
+    if (method === "DELETE") {
+      state.repositoryViews = state.repositoryViews.filter((v) => v.id !== id);
+      return new Response(null, { status: 204 });
+    }
+    return null;
+  };
+
   /** GitHub Tokens (#578), mirrored: list, add (validated against
    * `githubTokenIdentities`, one per owner) and remove; and the Watched
    * Repositories picker (#581): readable repositories deduplicated across
    * tokens, watch and unwatch. Null for a path it doesn't own. */
   const githubRoute = (method: string, url: URL, body: unknown): Response | null => {
+    const viewsResponse = repositoryViewsRoute(method, url, body);
+    if (viewsResponse !== null) return viewsResponse;
     if (method === "GET" && url.pathname === "/api/v1/github/tokens") {
       return json([...state.githubTokens].sort((a, b) => a.id - b.id));
     }
@@ -1847,6 +1950,7 @@ export function installFakeApi({
       state.githubTokens = state.githubTokens.filter((t) => t.id !== id);
       // A GitHub Token's Watched Repositories go with it.
       state.watchedRepositories = state.watchedRepositories.filter((w) => w.github_token_id !== id);
+      dropUnwatchedFromViews();
       return new Response(null, { status: 204 });
     }
     const readable = (token: FakeGitHubToken): FakeReadableRepository[] =>
@@ -1934,11 +2038,16 @@ export function installFakeApi({
       overflowByName: Record<string, number>,
       listPath: "pulls" | "issues",
     ): Response => {
-      // Shaped as the backend answers: only Watched Repositories, each
-      // with its overflow, and a status for each token that has any.
-      const watched = [...state.watchedRepositories].sort((a, b) =>
-        a.full_name.localeCompare(b.full_name),
-      );
+      // Shaped as the backend answers: only Watched Repositories (only a
+      // Repository View's, given `?view=`), each with its overflow, and a
+      // status for each token that has any.
+      const viewParam = url.searchParams.get("view");
+      const view =
+        viewParam === null ? null : state.repositoryViews.find((v) => v.id === Number(viewParam));
+      if (view === undefined) return notFound(`Repository View ${viewParam} not found`);
+      const watched = [...state.watchedRepositories]
+        .filter((w) => view === null || view.watched_repository_ids.includes(w.id))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
       // A token GitHub fails to read through hides only its own
       // repositories; one GitHub rejects needs reconnection (#584).
       const failing = (tokenId: number): "unavailable" | "needs_reconnect" | undefined => {
@@ -1997,6 +2106,7 @@ export function installFakeApi({
         return notFound(`Watched Repository ${id} not found`);
       }
       state.watchedRepositories = state.watchedRepositories.filter((w) => w.id !== id);
+      dropUnwatchedFromViews();
       return new Response(null, { status: 204 });
     }
     return null;
