@@ -53,7 +53,7 @@ from app.db import SessionDep
 from app.errors import APIError
 from app.event_cache import EventCache
 from app.models import GoogleAccount, GoogleCalendar, Task
-from app.user_settings import CurrentUserSettings, google_configured, google_oauth_client
+from app.user_settings import CurrentUserSettings, account_client, calendar_available
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
@@ -152,7 +152,7 @@ async def read_events(
         )
 
     settings: Settings = request.app.state.settings
-    if not google_configured(user_settings):
+    if not calendar_available(settings, user_settings):
         return EventsRead(events=[], failures=[])
 
     calendars = await _enabled_calendars(session)
@@ -177,7 +177,6 @@ async def read_events(
     calendar_source: CalendarSource = request.app.state.calendar_source
     event_cache: EventCache = request.app.state.event_cache
     assert settings.app_master_key is not None
-    oauth_client = google_oauth_client(user_settings, master_key=settings.app_master_key)
     owner_id = user_settings.user_id
     time_min = f"{range_start - timedelta(days=1)}T00:00:00Z"
     time_max = f"{range_end + timedelta(days=2)}T00:00:00Z"
@@ -201,6 +200,12 @@ async def read_events(
             # cache window never re-hits Google at all, not even to refresh.
             access_token = None
             if any(entries is None for entries in cached_by_calendar.values()):
+                # Each account refreshes with the client that minted its
+                # token (issue #586); one whose client is gone is as good
+                # as revoked.
+                oauth_client = account_client(account, settings, user_settings)
+                if oauth_client is None:
+                    raise TerminalCalendarSourceError("Its OAuth client is no longer configured")
                 refresh_token = decrypt_credential(
                     account.encrypted_refresh_token, key=settings.app_master_key
                 )

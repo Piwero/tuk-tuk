@@ -314,7 +314,13 @@ function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps):
 
   async function handleRemove(): Promise<void> {
     await removeGoogleIntegration();
-    onSaved({ configured: false, client_id: null, client_secret_set: false });
+    // With the instance's shared client (#586), Calendar stays available.
+    onSaved({
+      configured: status.shared_client,
+      shared_client: status.shared_client,
+      client_id: null,
+      client_secret_set: false,
+    });
   }
 
   return (
@@ -1370,7 +1376,12 @@ function MyAccountPanel({
       })
       .catch(() => {
         if (!cancelled) {
-          setGoogleStatus({ configured: false, client_id: null, client_secret_set: false });
+          setGoogleStatus({
+            configured: false,
+            shared_client: false,
+            client_id: null,
+            client_secret_set: false,
+          });
         }
       });
     return () => {
@@ -1736,10 +1747,14 @@ function MyAccountPanel({
                       : "Not set up"}
                 </span>
               </div>
-              <div className="settings-subsection">
-                <h3>Google API credentials</h3>
-                <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
-              </div>
+              {/* With the instance's shared client (#586) nobody needs their
+               * own; it stays manageable for anyone who already has one. */}
+              {(!googleStatus.shared_client || googleStatus.client_id !== null) && (
+                <div className="settings-subsection">
+                  <h3>Google API credentials</h3>
+                  <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
+                </div>
+              )}
               {googleStatus.configured && (
                 <div className="settings-subsection">
                   {googleOAuthError && (

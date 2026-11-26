@@ -125,6 +125,10 @@ notifications** should now offer **Enable on this device**.
 
 ⏱ 15 min, one time. Shows your Google events next to your tasks, read-only.
 
+Running Tuk Tuk for several people? Set up [Google sign-in and
+invitations](google-sign-in.md) instead: one shared client for everyone,
+and nobody needs the steps below.
+
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a
    project and enable the **Google Calendar API**.
 2. Set up the **OAuth consent screen** (type: External) and add yourself as a user.

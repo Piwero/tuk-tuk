@@ -75,6 +75,12 @@ spec:
             - secretRef:
                 name: tuk-tuk-mcp-service
                 optional: true
+            # Optional: the shared Google client and SMTP for invite-only
+            # Google sign-in (issue #586, ADR 0021). Absent, sign-in stays
+            # password-only and there are no invitations.
+            - secretRef:
+                name: tuk-tuk-sso
+                optional: true
           readinessProbe:
             httpGet:
               path: /health

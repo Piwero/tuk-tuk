@@ -742,8 +742,19 @@ def connect_google(
         email=f"{name}@gmail.com",
         refresh_token=refresh_token,
     )
-    callback = actor.request(
-        "GET", "/api/v1/google/callback?" + urlencode({"code": f"{name}-code", "state": state})
+    # The consent's browser-bound transaction cookie (issue #586) goes back
+    # with the callback, as the browser that started the consent would send it.
+    consent = redirect.cookies.get("tuktuk_google_calendar_oauth")
+    assert consent is not None
+    cookie = "; ".join(
+        part
+        for part in (actor.credentials.get("Cookie"), f"tuktuk_google_calendar_oauth={consent}")
+        if part
+    )
+    actor.client.cookies.clear()
+    callback = actor.client.get(
+        "/api/v1/google/callback?" + urlencode({"code": f"{name}-code", "state": state}),
+        headers={**actor.credentials, "Cookie": cookie},
     )
     assert "googleConnected=1" in callback.headers["location"], callback.headers
     calendar_source.register_calendars(

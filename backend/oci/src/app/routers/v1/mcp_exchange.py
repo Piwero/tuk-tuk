@@ -19,11 +19,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from app.api_tokens import find_live_token, mark_used, owner_of
+from app.api_tokens import find_token, mark_used, owner_of
 from app.app_settings import require_app_settings
 from app.errors import APIError, NotFoundError, error_response
 from app.mcp_exchange import ACCESS_LIFETIME, MCP_EXCHANGE_PATH, issue_access
-from app.middleware import forced_step
+from app.middleware import forced_step, token_login_method
 from app.models import User
 from app.ownership import acting_as
 
@@ -63,13 +63,15 @@ async def exchange_mcp_token(
     # are searched (app.api_tokens).
     with acting_as(user_id):
         async with request.app.state.session_factory() as db_session:
-            api_token = await find_live_token(db_session, payload.token)
+            api_token = await find_token(db_session, payload.token)
             user = await db_session.get(User, user_id) if api_token is not None else None
             if api_token is None or user is None:
                 return _invalid_token()
             if not user.is_active:
                 return error_response(401, "account_disabled", "This account is disabled")
-            blocked = forced_step(user)
+            if api_token.revoked_at is not None:
+                return _invalid_token()
+            blocked = forced_step(user, token_login_method(user))
             if blocked is not None:
                 return blocked
             token_id = api_token.id

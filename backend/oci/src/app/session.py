@@ -8,6 +8,7 @@ longer matches the one in an older cookie (app.middleware).
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from itsdangerous import BadSignature, URLSafeSerializer
 from starlette.responses import Response
@@ -17,6 +18,11 @@ from app.config import Settings
 SESSION_COOKIE_NAME = "tuktuk_session"
 
 _SALT = "tuk-tuk-session"
+
+# How the session was signed in (issue #586). A Google session is never
+# asked to replace a temporary password: that step belongs to the next
+# password login (app.middleware.forced_step).
+LoginMethod = Literal["password", "google"]
 
 # Returns the current, timezone-aware UTC time. Injected everywhere the
 # session lifecycle needs "now", so tests can drive expiry and reissue
@@ -39,12 +45,21 @@ class SessionClaims:
     user_id: int
     epoch: int
     issued_at: datetime
+    method: LoginMethod = "password"
 
 
-def issue_session_token(session_key: str, *, user_id: int, epoch: int, issued_at: datetime) -> str:
-    token: str = _serializer(session_key).dumps(
-        {"uid": user_id, "ep": epoch, "iat": issued_at.timestamp()}
-    )
+def issue_session_token(
+    session_key: str,
+    *,
+    user_id: int,
+    epoch: int,
+    issued_at: datetime,
+    method: LoginMethod = "password",
+) -> str:
+    payload: dict[str, object] = {"uid": user_id, "ep": epoch, "iat": issued_at.timestamp()}
+    if method == "google":
+        payload["m"] = "google"
+    token: str = _serializer(session_key).dumps(payload)
     return token
 
 
@@ -57,6 +72,7 @@ def set_session_cookie(
     user_id: int,
     epoch: int,
     issued_at: datetime | None = None,
+    method: LoginMethod = "password",
 ) -> None:
     """Sign and attach `user_id`'s session cookie, at `epoch`, to `response`. Inaccessible to
     JavaScript, sent only to this site, and `Secure` per configuration —
@@ -74,7 +90,11 @@ def set_session_cookie(
     matters for CSRF.
     """
     token = issue_session_token(
-        session_key, user_id=user_id, epoch=epoch, issued_at=issued_at or clock()
+        session_key,
+        user_id=user_id,
+        epoch=epoch,
+        issued_at=issued_at or clock(),
+        method=method,
     )
     response.set_cookie(
         SESSION_COOKIE_NAME,
@@ -127,7 +147,8 @@ def verify_session_token(
     issued_at = datetime.fromtimestamp(iat, tz=UTC)
     if clock() - issued_at > timedelta(days=settings.auth_session_lifetime_days):
         return None
-    return SessionClaims(user_id=user_id, epoch=epoch, issued_at=issued_at)
+    method: LoginMethod = "google" if payload.get("m") == "google" else "password"
+    return SessionClaims(user_id=user_id, epoch=epoch, issued_at=issued_at, method=method)
 
 
 def needs_reissue(issued_at: datetime, settings: Settings, clock: Clock) -> bool:

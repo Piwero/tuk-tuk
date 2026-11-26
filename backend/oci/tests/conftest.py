@@ -30,13 +30,18 @@ os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://unused:unused@localh
 os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0.001")
 
 import asyncio  # noqa: E402
+import base64  # noqa: E402
 import itertools  # noqa: E402
+import json  # noqa: E402
 from collections.abc import Iterator, Sequence  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
+from email.message import EmailMessage  # noqa: E402
 from typing import Any  # noqa: E402
 
 import psycopg  # noqa: E402
 import pytest  # noqa: E402
+from cryptography.hazmat.primitives import hashes  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import padding, rsa  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
@@ -69,6 +74,8 @@ from app.github_source import (  # noqa: E402
     RepositoryPullRequests,
     TerminalGitHubSourceError,
 )
+from app.google_identity import GoogleSignInError, pkce_challenge  # noqa: E402
+from app.mailer import MailDeliveryError  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import SEED_USER_ID, AppSettings, User, UserSettings  # noqa: E402
 from app.user_settings import user_settings_from_env  # noqa: E402
@@ -303,6 +310,7 @@ class FakeCalendarSource:
         # The OAuth client every exchange and refresh was made with — each
         # user's own (issue #409), recorded so a test can assert which one.
         self.exchanged_with: list[GoogleOAuthClient] = []
+        self.exchanged_verifiers: list[str | None] = []
         self.refreshed_with: list[GoogleOAuthClient] = []
         self._codes: dict[str, ExchangedCredential] = {}
         self._calendars: dict[str, list[CalendarListEntry]] = {}
@@ -323,9 +331,16 @@ class FakeCalendarSource:
         )
 
     async def exchange_code(
-        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str
+        self,
+        oauth_client: GoogleOAuthClient,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
     ) -> ExchangedCredential:
         self.exchanged_with.append(oauth_client)
+        # The PKCE verifier each exchange presented (issue #586), so a test
+        # can check it against the challenge the consent URL carried.
+        self.exchanged_verifiers.append(code_verifier)
         try:
             return self._codes[code]
         except KeyError:
@@ -636,12 +651,123 @@ def fake_github_source() -> FakeGitHubSource:
     return FakeGitHubSource()
 
 
+class FakeMailer:
+    """A fake Mailer (issue #586): records each message it is handed, or
+    refuses them all while `failing` is set, as an unreachable or refusing
+    mail server would."""
+
+    def __init__(self) -> None:
+        self.sent: list[EmailMessage] = []
+        self.failing: str | None = None
+
+    async def send(self, message: EmailMessage) -> None:
+        if self.failing is not None:
+            raise MailDeliveryError(self.failing)
+        self.sent.append(message)
+
+
+@pytest.fixture
+def fake_mailer() -> FakeMailer:
+    return FakeMailer()
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+_GOOGLE_TEST_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+class FakeGoogleSignIn:
+    """A fake GoogleSignIn (issue #586) that behaves like Google's token
+    endpoint: an authorization code is registered with the PKCE challenge
+    and the claims Google would sign, and exchanging it with the wrong
+    verifier, or a second time, is refused. ID tokens are real RS256 JWTs
+    signed with a test key, so the app's own verification runs unchanged.
+    """
+
+    KID = "test-key"
+
+    def __init__(self, clock: "FakeClock") -> None:
+        self._clock = clock
+        self._codes: dict[str, tuple[str, dict[str, Any]]] = {}
+        self.exchanged_redirect_uris: list[str] = []
+
+    def sign(self, claims: dict[str, Any], *, key: Any = None, kid: str = KID) -> str:
+        header = _b64url(json.dumps({"alg": "RS256", "kid": kid, "typ": "JWT"}).encode())
+        payload = _b64url(json.dumps(claims).encode())
+        signature = (key or _GOOGLE_TEST_KEY).sign(
+            f"{header}.{payload}".encode(), padding.PKCS1v15(), hashes.SHA256()
+        )
+        return f"{header}.{payload}.{_b64url(signature)}"
+
+    def claims(
+        self,
+        *,
+        subject: str,
+        email: str,
+        nonce: str,
+        email_verified: bool = True,
+        audience: str = "shared-client-id",
+        **overrides: Any,
+    ) -> dict[str, Any]:
+        now = self._clock().timestamp()
+        return {
+            "iss": "https://accounts.google.com",
+            "aud": audience,
+            "sub": subject,
+            "email": email,
+            "email_verified": email_verified,
+            "nonce": nonce,
+            "iat": int(now),
+            "exp": int(now) + 3600,
+            **overrides,
+        }
+
+    def register_code(self, code: str, code_challenge: str, id_token: str) -> None:
+        self._codes[code] = (code_challenge, {"id_token": id_token})
+
+    async def exchange_code(
+        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str, code_verifier: str
+    ) -> str:
+        self.exchanged_redirect_uris.append(redirect_uri)
+        registered = self._codes.pop(code, None)
+        if registered is None:
+            raise GoogleSignInError("invalid_grant")
+        challenge, body = registered
+        if pkce_challenge(code_verifier) != challenge:
+            raise GoogleSignInError("invalid_grant: code_verifier mismatch")
+        return str(body["id_token"])
+
+    async def signing_keys(self) -> list[dict[str, Any]]:
+        numbers = _GOOGLE_TEST_KEY.public_key().public_numbers()
+
+        def encode(value: int) -> str:
+            return _b64url(value.to_bytes((value.bit_length() + 7) // 8, "big"))
+
+        return [
+            {
+                "kty": "RSA",
+                "kid": self.KID,
+                "alg": "RS256",
+                "n": encode(numbers.n),
+                "e": encode(numbers.e),
+            }
+        ]
+
+
+@pytest.fixture
+def fake_google_sign_in(fake_clock: FakeClock) -> FakeGoogleSignIn:
+    return FakeGoogleSignIn(fake_clock)
+
+
 @pytest.fixture
 def unauthenticated_client(
     database_url: str,
     fake_clock: FakeClock,
     fake_calendar_source: FakeCalendarSource,
     fake_github_source: FakeGitHubSource,
+    fake_mailer: FakeMailer,
 ) -> Iterator[TestClient]:
     """The app past first-run setup, with the test admin (TEST_USERNAME /
     TEST_PASSWORD) created, but not logged in."""
@@ -650,6 +776,7 @@ def unauthenticated_client(
         clock=fake_clock,
         calendar_source=fake_calendar_source,
         github_source=fake_github_source,
+        mailer=fake_mailer,
     )
     with TestClient(app) as test_client:
         create_user_row(app, first_admin=True)

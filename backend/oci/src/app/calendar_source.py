@@ -107,9 +107,14 @@ class TerminalCalendarSourceError(CalendarSourceError):
 
 class CalendarSource(Protocol):
     async def exchange_code(
-        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str
+        self,
+        oauth_client: GoogleOAuthClient,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
     ) -> ExchangedCredential:
-        """Exchange a one-time authorization code for a refresh credential
+        """Exchange a one-time authorization code (with the PKCE verifier
+        its consent was started with, issue #586) for a refresh credential
         and the identity (Google account id, email) it belongs to."""
         ...
 

@@ -127,3 +127,34 @@ def test_app_starts_with_google_configured() -> None:
     )
 
     create_app(settings)
+
+
+def test_app_refuses_unencrypted_smtp_outside_development() -> None:
+    """Issue #586: SMTP credentials are never sent in the clear in production."""
+    settings = Settings(
+        app_master_key="a-master-key",
+        smtp_host="mail.example.com",
+        smtp_from="tuk-tuk@example.com",
+        smtp_security="none",
+    )
+
+    with pytest.raises(RuntimeError, match="SMTP_SECURITY"):
+        create_app(settings)
+
+
+def test_app_refuses_smtp_without_a_sender() -> None:
+    settings = Settings(app_master_key="a-master-key", smtp_host="mail.example.com")
+
+    with pytest.raises(RuntimeError, match="SMTP_FROM"):
+        create_app(settings)
+
+
+def test_app_starts_with_tls_smtp_configured() -> None:
+    settings = Settings(
+        app_master_key="a-master-key",
+        smtp_host="mail.example.com",
+        smtp_from="tuk-tuk@example.com",
+        smtp_security="starttls",
+    )
+
+    assert create_app(settings).state.mailer is not None

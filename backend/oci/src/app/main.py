@@ -20,9 +20,12 @@ from app.github_adapter import GitHubApiSource
 from app.github_cache import GitHubReadCache
 from app.github_source import GitHubSource, OpenIssues, OpenPullRequests
 from app.google_adapter import GoogleCalendarSource
+from app.google_identity import GoogleSignIn, GoogleSignInAdapter
+from app.mailer import Mailer, build_mailer
 from app.middleware import SessionAuthMiddleware
 from app.ownership import create_session_factory
 from app.routers.v1 import (
+    admin_invitations,
     admin_users,
     api_tokens,
     assist,
@@ -54,6 +57,7 @@ from app.routers.v1 import (
     timers,
     voice,
 )
+from app.routers.v1 import google_sign_in as google_sign_in_router
 from app.routers.v1 import settings as settings_router
 from app.session import Clock, real_clock
 from app.user_settings import user_settings_from_env
@@ -65,6 +69,8 @@ def create_app(
     clock: Clock | None = None,
     calendar_source: CalendarSource | None = None,
     github_source: GitHubSource | None = None,
+    google_sign_in: GoogleSignIn | None = None,
+    mailer: Mailer | None = None,
 ) -> FastAPI:
     app_settings = settings or default_settings
     app_clock = clock or real_clock
@@ -73,6 +79,10 @@ def create_app(
     app_calendar_source = calendar_source or GoogleCalendarSource()
     # Holds no credentials either: each call names a User's GitHub Token.
     app_github_source = github_source or GitHubApiSource()
+    app_google_sign_in = google_sign_in or GoogleSignInAdapter()
+    # None when SMTP is not configured: invitations then record a delivery
+    # failure instead of being emailed (issue #586).
+    app_mailer = mailer if mailer is not None else build_mailer(app_settings)
 
     if not app_settings.app_master_key:
         raise RuntimeError(
@@ -115,6 +125,8 @@ def create_app(
     app.state.clock = app_clock
     app.state.calendar_source = app_calendar_source
     app.state.github_source = app_github_source
+    app.state.google_sign_in = app_google_sign_in
+    app.state.mailer = app_mailer
     app.state.event_cache = EventCache(clock=app_clock)
     app.state.github_pull_request_cache = GitHubReadCache[OpenPullRequests](clock=app_clock)
     app.state.github_issue_cache = GitHubReadCache[OpenIssues](clock=app_clock)
@@ -126,6 +138,7 @@ def create_app(
         allow_headers=["*"],
     )
     register_error_handlers(app)
+    app.include_router(admin_invitations.router)
     app.include_router(admin_users.router)
     app.include_router(api_tokens.router)
     app.include_router(assist.router)
@@ -144,6 +157,7 @@ def create_app(
     app.include_router(github_view.router)
     app.include_router(goals.router)
     app.include_router(google.router)
+    app.include_router(google_sign_in_router.router)
     app.include_router(habits.router)
     app.include_router(habits.check_ins_router)
     app.include_router(key_results.router)

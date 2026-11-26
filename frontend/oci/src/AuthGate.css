@@ -8,6 +8,23 @@
     background: var(--surface-sunken);
   }
 
+  /* Between password sign-in and Continue with Google (#586). */
+  .auth-gate-divider {
+    margin: 0;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .auth-gate-invited {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  .auth-gate-invited strong {
+    color: var(--text-primary);
+  }
+
   .auth-gate-form {
     display: flex;
     flex-direction: column;

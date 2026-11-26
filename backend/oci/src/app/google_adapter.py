@@ -120,19 +120,23 @@ class GoogleCalendarSource:
             raise TransientCalendarSourceError(f"Network error {action}: {exc}") from exc
 
     async def exchange_code(
-        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str
+        self,
+        oauth_client: GoogleOAuthClient,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
     ) -> ExchangedCredential:
+        data = {
+            "code": code,
+            "client_id": oauth_client.client_id,
+            "client_secret": oauth_client.client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        if code_verifier is not None:
+            data["code_verifier"] = code_verifier
         async with self._client("exchanging the authorization code") as client:
-            token_response = await client.post(
-                TOKEN_URL,
-                data={
-                    "code": code,
-                    "client_id": oauth_client.client_id,
-                    "client_secret": oauth_client.client_secret,
-                    "redirect_uri": redirect_uri,
-                    "grant_type": "authorization_code",
-                },
-            )
+            token_response = await client.post(TOKEN_URL, data=data)
             if token_response.status_code != 200:
                 _raise_for_error_response(token_response, "Google rejected the authorization code")
             token_body = token_response.json()

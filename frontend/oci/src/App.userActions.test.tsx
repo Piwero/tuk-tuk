@@ -292,6 +292,8 @@ describe("The row menu by keyboard", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(within(menu).getByRole("menuitem", { name: "Reset password" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
+    expect(within(menu).getByRole("menuitem", { name: "Change email" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
     expect(within(menu).getByRole("menuitem", { name: "Make admin" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
     expect(within(menu).getByRole("menuitem", { name: "Disable user" })).toHaveFocus();
@@ -310,6 +312,7 @@ describe("The row menu by keyboard", () => {
         name: "Reset password",
       }),
     ).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
     await user.keyboard("{ArrowDown}");
     await user.keyboard("{Enter}");
 

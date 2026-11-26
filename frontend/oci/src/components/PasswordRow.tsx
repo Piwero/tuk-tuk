@@ -163,6 +163,19 @@ export function PasswordRow({ user, onUserChange }: PasswordRowProps): React.JSX
     void fetchCurrentUser().then(onUserChange);
   }
 
+  // Admitted by invitation, signing in with Google only (#586): there is no
+  // password to change. An Admin can give one for recovery.
+  if (!user.has_password) {
+    return (
+      <div className="password-row">
+        <div>
+          <h3>Password</h3>
+          <p className="settings-hint">None. You sign in with Google.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="password-row">
       <div>

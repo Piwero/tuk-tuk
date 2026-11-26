@@ -22,6 +22,9 @@ ACCOUNT_FIELDS = {
     "must_complete_profile",
     "created_at",
     "last_active_at",
+    # How the account signs in (issue #586): booleans and an email, no secret.
+    "has_password",
+    "google_email",
 }
 NEW_USER = {"username": "cy", "email": "cy@example.com", "temp_password": TEMP_PASSWORD}
 
@@ -112,6 +115,8 @@ class TestCreatingAUser:
             "must_complete_profile": False,
             "created_at": None,
             "last_active_at": None,
+            "has_password": True,
+            "google_email": None,
         }
         client.cookies.clear()
         log_in(client, "cy@example.com", TEMP_PASSWORD)
@@ -341,4 +346,6 @@ class TestListingUsers:
             "must_complete_profile": False,
             "created_at": None,
             "last_active_at": None,
+            "has_password": True,
+            "google_email": None,
         }
