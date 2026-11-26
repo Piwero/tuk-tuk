@@ -38,6 +38,10 @@ You can connect several Google accounts, such as work and personal.
 
 - **Click an event** to see its location, attendees and description.
   **Convert to task** turns it into a task you can tick off.
+- **Planned work** shows as its own dashed block labelled *Planned work*,
+  with its buffer drawn underneath. Drag it or its edges to change the plan,
+  or click it and use the **Planned work** row in the task. Moving it never
+  changes the due date. Events are labelled *Event · read-only*.
 - **Declined events are hidden.** Invites you haven't answered still show.
 - **Active hours:** **Settings → Active hours** makes your working hours
   taller and the rest of the day compact, so short tasks are easier to read.

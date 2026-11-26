@@ -2396,7 +2396,13 @@ export function installFakeApi({
           );
         }
         // Mirror the backend's calendar window: inclusive day intersection.
+        // Planned work (#562) brings its Task in too, read on the plan's own day.
         items = items.filter((task) => {
+          const plan = task.planned_work ?? null;
+          const planned = plan === null ? null : zonedDay(plan.start, plan.time_zone);
+          if (planned !== null && rangeStart <= planned && planned <= rangeEnd) {
+            return true;
+          }
           const window = dayWindow(task);
           return window !== null && window[0] <= rangeEnd && window[1] >= rangeStart;
         });

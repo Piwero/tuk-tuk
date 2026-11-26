@@ -6,6 +6,7 @@ export type DragPayload =
   | { kind: "list"; id: number }
   | { kind: "folder"; id: number }
   | { kind: "task"; id: number }
+  | { kind: "planned-work"; id: number }
   | { kind: "check-item"; id: number }
   | { kind: "section"; id: number }
   | { kind: "standup-bullet"; id: number }

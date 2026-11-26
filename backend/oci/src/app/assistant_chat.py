@@ -509,7 +509,7 @@ def _parse_date(value: object) -> date | None:
 async def _find_tasks(
     session: AsyncSession, arguments: dict[str, Any]
 ) -> tuple[dict[str, Any], set[int]]:
-    """The `find_tasks` tool: tasks whose scheduled window intersects
+    """The `find_tasks` tool: tasks whose scheduled window (or Planned work) intersects
     [range_start, range_end], outside the week the snapshot already
     covers. Reuses `in_range_window`, the same predicate the calendar's
     own range query runs in Python, rather than a second date dialect."""
