@@ -62,9 +62,11 @@ import {
   containerForPath,
   pathForContainer,
   pathForCalendarMode,
+  pathForRepositoryView,
   pathForSettingsTab,
   pathForSmartView,
   pathForStaticView,
+  repositoryViewForPath,
   settingsTabForPath,
   smartViewForPath,
   staticViewKindForPath,
@@ -87,6 +89,8 @@ import { EventDetail } from "./components/EventDetail";
 import { FocusStatsView } from "./components/FocusStatsPanel";
 import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
+import { AllWatchedGitHubView, RepositoryViewPage } from "./components/RepositoryViewPage";
+import { useRepositoryViews } from "./useRepositoryViews";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { AssistantPage } from "./components/AssistantPage";
@@ -128,6 +132,8 @@ type View =
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar"; mode: CalendarMode }
   | { kind: "goals" }
+  // `viewId`: one Repository View (#580); absent, every Watched Repository.
+  | { kind: "github"; viewId?: number }
   | { kind: "habits" }
   | { kind: "standup" }
   | { kind: "assistant" }
@@ -183,6 +189,7 @@ function staticViewKindOf(view: View): StaticViewKind | null {
   if (
     view?.kind === "calendar" ||
     view?.kind === "goals" ||
+    view?.kind === "github" ||
     view?.kind === "habits" ||
     view?.kind === "standup" ||
     view?.kind === "assistant" ||
@@ -212,6 +219,10 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
       return { kind: "smart", view: smartViewForPath(pathname) ?? "today" };
     case "goals":
       return { kind: "goals" };
+    case "github": {
+      const viewId = repositoryViewForPath(pathname);
+      return viewId === null ? { kind: "github" } : { kind: "github", viewId };
+    }
     case "habits":
       return { kind: "habits" };
     case "standup":
@@ -292,6 +303,8 @@ export function App({
   }, [currentUserId]);
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const repositoryViews = useRepositoryViews();
+  const { reload: reloadRepositoryViews } = repositoryViews;
   const [tags, setTags] = useState<Tag[]>([]);
   // Resolved from the URL on the very first render (rather than in a mount
   // effect) so a direct load of a static path never runs a render with the
@@ -457,7 +470,8 @@ export function App({
   // navigating within the app — that must never itself push or replace
   // history, since the browser already positioned it there.
   const lastSyncedKindRef = useRef<string | null>(
-    containerForPath(window.location.pathname)
+    containerForPath(window.location.pathname) ||
+      repositoryViewForPath(window.location.pathname) !== null
       ? window.location.pathname
       : staticViewKindForPath(window.location.pathname),
   );
@@ -504,10 +518,13 @@ export function App({
   // Container destinations and List modes each get a history entry.
   // Search edits stay within their view; Back/Forward never pushes.
   useEffect(() => {
+    // A Repository View (#580) has its own path, like a container.
     const containerPath =
       view && (view.kind === "list" || view.kind === "tag" || view.kind === "folder")
         ? pathForContainer(view)
-        : null;
+        : view?.kind === "github" && view.viewId !== undefined
+          ? pathForRepositoryView(view.viewId)
+          : null;
     const kind = containerPath ?? staticViewKindOf(view);
     if (suppressNextSyncRef.current) {
       suppressNextSyncRef.current = false;
@@ -661,6 +678,7 @@ export function App({
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
       view?.kind === "goals" ||
+      view?.kind === "github" ||
       view?.kind === "habits" ||
       view?.kind === "standup" ||
       view?.kind === "assistant" ||
@@ -709,6 +727,7 @@ export function App({
       view === null ||
       view.kind === "calendar" ||
       view.kind === "goals" ||
+      view.kind === "github" ||
       view.kind === "habits" ||
       view.kind === "standup" ||
       view.kind === "assistant" ||
@@ -1246,6 +1265,16 @@ export function App({
   // so the two surfaces never disagree about which destination is active.
   const calendarSelected = view?.kind === "calendar";
   const goalsSelected = view?.kind === "goals";
+  const githubSelected = view?.kind === "github" && view.viewId === undefined;
+  const selectedRepositoryViewId = view?.kind === "github" ? (view.viewId ?? null) : null;
+  const selectedRepositoryView =
+    repositoryViews.views?.find((v) => v.id === selectedRepositoryViewId) ?? null;
+  // Unwatching a repository in Settings drops it from every Repository View
+  // (#580), so opening one reads them afresh.
+  const openGitHubViewKey = view?.kind === "github" ? (view.viewId ?? 0) : null;
+  useEffect(() => {
+    if (openGitHubViewKey !== null) reloadRepositoryViews();
+  }, [openGitHubViewKey, reloadRepositoryViews]);
   const habitsSelected = view?.kind === "habits";
   const standupSelected = view?.kind === "standup";
   const assistantSelected = view?.kind === "assistant";
@@ -1457,6 +1486,15 @@ export function App({
               calendarEnabled={sectionSettings.calendar}
               goalsSelected={goalsSelected}
               goalsEnabled={sectionSettings.goals}
+              githubSelected={githubSelected}
+              onSelectGitHub={() => switchView({ kind: "github" })}
+              repositoryViews={repositoryViews.views ?? []}
+              selectedRepositoryViewId={selectedRepositoryViewId}
+              onSelectRepositoryView={(viewId) => switchView({ kind: "github", viewId })}
+              onCreateRepositoryView={async (name) => {
+                const created = await repositoryViews.create(name, []);
+                switchView({ kind: "github", viewId: created.id });
+              }}
               habitsSelected={habitsSelected}
               habitsEnabled={sectionSettings.habits}
               standupSelected={standupSelected}
@@ -1530,6 +1568,8 @@ export function App({
                         "Calendar"
                       ) : view?.kind === "goals" ? (
                         "Goals"
+                      ) : view?.kind === "github" ? (
+                        (selectedRepositoryView?.name ?? "GitHub")
                       ) : view?.kind === "habits" ? (
                         "Habits"
                       ) : view?.kind === "standup" ? (
@@ -1764,6 +1804,24 @@ export function App({
                   />
                 ) : view?.kind === "goals" ? (
                   <GoalsView />
+                ) : view?.kind === "github" ? (
+                  view.viewId === undefined ? (
+                    <AllWatchedGitHubView
+                      onOpenSettings={() => switchView({ kind: "settings", tab: "github" })}
+                    />
+                  ) : selectedRepositoryView !== null ? (
+                    <RepositoryViewPage
+                      key={selectedRepositoryView.id}
+                      view={selectedRepositoryView}
+                      repositoryViews={repositoryViews}
+                      onOpenSettings={() => switchView({ kind: "settings", tab: "github" })}
+                      onDeleted={() => switchView({ kind: "github" })}
+                    />
+                  ) : repositoryViews.views === null ? (
+                    <p className="github-loading">Loading…</p>
+                  ) : (
+                    <p className="github-empty">This Repository View doesn’t exist.</p>
+                  )
                 ) : view?.kind === "habits" ? (
                   <HabitsView refreshToken={habitsRefresh} />
                 ) : view?.kind === "standup" ? (

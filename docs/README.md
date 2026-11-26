@@ -14,6 +14,7 @@ For anyone using Tuk Tuk day to day.
    - [Tasks, lists and boards](guide/features/tasks.md)
    - [Quick-Add and keyboard shortcuts](guide/features/quick-add.md)
    - [Calendar and Google Calendar](guide/features/calendar.md)
+   - [GitHub](guide/features/github.md)
    - [Habits](guide/features/habits.md)
    - [Focus timer](guide/features/focus.md)
    - [Goals and daily stand-up](guide/features/goals-and-standup.md)

@@ -742,6 +742,284 @@ export function disconnectGoogleAccount(accountId: number): Promise<void> {
   return request(`/api/v1/google/accounts/${accountId}`, { method: "DELETE" });
 }
 
+export type GitHubOwnerKind = "user" | "organization";
+
+/** Whether GitHub still accepts a GitHub Token (#584). */
+export type GitHubConnectionState = "connected" | "needs_reconnect";
+
+/** A GitHub Token (#578): a fine-grained personal access token, listed by
+ * the GitHub owner it grants access to. Its value is write-only: no
+ * response ever carries it. The owner is null until GitHub can tell it: a
+ * token an organisation hasn't yet allowed or approved reads nothing, so
+ * GitHub can't say whose it is (ADR 0020). */
+export interface GitHubToken {
+  id: number;
+  owner_login: string | null;
+  owner_kind: GitHubOwnerKind | null;
+  expires_at: string | null;
+  /** Expires within 7 days, or already has (#584). */
+  expires_soon: boolean;
+  connection_state: GitHubConnectionState;
+  created_at: string;
+}
+
+export function fetchGitHubTokens(): Promise<GitHubToken[]> {
+  return request("/api/v1/github/tokens");
+}
+
+export function createGitHubToken(token: string): Promise<GitHubToken> {
+  return request("/api/v1/github/tokens", { method: "POST", body: JSON.stringify({ token }) });
+}
+
+/** Reconnect (#584): replaces the token of an existing GitHub Token with
+ * a replacement for the same owner, keeping its Watched Repositories. */
+export function reconnectGitHubToken(tokenId: number, token: string): Promise<GitHubToken> {
+  return request(`/api/v1/github/tokens/${tokenId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function deleteGitHubToken(tokenId: number): Promise<void> {
+  return request(`/api/v1/github/tokens/${tokenId}`, { method: "DELETE" });
+}
+
+/** One repository the Watched Repositories picker offers (#581): readable
+ * through `github_token_id`, and already watched when
+ * `watched_repository_id` is set. Offered once even when several GitHub
+ * Tokens can read it. */
+export interface AccessibleRepository {
+  github_repo_id: number;
+  full_name: string;
+  private: boolean;
+  github_token_id: number;
+  watched_repository_id: number | null;
+}
+
+/** How one GitHub Token fared in the picker. A token GitHub accepted that
+ * reads no repositories usually belongs to an organisation that has not
+ * allowed or approved fine-grained tokens yet. */
+export interface RepositoryPickerToken {
+  id: number;
+  owner_login: string | null;
+  status: "ok" | "unavailable" | "needs_reconnect";
+  repository_count: number;
+}
+
+export interface RepositoryPicker {
+  repositories: AccessibleRepository[];
+  tokens: RepositoryPickerToken[];
+}
+
+/** A Watched Repository (#581), read through the GitHub Token it was
+ * picked with. */
+export interface WatchedRepository {
+  id: number;
+  github_token_id: number;
+  github_repo_id: number;
+  full_name: string;
+  private: boolean;
+  created_at: string;
+}
+
+export function fetchRepositoryPicker(): Promise<RepositoryPicker> {
+  return request("/api/v1/github/repositories");
+}
+
+export function fetchWatchedRepositories(): Promise<WatchedRepository[]> {
+  return request("/api/v1/github/watched-repositories");
+}
+
+export function watchRepository(
+  githubTokenId: number,
+  githubRepoId: number,
+): Promise<WatchedRepository> {
+  return request("/api/v1/github/watched-repositories", {
+    method: "POST",
+    body: JSON.stringify({ github_token_id: githubTokenId, github_repo_id: githubRepoId }),
+  });
+}
+
+export function unwatchRepository(watchedRepositoryId: number): Promise<void> {
+  return request(`/api/v1/github/watched-repositories/${watchedRepositoryId}`, {
+    method: "DELETE",
+  });
+}
+
+/** A Pull Request's relationship to the User (#579), worked out by the
+ * backend: a review requested from them outranks having written it. */
+export type PullRequestRelationship = "review_requested" | "mine" | "other";
+
+/** One open Pull Request in the GitHub view (#579). Read live from GitHub
+ * and never stored. `author` is null for a deleted GitHub account. */
+export interface GitHubPullRequest {
+  watched_repository_id: number;
+  /** `owner/name`. */
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  is_draft: boolean;
+  review_decision: "approved" | "changes_requested" | "pending";
+  /** Null when the repository runs no checks. */
+  ci_status: "pass" | "fail" | "pending" | null;
+  relationship: PullRequestRelationship;
+}
+
+/** How much of one Watched Repository a GitHub view read shows: at most
+ * 100 items, with `overflow_count` more at `overflow_url` on GitHub. */
+export interface GitHubRepositoryRead {
+  watched_repository_id: number;
+  full_name: string;
+  total_count: number;
+  overflow_count: number;
+  overflow_url: string;
+}
+
+/** How one GitHub Token fared in a GitHub view read. `stale`: GitHub
+ * couldn't be reached, so its items are its last result from under 10
+ * minutes ago (#583). */
+export interface GitHubTokenReadStatus {
+  id: number;
+  owner_login: string | null;
+  status: "ok" | "stale" | "unavailable" | "needs_reconnect";
+  expires_at: string | null;
+  /** Expires within 7 days, or already has (#584). */
+  expires_soon: boolean;
+}
+
+/** A GitHub view read (#579, #582): the items in the backend's order, how
+ * much of each Watched Repository they cover, and how each GitHub Token
+ * fared. */
+export interface GitHubViewRead<Item> {
+  items: Item[];
+  repositories: GitHubRepositoryRead[];
+  tokens: GitHubTokenReadStatus[];
+  /** When the oldest items shown were fetched from GitHub (#583). */
+  fetched_at: string;
+  /** Some token's items are a stale result: GitHub couldn't be reached. */
+  stale: boolean;
+}
+
+/** Open Pull Requests, grouped by relationship and most recently updated
+ * first within each group. */
+export type GitHubPullRequestsRead = GitHubViewRead<GitHubPullRequest>;
+
+/** Which Watched Repositories a GitHub view read covers, every one or
+ * only Repository View `viewId`'s (#580), and how it treats the backend's
+ * one-minute cache (#583): `refresh` reads from GitHub now, bypassing and
+ * replacing it. */
+export interface GitHubReadOptions {
+  viewId?: number;
+  refresh?: boolean;
+}
+
+function githubReadQuery({ viewId, refresh = false }: GitHubReadOptions): string {
+  const query = new URLSearchParams();
+  if (viewId !== undefined) query.set("view", String(viewId));
+  if (refresh) query.set("refresh", "true");
+  const text = query.toString();
+  return text === "" ? "" : `?${text}`;
+}
+
+/** The open Pull Requests of every Watched Repository, or of one
+ * Repository View's. */
+export function fetchGitHubPullRequests(
+  options: GitHubReadOptions = {},
+): Promise<GitHubPullRequestsRead> {
+  return request(`/api/v1/github/pull-requests${githubReadQuery(options)}`);
+}
+
+/** One open GitHub Issue in the GitHub view (#582) — never a Pull
+ * Request. Read live from GitHub and never stored. `author` is null for a
+ * deleted GitHub account. */
+export interface GitHubIssue {
+  watched_repository_id: number;
+  /** `owner/name`. */
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  /** GitHub logins. */
+  assignees: string[];
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  comment_count: number;
+}
+
+/** Open GitHub Issues, most recently updated first. */
+export type GitHubIssuesRead = GitHubViewRead<GitHubIssue>;
+
+/** The open GitHub Issues of every Watched Repository, or of one
+ * Repository View's. */
+export function fetchGitHubIssues(options: GitHubReadOptions = {}): Promise<GitHubIssuesRead> {
+  return request(`/api/v1/github/issues${githubReadQuery(options)}`);
+}
+
+/** A Repository View (#580): a named subset of the User's Watched
+ * Repositories, listed under GitHub in the sidebar by `sort_order`, with
+ * its saved filters and active tab. */
+export interface RepositoryView extends RepositoryViewSavedOptions {
+  id: number;
+  name: string;
+  sort_order: number;
+  watched_repository_ids: number[];
+}
+
+/** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
+export type GitHubTab = "pull_requests" | "issues";
+
+/** What a Repository View remembers of how it was left (#580, #585): its
+ * author, label and assignee filters, hide drafts, hide bots and the
+ * active tab. */
+export interface RepositoryViewSavedOptions {
+  author: string | null;
+  label: string | null;
+  assignee: string | null;
+  hide_drafts: boolean;
+  hide_bots: boolean;
+  active_tab: GitHubTab;
+}
+
+export type RepositoryViewChanges = Partial<Omit<RepositoryView, "id">>;
+
+/** The User's Repository Views in sidebar order. */
+export function fetchRepositoryViews(): Promise<RepositoryView[]> {
+  return request("/api/v1/github/views");
+}
+
+export function createRepositoryView(
+  name: string,
+  watchedRepositoryIds: number[],
+): Promise<RepositoryView> {
+  return request("/api/v1/github/views", {
+    method: "POST",
+    body: JSON.stringify({ name, watched_repository_ids: watchedRepositoryIds }),
+  });
+}
+
+export function updateRepositoryView(
+  viewId: number,
+  changes: RepositoryViewChanges,
+): Promise<RepositoryView> {
+  return request(`/api/v1/github/views/${viewId}`, {
+    method: "PATCH",
+    body: JSON.stringify(changes),
+  });
+}
+
+export function deleteRepositoryView(viewId: number): Promise<void> {
+  return request(`/api/v1/github/views/${viewId}`, { method: "DELETE" });
+}
+
 export interface GoogleCalendar {
   id: number;
   google_calendar_id: string;

@@ -39,12 +39,22 @@ from app.config import Settings
 from app.main import create_app
 from app.reminder_delivery import DELIVERY_WINDOW
 from app.session import SESSION_COOKIE_NAME
-from tests.conftest import FakeCalendarSource, FakeClock, create_user_row, log_in
+from tests.conftest import (
+    FakeCalendarSource,
+    FakeClock,
+    FakeGitHubSource,
+    create_user_row,
+    fake_issue,
+    fake_pull_request,
+    log_in,
+)
 from tests.test_assistant_chat import StubChatProvider
 
 MARKER = "alice"
 TOKENS = "/api/v1/auth/me/tokens"
 ALICES_RUN = "alice-run"
+ALICES_WATCHED_REPO = 101
+ALICES_SPARE_REPO = 102
 
 
 @dataclass(frozen=True)
@@ -126,6 +136,9 @@ class AliceWorld(World):
     bullet: int
     google_account: int
     google_calendar: int
+    github_token: int
+    watched_repository: int
+    repository_view: int
     api_token: int
     reminder_delivery: int
     reminder_lease: str
@@ -184,6 +197,12 @@ READS: dict[str, Read] = {
     "sections": Read(get(lambda a, me: "/api/v1/sections")),
     "sections of a list": Read(get(lambda a, me: f"/api/v1/sections?list_id={a.list}")),
     "tags": Read(get(lambda a, me: "/api/v1/tags")),
+    "github tokens": Read(get(lambda a, me: "/api/v1/github/tokens")),
+    "github repository picker": Read(get(lambda a, me: "/api/v1/github/repositories")),
+    "watched repositories": Read(get(lambda a, me: "/api/v1/github/watched-repositories")),
+    "github pull requests": Read(get(lambda a, me: "/api/v1/github/pull-requests")),
+    "github issues": Read(get(lambda a, me: "/api/v1/github/issues")),
+    "repository views": Read(get(lambda a, me: "/api/v1/github/views")),
     "tasks": Read(get(lambda a, me: "/api/v1/tasks")),
     "tasks of a list": Read(get(lambda a, me: f"/api/v1/tasks?list_id={a.list}")),
     "tasks with a tag": Read(get(lambda a, me: f"/api/v1/tasks?tag_id={a.tag}")),
@@ -314,6 +333,7 @@ ITEM_PATCHES: dict[str, tuple[Callable[[AliceWorld], str], dict[str, Any]]] = {
     ),
     "focus session": (lambda a: f"/api/v1/focus-sessions/{a.focus_session}", {"note": "x"}),
     "timer": (lambda a: f"/api/v1/timers/{a.timer}", {"name": "x"}),
+    "repository view": (lambda a: f"/api/v1/github/views/{a.repository_view}", {"name": "x"}),
 }
 
 REACHES: dict[str, Reach] = {
@@ -439,11 +459,50 @@ REACHES |= {
     "DELETE google account": Reach(
         lambda a, me: ("DELETE", f"/api/v1/google/accounts/{a.google_account}", None)
     ),
+    "DELETE github token": Reach(
+        lambda a, me: ("DELETE", f"/api/v1/github/tokens/{a.github_token}", None)
+    ),
+    # Reconnect (issue #584), with Alice's own token as the replacement.
+    "PATCH github token": Reach(
+        lambda a, me: (
+            "PATCH",
+            f"/api/v1/github/tokens/{a.github_token}",
+            {"token": "github_pat_alice"},
+        )
+    ),
+    "github pull requests of a repository view": Reach(
+        get(lambda a, me: f"/api/v1/github/pull-requests?view={a.repository_view}")
+    ),
+    "github issues of a repository view": Reach(
+        get(lambda a, me: f"/api/v1/github/issues?view={a.repository_view}")
+    ),
+    "DELETE watched repository": Reach(
+        lambda a, me: (
+            "DELETE",
+            f"/api/v1/github/watched-repositories/{a.watched_repository}",
+            None,
+        )
+    ),
 }
 
 # Alice's ids named as the parent of, or a link from, one of the requester's
 # own rows.
 PARENTS: dict[str, Reach] = {
+    "repository view of a watched repository": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/github/views",
+            {"name": "x", "watched_repository_ids": [a.watched_repository]},
+        )
+    ),
+    # Alice's token can read alice/spare, which she does not yet watch.
+    "watched repository through a github token": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/github/watched-repositories",
+            {"github_token_id": a.github_token, "github_repo_id": ALICES_SPARE_REPO},
+        )
+    ),
     "section in a list": Reach(
         lambda a, me: ("POST", "/api/v1/sections", {"list_id": a.list, "name": "x"})
     ),
@@ -565,6 +624,11 @@ OWN_WRITES: dict[str, OwnWrite] = {
     ),
     "a tag named like another user's": OwnWrite(
         lambda a, me: ("POST", "/api/v1/tags", {"name": "alice tag"})
+    ),
+    # One GitHub Token per GitHub owner is per User: Bea may cover the same
+    # owner Alice does, with her own token.
+    "a github token for an owner another user covers": OwnWrite(
+        lambda a, me: ("POST", "/api/v1/github/tokens", {"token": "github_pat_alice"})
     ),
     "clearing completed tasks": OwnWrite(
         lambda a, me: ("DELETE", "/api/v1/tasks?completed=true", None)
@@ -706,6 +770,7 @@ def connect_google(
 def build_alice(
     alice: Actor,
     calendar_source: FakeCalendarSource,
+    github_source: FakeGitHubSource,
     assistant: StubChatProvider,
     today: date,
     api_token: int,
@@ -715,6 +780,32 @@ def build_alice(
     `api_token` is minted beforehand: only a password session can."""
     now = clock.now
     google_account, google_calendar = connect_google(alice, calendar_source, MARKER, today)
+    github_source.register_token("github_pat_alice", owner_login=MARKER)
+    github_source.register_repositories(
+        "github_pat_alice",
+        [(ALICES_WATCHED_REPO, "alice/watched"), (ALICES_SPARE_REPO, "alice/spare")],
+    )
+    github_token = alice.ok("POST", "/api/v1/github/tokens", {"token": "github_pat_alice"})["id"]
+    watched_repository = alice.ok(
+        "POST",
+        "/api/v1/github/watched-repositories",
+        {"github_token_id": github_token, "github_repo_id": ALICES_WATCHED_REPO},
+    )["id"]
+    repository_view = alice.ok(
+        "POST",
+        "/api/v1/github/views",
+        {"name": "alice view", "watched_repository_ids": [watched_repository]},
+    )["id"]
+    github_source.register_pull_requests(
+        "github_pat_alice",
+        "alice/watched",
+        [fake_pull_request(1, "alice pull request", repository="alice/watched")],
+    )
+    github_source.register_issues(
+        "github_pat_alice",
+        "alice/watched",
+        [fake_issue(2, "alice github issue", repository="alice/watched")],
+    )
     alice.ok(
         "PUT",
         "/api/v1/assistant/config",
@@ -848,6 +939,9 @@ def build_alice(
         bullet=entry["bullets"][0]["id"],
         google_account=google_account,
         google_calendar=google_calendar,
+        github_token=github_token,
+        watched_repository=watched_repository,
+        repository_view=repository_view,
         api_token=api_token,
     )
 
@@ -897,11 +991,15 @@ def pair(
     database_url: str,
     fake_clock: FakeClock,
     fake_calendar_source: FakeCalendarSource,
+    fake_github_source: FakeGitHubSource,
     assistant: StubChatProvider,
     sign_in: SignIn,
 ) -> Iterator[Pair]:
     app = create_app(
-        Settings(database_url=database_url), clock=fake_clock, calendar_source=fake_calendar_source
+        Settings(database_url=database_url),
+        clock=fake_clock,
+        calendar_source=fake_calendar_source,
+        github_source=fake_github_source,
     )
     with TestClient(app, follow_redirects=False) as client:
         create_user_row(app, "alice", "alice@example.com")
@@ -913,7 +1011,15 @@ def pair(
         yield Pair(
             alice=alice,
             bea=bea,
-            a=build_alice(alice, fake_calendar_source, assistant, today, alices_token, fake_clock),
+            a=build_alice(
+                alice,
+                fake_calendar_source,
+                fake_github_source,
+                assistant,
+                today,
+                alices_token,
+                fake_clock,
+            ),
             b=build_bea(bea, assistant, today),
             assistant=assistant,
         )

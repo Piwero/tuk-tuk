@@ -795,6 +795,134 @@ class GoogleCalendar(OwnedMixin, Base):
     account: Mapped[GoogleAccount] = relationship(back_populates="calendars")
 
 
+class GitHubConnectionState(StrEnum):
+    """Whether GitHub still accepts a GitHub Token (issue #584, ADR 0007)."""
+
+    CONNECTED = "connected"
+    # GitHub rejected it (401); only a terminal failure gets here.
+    NEEDS_RECONNECT = "needs_reconnect"
+
+
+class RepositoryViewTab(StrEnum):
+    """The tab a Repository View was left on (issue #580)."""
+
+    PULL_REQUESTS = "pull_requests"
+    ISSUES = "issues"
+
+
+class GitHubToken(OwnedMixin, Base):
+    """A GitHub Token — a fine-grained personal access token a User pasted
+    in Settings (issue #578, ADR 0020), granting read access to one GitHub
+    owner: the User themselves or one organisation. Encrypted at rest
+    (app.crypto, keyed by APP_MASTER_KEY) and never returned by the API.
+    `connection_state` is a GitHubConnectionState. A User holds at most one
+    GitHub Token per GitHub owner; any number may be waiting for
+    their owner to become known.
+    """
+
+    __tablename__ = "github_tokens"
+    __table_args__ = (UniqueConstraint("owner_id", "owner_login"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Absent until GitHub can tell: a token an organisation has not yet
+    # allowed or approved reads nothing, so its owner is unknown (ADR 0020).
+    owner_login: Mapped[str | None] = mapped_column(String(255), default=None)
+    # A GitHubOwnerKind (app.github_source).
+    owner_kind: Mapped[str | None] = mapped_column(String(16), default=None)
+    encrypted_token: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # A GitHubConnectionState, stored as its string value.
+    connection_state: Mapped[str] = mapped_column(
+        String(16), default=GitHubConnectionState.CONNECTED
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    watched_repositories: Mapped[list["WatchedRepository"]] = relationship(
+        back_populates="token", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class WatchedRepository(OwnedMixin, Base):
+    """A Watched Repository (issue #581) — a GitHub repository a User picked
+    from those their GitHub Tokens can read, read through the GitHub Token
+    it was picked with and deleted with it. Unique per User by GitHub's own
+    repository id, so a repository two tokens can read is watched once.
+    `full_name` (`owner/name`) and `private` are cosmetic metadata; nothing
+    else read from GitHub is ever stored (ADR 0006).
+    """
+
+    __tablename__ = "watched_repositories"
+    __table_args__ = (UniqueConstraint("owner_id", "github_repo_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    github_token_id: Mapped[int] = mapped_column(
+        ForeignKey("github_tokens.id", ondelete="CASCADE"), index=True
+    )
+    github_repo_id: Mapped[int] = mapped_column(BigInteger)
+    full_name: Mapped[str] = mapped_column(String(255))
+    private: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    token: Mapped[GitHubToken] = relationship(back_populates="watched_repositories")
+
+
+class RepositoryView(OwnedMixin, Base):
+    """A Repository View (issue #580) — a named subset of a User's Watched
+    Repositories, listed under GitHub in the sidebar in `sort_order`, that
+    remembers its display options: the author, label and assignee filters,
+    hide drafts, hide bots and the active tab. Losing every Watched
+    Repository leaves it in place, empty.
+    """
+
+    __tablename__ = "repository_views"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    author: Mapped[str | None] = mapped_column(String(255), default=None)
+    label: Mapped[str | None] = mapped_column(String(255), default=None)
+    assignee: Mapped[str | None] = mapped_column(String(255), default=None)
+    hide_drafts: Mapped[bool] = mapped_column(Boolean, default=False)
+    hide_bots: Mapped[bool] = mapped_column(Boolean, default=False)
+    # A RepositoryViewTab, stored as its string value.
+    active_tab: Mapped[str] = mapped_column(String(16), default=RepositoryViewTab.PULL_REQUESTS)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    members: Mapped[list["RepositoryViewMember"]] = relationship(
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+        order_by="RepositoryViewMember.watched_repository_id",
+    )
+
+    @property
+    def watched_repository_ids(self) -> list[int]:
+        return [member.watched_repository_id for member in self.members]
+
+
+class RepositoryViewMember(OwnedMixin, Base):
+    """One Watched Repository's place in one Repository View. Deleted with
+    either side, so unwatching a repository, or removing its GitHub Token,
+    drops it from every Repository View (spec #576)."""
+
+    __tablename__ = "repository_view_members"
+    __table_args__ = (UniqueConstraint("repository_view_id", "watched_repository_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repository_view_id: Mapped[int] = mapped_column(
+        ForeignKey("repository_views.id", ondelete="CASCADE"), index=True
+    )
+    watched_repository_id: Mapped[int] = mapped_column(
+        ForeignKey("watched_repositories.id", ondelete="CASCADE"), index=True
+    )
+
+
 class StandupEntry(OwnedMixin, Base):
     """A Stand-up Entry — one calendar date's daily stand-up: Yesterday /
     Today / Blockers Bullets, plus a Sprint-goal snapshot column (populated

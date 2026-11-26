@@ -5,6 +5,7 @@ import {
   type AssistCaptureDraft,
   type DatabaseStatus,
   type DatabaseTestConnectionResult,
+  type GitHubTokenReadStatus,
   type GoalStatus,
   type HabitType,
   type KeyResultSource,
@@ -276,6 +277,193 @@ export interface FakeStandupYesterdaySuggestion {
   title: string;
 }
 
+/** A GitHub Token (#578) as the backend lists it. */
+export interface FakeGitHubToken {
+  id: number;
+  /** Null while GitHub can't tell the token's owner (ADR 0020). */
+  owner_login: string | null;
+  owner_kind: "user" | "organization" | null;
+  expires_at: string | null;
+  /** Expires within 7 days, or already has (#584). The backend works this
+   * out from its clock; the fake takes it as given. */
+  expires_soon: boolean;
+  connection_state: "connected" | "needs_reconnect";
+  created_at: string;
+}
+
+/** What GitHub would say a pasted token is, for `githubTokenIdentities`. */
+export interface FakeGitHubIdentity {
+  /** Null for a token whose owner GitHub can't tell yet, as for an
+   * organisation's token before it allows or approves it. */
+  owner_login: string | null;
+  owner_kind?: "user" | "organization";
+  expires_at?: string | null;
+}
+
+let nextGitHubTokenId = 1;
+
+/** A connected GitHub Token for `installFakeApi({ githubTokens })`. */
+export function fakeGitHubToken(
+  ownerLogin: string | null,
+  overrides: Partial<FakeGitHubToken> = {},
+): FakeGitHubToken {
+  return {
+    id: nextGitHubTokenId++,
+    owner_login: ownerLogin,
+    owner_kind: "user",
+    expires_at: null,
+    expires_soon: false,
+    connection_state: "connected",
+    created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** A repository a GitHub Token can read (#581), for
+ * `installFakeApi({ githubReadableRepositories })`. */
+export interface FakeReadableRepository {
+  github_repo_id: number;
+  full_name: string;
+  private?: boolean;
+}
+
+/** A Watched Repository (#581) as the backend lists it. */
+export interface FakeWatchedRepository {
+  id: number;
+  github_token_id: number;
+  github_repo_id: number;
+  full_name: string;
+  private: boolean;
+  created_at: string;
+}
+
+let nextWatchedRepositoryId = 1;
+
+/** A Repository View (#580) as the backend lists it. */
+export interface FakeRepositoryView {
+  id: number;
+  name: string;
+  sort_order: number;
+  watched_repository_ids: number[];
+  author: string | null;
+  label: string | null;
+  assignee: string | null;
+  hide_drafts: boolean;
+  hide_bots: boolean;
+  active_tab: "pull_requests" | "issues";
+}
+
+let nextRepositoryViewId = 1;
+
+/** A Repository View for `installFakeApi({ repositoryViews })`, with no
+ * saved filters, placed after every one made before it. */
+export function fakeRepositoryView(
+  name: string,
+  watchedRepositoryIds: number[],
+  overrides: Partial<FakeRepositoryView> = {},
+): FakeRepositoryView {
+  const id = nextRepositoryViewId++;
+  return {
+    id,
+    name,
+    sort_order: id * 1024,
+    watched_repository_ids: watchedRepositoryIds,
+    author: null,
+    label: null,
+    assignee: null,
+    hide_drafts: false,
+    hide_bots: false,
+    active_tab: "pull_requests",
+    ...overrides,
+  };
+}
+
+/** An open Pull Request (#579) as the backend's read lists it: already
+ * classified by `relationship`. Its repository is `repository` (by
+ * `owner/name`); the fake fills in `watched_repository_id`. */
+export interface FakeGitHubPullRequest {
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  is_draft: boolean;
+  review_decision: "approved" | "changes_requested" | "pending";
+  ci_status: "pass" | "fail" | "pending" | null;
+  relationship: "review_requested" | "mine" | "other";
+}
+
+/** An open Pull Request for `installFakeApi({ githubPullRequests })`, in
+ * octocat/dotfiles unless `repository` says otherwise. */
+export function fakeGitHubPullRequest(
+  number: number,
+  title: string,
+  overrides: Partial<FakeGitHubPullRequest> = {},
+): FakeGitHubPullRequest {
+  const repository = overrides.repository ?? "octocat/dotfiles";
+  return {
+    repository,
+    number,
+    title,
+    url: `https://github.com/${repository}/pull/${number}`,
+    author: "hubot",
+    author_is_bot: false,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    labels: [],
+    is_draft: false,
+    review_decision: "pending",
+    ci_status: null,
+    relationship: "other",
+    ...overrides,
+  };
+}
+
+/** An open GitHub Issue (#582) as the backend's read lists it. Its
+ * repository is `repository` (by `owner/name`); the fake fills in
+ * `watched_repository_id`. */
+export interface FakeGitHubIssue {
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  assignees: string[];
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  comment_count: number;
+}
+
+/** An open GitHub Issue for `installFakeApi({ githubIssues })`, in
+ * octocat/dotfiles unless `repository` says otherwise. */
+export function fakeGitHubIssue(
+  number: number,
+  title: string,
+  overrides: Partial<FakeGitHubIssue> = {},
+): FakeGitHubIssue {
+  const repository = overrides.repository ?? "octocat/dotfiles";
+  return {
+    repository,
+    number,
+    title,
+    url: `https://github.com/${repository}/issues/${number}`,
+    author: "hubot",
+    author_is_bot: false,
+    assignees: [],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    labels: [],
+    comment_count: 0,
+    ...overrides,
+  };
+}
+
 export interface FakeGoogleAccount {
   id: number;
   google_account_id: string;
@@ -417,6 +605,47 @@ export interface FakeApiState {
   googleClientSecretSet: boolean;
   googleAccounts: FakeGoogleAccount[];
   googleCalendars: FakeGoogleCalendar[];
+  /** The signed-in User's GitHub Tokens (#578). */
+  githubTokens: FakeGitHubToken[];
+  /** What GitHub identifies each pasted token string as. A `github_pat_`
+   * token missing here is one GitHub rejects (401). */
+  githubTokenIdentities: Record<string, FakeGitHubIdentity>;
+  /** While true, checking a pasted token fails transiently (502). */
+  githubUnavailable: boolean;
+  /** The repositories each GitHub Token can read (#581), keyed by the
+   * token's owner login, so a token added through the UI reads them too.
+   * An owner missing here reads none. */
+  githubReadableRepositories: Record<string, FakeReadableRepository[]>;
+  /** The signed-in User's Watched Repositories (#581). */
+  watchedRepositories: FakeWatchedRepository[];
+  /** Owner logins whose token GitHub fails to read through, and how: as
+   * the backend reports it per token in the picker and the GitHub view's
+   * reads. A token GitHub rejects is flipped to needs_reconnect on a view
+   * read (#584); reconnecting it clears its failure. */
+  githubRepositoryFailures: Record<string, "unavailable" | "needs_reconnect">;
+  /** The open Pull Requests the GitHub view's read answers with (#579), in
+   * the backend's order (grouped, then most recently updated first). Only
+   * those in a Watched Repository are returned. */
+  githubPullRequests: FakeGitHubPullRequest[];
+  /** How many more open Pull Requests each repository (by `owner/name`)
+   * has on GitHub beyond those returned. */
+  githubPullRequestOverflow: Record<string, number>;
+  /** The open GitHub Issues the GitHub view's read answers with (#582),
+   * in the backend's order (most recently updated first). Only those in a
+   * Watched Repository are returned. */
+  githubIssues: FakeGitHubIssue[];
+  /** How many more open GitHub Issues each repository (by `owner/name`)
+   * has on GitHub beyond those returned. */
+  githubIssueOverflow: Record<string, number>;
+  /** The signed-in User's Repository Views (#580). */
+  repositoryViews: FakeRepositoryView[];
+  /** When the GitHub view's reads say their data was fetched from GitHub
+   * (#583); null for the moment of each read. */
+  githubFetchedAt: string | null;
+  /** Owner logins whose token GitHub couldn't be reached through, so the
+   * GitHub view's reads serve its last result as stale (#583): its items
+   * still render, fetched at `githubFetchedAt`. */
+  githubStaleOwners: string[];
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
@@ -1173,6 +1402,19 @@ export function installFakeApi({
   googleClientSecretSet = false,
   googleAccounts = [],
   googleCalendars = [],
+  githubTokens = [],
+  githubTokenIdentities = {},
+  githubUnavailable = false,
+  githubReadableRepositories = {},
+  watchedRepositories = [],
+  githubRepositoryFailures = {},
+  githubPullRequests = [],
+  githubPullRequestOverflow = {},
+  githubIssues = [],
+  githubIssueOverflow = {},
+  repositoryViews = [],
+  githubFetchedAt = null,
+  githubStaleOwners = [],
   events = [],
   eventFailures = [],
   standupEntries = [],
@@ -1248,6 +1490,21 @@ export function installFakeApi({
    * this from a Google-side `selected` flag; that seeding rule is the
    * backend's, exercised in the backend suite. */
   googleCalendars?: FakeGoogleCalendar[];
+  githubTokens?: FakeGitHubToken[];
+  githubTokenIdentities?: Record<string, FakeGitHubIdentity>;
+  githubUnavailable?: boolean;
+  githubReadableRepositories?: Record<string, FakeReadableRepository[]>;
+  /** Seeds Watched Repositories; `id`, `private` and `created_at` default. */
+  watchedRepositories?: (Omit<FakeWatchedRepository, "id" | "private" | "created_at"> &
+    Partial<FakeWatchedRepository>)[];
+  githubRepositoryFailures?: Record<string, "unavailable" | "needs_reconnect">;
+  githubPullRequests?: FakeGitHubPullRequest[];
+  githubPullRequestOverflow?: Record<string, number>;
+  githubIssues?: FakeGitHubIssue[];
+  githubIssueOverflow?: Record<string, number>;
+  repositoryViews?: FakeRepositoryView[];
+  githubFetchedAt?: string | null;
+  githubStaleOwners?: string[];
   /** Google Calendar Events (issue #107) the calendar's own read-only
    * endpoint answers with — never filtered by calendar `enabled` here,
    * since that filtering is the backend's job (exercised in the backend
@@ -1374,6 +1631,39 @@ export function installFakeApi({
     googleClientSecretSet,
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
     googleCalendars: googleCalendars.map((calendar) => ({ ...calendar })),
+    githubTokens: githubTokens.map((token) => ({ ...token })),
+    githubTokenIdentities: { ...githubTokenIdentities },
+    githubUnavailable,
+    githubReadableRepositories: Object.fromEntries(
+      Object.entries(githubReadableRepositories).map(([owner, repos]) => [
+        owner,
+        repos.map((repo) => ({ ...repo })),
+      ]),
+    ),
+    watchedRepositories: watchedRepositories.map((watched) => ({
+      id: nextWatchedRepositoryId++,
+      private: true,
+      created_at: "2026-01-01T00:00:00Z",
+      ...watched,
+    })),
+    githubRepositoryFailures: { ...githubRepositoryFailures },
+    githubPullRequests: githubPullRequests.map((pr) => ({
+      ...pr,
+      labels: pr.labels.map((label) => ({ ...label })),
+    })),
+    githubPullRequestOverflow: { ...githubPullRequestOverflow },
+    githubIssues: githubIssues.map((issue) => ({
+      ...issue,
+      assignees: [...issue.assignees],
+      labels: issue.labels.map((label) => ({ ...label })),
+    })),
+    githubIssueOverflow: { ...githubIssueOverflow },
+    repositoryViews: repositoryViews.map((view) => ({
+      ...view,
+      watched_repository_ids: [...view.watched_repository_ids],
+    })),
+    githubFetchedAt,
+    githubStaleOwners: [...githubStaleOwners],
     events: events.map((event) => ({ ...event })),
     eventFailures: eventFailures.map((failure) => ({ ...failure })),
     standupEntries: standupEntries.map((entry) => ({
@@ -1517,6 +1807,359 @@ export function installFakeApi({
         return notFound(`API token ${match[1]} not found`);
       }
       target.revoked_at = new Date().toISOString();
+      return new Response(null, { status: 204 });
+    }
+    return null;
+  };
+
+  /** Unwatching a repository, or removing its GitHub Token, drops it from
+   * every Repository View (#580). */
+  const dropUnwatchedFromViews = (): void => {
+    for (const view of state.repositoryViews) {
+      view.watched_repository_ids = view.watched_repository_ids.filter((id) =>
+        state.watchedRepositories.some((w) => w.id === id),
+      );
+    }
+  };
+
+  /** Repository Views (#580), mirrored: list in sidebar order, create
+   * (last), read, update (any field) and delete. Null for a path it
+   * doesn't own. */
+  const repositoryViewsRoute = (method: string, url: URL, body: unknown): Response | null => {
+    if (url.pathname === "/api/v1/github/views") {
+      if (method === "GET") {
+        return json(
+          [...state.repositoryViews].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id),
+        );
+      }
+      if (method === "POST") {
+        const input = body as { name: string; watched_repository_ids?: number[] };
+        const last = Math.max(0, ...state.repositoryViews.map((v) => v.sort_order));
+        const created = fakeRepositoryView(
+          input.name,
+          [...(input.watched_repository_ids ?? [])].sort((a, b) => a - b),
+          { sort_order: last + 1024 },
+        );
+        state.repositoryViews.push(created);
+        return json(created, 201);
+      }
+      return null;
+    }
+    const match = /^\/api\/v1\/github\/views\/(\d+)$/.exec(url.pathname);
+    if (match === null) return null;
+    const id = Number(match[1]);
+    const view = state.repositoryViews.find((v) => v.id === id);
+    if (view === undefined) return notFound(`Repository View ${id} not found`);
+    if (method === "GET") return json(view);
+    if (method === "PATCH") {
+      const changes = body as Partial<FakeRepositoryView>;
+      Object.assign(view, changes);
+      if (changes.watched_repository_ids !== undefined) {
+        view.watched_repository_ids = [...changes.watched_repository_ids].sort((a, b) => a - b);
+      }
+      return json(view);
+    }
+    if (method === "DELETE") {
+      state.repositoryViews = state.repositoryViews.filter((v) => v.id !== id);
+      return new Response(null, { status: 204 });
+    }
+    return null;
+  };
+
+  /** GitHub Tokens (#578), mirrored: list, add (validated against
+   * `githubTokenIdentities`, one per owner) and remove; and the Watched
+   * Repositories picker (#581): readable repositories deduplicated across
+   * tokens, watch and unwatch. Null for a path it doesn't own. */
+  const githubRoute = (method: string, url: URL, body: unknown): Response | null => {
+    // GitHub logins are case-insensitive; one GitHub Token per owner.
+    const ownerTaken = (login: string, but?: number): boolean =>
+      state.githubTokens.some(
+        (t) => t.id !== but && t.owner_login?.toLowerCase() === login.toLowerCase(),
+      );
+    const viewsResponse = repositoryViewsRoute(method, url, body);
+    if (viewsResponse !== null) return viewsResponse;
+    if (method === "GET" && url.pathname === "/api/v1/github/tokens") {
+      return json([...state.githubTokens].sort((a, b) => a.id - b.id));
+    }
+    if (method === "POST" && url.pathname === "/api/v1/github/tokens") {
+      const token = ((body as { token?: unknown }).token ?? "").toString().trim();
+      if (!token.startsWith("github_pat_")) {
+        return unprocessable(
+          "github_token_not_fine_grained",
+          "tuk-tuk accepts only fine-grained personal access tokens (they start with github_pat_).",
+        );
+      }
+      if (state.githubUnavailable) {
+        return json(
+          {
+            error: {
+              code: "github_unavailable",
+              message:
+                "GitHub could not be reached to check this token. Nothing was saved; try again in a moment.",
+            },
+          },
+          502,
+        );
+      }
+      const identity = state.githubTokenIdentities[token];
+      if (identity === undefined) {
+        return unprocessable(
+          "github_token_rejected",
+          "GitHub rejected this token: it may be mistyped, expired or revoked.",
+        );
+      }
+      const login = identity.owner_login;
+      if (login !== null && ownerTaken(login)) {
+        return json(
+          {
+            error: {
+              code: "github_token_owner_exists",
+              message: `You already have a GitHub Token for ${login}. Remove it first to use a different one.`,
+            },
+          },
+          409,
+        );
+      }
+      const created = fakeGitHubToken(login, {
+        owner_kind: login === null ? null : (identity.owner_kind ?? "user"),
+        expires_at: identity.expires_at ?? null,
+        created_at: new Date().toISOString(),
+      });
+      state.githubTokens.push(created);
+      return json(created, 201);
+    }
+    const match = /^\/api\/v1\/github\/tokens\/(\d+)$/.exec(url.pathname);
+    if (method === "PATCH" && match !== null) {
+      // Reconnect (#584): validated like a new token, for the same owner.
+      const id = Number(match[1]);
+      const existing = state.githubTokens.find((t) => t.id === id);
+      if (existing === undefined) {
+        return notFound(`GitHub Token ${id} not found`);
+      }
+      const token = String((body as { token?: unknown }).token ?? "").trim();
+      if (!token.startsWith("github_pat_")) {
+        return unprocessable(
+          "github_token_not_fine_grained",
+          "tuk-tuk accepts only fine-grained personal access tokens (they start with github_pat_).",
+        );
+      }
+      const identity = state.githubTokenIdentities[token];
+      if (identity === undefined) {
+        return unprocessable(
+          "github_token_rejected",
+          "GitHub rejected this token: it may be mistyped, expired or revoked.",
+        );
+      }
+      const login = identity.owner_login;
+      if (existing.owner_login === null) {
+        if (login !== null) {
+          if (ownerTaken(login, id)) {
+            return json(
+              {
+                error: {
+                  code: "github_token_owner_exists",
+                  message: `You already have a GitHub Token for ${login}. Reconnect it to use a different one.`,
+                },
+              },
+              409,
+            );
+          }
+          existing.owner_login = login;
+          existing.owner_kind = identity.owner_kind ?? "user";
+        }
+      } else if (login === null) {
+        return unprocessable(
+          "github_token_owner_unknown",
+          "GitHub cannot tell which owner this token is for until it can read a repository. " +
+            `If ${existing.owner_login} must allow or approve fine-grained tokens, try again once it has.`,
+        );
+      } else if (login.toLowerCase() !== existing.owner_login.toLowerCase()) {
+        return unprocessable(
+          "github_token_owner_mismatch",
+          `This token grants access to ${login}, not ${existing.owner_login}. ` +
+            `Paste a token for ${existing.owner_login}, or add it as a new GitHub Token.`,
+        );
+      }
+      existing.expires_at = identity.expires_at ?? null;
+      existing.expires_soon = false;
+      existing.connection_state = "connected";
+      // The replacement works where the old token no longer did.
+      delete state.githubRepositoryFailures[existing.owner_login ?? ""];
+      return json(existing);
+    }
+    if (method === "DELETE" && match !== null) {
+      const id = Number(match[1]);
+      if (!state.githubTokens.some((t) => t.id === id)) {
+        return notFound(`GitHub Token ${id} not found`);
+      }
+      state.githubTokens = state.githubTokens.filter((t) => t.id !== id);
+      // A GitHub Token's Watched Repositories go with it.
+      state.watchedRepositories = state.watchedRepositories.filter((w) => w.github_token_id !== id);
+      dropUnwatchedFromViews();
+      return new Response(null, { status: 204 });
+    }
+    // A token whose owner isn't known yet reads nothing.
+    const readable = (token: FakeGitHubToken): FakeReadableRepository[] =>
+      token.owner_login === null || token.owner_login in state.githubRepositoryFailures
+        ? []
+        : (state.githubReadableRepositories[token.owner_login] ?? []);
+    if (method === "GET" && url.pathname === "/api/v1/github/repositories") {
+      // Offered once per GitHub repository id, through the first token that
+      // reads it, or the token it is already watched through.
+      const offered = new Map<number, unknown>();
+      const tokens = [...state.githubTokens].sort((a, b) => a.id - b.id);
+      for (const token of tokens) {
+        for (const repo of readable(token)) {
+          if (offered.has(repo.github_repo_id)) continue;
+          const watched = state.watchedRepositories.find(
+            (w) => w.github_repo_id === repo.github_repo_id,
+          );
+          offered.set(repo.github_repo_id, {
+            github_repo_id: repo.github_repo_id,
+            full_name: repo.full_name,
+            private: repo.private ?? true,
+            github_token_id: watched?.github_token_id ?? token.id,
+            watched_repository_id: watched?.id ?? null,
+          });
+        }
+      }
+      return json({
+        repositories: [...offered.values()],
+        tokens: tokens.map((token) => ({
+          id: token.id,
+          owner_login: token.owner_login,
+          status: state.githubRepositoryFailures[token.owner_login ?? ""] ?? "ok",
+          repository_count: readable(token).length,
+        })),
+      });
+    }
+    if (method === "GET" && url.pathname === "/api/v1/github/watched-repositories") {
+      return json(
+        [...state.watchedRepositories].sort((a, b) =>
+          a.full_name.toLowerCase().localeCompare(b.full_name.toLowerCase()),
+        ),
+      );
+    }
+    if (method === "POST" && url.pathname === "/api/v1/github/watched-repositories") {
+      const { github_token_id, github_repo_id } = body as {
+        github_token_id: number;
+        github_repo_id: number;
+      };
+      const token = state.githubTokens.find((t) => t.id === github_token_id);
+      if (token === undefined) {
+        return notFound(`GitHub Token ${github_token_id} not found`);
+      }
+      const already = state.watchedRepositories.find((w) => w.github_repo_id === github_repo_id);
+      if (already !== undefined) {
+        return json(
+          {
+            error: {
+              code: "github_repository_already_watched",
+              message: `You already watch ${already.full_name}.`,
+            },
+          },
+          409,
+        );
+      }
+      const repo = readable(token).find((r) => r.github_repo_id === github_repo_id);
+      if (repo === undefined) {
+        return unprocessable(
+          "github_repository_not_readable",
+          `The GitHub Token for ${token.owner_login} cannot read that repository.`,
+        );
+      }
+      const created: FakeWatchedRepository = {
+        id: nextWatchedRepositoryId++,
+        github_token_id,
+        github_repo_id,
+        full_name: repo.full_name,
+        private: repo.private ?? true,
+        created_at: new Date().toISOString(),
+      };
+      state.watchedRepositories.push(created);
+      return json(created, 201);
+    }
+    const githubViewRead = (
+      items: readonly { repository: string }[],
+      overflowByName: Record<string, number>,
+      listPath: "pulls" | "issues",
+    ): Response => {
+      // Shaped as the backend answers: only Watched Repositories (only a
+      // Repository View's, given `?view=`), each with its overflow, and a
+      // status for each token that has any.
+      const viewParam = url.searchParams.get("view");
+      const view =
+        viewParam === null ? null : state.repositoryViews.find((v) => v.id === Number(viewParam));
+      if (view === undefined) return notFound(`Repository View ${viewParam} not found`);
+      const watched = [...state.watchedRepositories]
+        .filter((w) => view === null || view.watched_repository_ids.includes(w.id))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
+      // A token GitHub fails to read through hides only its own
+      // repositories; one GitHub rejects needs reconnection (#584).
+      const failing = (tokenId: number): "unavailable" | "needs_reconnect" | undefined => {
+        const token = state.githubTokens.find((t) => t.id === tokenId);
+        return token === undefined
+          ? undefined
+          : state.githubRepositoryFailures[token.owner_login ?? ""];
+      };
+      for (const token of state.githubTokens) {
+        if (state.githubRepositoryFailures[token.owner_login ?? ""] === "needs_reconnect") {
+          token.connection_state = "needs_reconnect";
+        }
+      }
+      const byName = new Map(
+        watched
+          .filter((w) => failing(w.github_token_id) === undefined)
+          .map((w) => [w.full_name, w]),
+      );
+      const readTokens = [...state.githubTokens]
+        .sort((a, b) => a.id - b.id)
+        .filter((token) => watched.some((w) => w.github_token_id === token.id));
+      // A token GitHub couldn't be reached through still shows its last
+      // result when it has a recent one: stale (#583).
+      const tokenStatus = (token: FakeGitHubToken): GitHubTokenReadStatus["status"] =>
+        state.githubRepositoryFailures[token.owner_login ?? ""] ??
+        (state.githubStaleOwners.includes(token.owner_login ?? "") ? "stale" : "ok");
+      return json({
+        items: items
+          .filter((item) => byName.has(item.repository))
+          .map((item) => ({ ...item, watched_repository_id: byName.get(item.repository)?.id })),
+        repositories: [...byName.values()].map((w) => {
+          const overflow = overflowByName[w.full_name] ?? 0;
+          const shown = items.filter((item) => item.repository === w.full_name).length;
+          return {
+            watched_repository_id: w.id,
+            full_name: w.full_name,
+            total_count: shown + overflow,
+            overflow_count: overflow,
+            overflow_url: `https://github.com/${w.full_name}/${listPath}`,
+          };
+        }),
+        tokens: readTokens.map((token) => ({
+          id: token.id,
+          owner_login: token.owner_login,
+          status: tokenStatus(token),
+          expires_at: token.expires_at,
+          expires_soon: token.expires_soon,
+        })),
+        fetched_at: state.githubFetchedAt ?? new Date().toISOString(),
+        stale: readTokens.some((token) => tokenStatus(token) === "stale"),
+      });
+    };
+    if (method === "GET" && url.pathname === "/api/v1/github/pull-requests") {
+      return githubViewRead(state.githubPullRequests, state.githubPullRequestOverflow, "pulls");
+    }
+    if (method === "GET" && url.pathname === "/api/v1/github/issues") {
+      return githubViewRead(state.githubIssues, state.githubIssueOverflow, "issues");
+    }
+    const watchedMatch = /^\/api\/v1\/github\/watched-repositories\/(\d+)$/.exec(url.pathname);
+    if (method === "DELETE" && watchedMatch !== null) {
+      const id = Number(watchedMatch[1]);
+      if (!state.watchedRepositories.some((w) => w.id === id)) {
+        return notFound(`Watched Repository ${id} not found`);
+      }
+      state.watchedRepositories = state.watchedRepositories.filter((w) => w.id !== id);
+      dropUnwatchedFromViews();
       return new Response(null, { status: 204 });
     }
     return null;
@@ -1902,6 +2545,12 @@ export function installFakeApi({
       const tokenResponse = apiTokensRoute(method, url, body);
       if (tokenResponse !== null) {
         return tokenResponse;
+      }
+    }
+    if (url.pathname.startsWith("/api/v1/github/")) {
+      const githubResponse = githubRoute(method, url, body);
+      if (githubResponse !== null) {
+        return githubResponse;
       }
     }
     if (url.pathname.startsWith("/api/v1/admin/")) {
