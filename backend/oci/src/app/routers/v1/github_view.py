@@ -6,7 +6,8 @@ returns is ever stored (ADR 0006). Grouping, sorting, the per-repository
 cap and bot flagging happen here, so every client sees the same answer.
 
 Both reads share `_read_each_token` (one round trip per GitHub Token, with
-its status) and `_repository_read` (the per-repository overflow).
+its status) and `_repository_read` (the per-repository overflow). A token
+GitHub rejects is marked as needing reconnection there (issue #584).
 """
 
 from collections.abc import Awaitable, Callable
@@ -32,6 +33,7 @@ from app.github_source import (
     TransientGitHubSourceError,
 )
 from app.models import GitHubToken, WatchedRepository
+from app.routers.v1.github import expires_soon
 from app.schemas import utc_z
 
 router = APIRouter(prefix="/api/v1/github", tags=["github"])
@@ -105,6 +107,25 @@ class TokenReadStatusRead(BaseModel):
     id: int
     owner_login: str
     status: TokenReadStatus
+    # So the GitHub view can warn before a token expires (issue #584).
+    expires_at: datetime | None
+    expires_soon: bool
+
+    @field_serializer("expires_at")
+    def _serialize_expires_at(self, value: datetime | None) -> str | None:
+        return None if value is None else utc_z(value)
+
+    @classmethod
+    def of(
+        cls, token: GitHubToken, status: TokenReadStatus, now: datetime
+    ) -> "TokenReadStatusRead":
+        return cls(
+            id=token.id,
+            owner_login=token.owner_login,
+            status=status,
+            expires_at=token.expires_at,
+            expires_soon=expires_soon(token.expires_at, now),
+        )
 
 
 class _GitHubViewRead(BaseModel):
@@ -172,12 +193,14 @@ async def _read_each_token[Result](
         except TransientGitHubSourceError:
             status = "unavailable"
         except TerminalGitHubSourceError:
+            # GitHub rejected the token itself (issue #584, ADR 0007); a
+            # transient failure never touches `connection_state`.
             status = "needs_reconnect"
+            token.connection_state = "needs_reconnect"
+            await session.commit()
         else:
             results.append(({w.github_repo_id: w for w in watched}, result))
-        statuses.append(
-            TokenReadStatusRead(id=token.id, owner_login=token.owner_login, status=status)
-        )
+        statuses.append(TokenReadStatusRead.of(token, status, request.app.state.clock()))
     return results, statuses
 
 

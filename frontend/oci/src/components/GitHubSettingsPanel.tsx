@@ -6,12 +6,12 @@ import {
   deleteGitHubToken,
   fetchGitHubTokens,
   type GitHubToken,
+  reconnectGitHubToken,
 } from "../api";
 import { formatDate } from "../dates";
 import { GitHubRepositoryPicker } from "./GitHubRepositoryPicker";
+import { GitHubTokenExpiryWarning } from "./GitHubTokenBanners";
 import { Modal } from "./Modal";
-
-const TOKEN_ERROR_ID = "github-token-error";
 
 /** Codes whose server message already tells the User what went wrong and
  * what to do next (#578). Anything else gets the generic retry line. */
@@ -20,6 +20,7 @@ const EXPLAINED_CODES = new Set([
   "github_token_rejected",
   "github_unavailable",
   "github_token_owner_exists",
+  "github_token_owner_mismatch",
 ]);
 
 function describeToken(token: GitHubToken): string {
@@ -33,11 +34,26 @@ function describeToken(token: GitHubToken): string {
 
 /** Pastes a fine-grained token; it is checked with GitHub before it is
  * saved, so a mistyped, classic or rejected token is explained here and
- * never listed. */
-function AddTokenForm({ onAdded }: { onAdded: (token: GitHubToken) => void }): React.JSX.Element {
+ * never listed. Adds a new GitHub Token, or reconnects one (#584). */
+function TokenForm({
+  id,
+  label,
+  submitLabel,
+  submit,
+  onSaved,
+  onCancel,
+}: {
+  id: string;
+  label: string;
+  submitLabel: string;
+  submit: (token: string) => Promise<GitHubToken>;
+  onSaved: (token: GitHubToken) => void;
+  onCancel?: () => void;
+}): React.JSX.Element {
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorId = `${id}-error`;
 
   function handleSubmit(event: React.FormEvent): void {
     event.preventDefault();
@@ -46,10 +62,10 @@ function AddTokenForm({ onAdded }: { onAdded: (token: GitHubToken) => void }): R
     }
     setPending(true);
     setError(null);
-    createGitHubToken(value.trim())
+    submit(value.trim())
       .then((token) => {
         setValue("");
-        onAdded(token);
+        onSaved(token);
       })
       .catch((err: unknown) => {
         setError(
@@ -63,10 +79,10 @@ function AddTokenForm({ onAdded }: { onAdded: (token: GitHubToken) => void }): R
 
   return (
     <form className="settings-field" onSubmit={handleSubmit} noValidate>
-      <label htmlFor="github-token-value">GitHub Token</label>
+      <label htmlFor={id}>{label}</label>
       <div className="profile-field-row">
         <input
-          id="github-token-value"
+          id={id}
           name="github-token"
           type="password"
           autoComplete="off"
@@ -75,18 +91,23 @@ function AddTokenForm({ onAdded }: { onAdded: (token: GitHubToken) => void }): R
           value={value}
           disabled={pending}
           aria-invalid={error !== null || undefined}
-          aria-describedby={error !== null ? TOKEN_ERROR_ID : undefined}
+          aria-describedby={error !== null ? errorId : undefined}
           onChange={(event) => {
             setValue(event.target.value);
             setError(null);
           }}
         />
         <button type="submit" className="btn-secondary" disabled={pending || value.trim() === ""}>
-          {pending ? "Checking…" : "Add token"}
+          {pending ? "Checking…" : submitLabel}
         </button>
+        {onCancel !== undefined && (
+          <button type="button" className="btn-quiet" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
       {error !== null && (
-        <p role="alert" id={TOKEN_ERROR_ID}>
+        <p role="alert" id={errorId}>
           {error}
         </p>
       )}
@@ -102,6 +123,7 @@ export function GitHubSettingsPanel(): React.JSX.Element {
   const [loadFailed, setLoadFailed] = useState(false);
   const [confirming, setConfirming] = useState<GitHubToken | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState<number | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -117,6 +139,13 @@ export function GitHubSettingsPanel(): React.JSX.Element {
       current = false;
     };
   }, []);
+
+  function replace(token: GitHubToken): void {
+    setTokens((previous) =>
+      (previous ?? []).map((other) => (other.id === token.id ? token : other)),
+    );
+    setReconnecting(null);
+  }
 
   function forget(token: GitHubToken): void {
     setTokens((previous) => (previous ?? []).filter((other) => other.id !== token.id));
@@ -147,7 +176,14 @@ export function GitHubSettingsPanel(): React.JSX.Element {
           Pull requests. Add one token for your own repositories and one per organisation. Tuk Tuk
           never writes to GitHub.
         </p>
-        <AddTokenForm onAdded={(token) => setTokens((previous) => [...(previous ?? []), token])} />
+        <GitHubTokenExpiryWarning tokens={tokens ?? []} />
+        <TokenForm
+          id="github-token-value"
+          label="GitHub Token"
+          submitLabel="Add token"
+          submit={createGitHubToken}
+          onSaved={(token) => setTokens((previous) => [...(previous ?? []), token])}
+        />
         {loadFailed && <p role="alert">Couldn’t load your GitHub Tokens.</p>}
         {tokens !== null && tokens.length === 0 && (
           <p className="settings-hint">No GitHub Tokens yet.</p>
@@ -160,17 +196,42 @@ export function GitHubSettingsPanel(): React.JSX.Element {
                   <h3>{token.owner_login}</h3>
                   <p className="settings-hint">{describeToken(token)}</p>
                   {token.connection_state === "needs_reconnect" && (
-                    <p role="alert">GitHub no longer accepts this token. Replace it.</p>
+                    <p role="alert">
+                      GitHub no longer accepts this token. Reconnect it with a replacement for{" "}
+                      {token.owner_login}.
+                    </p>
+                  )}
+                  {reconnecting === token.id && (
+                    <TokenForm
+                      id={`github-token-reconnect-${token.id}`}
+                      label={`Replacement token for ${token.owner_login}`}
+                      submitLabel="Reconnect"
+                      submit={(value) => reconnectGitHubToken(token.id, value)}
+                      onSaved={replace}
+                      onCancel={() => setReconnecting(null)}
+                    />
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  aria-label={`Remove GitHub Token for ${token.owner_login}`}
-                  onClick={() => setConfirming(token)}
-                >
-                  Remove
-                </button>
+                <div className="github-token-actions">
+                  {reconnecting !== token.id && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      aria-label={`Reconnect GitHub Token for ${token.owner_login}`}
+                      onClick={() => setReconnecting(token.id)}
+                    >
+                      Reconnect
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    aria-label={`Remove GitHub Token for ${token.owner_login}`}
+                    onClick={() => setConfirming(token)}
+                  >
+                    Remove
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

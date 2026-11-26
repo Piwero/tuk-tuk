@@ -53,6 +53,11 @@ def titles(body: dict[str, Any]) -> list[str]:
     return [item["title"] for item in body["items"]]
 
 
+def token_statuses(body: dict[str, Any]) -> list[dict[str, Any]]:
+    """Each token's id, owner login and read status, leaving out its expiry."""
+    return [{k: t[k] for k in ("id", "owner_login", "status")} for t in body["tokens"]]
+
+
 def test_an_open_pull_request_in_a_watched_repository_is_listed_with_its_details(
     client: TestClient, fake_github_source: FakeGitHubSource
 ) -> None:
@@ -268,7 +273,9 @@ def test_each_token_read_reports_its_status(
         client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")]
     )
 
-    assert read(client)["tokens"] == [{"id": personal, "owner_login": "octocat", "status": "ok"}]
+    assert token_statuses(read(client)) == [
+        {"id": personal, "owner_login": "octocat", "status": "ok"}
+    ]
 
 
 def test_a_token_github_cannot_reach_is_reported_while_other_tokens_still_render(
@@ -288,7 +295,7 @@ def test_a_token_github_cannot_reach_is_reported_while_other_tokens_still_render
     body = read(client)
 
     assert titles(body) == ["Still here"]
-    assert body["tokens"] == [
+    assert token_statuses(body) == [
         {"id": personal, "owner_login": "octocat", "status": "unavailable"},
         {"id": work, "owner_login": "acme", "status": "ok"},
     ]
@@ -304,6 +311,6 @@ def test_a_token_github_rejects_is_reported_as_needing_reconnection(
         PERSONAL, TerminalGitHubSourceError("Bad credentials")
     )
 
-    assert read(client)["tokens"] == [
+    assert token_statuses(read(client)) == [
         {"id": personal, "owner_login": "octocat", "status": "needs_reconnect"}
     ]

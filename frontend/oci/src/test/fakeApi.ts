@@ -282,6 +282,9 @@ export interface FakeGitHubToken {
   owner_login: string;
   owner_kind: "user" | "organization";
   expires_at: string | null;
+  /** Expires within 7 days, or already has (#584). The backend works this
+   * out from its clock; the fake takes it as given. */
+  expires_soon: boolean;
   connection_state: string;
   created_at: string;
 }
@@ -305,6 +308,7 @@ export function fakeGitHubToken(
     owner_login: ownerLogin,
     owner_kind: "user",
     expires_at: null,
+    expires_soon: false,
     connection_state: "connected",
     created_at: "2026-01-01T00:00:00Z",
     ...overrides,
@@ -571,8 +575,10 @@ export interface FakeApiState {
   githubReadableRepositories: Record<string, FakeReadableRepository[]>;
   /** The signed-in User's Watched Repositories (#581). */
   watchedRepositories: FakeWatchedRepository[];
-  /** Owner logins whose token's repository listing fails, and how: as the
-   * backend reports it per token in the picker. */
+  /** Owner logins whose token GitHub fails to read through, and how: as
+   * the backend reports it per token in the picker and the GitHub view's
+   * reads. A token GitHub rejects is flipped to needs_reconnect on a view
+   * read (#584); reconnecting it clears its failure. */
   githubRepositoryFailures: Record<string, "unavailable" | "needs_reconnect">;
   /** The open Pull Requests the GitHub view's read answers with (#579), in
    * the backend's order (grouped, then most recently updated first). Only
@@ -1798,6 +1804,41 @@ export function installFakeApi({
       return json(created, 201);
     }
     const match = /^\/api\/v1\/github\/tokens\/(\d+)$/.exec(url.pathname);
+    if (method === "PATCH" && match !== null) {
+      // Reconnect (#584): validated like a new token, for the same owner.
+      const id = Number(match[1]);
+      const existing = state.githubTokens.find((t) => t.id === id);
+      if (existing === undefined) {
+        return notFound(`GitHub Token ${id} not found`);
+      }
+      const token = String((body as { token?: unknown }).token ?? "").trim();
+      if (!token.startsWith("github_pat_")) {
+        return unprocessable(
+          "github_token_not_fine_grained",
+          "tuk-tuk accepts only fine-grained personal access tokens (they start with github_pat_).",
+        );
+      }
+      const identity = state.githubTokenIdentities[token];
+      if (identity === undefined) {
+        return unprocessable(
+          "github_token_rejected",
+          "GitHub rejected this token: it may be mistyped, expired or revoked.",
+        );
+      }
+      if (identity.owner_login.toLowerCase() !== existing.owner_login.toLowerCase()) {
+        return unprocessable(
+          "github_token_owner_mismatch",
+          `This token grants access to ${identity.owner_login}, not ${existing.owner_login}. ` +
+            `Paste a token for ${existing.owner_login}, or add it as a new GitHub Token.`,
+        );
+      }
+      existing.expires_at = identity.expires_at ?? null;
+      existing.expires_soon = false;
+      existing.connection_state = "connected";
+      // The replacement works where the old token no longer did.
+      delete state.githubRepositoryFailures[existing.owner_login];
+      return json(existing);
+    }
     if (method === "DELETE" && match !== null) {
       const id = Number(match[1]);
       if (!state.githubTokens.some((t) => t.id === id)) {
@@ -1898,12 +1939,27 @@ export function installFakeApi({
       const watched = [...state.watchedRepositories].sort((a, b) =>
         a.full_name.localeCompare(b.full_name),
       );
-      const byName = new Map(watched.map((w) => [w.full_name, w]));
+      // A token GitHub fails to read through hides only its own
+      // repositories; one GitHub rejects needs reconnection (#584).
+      const failing = (tokenId: number): "unavailable" | "needs_reconnect" | undefined => {
+        const token = state.githubTokens.find((t) => t.id === tokenId);
+        return token === undefined ? undefined : state.githubRepositoryFailures[token.owner_login];
+      };
+      for (const token of state.githubTokens) {
+        if (state.githubRepositoryFailures[token.owner_login] === "needs_reconnect") {
+          token.connection_state = "needs_reconnect";
+        }
+      }
+      const byName = new Map(
+        watched
+          .filter((w) => failing(w.github_token_id) === undefined)
+          .map((w) => [w.full_name, w]),
+      );
       return json({
         items: items
           .filter((item) => byName.has(item.repository))
           .map((item) => ({ ...item, watched_repository_id: byName.get(item.repository)?.id })),
-        repositories: watched.map((w) => {
+        repositories: [...byName.values()].map((w) => {
           const overflow = overflowByName[w.full_name] ?? 0;
           const shown = items.filter((item) => item.repository === w.full_name).length;
           return {
@@ -1917,7 +1973,13 @@ export function installFakeApi({
         tokens: [...state.githubTokens]
           .sort((a, b) => a.id - b.id)
           .filter((token) => watched.some((w) => w.github_token_id === token.id))
-          .map((token) => ({ id: token.id, owner_login: token.owner_login, status: "ok" })),
+          .map((token) => ({
+            id: token.id,
+            owner_login: token.owner_login,
+            status: state.githubRepositoryFailures[token.owner_login] ?? "ok",
+            expires_at: token.expires_at,
+            expires_soon: token.expires_soon,
+          })),
         fetched_at: new Date().toISOString(),
         stale: false,
       });
