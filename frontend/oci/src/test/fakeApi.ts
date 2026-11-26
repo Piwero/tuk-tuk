@@ -3809,7 +3809,7 @@ export function installFakeApi({
           toMinutes(input.start) >= toMinutes(input.end)
         ) {
           return json(
-            { error: { code: "validation_error", message: "invalid planning window" } },
+            { error: { code: "invalid_planning_window", message: "invalid planning window" } },
             422,
           );
         }
