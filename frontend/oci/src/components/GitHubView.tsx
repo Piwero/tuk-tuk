@@ -12,7 +12,9 @@ import {
   type PullRequestRelationship,
 } from "../api";
 import { formatTimeAgo } from "../dates";
+import { applyGitHubFilters, type GitHubFilters, NO_GITHUB_FILTERS } from "../githubFilters";
 import { pathForSettingsTab } from "../routes";
+import { GitHubFilterBar } from "./GitHubFilterBar";
 
 /** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
 type GitHubTab = "pull-requests" | "issues";
@@ -110,6 +112,8 @@ function IssueRow({ issue }: { issue: GitHubIssue }): React.JSX.Element {
  * tuk-tuk never writes there. */
 export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
   const [tab, setTab] = useState<GitHubTab>("pull-requests");
+  // Never saved: leaving the view drops them (#585).
+  const [filters, setFilters] = useState<GitHubFilters>(NO_GITHUB_FILTERS);
 
   return (
     <div className="github-view">
@@ -135,14 +139,24 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
             key={tab}
             load={fetchGitHubPullRequests}
             onOpenSettings={onOpenSettings}
-            render={(read) => <PullRequestGroups items={read.items} />}
+            render={(read) => (
+              <>
+                <GitHubFilterBar items={read.items} filters={filters} onChange={setFilters} />
+                <PullRequestGroups items={applyGitHubFilters(read.items, filters)} />
+              </>
+            )}
           />
         ) : (
           <GitHubRead
             key={tab}
             load={fetchGitHubIssues}
             onOpenSettings={onOpenSettings}
-            render={(read) => <IssueList items={read.items} />}
+            render={(read) => (
+              <>
+                <GitHubFilterBar items={read.items} filters={filters} onChange={setFilters} />
+                <IssueList items={applyGitHubFilters(read.items, filters)} />
+              </>
+            )}
           />
         )}
       </div>
