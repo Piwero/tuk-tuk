@@ -48,7 +48,7 @@ vocabulary means only real day/time tokens are consumed.
 
 The Calendar draft is anchored to the day (and, in Week/Day view, the time
 slot) the user clicked — `submitDraft` builds the create payload from
-`draft.day` and the dragged minutes. It _inherently_ carries a schedule. A
+`draft.day` and the dragged minutes. It *inherently* carries a schedule. A
 typed `@friday` would either be ignored (confusing) or override the slot
 the user just clicked (worse — it fights the direct-manipulation gesture
 that opened the draft). There is no coherent meaning for `@` here, so the

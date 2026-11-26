@@ -19,7 +19,6 @@ No. You run it yourself. [Getting started](getting-started.md) takes about 10 mi
 
 **Does it work on my phone?**
 Yes, in the browser. To get an app icon:
-
 1. Open Tuk Tuk in Safari (iPhone) or Chrome (Android).
 2. Tap **Share → Add to Home Screen** (iPhone) or **⋮ → Install app** (Android).
 

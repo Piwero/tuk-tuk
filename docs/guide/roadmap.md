@@ -10,10 +10,10 @@
 These appear in the app or design but don't fully work yet. MCP is available now; see the
 [MCP server guide](features/mcp.md).
 
-| Feature                    | Today                                                                       | Planned                                                              |
-| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Reminder notifications** | Notify while a Tuk Tuk tab is open                                          | Notifications with the app closed or the phone locked (not promised) |
-| **Overdue triage**         | Reschedule overdue tasks by hand (select them, then use **Reschedule to…**) | AI proposes a new date for each overdue task                         |
+| Feature | Today | Planned |
+| --- | --- | --- |
+| **Reminder notifications** | Notify while a Tuk Tuk tab is open | Notifications with the app closed or the phone locked (not promised) |
+| **Overdue triage** | Reschedule overdue tasks by hand (select them, then use **Reschedule to…**) | AI proposes a new date for each overdue task |
 
 ## Not planned
 

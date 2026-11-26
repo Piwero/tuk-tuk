@@ -35,12 +35,12 @@ The app builds on your own machine, so it runs on Intel/AMD and Apple Silicon (M
 
 Run these from the `tuk-tuk` folder.
 
-| To…                | Run                                                         |
-| ------------------ | ----------------------------------------------------------- |
-| Stop               | `docker compose -f docker-compose.prod.yml down`            |
-| Start              | `docker compose -f docker-compose.prod.yml up -d`           |
-| See logs           | `docker compose -f docker-compose.prod.yml logs -f backend` |
-| Check it's running | `docker compose -f docker-compose.prod.yml ps`              |
+| To… | Run |
+| --- | --- |
+| Stop | `docker compose -f docker-compose.prod.yml down` |
+| Start | `docker compose -f docker-compose.prod.yml up -d` |
+| See logs | `docker compose -f docker-compose.prod.yml logs -f backend` |
+| Check it's running | `docker compose -f docker-compose.prod.yml ps` |
 
 The app restarts by itself after a reboot as long as Docker is running. Your data
 lives in a PostgreSQL database, in a Docker volume called `tuk-tuk-prod_pgdata`,

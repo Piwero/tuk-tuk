@@ -14,13 +14,13 @@ think. Tuk Tuk shows you what matters today.
 
 ## How it's organised
 
-| Thing       | What it is                                                                                            |
-| ----------- | ----------------------------------------------------------------------------------------------------- |
-| **Task**    | One thing to do. Can have dates, a priority, tags and a checklist.                                    |
-| **List**    | A collection of tasks, such as "Q4 Roadmap" or "Groceries".                                           |
-| **Folder**  | Groups lists in the sidebar, such as "Work" or "Home". Holds lists, not tasks.                        |
+| Thing | What it is |
+| --- | --- |
+| **Task** | One thing to do. Can have dates, a priority, tags and a checklist. |
+| **List** | A collection of tasks, such as "Q4 Roadmap" or "Groceries". |
+| **Folder** | Groups lists in the sidebar, such as "Work" or "Home". Holds lists, not tasks. |
 | **Section** | Splits a list into stages, such as "Discovery" or "In progress". Sections are also the board columns. |
-| **Inbox**   | Where tasks land when you don't pick a list. Always there.                                            |
+| **Inbox** | Where tasks land when you don't pick a list. Always there. |
 
 ## Daily use
 

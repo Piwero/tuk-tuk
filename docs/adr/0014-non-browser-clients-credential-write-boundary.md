@@ -4,7 +4,7 @@
 
 Accepted. Supersedes one clause of
 [0009](0009-assistant-cloud-chat-suggest-only.md) — "there are no write
-tools" narrows to "the _in-app Assistant_ has no write tools" — in the
+tools" narrows to "the *in-app Assistant* has no write tools" — in the
 same way that record superseded clauses of
 [0005 (Assist)](0005-assist-local-suggest-only-ephemeral.md). ADR 0009
 itself is left unedited: the history of why the stance changed is the
@@ -88,8 +88,8 @@ Automatic-and-broad egress with model-chosen writes is a different shape
 from user-initiated-and-narrow egress with owner-directed writes, and
 one rule cannot serve both without banning the second.
 
-The restriction that earns its keep across both is _no
-model-initiated destruction_, and it is preserved exactly: everything
+The restriction that earns its keep across both is *no
+model-initiated destruction*, and it is preserved exactly: everything
 the MCP write set admits is undone by hand in seconds (see below), and
 deletion is absent from it entirely.
 
@@ -113,7 +113,7 @@ The server process holds the full session cookie, so every endpoint is
 technically within reach; what constrains the model is that no tool
 exists for anything outside the write set. That is structural with
 respect to the model — a model cannot call what it cannot see — and
-_not_ structural with respect to a bug or a compromised binary, against
+*not* structural with respect to a bug or a compromised binary, against
 which it offers nothing.
 
 This is acceptable only because the server runs as a local subprocess
@@ -175,7 +175,7 @@ than at inventing a syntax.
 The related strictness is deliberate in the other direction: the CLI
 resolves a typed List or Tag name by exact case-insensitive match and
 never creates what does not exist — it reuses the backend's lenient
-phrase resolver _nowhere_. That resolver's whole-word containment
+phrase resolver *nowhere*. That resolver's whole-word containment
 fallback is correct for a language model guessing a List from prose,
 and wrong for an argument a human typed, where a loose match turns a
 typo into a silent write to the wrong List.

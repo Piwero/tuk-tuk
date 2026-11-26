@@ -17,10 +17,10 @@ click to accept it. The AI has no way to change your data on its own.
 
 ## Two features
 
-| Feature                      | What it does                                                                                                                                                                           | Runs on                                                           |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Feature | What it does | Runs on |
+| --- | --- | --- |
 | **Assist** (smart Quick-Add) | Type "dentist next Friday 3pm every 6 months" and get a draft task with date, repeat and reminder filled in. Press Enter to accept or Escape to discard. Works in English and Spanish. | [Ollama](https://ollama.com) on your own computer (free, private) |
-| **Assistant** (day planner)  | Chat about your day. It reads your week and suggests tasks, time blocks and priorities, fitted around your meetings. You accept each suggestion one by one.                            | Any OpenAI-compatible service: OpenAI, Gemini, Ollama, etc.       |
+| **Assistant** (day planner) | Chat about your day. It reads your week and suggests tasks, time blocks and priorities, fitted around your meetings. You accept each suggestion one by one. | Any OpenAI-compatible service: OpenAI, Gemini, Ollama, etc. |
 
 ## Set up Assist (10 min)
 

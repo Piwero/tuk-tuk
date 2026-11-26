@@ -26,7 +26,7 @@ minute→pixel relationship is now **piecewise**: three linear segments with
 different slopes, meeting at the band edges.
 
 A piecewise scale is unforgiving of code that assumes linearity. The
-resize gesture is the sharp example: it computed a _delta_ —
+resize gesture is the sharp example: it computed a *delta* —
 `((clientY - originY) / HOUR_PX) * 60` — and added it to the edge's start
 minute. Under two slopes the same pixel travel is a different number of
 minutes on each side of a boundary, so a block dragged across the band
@@ -52,7 +52,7 @@ The drag gestures become **position-based, not delta-based**. A resize
 maps the grabbed edge's absolute pixel position — its y at grab, plus the
 pointer's travel since — back through `yToMinute`, so the edge tracks the
 cursor across a band boundary exactly. Recomputing the slope per frame
-from the block's _current_ position was considered and rejected: it is a
+from the block's *current* position was considered and rejected: it is a
 smaller diff, but it drifts across boundaries and reintroduces precisely
 the bug class this record exists to prevent.
 

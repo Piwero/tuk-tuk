@@ -28,13 +28,13 @@ Needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and the
 
 ## Everyday commands
 
-| Command                      | Does                                                   |
-| ---------------------------- | ------------------------------------------------------ |
-| `tuk agenda`                 | Today's tasks, habits and calendar events              |
-| `tuk ls`                     | Today's tasks (`--week`, `--all`, `--search passport`) |
-| `tuk done 12`                | Complete task 12                                       |
-| `tuk habits check 3`         | Check in habit 3 for today                             |
-| `tuk edit 12 --due tomorrow` | Reschedule                                             |
+| Command | Does |
+| --- | --- |
+| `tuk agenda` | Today's tasks, habits and calendar events |
+| `tuk ls` | Today's tasks (`--week`, `--all`, `--search passport`) |
+| `tuk done 12` | Complete task 12 |
+| `tuk habits check 3` | Check in habit 3 for today |
+| `tuk edit 12 --due tomorrow` | Reschedule |
 
 Full reference: [`cli/oci/README.md`](../../../cli/oci/README.md).
 

@@ -13,7 +13,6 @@ Connect daily tasks to the outcome you care about this quarter, and start
 each day knowing what moves it forward.
 
 Goals combine two proven methods:
-
 - **OKRs:** a goal plus 1–3 numbers that prove you got there (key results).
 - **WOOP:** naming what will get in your way and planning for it in advance.
 
@@ -26,11 +25,11 @@ Goals combine two proven methods:
    to the afternoon."
 5. **Add key results.** Each one tracks a number in one of three ways:
 
-| Tracking         | Updates                             | Example                   |
-| ---------------- | ----------------------------------- | ------------------------- |
-| **Manual**       | You type the number                 | Beta users: 84 / 200      |
-| **From a habit** | Adds up check-ins automatically     | Workouts: 36 / 48         |
-| **From tasks**   | Counts completed tasks linked to it | Milestones shipped: 2 / 6 |
+| Tracking | Updates | Example |
+| --- | --- | --- |
+| **Manual** | You type the number | Beta users: 84 / 200 |
+| **From a habit** | Adds up check-ins automatically | Workouts: 36 / 48 |
+| **From tasks** | Counts completed tasks linked to it | Milestones shipped: 2 / 6 |
 
 To link a task, open it and pick the key result under **Key Result**.
 
