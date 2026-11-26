@@ -1,4 +1,5 @@
 import "./BrainDumpView.css";
+import { assistantProviderHost } from "../assistantProvider";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -119,17 +120,12 @@ export function BrainDumpView(): React.JSX.Element {
   const configured = Boolean(config?.base_url && config.model && config.api_key_set);
   let provider = "Assistant not configured. Manual Task creation remains available.";
   if (configured && config) {
-    let local = false;
-    try {
-      local = ["localhost", "127.0.0.1", "[::1]"].includes(new URL(config.base_url!).hostname);
-    } catch {
-      /* Unknown hosts are not called local. */
-    }
+    const local = assistantProviderHost(config.base_url!)?.local ?? false;
     provider = `${config.model} · ${config.base_url} · ${local ? "Local" : "Cloud / remote"}`;
   }
   return (
     <section className="brain-dump" aria-label="Brain dump">
-      <button type="button" onClick={() => setOpen(true)}>
+      <button className="btn-secondary" type="button" onClick={() => setOpen(true)}>
         Brain dump to Tasks
       </button>
       {open && (
@@ -156,6 +152,7 @@ export function BrainDumpView(): React.JSX.Element {
             Manual Quick-Add is always available.
           </p>
           <button
+            className="btn-secondary"
             type="button"
             disabled={
               !configured ||
@@ -168,7 +165,12 @@ export function BrainDumpView(): React.JSX.Element {
           >
             {loading ? "Preparing…" : "Suggest Tasks"}
           </button>
-          <button type="button" onClick={cancel} disabled={rows.some((r) => r.state === "saving")}>
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={cancel}
+            disabled={rows.some((r) => r.state === "saving")}
+          >
             Cancel brain dump
           </button>
           <p id="brain-dump-error" role={error || input.length > 12000 ? "alert" : undefined}>
@@ -209,6 +211,7 @@ export function BrainDumpView(): React.JSX.Element {
                   onChange={(e) => patch(index, { date: e.target.value, reviewed: true })}
                 />
                 <button
+                  className="btn-secondary"
                   type="button"
                   disabled={row.state !== "pending"}
                   onClick={() => patch(index, { date: "", reviewed: true })}
@@ -219,13 +222,18 @@ export function BrainDumpView(): React.JSX.Element {
                 {row.state === "pending" && (
                   <>
                     <button
+                      className="btn-secondary"
                       type="button"
                       disabled={!row.draft.title.trim() || !row.reviewed}
                       onClick={() => void save(index)}
                     >
                       Save Task
                     </button>
-                    <button type="button" onClick={() => patch(index, { state: "discarded" })}>
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={() => patch(index, { state: "discarded" })}
+                    >
                       Discard
                     </button>
                   </>
@@ -240,7 +248,7 @@ export function BrainDumpView(): React.JSX.Element {
                         : ""}
                 </p>
                 {row.state === "failed" && (
-                  <button type="button" onClick={() => void save(index)}>
+                  <button className="btn-secondary" type="button" onClick={() => void save(index)}>
                     Retry Save
                   </button>
                 )}

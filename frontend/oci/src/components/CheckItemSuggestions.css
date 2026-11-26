@@ -1,26 +1,26 @@
 @layer components {
   .check-item-suggestions {
     min-width: 0;
-    margin-block: 12px;
+    margin-block: var(--space-3);
   }
   .check-item-suggestions section,
   .check-item-suggestions fieldset {
     display: grid;
-    gap: 8px;
+    gap: var(--space-2);
     min-width: 0;
-    margin-block: 8px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    margin-block: var(--space-2);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--border-default);
+    border-radius: var(--radius-md);
     overflow-wrap: anywhere;
   }
   .check-item-suggestions label {
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
     min-width: 0;
   }
   .check-item-suggestions :is(button, input, select, textarea) {
-    min-height: 44px;
+    min-height: var(--tap-target);
     min-width: 0;
     max-width: 100%;
   }

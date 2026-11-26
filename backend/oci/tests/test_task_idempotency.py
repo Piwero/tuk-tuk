@@ -20,6 +20,27 @@ def test_task_create_request_id_replays_same_task(database_url: str, fake_clock:
     assert first.json()["id"] == second.json()["id"]
 
 
+def test_lost_response_retry_never_resurrects_deleted_task(
+    database_url: str, fake_clock: FakeClock
+) -> None:
+    with make_client(database_url, fake_clock) as client:
+        payload = {"title": "Call dentist", "create_request_id": REQUEST_ID}
+        # First response represents a committed write whose response the caller lost.
+        first = client.post("/api/v1/tasks", json=payload)
+        assert first.status_code == 201
+        assert client.delete(f"/api/v1/tasks/{first.json()['id']}").status_code == 204
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            retries = list(pool.map(lambda _: client.post("/api/v1/tasks", json=payload), range(4)))
+        assert all(retry.status_code == 409 for retry in retries)
+        assert client.get("/api/v1/tasks").json()["total"] == 0
+        create_user_row(client, username="other", email="other@example.test")
+        log_in(client, login="other")
+        other = client.post("/api/v1/tasks", json=payload)
+        assert other.status_code == 201
+        assert other.json()["id"] != first.json()["id"]
+        assert client.get(f"/api/v1/tasks/{first.json()['id']}").status_code == 404
+
+
 def test_concurrent_task_acceptance_creates_one_task(
     database_url: str, fake_clock: FakeClock
 ) -> None:

@@ -80,6 +80,22 @@ it("partial group retry preserves identifiers and skips confirmed saved prefix",
   expect(within(region).getByRole("button", { name: "Add" })).toBeDisabled();
 });
 
+it("requires duplicate consent when manual entry follows a failed acceptance", async () => {
+  const { user, region, writes, failOn } = await review(["Pack socks"]);
+  failOn(1);
+  await user.click(within(region).getByRole("button", { name: "Add" }));
+  await within(region).findByText(/0 confirmed saved/);
+  await user.type(screen.getByRole("textbox", { name: "Add a check item" }), "Pack socks{Enter}");
+  const retry = within(region).getByRole("button", { name: "Retry Add" });
+  expect(retry).toBeDisabled();
+  const consent = within(region).getByRole("checkbox", { name: /Keep duplicates/ });
+  expect(consent).toBeEnabled();
+  await user.click(consent);
+  await user.click(retry);
+  expect(await within(region).findByText("Saved 1 Check Item.")).toBeInTheDocument();
+  expect(writes[2]).toEqual(writes[0]);
+});
+
 it("cancel drops preview without writes and returns focus to opener", async () => {
   const { user, region, writes } = await review(["Pack socks"]);
   await user.click(within(region).getByRole("button", { name: "Cancel suggestions" }));
