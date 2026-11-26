@@ -1,3 +1,5 @@
+import "./GitHubTokenBanners.css";
+
 import type { GitHubTokenReadStatus } from "../api";
 import { formatDate } from "../dates";
 import { pathForSettingsTab } from "../routes";
@@ -22,15 +24,7 @@ export function GitHubTokenBanners({
             token.status === "needs_reconnect" ? (
               <p key={token.id}>
                 {`GitHub no longer accepts the GitHub Token for ${token.owner_login}, so its repositories aren’t shown. `}
-                <a
-                  href={pathForSettingsTab("github")}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    onOpenSettings();
-                  }}
-                >
-                  Reconnect
-                </a>
+                <SettingsLink onOpenSettings={onOpenSettings} />
               </p>
             ) : (
               <p key={token.id}>
@@ -40,7 +34,7 @@ export function GitHubTokenBanners({
           )}
         </div>
       )}
-      <GitHubTokenExpiryWarning tokens={tokens} />
+      <GitHubTokenExpiryWarning tokens={tokens} onOpenSettings={onOpenSettings} />
     </>
   );
 }
@@ -52,12 +46,29 @@ interface ExpiringToken {
   expires_soon: boolean;
 }
 
+function SettingsLink({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
+  return (
+    <a
+      href={pathForSettingsTab("github")}
+      onClick={(event) => {
+        event.preventDefault();
+        onOpenSettings();
+      }}
+    >
+      Reconnect
+    </a>
+  );
+}
+
 /** Warns about each GitHub Token that expires within 7 days, or already
- * has (#584), so the GitHub view never breaks without notice. */
+ * has (#584), so the GitHub view never breaks without notice. Outside
+ * Settings, `onOpenSettings` adds a link to reconnect it there. */
 export function GitHubTokenExpiryWarning({
   tokens,
+  onOpenSettings,
 }: {
   tokens: ExpiringToken[];
+  onOpenSettings?: () => void;
 }): React.JSX.Element | null {
   const expiring = tokens.filter((token) => token.expires_soon && token.expires_at !== null);
   if (expiring.length === 0) return null;
@@ -65,10 +76,14 @@ export function GitHubTokenExpiryWarning({
     <div className="github-expiry" role="status" aria-label="GitHub Token expiry">
       {expiring.map((token) => {
         const at = new Date(token.expires_at ?? "");
-        const verb = at.getTime() <= Date.now() ? "expired" : "expires";
+        const expired = at.getTime() <= Date.now();
         return (
           <p key={token.id}>
-            {`The GitHub Token for ${token.owner_login} ${verb} on ${formatDate(at, "date")}. Reconnect it with a new token in Settings.`}
+            {`The GitHub Token for ${token.owner_login} ${expired ? "expired" : "expires"} on ${formatDate(at, "date")}. `}
+            {expired
+              ? "Reconnect it with a new token. "
+              : "Reconnect it with a new token before then. "}
+            {onOpenSettings !== undefined && <SettingsLink onOpenSettings={onOpenSettings} />}
           </p>
         );
       })}

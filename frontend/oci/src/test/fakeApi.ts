@@ -1746,6 +1746,41 @@ export function installFakeApi({
       return json(created, 201);
     }
     const match = /^\/api\/v1\/github\/tokens\/(\d+)$/.exec(url.pathname);
+    if (method === "PATCH" && match !== null) {
+      // Reconnect (#584): validated like a new token, for the same owner.
+      const id = Number(match[1]);
+      const existing = state.githubTokens.find((t) => t.id === id);
+      if (existing === undefined) {
+        return notFound(`GitHub Token ${id} not found`);
+      }
+      const token = String((body as { token?: unknown }).token ?? "").trim();
+      if (!token.startsWith("github_pat_")) {
+        return unprocessable(
+          "github_token_not_fine_grained",
+          "tuk-tuk accepts only fine-grained personal access tokens (they start with github_pat_).",
+        );
+      }
+      const identity = state.githubTokenIdentities[token];
+      if (identity === undefined) {
+        return unprocessable(
+          "github_token_rejected",
+          "GitHub rejected this token: it may be mistyped, expired or revoked.",
+        );
+      }
+      if (identity.owner_login.toLowerCase() !== existing.owner_login.toLowerCase()) {
+        return unprocessable(
+          "github_token_owner_mismatch",
+          `This token grants access to ${identity.owner_login}, not ${existing.owner_login}. ` +
+            `Paste a token for ${existing.owner_login}, or add it as a new GitHub Token.`,
+        );
+      }
+      existing.expires_at = identity.expires_at ?? null;
+      existing.expires_soon = false;
+      existing.connection_state = "connected";
+      // The replacement works where the old token no longer did.
+      delete state.githubRepositoryFailures[existing.owner_login];
+      return json(existing);
+    }
     if (method === "DELETE" && match !== null) {
       const id = Number(match[1]);
       if (!state.githubTokens.some((t) => t.id === id)) {
