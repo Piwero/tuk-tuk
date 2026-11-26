@@ -298,8 +298,18 @@ class Section(OwnedMixin, Base):
 
 class Task(OwnedMixin, Base):
     __tablename__ = "tasks"
+    __table_args__ = (
+        Index(
+            "uq_tasks_owner_create_request_id",
+            "owner_id",
+            "create_request_id",
+            unique=True,
+            postgresql_where=text("create_request_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    create_request_id: Mapped[str | None] = mapped_column(String(36), default=None)
     title: Mapped[str] = mapped_column(String(500))
     completed: Mapped[bool] = mapped_column(default=False)
     # When the task was last completed; drives the completed view's newest-first
@@ -396,6 +406,30 @@ class Task(OwnedMixin, Base):
         order_by="Tag.name, Tag.id",
         lazy="selectin",
     )
+
+
+class TaskCreation(OwnedMixin, Base):
+    """Durable receipt: Task deletion must never re-enable acceptance."""
+
+    __tablename__ = "task_creations"
+    __table_args__ = (UniqueConstraint("owner_id", "request_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(36))
+    # Deliberately no FK: retain tombstone after hard deletion.
+    task_id: Mapped[int] = mapped_column()
+
+
+class CheckItemCreation(OwnedMixin, Base):
+    """Durable receipt: deleting a Check Item never re-enables its request."""
+
+    __tablename__ = "check_item_creations"
+    __table_args__ = (UniqueConstraint("owner_id", "request_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(128))
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(500))
 
 
 class CheckItem(OwnedMixin, Base):

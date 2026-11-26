@@ -651,6 +651,22 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             <Icon name="chart-column" size={16} />
             Statistics
           </a>
+          <details className="focus-accountability">
+            <summary>Work alongside someone (optional)</summary>
+            <p>
+              Focusmate is an external service. Opening it leaves Tuk Tuk. No Task details are sent
+              and no session is booked.
+            </p>
+            <p>Without video, work alongside someone you already know, or continue alone.</p>
+            <a
+              href="https://www.focusmate.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              referrerPolicy="no-referrer"
+            >
+              Open Focusmate (external, new tab)
+            </a>
+          </details>
         </aside>
       )}
     </div>

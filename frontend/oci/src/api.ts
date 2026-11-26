@@ -513,6 +513,22 @@ export function fetchAssistantConfig(): Promise<AssistantConfig> {
   return request("/api/v1/assistant/config");
 }
 
+export function suggestCheckItems(
+  taskId: number,
+  count: number,
+  instruction: string,
+  signal: AbortSignal,
+): Promise<{
+  message: string;
+  suggestions: Extract<AssistantSuggestion, { type: "add_check_items" }>[];
+}> {
+  return request("/api/v1/assistant/check-item-suggestions", {
+    method: "POST",
+    body: JSON.stringify({ task_id: taskId, count, instruction }),
+    signal,
+  });
+}
+
 /** Saves whichever fields are passed; an omitted field is left unchanged
  * server-side. `apiKey` is omitted (not sent empty) to keep whatever is
  * already stored — the same write-only convention as
@@ -986,6 +1002,31 @@ export function deleteTag(tagId: number): Promise<void> {
   return request(`/api/v1/tags/${tagId}`, { method: "DELETE" });
 }
 
+export interface BrainDumpDraft {
+  type: "create_task";
+  title: string;
+  list_name: null;
+  tag_names: string[];
+  priority: Priority;
+  start_date: string | null;
+  due_date: string | null;
+  is_all_day: boolean;
+  time_zone: string | null;
+}
+
+export interface BrainDumpTurn {
+  message: string;
+  suggestions: BrainDumpDraft[];
+  discarded_count: number;
+}
+
+export function postBrainDump(text: string): Promise<BrainDumpTurn> {
+  return request("/api/v1/assistant/brain-dump", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+}
+
 export interface TaskCreateInput {
   title: string;
   description?: string;
@@ -1009,6 +1050,13 @@ export interface TaskCreateInput {
 
 export function createTask(input: TaskCreateInput): Promise<Task> {
   return request("/api/v1/tasks", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function createTaskIdempotently(input: TaskCreateInput, requestId: string): Promise<Task> {
+  return request("/api/v1/tasks", {
+    method: "POST",
+    body: JSON.stringify({ ...input, create_request_id: requestId }),
+  });
 }
 
 /** Tasks whose scheduled days intersect the inclusive [start, end] day window
@@ -1164,10 +1212,10 @@ export function deleteTask(taskId: number): Promise<void> {
 }
 
 /** Check Item mutations return the full parent Task (composition). */
-export function createCheckItem(taskId: number, title: string): Promise<Task> {
+export function createCheckItem(taskId: number, title: string, requestId?: string): Promise<Task> {
   return request(`/api/v1/tasks/${taskId}/check-items`, {
     method: "POST",
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, request_id: requestId }),
   });
 }
 

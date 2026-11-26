@@ -6,7 +6,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, text
 
 from app.calendar_window import validate_range_pair
 from app.db import SessionDep
@@ -19,6 +19,7 @@ from app.models import (
     Section,
     Tag,
     Task,
+    TaskCreation,
     TaskList,
     utcnow,
 )
@@ -184,6 +185,24 @@ async def resolve_tags(session: SessionDep, tag_ids: list[int]) -> list[Tag]:
 
 @router.post("", status_code=201)
 async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
+    request_id = str(payload.create_request_id) if payload.create_request_id is not None else None
+    if request_id is not None:
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"task:{request_id}"},
+        )
+        receipt = await session.scalar(
+            select(TaskCreation).where(TaskCreation.request_id == request_id)
+        )
+        if receipt is not None:
+            existing = await session.get(Task, receipt.task_id)
+            if existing is None:
+                raise APIError(
+                    status_code=409,
+                    code="accepted_task_deleted",
+                    message="Previously accepted Task was deleted; retry cannot recreate it",
+                )
+            return TaskRead.model_validate(existing)
     if payload.list_id is None:
         list_id = await session.scalar(select(TaskList.id).where(TaskList.is_inbox))
     else:
@@ -207,6 +226,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
     )
     task = Task(
         title=payload.title,
+        create_request_id=request_id,
         description=payload.description,
         list_id=list_id,
         section_id=payload.section_id,
@@ -225,6 +245,9 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         tags=tags,
     )
     session.add(task)
+    if request_id is not None:
+        await session.flush()
+        session.add(TaskCreation(request_id=request_id, task_id=task.id))
     await session.commit()
     return TaskRead.model_validate(task)
 

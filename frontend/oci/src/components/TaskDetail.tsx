@@ -24,6 +24,7 @@ import { PRIORITY_LABELS } from "../grouping";
 import { formatFocusTotal } from "../focusTotals";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { DateRow } from "./DateRow";
+import { CheckItemSuggestions } from "./CheckItemSuggestions";
 import { EstimateRow } from "./EstimateRow";
 import { PlannedWorkRow } from "./PlannedWorkRow";
 import { Hint } from "./Hint";
@@ -45,6 +46,7 @@ const SWIPE_DISMISS_THRESHOLD_PX = 60;
 
 interface TaskDetailProps {
   task: Task;
+  assistantEnabled?: boolean;
   allTags: Tag[];
   /** The List this Task belongs to — shown as a breadcrumb above the title
    * (issue #170) so the mobile sheet states where it was opened from,
@@ -82,6 +84,7 @@ function taskCountKeyResults(goals: Goal[]): { goalTitle: string; id: number; na
 
 export function TaskDetail({
   task,
+  assistantEnabled = false,
   allTags,
   listName,
   lists,
@@ -569,6 +572,9 @@ export function TaskDetail({
           />
         )}
       </div>
+      {assistantEnabled && (
+        <CheckItemSuggestions key={task.id} task={task} onTaskChanged={onTaskChanged} />
+      )}
       <section className="check-items" aria-label="Check items section">
         {task.check_items.length > 0 && (
           <div className="check-items-progress">
