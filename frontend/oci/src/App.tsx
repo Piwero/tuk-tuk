@@ -1949,6 +1949,7 @@ export function App({
             {selectedTask !== null && (
               <TaskDetail
                 task={selectedTask}
+                assistantEnabled={sectionSettings.assistant}
                 allTags={tags}
                 listName={selectedTaskListName}
                 lists={lists}

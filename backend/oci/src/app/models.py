@@ -398,6 +398,18 @@ class Task(OwnedMixin, Base):
     )
 
 
+class CheckItemCreation(OwnedMixin, Base):
+    """Durable receipt: deleting a Check Item never re-enables its request."""
+
+    __tablename__ = "check_item_creations"
+    __table_args__ = (UniqueConstraint("owner_id", "request_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(128))
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(500))
+
+
 class CheckItem(OwnedMixin, Base):
     """A Check Item — one line in a Task's checklist; not a Task itself.
 

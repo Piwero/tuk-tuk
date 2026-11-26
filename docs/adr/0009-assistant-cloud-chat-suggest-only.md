@@ -162,6 +162,42 @@ only way to act on a stale Suggestion is to edit the same task in another
 tab within the minute a card is alive — a rare, self-inflicted, visible
 conflict whose worst outcome is one wrong time.
 
+## Amendment: deliberate narrow-context interactions (#536, #571, #572)
+
+Ordinary Assistant planning retains its week snapshot and read-only tools.
+Two separate, stateless entry points reuse the User's configured Assistant
+provider without carrying the ordinary planning transcript or preferences:
+
+- `/assistant/check-item-suggestions` resolves one selected Task through the
+  current User's ownership filter before inference. Only its id, title,
+  description, existing Check Item titles and explicit instruction reach
+  the provider. There is no week snapshot, calendar retrieval, preference
+  injection or tool loop. Only bounded `add_check_items` Suggestions targeting
+  that Task can return; invalid output or excessive counts reject the whole
+  response, never truncate it. Default three steps, maximum ten.
+- `/assistant/brain-dump` sends only deliberately supplied text and instruction.
+  No snapshot, preferences, transcript or tools. Bounded `create_task`
+  Suggestions remain ephemeral, individually reviewed and accepted through
+  ordinary Task POST with stable User-scoped idempotency identifiers.
+
+The deliberate disclosures name the configured model/provider and local versus
+remote processing before sending. Unlike ordinary planning, selected Task
+assistance explicitly includes its description and Check Item text. These
+narrow modes cannot broaden context through prompt injection because no
+retrieval or tools exist on their execution paths. Entering ordinary planning
+is a separate deliberate action.
+
+Each reviewed `add_check_items` Suggestion may contain a group; accepting that
+already-reviewed group creates its Check Items sequentially through ordinary
+Check Item POST, each with a stable request identifier. A durable User-scoped
+receipt is committed atomically with each creation. Retries replay confirmed
+prefixes, even after a lost response, rather than creating duplicates; reusing
+an identifier with another title or Task conflicts. A title is never a key.
+Receipts survive Check Item deletion, preventing replay from recreating it.
+Normal validation and parent ownership apply before every replay. Partial or
+unknown outcomes remain visibly distinct from confirmed saves. Nothing
+changes Voice Assistant confirmation or retry rules.
+
 ## Considered options (and why they were rejected)
 
 - **Keep everything local and spec the chat down to a 14B model.**

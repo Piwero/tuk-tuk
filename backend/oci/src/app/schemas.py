@@ -288,6 +288,7 @@ class TaskUpdate(BaseModel):
 
 class CheckItemCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
+    request_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 # PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
