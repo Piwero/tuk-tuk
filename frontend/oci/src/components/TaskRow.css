@@ -100,8 +100,19 @@
     background: var(--focus-accent);
     color: var(--text-inverse);
   }
-  .tasks li.task-row:hover .row-actions,
-  .tasks li.task-row:focus-within .row-actions,
+  /* Hover or focus anywhere in the row reveals its actions only under a
+   * mouse. A tap leaves a phone's row :hover, and closing Task details
+   * refocuses its title, so on touch this used to reveal the actions with no
+   * height inside the clipped meta line: half a Focus pill peeked out under
+   * the title. Touch opens them by long-press instead (see below). */
+  @media (hover: hover) and (pointer: fine) {
+    .tasks li.task-row:hover .row-actions,
+    .tasks li.task-row:focus-within .row-actions {
+      width: auto;
+      overflow: visible;
+      visibility: visible;
+    }
+  }
   .tasks li.task-row .row-actions:focus-within {
     width: auto;
     overflow: visible;

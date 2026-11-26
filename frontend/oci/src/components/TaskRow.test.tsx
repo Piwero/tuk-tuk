@@ -330,6 +330,22 @@ describe("TaskRow touch: Focus/Delete stay behind a long-press (#168)", () => {
     expect(onDelete).toHaveBeenCalled();
     expect(row()).not.toHaveAttribute("data-actions-open");
   });
+
+  it("keeps a tapped or refocused row's actions hidden on touch", () => {
+    // A tap leaves the row :hover on a phone, and closing Task details
+    // hands focus back to its title, so the row stays :focus-within. Either
+    // used to reveal the actions with no height inside the clipped one-line
+    // meta: half an "Open Focus" pill peeked out under the title. Only a
+    // mouse may reveal them by hover or row focus; touch keeps the
+    // long-press and focus on the actions themselves.
+    const css = readStylesheets();
+    const reveal =
+      /\.tasks li\.task-row:hover \.row-actions,\s*\.tasks li\.task-row:focus-within \.row-actions\b/g;
+    expect(css.match(reveal)).toHaveLength(1);
+    expect(css).toMatch(
+      /@media \(hover: hover\) and \(pointer: fine\)\s*\{\s*\.tasks li\.task-row:hover \.row-actions,\s*\.tasks li\.task-row:focus-within \.row-actions\b/,
+    );
+  });
 });
 
 describe("due date chip is not clipped (issue #257)", () => {
