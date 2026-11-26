@@ -170,6 +170,69 @@ def make_task(client: TestClient, title: str, due_in_days: int = 1) -> int:
     return response.json()["id"]
 
 
+class TestBrainDump:
+    def test_brain_dump_sends_only_input_and_instruction_without_tools(
+        self, database_url: str, fake_clock: FakeClock, stub_chat: StubChatProvider
+    ) -> None:
+        stub_chat.set_json_content(
+            {
+                "message": "Drafts ready",
+                "suggestions": [
+                    {
+                        "type": "create_task",
+                        "title": "Call dentist",
+                        "list_name": None,
+                        "tag_names": [],
+                        "priority": "none",
+                        "start_date": None,
+                        "due_date": None,
+                        "is_all_day": False,
+                        "time_zone": None,
+                        "check_item_titles": [],
+                    }
+                ],
+            }
+        )
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_chat.base_url)
+            response = client.post("/api/v1/assistant/brain-dump", json={"text": "Call dentist"})
+        assert response.status_code == 200, response.text
+        assert response.json()["suggestions"][0]["title"] == "Call dentist"
+        request = stub_chat.request_at(0)
+        assert "tools" not in request
+        assert request["messages"][-1]["content"] == "Call dentist"
+        assert len(request["messages"]) == 2
+
+    @pytest.mark.parametrize(
+        "suggestions",
+        [
+            [{"type": "create_task", "title": "Task"}] * 11,
+            [{"type": "create_task", "title": "x" * 501}],
+            [{"type": "create_task", "title": "Task", "list_name": "Invented"}],
+            [{"type": "complete_task", "task_id": 1}],
+        ],
+    )
+    def test_invalid_or_excess_drafts_reject_whole_batch(
+        self,
+        database_url: str,
+        fake_clock: FakeClock,
+        stub_chat: StubChatProvider,
+        suggestions: list,
+    ) -> None:
+        stub_chat.set_json_content({"message": "Drafts", "suggestions": suggestions})
+        with make_client(database_url, fake_clock) as client:
+            _configure(client, stub_chat.base_url)
+            response = client.post("/api/v1/assistant/brain-dump", json={"text": "Call dentist"})
+        assert response.status_code == 422
+
+    def test_brain_dump_rejects_oversized_input(
+        self, database_url: str, fake_clock: FakeClock
+    ) -> None:
+        with make_client(database_url, fake_clock) as client:
+            response = client.post("/api/v1/assistant/brain-dump", json={"text": "x" * 12001})
+        assert response.status_code == 422
+
+
 class TestRequestValidation:
     def test_an_unknown_timezone_is_a_422_not_a_500(
         self, database_url: str, fake_clock: FakeClock

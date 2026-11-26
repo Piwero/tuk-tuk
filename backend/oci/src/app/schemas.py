@@ -2,6 +2,7 @@
 
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -222,6 +223,7 @@ MAX_ESTIMATE_MINUTES = 7 * 24 * 60
 
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
+    create_request_id: UUID | None = None
     description: str = ""
     list_id: int | None = None
     section_id: int | None = None

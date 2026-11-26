@@ -1,0 +1,37 @@
+@layer components {
+  .brain-dump {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+  .brain-dump article {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 0;
+  }
+  .brain-dump input,
+  .brain-dump textarea,
+  .brain-dump button {
+    min-height: 44px;
+    max-width: 100%;
+  }
+  .brain-dump textarea {
+    min-height: 120px;
+    width: 100%;
+  }
+  .brain-dump pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: inherit;
+  }
+  .brain-dump p {
+    overflow-wrap: anywhere;
+  }
+  .brain-dump :focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
