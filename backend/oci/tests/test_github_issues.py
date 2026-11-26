@@ -213,7 +213,8 @@ def test_github_issues_are_read_live_and_nothing_is_kept_of_them(
     fake_github_source.register_issues(PERSONAL, "octocat/dotfiles", [fake_issue(1, "Open now")])
     assert titles(read(client)) == ["Open now"]
 
-    # Closed on GitHub: gone from the next read, as nothing was stored.
+    # Closed on GitHub: gone from the next read from GitHub, as nothing
+    # was stored (a Refresh skips the in-memory cache, issue #583).
     fake_github_source.register_issues(PERSONAL, "octocat/dotfiles", [])
 
-    assert titles(read(client)) == []
+    assert titles(read(client, "?refresh=true")) == []

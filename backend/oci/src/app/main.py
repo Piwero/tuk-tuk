@@ -17,7 +17,8 @@ from app.db import check_database_reachable, create_engine, require_database_url
 from app.errors import register_error_handlers
 from app.event_cache import EventCache
 from app.github_adapter import GitHubApiSource
-from app.github_source import GitHubSource
+from app.github_cache import GitHubReadCache
+from app.github_source import GitHubSource, OpenIssues, OpenPullRequests
 from app.google_adapter import GoogleCalendarSource
 from app.middleware import SessionAuthMiddleware
 from app.ownership import create_session_factory
@@ -114,6 +115,8 @@ def create_app(
     app.state.calendar_source = app_calendar_source
     app.state.github_source = app_github_source
     app.state.event_cache = EventCache(clock=app_clock)
+    app.state.github_pull_request_cache = GitHubReadCache[OpenPullRequests](clock=app_clock)
+    app.state.github_issue_cache = GitHubReadCache[OpenIssues](clock=app_clock)
     app.add_middleware(SessionAuthMiddleware, settings=app_settings, clock=app_clock)
     app.add_middleware(
         CORSMiddleware,

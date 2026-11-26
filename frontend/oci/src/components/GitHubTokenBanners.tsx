@@ -7,15 +7,21 @@ import { pathForSettingsTab } from "../routes";
 /** One banner per GitHub Token that failed a GitHub view read (#584, ADR
  * 0007), naming its owner login, while every other token's items still
  * render. A token GitHub rejected offers Reconnect in Settings; one GitHub
- * couldn't be reached through only needs time. */
+ * couldn't be reached through, with no recent result to show instead,
+ * offers Retry (#583). A token showing a stale result has no banner: the
+ * view's stale notice covers it. */
 export function GitHubTokenBanners({
   tokens,
   onOpenSettings,
+  onRetry,
 }: {
   tokens: GitHubTokenReadStatus[];
   onOpenSettings: () => void;
+  onRetry: () => void;
 }): React.JSX.Element {
-  const failing = tokens.filter((token) => token.status !== "ok");
+  const failing = tokens.filter(
+    (token) => token.status === "unavailable" || token.status === "needs_reconnect",
+  );
   return (
     <>
       {failing.length > 0 && (
@@ -28,7 +34,10 @@ export function GitHubTokenBanners({
               </p>
             ) : (
               <p key={token.id}>
-                {`GitHub couldn’t be reached for ${token.owner_login}’s repositories. Try again in a moment.`}
+                {`GitHub couldn’t be reached for ${token.owner_login}’s repositories. `}
+                <button type="button" className="btn-quiet" onClick={onRetry}>
+                  Retry
+                </button>
               </p>
             ),
           )}

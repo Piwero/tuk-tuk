@@ -7,6 +7,7 @@ import {
   fetchGitHubPullRequests,
   type GitHubIssue,
   type GitHubPullRequest,
+  type GitHubReadOptions,
   type GitHubRepositoryRead,
   type GitHubViewRead,
   type PullRequestRelationship,
@@ -15,6 +16,7 @@ import { formatTimeAgo } from "../dates";
 import { applyGitHubFilters, type GitHubFilters } from "../githubFilters";
 import { pathForSettingsTab } from "../routes";
 import { GitHubFilterBar } from "./GitHubFilterBar";
+import { GitHubFreshness, GitHubStaleNotice } from "./GitHubFreshness";
 import { GitHubTokenBanners } from "./GitHubTokenBanners";
 
 /** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
@@ -109,9 +111,10 @@ function IssueRow({ issue }: { issue: GitHubIssue }): React.JSX.Element {
 
 /** The GitHub view (#579, #582): open Pull Requests and open GitHub Issues
  * across every Watched Repository, or a Repository View's (#580), in two
- * tabs. Read live from GitHub each time a tab opens; nothing is stored.
- * Each row links out to GitHub, since tuk-tuk never writes there. The
- * owner holds the tab and the filters, and decides whether they are saved. */
+ * tabs. Read from GitHub each time a tab opens, through the backend's
+ * one-minute cache that Refresh bypasses (#583); nothing is stored. Each
+ * row links out to GitHub, since tuk-tuk never writes there. The owner
+ * holds the tab and the filters, and decides whether they are saved. */
 export function GitHubView({
   viewId,
   tab,
@@ -127,8 +130,14 @@ export function GitHubView({
   onFiltersChange: (filters: GitHubFilters) => void;
   onOpenSettings: () => void;
 }): React.JSX.Element {
-  const loadPullRequests = useCallback(() => fetchGitHubPullRequests({ viewId }), [viewId]);
-  const loadIssues = useCallback(() => fetchGitHubIssues({ viewId }), [viewId]);
+  const loadPullRequests = useCallback(
+    (options: GitHubReadOptions = {}) => fetchGitHubPullRequests({ ...options, viewId }),
+    [viewId],
+  );
+  const loadIssues = useCallback(
+    (options: GitHubReadOptions = {}) => fetchGitHubIssues({ ...options, viewId }),
+    [viewId],
+  );
 
   return (
     <div className="github-view">
@@ -200,12 +209,13 @@ function GitHubRead<Item>({
   onOpenSettings,
   render,
 }: {
-  load: () => Promise<GitHubViewRead<Item>>;
+  load: (options?: GitHubReadOptions) => Promise<GitHubViewRead<Item>>;
   onOpenSettings: () => void;
   render: (read: GitHubViewRead<Item>) => React.ReactNode;
 }): React.JSX.Element {
   const [read, setRead] = useState<GitHubViewRead<Item> | null>(null);
   const [failed, setFailed] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,6 +231,21 @@ function GitHubRead<Item>({
       cancelled = true;
     };
   }, [load]);
+
+  // Refresh and Retry (#583): read from GitHub now, bypassing the cache,
+  // keeping the current read in view until the new one arrives.
+  const refresh = (): void => {
+    setRefreshing(true);
+    load({ refresh: true })
+      .then(
+        (result) => {
+          setRead(result);
+          setFailed(false);
+        },
+        () => setFailed(true),
+      )
+      .finally(() => setRefreshing(false));
+  };
 
   if (failed) return <p role="alert">GitHub couldn’t be read. Try again in a moment.</p>;
   if (read === null) return <p className="github-loading">Loading…</p>;
@@ -242,7 +267,9 @@ function GitHubRead<Item>({
   }
   return (
     <>
-      <GitHubTokenBanners tokens={read.tokens} onOpenSettings={onOpenSettings} />
+      <GitHubFreshness fetchedAt={read.fetched_at} refreshing={refreshing} onRefresh={refresh} />
+      {read.stale && <GitHubStaleNotice fetchedAt={read.fetched_at} onRetry={refresh} />}
+      <GitHubTokenBanners tokens={read.tokens} onOpenSettings={onOpenSettings} onRetry={refresh} />
       {render(read)}
       <OverflowLinks repositories={read.repositories} />
     </>

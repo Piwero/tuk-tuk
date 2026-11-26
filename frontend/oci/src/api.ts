@@ -874,11 +874,13 @@ export interface GitHubRepositoryRead {
   overflow_url: string;
 }
 
-/** How one GitHub Token fared in a GitHub view read. */
+/** How one GitHub Token fared in a GitHub view read. `stale`: GitHub
+ * couldn't be reached, so its items are its last result from under 10
+ * minutes ago (#583). */
 export interface GitHubTokenReadStatus {
   id: number;
   owner_login: string;
-  status: "ok" | "unavailable" | "needs_reconnect";
+  status: "ok" | "stale" | "unavailable" | "needs_reconnect";
   expires_at: string | null;
   /** Expires within 7 days, or already has (#584). */
   expires_soon: boolean;
@@ -891,7 +893,9 @@ export interface GitHubViewRead<Item> {
   items: Item[];
   repositories: GitHubRepositoryRead[];
   tokens: GitHubTokenReadStatus[];
+  /** When the oldest items shown were fetched from GitHub (#583). */
   fetched_at: string;
+  /** Some token's items are a stale result: GitHub couldn't be reached. */
   stale: boolean;
 }
 
@@ -899,14 +903,21 @@ export interface GitHubViewRead<Item> {
  * first within each group. */
 export type GitHubPullRequestsRead = GitHubViewRead<GitHubPullRequest>;
 
-/** Which Watched Repositories a GitHub view read covers: every one, or
- * only Repository View `viewId`'s (#580). */
+/** Which Watched Repositories a GitHub view read covers, every one or
+ * only Repository View `viewId`'s (#580), and how it treats the backend's
+ * one-minute cache (#583): `refresh` reads from GitHub now, bypassing and
+ * replacing it. */
 export interface GitHubReadOptions {
   viewId?: number;
+  refresh?: boolean;
 }
 
-function githubReadQuery({ viewId }: GitHubReadOptions): string {
-  return viewId === undefined ? "" : `?view=${viewId}`;
+function githubReadQuery({ viewId, refresh = false }: GitHubReadOptions): string {
+  const query = new URLSearchParams();
+  if (viewId !== undefined) query.set("view", String(viewId));
+  if (refresh) query.set("refresh", "true");
+  const text = query.toString();
+  return text === "" ? "" : `?${text}`;
 }
 
 /** The open Pull Requests of every Watched Repository, or of one
