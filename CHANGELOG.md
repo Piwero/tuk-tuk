@@ -4,6 +4,45 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.7.0](https://github.com/Piwero/tuk-tuk/compare/v3.6.0...v3.7.0) - 2026-11-26
+
+### Features
+
+- **github:** Add a GitHub Token through the API (#578) ([299fca3](https://github.com/Piwero/tuk-tuk/commit/299fca34da97acd1e546a1a23bcdfab889f07120))
+- **github:** Add and remove GitHub Tokens in a new Settings tab (#578) ([acc781d](https://github.com/Piwero/tuk-tuk/commit/acc781de79eedd12c650c6976fefdc9e8af13fcb))
+- **github:** Watched repositories picker API (#581) ([608e79d](https://github.com/Piwero/tuk-tuk/commit/608e79d93eb70fa8a4d4fad19e865754d6238d4b))
+- **github:** Watched repositories picker in Settings (#581) ([badc80b](https://github.com/Piwero/tuk-tuk/commit/badc80b45deb071d695e7906d59df39410395e2a))
+- **github:** List open Pull Requests of Watched Repositories through the API (#579) ([a980581](https://github.com/Piwero/tuk-tuk/commit/a98058115325ecc52cad224587f307ef4241189c))
+- **github:** GitHub view with a Pull Requests tab in the sidebar (#579) ([05e50da](https://github.com/Piwero/tuk-tuk/commit/05e50da2a376f51e164ff2cda423251d2294f455))
+- **github:** List open GitHub Issues of Watched Repositories through the API (#582) ([84fe24e](https://github.com/Piwero/tuk-tuk/commit/84fe24efdaf1db74b082511b6f4717daf3f52679))
+- **github:** GitHub Issues tab in the GitHub view (#582) ([f3bc817](https://github.com/Piwero/tuk-tuk/commit/f3bc81702c15c2ab517cc03e51c5e2a47d8911d2))
+- **github:** Filter the GitHub view by author and label (#585) ([ca96d30](https://github.com/Piwero/tuk-tuk/commit/ca96d308f5bec2d6695517fd4c8b508f6526fb53))
+- **github:** Filter GitHub Issues by assignee and hide drafts and bots (#585) ([952f0c8](https://github.com/Piwero/tuk-tuk/commit/952f0c8ca390160008255326be2ab4e0b24cc75b))
+- **github:** Keep Pull Request groups with filtered counts and say when filters empty a list (#585) ([b074098](https://github.com/Piwero/tuk-tuk/commit/b07409823043ffe1437401f3aae3fd0b9cd19b75))
+- **github:** Forget GitHub view filters on leaving the view (#585) ([11897ad](https://github.com/Piwero/tuk-tuk/commit/11897ad797d985db983982e86c874e1c49f1e3ca))
+- **github:** A GitHub Token GitHub rejects while reading needs reconnection, and Reconnect replaces it in place (#584) ([83b243d](https://github.com/Piwero/tuk-tuk/commit/83b243d2ecabaf3146df70c6e8135710633d0507))
+- **github:** Warn when a GitHub Token expires within 7 days (#584) ([f2131aa](https://github.com/Piwero/tuk-tuk/commit/f2131aa940879a4c609d35985d5b132aa15bcd2c))
+- **github:** Banner per failing or expiring GitHub Token in the GitHub view (#584) ([6bb0840](https://github.com/Piwero/tuk-tuk/commit/6bb0840e952b51552eb69df2145e6c22e4920634))
+- **github:** Reconnect a GitHub Token in Settings and warn there before it expires (#584) ([1925688](https://github.com/Piwero/tuk-tuk/commit/1925688de02b2bc0f45dd01f0a87d0615573682e))
+- **github:** Create, rename, reorder and delete Repository Views through the API (#580) ([3650103](https://github.com/Piwero/tuk-tuk/commit/3650103f653c83a9499ded828ea3ac7c4b05c800))
+- **github:** Read a Repository View's Pull Requests and GitHub Issues, isolated per User (#580) ([569d0ff](https://github.com/Piwero/tuk-tuk/commit/569d0ff6858ecbb4350aa2d542a3ecb3e2b554ec))
+- **github:** Repository Views under GitHub in the sidebar, each opening with its saved filters and tab (#580) ([b257105](https://github.com/Piwero/tuk-tuk/commit/b257105fb38a9838698af62487fb34c844d6647f))
+- **github:** Cache each GitHub Token's reads for 60 seconds, Refresh bypasses it (#583) ([1824890](https://github.com/Piwero/tuk-tuk/commit/1824890573829b8ca33462acfa35ecfc0bf7d69d))
+- **github:** A GitHub view read carries when its results were fetched from GitHub (#583) ([d597bd9](https://github.com/Piwero/tuk-tuk/commit/d597bd9b4e003c67971122fd917413a3d12d9d8f))
+- **github:** On a transient GitHub failure, serve a token's last result under 10 minutes old as stale (#583) ([d6601f6](https://github.com/Piwero/tuk-tuk/commit/d6601f64a599b810d936a5d6e5a4b1270ab9bc7b))
+- **github:** Never show a cached result for a GitHub Token GitHub has rejected (#583) ([7597426](https://github.com/Piwero/tuk-tuk/commit/75974269d50422c4b2b78a92692974d5e28f453a))
+- **github:** A repository watched within the minute is read from GitHub, not missed in the cache (#583) ([337fa0f](https://github.com/Piwero/tuk-tuk/commit/337fa0f875669fe01736fca9efe7e7db87468f54))
+- **github:** The GitHub view shows how long ago its data was fetched (#583) ([c7c9627](https://github.com/Piwero/tuk-tuk/commit/c7c96279830b01914095c475739c025ad1ab76d8))
+- **github:** Refresh in the GitHub view reads from GitHub now (#583) ([7e4e47f](https://github.com/Piwero/tuk-tuk/commit/7e4e47f06592ece6c4c2a55bc3eac5b2de64acaf))
+- **github:** A stale notice with Retry when GitHub can't be reached, and Retry for a token with nothing recent (#583) ([4a68233](https://github.com/Piwero/tuk-tuk/commit/4a6823305b1f69105d6962cd5151959cebb35c1c))
+
+### Bug Fixes
+
+- **frontend:** Age GitHub view rows from when they were opened (#579, #582) ([0cfc0b8](https://github.com/Piwero/tuk-tuk/commit/0cfc0b82b204d7b3d9770cfe9418c11e961d1f33))
+- **github:** Never guess a GitHub Token's owner (#578, #581) ([cb6e999](https://github.com/Piwero/tuk-tuk/commit/cb6e9994679e2dc8fd6b5179dfad73b22ca6c223))
+- **github:** Follow the documented standards in the GitHub UI and docs (#576) ([1132f3c](https://github.com/Piwero/tuk-tuk/commit/1132f3c5e99ca3a2ae691dba7ccf8e9b7c173663))
+- **backend:** Reconnect a GitHub Token GitHub accepts again (#584) ([b0ce933](https://github.com/Piwero/tuk-tuk/commit/b0ce9333262af56b51c89554216816e0181690b5))
+
 ## [3.6.0](https://github.com/Piwero/tuk-tuk/compare/v3.5.0...v3.6.0) - 2026-11-26
 
 ### Features
