@@ -148,7 +148,11 @@ occurrence_due)`, so several tabs coming out of Quiet hours together
   passed without a `shown` row. None of them change the lease protocol.
 - Missed reminders (#565) are worked out from the current open Tasks like
   a claim, since most have no ledger row, and are listed only while the
-  opt-in is on. A `failed` row or an abandoned claim counts as missed; a
+  opt-in is on. The list is bounded by when the User last turned the
+  opt-in on (`user_settings.reminder_notifications_enabled_at`, reset on
+  each off-to-on change): only a Reminder whose final delivery time falls
+  at or after that instant can be missed, so offsets stored before
+  delivery existed never surface after an upgrade (#535). A `failed` row or an abandoned claim counts as missed; a
   claim whose lease is still running does not, yet. Dismissing one writes
   a `dismissed` ledger row (or settles the existing one, revoking its
   lease), so it never reappears or notifies. A never-claimed dismissed row

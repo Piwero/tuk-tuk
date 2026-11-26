@@ -827,3 +827,32 @@ class TestDeleteRulesContract:
         built = {(table, column): PG_DELETE_RULES[rule] for table, column, rule in rows}
 
         assert built == self.declared_rules()
+
+
+class TestReminderOptInAtMigration:
+    """Review of #565: the missed list is bounded by when the User turned
+    Reminder notifications on. A User already opted in is bounded from the
+    upgrade, so no stored offset surfaces as missed after it."""
+
+    def test_an_opted_in_user_is_bounded_from_the_upgrade_and_others_never_were_on(
+        self, empty_database_url: str
+    ) -> None:
+        config = alembic_config(empty_database_url)
+        command.upgrade(config, "0055_planning_window")
+        run_sql(
+            empty_database_url,
+            "INSERT INTO users (username, email) VALUES ('ana', 'a@x.io'), ('ben', 'b@x.io')",
+        )
+        run_sql(
+            empty_database_url,
+            "INSERT INTO user_settings (user_id, reminder_notifications_enabled) "
+            "VALUES (1, true), (2, false)",
+        )
+
+        command.upgrade(config, "head")
+
+        assert run_sql(
+            empty_database_url,
+            "SELECT user_id, reminder_notifications_enabled_at > now() - interval '1 minute' "
+            "FROM user_settings ORDER BY user_id",
+        ) == [(1, True), (2, None)]

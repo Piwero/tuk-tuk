@@ -41,18 +41,23 @@ async def missed_reminders(
     session: AsyncSession,
     now: datetime,
     caller_zone: tzinfo,
+    since: datetime | None,
     quiet: QuietHours | None = None,
 ) -> list[Due]:
     """The User's missed Reminders at `now`, newest first. The window is
     measured from each Reminder's final delivery time, after any snooze
     (#566) and Quiet hours (#567), exactly as a claim measures it: a held or
-    snoozed Reminder is not missed before that window passes."""
+    snoozed Reminder is not missed before that window passes. Only one
+    delivered after `since`, when the User turned Reminder notifications
+    on, can have been missed (#535); None means never on, so none."""
+    if since is None:
+        return []
     tasks = await open_dated_tasks(session)
     snoozes = await snoozes_of(session)
     candidates = []
     for task, offset, nominal, at in open_reminders(tasks, caller_zone, snoozes):
         when = deliver_at(at, quiet, caller_zone)
-        if when + DELIVERY_WINDOW <= now:
+        if since <= when and when + DELIVERY_WINDOW <= now:
             candidates.append(Due(task=task, offset=offset, fire_at=nominal, deliver_at=when))
     if not candidates:
         return []
@@ -86,6 +91,7 @@ async def dismiss_missed(
     task_id: int,
     offset: str,
     occurrence_due: datetime,
+    since: datetime | None,
     quiet: QuietHours | None = None,
 ) -> ReminderDelivery | None:
     """Records the dismissal of one missed Reminder, or of one already
@@ -96,7 +102,11 @@ async def dismiss_missed(
     if existing is not None and existing.state == "dismissed":
         return existing
     due = next(
-        (d for d in await missed_reminders(session, now, caller_zone, quiet) if _key(d) == key),
+        (
+            d
+            for d in await missed_reminders(session, now, caller_zone, since, quiet)
+            if _key(d) == key
+        ),
         None,
     )
     if due is None:

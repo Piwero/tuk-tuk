@@ -61,7 +61,11 @@ async def list_missed(
     if not user_settings.reminder_notifications_enabled:
         return MissedPage(items=[])
     found = await missed_reminders(
-        session, request.app.state.clock(), zone, quiet_hours(user_settings)
+        session,
+        request.app.state.clock(),
+        zone,
+        user_settings.reminder_notifications_enabled_at,
+        quiet_hours(user_settings),
     )
     return MissedPage(
         items=[
@@ -97,6 +101,7 @@ async def dismiss(
         payload.task_id,
         payload.offset,
         payload.occurrence_due,
+        user_settings.reminder_notifications_enabled_at,
         quiet_hours(user_settings),
     )
     if row is None:

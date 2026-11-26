@@ -26,7 +26,7 @@ list and revoke routes are probed like any other owned row.
 import json
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -37,6 +37,7 @@ from fastapi.testclient import TestClient
 from app.calendar_source import CalendarEventEntry, CalendarListEntry
 from app.config import Settings
 from app.main import create_app
+from app.reminder_delivery import DELIVERY_WINDOW
 from app.session import SESSION_COOKIE_NAME
 from tests.conftest import FakeCalendarSource, FakeClock, create_user_row, log_in
 from tests.test_assistant_chat import StubChatProvider
@@ -701,10 +702,11 @@ def build_alice(
     assistant: StubChatProvider,
     today: date,
     api_token: int,
-    now: datetime,
+    clock: FakeClock,
 ) -> AliceWorld:
     """One of every resource type, each named so "alice" finds it.
     `api_token` is minted beforehand: only a password session can."""
+    now = clock.now
     google_account, google_calendar = connect_google(alice, calendar_source, MARKER, today)
     alice.ok(
         "PUT",
@@ -791,14 +793,23 @@ def build_alice(
         "/api/v1/tasks",
         {
             "title": "alice missed reminder",
-            "due_date": (now - timedelta(hours=1)).isoformat(),
+            "due_date": now.isoformat(),
             "reminders": ["PT0S"],
         },
     )
-    [missed] = alice.ok("GET", "/api/v1/reminder-deliveries/missed?tz=UTC")["items"]
-    # After the claim and the missed read, so the band never holds Alice's own Reminder.
+    # Missed only once its window closes after the opt-in (#565).
+    clock.advance(DELIVERY_WINDOW)
+    [missed] = [
+        item
+        for item in alice.ok("GET", "/api/v1/reminder-deliveries/missed?tz=UTC")["items"]
+        if item["task_title"] == "alice missed reminder"
+    ]
+    # Hours away from now, so the band never holds Alice's own Reminders.
+    band = [f"{(clock.now + timedelta(hours=hours)).hour:02d}:00" for hours in (3, 4)]
     alice.ok(
-        "PUT", "/api/v1/settings/quiet-hours", {"enabled": True, "start": "01:00", "end": "02:00"}
+        "PUT",
+        "/api/v1/settings/quiet-hours",
+        {"enabled": True, "start": band[0], "end": band[1]},
     )
     timer = alice.ok(
         "POST", "/api/v1/timers", {"name": "alice timer", "mode": "stopwatch", "habit_id": habit}
@@ -895,9 +906,7 @@ def pair(
         yield Pair(
             alice=alice,
             bea=bea,
-            a=build_alice(
-                alice, fake_calendar_source, assistant, today, alices_token, fake_clock.now
-            ),
+            a=build_alice(alice, fake_calendar_source, assistant, today, alices_token, fake_clock),
             b=build_bea(bea, assistant, today),
             assistant=assistant,
         )

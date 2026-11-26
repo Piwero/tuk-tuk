@@ -189,6 +189,12 @@ class UserSettings(Base):
     # notifying after upgrade. Browser permission is per device and stays in
     # the browser; this flag only records the User's choice.
     reminder_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # When the User last turned them on (review of #565): the missed list
+    # holds only Reminders delivered after it, so old offsets never surface.
+    # Reset on every off-to-on change; null while they have never been on.
+    reminder_notifications_enabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     # Quiet hours (issue #567): a band of the day during which Reminder
     # notifications are held and delivered once when it ends. "HH:MM"
     # wall-clock labels read in the claiming tab's zone; the band may wrap

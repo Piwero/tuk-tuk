@@ -238,11 +238,17 @@ async def read_reminder_notification_settings(
 
 @router.put("/reminder-notifications")
 async def update_reminder_notification_settings(
-    payload: ReminderNotificationSettings, session: SessionDep, user_settings: CurrentUserSettings
+    payload: ReminderNotificationSettings,
+    request: Request,
+    session: SessionDep,
+    user_settings: CurrentUserSettings,
 ) -> ReminderNotificationSettings:
     """Reminder notifications (issue #557): the User's opt-in to Reminder
     delivery. Private to the User; browser permission is per device and is
-    never recorded here."""
+    never recorded here. Turning them on records when, which bounds the
+    missed list (#565); saving "on" again while on keeps that instant."""
+    if payload.enabled and not user_settings.reminder_notifications_enabled:
+        user_settings.reminder_notifications_enabled_at = request.app.state.clock()
     user_settings.reminder_notifications_enabled = payload.enabled
     await session.commit()
     return ReminderNotificationSettings(enabled=user_settings.reminder_notifications_enabled)

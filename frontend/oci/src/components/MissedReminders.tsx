@@ -80,7 +80,8 @@ export function MissedReminders({
         Missed reminders
       </h2>
       <p className="missed-reminders-note">
-        These came due while Tuk Tuk was not open to notify you.
+        These came due after you turned on Reminder notifications, but no notification was shown for
+        them.
       </p>
       <ul className="missed-reminders-list">
         {shown.map((missed) => (
