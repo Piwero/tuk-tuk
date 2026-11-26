@@ -750,6 +750,8 @@ export interface GitHubToken {
   owner_login: string;
   owner_kind: "user" | "organization";
   expires_at: string | null;
+  /** Expires within 7 days, or already has (#584). */
+  expires_soon: boolean;
   connection_state: string;
   created_at: string;
 }
@@ -760,6 +762,15 @@ export function fetchGitHubTokens(): Promise<GitHubToken[]> {
 
 export function createGitHubToken(token: string): Promise<GitHubToken> {
   return request("/api/v1/github/tokens", { method: "POST", body: JSON.stringify({ token }) });
+}
+
+/** Reconnect (#584): replaces the token of an existing GitHub Token with
+ * a replacement for the same owner, keeping its Watched Repositories. */
+export function reconnectGitHubToken(tokenId: number, token: string): Promise<GitHubToken> {
+  return request(`/api/v1/github/tokens/${tokenId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ token }),
+  });
 }
 
 export function deleteGitHubToken(tokenId: number): Promise<void> {
@@ -868,6 +879,9 @@ export interface GitHubTokenReadStatus {
   id: number;
   owner_login: string;
   status: "ok" | "unavailable" | "needs_reconnect";
+  expires_at: string | null;
+  /** Expires within 7 days, or already has (#584). */
+  expires_soon: boolean;
 }
 
 /** A GitHub view read (#579): items in the backend's order, grouped by

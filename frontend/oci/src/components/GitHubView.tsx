@@ -10,6 +10,7 @@ import {
 } from "../api";
 import { formatTimeAgo } from "../dates";
 import { pathForSettingsTab } from "../routes";
+import { GitHubTokenBanners } from "./GitHubTokenBanners";
 
 /** The groups, in the order the backend sorts them. */
 const GROUPS: { relationship: PullRequestRelationship; label: string }[] = [
@@ -114,7 +115,10 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
             </a>
           </div>
         ) : (
-          <PullRequestGroups read={read} />
+          <>
+            <GitHubTokenBanners tokens={read.tokens} onOpenSettings={onOpenSettings} />
+            <PullRequestGroups read={read} />
+          </>
         )}
       </div>
     </div>
