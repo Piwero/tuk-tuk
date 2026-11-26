@@ -108,8 +108,9 @@ function IssueRow({ issue }: { issue: GitHubIssue }): React.JSX.Element {
 }
 
 /** The GitHub view (#579, #582): open Pull Requests and open GitHub Issues
- * across every Watched Repository, in two tabs. Read live from GitHub each
- * time a tab opens; nothing is stored. Each row links out to GitHub, since
+ * across every Watched Repository, in two tabs. Read from GitHub each time
+ * a tab opens, through the backend's one-minute cache that Refresh bypasses
+ * (#583); nothing is stored. Each row links out to GitHub, since
  * tuk-tuk never writes there. */
 export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
   const [tab, setTab] = useState<GitHubTab>("pull-requests");

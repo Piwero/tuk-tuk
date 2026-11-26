@@ -2,8 +2,11 @@
 (issue #582) — spec #576, ADR 0020.
 
 Every read goes to GitHub, one round trip per GitHub Token, and nothing it
-returns is ever stored (ADR 0006). Grouping, sorting, the per-repository
-cap and bot flagging happen here, so every client sees the same answer.
+returns is ever stored (ADR 0006): each token's result is only held in
+process memory for a minute, and for 10 minutes as a stale fallback when
+GitHub is briefly unreachable (app.github_cache, issue #583). Grouping,
+sorting, the per-repository cap and bot flagging happen here, so every
+client sees the same answer.
 
 Both reads share `_read_each_token` (one round trip per GitHub Token, with
 its status) and `_repository_read` (the per-repository overflow). A token
