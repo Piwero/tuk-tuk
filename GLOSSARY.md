@@ -250,6 +250,30 @@ _Avoid_: Calendar (ambiguous with the Calendar view itself)
 One occurrence on a Google Calendar (issue #107), read live for the Calendar view's visible window and never persisted (ADR 0006) — an Entry arm alongside Task, but read-only: it cannot be dragged, resized, or completed, and offers no affordance suggesting otherwise beyond converting itself away (below). A recurring series always arrives already expanded into concrete Events, never as a rule tuk-tuk interprets itself. Declined Events (the authenticated user's own RSVP) are hidden; a pending invitation (needs-action) or a tentative response stays visible, since an unanswered invite must not be invisible. Disabling its owning Google Calendar removes its Events from the view. See the Entry glossary entry above for the deliberate viewer-timezone rendering asymmetry with Task. Unlike a Task, an Event may cross midnight (issue #108): in Week/Day it renders as one segment per day it touches, clipped at each day boundary, so it reads correctly on both the day it starts and the day it ends — the splitting is a Calendar-view rendering concern only, since the backend adapter and API pass the crossing through untouched. Clicking an Event opens a read-only detail popover (issue #110) — location, attendees, organiser, description, and which account/calendar it came from, plus a link out to Google Calendar for anything tuk-tuk can't show. This is the only home for the parts of an Event with no Task equivalent (the attendee list, the organiser, a video-call link buried in the description); dismissing it, like every other Event interaction, changes nothing. The popover's one write-adjacent affordance is "Convert to task" (issue #111): it turns the Event into a real Task — title, schedule, and description (with location and a link back) carried over, landing in the Inbox — after a preview the user must confirm. Only the clicked occurrence of a recurring series converts; the rest keep showing as Events, since a Task's single recurrence rule can't represent the cancellations and per-instance overrides a real Google series carries. A midnight-crossing Event clamps to the end of its start day (the Task schedule invariant isn't relaxed for this), with its true end kept in the description and shown before confirming. The Event then disappears from the Calendar — filtered out by matching the Task's provenance, since Google access stays read-only and nothing is ever written back — and reappears only if that Task is deleted.
 _Avoid_: Calendar item, meeting
 
+## GitHub
+
+tuk-tuk only ever reads GitHub (ADR 0020). Nothing read from GitHub is persisted: Pull Requests and GitHub Issues are fetched live and cached briefly in memory.
+
+**GitHub Token**:
+A fine-grained personal access token a User pasted in Settings → GitHub (issue #578), granting read-only access to one GitHub owner: the User themselves or one organisation. Listed by that owner's login and kind (user or organisation) and its expiry. Checked with GitHub before it is saved; a classic token, or anything else that is not fine-grained, is refused. Stored encrypted with `APP_MASTER_KEY` and never returned by the API. A User holds at most one GitHub Token per owner. Carries a `connection_state` of "connected" or "needs_reconnect": only a terminal failure (GitHub answers 401) flips it, never a transient one. Reconnecting replaces the token in place for the same owner.
+_Avoid_: integration, GitHub connection, GitHub Account (there is no OAuth identity), API token (tuk-tuk's own credential), PAT
+
+**Watched Repository**:
+A GitHub repository a User chose, from those their GitHub Tokens can read, to appear in the GitHub view. Read through the GitHub Token it was picked with, and unique per User by GitHub's repository id. Removing that GitHub Token removes it.
+_Avoid_: tracked repo, subscription
+
+**Repository View**:
+A named subset of a User's Watched Repositories with saved display options (author, label and assignee filters, hide drafts, hide bots, the active tab), listed under GitHub in the sidebar. The bare GitHub entry is the unsaved "all Watched Repositories" view. A Repository View left with no repositories remains, showing an empty state.
+_Avoid_: Dashboard, Filter (a different, user-defined feature), saved search
+
+**Pull Request**:
+An open pull request in a Watched Repository, read live from GitHub. Grouped by the User's relationship to it: review requested first, then their own, then others.
+_Avoid_: "PR" in prose, merge request
+
+**GitHub Issue**:
+An open issue in a Watched Repository, read live from GitHub. Never a Pull Request, although GitHub's own issue listing includes them. Always "GitHub Issue", so it never collides with tuk-tuk's own development issues.
+_Avoid_: Issue (bare), ticket
+
 ## Clients
 
 **CLI**:
