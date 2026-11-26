@@ -32,6 +32,7 @@ export function BrainDumpView(): React.JSX.Element {
   const active = useRef(new Set<string>());
   const accepted = useRef(new Map<string, TaskCreateInput>());
   const generation = useRef(0);
+  const opener = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (open)
       void fetchAssistantConfig()
@@ -51,6 +52,7 @@ export function BrainDumpView(): React.JSX.Element {
     setOpen(false);
     setRows([]);
     setError("");
+    opener.current?.focus();
   }
   async function send(): Promise<void> {
     if (!input.trim() || input.length > 12000 || loading) return;
@@ -125,7 +127,13 @@ export function BrainDumpView(): React.JSX.Element {
   }
   return (
     <section className="brain-dump" aria-label="Brain dump">
-      <button className="btn-secondary" type="button" onClick={() => setOpen(true)}>
+      <button
+        className="btn-secondary"
+        type="button"
+        ref={opener}
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
         Brain dump to Tasks
       </button>
       {open && (
