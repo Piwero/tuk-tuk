@@ -11,6 +11,7 @@ resources:
   - google-onepassworditem.yaml
   - db-onepassworditem.yaml
   - mcp-service-onepassworditem.yaml
+  - sso-onepassworditem.yaml
   - imagerepository.yaml
   - imagepolicy.yaml
   - gitrepository.yaml

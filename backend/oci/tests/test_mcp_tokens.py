@@ -318,3 +318,51 @@ class TestTheAccessCredentialReachesOnlyTheMcpTools:
             response = as_access(client, access, method, path, json=body)
             assert response.status_code != 403, (method, path, response.text)
             assert response.status_code != 401, (method, path, response.text)
+
+
+class TestDisablingTheOwner:
+    """Issue #586: disabling a User revokes every token they hold, and
+    re-enabling them brings none back."""
+
+    def test_disabling_revokes_api_and_mcp_tokens_for_good(self, client: TestClient) -> None:
+        create_user_row(client, "ben", "ben@example.com")
+        ben = TestClient(client.app)
+        log_in(ben, "ben")
+        api_token = ben.post(TOKENS, json={"name": "cli"}).json()["token"]
+        mcp_token = create_mcp_token(ben)["token"]
+        ben_id = ben.get("/api/v1/auth/me").json()["id"]
+        access = exchange(TestClient(client.app), mcp_token).json()["access_token"]
+
+        client.patch(f"/api/v1/admin/users/{ben_id}", json={"is_active": False})
+        client.patch(f"/api/v1/admin/users/{ben_id}", json={"is_active": True})
+
+        anonymous = TestClient(client.app)
+        for credential in (api_token, access):
+            response = anonymous.get(
+                "/api/v1/tasks", headers={"authorization": f"Bearer {credential}"}
+            )
+            assert response.status_code == 401, credential[:8]
+        assert exchange(anonymous, mcp_token).status_code == 401
+        log_in(ben, "ben")
+        assert ben.get(TOKENS).json()["items"] == []
+        fresh = ben.post(TOKENS, json={"name": "new"}).json()["token"]
+        assert (
+            anonymous.get("/api/v1/tasks", headers={"authorization": f"Bearer {fresh}"}).status_code
+            == 200
+        )
+
+    def test_disabling_leaves_the_admins_own_tokens_alone(self, client: TestClient) -> None:
+        own = client.post(TOKENS, json={"name": "mine"}).json()["token"]
+        create_user_row(client, "ben", "ben@example.com")
+        ben_id = [
+            row["id"]
+            for row in client.get("/api/v1/admin/users").json()["items"]
+            if row["username"] == "ben"
+        ][0]
+
+        client.patch(f"/api/v1/admin/users/{ben_id}", json={"is_active": False})
+
+        response = TestClient(client.app).get(
+            "/api/v1/tasks", headers={"authorization": f"Bearer {own}"}
+        )
+        assert response.status_code == 200

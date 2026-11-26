@@ -80,6 +80,31 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: str | None = None
 
+    # Shared Google OAuth client (issue #586): operator-managed deployment
+    # configuration, never stored in the database nor shown to anyone. Both
+    # set turns on Google sign-in, invitations, and new Google Calendar
+    # connections through this one client. Distinct from the one-time
+    # import pair above, which only ever seeds user #1's own client.
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+
+    # The frontend's public origin, used to build the links sent in
+    # invitation emails (issue #586). Falls back to the first CORS origin.
+    app_public_url: str | None = None
+
+    # Outgoing email for invitations (issue #586). Unset SMTP_HOST means
+    # invitations are never emailed: each records a delivery failure and an
+    # Admin copies its link instead. "starttls" upgrades a plain connection
+    # (usually port 587), "ssl" connects over TLS (usually 465); "none"
+    # sends credentials in the clear and is refused outside development.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_timeout_seconds: float = 15.0
+
     # Assist (v2; ADR 0005/issue #41). Migration-only, like
     # auth_password_hash/google_client_id above: read once on an existing
     # deployment's first boot to import into the DB-backed `settings` row

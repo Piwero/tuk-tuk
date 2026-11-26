@@ -43,7 +43,8 @@ class User(Base):
     """A person with their own login and their own data (issue #405).
 
     `email` is nullable only while `must_complete_profile` is set: the
-    seeded user #1 has none until its profile is completed. The login
+    seeded user #1 has none until its profile is completed. `password_hash`
+    is null for a User who signs in with Google only (issue #586). The login
     lockout lives here, per user (moved off `settings`, issue #408):
     persisted so it survives a pod restart (issue #333/#339), but correct
     across restarts only, NOT across replicas: two pods would race on
@@ -80,6 +81,70 @@ class User(Base):
     login_locked_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )
+    # The User's Google login identity (issue #586): Google's stable
+    # account id (`sub`), unique across every User, and the verified email
+    # it had when linked. Never a Google Account (a Calendar connection),
+    # which never becomes a login identity.
+    google_subject: Mapped[str | None] = mapped_column(String(255), unique=True, default=None)
+    google_email: Mapped[str | None] = mapped_column(CITEXT, default=None)
+    google_linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    @property
+    def has_password(self) -> bool:
+        """Whether the User can sign in with a password at all: not, when
+        admitted by invitation and signing in with Google only."""
+        return self.password_hash is not None
+
+    def link_google(self, subject: str | None, email: str | None, now: datetime | None) -> None:
+        """Sets (or, all None, removes) the Google login identity."""
+        self.google_subject, self.google_email, self.google_linked_at = subject, email, now
+
+
+class Invitation(Base):
+    """An Admin's invitation of an email address to the instance (issue
+    #586): account admission, not collaboration. Accepting it creates the
+    regular User, so no account exists before then.
+
+    Lifecycle and delivery are separate. The lifecycle (pending, accepted,
+    canceled, expired) is read from the timestamps (app.invitations); the
+    delivery outcome is what the app knows of emailing the link: never
+    sent, handed to the mail server, or failed.
+
+    The link's single-use credential is kept as a SHA-256 hash to look it
+    up and, encrypted with APP_MASTER_KEY, so an Admin can copy the link or
+    retry its delivery. Resending replaces both, invalidating older links.
+    """
+
+    __tablename__ = "invitations"
+    # One open (not accepted, not canceled) invitation per email, so two
+    # Admins inviting the same address at once cannot both succeed.
+    __table_args__ = (
+        Index(
+            "invitations_open_email_key",
+            "email",
+            unique=True,
+            postgresql_where=text("accepted_at IS NULL AND canceled_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(CITEXT)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    encrypted_token: Mapped[str] = mapped_column(Text)
+    invited_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), default=None)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    accepted_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), unique=True, default=None
+    )
+    delivery_state: Mapped[str] = mapped_column(String(16), default="not_sent")
+    delivery_error: Mapped[str | None] = mapped_column(String(255), default=None)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -757,6 +822,11 @@ class GoogleAccount(OwnedMixin, Base):
     email: Mapped[str] = mapped_column(String(320))
     encrypted_refresh_token: Mapped[str] = mapped_column(Text)
     connection_state: Mapped[str] = mapped_column(String(16), default="connected")
+    # Which OAuth client minted the refresh token (issue #586): the
+    # deployment's shared client, or the User's own (every connection made
+    # before the shared client existed). A refresh token only works with
+    # the client that minted it, so each account keeps its own.
+    uses_shared_client: Mapped[bool] = mapped_column(default=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

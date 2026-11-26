@@ -69,12 +69,13 @@ def owner_of(token: str, kind: TokenKind = "api") -> int | None:
     return int(match.group(1)) if match else None
 
 
-async def find_live_token(session: AsyncSession, token: str) -> ApiToken | None:
-    """The unrevoked token whose plaintext is `token`. Runs acting as the
-    User the token names (the caller's `acting_as`), so only their tokens
-    are searched."""
+async def find_token(session: AsyncSession, token: str) -> ApiToken | None:
+    """The token whose plaintext is `token`, revoked or not: the caller
+    decides what a revoked one means (a disabled owner is reported as
+    such, issue #586). Runs acting as the User the token names (the
+    caller's `acting_as`), so only their tokens are searched."""
     found: ApiToken | None = await session.scalar(
-        select(ApiToken).where(ApiToken.token_hash == _hash(token), ApiToken.revoked_at.is_(None))
+        select(ApiToken).where(ApiToken.token_hash == _hash(token))
     )
     return found
 

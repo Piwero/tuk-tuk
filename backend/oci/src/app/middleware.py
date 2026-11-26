@@ -37,7 +37,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-from app.api_tokens import find_live_token, kind_of, mark_used, owner_of
+from app.api_tokens import find_token, kind_of, mark_used, owner_of
 from app.app_settings import require_app_settings
 from app.config import Settings
 from app.errors import error_response
@@ -47,6 +47,7 @@ from app.ownership import acting_as
 from app.session import (
     SESSION_COOKIE_NAME,
     Clock,
+    LoginMethod,
     needs_reissue,
     set_session_cookie,
     verify_session_token,
@@ -57,7 +58,22 @@ from app.users import first_admin, install_has_password
 # one of these strings must not be accidentally opened.
 # The MCP token exchange is authenticated by the route itself, with the MCP
 # service key rather than a User's credential (app.routers.v1.mcp_exchange).
-PUBLIC_PATHS = frozenset({"/health", "/api/v1/auth/login", "/api/v1/auth/setup", MCP_EXCHANGE_PATH})
+# Google sign-in and invitation acceptance (issue #586) are public: the
+# person has no session yet. Linking Google to an existing account is not.
+PUBLIC_PATHS = frozenset(
+    {
+        "/health",
+        "/api/v1/auth/login",
+        "/api/v1/auth/setup",
+        "/api/v1/auth/providers",
+        "/api/v1/auth/google/login",
+        "/api/v1/auth/google/invitation",
+        "/api/v1/auth/google/callback",
+        "/api/v1/auth/invitations/lookup",
+        "/api/v1/auth/invitations/accept",
+        MCP_EXCHANGE_PATH,
+    }
+)
 
 # A User's last-active time (issue #478) is coarse on purpose: written at
 # most this often, so serving a request doesn't also mean a write.
@@ -86,6 +102,8 @@ TOKEN_REFUSED_ROUTES = frozenset(
     {
         ("POST", "/api/v1/auth/me/tokens"),
         ("POST", "/api/v1/auth/password"),
+        ("POST", "/api/v1/auth/google/link"),
+        ("GET", "/api/v1/auth/google/link/callback"),
         ("POST", "/api/v1/auth/complete"),
         ("PATCH", "/api/v1/auth/me"),
         ("GET", "/api/v1/settings/database"),
@@ -121,20 +139,32 @@ def _bearer_token(request: Request) -> str | None:
     return credential.strip() if scheme.lower() == "bearer" else None
 
 
-def _forced_step_gate(request: Request, user: User) -> Response | None:
+def _forced_step_gate(
+    request: Request, user: User, method: LoginMethod = "password"
+) -> Response | None:
     if (request.method, request.url.path) in FORCED_STEP_ROUTES:
         return None
-    return forced_step(user)
+    return forced_step(user, method)
 
 
-def forced_step(user: User) -> Response | None:
+def token_login_method(user: User) -> LoginMethod:
+    """How a token's owner signs in, for the forced steps: a User who can
+    sign in with Google is never made to set a password (issue #586), so
+    neither are their tokens."""
+    return "google" if user.google_subject is not None else "password"
+
+
+def forced_step(user: User, method: LoginMethod = "password") -> Response | None:
     # 403, not 401: the session is valid and must not be dropped by the
     # frontend's log-out-on-401 listener; it just can't be used yet.
     if user.must_complete_profile:
         return error_response(
             403, "profile_completion_required", "Complete your profile to continue"
         )
-    if user.must_change_password:
+    # A temporary password (an Admin's recovery reset) is replaced at the
+    # next password login; signing in with Google never asks for one
+    # (issue #586).
+    if user.must_change_password and method == "password":
         return error_response(403, "password_change_required", "Choose a new password to continue")
     return None
 
@@ -193,11 +223,12 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         if claims.epoch != user.session_epoch:
             return error_response(401, "unauthorized", "A valid session is required")
 
-        blocked = _forced_step_gate(request, user)
+        blocked = _forced_step_gate(request, user, claims.method)
         if blocked is not None:
             return blocked
 
         request.state.user_id = user.id
+        request.state.login_method = claims.method
         await self._record_activity(request, user)
         with acting_as(user.id):
             response = await call_next(request)
@@ -211,6 +242,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 self._clock,
                 user_id=user.id,
                 epoch=user.session_epoch,
+                method=claims.method,
             )
         return response
 
@@ -239,7 +271,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
 
             async def find(db_session: AsyncSession) -> ApiToken | None:
                 found = await db_session.get(ApiToken, claims.token_id)
-                if found is None or found.revoked_at is not None or kind_of(found.prefix) != "mcp":
+                if found is None or kind_of(found.prefix) != "mcp":
                     return None
                 return found
 
@@ -250,7 +282,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             user_id = owner
 
             async def find(db_session: AsyncSession) -> ApiToken | None:
-                return await find_live_token(db_session, token)
+                return await find_token(db_session, token)
 
         # The token is looked up acting as the User it names: only their
         # own tokens are searched (app.api_tokens).
@@ -260,9 +292,13 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 user = await db_session.get(User, user_id) if api_token is not None else None
                 if api_token is None or user is None:
                     return unauthorized
+                # Disabling revokes every token (issue #586); the owner's
+                # state is still what a genuine token's holder is told.
                 if not user.is_active:
                     return _account_disabled()
-                blocked = _forced_step_gate(request, user)
+                if api_token.revoked_at is not None:
+                    return unauthorized
+                blocked = _forced_step_gate(request, user, token_login_method(user))
                 if blocked is not None:
                     return blocked
                 # An MCP access credential reaches only the MCP tools' routes
