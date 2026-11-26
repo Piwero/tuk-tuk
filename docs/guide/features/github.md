@@ -1,6 +1,6 @@
 # GitHub
 
-⏱ 4 min read · Set up: Settings → GitHub
+⏱ 5 min read · Set up: Settings → GitHub
 
 **Do this first:** create a fine-grained token on GitHub and paste it into
 **Settings → GitHub**.
@@ -70,6 +70,36 @@ rest.
 
 If you aren't watching any repositories yet, the view links you to
 **Settings → GitHub** to pick some.
+
+## Keep your tokens working
+
+Fine-grained tokens expire, and you can revoke them on GitHub at any time.
+Tuk Tuk tells you when a token needs attention.
+
+- **Expiry:** **Settings → GitHub** shows each token's expiry date, or
+  **No expiry**. From 7 days before a token expires, a banner in Settings
+  and in the GitHub view names it and its expiry date.
+- **Rejected token:** if GitHub stops accepting a token, for example
+  because it expired or you revoked it, the GitHub view shows a banner
+  naming that token's owner. The other tokens' repositories still show.
+  Settings marks the token as needing reconnection.
+- **GitHub unreachable:** if GitHub can't be reached for one token, the
+  GitHub view says so for that token and shows the rest. This never marks
+  the token as needing reconnection. Try again in a moment.
+
+To reconnect a token:
+
+1. Create a new fine-grained token on GitHub for the **same** owner, with
+   the same read-only permissions.
+2. In **Settings → GitHub**, choose **Reconnect** next to the token.
+3. Paste the new token into **Replacement token** and choose **Reconnect**.
+
+Tuk Tuk checks the new token with GitHub first. A token for a different
+owner is refused: add that one as a new token instead. Your Watched
+Repositories stay as they were.
+
+You can use **Reconnect** at any time, for example to swap in a new token
+before the old one expires.
 
 ## Good to know
 
