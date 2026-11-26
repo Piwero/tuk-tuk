@@ -55,6 +55,7 @@ import { timeMinutes } from "../calendar";
 import { clockLabels } from "../dates";
 import { type ThemePreference } from "../layoutPrefs";
 import { pathForSettingsTab, type SettingsTab } from "../routes";
+import { GitHubSettingsPanel } from "./GitHubSettingsPanel";
 import {
   DEFAULT_OVERLAY_SHORTCUT,
   formatOverlayShortcut,
@@ -1256,10 +1257,13 @@ export function SettingsView({
     <div className="settings-view">
       <nav aria-label="Settings" className="settings-tabs">
         {tabLink("account", "My account")}
+        {tabLink("github", "GitHub")}
         {isAdmin && tabLink("users", "Users")}
       </nav>
       {tab === "account" ? (
         <MyAccountPanel {...accountProps} user={user} onUserChange={setUser} />
+      ) : tab === "github" ? (
+        <GitHubSettingsPanel />
       ) : (
         isAdmin && user !== null && <UsersPanel currentUser={user} onAccessLost={refreshUser} />
       )}

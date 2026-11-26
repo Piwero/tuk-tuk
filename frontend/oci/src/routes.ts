@@ -30,11 +30,12 @@ const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
 /** Settings' tabs (#474), each at its own URL. `/settings` alone is an alias
  * for My account, so old bookmarks/links to it still resolve. Users is for
  * Admins only; SettingsView resolves it to My account for anyone else. */
-export type SettingsTab = "account" | "users";
+export type SettingsTab = "account" | "users" | "github";
 
 const SETTINGS_TAB_PATHS: Record<SettingsTab, string> = {
   account: "/settings/account",
   users: "/settings/users",
+  github: "/settings/github",
 };
 
 /** The Calendar's per-mode URLs (issue: individual URIs for Month/Week/Day)
