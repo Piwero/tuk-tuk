@@ -86,6 +86,29 @@ Each repository shows at most 100 open GitHub issues: the most recently
 updated ones. A repository with more gets an **N more on GitHub** link to the
 rest.
 
+## Narrow the list
+
+Above each tab's list, pick what to show:
+
+- **Author**: only items written by one person.
+- **Label**: only items carrying one label.
+- **Assignee** (Issues tab only): only GitHub issues assigned to one person.
+  Pick yourself and a label such as `ready-for-agent` to see what is waiting
+  on you.
+- **Hide drafts** (Pull Requests tab only): leave out draft pull requests.
+- **Hide bots**: leave out items written by bots such as dependabot.
+
+Each menu offers only the authors, labels and assignees in what you are
+looking at. Your choices apply to both tabs. Narrowing happens in your
+browser, so it is instant and never asks GitHub again.
+
+On the Pull Requests tab the groups keep their order, and each heading shows
+how many pull requests it still lists. A group your choices empty stays,
+saying that nothing there matches.
+
+Your choices are not saved. Leave the GitHub view and come back, and it shows
+everything again.
+
 ## Keep your tokens working
 
 Fine-grained tokens expire, and you can revoke them on GitHub at any time.
