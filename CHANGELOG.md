@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.8.1](https://github.com/Piwero/tuk-tuk/compare/v3.8.0...v3.8.1) - 2026-11-26
+
+### Features
+
+- **frontend:** Open and touch-drag Unscheduled tasks in the calendar ([6040b52](https://github.com/Piwero/tuk-tuk/commit/6040b523c0b2458a62205c6c99df4e53ac8dd98b))
+
+### Bug Fixes
+
+- **frontend:** Today's calendar column wash spans the whole day ([5d71186](https://github.com/Piwero/tuk-tuk/commit/5d7118625f9781c18e1463cf99fe64f197682393))
+- **frontend:** Keep a tapped Task row's actions hidden on phones ([d820e86](https://github.com/Piwero/tuk-tuk/commit/d820e865e789b9704c6764572abdc05f93e2d61c))
+- **frontend:** Fit the Habits week grid and recent-days strips on phones ([004e2f0](https://github.com/Piwero/tuk-tuk/commit/004e2f0877512e9f4c9c60871de592abecff16db))
+- **frontend:** Theme the date panel's days and tidy its layout ([55bd973](https://github.com/Piwero/tuk-tuk/commit/55bd973c5811bc770637c81df659d5e1ddeefe45))
+
 ## [3.8.0](https://github.com/Piwero/tuk-tuk/compare/v3.7.0...v3.8.0) - 2026-11-26
 
 ### Features
