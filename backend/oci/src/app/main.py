@@ -45,6 +45,7 @@ from app.routers.v1 import (
     missed_reminders,
     now,
     reminder_deliveries,
+    repository_views,
     sections,
     stand_up,
     tags,
@@ -148,6 +149,7 @@ def create_app(
     app.include_router(mcp_exchange.router)
     app.include_router(missed_reminders.router)
     app.include_router(reminder_deliveries.router)
+    app.include_router(repository_views.router)
     app.include_router(sections.router)
     app.include_router(settings_router.router)
     app.include_router(stand_up.router)

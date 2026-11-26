@@ -16,6 +16,7 @@ import {
   updateTask,
   SMART_LABELS,
   type Folder,
+  type RepositoryView,
   type SmartView,
   type Tag,
   type Task,
@@ -26,7 +27,7 @@ import { HINT_REGISTRY } from "../hintRegistry";
 import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { folderOpenCount, openCountLabel } from "../openCounts";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
-import { pathForContainer, pathForStaticView } from "../routes";
+import { pathForContainer, pathForRepositoryView, pathForStaticView } from "../routes";
 import { useHoverHint } from "../useHoverHint";
 import { APP_VERSION } from "../version";
 import { CreateMenu } from "./CreateMenu";
@@ -37,6 +38,7 @@ import { Icon, type IconName } from "./Icon";
 import { IconButton } from "./IconButton";
 import { ListForm, type ListFormValues } from "./ListForm";
 import { Logo } from "./Logo";
+import { RepositoryViewNameForm } from "./RepositoryViewNameForm";
 import { TagForm, type TagFormValues } from "./TagForm";
 
 /** Joins the id fragments of an accessible description together, dropping
@@ -70,6 +72,7 @@ type Editor =
   | { mode: "rename-folder"; folderId: number }
   | { mode: "create-tag" }
   | { mode: "edit-tag"; tagId: number }
+  | { mode: "create-repository-view" }
   | null;
 
 interface SidebarProps {
@@ -119,6 +122,12 @@ interface SidebarProps {
    * with nothing watched it explains how to start. */
   githubSelected: boolean;
   onSelectGitHub: () => void;
+  /** The User's Repository Views (#580), nested under GitHub in this
+   * order, with "New view" to name another. */
+  repositoryViews?: RepositoryView[];
+  selectedRepositoryViewId?: number | null;
+  onSelectRepositoryView?: (viewId: number) => void;
+  onCreateRepositoryView?: (name: string) => Promise<void>;
   onSelect: (listId: number) => void;
   onSelectFolder: (folderId: number) => void;
   onSelectTag: (tagId: number) => void;
@@ -458,6 +467,10 @@ export function Sidebar({
   focusEnabled,
   githubSelected,
   onSelectGitHub,
+  repositoryViews = [],
+  selectedRepositoryViewId = null,
+  onSelectRepositoryView = () => {},
+  onCreateRepositoryView = async () => {},
   assistantSelected,
   assistantAvailable,
   onSelectAssistant,
@@ -930,6 +943,39 @@ export function Sidebar({
             selected={githubSelected}
             onClick={onSelectGitHub}
           />
+          <ul aria-label="Repository Views" className="repository-views">
+            {repositoryViews.map((repositoryView) => (
+              <li key={repositoryView.id}>
+                <TopNavItem
+                  icon="folder-git"
+                  label={repositoryView.name}
+                  href={pathForRepositoryView(repositoryView.id)}
+                  selected={selectedRepositoryViewId === repositoryView.id}
+                  onClick={() => onSelectRepositoryView(repositoryView.id)}
+                />
+              </li>
+            ))}
+          </ul>
+          {editor?.mode === "create-repository-view" ? (
+            <RepositoryViewNameForm
+              onSubmit={async (name) => {
+                await onCreateRepositoryView(name);
+                setEditor(null);
+              }}
+              onCancel={() => setEditor(null)}
+            />
+          ) : (
+            <button
+              type="button"
+              className="sidebar-add btn-quiet"
+              aria-label="New view"
+              title="New view"
+              onClick={() => setEditor({ mode: "create-repository-view" })}
+            >
+              <Icon name="plus" size={18} />
+              <span className="nav-label">New view</span>
+            </button>
+          )}
         </nav>
         <div className="sidebar-search" role="search">
           <button

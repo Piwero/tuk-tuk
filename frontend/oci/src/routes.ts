@@ -131,9 +131,25 @@ export function settingsTabForPath(pathname: string): SettingsTab | null {
   return match ?? null;
 }
 
+/** A Repository View's own path (#580), beside the GitHub view's. */
+export function pathForRepositoryView(viewId: number): string {
+  return `/github/views/${viewId}`;
+}
+
+/** Reads the Repository View id out of a `/github/views/:id` path. Returns
+ * null for any other path. */
+export function repositoryViewForPath(pathname: string): number | null {
+  const match = /^\/github\/views\/([1-9]\d*)$/.exec(pathname);
+  if (!match || !Number.isSafeInteger(Number(match[1]))) return null;
+  return Number(match[1]);
+}
+
 export function staticViewKindForPath(pathname: string): StaticViewKind | null {
   if (settingsTabForPath(pathname) !== null) {
     return "settings";
+  }
+  if (repositoryViewForPath(pathname) !== null) {
+    return "github";
   }
   if (calendarModeForPath(pathname) !== null) {
     return "calendar";

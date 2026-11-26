@@ -138,6 +138,7 @@ class AliceWorld(World):
     google_calendar: int
     github_token: int
     watched_repository: int
+    repository_view: int
     api_token: int
     reminder_delivery: int
     reminder_lease: str
@@ -201,6 +202,7 @@ READS: dict[str, Read] = {
     "watched repositories": Read(get(lambda a, me: "/api/v1/github/watched-repositories")),
     "github pull requests": Read(get(lambda a, me: "/api/v1/github/pull-requests")),
     "github issues": Read(get(lambda a, me: "/api/v1/github/issues")),
+    "repository views": Read(get(lambda a, me: "/api/v1/github/views")),
     "tasks": Read(get(lambda a, me: "/api/v1/tasks")),
     "tasks of a list": Read(get(lambda a, me: f"/api/v1/tasks?list_id={a.list}")),
     "tasks with a tag": Read(get(lambda a, me: f"/api/v1/tasks?tag_id={a.tag}")),
@@ -331,6 +333,7 @@ ITEM_PATCHES: dict[str, tuple[Callable[[AliceWorld], str], dict[str, Any]]] = {
     ),
     "focus session": (lambda a: f"/api/v1/focus-sessions/{a.focus_session}", {"note": "x"}),
     "timer": (lambda a: f"/api/v1/timers/{a.timer}", {"name": "x"}),
+    "repository view": (lambda a: f"/api/v1/github/views/{a.repository_view}", {"name": "x"}),
 }
 
 REACHES: dict[str, Reach] = {
@@ -467,6 +470,12 @@ REACHES |= {
             {"token": "github_pat_alice"},
         )
     ),
+    "github pull requests of a repository view": Reach(
+        get(lambda a, me: f"/api/v1/github/pull-requests?view={a.repository_view}")
+    ),
+    "github issues of a repository view": Reach(
+        get(lambda a, me: f"/api/v1/github/issues?view={a.repository_view}")
+    ),
     "DELETE watched repository": Reach(
         lambda a, me: (
             "DELETE",
@@ -479,6 +488,13 @@ REACHES |= {
 # Alice's ids named as the parent of, or a link from, one of the requester's
 # own rows.
 PARENTS: dict[str, Reach] = {
+    "repository view of a watched repository": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/github/views",
+            {"name": "x", "watched_repository_ids": [a.watched_repository]},
+        )
+    ),
     # Alice's token can read alice/spare, which she does not yet watch.
     "watched repository through a github token": Reach(
         lambda a, me: (
@@ -775,6 +791,11 @@ def build_alice(
         "/api/v1/github/watched-repositories",
         {"github_token_id": github_token, "github_repo_id": ALICES_WATCHED_REPO},
     )["id"]
+    repository_view = alice.ok(
+        "POST",
+        "/api/v1/github/views",
+        {"name": "alice view", "watched_repository_ids": [watched_repository]},
+    )["id"]
     github_source.register_pull_requests(
         "github_pat_alice",
         "alice/watched",
@@ -920,6 +941,7 @@ def build_alice(
         google_calendar=google_calendar,
         github_token=github_token,
         watched_repository=watched_repository,
+        repository_view=repository_view,
         api_token=api_token,
     )
 

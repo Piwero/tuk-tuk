@@ -903,17 +903,25 @@ export interface GitHubViewRead<Item> {
  * first within each group. */
 export type GitHubPullRequestsRead = GitHubViewRead<GitHubPullRequest>;
 
-/** How a GitHub view read treats the backend's one-minute cache (#583):
- * `refresh` reads from GitHub now, bypassing and replacing it. */
+/** Which Watched Repositories a GitHub view read covers, every one or
+ * only Repository View `viewId`'s (#580), and how it treats the backend's
+ * one-minute cache (#583): `refresh` reads from GitHub now, bypassing and
+ * replacing it. */
 export interface GitHubReadOptions {
+  viewId?: number;
   refresh?: boolean;
 }
 
-function githubReadQuery({ refresh = false }: GitHubReadOptions): string {
-  return refresh ? "?refresh=true" : "";
+function githubReadQuery({ viewId, refresh = false }: GitHubReadOptions): string {
+  const query = new URLSearchParams();
+  if (viewId !== undefined) query.set("view", String(viewId));
+  if (refresh) query.set("refresh", "true");
+  const text = query.toString();
+  return text === "" ? "" : `?${text}`;
 }
 
-/** The open Pull Requests of every Watched Repository. */
+/** The open Pull Requests of every Watched Repository, or of one
+ * Repository View's. */
 export function fetchGitHubPullRequests(
   options: GitHubReadOptions = {},
 ): Promise<GitHubPullRequestsRead> {
@@ -943,9 +951,57 @@ export interface GitHubIssue {
 /** Open GitHub Issues, most recently updated first. */
 export type GitHubIssuesRead = GitHubViewRead<GitHubIssue>;
 
-/** The open GitHub Issues of every Watched Repository. */
+/** The open GitHub Issues of every Watched Repository, or of one
+ * Repository View's. */
 export function fetchGitHubIssues(options: GitHubReadOptions = {}): Promise<GitHubIssuesRead> {
   return request(`/api/v1/github/issues${githubReadQuery(options)}`);
+}
+
+/** A Repository View (#580): a named subset of the User's Watched
+ * Repositories, listed under GitHub in the sidebar by `sort_order`, with
+ * its saved filters and active tab. */
+export interface RepositoryView {
+  id: number;
+  name: string;
+  sort_order: number;
+  watched_repository_ids: number[];
+  author: string | null;
+  label: string | null;
+  assignee: string | null;
+  hide_drafts: boolean;
+  hide_bots: boolean;
+  active_tab: "pull_requests" | "issues";
+}
+
+export type RepositoryViewChanges = Partial<Omit<RepositoryView, "id">>;
+
+/** The User's Repository Views in sidebar order. */
+export function fetchRepositoryViews(): Promise<RepositoryView[]> {
+  return request("/api/v1/github/views");
+}
+
+export function createRepositoryView(
+  name: string,
+  watchedRepositoryIds: number[],
+): Promise<RepositoryView> {
+  return request("/api/v1/github/views", {
+    method: "POST",
+    body: JSON.stringify({ name, watched_repository_ids: watchedRepositoryIds }),
+  });
+}
+
+export function updateRepositoryView(
+  viewId: number,
+  changes: RepositoryViewChanges,
+): Promise<RepositoryView> {
+  return request(`/api/v1/github/views/${viewId}`, {
+    method: "PATCH",
+    body: JSON.stringify(changes),
+  });
+}
+
+export function deleteRepositoryView(viewId: number): Promise<void> {
+  return request(`/api/v1/github/views/${viewId}`, { method: "DELETE" });
 }
 
 export interface GoogleCalendar {

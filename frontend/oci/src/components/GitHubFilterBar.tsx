@@ -14,12 +14,15 @@ function FilterSelect({
   choices: string[];
   onChange: (value: string | null) => void;
 }): React.JSX.Element {
+  // A Repository View's saved choice (#580) stays offered even when
+  // nothing open matches it any more.
+  const offered = value === null || choices.includes(value) ? choices : [value, ...choices];
   return (
     <label className="github-filter">
       <span>{label}</span>
       <select value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}>
         <option value="">{anyLabel}</option>
-        {choices.map((choice) => (
+        {offered.map((choice) => (
           <option key={choice} value={choice}>
             {choice}
           </option>

@@ -847,6 +847,55 @@ class WatchedRepository(OwnedMixin, Base):
     token: Mapped[GitHubToken] = relationship(back_populates="watched_repositories")
 
 
+class RepositoryView(OwnedMixin, Base):
+    """A Repository View (issue #580) — a named subset of a User's Watched
+    Repositories, listed under GitHub in the sidebar in `sort_order`, that
+    remembers its display options: the author, label and assignee filters,
+    hide drafts, hide bots and the active tab ("pull_requests" or
+    "issues"). Losing every Watched Repository leaves it in place, empty.
+    """
+
+    __tablename__ = "repository_views"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(BigInteger, default=0)
+    author: Mapped[str | None] = mapped_column(String(255), default=None)
+    label: Mapped[str | None] = mapped_column(String(255), default=None)
+    assignee: Mapped[str | None] = mapped_column(String(255), default=None)
+    hide_drafts: Mapped[bool] = mapped_column(Boolean, default=False)
+    hide_bots: Mapped[bool] = mapped_column(Boolean, default=False)
+    active_tab: Mapped[str] = mapped_column(String(16), default="pull_requests")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    members: Mapped[list["RepositoryViewMember"]] = relationship(
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+        order_by="RepositoryViewMember.watched_repository_id",
+    )
+
+
+class RepositoryViewMember(OwnedMixin, Base):
+    """One Watched Repository's place in one Repository View. Deleted with
+    either side, so unwatching a repository, or removing its GitHub Token,
+    drops it from every Repository View (spec #576)."""
+
+    __tablename__ = "repository_view_members"
+    __table_args__ = (UniqueConstraint("repository_view_id", "watched_repository_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repository_view_id: Mapped[int] = mapped_column(
+        ForeignKey("repository_views.id", ondelete="CASCADE"), index=True
+    )
+    watched_repository_id: Mapped[int] = mapped_column(
+        ForeignKey("watched_repositories.id", ondelete="CASCADE"), index=True
+    )
+
+
 class StandupEntry(OwnedMixin, Base):
     """A Stand-up Entry — one calendar date's daily stand-up: Yesterday /
     Today / Blockers Bullets, plus a Sprint-goal snapshot column (populated
