@@ -801,15 +801,18 @@ class GitHubToken(OwnedMixin, Base):
     owner: the User themselves or one organisation. Encrypted at rest
     (app.crypto, keyed by APP_MASTER_KEY) and never returned by the API.
     `connection_state` is "connected" or "needs_reconnect". A User holds at
-    most one GitHub Token per GitHub owner.
+    most one GitHub Token per GitHub owner; any number may be waiting for
+    their owner to become known.
     """
 
     __tablename__ = "github_tokens"
     __table_args__ = (UniqueConstraint("owner_id", "owner_login"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    owner_login: Mapped[str] = mapped_column(String(255))
-    owner_kind: Mapped[str] = mapped_column(String(16))
+    # Absent until GitHub can tell: a token an organisation has not yet
+    # allowed or approved reads nothing, so its owner is unknown (ADR 0020).
+    owner_login: Mapped[str | None] = mapped_column(String(255), default=None)
+    owner_kind: Mapped[str | None] = mapped_column(String(16), default=None)
     encrypted_token: Mapped[str] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     connection_state: Mapped[str] = mapped_column(String(16), default="connected")

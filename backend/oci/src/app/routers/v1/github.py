@@ -17,8 +17,10 @@ from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.github_source import (
+    GitHubOwner,
     GitHubRepository,
     GitHubSource,
+    GitHubSourceError,
     GitHubTokenIdentity,
     TerminalGitHubSourceError,
     TransientGitHubSourceError,
@@ -44,8 +46,9 @@ class GitHubTokenCreate(BaseModel):
 
 class GitHubTokenRead(BaseModel):
     id: int
-    owner_login: str
-    owner_kind: str
+    # Both absent while GitHub cannot tell the token's owner (ADR 0020).
+    owner_login: str | None
+    owner_kind: str | None
     expires_at: datetime | None
     expires_soon: bool
     connection_state: str
@@ -114,30 +117,39 @@ def _encrypt(request: Request, token: str) -> str:
     return encrypt_credential(token, key=settings.app_master_key)
 
 
+async def _owner_taken(session: SessionDep, owner: GitHubOwner, but: int | None = None) -> bool:
+    """Whether another of the User's GitHub Tokens (any but `but`) is for
+    `owner`. GitHub logins are case-insensitive."""
+    query = select(GitHubToken.id).where(func.lower(GitHubToken.owner_login) == owner.login.lower())
+    if but is not None:
+        query = query.where(GitHubToken.id != but)
+    return await session.scalar(query) is not None
+
+
+def _owner_exists_error(owner: GitHubOwner) -> APIError:
+    return APIError(
+        409,
+        "github_token_owner_exists",
+        f"You already have a GitHub Token for {owner.login}. Reconnect it to use a different one.",
+    )
+
+
 @router.post("/tokens", status_code=201)
 async def add_token(
     payload: GitHubTokenCreate, request: Request, session: SessionDep
 ) -> GitHubTokenRead:
+    """Saves a pasted token. One whose owner GitHub cannot tell yet is
+    saved without one, and learns it once it reads a repository."""
     token = payload.token.strip()
     identity = await _validate(request, token)
-
-    # GitHub logins are case-insensitive; one GitHub Token per owner.
-    existing = await session.scalar(
-        select(GitHubToken).where(
-            func.lower(GitHubToken.owner_login) == identity.owner_login.lower()
-        )
-    )
-    if existing is not None:
-        raise APIError(
-            409,
-            "github_token_owner_exists",
-            f"You already have a GitHub Token for {identity.owner_login}. "
-            "Reconnect it to use a different one.",
-        )
+    owner = identity.owner
+    # One GitHub Token per owner.
+    if owner is not None and await _owner_taken(session, owner):
+        raise _owner_exists_error(owner)
 
     row = GitHubToken(
-        owner_login=identity.owner_login,
-        owner_kind=identity.owner_kind,
+        owner_login=owner.login if owner else None,
+        owner_kind=owner.kind if owner else None,
         encrypted_token=_encrypt(request, token),
         expires_at=identity.expires_at,
         connection_state="connected",
@@ -153,21 +165,35 @@ async def reconnect_token(
 ) -> GitHubTokenRead:
     """Reconnect: replaces the token on an existing GitHub Token in place
     with a replacement for the same owner, so its Watched Repositories
-    survive a rotation (issue #584)."""
+    survive a rotation (issue #584). A GitHub Token whose owner is not
+    known yet takes the replacement's."""
     row = await session.get(GitHubToken, token_id)
     if row is None:
         raise NotFoundError(f"GitHub Token {token_id} not found")
     token = payload.token.strip()
     identity = await _validate(request, token)
+    owner = identity.owner
+    if row.owner_login is None:
+        if owner is not None:
+            if await _owner_taken(session, owner, but=row.id):
+                raise _owner_exists_error(owner)
+            row.owner_login, row.owner_kind = owner.login, owner.kind
     # A replacement must grant access to the same owner, or the Watched
     # Repositories it keeps would be read through someone else's access.
-    if identity.owner_login.lower() != row.owner_login.lower():
+    elif owner is None:
+        raise APIError(
+            422,
+            "github_token_owner_unknown",
+            "GitHub cannot tell which owner this token is for until it can read a "
+            f"repository. If {row.owner_login} must allow or approve fine-grained "
+            "tokens, try again once it has.",
+        )
+    elif owner.login.lower() != row.owner_login.lower():
         raise APIError(
             422,
             "github_token_owner_mismatch",
-            f"This token grants access to {identity.owner_login}, not "
-            f"{row.owner_login}. Paste a token for {row.owner_login}, or add it as a "
-            "new GitHub Token.",
+            f"This token grants access to {owner.login}, not {row.owner_login}. Paste a "
+            f"token for {row.owner_login}, or add it as a new GitHub Token.",
         )
     row.encrypted_token = _encrypt(request, token)
     row.expires_at = identity.expires_at
@@ -190,7 +216,7 @@ class PickerTokenRead(BaseModel):
     not yet allowed or approved fine-grained tokens."""
 
     id: int
-    owner_login: str
+    owner_login: str | None
     # "ok"; "unavailable" when GitHub had a transient problem (the token
     # stays connected); "needs_reconnect" when GitHub rejected the token.
     status: Literal["ok", "unavailable", "needs_reconnect"]
@@ -218,12 +244,33 @@ class WatchedRepositoryRead(BaseModel):
     created_at: datetime
 
 
+def _named(token: GitHubToken) -> str:
+    if token.owner_login is None:
+        return "the GitHub Token whose owner is not known yet"
+    return f"the GitHub Token for {token.owner_login}"
+
+
+def _plaintext(request: Request, token: GitHubToken) -> str:
+    return decrypt_credential(token.encrypted_token, key=request.app.state.settings.app_master_key)
+
+
 async def _readable_repositories(request: Request, token: GitHubToken) -> list[GitHubRepository]:
     github_source: GitHubSource = request.app.state.github_source
-    plaintext = decrypt_credential(
-        token.encrypted_token, key=request.app.state.settings.app_master_key
-    )
-    return await github_source.list_accessible_repositories(plaintext)
+    return await github_source.list_accessible_repositories(_plaintext(request, token))
+
+
+async def _learn_owner(request: Request, session: SessionDep, token: GitHubToken) -> None:
+    """Asks GitHub again for the owner of a GitHub Token that has none
+    yet, now that it reads repositories. An owner another GitHub Token
+    already covers is not taken, so each owner keeps one token."""
+    github_source: GitHubSource = request.app.state.github_source
+    try:
+        owner = (await github_source.identify_token(_plaintext(request, token))).owner
+    except GitHubSourceError:
+        return  # Asked again next time.
+    if owner is not None and not await _owner_taken(session, owner, but=token.id):
+        token.owner_login, token.owner_kind = owner.login, owner.kind
+        await session.commit()
 
 
 @router.get("/repositories")
@@ -249,6 +296,8 @@ async def list_accessible_repositories(
             status = "needs_reconnect"
             token.connection_state = "needs_reconnect"
             await session.commit()
+        if readable and token.owner_login is None:
+            await _learn_owner(request, session, token)
         tokens.append(
             PickerTokenRead(
                 id=token.id,
@@ -304,7 +353,7 @@ async def watch_repository(
         raise APIError(
             422,
             "github_token_rejected",
-            f"GitHub rejected the GitHub Token for {token.owner_login}: it may be "
+            f"GitHub rejected {_named(token)}: it may be "
             "expired or revoked. Reconnect it in Settings.",
         ) from None
     except TransientGitHubSourceError:
@@ -318,7 +367,7 @@ async def watch_repository(
         raise APIError(
             422,
             "github_repository_not_readable",
-            f"The GitHub Token for {token.owner_login} cannot read that repository.",
+            f"{_named(token).capitalize()} cannot read that repository.",
         )
     row = WatchedRepository(
         github_token_id=token.id,

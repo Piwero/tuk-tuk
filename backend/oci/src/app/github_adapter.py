@@ -13,6 +13,7 @@ from app.github_source import (
     GitHubCiStatus,
     GitHubIssue,
     GitHubLabel,
+    GitHubOwner,
     GitHubOwnerKind,
     GitHubPullRequest,
     GitHubRepository,
@@ -73,16 +74,29 @@ def _token_type(token: str, response: httpx.Response) -> GitHubTokenType:
     return "fine_grained" if token.startswith("github_pat_") else "other"
 
 
-def _resource_owner(user_login: str, repos: list[dict[str, Any]]) -> tuple[str, GitHubOwnerKind]:
-    """A fine-grained token has exactly one resource owner, but GitHub has
-    no endpoint naming it. The repositories it can read all belong to that
-    owner, so an organisation among them is the owner; otherwise (including
-    a token that can read no repository yet) it is the token's own User."""
-    for repo in repos:
-        owner = repo.get("owner") or {}
-        if owner.get("type") == "Organization" and isinstance(owner.get("login"), str):
-            return owner["login"], "organization"
-    return user_login, "user"
+_OWNER_KINDS: dict[str, GitHubOwnerKind] = {"User": "user", "Organization": "organization"}
+
+
+def _sole_owner(repos: list[dict[str, Any]]) -> GitHubOwner | None:
+    owners = {
+        GitHubOwner(login=str(owner["login"]), kind=_OWNER_KINDS[owner["type"]])
+        for owner in (repo.get("owner") or {} for repo in repos)
+        if owner.get("type") in _OWNER_KINDS and owner.get("login")
+    }
+    return owners.pop() if len(owners) == 1 else None
+
+
+def _resource_owner(repos: list[dict[str, Any]]) -> GitHubOwner | None:
+    """A fine-grained token has exactly one resource owner, but GitHub
+    names it nowhere — not `/user` (the token's creator), not a header. A
+    private repository the token reads can only be the owner's, so the one
+    owner of those is it; failing any, the one owner of every repository it
+    reads. Every token also reads all public repositories, so public ones
+    of several owners prove nothing, and a token that reads no repository
+    yet (an organisation's, before it allows or approves fine-grained
+    tokens) has no owner GitHub will tell (ADR 0020)."""
+    private = [repo for repo in repos if repo.get("private")]
+    return _sole_owner(private) if private else _sole_owner(repos)
 
 
 # At most this many items per repository (spec #576); GitHub's own maximum
@@ -255,10 +269,8 @@ class GitHubApiSource:
             repos = await client.get("/user/repos", params={"per_page": 100})
             if repos.status_code != 200:
                 _raise_for_error_response(repos, action)
-        owner_login, owner_kind = _resource_owner(user.json()["login"], repos.json())
         return GitHubTokenIdentity(
-            owner_login=owner_login,
-            owner_kind=owner_kind,
+            owner=_resource_owner(repos.json()),
             token_type=_token_type(token, user),
             expires_at=_parse_expiry(user.headers.get(EXPIRY_HEADER)),
         )

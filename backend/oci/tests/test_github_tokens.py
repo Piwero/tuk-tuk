@@ -139,3 +139,56 @@ def test_removing_a_github_token_deletes_it(
     assert response.status_code == 204, response.text
     assert client.get(TOKENS).json() == []
     assert client.delete(f"{TOKENS}/{token_id}").status_code == 404
+
+
+ORGANISATION_PENDING = "github_pat_11AAAAAAA0pending"
+
+
+def test_a_token_whose_owner_github_cannot_tell_yet_is_saved_without_one(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    # An organisation's token before the organisation allows or approves
+    # fine-grained tokens: it reads nothing, so GitHub cannot say whose it
+    # is, and it must not pass for the User's own (spec #576, ADR 0020).
+    fake_github_source.register_token(FINE_GRAINED, owner_login="octocat")
+    fake_github_source.register_token(ORGANISATION_PENDING, owner_login=None)
+    assert client.post(TOKENS, json={"token": FINE_GRAINED}).status_code == 201
+
+    created = client.post(TOKENS, json={"token": ORGANISATION_PENDING})
+
+    assert created.status_code == 201, created.text
+    assert (created.json()["owner_login"], created.json()["owner_kind"]) == (None, None)
+    assert [t["owner_login"] for t in client.get(TOKENS).json()] == ["octocat", None]
+
+
+def test_a_tokens_owner_is_learned_once_it_reads_repositories(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    fake_github_source.register_token(ORGANISATION_PENDING, owner_login=None)
+    client.post(TOKENS, json={"token": ORGANISATION_PENDING})
+    # The organisation approves the token: it now reads acme's repositories.
+    fake_github_source.register_token(
+        ORGANISATION_PENDING, owner_login="acme", owner_kind="organization"
+    )
+    fake_github_source.register_repositories(ORGANISATION_PENDING, [(2, "acme/api")])
+
+    assert client.get("/api/v1/github/repositories").status_code == 200
+
+    [listed] = client.get(TOKENS).json()
+    assert (listed["owner_login"], listed["owner_kind"]) == ("acme", "organization")
+
+
+def test_an_owner_already_covered_is_not_learned_twice(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    fake_github_source.register_token(FINE_GRAINED, owner_login="acme", owner_kind="organization")
+    fake_github_source.register_token(ORGANISATION_PENDING, owner_login=None)
+    client.post(TOKENS, json={"token": FINE_GRAINED})
+    client.post(TOKENS, json={"token": ORGANISATION_PENDING})
+    fake_github_source.register_token(
+        ORGANISATION_PENDING, owner_login="acme", owner_kind="organization"
+    )
+
+    assert client.get("/api/v1/github/repositories").status_code == 200
+
+    assert [t["owner_login"] for t in client.get(TOKENS).json()] == ["acme", None]

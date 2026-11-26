@@ -114,7 +114,7 @@ class TokenReadStatusRead(BaseModel):
     as a banner for that token alone while the others' items render."""
 
     id: int
-    owner_login: str
+    owner_login: str | None
     status: TokenReadStatus
     # So the GitHub view can warn before a token expires (issue #584).
     expires_at: datetime | None

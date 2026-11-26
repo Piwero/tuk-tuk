@@ -12,6 +12,7 @@ import pytest
 from app.github_adapter import GitHubApiSource
 from app.github_source import (
     GitHubLabel,
+    GitHubOwner,
     GitHubRepository,
     TerminalGitHubSourceError,
     TransientGitHubSourceError,
@@ -25,11 +26,13 @@ def adapter(handle: Callable[[httpx.Request], httpx.Response]) -> GitHubApiSourc
     return GitHubApiSource(transport=httpx.MockTransport(handle))
 
 
-def repo(owner: str, owner_type: str, name: str = "repo") -> dict[str, object]:
+def repo(
+    owner: str, owner_type: str, name: str = "repo", *, private: bool = True
+) -> dict[str, object]:
     return {
         "id": 1,
         "full_name": f"{owner}/{name}",
-        "private": True,
+        "private": private,
         "owner": {"login": owner, "type": owner_type},
     }
 
@@ -56,7 +59,7 @@ class TestIdentifyToken:
 
         identity = await adapter(handle).identify_token(TOKEN)
 
-        assert (identity.owner_login, identity.owner_kind) == ("octocat", "user")
+        assert identity.owner == GitHubOwner(login="octocat", kind="user")
         assert identity.token_type == "fine_grained"
 
     async def test_a_token_for_an_organisations_repositories_names_the_organisation(
@@ -66,12 +69,40 @@ class TestIdentifyToken:
 
         identity = await adapter(handle).identify_token(TOKEN)
 
-        assert (identity.owner_login, identity.owner_kind) == ("acme", "organization")
+        assert identity.owner == GitHubOwner(login="acme", kind="organization")
 
-    async def test_a_token_that_reads_no_repositories_yet_names_the_user(self) -> None:
+    async def test_a_token_that_reads_no_repositories_yet_has_no_known_owner(self) -> None:
+        # GitHub names a fine-grained token's resource owner nowhere; a
+        # token an organisation has not approved yet reads nothing, and is
+        # not the User's own token for that (spec #576, ADR 0020).
         identity = await adapter(github(repos=[])).identify_token(TOKEN)
 
-        assert (identity.owner_login, identity.owner_kind) == ("octocat", "user")
+        assert identity.owner is None
+
+    async def test_the_owner_of_the_private_repositories_read_is_the_owner(self) -> None:
+        # Every fine-grained token reads all public repositories, so only a
+        # private one is proof of what the token was granted.
+        handle = github(
+            repos=[repo("acme", "Organization", private=False), repo("octocat", "User")]
+        )
+
+        identity = await adapter(handle).identify_token(TOKEN)
+
+        assert identity.owner == GitHubOwner(login="octocat", kind="user")
+
+    async def test_public_repositories_of_several_owners_leave_the_owner_unknown(
+        self,
+    ) -> None:
+        handle = github(
+            repos=[
+                repo("acme", "Organization", private=False),
+                repo("octocat", "User", private=False),
+            ]
+        )
+
+        identity = await adapter(handle).identify_token(TOKEN)
+
+        assert identity.owner is None
 
     async def test_the_expiry_github_reports_is_read(self) -> None:
         handle = github(repos=[], headers={EXPIRY_HEADER: "2027-02-01 08:09:11 UTC"})

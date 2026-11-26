@@ -2,6 +2,7 @@ import "./GitHubTokenBanners.css";
 
 import type { GitHubTokenReadStatus } from "../api";
 import { formatDate } from "../dates";
+import { githubOwnerName, githubTokenName } from "../githubOwner";
 import { pathForSettingsTab } from "../routes";
 
 /** One banner per GitHub Token that failed a GitHub view read (#584, ADR
@@ -29,12 +30,12 @@ export function GitHubTokenBanners({
           {failing.map((token) =>
             token.status === "needs_reconnect" ? (
               <p key={token.id}>
-                {`GitHub no longer accepts the GitHub Token for ${token.owner_login}, so its repositories aren’t shown. `}
+                {`GitHub no longer accepts ${githubTokenName(token.owner_login)}, so its repositories aren’t shown. `}
                 <SettingsLink onOpenSettings={onOpenSettings} />
               </p>
             ) : (
               <p key={token.id}>
-                {`GitHub couldn’t be reached for ${token.owner_login}’s repositories. `}
+                {`GitHub couldn’t be reached for ${githubOwnerName(token.owner_login)}’s repositories. `}
                 <button type="button" className="btn-quiet" onClick={onRetry}>
                   Retry
                 </button>
@@ -50,9 +51,13 @@ export function GitHubTokenBanners({
 
 interface ExpiringToken {
   id: number;
-  owner_login: string;
+  owner_login: string | null;
   expires_at: string | null;
   expires_soon: boolean;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function SettingsLink({ onOpenSettings }: { onOpenSettings: () => void }): React.JSX.Element {
@@ -88,7 +93,7 @@ export function GitHubTokenExpiryWarning({
         const expired = at.getTime() <= Date.now();
         return (
           <p key={token.id}>
-            {`The GitHub Token for ${token.owner_login} ${expired ? "expired" : "expires"} on ${formatDate(at, "date")}. `}
+            {`${capitalize(githubTokenName(token.owner_login))} ${expired ? "expired" : "expires"} on ${formatDate(at, "date")}. `}
             {expired
               ? "Reconnect it with a new token. "
               : "Reconnect it with a new token before then. "}

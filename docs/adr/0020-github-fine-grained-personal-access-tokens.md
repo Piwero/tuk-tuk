@@ -38,16 +38,49 @@ A User adds **GitHub Tokens** in Settings → GitHub. tuk-tuk accepts only
 fine-grained tokens. Anything that does not look like one (`github_pat_`
 prefix) is refused before it is sent anywhere. A token GitHub reports as
 classic is refused too. Each pasted token is checked with GitHub before it
-is saved. GitHub tells tuk-tuk which owner the token grants access to, the
-User or one organisation, and when it expires. A token GitHub rejects (401)
-is not saved. A transient failure while checking is reported as retryable,
-and nothing is saved.
+is saved. tuk-tuk learns which owner the token grants access to (the User
+or one organisation, when GitHub can tell; see below) and when it expires.
+A token GitHub rejects (401) is not saved. A transient failure while
+checking is reported as retryable, and nothing is saved.
 
 A fine-grained token is limited to one resource owner, so a User holds one
 GitHub Token per owner. They can have one for their own repositories and
 one per organisation. A second token for an owner already covered is
 refused. Replacing a token for the same owner (reconnect) keeps what was
 built on it.
+
+## Decision: a token's owner is learned from what it reads, or left unknown
+
+GitHub names a fine-grained token's resource owner nowhere. `GET /user`
+names the User who created the token, not its owner, and no response
+header carries it. Every fine-grained token can also read all public
+repositories on GitHub. So the adapter infers the owner from
+`GET /user/repos`: the one owner of the private repositories the token
+reads (only the owner's private repositories are readable through it),
+or, when it reads no private one, the one owner of every repository it
+reads. When the token reads no repository, or public repositories of
+several owners, the owner is **unknown**. It is never guessed, and in
+particular never taken to be the token's User.
+
+This matters for an organisation that has not yet allowed or approved
+fine-grained tokens. Its token is valid but reads nothing until then.
+Naming it after the User would collide with their own token (refused as
+a second token for that owner) and would later refuse the approved token
+on Reconnect as an owner mismatch. Instead:
+
+- A token with an unknown owner is saved without one. Settings lists it
+  as "Owner not known yet" and says an organisation may need to allow or
+  approve fine-grained tokens. One-per-owner does not apply to it.
+- Each time the Watched Repositories picker reads such a token and it
+  now reads repositories, tuk-tuk asks GitHub again and records the owner,
+  unless another GitHub Token already covers that owner. Then it stays
+  unknown, and the User removes one of the two.
+- Reconnecting a token with an unknown owner takes the replacement's
+  owner, refused only if another GitHub Token already covers it.
+  Reconnecting a token with a known owner refuses a replacement whose
+  owner is unknown (`github_token_owner_unknown`): it cannot be shown to
+  be for the same owner. The User tries again once the organisation has
+  approved the new token.
 
 All GitHub traffic goes through one injected `GitHubSource` Protocol
 (`app.github_source`). The real adapter is `app.github_adapter`. Tests
@@ -90,10 +123,8 @@ substitute a fake, the same way they do for the calendar source.
   and warns before it lapses. The User pastes a replacement for the same
   owner.
 - An organisation may need to allow fine-grained tokens, or approve each
-  one, before its repositories become readable.
-- GitHub has no endpoint that names a fine-grained token's resource owner.
-  The adapter infers it from the repositories the token can read: an
-  organisation among them is the owner, otherwise it is the token's User.
+  one, before its repositories become readable. Until then its token's
+  owner is unknown, and a rotated token for it cannot be reconnected.
 - github.com only. GitHub Enterprise Server hosts are out of scope.
 
 ## What would justify revisiting this

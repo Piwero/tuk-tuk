@@ -1,3 +1,5 @@
+import "./GitHubSettingsPanel.css";
+
 import { useEffect, useState } from "react";
 
 import {
@@ -9,6 +11,7 @@ import {
   reconnectGitHubToken,
 } from "../api";
 import { formatDate } from "../dates";
+import { githubOwnerName, githubTokenName, UNKNOWN_GITHUB_OWNER } from "../githubOwner";
 import { GitHubRepositoryPicker } from "./GitHubRepositoryPicker";
 import { GitHubTokenExpiryWarning } from "./GitHubTokenBanners";
 import { Modal } from "./Modal";
@@ -21,10 +24,16 @@ const EXPLAINED_CODES = new Set([
   "github_unavailable",
   "github_token_owner_exists",
   "github_token_owner_mismatch",
+  "github_token_owner_unknown",
 ]);
 
 function describeToken(token: GitHubToken): string {
-  const kind = token.owner_kind === "organization" ? "Organization" : "Your account";
+  const kind =
+    token.owner_kind === null
+      ? UNKNOWN_GITHUB_OWNER
+      : token.owner_kind === "organization"
+        ? "Organization"
+        : "Your account";
   const expiry =
     token.expires_at === null
       ? "No expiry"
@@ -161,7 +170,7 @@ export function GitHubSettingsPanel(): React.JSX.Element {
           forget(token);
           return;
         }
-        setRemoveError(`Couldn’t remove the GitHub Token for ${token.owner_login}. Try again.`);
+        setRemoveError(`Couldn’t remove ${githubTokenName(token.owner_login)}. Try again.`);
       });
   }
 
@@ -193,18 +202,25 @@ export function GitHubSettingsPanel(): React.JSX.Element {
             {tokens.map((token) => (
               <li key={token.id} className="api-token">
                 <div>
-                  <h3>{token.owner_login}</h3>
+                  <h3>{githubOwnerName(token.owner_login)}</h3>
                   <p className="settings-hint">{describeToken(token)}</p>
+                  {token.owner_login === null && (
+                    <p className="settings-hint">
+                      GitHub can’t tell whose repositories this token is for until it can read one.
+                      An organisation may need to allow or approve fine-grained tokens: check the
+                      organisation’s settings on GitHub.
+                    </p>
+                  )}
                   {token.connection_state === "needs_reconnect" && (
                     <p role="alert">
                       GitHub no longer accepts this token. Reconnect it with a replacement for{" "}
-                      {token.owner_login}.
+                      {token.owner_login ?? "the same owner"}.
                     </p>
                   )}
                   {reconnecting === token.id && (
                     <TokenForm
                       id={`github-token-reconnect-${token.id}`}
-                      label={`Replacement token for ${token.owner_login}`}
+                      label={`Replacement token for ${githubOwnerName(token.owner_login)}`}
                       submitLabel="Reconnect"
                       submit={(value) => reconnectGitHubToken(token.id, value)}
                       onSaved={replace}
@@ -217,7 +233,7 @@ export function GitHubSettingsPanel(): React.JSX.Element {
                     <button
                       type="button"
                       className="btn-secondary"
-                      aria-label={`Reconnect GitHub Token for ${token.owner_login}`}
+                      aria-label={`Reconnect GitHub Token for ${githubOwnerName(token.owner_login)}`}
                       onClick={() => setReconnecting(token.id)}
                     >
                       Reconnect
@@ -226,7 +242,7 @@ export function GitHubSettingsPanel(): React.JSX.Element {
                   <button
                     type="button"
                     className="btn-secondary"
-                    aria-label={`Remove GitHub Token for ${token.owner_login}`}
+                    aria-label={`Remove GitHub Token for ${githubOwnerName(token.owner_login)}`}
                     onClick={() => setConfirming(token)}
                   >
                     Remove
@@ -239,12 +255,13 @@ export function GitHubSettingsPanel(): React.JSX.Element {
         {removeError !== null && <p role="alert">{removeError}</p>}
         {confirming !== null && (
           <Modal
-            title={`Remove the GitHub Token for ${confirming.owner_login}?`}
+            title={`Remove ${githubTokenName(confirming.owner_login)}?`}
             onClose={() => setConfirming(null)}
           >
             <p className="api-token-confirm-lead">
-              Tuk Tuk loses access to {confirming.owner_login}’s repositories. You can add a token
-              again later.
+              Its Watched Repositories are deleted and dropped from every Repository View. Tuk Tuk
+              stops reading {confirming.owner_login ?? "its owner"}’s repositories. You can add a
+              token again later.
             </p>
             <div className="api-token-confirm-actions">
               <button

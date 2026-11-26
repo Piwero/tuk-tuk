@@ -138,6 +138,57 @@ def test_a_replacement_for_a_different_owner_is_refused_and_the_token_is_kept(
     assert decrypt_credential(stored, key="test-master-key") == PERSONAL
 
 
+def test_a_replacement_whose_owner_github_cannot_tell_yet_is_refused(
+    client: TestClient, fake_github_source: FakeGitHubSource, database_url: str
+) -> None:
+    # A rotated organisation token the organisation has not approved yet
+    # reads nothing, so it cannot be shown to be for the same owner.
+    personal = watch_through(
+        client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")]
+    )
+    fake_github_source.register_token(REPLACEMENT, owner_login=None)
+
+    response = client.patch(f"{TOKENS}/{personal}", json={"token": REPLACEMENT})
+
+    assert response.status_code == 422, response.text
+    error = response.json()["error"]
+    assert error["code"] == "github_token_owner_unknown"
+    assert "octocat" in error["message"]
+    [(stored,)] = run_sql(database_url, "SELECT encrypted_token FROM github_tokens")
+    assert decrypt_credential(stored, key="test-master-key") == PERSONAL
+
+
+def test_reconnecting_a_token_without_a_known_owner_learns_the_replacements(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    fake_github_source.register_token(PERSONAL, owner_login=None)
+    token_id = client.post(TOKENS, json={"token": PERSONAL}).json()["id"]
+    fake_github_source.register_token(REPLACEMENT, owner_login="acme", owner_kind="organization")
+
+    response = client.patch(f"{TOKENS}/{token_id}", json={"token": REPLACEMENT})
+
+    assert response.status_code == 200, response.text
+    assert (response.json()["owner_login"], response.json()["owner_kind"]) == (
+        "acme",
+        "organization",
+    )
+
+
+def test_reconnecting_a_token_without_a_known_owner_to_an_owner_covered_is_refused(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    pending = "github_pat_11AAAAAAA0pending"
+    fake_github_source.register_token(pending, owner_login=None)
+    token_id = client.post(TOKENS, json={"token": pending}).json()["id"]
+    fake_github_source.register_token(REPLACEMENT, owner_login="octocat")
+
+    response = client.patch(f"{TOKENS}/{token_id}", json={"token": REPLACEMENT})
+
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "github_token_owner_exists"
+
+
 def test_reconnect_validates_the_replacement_like_a_new_token(
     client: TestClient, fake_github_source: FakeGitHubSource
 ) -> None:

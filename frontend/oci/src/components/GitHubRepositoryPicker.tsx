@@ -33,14 +33,18 @@ function matching(repositories: AccessibleRepository[], query: string): Accessib
 
 /** Why one token contributes nothing to the picker, or null when it does. */
 function tokenNote(token: RepositoryPickerToken): string | null {
+  const theToken =
+    token.owner_login === null
+      ? "the token whose owner isn’t known yet"
+      : `the ${token.owner_login} token`;
   if (token.status === "unavailable") {
-    return `GitHub couldn’t be reached for the ${token.owner_login} token’s repositories. Try again in a moment.`;
+    return `GitHub couldn’t be reached for ${theToken}’s repositories. Try again in a moment.`;
   }
   if (token.status === "needs_reconnect") {
-    return `GitHub no longer accepts the ${token.owner_login} token. Replace it to pick its repositories.`;
+    return `GitHub no longer accepts ${theToken}. Replace it to pick its repositories.`;
   }
   if (token.repository_count === 0) {
-    return `GitHub lists no repositories for the ${token.owner_login} token. An organisation may need to allow or approve fine-grained tokens before its repositories can be read: check the organisation’s settings on GitHub.`;
+    return `GitHub lists no repositories for ${theToken}. An organisation may need to allow or approve fine-grained tokens before its repositories can be read: check the organisation’s settings on GitHub.`;
   }
   return null;
 }

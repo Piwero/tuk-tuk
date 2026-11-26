@@ -19,14 +19,24 @@ GitHubTokenType = Literal["fine_grained", "classic", "other"]
 
 
 @dataclass(frozen=True)
-class GitHubTokenIdentity:
-    """What GitHub says a token is. `owner_login`/`owner_kind` name the one
-    resource owner a fine-grained token grants access to: the User
-    themselves or one organisation. `expires_at` is absent for a token
-    created without an expiry."""
+class GitHubOwner:
+    """The one resource owner a fine-grained token grants access to: the
+    User themselves or one organisation."""
 
-    owner_login: str
-    owner_kind: GitHubOwnerKind
+    login: str
+    kind: GitHubOwnerKind
+
+
+@dataclass(frozen=True)
+class GitHubTokenIdentity:
+    """What GitHub says a token is. `owner` is absent while it cannot be
+    told: GitHub names a fine-grained token's resource owner nowhere, so it
+    is known only from the private repositories the token reads, and a
+    token an organisation has not yet allowed or approved reads none
+    (ADR 0020). `expires_at` is absent for a token created without an
+    expiry."""
+
+    owner: GitHubOwner | None
     token_type: GitHubTokenType
     expires_at: datetime | None
 

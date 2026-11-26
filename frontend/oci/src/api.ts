@@ -742,13 +742,17 @@ export function disconnectGoogleAccount(accountId: number): Promise<void> {
   return request(`/api/v1/google/accounts/${accountId}`, { method: "DELETE" });
 }
 
+export type GitHubOwnerKind = "user" | "organization";
+
 /** A GitHub Token (#578): a fine-grained personal access token, listed by
  * the GitHub owner it grants access to. Its value is write-only: no
- * response ever carries it. */
+ * response ever carries it. The owner is null until GitHub can tell it: a
+ * token an organisation hasn't yet allowed or approved reads nothing, so
+ * GitHub can't say whose it is (ADR 0020). */
 export interface GitHubToken {
   id: number;
-  owner_login: string;
-  owner_kind: "user" | "organization";
+  owner_login: string | null;
+  owner_kind: GitHubOwnerKind | null;
   expires_at: string | null;
   /** Expires within 7 days, or already has (#584). */
   expires_soon: boolean;
@@ -794,7 +798,7 @@ export interface AccessibleRepository {
  * allowed or approved fine-grained tokens yet. */
 export interface RepositoryPickerToken {
   id: number;
-  owner_login: string;
+  owner_login: string | null;
   status: "ok" | "unavailable" | "needs_reconnect";
   repository_count: number;
 }
@@ -879,7 +883,7 @@ export interface GitHubRepositoryRead {
  * minutes ago (#583). */
 export interface GitHubTokenReadStatus {
   id: number;
-  owner_login: string;
+  owner_login: string | null;
   status: "ok" | "stale" | "unavailable" | "needs_reconnect";
   expires_at: string | null;
   /** Expires within 7 days, or already has (#584). */

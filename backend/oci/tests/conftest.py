@@ -56,6 +56,7 @@ from app.github_source import (  # noqa: E402
     GitHubCiStatus,
     GitHubIssue,
     GitHubLabel,
+    GitHubOwner,
     GitHubOwnerKind,
     GitHubPullRequest,
     GitHubRepository,
@@ -484,14 +485,17 @@ class FakeGitHubSource:
         self,
         token: str,
         *,
-        owner_login: str,
+        owner_login: str | None,
         owner_kind: GitHubOwnerKind = "user",
         token_type: GitHubTokenType = "fine_grained",
         expires_at: datetime | None = None,
     ) -> None:
+        """What `token` identifies as. `owner_login=None` is a token whose
+        owner GitHub cannot tell yet, as for an organisation's token before
+        the organisation allows or approves it. Registering again replaces
+        the identity, so a test can let that owner become known."""
         self._identities[token] = GitHubTokenIdentity(
-            owner_login=owner_login,
-            owner_kind=owner_kind,
+            owner=None if owner_login is None else GitHubOwner(login=owner_login, kind=owner_kind),
             token_type=token_type,
             expires_at=expires_at,
         )
@@ -569,7 +573,9 @@ class FakeGitHubSource:
                 )
             )
         return OpenPullRequests(
-            viewer_login=self._viewers.get(token, identity.owner_login),
+            viewer_login=self._viewers.get(
+                token, identity.owner.login if identity.owner else "viewer"
+            ),
             repositories=tuple(results),
         )
 

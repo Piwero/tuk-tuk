@@ -100,6 +100,31 @@ describe("Settings › GitHub", () => {
     expect(screen.getByLabelText("GitHub Token")).toHaveValue(pasted);
   });
 
+  it("adds a token whose owner GitHub can't tell yet, explaining why", async () => {
+    // An organisation's token before the organisation allows or approves
+    // fine-grained tokens reads nothing, so GitHub can't say whose it is
+    // (spec #576, ADR 0020); it must not pass for the User's own.
+    installFakeApi({
+      githubTokens: [fakeGitHubToken("octocat")],
+      githubTokenIdentities: { github_pat_pending: { owner_login: null } },
+    });
+    const user = await openGitHubSettings();
+
+    await user.type(await screen.findByLabelText("GitHub Token"), "github_pat_pending");
+    await user.click(screen.getByRole("button", { name: "Add token" }));
+
+    await waitFor(() =>
+      expect(listedTokens()).toEqual([
+        ["octocat", "Your account · No expiry"],
+        ["Owner not known yet", "Owner not known yet · No expiry"],
+      ]),
+    );
+    const list = screen.getByRole("list", { name: "GitHub Tokens" });
+    expect(within(list).getAllByRole("listitem")[1]).toHaveTextContent(
+      /organisation may need to allow or approve fine-grained tokens/,
+    );
+  });
+
   it("refuses a second token for an owner already covered", async () => {
     installFakeApi({
       githubTokens: [fakeGitHubToken("acme", { owner_kind: "organization" })],
@@ -122,6 +147,10 @@ describe("Settings › GitHub", () => {
 
     await user.click(
       await screen.findByRole("button", { name: "Remove GitHub Token for octocat" }),
+    );
+    // The confirmation states what goes with the token (design system).
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "Its Watched Repositories are deleted and dropped from every Repository View.",
     );
     await user.click(screen.getByRole("button", { name: "Remove token" }));
 
