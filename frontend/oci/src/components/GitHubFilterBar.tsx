@@ -32,10 +32,13 @@ function FilterSelect({
 /** The GitHub view's filter controls (#585). Controlled: the owner holds the
  * filters and decides whether they outlive the view. */
 export function GitHubFilterBar({
+  tab,
   items,
   filters,
   onChange,
 }: {
+  /** Which tab the controls narrow: only GitHub Issues have assignees. */
+  tab: "pull-requests" | "issues";
   /** The tab's unfiltered results: the choices come from them. */
   items: Filterable[];
   filters: GitHubFilters;
@@ -58,6 +61,33 @@ export function GitHubFilterBar({
         choices={choices.labels}
         onChange={(label) => onChange({ ...filters, label })}
       />
+      {tab === "issues" && (
+        <FilterSelect
+          label="Assignee"
+          anyLabel="Anyone"
+          value={filters.assignee}
+          choices={choices.assignees}
+          onChange={(assignee) => onChange({ ...filters, assignee })}
+        />
+      )}
+      {tab === "pull-requests" && (
+        <label className="github-filter-toggle">
+          <input
+            type="checkbox"
+            checked={filters.hideDrafts}
+            onChange={(event) => onChange({ ...filters, hideDrafts: event.target.checked })}
+          />
+          <span>Hide drafts</span>
+        </label>
+      )}
+      <label className="github-filter-toggle">
+        <input
+          type="checkbox"
+          checked={filters.hideBots}
+          onChange={(event) => onChange({ ...filters, hideBots: event.target.checked })}
+        />
+        <span>Hide bots</span>
+      </label>
     </div>
   );
 }

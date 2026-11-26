@@ -141,7 +141,12 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
             onOpenSettings={onOpenSettings}
             render={(read) => (
               <>
-                <GitHubFilterBar items={read.items} filters={filters} onChange={setFilters} />
+                <GitHubFilterBar
+                  tab="pull-requests"
+                  items={read.items}
+                  filters={filters}
+                  onChange={setFilters}
+                />
                 <PullRequestGroups items={applyGitHubFilters(read.items, filters)} />
               </>
             )}
@@ -153,7 +158,12 @@ export function GitHubView({ onOpenSettings }: { onOpenSettings: () => void }): 
             onOpenSettings={onOpenSettings}
             render={(read) => (
               <>
-                <GitHubFilterBar items={read.items} filters={filters} onChange={setFilters} />
+                <GitHubFilterBar
+                  tab="issues"
+                  items={read.items}
+                  filters={filters}
+                  onChange={setFilters}
+                />
                 <IssueList items={applyGitHubFilters(read.items, filters)} />
               </>
             )}

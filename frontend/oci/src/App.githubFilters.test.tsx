@@ -93,4 +93,71 @@ describe("GitHub view › filters", () => {
 
     expect(shownTitles()).toEqual(["Slow prompt"]);
   });
+
+  it("narrows GitHub Issues to one assignee, an option the Pull Requests tab lacks", async () => {
+    installFakeApi({
+      ...watchedDotfiles(),
+      githubPullRequests: [fakeGitHubPullRequest(9, "Parser")],
+      githubIssues: [
+        fakeGitHubIssue(3, "Slow prompt", { assignees: ["octocat", "monalisa"] }),
+        fakeGitHubIssue(2, "Crash", { assignees: ["monalisa"] }),
+        fakeGitHubIssue(1, "Docs", { assignees: [] }),
+      ],
+    });
+    const user = await openGitHub();
+    await screen.findByRole("link", { name: "Parser" });
+    expect(screen.queryByRole("combobox", { name: "Assignee" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Issues" }));
+    await screen.findByRole("link", { name: "Slow prompt" });
+    const assignee = screen.getByRole("combobox", { name: "Assignee" });
+    expect(optionsOf(assignee)).toEqual(["Anyone", "monalisa", "octocat"]);
+    await user.selectOptions(assignee, "octocat");
+
+    expect(shownTitles()).toEqual(["Slow prompt"]);
+  });
+
+  it("hides draft Pull Requests", async () => {
+    installFakeApi({
+      ...watchedDotfiles(),
+      githubPullRequests: [
+        fakeGitHubPullRequest(2, "Work in progress", { is_draft: true }),
+        fakeGitHubPullRequest(1, "Ready", { is_draft: false }),
+      ],
+    });
+    const user = await openGitHub();
+    await screen.findByRole("link", { name: "Ready" });
+
+    await user.click(screen.getByRole("checkbox", { name: "Hide drafts" }));
+
+    expect(shownTitles()).toEqual(["Ready"]);
+  });
+
+  it("hides items whose author is a bot, on both tabs", async () => {
+    installFakeApi({
+      ...watchedDotfiles(),
+      githubPullRequests: [
+        fakeGitHubPullRequest(2, "Bump lodash", {
+          author: "dependabot[bot]",
+          author_is_bot: true,
+        }),
+        fakeGitHubPullRequest(1, "Human fix", { author: "octocat" }),
+      ],
+      githubIssues: [
+        fakeGitHubIssue(4, "Dependency dashboard", { author: "renovate", author_is_bot: true }),
+        fakeGitHubIssue(3, "Human report", { author: "monalisa" }),
+      ],
+    });
+    const user = await openGitHub();
+    await screen.findByRole("link", { name: "Human fix" });
+
+    await user.click(screen.getByRole("checkbox", { name: "Hide bots" }));
+    expect(shownTitles()).toEqual(["Human fix"]);
+
+    await user.click(screen.getByRole("tab", { name: "Issues" }));
+    await screen.findByRole("link", { name: "Human report" });
+    expect(screen.getByRole("checkbox", { name: "Hide bots" })).toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: "Hide drafts" })).not.toBeInTheDocument();
+    expect(shownTitles()).toEqual(["Human report"]);
+  });
 });
