@@ -109,6 +109,25 @@ saying that nothing there matches.
 Your choices are not saved. Leave the GitHub view and come back, and it shows
 everything again.
 
+## Refresh and how fresh the view is
+
+The GitHub view shows how long ago its data was fetched from GitHub, for
+example **fetched 42 s ago**.
+
+- **Reopening is instant.** Tuk Tuk keeps what it fetched for about a
+  minute, so opening the view again, or switching tabs, within that minute
+  doesn't wait for GitHub.
+- **Refresh** fetches from GitHub straight away. Use it to see a pull
+  request or GitHub issue you just opened.
+- **When GitHub has a temporary problem** (a rate limit, an outage or a
+  network blip), the view keeps showing what it last fetched, if that was
+  less than 10 minutes ago. A notice says how old it is. Choose **Retry** to
+  try GitHub again. Without anything that recent, that token's repositories
+  show a notice with **Retry** instead.
+
+This never marks a token as needing reconnection. Only GitHub rejecting the
+token does.
+
 ## Keep your tokens working
 
 Fine-grained tokens expire, and you can revoke them on GitHub at any time.
@@ -124,7 +143,7 @@ Tuk Tuk tells you when a token needs attention.
   Settings marks the token as needing reconnection.
 - **GitHub unreachable:** if GitHub can't be reached for one token, the
   GitHub view says so for that token and shows the rest. This never marks
-  the token as needing reconnection. Try again in a moment.
+  the token as needing reconnection. Choose **Retry** to try again.
 
 To reconnect a token:
 
@@ -142,8 +161,10 @@ before the old one expires.
 
 ## Good to know
 
-- **The GitHub view reads GitHub each time you open it.** Nothing about your
-  pull requests or GitHub issues is stored in Tuk Tuk.
+- **The GitHub view reads GitHub when you open it,** at most once a minute
+  unless you choose **Refresh**. Nothing about your pull requests or GitHub
+  issues is stored in Tuk Tuk: what it keeps for that minute lives only in
+  memory.
 - **"Mine" means you wrote it**, as the GitHub account that created the
   token. This also applies to an organisation's token.
 - **A review requested from one of your teams** doesn't count as

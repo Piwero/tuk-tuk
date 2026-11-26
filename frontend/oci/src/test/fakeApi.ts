@@ -5,6 +5,7 @@ import {
   type AssistCaptureDraft,
   type DatabaseStatus,
   type DatabaseTestConnectionResult,
+  type GitHubTokenReadStatus,
   type GoalStatus,
   type HabitType,
   type KeyResultSource,
@@ -594,6 +595,13 @@ export interface FakeApiState {
   /** How many more open GitHub Issues each repository (by `owner/name`)
    * has on GitHub beyond those returned. */
   githubIssueOverflow: Record<string, number>;
+  /** When the GitHub view's reads say their data was fetched from GitHub
+   * (#583); null for the moment of each read. */
+  githubFetchedAt: string | null;
+  /** Owner logins whose token GitHub couldn't be reached through, so the
+   * GitHub view's reads serve its last result as stale (#583): its items
+   * still render, fetched at `githubFetchedAt`. */
+  githubStaleOwners: string[];
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
@@ -1360,6 +1368,8 @@ export function installFakeApi({
   githubPullRequestOverflow = {},
   githubIssues = [],
   githubIssueOverflow = {},
+  githubFetchedAt = null,
+  githubStaleOwners = [],
   events = [],
   eventFailures = [],
   standupEntries = [],
@@ -1447,6 +1457,8 @@ export function installFakeApi({
   githubPullRequestOverflow?: Record<string, number>;
   githubIssues?: FakeGitHubIssue[];
   githubIssueOverflow?: Record<string, number>;
+  githubFetchedAt?: string | null;
+  githubStaleOwners?: string[];
   /** Google Calendar Events (issue #107) the calendar's own read-only
    * endpoint answers with — never filtered by calendar `enabled` here,
    * since that filtering is the backend's job (exercised in the backend
@@ -1600,6 +1612,8 @@ export function installFakeApi({
       labels: issue.labels.map((label) => ({ ...label })),
     })),
     githubIssueOverflow: { ...githubIssueOverflow },
+    githubFetchedAt,
+    githubStaleOwners: [...githubStaleOwners],
     events: events.map((event) => ({ ...event })),
     eventFailures: eventFailures.map((failure) => ({ ...failure })),
     standupEntries: standupEntries.map((entry) => ({
@@ -1955,6 +1969,14 @@ export function installFakeApi({
           .filter((w) => failing(w.github_token_id) === undefined)
           .map((w) => [w.full_name, w]),
       );
+      const readTokens = [...state.githubTokens]
+        .sort((a, b) => a.id - b.id)
+        .filter((token) => watched.some((w) => w.github_token_id === token.id));
+      // A token GitHub couldn't be reached through still shows its last
+      // result when it has a recent one: stale (#583).
+      const tokenStatus = (token: FakeGitHubToken): GitHubTokenReadStatus["status"] =>
+        state.githubRepositoryFailures[token.owner_login] ??
+        (state.githubStaleOwners.includes(token.owner_login) ? "stale" : "ok");
       return json({
         items: items
           .filter((item) => byName.has(item.repository))
@@ -1970,18 +1992,15 @@ export function installFakeApi({
             overflow_url: `https://github.com/${w.full_name}/${listPath}`,
           };
         }),
-        tokens: [...state.githubTokens]
-          .sort((a, b) => a.id - b.id)
-          .filter((token) => watched.some((w) => w.github_token_id === token.id))
-          .map((token) => ({
-            id: token.id,
-            owner_login: token.owner_login,
-            status: state.githubRepositoryFailures[token.owner_login] ?? "ok",
-            expires_at: token.expires_at,
-            expires_soon: token.expires_soon,
-          })),
-        fetched_at: new Date().toISOString(),
-        stale: false,
+        tokens: readTokens.map((token) => ({
+          id: token.id,
+          owner_login: token.owner_login,
+          status: tokenStatus(token),
+          expires_at: token.expires_at,
+          expires_soon: token.expires_soon,
+        })),
+        fetched_at: state.githubFetchedAt ?? new Date().toISOString(),
+        stale: readTokens.some((token) => tokenStatus(token) === "stale"),
       });
     };
     if (method === "GET" && url.pathname === "/api/v1/github/pull-requests") {

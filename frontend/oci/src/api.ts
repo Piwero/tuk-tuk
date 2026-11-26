@@ -874,11 +874,13 @@ export interface GitHubRepositoryRead {
   overflow_url: string;
 }
 
-/** How one GitHub Token fared in a GitHub view read. */
+/** How one GitHub Token fared in a GitHub view read. `stale`: GitHub
+ * couldn't be reached, so its items are its last result from under 10
+ * minutes ago (#583). */
 export interface GitHubTokenReadStatus {
   id: number;
   owner_login: string;
-  status: "ok" | "unavailable" | "needs_reconnect";
+  status: "ok" | "stale" | "unavailable" | "needs_reconnect";
   expires_at: string | null;
   /** Expires within 7 days, or already has (#584). */
   expires_soon: boolean;
@@ -891,7 +893,9 @@ export interface GitHubViewRead<Item> {
   items: Item[];
   repositories: GitHubRepositoryRead[];
   tokens: GitHubTokenReadStatus[];
+  /** When the oldest items shown were fetched from GitHub (#583). */
   fetched_at: string;
+  /** Some token's items are a stale result: GitHub couldn't be reached. */
   stale: boolean;
 }
 
@@ -899,9 +903,21 @@ export interface GitHubViewRead<Item> {
  * first within each group. */
 export type GitHubPullRequestsRead = GitHubViewRead<GitHubPullRequest>;
 
+/** How a GitHub view read treats the backend's one-minute cache (#583):
+ * `refresh` reads from GitHub now, bypassing and replacing it. */
+export interface GitHubReadOptions {
+  refresh?: boolean;
+}
+
+function githubReadQuery({ refresh = false }: GitHubReadOptions): string {
+  return refresh ? "?refresh=true" : "";
+}
+
 /** The open Pull Requests of every Watched Repository. */
-export function fetchGitHubPullRequests(): Promise<GitHubPullRequestsRead> {
-  return request("/api/v1/github/pull-requests");
+export function fetchGitHubPullRequests(
+  options: GitHubReadOptions = {},
+): Promise<GitHubPullRequestsRead> {
+  return request(`/api/v1/github/pull-requests${githubReadQuery(options)}`);
 }
 
 /** One open GitHub Issue in the GitHub view (#582) — never a Pull
@@ -928,8 +944,8 @@ export interface GitHubIssue {
 export type GitHubIssuesRead = GitHubViewRead<GitHubIssue>;
 
 /** The open GitHub Issues of every Watched Repository. */
-export function fetchGitHubIssues(): Promise<GitHubIssuesRead> {
-  return request("/api/v1/github/issues");
+export function fetchGitHubIssues(options: GitHubReadOptions = {}): Promise<GitHubIssuesRead> {
+  return request(`/api/v1/github/issues${githubReadQuery(options)}`);
 }
 
 export interface GoogleCalendar {
