@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.8.0](https://github.com/Piwero/tuk-tuk/compare/v3.7.0...v3.8.0) - 2026-11-26
+
+### Features
+
+- **backend:** Invite-only Google sign-in with optional Calendar onboarding (#586) ([c684c96](https://github.com/Piwero/tuk-tuk/commit/c684c9686b03901570ea722fc5d5235a309f6434))
+- **frontend:** Google sign-in, invitation acceptance and Admin invitations (#586) ([ec39f9e](https://github.com/Piwero/tuk-tuk/commit/ec39f9e5a1ee6f640055e8751ee2f47ffb8aec59))
+
 ## [3.7.0](https://github.com/Piwero/tuk-tuk/compare/v3.6.0...v3.7.0) - 2026-11-26
 
 ### Features
