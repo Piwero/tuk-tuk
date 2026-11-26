@@ -3,9 +3,9 @@
 The GitHub counterpart of app.calendar_source: injected through the
 application factory (see app.main.create_app), with the real adapter
 (app.github_adapter) as the default, so every backend test can run against
-a fake and never touch the network. Issue #578 needs only *identify token*;
-later tickets add the repository listing and the open Pull Request and
-GitHub Issue reads.
+a fake and never touch the network. Issue #578 added *identify token* and
+issue #581 *list accessible repositories*; later tickets add the open Pull
+Request and GitHub Issue reads.
 """
 
 from dataclasses import dataclass
@@ -31,6 +31,17 @@ class GitHubTokenIdentity:
     expires_at: datetime | None
 
 
+@dataclass(frozen=True)
+class GitHubRepository:
+    """A repository a GitHub Token can read. `github_id` is GitHub's own,
+    stable repository id; `full_name` (`owner/name`) changes on a rename
+    or transfer, so it is cosmetic."""
+
+    github_id: int
+    full_name: str
+    private: bool
+
+
 class GitHubSourceError(Exception):
     """Base for any failure talking to GitHub. Never raised directly —
     callers catch one of the two subclasses below, which is deliberately
@@ -52,4 +63,9 @@ class GitHubSource(Protocol):
     async def identify_token(self, token: str) -> GitHubTokenIdentity:
         """Ask GitHub who `token` belongs to, what kind of token it is and
         when it expires."""
+        ...
+
+    async def list_accessible_repositories(self, token: str) -> list[GitHubRepository]:
+        """Every repository `token` can read, for the Watched Repositories
+        picker."""
         ...

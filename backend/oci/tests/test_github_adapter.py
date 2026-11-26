@@ -124,3 +124,49 @@ class TestIdentifyToken:
 
         with pytest.raises(TransientGitHubSourceError):
             await adapter(handle).identify_token(TOKEN)
+
+
+class TestListAccessibleRepositories:
+    async def test_every_page_of_repositories_github_lists_is_read(self) -> None:
+        next_page = "https://api.github.com/user/repos?per_page=100&page=2"
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            assert request.headers["Authorization"] == f"Bearer {TOKEN}"
+            assert request.url.path == "/user/repos"
+            if request.url.params.get("page") == "2":
+                return httpx.Response(
+                    200, json=[{**repo("acme", "Organization", "web"), "id": 2, "private": False}]
+                )
+            return httpx.Response(
+                200,
+                json=[repo("acme", "Organization", "api")],
+                headers={"Link": f'<{next_page}>; rel="next", <{next_page}>; rel="last"'},
+            )
+
+        repositories = await adapter(handle).list_accessible_repositories(TOKEN)
+
+        assert [(r.github_id, r.full_name, r.private) for r in repositories] == [
+            (1, "acme/api", True),
+            (2, "acme/web", False),
+        ]
+
+    async def test_bad_credentials_are_terminal(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"message": "Bad credentials"})
+
+        with pytest.raises(TerminalGitHubSourceError):
+            await adapter(handle).list_accessible_repositories(TOKEN)
+
+    async def test_a_rate_limit_is_transient(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(403, json={}, headers={"x-ratelimit-remaining": "0"})
+
+        with pytest.raises(TransientGitHubSourceError):
+            await adapter(handle).list_accessible_repositories(TOKEN)
+
+    async def test_a_network_failure_is_transient(self) -> None:
+        def handle(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("boom", request=request)
+
+        with pytest.raises(TransientGitHubSourceError):
+            await adapter(handle).list_accessible_repositories(TOKEN)
