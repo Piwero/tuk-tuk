@@ -6,12 +6,10 @@ import {
   updateQuietHoursSettings,
   type QuietHoursSettings as QuietHoursBand,
 } from "../api";
+import { clockLabels } from "../dates";
 
 /** Every quarter hour of the day, "00:00" to "23:45". */
-const QUARTER_HOUR_LABELS: string[] = Array.from({ length: 96 }, (_, index) => {
-  const minutes = index * 15;
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-});
+const QUARTER_HOUR_LABELS: string[] = clockLabels(15);
 
 /** The saved labels plus the quarter hours, so a band saved off the grid
  * (through the API) still shows as it is. */
