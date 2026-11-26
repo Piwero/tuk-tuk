@@ -112,7 +112,9 @@ describe("GitHub view › Issues", () => {
           author: "hubot",
           assignees: ["octocat", "monalisa"],
           labels: [{ name: "bug", color: "d73a4a" }],
-          updated_at: hoursAgo(3),
+          // Its age is the time since it was opened (spec #576).
+          created_at: hoursAgo(3),
+          updated_at: hoursAgo(1),
           comment_count: 4,
         }),
       ],
@@ -128,6 +130,7 @@ describe("GitHub view › Issues", () => {
     expect(row.getByText("Assigned to octocat, monalisa")).toBeInTheDocument();
     expect(row.getByText("bug")).toBeInTheDocument();
     expect(row.getByText("3 hours ago")).toBeInTheDocument();
+    expect(row.queryByText("1 hour ago")).not.toBeInTheDocument();
     expect(row.getByText("4 comments")).toBeInTheDocument();
   });
 

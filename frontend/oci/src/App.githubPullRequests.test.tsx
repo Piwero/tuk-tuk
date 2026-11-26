@@ -100,7 +100,9 @@ describe("GitHub view › Pull Requests", () => {
       githubPullRequests: [
         fakeGitHubPullRequest(7, "Add zsh config", {
           author: "hubot",
-          updated_at: hoursAgo(3),
+          // Its age is the time since it was opened (spec #576).
+          created_at: hoursAgo(3),
+          updated_at: hoursAgo(1),
           labels: [{ name: "enhancement", color: "a2eeef" }],
           is_draft: true,
           review_decision: "changes_requested",
@@ -119,6 +121,7 @@ describe("GitHub view › Pull Requests", () => {
     expect(details.getByText("octocat/dotfiles#7")).toBeInTheDocument();
     expect(details.getByText("hubot")).toBeInTheDocument();
     expect(details.getByText("3 hours ago")).toBeInTheDocument();
+    expect(details.queryByText("1 hour ago")).not.toBeInTheDocument();
     expect(details.getByText("enhancement")).toBeInTheDocument();
     expect(details.getByText("Draft")).toBeInTheDocument();
     expect(details.getByText("Changes requested")).toBeInTheDocument();

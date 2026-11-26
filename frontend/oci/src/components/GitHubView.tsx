@@ -74,7 +74,7 @@ function PullRequestRow({ pr }: { pr: GitHubPullRequest }): React.JSX.Element {
       <div className="github-row-meta">
         <span>{`${pr.repository}#${pr.number}`}</span>
         {pr.author !== null && <span>{pr.author}</span>}
-        <time dateTime={pr.updated_at}>{formatTimeAgo(new Date(pr.updated_at))}</time>
+        <time dateTime={pr.created_at}>{formatTimeAgo(new Date(pr.created_at))}</time>
         <span className="github-review" data-decision={pr.review_decision}>
           {REVIEW_LABELS[pr.review_decision]}
         </span>
@@ -101,7 +101,7 @@ function IssueRow({ issue }: { issue: GitHubIssue }): React.JSX.Element {
         <span>{`${issue.repository}#${issue.number}`}</span>
         {issue.author !== null && <span>{issue.author}</span>}
         {issue.assignees.length > 0 && <span>{`Assigned to ${issue.assignees.join(", ")}`}</span>}
-        <time dateTime={issue.updated_at}>{formatTimeAgo(new Date(issue.updated_at))}</time>
+        <time dateTime={issue.created_at}>{formatTimeAgo(new Date(issue.created_at))}</time>
         <span>{issue.comment_count === 1 ? "1 comment" : `${issue.comment_count} comments`}</span>
         <Labels labels={issue.labels} />
       </div>
