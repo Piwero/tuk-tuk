@@ -207,7 +207,9 @@ async def _read_each_token[Result](
         # Only live reads may change `connection_state`, and nothing
         # cached is shown for a token GitHub has rejected (ADR 0007).
         connected = token.connection_state == "connected"
-        shown = cache.fresh(owner_id, token.id) if connected and not refresh else None
+        by_github_id = {w.github_repo_id: w for w in watched}
+        repositories = frozenset(by_github_id)
+        shown = cache.fresh(owner_id, token.id, repositories) if connected and not refresh else None
         if shown is None:
             try:
                 result = await source_read(
@@ -233,9 +235,11 @@ async def _read_each_token[Result](
                 await session.commit()
                 cache.forget(owner_id, token.id)
             else:
-                shown = cache.store(owner_id, token.id, result)
+                shown = cache.store(owner_id, token.id, repositories, result)
         if shown is not None:
-            reads.results.append(({w.github_repo_id: w for w in watched}, shown.result))
+            # A repository since unwatched is in a cached result but not
+            # in `by_github_id`, so it is left out.
+            reads.results.append((by_github_id, shown.result))
             reads.fetched_at = min(reads.fetched_at, shown.fetched_at)
             reads.stale = reads.stale or status == "stale"
         reads.statuses.append(TokenReadStatusRead.of(token, status, now))

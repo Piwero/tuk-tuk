@@ -26,9 +26,11 @@ _CacheKey = tuple[int, int]
 
 @dataclass(frozen=True)
 class CachedRead[Result]:
-    """One token's successful read and when it was fetched from GitHub."""
+    """One token's successful read, which GitHub repositories (by id) it
+    covers, and when it was fetched from GitHub."""
 
     result: Result
+    repositories: frozenset[int]
     fetched_at: datetime
 
 
@@ -37,9 +39,16 @@ class GitHubReadCache[Result]:
         self._clock = clock
         self._entries: dict[_CacheKey, CachedRead[Result]] = {}
 
-    def fresh(self, owner_id: int, token_id: int) -> CachedRead[Result] | None:
-        """The token's last read if it was fetched under 60 seconds ago."""
-        return self._younger_than(owner_id, token_id, FRESH_FOR)
+    def fresh(
+        self, owner_id: int, token_id: int, repositories: frozenset[int]
+    ) -> CachedRead[Result] | None:
+        """The token's last read if it was fetched under 60 seconds ago and
+        covers every one of `repositories`, so a repository watched since
+        is read from GitHub rather than missing."""
+        entry = self._younger_than(owner_id, token_id, FRESH_FOR)
+        if entry is None or not repositories <= entry.repositories:
+            return None
+        return entry
 
     def stale(self, owner_id: int, token_id: int) -> CachedRead[Result] | None:
         """The token's last read if it was fetched under 10 minutes ago:
@@ -54,8 +63,10 @@ class GitHubReadCache[Result]:
             return None
         return entry
 
-    def store(self, owner_id: int, token_id: int, result: Result) -> CachedRead[Result]:
-        entry = CachedRead(result=result, fetched_at=self._clock())
+    def store(
+        self, owner_id: int, token_id: int, repositories: frozenset[int], result: Result
+    ) -> CachedRead[Result]:
+        entry = CachedRead(result=result, repositories=repositories, fetched_at=self._clock())
         self._entries[(owner_id, token_id)] = entry
         return entry
 

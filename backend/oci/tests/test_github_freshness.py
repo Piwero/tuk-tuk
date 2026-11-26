@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from app.github_source import TerminalGitHubSourceError, TransientGitHubSourceError
 from tests.conftest import FakeClock, FakeGitHubSource, fake_issue, fake_pull_request
-from tests.test_github_pull_requests import watch_through
+from tests.test_github_pull_requests import WATCHED, watch_through
 
 PULL_REQUESTS = "/api/v1/github/pull-requests"
 ISSUES = "/api/v1/github/issues"
@@ -227,3 +227,51 @@ def test_a_token_rejected_in_settings_is_read_live_rather_than_from_the_cache(
 
     assert titles(body) == []
     assert token_statuses(body) == [("octocat", "needs_reconnect")]
+
+
+def test_a_repository_watched_within_the_minute_shows_on_the_next_read(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    personal = watch_through(
+        client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")]
+    )
+    fake_github_source.register_pull_requests(
+        PERSONAL, "octocat/dotfiles", [fake_pull_request(1, "In dotfiles")]
+    )
+    fake_github_source.register_pull_requests(
+        PERSONAL,
+        "octocat/website",
+        [fake_pull_request(2, "In website", repository="octocat/website")],
+    )
+    read(client)
+    fake_github_source.register_repositories(
+        PERSONAL, [(1, "octocat/dotfiles"), (2, "octocat/website")]
+    )
+    client.post(WATCHED, json={"github_token_id": personal, "github_repo_id": 2})
+
+    assert sorted(titles(read(client))) == ["In dotfiles", "In website"]
+
+
+def test_a_repository_no_longer_watched_is_gone_from_the_next_read(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    watch_through(
+        client,
+        fake_github_source,
+        PERSONAL,
+        "octocat",
+        [(1, "octocat/dotfiles"), (2, "octocat/website")],
+    )
+    fake_github_source.register_pull_requests(
+        PERSONAL, "octocat/dotfiles", [fake_pull_request(1, "In dotfiles")]
+    )
+    fake_github_source.register_pull_requests(
+        PERSONAL,
+        "octocat/website",
+        [fake_pull_request(2, "In website", repository="octocat/website")],
+    )
+    read(client)
+    [website] = [w for w in client.get(WATCHED).json() if w["github_repo_id"] == 2]
+    client.delete(f"{WATCHED}/{website['id']}")
+
+    assert titles(read(client)) == ["In dotfiles"]
