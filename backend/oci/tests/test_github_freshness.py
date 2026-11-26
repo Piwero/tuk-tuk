@@ -14,13 +14,22 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from app.github_source import TerminalGitHubSourceError, TransientGitHubSourceError
-from tests.conftest import FakeClock, FakeGitHubSource, fake_issue, fake_pull_request
+from tests.conftest import (
+    TEST_PASSWORD,
+    FakeClock,
+    FakeGitHubSource,
+    create_user_row,
+    fake_issue,
+    fake_pull_request,
+    log_in,
+)
 from tests.test_github_pull_requests import WATCHED, watch_through
 
 PULL_REQUESTS = "/api/v1/github/pull-requests"
 ISSUES = "/api/v1/github/issues"
 PERSONAL = "github_pat_11AAAAAAA0personal"
 WORK = "github_pat_11AAAAAAA0work"
+BEAS = "github_pat_11AAAAAAA0bea"
 
 
 def read(client: TestClient, path: str = PULL_REQUESTS, query: str = "") -> dict[str, Any]:
@@ -275,3 +284,49 @@ def test_a_repository_no_longer_watched_is_gone_from_the_next_read(
     client.delete(f"{WATCHED}/{website['id']}")
 
     assert titles(read(client)) == ["In dotfiles"]
+
+
+def test_one_token_stale_beside_another_read_live_dates_the_read_by_the_stale_one(
+    client: TestClient, fake_github_source: FakeGitHubSource, fake_clock: FakeClock
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    watch_through(client, fake_github_source, WORK, "acme", [(2, "acme/api")])
+    fake_github_source.register_issues(PERSONAL, "octocat/dotfiles", [fake_issue(1, "Personal")])
+    fake_github_source.register_issues(
+        WORK, "acme/api", [fake_issue(2, "Work", repository="acme/api")]
+    )
+    fetched = fake_clock.now
+    read(client, ISSUES)
+
+    fake_clock.advance(timedelta(minutes=5))
+    fake_github_source.register_issues_error(PERSONAL, TransientGitHubSourceError("5xx"))
+    body = read(client, ISSUES, "?refresh=true")
+
+    assert sorted(titles(body)) == ["Personal", "Work"]
+    assert body["stale"] is True
+    assert fetched_at(body) == fetched
+    assert token_statuses(body) == [("octocat", "stale"), ("acme", "ok")]
+
+
+def test_one_users_cached_results_are_never_served_to_another(
+    client: TestClient, fake_github_source: FakeGitHubSource
+) -> None:
+    watch_through(client, fake_github_source, PERSONAL, "octocat", [(1, "octocat/dotfiles")])
+    fake_github_source.register_pull_requests(
+        PERSONAL, "octocat/dotfiles", [fake_pull_request(1, "Admin's view")]
+    )
+    assert titles(read(client)) == ["Admin's view"]
+
+    # Bea watches the same repository through her own token for the same
+    # owner, which GitHub cannot reach right now: neither the Admin's fresh
+    # result nor their stale one stands in for hers.
+    create_user_row(client, "bea", "bea@example.com")
+    client.cookies.clear()
+    log_in(client, "bea", TEST_PASSWORD)
+    watch_through(client, fake_github_source, BEAS, "octocat", [(1, "octocat/dotfiles")])
+    fake_github_source.register_pull_requests_error(BEAS, TransientGitHubSourceError("5xx"))
+    body = read(client)
+
+    assert titles(body) == []
+    assert body["stale"] is False
+    assert token_statuses(body) == [("octocat", "unavailable")]
