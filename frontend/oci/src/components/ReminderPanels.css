@@ -1,0 +1,28 @@
+/* One fixed stack, bottom right, for the Reminder panels that float over
+ the page: Quiet hours deferred (#567) above the delivered-reminder cards
+ (#566), so neither covers the other. Missed reminders (#565) sit in the
+ page flow under the header and are not part of it. */
+@layer components {
+  .reminder-panels {
+    position: fixed;
+    right: var(--space-6);
+    bottom: var(--space-6);
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: min(var(--detail-width), calc(100vw - 2 * var(--space-4)));
+    max-height: calc(100vh - 2 * var(--space-6));
+    overflow-y: auto;
+  }
+
+  @media (max-width: 720px) {
+    .reminder-panels {
+      right: var(--space-4);
+      left: var(--space-4);
+      bottom: calc(var(--mobile-tab-bar-height) + var(--space-4));
+      width: auto;
+      max-height: calc(100vh - var(--mobile-tab-bar-height) - 2 * var(--space-4));
+    }
+  }
+}

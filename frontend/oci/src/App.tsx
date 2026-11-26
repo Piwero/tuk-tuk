@@ -14,6 +14,7 @@ import {
   fetchSectionSettings,
   type SectionSettings,
   fetchTags,
+  fetchTask,
   fetchTasks,
   fetchTasksByTag,
   deleteTask,
@@ -42,6 +43,8 @@ import {
   rescheduledToDay,
 } from "./dates";
 import { FocusRunProvider, useStartPomo } from "./focusRunContext";
+import { MissedReminders } from "./components/MissedReminders";
+import { DueReminderNotifier, ReminderDeliveryProvider } from "./reminderDelivery";
 import { groupTodayTasks, type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
@@ -325,6 +328,9 @@ export function App({
   // Bumped after "Convert to task" (issue #111) so the Calendar force-reloads:
   // the converted Event disappears and the new Task appears immediately.
   const [calendarRefresh, setCalendarRefresh] = useState(0);
+  // Bumped when the detail panel changes a Task while the Calendar shows, so
+  // a plan edited with its date/time controls moves on the grid (#562).
+  const [calendarTaskChange, setCalendarTaskChange] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   // Whether the current Task view's Tasks have loaded (#441), keyed by what
   // was asked for, so a view that hasn't loaded yet is never shown as empty
@@ -1044,6 +1050,9 @@ export function App({
   /** Apply a server response, evicting the task if it left the current view. */
   function applyTaskChange(updated: Task): void {
     setCalendarTask((current) => (current?.id === updated.id ? updated : current));
+    if (view?.kind === "calendar") {
+      setCalendarTaskChange((current) => current + 1);
+    }
     reconcileOpenTask(updated);
     if (isComputedView) {
       changeTasksAndRecompute((current) =>
@@ -1135,6 +1144,13 @@ export function App({
     }
     setSelectedTaskId(task.id);
     setCalendarTask(task);
+  }
+
+  /** A delivered Reminder was clicked (issue #561): open its Task, read
+   * fresh, since it may not be loaded in the view on screen. A Task gone
+   * meanwhile opens nothing. */
+  function openRemindedTask(taskId: number): void {
+    fetchTask(taskId).then(openTaskDetail, () => {});
   }
 
   function announceCreated(created: Task): void {
@@ -1376,7 +1392,7 @@ export function App({
       refresh={refreshAfterVoiceWrite}
       available={voiceStatus}
     >
-      <FocusRunProvider>
+      <SessionProviders>
         <ShortcutsProvider>
           <ShellShortcuts
             onQuickAdd={() => setQuickAddOpen(true)}
@@ -1610,6 +1626,7 @@ export function App({
                   </div>
                   {/* Full-width row under the header: only .view-controls takes the
                   right-hand column of .main-chrome on a phone. */}
+                  <MissedReminders onOpenTask={openRemindedTask} />
                   {showHabitStrip && <HabitStrip habits={todayHabits} />}
                   {smartView === "today" && !completedMode && (
                     <NowPanel
@@ -1736,6 +1753,7 @@ export function App({
                     }}
                     onSelectEvent={setSelectedEvent}
                     refreshToken={calendarRefresh}
+                    taskChangeToken={calendarTaskChange}
                     lists={lists}
                     tags={tags}
                     onTagCreated={(tag) => setTags((current) => [...current, tag])}
@@ -1972,8 +1990,21 @@ export function App({
             </div>
           </div>
         </ShortcutsProvider>
-      </FocusRunProvider>
+        {/* After the shell (#569): its panels float bottom right, so they
+        come last in tab order instead of before the sidebar. */}
+        <DueReminderNotifier onOpenTask={openRemindedTask} />
+      </SessionProviders>
     </VoiceProvider>
+  );
+}
+
+/** Signed-in, app-wide state shared outside any one screen: the live focus
+ * run, and whether Reminders notify on this device (issue #557). */
+function SessionProviders({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <FocusRunProvider>
+      <ReminderDeliveryProvider>{children}</ReminderDeliveryProvider>
+    </FocusRunProvider>
   );
 }
 

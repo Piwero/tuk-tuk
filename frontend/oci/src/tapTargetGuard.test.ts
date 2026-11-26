@@ -844,3 +844,67 @@ describe("Now panel is operable on touch (issue #555)", () => {
     expect(declaredValue(".now-shortlist-actions", "flex-wrap")).toBe("wrap");
   });
 });
+
+/** ADHD Phase 3 surfaces (#557–#568), checked by #569. Fixed list so deleting
+ * the sizing fails the guard. The Calendar's resize handles are left out on
+ * purpose: they sit on a block edge and a 44px handle would cover a short
+ * block; the touch path is the block's Task detail form, sized here. */
+const PHASE3_CONTROLS = [
+  ".planned-work-form input",
+  ".settings-field select",
+  ".missed-reminder-task",
+  ".missed-reminder-dismiss",
+  ".quiet-hours-deferred-task",
+  ".delivered-reminder-dismiss",
+  ".habit-pause-actions button",
+  ".habit-pause-form input",
+];
+
+describe("ADHD Phase 3 controls on a phone (issue #569)", () => {
+  it("meets the 44px floor for plan, reminder, quiet hours and pause controls", () => {
+    const offenders = findOffenders(PHASE3_CONTROLS);
+    expect(offenders, offenderMessage("Phase 3 surfaces", offenders)).toEqual([]);
+  });
+
+  it("grows the settings checkboxes' hit area through their label", () => {
+    const padding = declaredValue(
+      '.settings-field label:has(> input[type="checkbox"])',
+      "padding-block",
+    );
+    expect(padding, "no padding declared on the checkbox label").not.toBeNull();
+    expect(18 + (resolvePx(padding as string) ?? 0) * 2).toBeGreaterThanOrEqual(TAP_TARGET);
+  });
+
+  it("makes Save plan and Remove plan full width", () => {
+    expect(declaredValue(".planned-work-actions button", "flex")).toBe("1 1 100%");
+    expect(declaredValue(".planned-work-actions button", "flex", DESKTOP)).toBeNull();
+  });
+
+  it("stacks the plan's fields inside the 16px gutters", () => {
+    expect(declaredValue(".planned-work-fields label", "flex")).toBe("1 1 100%");
+    // The Popover sits 4px from the screen edge with 4px of its own padding.
+    expect(declaredValue(".planned-work-form", "padding")).toBe("var(--space-2)");
+  });
+
+  it("fits pause, skip and weekly-target rows to the visible width of the Habits grid", () => {
+    // The grid scrolls sideways on a phone; its detail rows span all eight
+    // columns, so without this their buttons sat beyond the visible edge.
+    expect(declaredValue(".habits-week-scroll", "container-type", DESKTOP)).toBe("inline-size");
+    expect(declaredValue(".habit-detail-cell > *", "position", DESKTOP)).toBe("sticky");
+    expect(declaredValue(".habit-detail-cell > *", "max-width", DESKTOP)).toMatch(/cqi/);
+  });
+});
+
+describe("Calendar resize handles show keyboard focus (issue #569)", () => {
+  it("draws the 3px focus ring, not only the faint grip", () => {
+    expect(declaredValue(".resize-handle:focus-visible", "box-shadow", DESKTOP)).toBe(
+      "var(--focus-ring)",
+    );
+  });
+
+  it("gives the planned block's title button a focus ring too", () => {
+    expect(declaredValue(".block-title-button:focus-visible", "box-shadow", DESKTOP)).toBe(
+      "var(--focus-ring)",
+    );
+  });
+});

@@ -397,6 +397,15 @@ export function shortDayLabel(dayIso: string): string {
   return formatDate(fromDayIso(dayIso), "short");
 }
 
+/** "Jul 1 and Jul 2", "Jul 1, Jul 2 and Jul 5": the dates a conflict names. */
+export function listDays(days: string[]): string {
+  const labels = days.map(shortDayLabel);
+  if (labels.length <= 1) {
+    return labels.join("");
+  }
+  return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1) ?? ""}`;
+}
+
 /** A weekday-led record label for history rows: "Monday: 10/08/26". */
 export function weekdayRecordLabel(dayIso: string): string {
   const date = fromDayIso(dayIso);
@@ -514,10 +523,26 @@ export function durationMinutes(task: Pick<Task, "start_date" | "due_date">): nu
 
 export function formatDuration(task: Pick<Task, "start_date" | "due_date">): string | null {
   const minutes = durationMinutes(task);
-  if (minutes === null) return null;
-  return minutes % 60 === 0
-    ? `${minutes / 60}h`
-    : minutes < 60
-      ? `${minutes}m`
-      : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return minutes === null ? null : formatMinutes(minutes);
+}
+
+/** "HH:MM" labels every `stepMinutes` from "00:00": up to the last step
+ * before midnight, or with `throughMidnight` up to "24:00", the end of the
+ * day. The time selects of the band settings (Active hours, Planning
+ * window, Quiet hours) all read from here. */
+export function clockLabels(stepMinutes: number, { throughMidnight = false } = {}): string[] {
+  const count = (24 * 60) / stepMinutes + (throughMidnight ? 1 : 0);
+  return Array.from({ length: count }, (_, index) => {
+    const minutes = index * stepMinutes;
+    return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  });
+}
+
+/** A length of time in whole minutes, the one way the app writes one:
+ * "8h", "1h 30m", "45m" (and "0m"). */
+export function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest}m`;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }

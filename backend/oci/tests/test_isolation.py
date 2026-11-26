@@ -37,6 +37,7 @@ from fastapi.testclient import TestClient
 from app.calendar_source import CalendarEventEntry, CalendarListEntry
 from app.config import Settings
 from app.main import create_app
+from app.reminder_delivery import DELIVERY_WINDOW
 from app.session import SESSION_COOKIE_NAME
 from tests.conftest import FakeCalendarSource, FakeClock, create_user_row, log_in
 from tests.test_assistant_chat import StubChatProvider
@@ -119,12 +120,16 @@ class AliceWorld(World):
     tag: int
     check_item: int
     habit: int
+    habit_pause: int
     key_result: int
     standup_entry: int
     bullet: int
     google_account: int
     google_calendar: int
     api_token: int
+    reminder_delivery: int
+    reminder_lease: str
+    missed_reminder: dict[str, Any]
 
 
 type Request = Callable[[AliceWorld, World], tuple[str, str, dict[str, Any] | None]]
@@ -229,6 +234,20 @@ READS: dict[str, Read] = {
         get(lambda a, me: "/api/v1/settings/gentle-return"),
         rows=lambda body, a: [body] if body["enabled"] else [],
     ),
+    "reminder delivery ledger": Read(get(lambda a, me: "/api/v1/reminder-deliveries")),
+    "missed reminders": Read(get(lambda a, me: "/api/v1/reminder-deliveries/missed?tz=UTC")),
+    "reminder notifications toggle": Read(
+        get(lambda a, me: "/api/v1/settings/reminder-notifications"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
+    "quiet hours": Read(
+        get(lambda a, me: "/api/v1/settings/quiet-hours"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
+    "planning window": Read(
+        get(lambda a, me: "/api/v1/settings/planning-window"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
     "stand-up suggestions today": Read(
         get(lambda a, me: f"/api/v1/stand-up/suggestions/today?date={a.today}")
     ),
@@ -310,6 +329,78 @@ REACHES |= {
     ),
     "habit stats": Reach(
         get(lambda a, me: f"/api/v1/habits/{a.habit}/stats?today={a.today}&tz=UTC")
+    ),
+    "pause a habit": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/habits/{a.habit}/pauses",
+            {
+                "start_date": str(a.today + timedelta(days=1)),
+                "end_date": str(a.today + timedelta(days=2)),
+            },
+        )
+    ),
+    "edit a habit pause": Reach(
+        lambda a, me: (
+            "PATCH",
+            f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}",
+            {"end_date": str(a.today + timedelta(days=20))},
+        )
+    ),
+    "resume a habit pause": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}/resume",
+            {"today": str(a.today)},
+        )
+    ),
+    "remove a habit pause": Reach(
+        lambda a, me: ("DELETE", f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}", None)
+    ),
+    "report a reminder shown": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/shown",
+            {"lease_token": a.reminder_lease},
+        )
+    ),
+    "report a reminder failed": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/failed",
+            {"lease_token": a.reminder_lease},
+        )
+    ),
+    "snooze a reminder": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/snooze",
+            {"minutes": 10},
+        )
+    ),
+    "dismiss a missed reminder": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/reminder-deliveries/missed/dismiss?tz=UTC",
+            a.missed_reminder,
+        )
+    ),
+    "snooze a missed reminder": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/reminder-deliveries/missed/snooze?tz=UTC",
+            {**a.missed_reminder, "minutes": 10},
+        )
+    ),
+    "skip a habit day": Reach(
+        lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=1)}", None)
+    ),
+    "remove a habit skip": Reach(
+        lambda a, me: (
+            "DELETE",
+            f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=3)}",
+            None,
+        )
     ),
     "revoke api token": Reach(lambda a, me: ("DELETE", f"{TOKENS}/{a.api_token}", None)),
     "PUT check-in": Reach(
@@ -511,6 +602,26 @@ OWN_WRITES: dict[str, OwnWrite] = {
     "turning gentle return off": OwnWrite(
         lambda a, me: ("PUT", "/api/v1/settings/gentle-return", {"enabled": False})
     ),
+    "claiming due reminders": OwnWrite(
+        lambda a, me: ("POST", "/api/v1/reminder-deliveries/claim?tz=UTC", None)
+    ),
+    "turning reminder notifications off": OwnWrite(
+        lambda a, me: ("PUT", "/api/v1/settings/reminder-notifications", {"enabled": False})
+    ),
+    "turning quiet hours off": OwnWrite(
+        lambda a, me: (
+            "PUT",
+            "/api/v1/settings/quiet-hours",
+            {"enabled": False, "start": "22:00", "end": "07:00"},
+        )
+    ),
+    "turning the planning window off": OwnWrite(
+        lambda a, me: (
+            "PUT",
+            "/api/v1/settings/planning-window",
+            {"enabled": False, "start": "09:00", "end": "17:00"},
+        )
+    ),
     "a focus session reusing another user's run id": OwnWrite(
         lambda a, me: (
             "POST",
@@ -598,9 +709,11 @@ def build_alice(
     assistant: StubChatProvider,
     today: date,
     api_token: int,
+    clock: FakeClock,
 ) -> AliceWorld:
     """One of every resource type, each named so "alice" finds it.
     `api_token` is minted beforehand: only a password session can."""
+    now = clock.now
     google_account, google_calendar = connect_google(alice, calendar_source, MARKER, today)
     alice.ok(
         "PUT",
@@ -620,6 +733,12 @@ def build_alice(
     ][0]["id"]
     habit = alice.ok("POST", "/api/v1/habits", {"name": "alice habit"})["id"]
     alice.ok("PUT", f"/api/v1/habits/{habit}/check-ins/{today}", {"value": 1})
+    habit_pause = alice.ok(
+        "POST",
+        f"/api/v1/habits/{habit}/pauses",
+        {"start_date": str(today + timedelta(days=10)), "end_date": None},
+    )["id"]
+    alice.ok("PUT", f"/api/v1/habits/{habit}/skips/{today + timedelta(days=3)}")
     task = alice.ok(
         "POST",
         "/api/v1/tasks",
@@ -664,6 +783,41 @@ def build_alice(
     alice.ok("PUT", "/api/v1/now/note", {"note": "alice resume note"})
     alice.ok("PUT", "/api/v1/now/shortlist", {"task_ids": [shortlisted]})
     alice.ok("PUT", "/api/v1/settings/gentle-return", {"enabled": True})
+    alice.ok("PUT", "/api/v1/settings/reminder-notifications", {"enabled": True})
+    alice.ok(
+        "PUT",
+        "/api/v1/settings/planning-window",
+        {"enabled": True, "start": "10:00", "end": "14:00"},
+    )
+    alice.ok(
+        "POST",
+        "/api/v1/tasks",
+        {"title": "alice reminder", "due_date": now.isoformat(), "reminders": ["PT0S"]},
+    )
+    [delivery] = alice.ok("POST", "/api/v1/reminder-deliveries/claim?tz=UTC")["items"]
+    alice.ok(
+        "POST",
+        "/api/v1/tasks",
+        {
+            "title": "alice missed reminder",
+            "due_date": now.isoformat(),
+            "reminders": ["PT0S"],
+        },
+    )
+    # Missed only once its window closes after the opt-in (#565).
+    clock.advance(DELIVERY_WINDOW)
+    [missed] = [
+        item
+        for item in alice.ok("GET", "/api/v1/reminder-deliveries/missed?tz=UTC")["items"]
+        if item["task_title"] == "alice missed reminder"
+    ]
+    # Hours away from now, so the band never holds Alice's own Reminders.
+    band = [f"{(clock.now + timedelta(hours=hours)).hour:02d}:00" for hours in (3, 4)]
+    alice.ok(
+        "PUT",
+        "/api/v1/settings/quiet-hours",
+        {"enabled": True, "start": band[0], "end": band[1]},
+    )
     timer = alice.ok(
         "POST", "/api/v1/timers", {"name": "alice timer", "mode": "stopwatch", "habit_id": habit}
     )["id"]
@@ -685,6 +839,10 @@ def build_alice(
         tag=tag,
         check_item=check_item,
         habit=habit,
+        habit_pause=habit_pause,
+        reminder_delivery=delivery["id"],
+        reminder_lease=delivery["lease_token"],
+        missed_reminder={k: missed[k] for k in ("task_id", "offset", "occurrence_due")},
         key_result=key_result,
         standup_entry=entry["id"],
         bullet=entry["bullets"][0]["id"],
@@ -755,7 +913,7 @@ def pair(
         yield Pair(
             alice=alice,
             bea=bea,
-            a=build_alice(alice, fake_calendar_source, assistant, today, alices_token),
+            a=build_alice(alice, fake_calendar_source, assistant, today, alices_token, fake_clock),
             b=build_bea(bea, assistant, today),
             assistant=assistant,
         )

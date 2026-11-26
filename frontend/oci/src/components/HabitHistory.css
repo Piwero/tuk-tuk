@@ -151,6 +151,32 @@
   .heatmap-day.level-0.not-started {
     background: transparent;
   }
+  /* The "paused" mark (#559), shared like "not started" by every view of a
+   Habit's days: no fill and a solid neutral outline, so it reads apart from
+   a missed day's dashed one and a future day's dotted one. Never red, never
+   green. */
+  .paused,
+  .heatmap-day.level-0.paused,
+  .habits-week-grid .habit-cell.paused {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+  }
+  .grid-day.paused {
+    color: var(--text-tertiary);
+  }
+  /* The "skipped" mark (#564), shared by every view of a Habit's days: no
+   fill and a double neutral outline, so it reads apart from a paused day's
+   plain outline, a missed day's dashed one and a future day's dotted one
+   without a gradient. Never red, never green: a skip is on purpose. */
+  .skipped,
+  .heatmap-day.level-0.skipped,
+  .habits-week-grid .habit-cell.skipped {
+    background: transparent;
+    border: 3px double var(--border-strong);
+  }
+  .grid-day.skipped {
+    color: var(--text-tertiary);
+  }
   .heatmap-caption {
     margin: 0;
     font-size: var(--text-2xs);

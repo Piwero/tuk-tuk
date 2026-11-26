@@ -8,13 +8,16 @@ import {
   type GoalStatus,
   type HabitType,
   type KeyResultSource,
+  type PlannedWork,
+  type PlannedWorkRead,
   type Priority,
   type ViewMode,
 } from "../api";
 import { entryDayWindow } from "../calendar";
-import { addDays, zonedDay } from "../dates";
+import { addDays, zonedDay, zonedTime } from "../dates";
 import { habitDueOn } from "../habitFrequency";
 import { byName, SORT_GAP } from "../ordering";
+import { DEVICE_OPT_IN_KEY } from "../reminderDelivery";
 import { decrementCount, nextOccurrenceISO } from "./fakeRecurrence";
 
 /** The fake's stand-in for the backend's IANA validation: unknown zone
@@ -85,10 +88,67 @@ export interface FakeTask {
   source_google_calendar_id: number | null;
   source_google_event_id: string | null;
   key_result_id: number | null;
+  planned_work?: PlannedWorkRead | null;
+  estimate_minutes?: number | null;
   check_items: FakeCheckItem[];
   tags: FakeTag[];
   created_at: string;
 }
+
+/** A lease on one due Reminder, as the server's claim hands it out (issue
+ * #561). */
+export interface FakeReminderClaim {
+  id: number;
+  task_id: number;
+  task_title: string;
+  offset: string;
+  occurrence_due: string;
+  fire_at: string;
+  state: "claimed" | "shown" | "failed" | "snoozed";
+  attempt: number;
+  snoozed_until?: string | null;
+  lease_token: string;
+  lease_expires_at: string;
+}
+
+export interface FakeReminderSnooze {
+  id: number;
+  minutes: number;
+}
+
+/** A Reminder held by Quiet hours, as the claim lists it (issue #567). */
+export interface FakeHeldReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  fire_at: string;
+  deliver_at: string;
+}
+
+export interface FakeReminderReport {
+  id: number;
+  outcome: "shown" | "failed";
+  lease_token: string;
+}
+
+/** A Reminder whose delivery window passed unseen (issue #565). */
+export interface FakeMissedReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  occurrence_due: string;
+  fire_at: string;
+  is_all_day: boolean;
+  time_zone: string | null;
+  /** Its ledger row, when a tab ever claimed it (#566); null otherwise. */
+  delivery_id: number | null;
+}
+
+/** The key a dismissal names a missed reminder by. */
+export type FakeMissedDismissal = Pick<FakeMissedReminder, "task_id" | "offset" | "occurrence_due">;
+
+/** A snooze sent from the missed list for a never-claimed Reminder. */
+export type FakeMissedSnooze = FakeMissedDismissal & { minutes: number };
 
 export interface RecordedRequest {
   method: string;
@@ -119,6 +179,16 @@ export interface FakeHabit {
   frequency: string;
   is_archived: boolean;
   created_at: string;
+  pauses: FakeHabitPause[];
+  /** Skipped days (issue #564), oldest first. */
+  skips: string[];
+}
+
+export interface FakeHabitPause {
+  id: number;
+  habit_id: number;
+  start_date: string;
+  end_date: string | null;
 }
 
 export interface FakeKeyResult {
@@ -378,8 +448,33 @@ export interface FakeApiState {
     assistant: boolean;
   };
   activeHours: { enabled: boolean; start: string; end: string };
+  /** Planning window (issue #563): the capacity summary's band. */
+  planningWindow: { enabled: boolean; start: string; end: string };
   /** Gentle return (issue #548): Today collapses earlier overdue Tasks. */
   gentleReturn: boolean;
+  /** Reminder notifications (issue #557): the User's delivery opt-in. */
+  reminderNotifications: boolean;
+  /** Reminder delivery (issue #561): what claims hand out. The fake plays
+   * the server's ledger simply: each claim is handed out once, and only
+   * while the opt-in is on. Isolation and deduplication are proven by the
+   * backend's tests, never here. */
+  reminderClaims: FakeReminderClaim[];
+  /** Every shown/failed report a tab sent, in order. */
+  reminderReports: FakeReminderReport[];
+  /** Every snooze a tab sent, in order (issue #566). */
+  reminderSnoozes: FakeReminderSnooze[];
+  /** Quiet hours (issue #567): the User's band, and what each claim says
+   * is held and until when. The fake never computes holds itself. */
+  quietHours: { enabled: boolean; start: string; end: string };
+  heldReminders: FakeHeldReminder[];
+  quietUntil: string | null;
+  /** Missed reminders (issue #565): what the missed list returns while the
+   * opt-in is on, less those dismissed. */
+  missedReminders: FakeMissedReminder[];
+  /** Every dismissal a tab sent, in order. */
+  missedDismissals: FakeMissedDismissal[];
+  /** Every snooze sent from the missed list by key (#566), in order. */
+  missedSnoozes: FakeMissedSnooze[];
   /** Settings > Database (issue #256): the engine the fake app reports
    * itself as running, and what the test-connection probe answers with. */
   databaseStatus: DatabaseStatus;
@@ -652,6 +747,49 @@ let nextSectionId = 800;
 let nextOccurrenceId = 950;
 let nextHabitId = 300;
 let nextCheckInId = 9000;
+let nextHabitPauseId = 9800;
+
+/** Mirror the backend's pause interval test: both ends inclusive, a null
+ * end open-ended. */
+function pauseCovers(pause: FakeHabitPause, day: string): boolean {
+  return pause.start_date <= day && (pause.end_date === null || day <= pause.end_date);
+}
+
+/** Mirrors the backend's times-per-week week (app.habit_days.HabitDays.week):
+ * the Monday-to-Sunday week holding `today`, its Target never lowered by a
+ * pause or skip, and excluded only when every day from the Habit start on is
+ * paused. Null for other frequencies. */
+function fakeHabitWeek(
+  habit: FakeHabit,
+  checkIns: { date: string; value: number }[],
+  start: string,
+  today: string,
+) {
+  const times = /TT_TIMES=(\d)/.exec(habit.frequency)?.[1];
+  if (times === undefined) {
+    return null;
+  }
+  const target = Number(times);
+  const monday = addDays(today, -((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7));
+  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const valueOf = (day: string): number | undefined =>
+    checkIns.find((checkIn) => checkIn.date === day)?.value;
+  const isPaused = (day: string): boolean => habit.pauses.some((pause) => pauseCovers(pause, day));
+  const started = days.filter((day) => day >= start);
+  const done = days.filter((day) => (valueOf(day) ?? 0) >= habit.target).length;
+  return {
+    start: monday,
+    end: days[6],
+    target,
+    done,
+    remaining: Math.max(target - done, 0),
+    paused_days: started.filter(isPaused).length,
+    skipped_days: started.filter(
+      (day) => habit.skips.includes(day) && !isPaused(day) && valueOf(day) === undefined,
+    ).length,
+    excluded: started.length > 0 && started.every(isPaused),
+  };
+}
 let nextGoalId = 1300;
 let nextFocusSessionId = 400;
 let nextTimerId = 450;
@@ -669,6 +807,22 @@ export function fakeStandupEntry(
     bullets: [],
     ...overrides,
   };
+}
+
+/** Why the fake backend rejects a planned work block, or null when valid. */
+function plannedWorkRejection(block: PlannedWork): string | null {
+  if (block.duration_minutes <= 0) return "Planned work needs a positive duration";
+  const finish = new Date(
+    new Date(block.start).getTime() +
+      (block.duration_minutes + (block.buffer_minutes ?? 0)) * 60000,
+  ).toISOString();
+  const startDay = zonedDay(block.start, block.time_zone);
+  const finishDay = zonedDay(finish, block.time_zone);
+  const atMidnight =
+    finishDay === addDays(startDay, 1) && zonedTime(finish, block.time_zone) === "00:00";
+  return finishDay === startDay || atMidnight
+    ? null
+    : "Planned work must stay within one local day: it would run past midnight";
 }
 
 export function fakeTask(title: string, overrides: Partial<FakeTask> = {}): FakeTask {
@@ -720,6 +874,66 @@ export function fakeCheckItem(
   return { id, title, done: false, sort_order: id * SORT_GAP, ...overrides };
 }
 
+let nextReminderClaimId = 1;
+
+/** One of `task`'s Reminders, held until quiet hours end (issue #567). */
+export function fakeHeldReminder(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeHeldReminder> = {},
+): FakeHeldReminder {
+  return {
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    fire_at: task.due_date ?? "2026-11-10T23:00:00Z",
+    deliver_at: "2026-11-11T07:00:00Z",
+    ...overrides,
+  };
+}
+
+/** A claim on one of `task`'s Reminders, due now. */
+export function fakeReminderClaim(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeReminderClaim> = {},
+): FakeReminderClaim {
+  const id = nextReminderClaimId++;
+  return {
+    id,
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    occurrence_due: task.due_date ?? "2026-07-10T15:00:00Z",
+    fire_at: task.due_date ?? "2026-07-10T15:00:00Z",
+    state: "claimed",
+    attempt: 1,
+    lease_token: `lease-${id}`,
+    lease_expires_at: "2026-07-10T15:01:00Z",
+    ...overrides,
+  };
+}
+
+/** One of `task`'s Reminders, missed for its current occurrence. */
+export function fakeMissedReminder(
+  task: FakeTask,
+  offset: string,
+  overrides: Partial<FakeMissedReminder> = {},
+): FakeMissedReminder {
+  const due = task.due_date ?? "2026-07-10T15:00:00Z";
+  return {
+    task_id: task.id,
+    task_title: task.title,
+    offset,
+    occurrence_due: due,
+    fire_at: due,
+    is_all_day: task.is_all_day,
+    time_zone: task.time_zone,
+    delivery_id: null,
+    ...overrides,
+  };
+}
+
 export function fakeList(name: string, overrides: Partial<FakeList> = {}): FakeList {
   const id = nextListId++;
   return {
@@ -758,6 +972,8 @@ export function fakeHabit(name: string, overrides: Partial<FakeHabit> = {}): Fak
     frequency: "FREQ=DAILY",
     is_archived: false,
     created_at: "2025-01-01T10:00:00Z",
+    pauses: [],
+    skips: [],
     ...overrides,
   };
 }
@@ -968,7 +1184,16 @@ export function installFakeApi({
   nowShortlist = [],
   sectionSettings = { calendar: true, goals: true, habits: true, focus: true, assistant: true },
   activeHours = { enabled: false, start: "09:00", end: "17:00" },
+  planningWindow = { enabled: false, start: "09:00", end: "17:00" },
   gentleReturn = false,
+  reminderNotifications = false,
+  reminderDeviceEnabled = reminderNotifications,
+  dueReminders = [],
+  quietHours = { enabled: false, start: "22:00", end: "07:00" },
+  quietHoursError = null,
+  heldReminders = [],
+  quietUntil = null,
+  missedReminders = [],
   databaseStatus = { engine: "postgresql", host: "localhost", database: "tuktuk" },
   databaseTestConnectionResult = {
     ok: true,
@@ -1059,8 +1284,27 @@ export function installFakeApi({
   /** Active hours (issue #210) -- the Calendar's double-height band.
    * Defaults to disabled, matching the backend. */
   activeHours?: { enabled: boolean; start: string; end: string };
+  /** Planning window (issue #563). Defaults to off, matching the backend. */
+  planningWindow?: { enabled: boolean; start: string; end: string };
   /** Gentle return (issue #548). Defaults to off, matching the backend. */
   gentleReturn?: boolean;
+  /** Reminder notifications (issue #557). Defaults to off, matching the backend. */
+  reminderNotifications?: boolean;
+  /** Whether this browser was enabled for them ("Enable on this device"),
+   * kept in its localStorage. Defaults to `reminderNotifications`: false
+   * plays another device, where the User opted in but not here. */
+  reminderDeviceEnabled?: boolean;
+  /** Reminders due now, handed out by the claim endpoint (issue #561). */
+  dueReminders?: FakeReminderClaim[];
+  /** Quiet hours (issue #567). Defaults to off, 22:00-07:00, like the backend. */
+  quietHours?: { enabled: boolean; start: string; end: string };
+  /** When set, every Quiet hours save is refused with this message. */
+  quietHoursError?: string | null;
+  /** What claims list as held by Quiet hours, and the band's end. */
+  heldReminders?: FakeHeldReminder[];
+  quietUntil?: string | null;
+  /** Reminders already missed, listed by the missed endpoint (issue #565). */
+  missedReminders?: FakeMissedReminder[];
   /** Settings > Database (issue #256). Defaults to a local PostgreSQL;
    * databaseTestConnectionResult is what every
    * test-connection POST answers with, regardless of the submitted URL. */
@@ -1093,6 +1337,10 @@ export function installFakeApi({
   voiceLivekitApiKey?: string | null;
   voiceSecretSet?: boolean;
 } = {}): FakeApiState {
+  // This browser's own "Enable on this device" flag (#557 review): kept in
+  // localStorage, which outlives a test, so every install sets it afresh.
+  if (reminderDeviceEnabled) localStorage.setItem(DEVICE_OPT_IN_KEY, "true");
+  else localStorage.removeItem(DEVICE_OPT_IN_KEY);
   const state: FakeApiState = {
     lists: lists.map((list) => ({ ...list })),
     folders: folders.map((folder) => ({ ...folder })),
@@ -1142,7 +1390,18 @@ export function installFakeApi({
     nowShortlist: nowShortlist.map((taskId) => ({ taskId })),
     sectionSettings: { ...sectionSettings },
     activeHours: { ...activeHours },
+    planningWindow: { ...planningWindow },
     gentleReturn,
+    reminderNotifications,
+    reminderClaims: dueReminders.map((claim) => ({ ...claim })),
+    reminderReports: [],
+    reminderSnoozes: [],
+    quietHours: { ...quietHours },
+    heldReminders: heldReminders.map((held) => ({ ...held })),
+    quietUntil,
+    missedReminders: missedReminders.map((entry) => ({ ...entry })),
+    missedDismissals: [],
+    missedSnoozes: [],
     databaseStatus: { ...databaseStatus },
     databaseTestConnectionResult: { ...databaseTestConnectionResult },
     assistAvailable,
@@ -1170,6 +1429,7 @@ export function installFakeApi({
       state.voiceLivekitUrl !== null && state.voiceLivekitApiKey !== null && state.voiceSecretSet,
   });
 
+  const handedOut = new Set<number>();
   const json = (data: unknown, status = 200): Response =>
     new Response(JSON.stringify(data), {
       status,
@@ -1429,6 +1689,8 @@ export function installFakeApi({
    * completes for real when its recurrence has ended. */
   const completeTask = (task: FakeTask): void => {
     if (task.recurrence !== null && task.due_date !== null) {
+      // The plan belongs to the occurrence being completed (#558).
+      task.planned_work = null;
       const next = nextOccurrenceISO(task.recurrence, task.due_date, task.is_all_day);
       if (next !== null) {
         state.completedOccurrences.push({
@@ -2292,7 +2554,13 @@ export function installFakeApi({
           );
         }
         // Mirror the backend's calendar window: inclusive day intersection.
+        // Planned work (#562) brings its Task in too, read on the plan's own day.
         items = items.filter((task) => {
+          const plan = task.planned_work ?? null;
+          const planned = plan === null ? null : zonedDay(plan.start, plan.time_zone);
+          if (planned !== null && rangeStart <= planned && planned <= rangeEnd) {
+            return true;
+          }
           const window = dayWindow(task);
           return window !== null && window[0] <= rangeEnd && window[1] >= rangeStart;
         });
@@ -2571,6 +2839,27 @@ export function installFakeApi({
         if (!("recurrence" in rest) && effectiveDue === null && task.recurrence !== null) {
           rest.recurrence = null;
         }
+        // Mirror the backend's estimate rule (#563): positive whole minutes,
+        // at most a week; null removes it.
+        const estimate = rest.estimate_minutes;
+        if (
+          estimate !== undefined &&
+          estimate !== null &&
+          !(Number.isInteger(estimate) && Number(estimate) >= 1 && Number(estimate) <= 7 * 24 * 60)
+        ) {
+          return json({ error: { code: "validation_error", message: "Invalid estimate" } }, 422);
+        }
+        // Mirror the backend's planned work rules (#558): a positive
+        // duration, kept (buffer included) within one local day.
+        if (rest.planned_work !== undefined && rest.planned_work !== null) {
+          const block = rest.planned_work as PlannedWork;
+          const rejection = plannedWorkRejection(block);
+          if (rejection !== null) {
+            return json({ error: { code: "invalid_planned_work", message: rejection } }, 422);
+          }
+          const end = new Date(new Date(block.start).getTime() + block.duration_minutes * 60000);
+          rest.planned_work = { ...block, end: `${end.toISOString().slice(0, 19)}Z` };
+        }
         if (
           typeof rest.list_id === "number" &&
           rest.list_id !== task.list_id &&
@@ -2792,6 +3081,129 @@ export function installFakeApi({
         return new Response(null, { status: 204 });
       }
     }
+    const pausesMatch = url.pathname.match(
+      /^\/api\/v1\/habits\/(\d+)\/pauses(?:\/(\d+))?(\/resume)?$/,
+    );
+    if (pausesMatch) {
+      const habit = state.habits.find((h) => h.id === Number(pausesMatch[1]));
+      if (!habit) {
+        return notFound(`Habit ${pausesMatch[1]} not found`);
+      }
+      const pauseId = pausesMatch[2] === undefined ? null : Number(pausesMatch[2]);
+      const existing = habit.pauses.find((pause) => pause.id === pauseId);
+      if (pauseId !== null && !existing) {
+        return notFound(`Pause ${pauseId} not found`);
+      }
+      if (method === "POST" && pausesMatch[3] !== undefined && existing) {
+        // Mirror the backend's Resume today.
+        const today = (body as { today: string }).today;
+        if (existing.start_date >= today) {
+          habit.pauses = habit.pauses.filter((pause) => pause !== existing);
+        } else if (existing.end_date === null || existing.end_date >= today) {
+          existing.end_date = addDays(today, -1);
+        }
+        return json(habit);
+      }
+      if (method === "DELETE" && existing) {
+        habit.pauses = habit.pauses.filter((pause) => pause !== existing);
+        return new Response(null, { status: 204 });
+      }
+      if (method === "POST" || method === "PATCH") {
+        const input = { ...existing, ...(body as Partial<FakeHabitPause>) };
+        const candidate: FakeHabitPause = {
+          id: existing?.id ?? nextHabitPauseId++,
+          habit_id: habit.id,
+          start_date: input.start_date as string,
+          end_date: input.end_date ?? null,
+        };
+        // Mirror the backend's rules: forwards, no overlap, no Check-ins.
+        if (candidate.end_date !== null && candidate.end_date < candidate.start_date) {
+          return json(
+            { error: { code: "invalid_pause", message: "A pause cannot end before it starts" } },
+            422,
+          );
+        }
+        const overlaps = habit.pauses.some(
+          (other) =>
+            other !== existing &&
+            (other.end_date === null || candidate.start_date <= other.end_date) &&
+            (candidate.end_date === null || other.start_date <= candidate.end_date),
+        );
+        if (overlaps) {
+          return json(
+            { error: { code: "pause_overlaps", message: "Already paused over those dates" } },
+            409,
+          );
+        }
+        const dates = state.checkIns
+          .filter((c) => c.habit_id === habit.id && pauseCovers(candidate, c.date))
+          .map((c) => c.date)
+          .sort();
+        if (dates.length > 0) {
+          return json(
+            {
+              error: {
+                code: "pause_conflicts_with_check_ins",
+                message: `Check-ins on ${dates.join(", ")} prevent this pause`,
+                details: { dates },
+              },
+            },
+            409,
+          );
+        }
+        if (existing) {
+          Object.assign(existing, candidate);
+          return json(existing);
+        }
+        habit.pauses = [...habit.pauses, candidate].sort((a, b) =>
+          a.start_date.localeCompare(b.start_date),
+        );
+        return json(candidate, 201);
+      }
+    }
+    const skipMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)\/skips\/(\d{4}-\d{2}-\d{2})$/);
+    if (skipMatch) {
+      const habit = state.habits.find((h) => h.id === Number(skipMatch[1]));
+      if (!habit) {
+        return notFound(`Habit ${skipMatch[1]} not found`);
+      }
+      const day = skipMatch[2] as string;
+      if (method === "DELETE") {
+        if (!habit.skips.includes(day)) {
+          return notFound(`${day} is not skipped`);
+        }
+        habit.skips = habit.skips.filter((skipped) => skipped !== day);
+        return new Response(null, { status: 204 });
+      }
+      if (method === "PUT") {
+        // Mirror the backend's rules: scheduled, unpaused, no Check-in.
+        if (!habitDueOn(habit.frequency, day)) {
+          return json(
+            { error: { code: "skip_not_scheduled", message: `Not scheduled on ${day}` } },
+            422,
+          );
+        }
+        if (habit.pauses.some((pause) => pauseCovers(pause, day))) {
+          return json({ error: { code: "habit_day_paused", message: `Paused on ${day}` } }, 409);
+        }
+        if (state.checkIns.some((c) => c.habit_id === habit.id && c.date === day)) {
+          return json(
+            {
+              error: {
+                code: "skip_conflicts_with_check_in",
+                message: `A Check-in on ${day} prevents this skip`,
+                details: { dates: [day] },
+              },
+            },
+            409,
+          );
+        }
+        if (!habit.skips.includes(day)) {
+          habit.skips = [...habit.skips, day].sort();
+        }
+        return json({ habit_id: habit.id, date: day });
+      }
+    }
     const statsMatch = url.pathname.match(/^\/api\/v1\/habits\/(\d+)\/stats$/);
     if (statsMatch && method === "GET") {
       const habitId = Number(statsMatch[1]);
@@ -2823,9 +3235,13 @@ export function installFakeApi({
         if (habitDueOn(habit.frequency, day) && !checked.has(day)) {
           day = addDays(day, -1);
         }
+        // Mirror the backend: paused and skipped days (app.habit_days) are
+        // stepped over like unscheduled ones, never counted.
         const earliest = [...checked].sort()[0] as string;
         while (day >= earliest) {
-          if (habitDueOn(habit.frequency, day)) {
+          const isPaused =
+            habit.pauses.some((pause) => pauseCovers(pause, day)) || habit.skips.includes(day);
+          if (habitDueOn(habit.frequency, day) && !(isPaused && !checked.has(day))) {
             if (!checked.has(day)) {
               break;
             }
@@ -2844,8 +3260,13 @@ export function installFakeApi({
         }));
       // Mirror the backend's Habit start: the creation day in `tz`, pulled
       // back to an earlier real Check-in, and never after today.
-      const eligibleFrom = [zonedDay(habit.created_at, tz), ...checked, today].sort()[0];
-      return json({ streak, heatmap, eligible_from: eligibleFrom });
+      const eligibleFrom = [zonedDay(habit.created_at, tz), ...checked, today].sort()[0] as string;
+      return json({
+        streak,
+        heatmap,
+        eligible_from: eligibleFrom,
+        week: fakeHabitWeek(habit, habitCheckIns, eligibleFrom, today),
+      });
     }
     const checkInMatch = url.pathname.match(
       /^\/api\/v1\/habits\/(\d+)\/check-ins\/(\d{4}-\d{2}-\d{2})$/,
@@ -2857,6 +3278,13 @@ export function installFakeApi({
         return notFound(`Habit ${habitId} not found`);
       }
       const existing = state.checkIns.find((c) => c.habit_id === habitId && c.date === day);
+      const pausedHabit = state.habits.find((h) => h.id === habitId);
+      if (method === "PUT" && pausedHabit?.pauses.some((pause) => pauseCovers(pause, day))) {
+        return json({ error: { code: "habit_day_paused", message: `Paused on ${day}` } }, 409);
+      }
+      if (method === "PUT" && pausedHabit?.skips.includes(day)) {
+        return json({ error: { code: "habit_day_skipped", message: `Skipped on ${day}` } }, 409);
+      }
       if (method === "PUT") {
         // Mirror the backend's upsert: one row per (habit, date), whatever
         // the tap count — PUT replaces the day's whole value.
@@ -3232,6 +3660,162 @@ export function installFakeApi({
         state.gentleReturn = (body as { enabled: boolean }).enabled;
       }
       return json({ enabled: state.gentleReturn });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/claim" && method === "POST") {
+      if (!state.reminderNotifications) return json({ items: [], held: [], quiet_until: null });
+      const items = state.reminderClaims.filter((claim) => !handedOut.has(claim.id));
+      for (const claim of items) handedOut.add(claim.id);
+      return json({
+        items: items.map((claim) => ({ ...claim })),
+        held: state.heldReminders.map((held) => ({ ...held })),
+        quiet_until: state.quietUntil,
+      });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed" && method === "GET") {
+      if (!state.reminderNotifications) return json({ items: [] });
+      return json({ items: state.missedReminders.map((entry) => ({ ...entry })) });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed/dismiss" && method === "POST") {
+      const key = body as FakeMissedDismissal;
+      const same = (entry: FakeMissedReminder): boolean =>
+        entry.task_id === key.task_id &&
+        entry.offset === key.offset &&
+        entry.occurrence_due === key.occurrence_due;
+      const entry = state.missedReminders.find(same);
+      if (entry === undefined) {
+        return json({ error: { code: "not_found", message: "Missed reminder not found" } }, 404);
+      }
+      state.missedDismissals.push({ ...key });
+      state.missedReminders = state.missedReminders.filter((candidate) => !same(candidate));
+      return json({ id: 1, ...entry, state: "dismissed", attempt: 0 });
+    }
+    if (url.pathname === "/api/v1/reminder-deliveries/missed/snooze" && method === "POST") {
+      const key = body as FakeMissedSnooze;
+      const same = (entry: FakeMissedReminder): boolean =>
+        entry.task_id === key.task_id &&
+        entry.offset === key.offset &&
+        entry.occurrence_due === key.occurrence_due;
+      const entry = state.missedReminders.find(same);
+      if (entry === undefined) {
+        return json({ error: { code: "not_found", message: "Missed reminder not found" } }, 404);
+      }
+      state.missedSnoozes.push({ ...key });
+      state.missedReminders = state.missedReminders.filter((candidate) => !same(candidate));
+      const snoozedUntil = new Date(Date.now() + key.minutes * 60_000).toISOString();
+      return json({ id: 1, ...entry, state: "snoozed", attempt: 0, snoozed_until: snoozedUntil });
+    }
+    const reminderReport = url.pathname.match(
+      /^\/api\/v1\/reminder-deliveries\/(\d+)\/(shown|failed)$/,
+    );
+    if (reminderReport && method === "POST") {
+      const id = Number(reminderReport[1]);
+      const outcome = reminderReport[2] as "shown" | "failed";
+      const claim = state.reminderClaims.find((candidate) => candidate.id === id);
+      if (claim === undefined) {
+        return json(
+          { error: { code: "not_found", message: `Reminder delivery ${id} not found` } },
+          404,
+        );
+      }
+      const { lease_token } = body as { lease_token: string };
+      state.reminderReports.push({ id, outcome, lease_token });
+      if (claim.state === "claimed") claim.state = outcome;
+      return json({ ...claim });
+    }
+    const reminderSnooze = url.pathname.match(/^\/api\/v1\/reminder-deliveries\/(\d+)\/snooze$/);
+    if (reminderSnooze && method === "POST") {
+      // Mirrors the server (issue #566): only the ledger row changes, and
+      // an occurrence that is gone (Task completed, redated, Reminder
+      // removed) is refused as stale.
+      const id = Number(reminderSnooze[1]);
+      const missedRow = state.missedReminders.find((entry) => entry.delivery_id === id);
+      if (missedRow !== undefined) {
+        // A missed Reminder with a ledger row (#566): snoozing it takes it
+        // off the list until it comes due again.
+        const { minutes } = body as { minutes: number };
+        state.reminderSnoozes.push({ id, minutes });
+        state.missedReminders = state.missedReminders.filter((entry) => entry !== missedRow);
+        const snoozedUntil = new Date(Date.now() + minutes * 60_000).toISOString();
+        return json({
+          ...missedRow,
+          id,
+          state: "snoozed",
+          attempt: 1,
+          snoozed_until: snoozedUntil,
+        });
+      }
+      const claim = state.reminderClaims.find((candidate) => candidate.id === id);
+      if (claim === undefined) {
+        return json(
+          { error: { code: "not_found", message: `Reminder delivery ${id} not found` } },
+          404,
+        );
+      }
+      const task = state.tasks.find((candidate) => candidate.id === claim.task_id);
+      if (
+        task === undefined ||
+        task.completed ||
+        task.due_date !== claim.occurrence_due ||
+        !task.reminders.includes(claim.offset)
+      ) {
+        return json(
+          {
+            error: {
+              code: "reminder_stale",
+              message: "This reminder's Task occurrence has changed since it was delivered",
+            },
+          },
+          409,
+        );
+      }
+      const { minutes } = body as { minutes: number };
+      state.reminderSnoozes.push({ id, minutes });
+      claim.state = "snoozed";
+      claim.snoozed_until = new Date(Date.now() + minutes * 60_000).toISOString();
+      return json({ ...claim });
+    }
+    if (url.pathname === "/api/v1/settings/quiet-hours") {
+      if (method === "PUT") {
+        const input = body as { enabled: boolean; start: string; end: string };
+        const refusal =
+          quietHoursError ??
+          (input.start === input.end ? "Quiet hours must start and end at different times" : null);
+        if (refusal !== null) {
+          return json({ error: { code: "invalid_quiet_hours", message: refusal } }, 422);
+        }
+        state.quietHours = { ...input };
+      }
+      return json({ ...state.quietHours });
+    }
+    if (url.pathname === "/api/v1/settings/reminder-notifications") {
+      if (method === "PUT") {
+        state.reminderNotifications = (body as { enabled: boolean }).enabled;
+      }
+      return json({ enabled: state.reminderNotifications });
+    }
+    if (url.pathname === "/api/v1/settings/planning-window") {
+      if (method === "GET") {
+        return json({ ...state.planningWindow });
+      }
+      if (method === "PUT") {
+        const input = body as { enabled: boolean; start: string; end: string };
+        const toMinutes = (label: string): number =>
+          Number(label.slice(0, 2)) * 60 + Number(label.slice(3));
+        const aligned = (label: string): boolean =>
+          /^\d\d:\d\d$/.test(label) && toMinutes(label) % 30 === 0;
+        if (
+          !aligned(input.start) ||
+          !aligned(input.end) ||
+          toMinutes(input.start) >= toMinutes(input.end)
+        ) {
+          return json(
+            { error: { code: "invalid_planning_window", message: "invalid planning window" } },
+            422,
+          );
+        }
+        state.planningWindow = { enabled: input.enabled, start: input.start, end: input.end };
+        return json({ ...state.planningWindow });
+      }
     }
     if (url.pathname === "/api/v1/settings/active-hours") {
       if (method === "GET") {

@@ -56,7 +56,7 @@ export function HabitCardStats({
       <div className="habit-strip" role="group" aria-label={`Recent days for ${habit.name}`}>
         {days.map((day) => {
           const { state, level, text } = read(day, values.get(day) ?? 0);
-          const className = `habit-strip-day heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}${day === today ? " today" : ""}`;
+          const className = `habit-strip-day heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}${state === "paused" ? " paused" : ""}${state === "skipped" ? " skipped" : ""}${day === today ? " today" : ""}`;
           const label = `${shortDayLabel(day)}: ${text}`;
           return (
             <StripDay
@@ -64,7 +64,12 @@ export function HabitCardStats({
               className={className}
               label={label}
               level={level}
-              onToggle={onToggleDay === null ? null : () => onToggleDay(day)}
+              // A paused or skipped day refuses a Check-in, so it is a picture too.
+              onToggle={
+                onToggleDay === null || state === "paused" || state === "skipped"
+                  ? null
+                  : () => onToggleDay(day)
+              }
             />
           );
         })}

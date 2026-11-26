@@ -1,10 +1,12 @@
 import "./HabitHistory.css";
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchHabitStats, type Habit, type HabitStats } from "../api";
+import { fetchHabitStats, skipHabitDay, unskipHabitDay, type Habit, type HabitStats } from "../api";
 import { tapCheckIn } from "../habitCheckIn";
 import { formatDate, localDayOf } from "../dates";
 import { habitDayReader, heatLevel } from "../habitStats";
+import { HabitSkipForm } from "./HabitSkip";
+import { HabitWeekTarget } from "./HabitWeekTarget";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
 
@@ -18,7 +20,8 @@ function monthDays(year: number, month: number): string[] {
 
 interface HabitHistoryProps {
   habit: Habit;
-  /** Fired after a backfill changes a Check-in, so the today screen refetches. */
+  /** Fired after a backfill changes a Check-in, or a skip is added or
+   * undone, so the today screen refetches. */
   onChanged: () => void;
 }
 
@@ -46,6 +49,32 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
   // stay tappable: backfilling one is a real Check-in, and moves the start back.
   const read = habitDayReader(habit, stats, today);
   const notStarted = (day: string): boolean => read(day, valueOf(day)).state === "not-started";
+  // A paused day (issue #559) is neither done nor missed, and refuses a
+  // Check-in until its pause is changed.
+  const paused = (day: string): boolean => read(day, valueOf(day)).state === "paused";
+  // A skipped day (issue #564) is on purpose: neither done nor missed, and
+  // it refuses a Check-in until the skip is undone.
+  const skipped = (day: string): boolean => read(day, valueOf(day)).state === "skipped";
+  const dayLabel = (day: string): string =>
+    notStarted(day)
+      ? `${day}: not started`
+      : paused(day)
+        ? `${day}: paused`
+        : skipped(day)
+          ? `${day}: skipped`
+          : day;
+
+  async function skipDay(day: string): Promise<void> {
+    await skipHabitDay(habit.id, day);
+    await load();
+    onChanged();
+  }
+
+  async function undoSkip(day: string): Promise<void> {
+    await unskipHabitDay(habit.id, day);
+    await load();
+    onChanged();
+  }
 
   /** Backfill (or edit) a day's Check-in, on the same rule as the card's
    * recent-days strip (see tapCheckIn). */
@@ -69,6 +98,9 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
           Streak: {stats?.streak ?? 0}
         </p>
       </Hint>
+      {stats?.week && (
+        <HabitWeekTarget label={`${habit.name} this week in history`} week={stats.week} />
+      )}
       <div className="habit-month">
         <div className="habit-month-nav">
           <IconButton icon="chevron-left" label="Previous month" onClick={() => stepMonth(-1)} />
@@ -82,6 +114,8 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
               "grid-day",
               value >= habit.target && "complete",
               notStarted(day) && "not-started",
+              paused(day) && "paused",
+              skipped(day) && "skipped",
             ]
               .filter(Boolean)
               .join(" ");
@@ -90,9 +124,9 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
                 key={day}
                 type="button"
                 className={className}
-                aria-label={notStarted(day) ? `${day}: not started` : day}
+                aria-label={dayLabel(day)}
                 aria-pressed={value > 0}
-                disabled={day > today}
+                disabled={day > today || paused(day) || skipped(day)}
                 style={
                   // Align the 1st under its weekday (Monday-first, like the
                   // repeat editor's weekday order).
@@ -106,6 +140,13 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
           })}
         </div>
       </div>
+      <HabitSkipForm
+        habitName={habit.name}
+        today={today}
+        skipped={monthDays(year, month).filter(skipped)}
+        onSkip={skipDay}
+        onUndo={undoSkip}
+      />
       <p className="heatmap-caption">{year}: one square per day, from January 1</p>
       <div className="heatmap" role="img" aria-label="Yearly heatmap">
         {Array.from({ length: 12 }, (_, m) =>
@@ -113,7 +154,7 @@ export function HabitHistory({ habit, onChanged }: HabitHistoryProps): React.JSX
             <span
               key={day}
               title={day}
-              className={`heatmap-day level-${heatLevel(entries.get(day)?.intensity ?? 0)}${notStarted(day) ? " not-started" : ""}`}
+              className={`heatmap-day level-${heatLevel(entries.get(day)?.intensity ?? 0)}${notStarted(day) ? " not-started" : ""}${paused(day) ? " paused" : ""}${skipped(day) ? " skipped" : ""}`}
             />
           )),
         )}
@@ -131,6 +172,11 @@ const HISTORY_KEY: { className: string; text: string }[] = [
   { className: "level-2", text: "In progress" },
   { className: "level-0", text: "No Check-in" },
   { className: "level-0 not-started", text: "Not started: before the Habit began" },
+  { className: "level-0 paused", text: "Paused: not counted, neither done nor missed" },
+  {
+    className: "level-0 skipped",
+    text: "Skipped: on purpose, not counted, neither done nor missed",
+  },
 ];
 
 function HistoryKey(): React.JSX.Element {

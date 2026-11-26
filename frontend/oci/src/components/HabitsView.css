@@ -211,6 +211,21 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
     background: var(--surface-card);
+    /* Lets a detail row measure the visible width, not the table's (#569). */
+    container-type: inline-size;
+  }
+  /* Weekly target, pause, skip and history rows span all eight columns. On
+   a phone the grid scrolls sideways and the table is wider than the
+   screen, so their content holds still at the visible width instead of
+   centring its buttons and notes past the edge (#569). */
+  .habits-week-grid td.habit-detail-cell {
+    text-align: left;
+  }
+  .habit-detail-cell > * {
+    position: sticky;
+    left: var(--space-2);
+    box-sizing: border-box;
+    max-width: calc(100cqi - 2 * var(--space-2));
   }
   .habits-week-grid {
     width: 100%;
@@ -299,8 +314,8 @@
   .habit-cell.state-missed {
     border: 1px dashed var(--border-strong);
   }
-  .habits-week-grid .habit-cell.state-not-scheduled,
-  .habits-legend .habit-cell.state-not-scheduled {
+  .habits-week-grid .habit-cell.state-unscheduled,
+  .habits-legend .habit-cell.state-unscheduled {
     background: transparent;
     border-color: var(--border-default);
     opacity: 0.5;
@@ -313,10 +328,28 @@
   /* Before the Habit start: the shared dash (HabitHistory.css) on no fill.
    Never the missed outline, never a success green: the Habit didn't exist
    yet. */
+  .habits-week-grid .habit-cell.state-paused,
+  .habits-legend .habit-cell.state-paused,
   .habits-week-grid .habit-cell.state-not-started,
   .habits-legend .habit-cell.state-not-started {
     background: transparent;
     border: 1px solid transparent;
+  }
+  /* Paused (#559): the shared paused mark (HabitHistory.css) plus a pause
+   glyph. Neutral, never the missed outline, red or success green: a pause
+   is neither failure nor success. */
+  .habits-week-grid .habit-cell.state-paused,
+  .habits-legend .habit-cell.state-paused,
+  .habits-week-grid .habit-cell.state-skipped,
+  .habits-legend .habit-cell.state-skipped {
+    color: var(--text-tertiary);
+  }
+  /* Skipped (#564): no fill, a solid neutral outline and a skip glyph — on
+   purpose, so never the missed dashed outline, red or success green. */
+  .habits-week-grid .habit-cell.state-skipped,
+  .habits-legend .habit-cell.state-skipped {
+    background: transparent;
+    border: 1px solid var(--border-strong);
   }
   /* The legend: one swatch per cell state, its meaning always in words. */
   .habits-legend {

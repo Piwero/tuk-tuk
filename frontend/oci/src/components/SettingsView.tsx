@@ -6,9 +6,11 @@ import {
   ApiError,
   disconnectGoogleAccount,
   fetchActiveHoursSettings,
+  fetchPlanningWindowSettings,
   fetchGentleReturnSettings,
   updateGentleReturnSettings,
   updateActiveHoursSettings,
+  updatePlanningWindowSettings,
   fetchDatabaseStatus,
   testDatabaseConnection,
   fetchAssistConfig,
@@ -40,7 +42,6 @@ import {
   updateSectionSettings,
   type AssistConfig,
   type AssistantConfig,
-  type ActiveHoursSettings,
   type CurrentUser,
   type DatabaseStatus,
   type DatabaseTestConnectionResult,
@@ -51,6 +52,7 @@ import {
   type VoiceConfig,
 } from "../api";
 import { timeMinutes } from "../calendar";
+import { clockLabels } from "../dates";
 import { type ThemePreference } from "../layoutPrefs";
 import { pathForSettingsTab, type SettingsTab } from "../routes";
 import {
@@ -65,6 +67,8 @@ import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
 import { Hint } from "./Hint";
 import { ProfileCard } from "./ProfileCard";
+import { QuietHoursSettings } from "./QuietHoursSettings";
+import { ReminderNotificationsSettings } from "./ReminderNotificationsSettings";
 import { ApiTokensCard } from "./ApiTokensCard";
 import { UsersPanel } from "./UsersPanel";
 
@@ -944,10 +948,7 @@ function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): React.JSX.E
 }
 
 /** Half-hour labels "00:00" … "24:00" — the Active-hours grid (issue #210). */
-const HALF_HOUR_LABELS: string[] = Array.from({ length: 49 }, (_, index) => {
-  const minutes = index * 30;
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-});
+const HALF_HOUR_LABELS: string[] = clockLabels(30, { throughMidnight: true });
 
 /** Gentle return (issue #548): the User chooses to have Today collapse every
  * earlier overdue Task behind a counted disclosure. Nothing is rescheduled. */
@@ -981,27 +982,50 @@ function GentleReturnSettingsForm(): React.JSX.Element {
   );
 }
 
-/** Active hours (issue #210): the band of the day the Calendar renders at
- * double height. The selects only offer valid half-hour times, so the one
- * reachable invalid state is start ≥ end (which includes a band that would
- * wrap past midnight); that shows inline and isn't saved. */
-function ActiveHoursSettingsForm(): React.JSX.Element {
-  const [settings, setSettings] = useState<ActiveHoursSettings>({
+/** One band of one day on the half-hour grid, on or off: the shape Active
+ * hours and the Planning window share, each stored apart. The selects only
+ * offer valid half-hour times, so the one reachable invalid state is
+ * start ≥ end (which includes a band that would wrap past midnight); that
+ * shows inline and isn't saved. */
+interface DayBand {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+interface DayBandSettingsFormProps {
+  /** The checkbox label, which names the setting. */
+  label: string;
+  hint: React.ReactNode;
+  /** Shown while start ≥ end. */
+  invalidText: React.ReactNode;
+  load: () => Promise<DayBand>;
+  save: (band: DayBand) => Promise<DayBand>;
+}
+
+function DayBandSettingsForm({
+  label,
+  hint,
+  invalidText,
+  load,
+  save,
+}: DayBandSettingsFormProps): React.JSX.Element {
+  const [settings, setSettings] = useState<DayBand>({
     enabled: false,
     start: "09:00",
     end: "17:00",
   });
 
   useEffect(() => {
-    void fetchActiveHoursSettings().then(setSettings);
-  }, []);
+    void load().then(setSettings);
+  }, [load]);
 
   const invalid = timeMinutes(settings.start) >= timeMinutes(settings.end);
 
-  function apply(next: ActiveHoursSettings): void {
+  function apply(next: DayBand): void {
     setSettings(next);
     if (timeMinutes(next.start) < timeMinutes(next.end)) {
-      void updateActiveHoursSettings(next).then(setSettings);
+      void save(next).then(setSettings);
     }
   }
 
@@ -1013,13 +1037,9 @@ function ActiveHoursSettingsForm(): React.JSX.Element {
           checked={settings.enabled}
           onChange={() => apply({ ...settings, enabled: !settings.enabled })}
         />
-        Active hours
+        {label}
       </label>
-      <p className="settings-hint">
-        Marks the part of the day you&rsquo;re usually active. The calendar&rsquo;s Week and Day
-        grids draw those hours at double height, so short tasks stay readable in place, and compress
-        the hours outside — dead time costs little scroll.
-      </p>
+      <p className="settings-hint">{hint}</p>
       <div className="settings-field-with-action">
         <label>
           Start
@@ -1048,12 +1068,54 @@ function ActiveHoursSettingsForm(): React.JSX.Element {
           </select>
         </label>
       </div>
-      {invalid && (
-        <p role="alert">
-          Active hours must start before they end, and can&rsquo;t wrap past midnight.
-        </p>
-      )}
+      {invalid && <p role="alert">{invalidText}</p>}
     </div>
+  );
+}
+
+/** Active hours (issue #210): the band of the day the Calendar renders at
+ * double height. */
+function ActiveHoursSettingsForm(): React.JSX.Element {
+  return (
+    <DayBandSettingsForm
+      label="Active hours"
+      hint={
+        <>
+          Marks the part of the day you&rsquo;re usually active. The calendar&rsquo;s Week and Day
+          grids draw those hours at double height, so short tasks stay readable in place, and
+          compress the hours outside — dead time costs little scroll.
+        </>
+      }
+      invalidText={
+        <>Active hours must start before they end, and can&rsquo;t wrap past midnight.</>
+      }
+      load={fetchActiveHoursSettings}
+      save={updateActiveHoursSettings}
+    />
+  );
+}
+
+/** Planning window (issue #563): the band of each day the Calendar's
+ * capacity summary measures. Its own setting, never copied from Active
+ * hours, so moving the grid's band leaves it where the User put it. */
+function PlanningWindowSettingsForm(): React.JSX.Element {
+  return (
+    <DayBandSettingsForm
+      label="Planning window"
+      hint={
+        <>
+          The part of the day you plan work into. The calendar&rsquo;s Day view says how much of it
+          is still free once Events and Planned work are counted. A Task&rsquo;s Estimate is
+          reported as not yet planned; Tasks without one stay listed as unknown, and nothing is
+          guessed.
+        </>
+      }
+      invalidText={
+        <>The planning window must start before it ends, and can&rsquo;t wrap past midnight.</>
+      }
+      load={fetchPlanningWindowSettings}
+      save={updatePlanningWindowSettings}
+    />
   );
 }
 
@@ -1356,7 +1418,10 @@ function MyAccountPanel({
         <a href="#settings-appearance">Appearance</a>
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
+        <a href="#settings-planning-window">Planning window</a>
         <a href="#settings-gentle-return">Gentle return</a>
+        <a href="#settings-reminder-notifications">Reminder notifications</a>
+        <a href="#settings-quiet-hours">Quiet hours</a>
         <a href="#settings-assist">
           Assist
           {assistConfig !== null && (
@@ -1517,6 +1582,16 @@ function MyAccountPanel({
           <ActiveHoursSettingsForm />
         </section>
         <section
+          aria-label="Planning window"
+          id="settings-planning-window"
+          className="settings-section"
+        >
+          <div className="settings-section-head">
+            <h2>Planning window</h2>
+          </div>
+          <PlanningWindowSettingsForm />
+        </section>
+        <section
           aria-label="Gentle return"
           id="settings-gentle-return"
           className="settings-section"
@@ -1525,6 +1600,16 @@ function MyAccountPanel({
             <h2>Gentle return</h2>
           </div>
           <GentleReturnSettingsForm />
+        </section>
+        <section
+          aria-label="Reminder notifications"
+          id="settings-reminder-notifications"
+          className="settings-section"
+        >
+          <ReminderNotificationsSettings />
+        </section>
+        <section aria-label="Quiet hours" id="settings-quiet-hours" className="settings-section">
+          <QuietHoursSettings />
         </section>
       </section>
       {showAiGroup && (

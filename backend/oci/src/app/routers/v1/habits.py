@@ -4,7 +4,7 @@ A Check-in is keyed by (habit, date) and PUT replaces the day's whole value,
 so re-taps and backfill corrections are idempotent by construction.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -13,17 +13,24 @@ from sqlalchemy import func, select
 from app.caller_zone import caller_zone
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
+from app.habit_days import Pause, is_paused
 from app.habit_frequency import due_on, validate_frequency
-from app.habit_stats import current_streak, eligible_from, intensity
-from app.models import CheckIn, Habit
+from app.habit_stats import current_streak, current_week, eligible_from, habit_days, intensity
+from app.models import CheckIn, Habit, HabitPause, HabitSkip
 from app.schemas import (
     CheckInPut,
     CheckInRead,
     HabitCreate,
+    HabitPauseCreate,
+    HabitPauseRead,
+    HabitPauseResume,
+    HabitPauseUpdate,
     HabitRead,
+    HabitSkipRead,
     HabitStats,
     HabitType,
     HabitUpdate,
+    HabitWeek,
     HeatmapDay,
     Page,
 )
@@ -70,6 +77,8 @@ async def create_habit(payload: HabitCreate, session: SessionDep) -> HabitRead:
         color=payload.color,
         encouragement=payload.encouragement,
         frequency=payload.frequency,
+        pauses=[],
+        skips=[],
     )
     session.add(habit)
     await session.commit()
@@ -160,6 +169,19 @@ async def put_check_in(
     habit = await get_habit_or_404(habit_id, session)
     if habit.type == "boolean" and payload.value != 1:
         raise invalid_habit("A Boolean check-in is always value 1")
+    if is_paused(day, pauses_of(habit)):
+        raise APIError(
+            status_code=409,
+            code="habit_day_paused",
+            message=f"{habit.name} is paused on {day.isoformat()}; "
+            "remove or edit the pause to check in",
+        )
+    if any(habit_skip.date == day for habit_skip in habit.skips):
+        raise APIError(
+            status_code=409,
+            code="habit_day_skipped",
+            message=f"{day.isoformat()} is skipped for {habit.name}; remove the skip to check in",
+        )
     check_in = await session.scalar(
         select(CheckIn).where(CheckIn.habit_id == habit_id, CheckIn.date == day)
     )
@@ -185,6 +207,170 @@ async def delete_check_in(habit_id: int, day: date, session: SessionDep) -> None
     await session.commit()
 
 
+async def validate_pause(
+    habit: Habit,
+    interval: Pause,
+    session: SessionDep,
+    *,
+    replacing: HabitPause | None = None,
+) -> None:
+    """The rules a pause's interval must meet before it is stored (issue
+    #559): it runs forwards, it overlaps none of the Habit's other pauses,
+    and it covers no date holding a Check-in — existing Check-ins stay
+    authoritative, so the conflict names their dates and deletes nothing.
+    `replacing` is the pause being edited, which may overlap itself.
+    """
+    if interval.end is not None and interval.end < interval.start:
+        raise APIError(
+            status_code=422, code="invalid_pause", message="A pause cannot end before it starts"
+        )
+    for other in habit.pauses:
+        if other is not replacing and interval.overlaps(pause_of(other)):
+            raise APIError(
+                status_code=409,
+                code="pause_overlaps",
+                message="This Habit is already paused over some of those dates",
+            )
+    query = select(CheckIn.date).where(CheckIn.habit_id == habit.id, CheckIn.date >= interval.start)
+    if interval.end is not None:
+        query = query.where(CheckIn.date <= interval.end)
+    conflicts = sorted((await session.scalars(query)).all())
+    if conflicts:
+        listed = ", ".join(day.isoformat() for day in conflicts)
+        raise APIError(
+            status_code=409,
+            code="pause_conflicts_with_check_ins",
+            message=f"Check-ins on {listed} prevent this pause; remove them first "
+            "or choose other dates",
+            details={"dates": [day.isoformat() for day in conflicts]},
+        )
+
+
+def pause_of(habit_pause: HabitPause) -> Pause:
+    return Pause(start=habit_pause.start_date, end=habit_pause.end_date)
+
+
+def pauses_of(habit: Habit) -> tuple[Pause, ...]:
+    return tuple(pause_of(habit_pause) for habit_pause in habit.pauses)
+
+
+@router.post("/{habit_id}/pauses", status_code=201)
+async def create_pause(
+    habit_id: int, payload: HabitPauseCreate, session: SessionDep
+) -> HabitPauseRead:
+    """Pause the Habit over a date interval (issue #559): its days are
+    neither done nor missed."""
+    habit = await get_habit_or_404(habit_id, session)
+    await validate_pause(habit, Pause(start=payload.start_date, end=payload.end_date), session)
+    habit_pause = HabitPause(start_date=payload.start_date, end_date=payload.end_date)
+    habit.pauses.append(habit_pause)
+    await session.commit()
+    return HabitPauseRead.model_validate(habit_pause)
+
+
+async def get_pause_or_404(habit: Habit, pause_id: int) -> HabitPause:
+    for habit_pause in habit.pauses:
+        if habit_pause.id == pause_id:
+            return habit_pause
+    raise NotFoundError(f"Pause {pause_id} not found on habit {habit.id}")
+
+
+@router.patch("/{habit_id}/pauses/{pause_id}")
+async def update_pause(
+    habit_id: int, pause_id: int, payload: HabitPauseUpdate, session: SessionDep
+) -> HabitPauseRead:
+    """Edit pause: move either end, or make it open-ended with a null end.
+    The edited interval meets the same rules as a new one."""
+    habit = await get_habit_or_404(habit_id, session)
+    habit_pause = await get_pause_or_404(habit, pause_id)
+    changes = payload.model_dump(exclude_unset=True)
+    interval = Pause(
+        start=changes.get("start_date", habit_pause.start_date),
+        end=changes.get("end_date", habit_pause.end_date),
+    )
+    await validate_pause(habit, interval, session, replacing=habit_pause)
+    habit_pause.start_date = interval.start
+    habit_pause.end_date = interval.end
+    await session.commit()
+    return HabitPauseRead.model_validate(habit_pause)
+
+
+@router.post("/{habit_id}/pauses/{pause_id}/resume")
+async def resume_pause(
+    habit_id: int, pause_id: int, payload: HabitPauseResume, session: SessionDep
+) -> HabitRead:
+    """Resume today: the caller's `today` is eligible again, so the pause
+    ends yesterday — or goes altogether when it had not begun before today.
+    A pause already over is left alone. Answers with the Habit, since the
+    pause may be gone."""
+    habit = await get_habit_or_404(habit_id, session)
+    habit_pause = await get_pause_or_404(habit, pause_id)
+    if habit_pause.start_date >= payload.today:
+        habit.pauses.remove(habit_pause)
+    elif habit_pause.end_date is None or habit_pause.end_date >= payload.today:
+        habit_pause.end_date = payload.today - timedelta(days=1)
+    await session.commit()
+    return HabitRead.model_validate(habit)
+
+
+@router.delete("/{habit_id}/pauses/{pause_id}", status_code=204)
+async def delete_pause(habit_id: int, pause_id: int, session: SessionDep) -> None:
+    """Remove the pause: its days are eligible again, and accept Check-ins."""
+    habit = await get_habit_or_404(habit_id, session)
+    habit_pause = await get_pause_or_404(habit, pause_id)
+    habit.pauses.remove(habit_pause)
+    await session.commit()
+
+
+@router.put("/{habit_id}/skips/{day}")
+async def put_skip(habit_id: int, day: date, session: SessionDep) -> HabitSkipRead:
+    """Skip one scheduled day on purpose (issue #564): it creates no
+    Check-in and counts as neither success nor failure. Only a scheduled,
+    unpaused day may be skipped, and never one holding a Check-in — the
+    Check-in stays authoritative, so the conflict names its date and deletes
+    nothing. Skipping a day twice keeps the one skip."""
+    habit = await get_habit_or_404(habit_id, session)
+    if not due_on(habit.frequency, day):
+        raise APIError(
+            status_code=422,
+            code="skip_not_scheduled",
+            message=f"{habit.name} is not scheduled on {day.isoformat()}, so there is nothing to skip",
+        )
+    if is_paused(day, pauses_of(habit)):
+        raise APIError(
+            status_code=409,
+            code="habit_day_paused",
+            message=f"{habit.name} is paused on {day.isoformat()}; a paused day needs no skip",
+        )
+    has_check_in = await session.scalar(
+        select(CheckIn.id).where(CheckIn.habit_id == habit_id, CheckIn.date == day)
+    )
+    if has_check_in is not None:
+        raise APIError(
+            status_code=409,
+            code="skip_conflicts_with_check_in",
+            message=f"A Check-in on {day.isoformat()} prevents this skip; remove it first",
+            details={"dates": [day.isoformat()]},
+        )
+    habit_skip = next((row for row in habit.skips if row.date == day), None)
+    if habit_skip is None:
+        habit_skip = HabitSkip(date=day)
+        habit.skips.append(habit_skip)
+        await session.commit()
+    return HabitSkipRead(habit_id=habit.id, date=day)
+
+
+@router.delete("/{habit_id}/skips/{day}", status_code=204)
+async def delete_skip(habit_id: int, day: date, session: SessionDep) -> None:
+    """Undo a skip: the day is eligible again, and accepts a Check-in."""
+    habit = await get_habit_or_404(habit_id, session)
+    habit_skip = next((row for row in habit.skips if row.date == day), None)
+    if habit_skip is None:
+        raise NotFoundError(f"{day.isoformat()} is not skipped for habit {habit_id}")
+    habit.skips.remove(habit_skip)
+    await session.commit()
+
+
 @router.get("/{habit_id}/stats")
 async def read_habit_stats(
     habit_id: int,
@@ -204,11 +390,16 @@ async def read_habit_stats(
     zone = caller_zone(tz)
     habit = await get_habit_or_404(habit_id, session)
     rows = (await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit_id))).all()
-    checked = {row.date for row in rows}
+    values = {row.date: row.value for row in rows}
+    checked = set(values)
     heatmap_year = year if year is not None else today.year
+    start = eligible_from(habit.created_at, zone, checked, today)
+    days = habit_days(habit, values, today, start)
+    week = current_week(days)
     return HabitStats(
-        streak=current_streak(habit.frequency, checked, today),
-        eligible_from=eligible_from(habit.created_at, zone, checked, today),
+        streak=current_streak(days),
+        eligible_from=start,
+        week=None if week is None else HabitWeek.model_validate(week, from_attributes=True),
         heatmap=[
             HeatmapDay(date=row.date, value=row.value, intensity=intensity(row.value, habit.target))
             for row in sorted(rows, key=lambda row: row.date)

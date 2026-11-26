@@ -2,6 +2,7 @@
 `owner_id` (issue #408)."""
 
 from datetime import UTC, date, datetime
+from enum import StrEnum
 
 from sqlalchemy import (
     JSON,
@@ -184,6 +185,32 @@ class UserSettings(Base):
     # behind a counted disclosure. Chosen by the User, never inferred; off by
     # default so Today is unchanged after upgrade.
     gentle_return_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Reminder notifications (issue #557): the User opts in to Reminder
+    # delivery. Off by default so stored Reminder offsets never start
+    # notifying after upgrade. Browser permission is per device and stays in
+    # the browser; this flag only records the User's choice.
+    reminder_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # When the User last turned them on (review of #565): the missed list
+    # holds only Reminders delivered after it, so old offsets never surface.
+    # Reset on every off-to-on change; null while they have never been on.
+    reminder_notifications_enabled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    # Quiet hours (issue #567): a band of the day during which Reminder
+    # notifications are held and delivered once when it ends. "HH:MM"
+    # wall-clock labels read in the claiming tab's zone; the band may wrap
+    # past midnight (start after end). Not Active hours, which only shapes
+    # the Calendar grid and never delivery.
+    quiet_hours_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    quiet_hours_start: Mapped[str] = mapped_column(String(5), default="22:00")
+    quiet_hours_end: Mapped[str] = mapped_column(String(5), default="07:00")
+    # Planning window (issue #563): the band of each day the capacity summary
+    # measures available time against. The User's own choice, stored apart
+    # from Active hours so changing the grid band never moves it. Off by
+    # default; same "HH:MM" 30-minute grid and no-wrap rule (router-validated).
+    planning_window_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    planning_window_start: Mapped[str] = mapped_column(String(5), default="09:00")
+    planning_window_end: Mapped[str] = mapped_column(String(5), default="17:00")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -289,12 +316,26 @@ class Task(OwnedMixin, Base):
     time_zone: Mapped[str | None] = mapped_column(String(64), default=None)
     # Reminders: signed ISO-8601 duration offsets from the task's date
     # (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
-    # Stored only — v1 delivers no notifications (see the PRD).
+    # Delivered only to an open tab of a User who opted in (issue #561,
+    # ADR 0019; ledger in ReminderDelivery).
     reminders: Mapped[list[str]] = mapped_column(JSON, default=list)
     # Recurrence: iCalendar RRULE content (e.g. "FREQ=WEEKLY;BYDAY=MO,TH"),
     # anchored at the task's due date. Completing a recurring task advances
     # its dates in place instead of completing the row (ADR 0003).
     recurrence: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Duration estimate (issue #563): how long the User expects the work to
+    # take, in minutes. Optional, never inferred (not from Focus either),
+    # used only for work planning: the capacity summary and a prefill for
+    # Planned work. Kept apart from the Planned work duration.
+    estimate_minutes: Mapped[int | None] = mapped_column(default=None)
+    # Planned work (issue #558): at most one optional block of reserved work
+    # time, held apart from start/due — moving or removing it never touches
+    # the deadline, and it is not a Reminder anchor. Start, duration and
+    # timezone are set together (all null = no plan); the buffer is optional.
+    planned_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    planned_duration_minutes: Mapped[int | None] = mapped_column(default=None)
+    planned_time_zone: Mapped[str | None] = mapped_column(String(64), default=None)
+    planned_buffer_minutes: Mapped[int | None] = mapped_column(default=None)
     list_id: Mapped[int] = mapped_column(ForeignKey("lists.id", ondelete="CASCADE"), index=True)
     section_id: Mapped[int | None] = mapped_column(
         ForeignKey("sections.id", ondelete="SET NULL"), index=True, default=None
@@ -318,6 +359,24 @@ class Task(OwnedMixin, Base):
     key_result_id: Mapped[int | None] = mapped_column(
         ForeignKey("key_results.id", ondelete="SET NULL"), index=True, default=None
     )
+
+    @property
+    def planned_work(self) -> dict[str, object] | None:
+        """The planned work block as one value, or None when unplanned."""
+        if self.planned_start is None or self.planned_duration_minutes is None:
+            return None
+        return {
+            "start": self.planned_start,
+            "duration_minutes": self.planned_duration_minutes,
+            "time_zone": self.planned_time_zone,
+            "buffer_minutes": self.planned_buffer_minutes,
+        }
+
+    def clear_planned_work(self) -> None:
+        self.planned_start = None
+        self.planned_duration_minutes = None
+        self.planned_time_zone = None
+        self.planned_buffer_minutes = None
 
     task_list: Mapped[TaskList] = relationship(back_populates="tasks")
     # Check Items always travel with their Task (composition), so load them
@@ -407,6 +466,20 @@ class Habit(OwnedMixin, Base):
     check_ins: Mapped[list["CheckIn"]] = relationship(
         back_populates="habit", cascade="all, delete-orphan", passive_deletes=True
     )
+    pauses: Mapped[list["HabitPause"]] = relationship(
+        back_populates="habit",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+        order_by="HabitPause.start_date",
+    )
+    skips: Mapped[list["HabitSkip"]] = relationship(
+        back_populates="habit",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+        order_by="HabitSkip.date",
+    )
 
 
 class CheckIn(OwnedMixin, Base):
@@ -429,6 +502,100 @@ class CheckIn(OwnedMixin, Base):
     value: Mapped[float] = mapped_column(default=1.0)
 
     habit: Mapped[Habit] = relationship(back_populates="check_ins")
+
+
+class HabitPause(OwnedMixin, Base):
+    """A Habit pause (issue #559) — an explicit date interval, both ends
+    inclusive local days, whose days are not eligible: neither done nor
+    missed. `end_date` None is open-ended. A Habit's pauses never overlap,
+    and never cover a date holding a Check-in (app.routers.v1.habits).
+
+    Composition under a Habit (deleted with it), carrying its own
+    `owner_id` like a Check-in.
+    """
+
+    __tablename__ = "habit_pauses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"), index=True)
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date, default=None)
+
+    habit: Mapped[Habit] = relationship(back_populates="pauses")
+
+
+class DeliveryState(StrEnum):
+    """Where one Reminder occurrence's delivery stands in the ledger (ADR
+    0019): the one list of states, read by the claim, the missed list and
+    the API."""
+
+    # A tab holds or held the lease.
+    CLAIMED = "claimed"
+    # The browser reported display.
+    SHOWN = "shown"
+    # The browser refused to show it; final.
+    FAILED = "failed"
+    # The User asked for it again at `snoozed_until` (issue #566).
+    SNOOZED = "snoozed"
+    # The User dismissed it as a missed reminder (issue #565).
+    DISMISSED = "dismissed"
+
+
+class ReminderDelivery(OwnedMixin, Base):
+    """One entry of the delivery ledger (issue #561, ADR 0019): a Reminder
+    of one Task occurrence that an open tab claimed for display.
+
+    Keyed by (Task, Reminder offset, occurrence due date): the unique key is
+    what makes one occurrence notify once however many tabs claim it. The
+    lease (`lease_token`, `lease_expires_at`) says which tab holds it; an
+    unreported lease that expires is retried (app.reminder_delivery).
+    `fire_at` is when this occurrence's Reminder came due. History under a
+    Task (deleted with it), carrying its own `owner_id`.
+    """
+
+    __tablename__ = "reminder_deliveries"
+    __table_args__ = (UniqueConstraint("task_id", "offset", "occurrence_due"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
+    offset: Mapped[str] = mapped_column(String(32))
+    occurrence_due: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # A DeliveryState, stored as its string value.
+    state: Mapped[str] = mapped_column(String(16), default="claimed")
+    attempts: Mapped[int] = mapped_column(default=1)
+    lease_token: Mapped[str] = mapped_column(String(64))
+    lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # The User's snooze (issue #566): while set, this occurrence's Reminder
+    # comes due at this instant instead of `fire_at`. An override on the
+    # delivery only; the Task's dates and offsets never change.
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+    # Every read names its Task, so load it with the row.
+    task: Mapped[Task] = relationship(lazy="joined")
+
+
+class HabitSkip(OwnedMixin, Base):
+    """A Habit skip (issue #564) — one scheduled local day the User
+    explicitly marks as not practised: neither done nor missed, unlike a
+    forgotten (missed) day. Keyed by (habit, date); never placed on an
+    unscheduled or paused day, nor on a date holding a Check-in
+    (app.routers.v1.habits).
+
+    Composition under a Habit (deleted with it), carrying its own
+    `owner_id` like a Check-in.
+    """
+
+    __tablename__ = "habit_skips"
+    __table_args__ = (UniqueConstraint("habit_id", "date", name="uq_habit_skips_habit_id_date"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"), index=True)
+    date: Mapped[date] = mapped_column(Date)
+
+    habit: Mapped[Habit] = relationship(back_populates="skips")
 
 
 class Goal(OwnedMixin, Base):

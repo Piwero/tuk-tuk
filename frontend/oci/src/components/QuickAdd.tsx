@@ -22,6 +22,7 @@ import { useAssistAvailable } from "../useAssistAvailable";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
+import { ReminderDeliveryNote } from "./ReminderDeliveryNote";
 import { TokenInput, type TokenChannel } from "./TokenInput";
 
 function formatDraftDate(dueDate: string, isAllDay: boolean): string {
@@ -515,6 +516,9 @@ export function QuickAdd({
               />
             </span>
           ))}
+          {/* As in the Quick-Add dialog and Task detail (#557, #569): a
+          stored offset is never mistaken for an alert on this device. */}
+          {draft.reminders.length > 0 && <ReminderDeliveryNote />}
           {draft.tokenListId !== null && (
             <span className="list-chip token-chip">
               {lists.find((list) => list.id === draft.tokenListId)?.name ?? ""}

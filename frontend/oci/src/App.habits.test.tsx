@@ -92,7 +92,7 @@ describe("Habits week grid", () => {
     expect(state("Drink water, Tuesday, Jun 30: in progress: 2 of 4")).toBe("state-partial");
     expect(state("Drink water, Wednesday, Jul 1: missed")).toBe("state-missed");
     expect(state("Drink water, Friday, Jul 3: not yet checked in")).toBe("state-open-today");
-    expect(state("Review week, Friday, Jul 3: not scheduled")).toBe("state-not-scheduled");
+    expect(state("Review week, Friday, Jul 3: not scheduled")).toBe("state-unscheduled");
     // A partial day sits on a lighter step of the heat ramp than a full one.
     expect(within(grid).getByLabelText("Drink water, Monday, Jun 29: checked in")).toHaveClass(
       "level-4",
@@ -529,6 +529,8 @@ describe("Habit start: days before it read as not started, never missed", () => 
       "Missed",
       "Not started: before the Habit began",
       "Not scheduled",
+      "Paused: not counted, neither done nor missed",
+      "Skipped: on purpose, not counted, neither done nor missed",
       "Future",
     ]);
     expect(legend).toBeVisible();
@@ -865,7 +867,14 @@ describe("Managing Habits", () => {
       within(menu)
         .getAllByRole("menuitem")
         .map((item) => item.getAttribute("aria-label")),
-    ).toEqual(["History Meditate", "Edit Meditate", "Archive Meditate", "Delete habit Meditate"]);
+    ).toEqual([
+      "History Meditate",
+      "Edit Meditate",
+      "Pause Meditate",
+      "Skip today for Meditate",
+      "Archive Meditate",
+      "Delete habit Meditate",
+    ]);
 
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>

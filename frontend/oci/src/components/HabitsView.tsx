@@ -4,28 +4,41 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createHabit,
+  createHabitPause,
   deleteHabit,
   fetchCheckIns,
   fetchHabits,
   fetchHabitStats,
+  resumeHabitPause,
+  skipHabitDay,
+  unskipHabitDay,
   updateHabit,
+  updateHabitPause,
   type CheckIn,
   type Habit,
   type HabitCreateInput,
+  type HabitPauseInput,
   type HabitStats,
 } from "../api";
 import { addDays, formatDate, fromDayIso, localDayOf, shortDayLabel } from "../dates";
 import { habitFrequencyLabel } from "../habitFrequency";
 import { tapCheckIn } from "../habitCheckIn";
-import { habitDayReader, stripDays, type DayState } from "../habitStats";
+import { currentOrNextPause, habitDayReader, stripDays, type DayState } from "../habitStats";
 import { HabitActionsMenu } from "./HabitActionsMenu";
 import { HabitCardStats } from "./HabitCardStats";
 import { HabitForm, type HabitFormValues } from "./HabitForm";
 import { HabitHistory } from "./HabitHistory";
+import { HabitPauseForm, HabitPauseStatus } from "./HabitPause";
+import { HabitSkipStatus } from "./HabitSkip";
+import { HabitWeekTarget } from "./HabitWeekTarget";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 
-type Editor = { mode: "create" } | { mode: "edit"; habitId: number } | null;
+type Editor =
+  | { mode: "create" }
+  | { mode: "edit"; habitId: number }
+  | { mode: "pause"; habitId: number }
+  | null;
 
 /** The today's-Habits screen: the Habits scheduled today with one-tap
  * Check-ins, plus the rest under "Other habits" for management. Self-fetching,
@@ -175,6 +188,34 @@ export function HabitsView({
     await load();
   }
 
+  /** Saves the pause form: a new pause, or Edit pause on the current one.
+   * A refusal (Check-ins in the way) throws back to the form, which keeps
+   * the attempted dates and names the conflict. */
+  async function savePause(habit: Habit, input: HabitPauseInput): Promise<void> {
+    const pause = currentOrNextPause(habit, today);
+    if (pause === undefined) {
+      await createHabitPause(habit.id, input);
+    } else {
+      await updateHabitPause(habit.id, pause.id, input);
+    }
+    setEditor(null);
+    await load();
+  }
+
+  async function resumeToday(habit: Habit): Promise<void> {
+    const pause = currentOrNextPause(habit, today);
+    if (pause !== undefined) {
+      await resumeHabitPause(habit.id, pause.id, today);
+      await load();
+    }
+  }
+
+  /** Skip today on purpose (issue #564), or undo it. */
+  async function setSkippedToday(habit: Habit, skip: boolean): Promise<void> {
+    await (skip ? skipHabitDay(habit.id, today) : unskipHabitDay(habit.id, today));
+    await load();
+  }
+
   async function handleDelete(habit: Habit): Promise<void> {
     const confirmed = window.confirm(
       `Delete the habit "${habit.name}" and its whole check-in history?`,
@@ -187,11 +228,26 @@ export function HabitsView({
   }
 
   function actionsMenu(habit: Habit): React.JSX.Element {
+    const todayState = habitDayReader(
+      habit,
+      statsByHabit.get(habit.id),
+      today,
+    )(today, valueOn(habit, today)).state;
     return (
       <HabitActionsMenu
         habit={habit}
         onHistory={() => setHistoryId((current) => (current === habit.id ? null : habit.id))}
         onEdit={() => setEditor({ mode: "edit", habitId: habit.id })}
+        onPause={
+          habit.is_archived || currentOrNextPause(habit, today) !== undefined
+            ? null
+            : () => setEditor({ mode: "pause", habitId: habit.id })
+        }
+        onSkipToday={
+          habit.is_archived || todayState !== "open-today"
+            ? null
+            : () => void setSkippedToday(habit, true)
+        }
         onToggleArchive={() => void setArchived(habit, !habit.is_archived)}
         onDelete={() => void handleDelete(habit)}
       />
@@ -250,8 +306,13 @@ export function HabitsView({
           const className = `habit-cell state-${state} heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}${day === today ? " today" : ""}`;
           return (
             <td key={day}>
-              {state === "future" ? (
-                <span role="img" className={className} aria-label={label} />
+              {state === "future" || state === "paused" || state === "skipped" ? (
+                // Inert: a future day can't be written yet, and a paused or
+                // skipped day refuses a Check-in until it is changed.
+                <span role="img" className={className} aria-label={label}>
+                  {state === "paused" && <Icon name="pause" size={12} />}
+                  {state === "skipped" && <Icon name="skip-forward" size={12} />}
+                </span>
               ) : (
                 <button
                   type="button"
@@ -281,10 +342,61 @@ export function HabitsView({
         })}
       </tr>,
     ];
+    if (stats?.week) {
+      rows.push(
+        <tr key={`${habit.id}-week`}>
+          <td colSpan={8} className="habit-detail-cell">
+            <HabitWeekTarget label={`${habit.name} this week`} week={stats.week} />
+          </td>
+        </tr>,
+      );
+    }
+    const pause = currentOrNextPause(habit, today);
+    if (editor?.mode === "pause" && editor.habitId === habit.id) {
+      rows.push(
+        <tr key={`${habit.id}-pause`}>
+          <td colSpan={8} className="habit-detail-cell">
+            <HabitPauseForm
+              label={pause === undefined ? `Pause ${habit.name}` : `Edit pause for ${habit.name}`}
+              initial={pause}
+              today={today}
+              onSave={(input) => savePause(habit, input)}
+              onCancel={() => setEditor(null)}
+            />
+          </td>
+        </tr>,
+      );
+    } else if (pause !== undefined) {
+      rows.push(
+        <tr key={`${habit.id}-pause`}>
+          <td colSpan={8} className="habit-detail-cell">
+            <HabitPauseStatus
+              habitName={habit.name}
+              pause={pause}
+              today={today}
+              onEdit={() => setEditor({ mode: "pause", habitId: habit.id })}
+              onResume={() => void resumeToday(habit)}
+            />
+          </td>
+        </tr>,
+      );
+    }
+    if (read(today, valueOn(habit, today)).state === "skipped") {
+      rows.push(
+        <tr key={`${habit.id}-skip`}>
+          <td colSpan={8} className="habit-detail-cell">
+            <HabitSkipStatus
+              habitName={habit.name}
+              onUndo={() => void setSkippedToday(habit, false)}
+            />
+          </td>
+        </tr>,
+      );
+    }
     if (historyId === habit.id) {
       rows.push(
         <tr key={`${habit.id}-history`}>
-          <td colSpan={8}>
+          <td colSpan={8} className="habit-detail-cell">
             <HabitHistory habit={habit} onChanged={() => void load()} />
           </td>
         </tr>,
@@ -440,7 +552,13 @@ const LEGEND: { state: DayState; level: number; text: string }[] = [
   { state: "open-today", level: 0, text: "Not yet: today, still open" },
   { state: "missed", level: 0, text: "Missed" },
   { state: "not-started", level: 0, text: "Not started: before the Habit began" },
-  { state: "not-scheduled", level: 0, text: "Not scheduled" },
+  { state: "unscheduled", level: 0, text: "Not scheduled" },
+  { state: "paused", level: 0, text: "Paused: not counted, neither done nor missed" },
+  {
+    state: "skipped",
+    level: 0,
+    text: "Skipped: on purpose, not counted, neither done nor missed",
+  },
   { state: "future", level: 0, text: "Future" },
 ];
 
@@ -454,6 +572,8 @@ function DayLegend(): React.JSX.Element {
             className={`habit-cell habits-legend-swatch state-${state} heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}`}
           >
             {state === "done" && <Icon name="check" size={14} />}
+            {state === "paused" && <Icon name="pause" size={12} />}
+            {state === "skipped" && <Icon name="skip-forward" size={12} />}
           </span>
           {text}
         </li>
@@ -478,13 +598,14 @@ async function habitStatsFor(habit: Habit, today: string): Promise<HabitStats> {
   const pages = await Promise.all(
     years.map(async (year) => fetchHabitStats(habit.id, today, Number(year))),
   );
-  // The Streak and the Habit start are as of `today` whichever year was
-  // asked for, so any page's will do; the heatmaps are disjoint years, so
-  // they simply concatenate.
+  // The Streak, the Habit start and the week are as of `today` whichever
+  // year was asked for, so any page's will do; the heatmaps are disjoint
+  // years, so they simply concatenate.
   return {
     streak: pages[0]?.streak ?? 0,
     heatmap: pages.flatMap((page) => page.heatmap),
     eligible_from: pages[0]?.eligible_from ?? today,
+    week: pages[0]?.week ?? null,
   };
 }
 

@@ -8,6 +8,8 @@
 import {
   type Event,
   type EventAttendee,
+  type PlannedWork,
+  type PlannedWorkRead,
   type Task,
   type TaskCreateInput,
   type TaskPatch,
@@ -68,11 +70,22 @@ export interface EventEntry {
   readonly event: Event;
 }
 
+/** A Task's Planned work block occupying calendar space (issue #562): its
+ * own arm, so it renders as a labelled plan apart from the Task's schedule
+ * entry. It carries the Task, because the plan's one write path is the
+ * Task's (`updatePlannedWork`) — moving it never touches the due date, and
+ * no Event write path exists for it to reach. */
+export interface PlannedEntry {
+  readonly kind: "planned";
+  readonly task: Task;
+  readonly plan: PlannedWorkRead;
+}
+
 /** Anything that can occupy calendar space in Month/Week/Day. Every mutating
  * path (create/move/resize/patch) takes a Task directly rather than an
  * Entry, so the type system — not reviewer vigilance — keeps a write from
  * ever targeting an unwritable arm (an Event has none). */
-export type Entry = TaskEntry | EventEntry;
+export type Entry = TaskEntry | PlannedEntry | EventEntry;
 
 /** The only place a TaskEntry gets built, so every future arm gets a
  * construction site just like it. */
@@ -80,22 +93,108 @@ export function taskEntry(task: Task): TaskEntry {
   return { kind: "task", task };
 }
 
+/** The only place a PlannedEntry gets built: none when the Task is unplanned. */
+export function plannedEntries(task: Task): PlannedEntry[] {
+  const plan = task.planned_work ?? null;
+  return plan === null ? [] : [{ kind: "planned", task, plan }];
+}
+
 /** The only place an EventEntry gets built. */
 export function eventEntry(event: Event): EventEntry {
   return { kind: "event", event };
 }
 
+/** A plan's end as the grid draws it: a block ending exactly at the next
+ * local midnight (allowed, #558) is drawn to 23:59 of its own day, the same
+ * convention minuteLabel uses, rather than leaking into the next day. */
+function plannedDrawnEnd(plan: PlannedWorkRead): string {
+  const startDay = zonedDay(plan.start, plan.time_zone);
+  return zonedDay(plan.end, plan.time_zone) === startDay
+    ? plan.end
+    : new Date(new Date(plan.end).getTime() - 60_000).toISOString();
+}
+
 /** An entry's minimal time-shape, regardless of kind. An Event carries no
  * timezone of its own on the wire — `time_zone: null` reads it in the
  * *viewer's* timezone (see zonedDay/zonedTime), deliberately asymmetric
- * with a Task, which renders in the timezone it was scheduled in. */
+ * with a Task, which renders in the timezone it was scheduled in. Planned
+ * work renders in the timezone it was planned in, like a Task. */
 export function entryTimeShape(entry: Entry): EntryTimeShape {
   switch (entry.kind) {
     case "task":
       return entry.task;
+    case "planned":
+      return {
+        start_date: entry.plan.start,
+        due_date: plannedDrawnEnd(entry.plan),
+        is_all_day: false,
+        time_zone: entry.plan.time_zone,
+      };
     case "event":
       return { ...entry.event, time_zone: null };
   }
+}
+
+/** The minutes of its day a plan's buffer runs over, after the block, or
+ * null without one. Never past the day's end (#558 keeps it inside). */
+export function plannedBufferMinutes(entry: PlannedEntry): [number, number] | null {
+  const buffer = entry.plan.buffer_minutes ?? 0;
+  const minutes = blockMinutes(entryTimeShape(entry));
+  if (buffer <= 0 || minutes === null) {
+    return null;
+  }
+  return [minutes[1], Math.min(minutes[1] + buffer, MINUTES_IN_DAY)];
+}
+
+/** The plan for a Planned work block dropped on a calendar cell (hour is
+ * null on a Month cell or the all-day lane): a Month drop keeps its time of
+ * day and moves it to that day; an hour drop starts it at that hour. Its
+ * length and buffer are kept, and it is written in the browser's timezone
+ * like every v1 write. Null when the moved block would run past midnight. */
+export function plannedMove(
+  plan: PlannedWork,
+  dayIso: string,
+  hour: number | null,
+): PlannedWork | null {
+  const time = hour === null ? zonedTime(plan.start, plan.time_zone) : hourLabel(hour);
+  const startMinute = timeMinutes(time);
+  if (startMinute + plan.duration_minutes + (plan.buffer_minutes ?? 0) > MINUTES_IN_DAY) {
+    return null;
+  }
+  return {
+    start: instantOf(dayIso, time),
+    duration_minutes: plan.duration_minutes,
+    time_zone: browserTimeZone(),
+    buffer_minutes: plan.buffer_minutes,
+  };
+}
+
+/** The plan after a block edge is released at a minute of its day column:
+ * the start edge moves the start and keeps the end; the end edge changes
+ * only the duration. Null when the edge would cross its opposite or push
+ * the block and buffer past midnight. */
+export function plannedResize(
+  plan: PlannedWorkRead,
+  edge: "start" | "end",
+  dayIso: string,
+  minute: number,
+): PlannedWork | null {
+  const startMs = new Date(plan.start).getTime();
+  const endMs = new Date(plan.end).getTime();
+  const at = new Date(instantOf(dayIso, minuteLabel(minute))).getTime();
+  const [newStart, newEnd] = edge === "start" ? [at, endMs] : [startMs, at];
+  if (
+    newEnd <= newStart ||
+    minute + (edge === "end" ? (plan.buffer_minutes ?? 0) : 0) > MINUTES_IN_DAY
+  ) {
+    return null;
+  }
+  return {
+    start: new Date(newStart).toISOString(),
+    duration_minutes: Math.round((newEnd - newStart) / 60_000),
+    time_zone: browserTimeZone(),
+    buffer_minutes: plan.buffer_minutes,
+  };
 }
 
 /** Monday of the week containing the day (WKST=MO, matching recurrence). */

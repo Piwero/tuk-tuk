@@ -67,7 +67,7 @@ export interface Task {
   time_zone: string | null;
   /** Reminder offsets from the task's date: signed ISO-8601 durations
    * (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
-   * Stored only — v1 delivers no notifications. */
+   * Delivered only to an open tab of a User who opted in (ADR 0019). */
   reminders: string[];
   /** Recurrence: iCalendar RRULE content (e.g. "FREQ=WEEKLY;BYDAY=MO,TH"),
    * anchored at the due date. Completing a recurring task advances its dates
@@ -80,9 +80,31 @@ export interface Task {
   source_google_event_id: string | null;
   /** The Key Result this Task's completion counts toward, if any (ADR 0012). */
   key_result_id: number | null;
+  /** Planned work (#558): reserved work time, separate from start/due —
+   * moving or removing it never changes the deadline. Null when unplanned;
+   * optional so older payloads without the field still read as unplanned. */
+  planned_work?: PlannedWorkRead | null;
+  /** Duration estimate in minutes (#563), only for work planning; null
+   * when the User gave none. Never inferred. */
+  estimate_minutes?: number | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
+}
+
+/** A planned work block as written: a start instant, a positive duration,
+ * the IANA timezone it was planned in, and an optional buffer after. Stays
+ * within one local day of that timezone. */
+export interface PlannedWork {
+  start: string;
+  duration_minutes: number;
+  time_zone: string;
+  buffer_minutes: number | null;
+}
+
+/** As read: plus its end instant (start + duration, elapsed). */
+export interface PlannedWorkRead extends PlannedWork {
+  end: string;
 }
 
 export interface Page<T> {
@@ -101,6 +123,9 @@ export class ApiError extends Error {
     public readonly code: string,
     message: string,
     public readonly status?: number,
+    /** The envelope's machine-readable specifics, when it carries any
+     * (a pause's conflicting Check-in dates, issue #559). */
+    public readonly details?: unknown,
   ) {
     super(message);
   }
@@ -136,7 +161,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         listener(body.error.code);
       }
     }
-    throw new ApiError(body.error.code, body.error.message, response.status);
+    throw new ApiError(body.error.code, body.error.message, response.status, body.error.details);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -1113,12 +1138,24 @@ export interface TaskPatch {
   recurrence?: string | null;
   /** null detaches the Task from its Key Result. */
   key_result_id?: number | null;
+  /** Duration estimate in minutes (#563); null removes it. */
+  estimate_minutes?: number | null;
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {
   return request(`/api/v1/tasks/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
+  });
+}
+
+/** Replaces a Task's planned work block whole (#558); null removes it.
+ * Kept apart from TaskPatch, which optimistic updates spread onto a Task:
+ * the written block has no `end` until the server computes it. */
+export function updatePlannedWork(taskId: number, plannedWork: PlannedWork | null): Promise<Task> {
+  return request(`/api/v1/tasks/${taskId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ planned_work: plannedWork }),
   });
 }
 
@@ -1180,6 +1217,74 @@ export interface Habit {
   /** Archived Habits leave the today screen but keep their whole history. */
   is_archived: boolean;
   created_at: string;
+  /** The Habit's pauses, oldest first (issue #559). Optional on the wire
+   * only for an older server, which sends none. */
+  pauses?: HabitPause[];
+  /** The Habit's skipped days (YYYY-MM-DD), oldest first (issue #564).
+   * Optional on the wire only for an older server, which sends none. */
+  skips?: string[];
+}
+
+/** A Habit pause (issue #559): an explicit interval of local days, both
+ * ends inclusive, whose days are neither done nor missed. A null
+ * `end_date` is open-ended. */
+export interface HabitPause {
+  id: number;
+  habit_id: number;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface HabitPauseInput {
+  start_date: string;
+  end_date: string | null;
+}
+
+/** Pause a Habit. Refused (409 `pause_conflicts_with_check_ins`, with the
+ * dates in `error.details.dates`) when Check-ins fall inside the interval. */
+export function createHabitPause(habitId: number, input: HabitPauseInput): Promise<HabitPause> {
+  return request(`/api/v1/habits/${habitId}/pauses`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Edit pause: move either end, or a null end for open-ended. */
+export function updateHabitPause(
+  habitId: number,
+  pauseId: number,
+  input: HabitPauseInput,
+): Promise<HabitPause> {
+  return request(`/api/v1/habits/${habitId}/pauses/${pauseId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Resume today: the pause ends yesterday (or goes, if it began today or
+ * later), so `today` is eligible again. Answers with the Habit. */
+export function resumeHabitPause(habitId: number, pauseId: number, today: string): Promise<Habit> {
+  return request(`/api/v1/habits/${habitId}/pauses/${pauseId}/resume`, {
+    method: "POST",
+    body: JSON.stringify({ today }),
+  });
+}
+
+/** Skip one scheduled day on purpose (issue #564): no Check-in, neither
+ * done nor missed. Refused on an unscheduled day (422
+ * `skip_not_scheduled`), a paused day (409 `habit_day_paused`) or a day
+ * holding a Check-in (409 `skip_conflicts_with_check_in`, the date in
+ * `error.details.dates`). */
+export function skipHabitDay(
+  habitId: number,
+  day: string,
+): Promise<{ habit_id: number; date: string }> {
+  return request(`/api/v1/habits/${habitId}/skips/${day}`, { method: "PUT" });
+}
+
+/** Undo a skip: the day is eligible again and accepts a Check-in. */
+export function unskipHabitDay(habitId: number, day: string): Promise<void> {
+  return request(`/api/v1/habits/${habitId}/skips/${day}`, { method: "DELETE" });
 }
 
 /** A Check-in — one day's progress on a Habit, keyed by (habit, date). */
@@ -1274,6 +1379,24 @@ export interface HabitStats {
   streak: number;
   heatmap: HeatmapDay[];
   eligible_from: string;
+  /** The week holding `today` for an N-times-per-week Habit (issue #568);
+   * null (or absent, from an older server) for daily and weekday Habits. */
+  week?: HabitWeek | null;
+}
+
+/** A times-per-week Habit's week, Monday to Sunday. A pause or skip inside it
+ * never lowers `target`; only a pause over the whole week (from the Habit
+ * start) sets `excluded`, and then it counts as neither met nor missed. */
+export interface HabitWeek {
+  start: string;
+  end: string;
+  target: number;
+  /** Days whose Check-in met the Habit's Target. */
+  done: number;
+  remaining: number;
+  paused_days: number;
+  skipped_days: number;
+  excluded: boolean;
 }
 
 /** Statistics as of `today` (the caller's local day), with the Habit start
@@ -1816,6 +1939,28 @@ export function updateActiveHoursSettings(
   });
 }
 
+/** Planning window (issue #563): the band of each day the Calendar's
+ * capacity summary measures. The User's own choice, separate from Active
+ * hours (which only shapes the grid); off by default, 09:00–17:00 prefilled. */
+export interface PlanningWindowSettings {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export function fetchPlanningWindowSettings(): Promise<PlanningWindowSettings> {
+  return request("/api/v1/settings/planning-window");
+}
+
+export function updatePlanningWindowSettings(
+  settings: PlanningWindowSettings,
+): Promise<PlanningWindowSettings> {
+  return request("/api/v1/settings/planning-window", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
 /** Gentle return (issue #548): when on, Today collapses every earlier overdue
  * Task behind a counted disclosure. Chosen by the User, off by default;
  * presentation only — no Task date changes. */
@@ -1833,6 +1978,179 @@ export function updateGentleReturnSettings(
   return request("/api/v1/settings/gentle-return", {
     method: "PUT",
     body: JSON.stringify(settings),
+  });
+}
+
+/** Reminder notifications (issue #557): the User's opt-in to Reminder
+ * delivery, off by default and private to them. Browser permission is per
+ * device and stays in the browser; it is never sent here. */
+export interface ReminderNotificationSettings {
+  enabled: boolean;
+}
+
+export function fetchReminderNotificationSettings(): Promise<ReminderNotificationSettings> {
+  return request("/api/v1/settings/reminder-notifications");
+}
+
+export function updateReminderNotificationSettings(
+  settings: ReminderNotificationSettings,
+): Promise<ReminderNotificationSettings> {
+  return request("/api/v1/settings/reminder-notifications", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** Reminder delivery (issue #561, ADR 0019): a lease on one Reminder of
+ * one Task occurrence that came due. The tab that claimed it shows it, then
+ * reports `shown` or `failed` with `lease_token`; an unreported lease
+ * expires and the server may hand it to another claim. */
+export interface ReminderClaim {
+  id: number;
+  task_id: number;
+  task_title: string;
+  /** The Reminder: an ISO-8601 offset from the Task's date. */
+  offset: string;
+  /** The Task occurrence's due date this Reminder belongs to. */
+  occurrence_due: string;
+  fire_at: string;
+  state: "claimed" | "shown" | "failed" | "snoozed";
+  attempt: number;
+  /** When a snoozed Reminder comes due again (issue #566); null if never
+   * snoozed. Optional for servers before #566. */
+  snoozed_until?: string | null;
+  lease_token: string;
+  lease_expires_at: string;
+}
+
+/** A ledger row as the server reports it, without a lease. */
+export type ReminderDeliveryRead = Omit<ReminderClaim, "lease_token" | "lease_expires_at">;
+
+/** Quiet hours (issue #567): a band of the day during which Reminder
+ * notifications are held and notify once when it ends. "HH:MM" labels on
+ * the tab's own wall clock; a start after the end wraps past midnight. A
+ * notification setting only: Active hours never change delivery. */
+export interface QuietHoursSettings {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export function fetchQuietHoursSettings(): Promise<QuietHoursSettings> {
+  return request("/api/v1/settings/quiet-hours");
+}
+
+export function updateQuietHoursSettings(
+  settings: QuietHoursSettings,
+): Promise<QuietHoursSettings> {
+  return request("/api/v1/settings/quiet-hours", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** A Reminder that fired inside Quiet hours and waits for `deliver_at`,
+ * the band's end (issue #567). */
+export interface HeldReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  fire_at: string;
+  deliver_at: string;
+}
+
+export interface ReminderClaimPage {
+  items: ReminderClaim[];
+  /** Held by Quiet hours right now (absent from an older server). */
+  held?: HeldReminder[];
+  /** When the Quiet hours band holding now ends; null outside it. */
+  quiet_until?: string | null;
+}
+
+/** Claims the Reminders due now that no other tab holds. `tz` anchors
+ * all-day Tasks and Quiet hours; nothing is claimed while the User's
+ * opt-in is off or while Quiet hours are on. */
+export function claimDueReminders(tz: string): Promise<ReminderClaimPage> {
+  return request(`/api/v1/reminder-deliveries/claim?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+  });
+}
+
+export function reportReminderDelivery(
+  claim: ReminderClaim,
+  outcome: "shown" | "failed",
+): Promise<unknown> {
+  return request(`/api/v1/reminder-deliveries/${claim.id}/${outcome}`, {
+    method: "POST",
+    body: JSON.stringify({ lease_token: claim.lease_token }),
+  });
+}
+
+/** Snoozes one delivered Reminder (issue #566): it comes due again
+ * `minutes` from now. Only the delivery ledger changes; the Task's dates
+ * and Reminder offsets stay as they are. 409 `reminder_stale` when the
+ * occurrence is gone (Task completed, redated, Reminder removed). */
+export function snoozeReminder(id: number, minutes: number): Promise<ReminderDeliveryRead> {
+  return request(`/api/v1/reminder-deliveries/${id}/snooze`, {
+    method: "POST",
+    body: JSON.stringify({ minutes }),
+  });
+}
+
+/** A Reminder whose delivery window closed unseen (issue #565): listed
+ * in-app, never replayed as a late notification. (`task_id`, `offset`,
+ * `occurrence_due`) names it for dismissal. */
+export interface MissedReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  /** The Task occurrence's due date this Reminder belongs to. */
+  occurrence_due: string;
+  fire_at: string;
+  /** The Task's, so the occurrence reads as the Task shows its date. */
+  is_all_day: boolean;
+  time_zone: string | null;
+  /** Its ledger row, when a tab ever claimed it: snoozed with
+   * `snoozeReminder`. Null for a Reminder no tab was open for, snoozed
+   * with `snoozeMissedReminder` instead (#566). */
+  delivery_id?: number | null;
+}
+
+/** The User's missed Reminders, newest first; empty while the opt-in is
+ * off. `tz` anchors all-day Tasks. */
+export function fetchMissedReminders(tz: string): Promise<{ items: MissedReminder[] }> {
+  return request(`/api/v1/reminder-deliveries/missed?tz=${encodeURIComponent(tz)}`);
+}
+
+/** Dismisses a missed Reminder: the ledger records it, so it never comes
+ * back or notifies. */
+export function dismissMissedReminder(missed: MissedReminder, tz: string): Promise<unknown> {
+  return request(`/api/v1/reminder-deliveries/missed/dismiss?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task_id: missed.task_id,
+      offset: missed.offset,
+      occurrence_due: missed.occurrence_due,
+    }),
+  });
+}
+
+/** Snoozes a missed Reminder no tab ever claimed (#566): the server
+ * creates its ledger row already snoozed, under the same key. Only the
+ * ledger changes, never the Task. */
+export function snoozeMissedReminder(
+  missed: MissedReminder,
+  minutes: number,
+  tz: string,
+): Promise<ReminderDeliveryRead> {
+  return request(`/api/v1/reminder-deliveries/missed/snooze?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task_id: missed.task_id,
+      offset: missed.offset,
+      occurrence_due: missed.occurrence_due,
+      minutes,
+    }),
   });
 }
 

@@ -6,22 +6,27 @@ user's own settings (issue #409).
 """
 
 import asyncio
-import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, field_validator, model_validator
 
+from app.clock_labels import is_hh_mm, minutes_of
 from app.current_user import require_admin
 from app.db import DatabaseUrl, SessionDep
 from app.db_probe import ProbeResult, is_valid_postgres_url, probe_connection
+from app.errors import APIError
 from app.models import UserSettings
+from app.quiet_hours import InvalidQuietHoursError, QuietHours
 from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 
-class StandupSettings(BaseModel):
+class FlagSettings(BaseModel):
+    """One on/off setting of the User's: Stand-up, Gentle return, Reminder
+    notifications."""
+
     enabled: bool
 
 
@@ -52,12 +57,10 @@ class SectionSettings(BaseModel):
 # band makes "the start of your day" ambiguous, which leaks into the
 # Calendar's initial scroll. Night-shift support is explicitly out of scope.
 ACTIVE_HOURS_GRANULARITY_MINUTES = 30
-_HH_MM = re.compile(r"^\d{2}:\d{2}$")
 
 
-def _minutes(label: str) -> int:
-    hours, minutes = label.split(":")
-    return int(hours) * 60 + int(minutes)
+class InvalidBandError(ValueError):
+    """A day band that can't be saved; the message says why, for the User."""
 
 
 class ActiveHoursSettings(BaseModel):
@@ -67,28 +70,56 @@ class ActiveHoursSettings(BaseModel):
 
     @model_validator(mode="after")
     def _check_band(self) -> "ActiveHoursSettings":
-        for label in (self.start, self.end):
-            if not _HH_MM.match(label):
-                raise ValueError(f"{label!r} is not an HH:MM time")
-            minute = _minutes(label)
-            if not 0 <= minute <= 24 * 60:
-                raise ValueError(f"{label!r} is outside the day")
-            if minute % ACTIVE_HOURS_GRANULARITY_MINUTES != 0:
-                raise ValueError(f"{label!r} is not aligned to 30 minutes")
-        if _minutes(self.start) >= _minutes(self.end):
-            raise ValueError("Active hours must start before they end")
+        _check_day_band(self.start, self.end, "Active hours must start before they end")
         return self
 
 
+def _check_day_band(start: str, end: str, out_of_order: str) -> None:
+    """A band of one day on the 30-minute grid: start strictly before end,
+    no wrap past midnight (24:00 is the day's end). InvalidBandError if not."""
+    for label in (start, end):
+        if not is_hh_mm(label):
+            raise InvalidBandError(f"{label!r} is not an HH:MM time")
+        minute = minutes_of(label)
+        if not 0 <= minute <= 24 * 60:
+            raise InvalidBandError(f"{label!r} is outside the day")
+        if minute % ACTIVE_HOURS_GRANULARITY_MINUTES != 0:
+            raise InvalidBandError(f"{label!r} is not aligned to 30 minutes")
+    if minutes_of(start) >= minutes_of(end):
+        raise InvalidBandError(out_of_order)
+
+
+class PlanningWindowSettings(BaseModel):
+    """Planning window (issue #563): the band of each day the capacity
+    summary measures. Same grid as Active hours, stored apart so changing
+    one never moves the other. Validated in its handler, like its sibling
+    band Quiet hours, so a refusal carries its own code and a message the
+    User can read."""
+
+    enabled: bool
+    start: str
+    end: str
+
+
+class QuietHoursSettings(BaseModel):
+    enabled: bool
+    start: str
+    end: str
+
+
+def invalid_band(code: str, error: ValueError) -> APIError:
+    return APIError(status_code=422, code=code, message=str(error))
+
+
 @router.get("/stand-up")
-async def read_standup_settings(user_settings: CurrentUserSettings) -> StandupSettings:
-    return StandupSettings(enabled=user_settings.standup_enabled)
+async def read_standup_settings(user_settings: CurrentUserSettings) -> FlagSettings:
+    return FlagSettings(enabled=user_settings.standup_enabled)
 
 
 @router.put("/stand-up")
 async def update_standup_settings(
-    payload: StandupSettings, session: SessionDep, user_settings: CurrentUserSettings
-) -> StandupSettings:
+    payload: FlagSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> FlagSettings:
     """Purely a UI-visibility flag (issue #140): toggling it never blocks
     the stand-up API routes and never touches stored entries, bullets, or
     the Sprint goal — those stay intact and reachable while the feature is
@@ -96,7 +127,7 @@ async def update_standup_settings(
     """
     user_settings.standup_enabled = payload.enabled
     await session.commit()
-    return StandupSettings(enabled=user_settings.standup_enabled)
+    return FlagSettings(enabled=user_settings.standup_enabled)
 
 
 def _sections(user_settings: UserSettings) -> SectionSettings:
@@ -153,24 +184,110 @@ async def update_active_hours_settings(
     return _active_hours(user_settings)
 
 
-class GentleReturnSettings(BaseModel):
-    enabled: bool
+def _planning_window(user_settings: UserSettings) -> PlanningWindowSettings:
+    return PlanningWindowSettings(
+        enabled=user_settings.planning_window_enabled,
+        start=user_settings.planning_window_start,
+        end=user_settings.planning_window_end,
+    )
+
+
+@router.get("/planning-window")
+async def read_planning_window_settings(
+    user_settings: CurrentUserSettings,
+) -> PlanningWindowSettings:
+    return _planning_window(user_settings)
+
+
+@router.put("/planning-window")
+async def update_planning_window_settings(
+    payload: PlanningWindowSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> PlanningWindowSettings:
+    """The planning window (issue #563) is the User's own choice, never
+    derived from Active hours: Active hours shapes the Calendar grid, this
+    band is only what the capacity summary measures."""
+    try:
+        _check_day_band(payload.start, payload.end, "The planning window must start before it ends")
+    except InvalidBandError as error:
+        raise invalid_band("invalid_planning_window", error) from None
+    user_settings.planning_window_enabled = payload.enabled
+    user_settings.planning_window_start = payload.start
+    user_settings.planning_window_end = payload.end
+    await session.commit()
+    return _planning_window(user_settings)
 
 
 @router.get("/gentle-return")
-async def read_gentle_return_settings(user_settings: CurrentUserSettings) -> GentleReturnSettings:
-    return GentleReturnSettings(enabled=user_settings.gentle_return_enabled)
+async def read_gentle_return_settings(user_settings: CurrentUserSettings) -> FlagSettings:
+    return FlagSettings(enabled=user_settings.gentle_return_enabled)
 
 
 @router.put("/gentle-return")
 async def update_gentle_return_settings(
-    payload: GentleReturnSettings, session: SessionDep, user_settings: CurrentUserSettings
-) -> GentleReturnSettings:
+    payload: FlagSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> FlagSettings:
     """Gentle return (issue #548): Today collapses earlier overdue Tasks
     behind a counted disclosure. Presentation only — no Task dates change."""
     user_settings.gentle_return_enabled = payload.enabled
     await session.commit()
-    return GentleReturnSettings(enabled=user_settings.gentle_return_enabled)
+    return FlagSettings(enabled=user_settings.gentle_return_enabled)
+
+
+@router.get("/reminder-notifications")
+async def read_reminder_notification_settings(
+    user_settings: CurrentUserSettings,
+) -> FlagSettings:
+    return FlagSettings(enabled=user_settings.reminder_notifications_enabled)
+
+
+@router.put("/reminder-notifications")
+async def update_reminder_notification_settings(
+    payload: FlagSettings,
+    request: Request,
+    session: SessionDep,
+    user_settings: CurrentUserSettings,
+) -> FlagSettings:
+    """Reminder notifications (issue #557): the User's opt-in to Reminder
+    delivery. Private to the User; browser permission is per device and is
+    never recorded here. Turning them on records when, which bounds the
+    missed list (#565); saving "on" again while on keeps that instant."""
+    if payload.enabled and not user_settings.reminder_notifications_enabled:
+        user_settings.reminder_notifications_enabled_at = request.app.state.clock()
+    user_settings.reminder_notifications_enabled = payload.enabled
+    await session.commit()
+    return FlagSettings(enabled=user_settings.reminder_notifications_enabled)
+
+
+def _quiet_hours(user_settings: UserSettings) -> QuietHoursSettings:
+    return QuietHoursSettings(
+        enabled=user_settings.quiet_hours_enabled,
+        start=user_settings.quiet_hours_start,
+        end=user_settings.quiet_hours_end,
+    )
+
+
+@router.get("/quiet-hours")
+async def read_quiet_hours_settings(user_settings: CurrentUserSettings) -> QuietHoursSettings:
+    return _quiet_hours(user_settings)
+
+
+@router.put("/quiet-hours")
+async def update_quiet_hours_settings(
+    payload: QuietHoursSettings, session: SessionDep, user_settings: CurrentUserSettings
+) -> QuietHoursSettings:
+    """Quiet hours (issue #567): Reminders falling due inside the band are
+    held and notify once when it ends. A notification setting only; Active
+    hours, the Calendar band, is a different setting and never read here.
+    The band may wrap past midnight; a start equal to its end is refused."""
+    try:
+        QuietHours.parse(payload.start, payload.end)
+    except InvalidQuietHoursError as error:
+        raise invalid_band("invalid_quiet_hours", error) from None
+    user_settings.quiet_hours_enabled = payload.enabled
+    user_settings.quiet_hours_start = payload.start
+    user_settings.quiet_hours_end = payload.end
+    await session.commit()
+    return _quiet_hours(user_settings)
 
 
 # Database status + connection probe (issue #256). Read-only: the status
