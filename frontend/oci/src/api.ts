@@ -986,6 +986,31 @@ export function deleteTag(tagId: number): Promise<void> {
   return request(`/api/v1/tags/${tagId}`, { method: "DELETE" });
 }
 
+export interface BrainDumpDraft {
+  type: "create_task";
+  title: string;
+  list_name: null;
+  tag_names: string[];
+  priority: Priority;
+  start_date: string | null;
+  due_date: string | null;
+  is_all_day: boolean;
+  time_zone: string | null;
+}
+
+export interface BrainDumpTurn {
+  message: string;
+  suggestions: BrainDumpDraft[];
+  discarded_count: number;
+}
+
+export function postBrainDump(text: string): Promise<BrainDumpTurn> {
+  return request("/api/v1/assistant/brain-dump", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+}
+
 export interface TaskCreateInput {
   title: string;
   description?: string;
@@ -1009,6 +1034,13 @@ export interface TaskCreateInput {
 
 export function createTask(input: TaskCreateInput): Promise<Task> {
   return request("/api/v1/tasks", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function createTaskIdempotently(input: TaskCreateInput, requestId: string): Promise<Task> {
+  return request("/api/v1/tasks", {
+    method: "POST",
+    body: JSON.stringify({ ...input, create_request_id: requestId }),
+  });
 }
 
 /** Tasks whose scheduled days intersect the inclusive [start, end] day window

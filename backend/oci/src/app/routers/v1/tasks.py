@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from app.calendar_window import validate_range_pair
 from app.db import SessionDep
@@ -184,6 +185,11 @@ async def resolve_tags(session: SessionDep, tag_ids: list[int]) -> list[Tag]:
 
 @router.post("", status_code=201)
 async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
+    request_id = str(payload.create_request_id) if payload.create_request_id is not None else None
+    if request_id is not None:
+        existing = await session.scalar(select(Task).where(Task.create_request_id == request_id))
+        if existing is not None:
+            return TaskRead.model_validate(existing)
     if payload.list_id is None:
         list_id = await session.scalar(select(TaskList.id).where(TaskList.is_inbox))
     else:
@@ -207,6 +213,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
     )
     task = Task(
         title=payload.title,
+        create_request_id=request_id,
         description=payload.description,
         list_id=list_id,
         section_id=payload.section_id,
@@ -225,7 +232,17 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         tags=tags,
     )
     session.add(task)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        if request_id is not None:
+            existing = await session.scalar(
+                select(Task).where(Task.create_request_id == request_id)
+            )
+            if existing is not None:
+                return TaskRead.model_validate(existing)
+        raise
     return TaskRead.model_validate(task)
 
 
