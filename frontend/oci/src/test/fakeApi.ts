@@ -276,6 +276,41 @@ export interface FakeStandupYesterdaySuggestion {
   title: string;
 }
 
+/** A GitHub Token (#578) as the backend lists it. */
+export interface FakeGitHubToken {
+  id: number;
+  owner_login: string;
+  owner_kind: "user" | "organization";
+  expires_at: string | null;
+  connection_state: string;
+  created_at: string;
+}
+
+/** What GitHub would say a pasted token is, for `githubTokenIdentities`. */
+export interface FakeGitHubIdentity {
+  owner_login: string;
+  owner_kind?: "user" | "organization";
+  expires_at?: string | null;
+}
+
+let nextGitHubTokenId = 1;
+
+/** A connected GitHub Token for `installFakeApi({ githubTokens })`. */
+export function fakeGitHubToken(
+  ownerLogin: string,
+  overrides: Partial<FakeGitHubToken> = {},
+): FakeGitHubToken {
+  return {
+    id: nextGitHubTokenId++,
+    owner_login: ownerLogin,
+    owner_kind: "user",
+    expires_at: null,
+    connection_state: "connected",
+    created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
 export interface FakeGoogleAccount {
   id: number;
   google_account_id: string;
@@ -417,6 +452,13 @@ export interface FakeApiState {
   googleClientSecretSet: boolean;
   googleAccounts: FakeGoogleAccount[];
   googleCalendars: FakeGoogleCalendar[];
+  /** The signed-in User's GitHub Tokens (#578). */
+  githubTokens: FakeGitHubToken[];
+  /** What GitHub identifies each pasted token string as. A `github_pat_`
+   * token missing here is one GitHub rejects (401). */
+  githubTokenIdentities: Record<string, FakeGitHubIdentity>;
+  /** While true, checking a pasted token fails transiently (502). */
+  githubUnavailable: boolean;
   events: FakeEvent[];
   eventFailures: FakeEventFailure[];
   standupEntries: FakeStandupEntry[];
@@ -1173,6 +1215,9 @@ export function installFakeApi({
   googleClientSecretSet = false,
   googleAccounts = [],
   googleCalendars = [],
+  githubTokens = [],
+  githubTokenIdentities = {},
+  githubUnavailable = false,
   events = [],
   eventFailures = [],
   standupEntries = [],
@@ -1248,6 +1293,9 @@ export function installFakeApi({
    * this from a Google-side `selected` flag; that seeding rule is the
    * backend's, exercised in the backend suite. */
   googleCalendars?: FakeGoogleCalendar[];
+  githubTokens?: FakeGitHubToken[];
+  githubTokenIdentities?: Record<string, FakeGitHubIdentity>;
+  githubUnavailable?: boolean;
   /** Google Calendar Events (issue #107) the calendar's own read-only
    * endpoint answers with — never filtered by calendar `enabled` here,
    * since that filtering is the backend's job (exercised in the backend
@@ -1374,6 +1422,9 @@ export function installFakeApi({
     googleClientSecretSet,
     googleAccounts: googleAccounts.map((account) => ({ ...account })),
     googleCalendars: googleCalendars.map((calendar) => ({ ...calendar })),
+    githubTokens: githubTokens.map((token) => ({ ...token })),
+    githubTokenIdentities: { ...githubTokenIdentities },
+    githubUnavailable,
     events: events.map((event) => ({ ...event })),
     eventFailures: eventFailures.map((failure) => ({ ...failure })),
     standupEntries: standupEntries.map((entry) => ({
@@ -1517,6 +1568,72 @@ export function installFakeApi({
         return notFound(`API token ${match[1]} not found`);
       }
       target.revoked_at = new Date().toISOString();
+      return new Response(null, { status: 204 });
+    }
+    return null;
+  };
+
+  /** GitHub Tokens (#578), mirrored: list, add (validated against
+   * `githubTokenIdentities`, one per owner) and remove. Null for a path it
+   * doesn't own. */
+  const githubRoute = (method: string, url: URL, body: unknown): Response | null => {
+    if (method === "GET" && url.pathname === "/api/v1/github/tokens") {
+      return json([...state.githubTokens].sort((a, b) => a.id - b.id));
+    }
+    if (method === "POST" && url.pathname === "/api/v1/github/tokens") {
+      const token = ((body as { token?: unknown }).token ?? "").toString().trim();
+      if (!token.startsWith("github_pat_")) {
+        return unprocessable(
+          "github_token_not_fine_grained",
+          "tuk-tuk accepts only fine-grained personal access tokens (they start with github_pat_).",
+        );
+      }
+      if (state.githubUnavailable) {
+        return json(
+          {
+            error: {
+              code: "github_unavailable",
+              message:
+                "GitHub could not be reached to check this token. Nothing was saved; try again in a moment.",
+            },
+          },
+          502,
+        );
+      }
+      const identity = state.githubTokenIdentities[token];
+      if (identity === undefined) {
+        return unprocessable(
+          "github_token_rejected",
+          "GitHub rejected this token: it may be mistyped, expired or revoked.",
+        );
+      }
+      const login = identity.owner_login;
+      if (state.githubTokens.some((t) => t.owner_login.toLowerCase() === login.toLowerCase())) {
+        return json(
+          {
+            error: {
+              code: "github_token_owner_exists",
+              message: `You already have a GitHub Token for ${login}. Remove it first to use a different one.`,
+            },
+          },
+          409,
+        );
+      }
+      const created = fakeGitHubToken(login, {
+        owner_kind: identity.owner_kind ?? "user",
+        expires_at: identity.expires_at ?? null,
+        created_at: new Date().toISOString(),
+      });
+      state.githubTokens.push(created);
+      return json(created, 201);
+    }
+    const match = /^\/api\/v1\/github\/tokens\/(\d+)$/.exec(url.pathname);
+    if (method === "DELETE" && match !== null) {
+      const id = Number(match[1]);
+      if (!state.githubTokens.some((t) => t.id === id)) {
+        return notFound(`GitHub Token ${id} not found`);
+      }
+      state.githubTokens = state.githubTokens.filter((t) => t.id !== id);
       return new Response(null, { status: 204 });
     }
     return null;
@@ -1902,6 +2019,12 @@ export function installFakeApi({
       const tokenResponse = apiTokensRoute(method, url, body);
       if (tokenResponse !== null) {
         return tokenResponse;
+      }
+    }
+    if (url.pathname.startsWith("/api/v1/github/")) {
+      const githubResponse = githubRoute(method, url, body);
+      if (githubResponse !== null) {
+        return githubResponse;
       }
     }
     if (url.pathname.startsWith("/api/v1/admin/")) {

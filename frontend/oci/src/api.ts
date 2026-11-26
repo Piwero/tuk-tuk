@@ -742,6 +742,30 @@ export function disconnectGoogleAccount(accountId: number): Promise<void> {
   return request(`/api/v1/google/accounts/${accountId}`, { method: "DELETE" });
 }
 
+/** A GitHub Token (#578): a fine-grained personal access token, listed by
+ * the GitHub owner it grants access to. Its value is write-only: no
+ * response ever carries it. */
+export interface GitHubToken {
+  id: number;
+  owner_login: string;
+  owner_kind: "user" | "organization";
+  expires_at: string | null;
+  connection_state: string;
+  created_at: string;
+}
+
+export function fetchGitHubTokens(): Promise<GitHubToken[]> {
+  return request("/api/v1/github/tokens");
+}
+
+export function createGitHubToken(token: string): Promise<GitHubToken> {
+  return request("/api/v1/github/tokens", { method: "POST", body: JSON.stringify({ token }) });
+}
+
+export function deleteGitHubToken(tokenId: number): Promise<void> {
+  return request(`/api/v1/github/tokens/${tokenId}`, { method: "DELETE" });
+}
+
 export interface GoogleCalendar {
   id: number;
   google_calendar_id: string;

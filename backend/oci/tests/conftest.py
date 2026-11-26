@@ -52,6 +52,12 @@ from app.calendar_source import (  # noqa: E402
 )
 from app.config import Settings  # noqa: E402
 from app.db import DatabaseUrl, run_migrations  # noqa: E402
+from app.github_source import (  # noqa: E402
+    GitHubOwnerKind,
+    GitHubTokenIdentity,
+    GitHubTokenType,
+    TerminalGitHubSourceError,
+)
 from app.main import create_app  # noqa: E402
 from app.models import SEED_USER_ID, AppSettings, User, UserSettings  # noqa: E402
 from app.user_settings import user_settings_from_env  # noqa: E402
@@ -379,14 +385,69 @@ def fake_calendar_source() -> FakeCalendarSource:
     return FakeCalendarSource()
 
 
+class FakeGitHubSource:
+    """A fake GitHubSource (spec #576), injected through the application
+    factory like FakeCalendarSource. Tests register what each token string
+    identifies as; a token never registered is one GitHub rejects (401),
+    exactly as GitHub answers a token it has never issued.
+    """
+
+    def __init__(self) -> None:
+        self._identities: dict[str, GitHubTokenIdentity] = {}
+        self._identify_errors: dict[str, Exception] = {}
+        self.identify_calls: list[str] = []
+
+    def register_token(
+        self,
+        token: str,
+        *,
+        owner_login: str,
+        owner_kind: GitHubOwnerKind = "user",
+        token_type: GitHubTokenType = "fine_grained",
+        expires_at: datetime | None = None,
+    ) -> None:
+        self._identities[token] = GitHubTokenIdentity(
+            owner_login=owner_login,
+            owner_kind=owner_kind,
+            token_type=token_type,
+            expires_at=expires_at,
+        )
+
+    def register_identify_error(self, token: str, error: Exception) -> None:
+        """Every `identify_token` for this token raises `error` — a
+        Transient or Terminal GitHubSourceError."""
+        self._identify_errors[token] = error
+
+    async def identify_token(self, token: str) -> GitHubTokenIdentity:
+        self.identify_calls.append(token)
+        error = self._identify_errors.get(token)
+        if error is not None:
+            raise error
+        try:
+            return self._identities[token]
+        except KeyError:
+            raise TerminalGitHubSourceError("Bad credentials") from None
+
+
+@pytest.fixture
+def fake_github_source() -> FakeGitHubSource:
+    return FakeGitHubSource()
+
+
 @pytest.fixture
 def unauthenticated_client(
-    database_url: str, fake_clock: FakeClock, fake_calendar_source: FakeCalendarSource
+    database_url: str,
+    fake_clock: FakeClock,
+    fake_calendar_source: FakeCalendarSource,
+    fake_github_source: FakeGitHubSource,
 ) -> Iterator[TestClient]:
     """The app past first-run setup, with the test admin (TEST_USERNAME /
     TEST_PASSWORD) created, but not logged in."""
     app = create_app(
-        Settings(database_url=database_url), clock=fake_clock, calendar_source=fake_calendar_source
+        Settings(database_url=database_url),
+        clock=fake_clock,
+        calendar_source=fake_calendar_source,
+        github_source=fake_github_source,
     )
     with TestClient(app) as test_client:
         create_user_row(app, first_admin=True)

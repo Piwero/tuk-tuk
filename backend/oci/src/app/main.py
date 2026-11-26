@@ -16,6 +16,8 @@ from app.config import settings as default_settings
 from app.db import check_database_reachable, create_engine, require_database_url, run_migrations
 from app.errors import register_error_handlers
 from app.event_cache import EventCache
+from app.github_adapter import GitHubApiSource
+from app.github_source import GitHubSource
 from app.google_adapter import GoogleCalendarSource
 from app.middleware import SessionAuthMiddleware
 from app.ownership import create_session_factory
@@ -31,6 +33,7 @@ from app.routers.v1 import (
     events,
     focus_sessions,
     folders,
+    github,
     goals,
     google,
     habits,
@@ -57,12 +60,15 @@ def create_app(
     settings: Settings | None = None,
     clock: Clock | None = None,
     calendar_source: CalendarSource | None = None,
+    github_source: GitHubSource | None = None,
 ) -> FastAPI:
     app_settings = settings or default_settings
     app_clock = clock or real_clock
     # Holds no credentials: each call names the acting user's own OAuth
     # client (issue #409).
     app_calendar_source = calendar_source or GoogleCalendarSource()
+    # Holds no credentials either: each call names a User's GitHub Token.
+    app_github_source = github_source or GitHubApiSource()
 
     if not app_settings.app_master_key:
         raise RuntimeError(
@@ -104,6 +110,7 @@ def create_app(
     app.state.settings = app_settings
     app.state.clock = app_clock
     app.state.calendar_source = app_calendar_source
+    app.state.github_source = app_github_source
     app.state.event_cache = EventCache(clock=app_clock)
     app.add_middleware(SessionAuthMiddleware, settings=app_settings, clock=app_clock)
     app.add_middleware(
@@ -126,6 +133,7 @@ def create_app(
     app.include_router(now.router)
     app.include_router(focus_sessions.router)
     app.include_router(focus_sessions.stats_router)
+    app.include_router(github.router)
     app.include_router(goals.router)
     app.include_router(google.router)
     app.include_router(habits.router)

@@ -30,7 +30,7 @@ only their own data, and an Admin can't see anyone else's either.
 ## The master key
 
 `APP_MASTER_KEY` in `.env` encrypts the secrets you save in Settings: Google
-credentials, Google sign-ins and AI API keys. It never appears in the app or the API.
+credentials, Google sign-ins, GitHub Tokens and AI API keys. It never appears in the app or the API.
 
 1. A copy of the database alone doesn't reveal those secrets.
 2. The app won't start without the key.
