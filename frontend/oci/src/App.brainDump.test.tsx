@@ -96,6 +96,8 @@ it("keeps original text on provider failure and cancels without writes or refres
   expect(screen.getByLabelText("Pasted text")).toHaveValue("Call dentist tomorrow maybe");
   fireEvent.click(screen.getByRole("button", { name: "Cancel brain dump" }));
   expect(save).not.toHaveBeenCalled();
+  // #574 browser check: focus returns to the opener, not <body>.
+  expect(screen.getByRole("button", { name: "Brain dump to Tasks" })).toHaveFocus();
   view.unmount();
   render(<App />);
   await waitFor(() => expect(save).not.toHaveBeenCalled());
