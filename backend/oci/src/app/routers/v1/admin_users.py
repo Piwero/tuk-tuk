@@ -7,16 +7,16 @@ anything a User owns: being an Admin grants no access to other Users' data.
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import password_hasher
 from app.current_user import AdminDep, require_admin
-from app.db import SessionDep
+from app.db import Base, SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import ApiToken, User
+from app.models import ApiToken, Invitation, OwnedMixin, User, UserSettings
 from app.ownership import acting_as
 from app.schemas import Page
 from app.users import (
@@ -193,6 +193,64 @@ async def _revoke_tokens(session: AsyncSession, user_id: int, now: datetime) -> 
             .values(revoked_at=now)
             .execution_options(synchronize_session=False)
         )
+
+
+class AdminUserDelete(BaseModel):
+    email: str
+
+
+@router.delete("/{user_id}", status_code=204)
+async def delete_account(
+    user_id: int, payload: AdminUserDelete, request: Request, session: SessionDep
+) -> Response:
+    """Permanently erases local account data, never external provider data.
+
+    Email confirmation is checked against the locked current account. A
+    missing legacy email must be set first; blank confirmation never works.
+    """
+    # Match the role-change guard's lock order before locking the target.
+    await session.scalars(
+        select(User.id).where(User.is_admin, User.is_active).order_by(User.id).with_for_update()
+    )
+    user = await session.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if user is None:
+        raise NotFoundError(f"User {user_id} not found")
+    if not user.email or payload.email != user.email:
+        raise APIError(422, "email_confirmation_mismatch", "Re-enter the account email exactly")
+    if user.is_admin and user.is_active:
+        await _ensure_another_active_admin(session, user)
+
+    await session.execute(
+        delete(Invitation).where(
+            or_(Invitation.accepted_user_id == user_id, Invitation.email == user.email)
+        )
+    )
+    # Invitations to other people stay usable without retaining the deleted inviter.
+    await session.execute(
+        update(Invitation).where(Invitation.invited_by_id == user_id).values(invited_by_id=None)
+    )
+    owned_models = {
+        mapper.local_table: mapper.class_
+        for mapper in Base.registry.mappers
+        if issubclass(mapper.class_, OwnedMixin)
+    }
+    with acting_as(user_id):
+        # Child-first also covers receipt tombstones and independent history.
+        for table in reversed(Base.metadata.sorted_tables):
+            if table in owned_models:
+                await session.execute(delete(owned_models[table]))
+    await session.execute(delete(UserSettings).where(UserSettings.user_id == user_id))
+    await session.execute(delete(User).where(User.id == user_id))
+    await session.commit()
+    request.app.state.event_cache.forget_owner(user_id)
+    request.app.state.github_pull_request_cache.forget_owner(user_id)
+    request.app.state.github_issue_cache.forget_owner(user_id)
+    return Response(status_code=204)
 
 
 @router.delete("/{user_id}/google-identity")

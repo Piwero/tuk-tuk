@@ -47,6 +47,7 @@ from tests.conftest import (
     fake_issue,
     fake_pull_request,
     log_in,
+    run_sql,
 )
 from tests.test_assistant_chat import StubChatProvider
 
@@ -1034,6 +1035,37 @@ def pair(
             b=build_bea(bea, assistant, today),
             assistant=assistant,
         )
+
+
+def test_admin_deletes_populated_account_without_touching_other_user(
+    pair: Pair, database_url: str
+) -> None:
+    """Exercise deletion through HTTP against every resource in the isolation world."""
+    client = pair.alice.client
+    admin = create_user_row(client, "deleter", "deleter@example.com", is_admin=True)
+    alice_id = run_sql(database_url, "SELECT id FROM users WHERE username = 'alice'")[0][0]
+    beas_tasks = pair.bea.ok("GET", "/api/v1/tasks")
+    client.cookies.clear()
+    log_in(client, admin.username)
+    response = client.request(
+        "DELETE", f"/api/v1/admin/users/{alice_id}", json={"email": "alice@example.com"}
+    )
+    assert response.status_code == 204, response.text
+    assert pair.alice.request("GET", "/api/v1/tasks").status_code == 401
+    assert pair.bea.ok("GET", "/api/v1/tasks") == beas_tasks
+    # Storage inspection proves privacy erasure, not merely hidden resources.
+    tables = run_sql(
+        database_url,
+        "SELECT table_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND column_name = 'owner_id'",
+    )
+    for (table,) in tables:
+        assert run_sql(
+            database_url, f'SELECT count(*) FROM "{table}" WHERE owner_id = %s', [alice_id]
+        ) == [(0,)], table
+    assert run_sql(
+        database_url, "SELECT count(*) FROM user_settings WHERE user_id = %s", [alice_id]
+    ) == [(0,)]
 
 
 def seen(response: httpx.Response, probe: Read, assistant: StubChatProvider) -> str:

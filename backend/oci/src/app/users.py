@@ -84,10 +84,20 @@ async def find_user_by_login(session: AsyncSession, login: str) -> User | None:
 
 
 async def install_has_password(session: AsyncSession) -> bool:
-    """Whether anyone can log in yet. Until some User holds a password the
-    install is waiting on `/setup` (or, on an upgrade from before ADR 0008,
-    the one-time AUTH_PASSWORD_HASH import)."""
-    return bool(await session.scalar(select(exists().where(User.password_hash.is_not(None)))))
+    """Whether setup completed: a password or Google identity exists.
+
+    Google-only installs must never reopen public setup or import an env
+    password after their last password-bearing account is deleted.
+    """
+    return bool(
+        await session.scalar(
+            select(
+                exists().where(
+                    or_(User.password_hash.is_not(None), User.google_subject.is_not(None))
+                )
+            )
+        )
+    )
 
 
 async def first_admin(session: AsyncSession) -> User | None:

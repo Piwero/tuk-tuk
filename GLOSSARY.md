@@ -7,11 +7,11 @@ One instance serves several Users, and each sees only their own data (ADR 0018).
 ## Accounts
 
 **User**:
-A person with their own account on the instance: a username, an email, and a password, a Google sign-in, or both. Everything a User creates belongs to them alone, and no other User can see it. A User is disabled rather than deleted, which ends their sessions, revokes their API tokens and keeps their data.
+A person with their own account on the instance: a username, an email, and a password, a Google sign-in, or both. Everything a User creates belongs to them alone, and no other User can see it. Disabling a User ends their sessions, revokes their API tokens and keeps their data. Deleting a User permanently removes their account and all their local data, after an Admin confirms by re-entering their email.
 _Avoid_: Member, tenant (nothing is shared, so a User belongs to no group)
 
 **Admin**:
-A User who can also manage accounts: invite people, create Users with a temporary password, disable or re-enable them, reset their passwords, change their email, remove a lost Google sign-in, and grant or remove Admin. Only an Admin admits people; there is no sign-up. Being Admin grants no access to other Users' data.
+A User who can also manage accounts: invite people, create Users with a temporary password, disable or re-enable them, permanently delete their accounts and local data, reset their passwords, change their email, remove a lost Google sign-in, and grant or remove Admin. Only an Admin admits people; there is no sign-up. Being Admin grants no access to other Users' data.
 _Avoid_: Superuser, root
 
 **Invitation**:

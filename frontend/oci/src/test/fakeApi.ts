@@ -2412,6 +2412,26 @@ export function installFakeApi({
     }
     const target = state.users.find((account) => account.id === Number(match[1]));
     const isReset = match[2] !== undefined;
+    if (method === "DELETE" && !isReset) {
+      if (target === undefined) return notFound(`User ${match[1]} not found`);
+      const input = body as { email?: string };
+      if (!target.email || input.email !== target.email) {
+        return unprocessable("email_confirmation_mismatch", "Re-enter the account email");
+      }
+      if (
+        target.is_admin &&
+        target.is_active &&
+        !state.users.some((account) => account !== target && account.is_admin && account.is_active)
+      ) {
+        return json(
+          { error: { code: "last_admin", message: "The last active admin cannot be deleted" } },
+          409,
+        );
+      }
+      state.users = state.users.filter((account) => account !== target);
+      if (target.id === state.sessionUserId) state.loggedIn = false;
+      return new Response(null, { status: 204 });
+    }
     if (method === "PATCH" && !isReset) {
       if (target === undefined) {
         return notFound(`User ${match[1]} not found`);

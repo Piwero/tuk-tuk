@@ -13,8 +13,8 @@ import { Popover } from "./Popover";
 export const LAST_ADMIN_REASON = "An instance needs at least one active admin.";
 
 /** One account's row menu in Settings › Users (#480, #481): Reset password,
- * Make admin / Remove admin and Disable user / Enable user. There is no
- * delete: accounts are only ever disabled. Disable asks to confirm first;
+ * Make admin / Remove admin, Disable user / Enable user and Delete user account.
+ * Delete opens a separate email confirmation. Disable asks to confirm first;
  * Reset password hands over to the panel's dialog. */
 export function UserActionsMenu({
   account,
@@ -24,6 +24,7 @@ export function UserActionsMenu({
   onResetPassword,
   onChangeEmail,
   onUnlinkGoogle,
+  onDelete,
 }: {
   account: AdminUser;
   isSelf: boolean;
@@ -39,6 +40,7 @@ export function UserActionsMenu({
   onChangeEmail: () => void;
   /** Removes the account's Google sign-in (#586), once confirmed. */
   onUnlinkGoogle: () => void;
+  onDelete: () => void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [confirmingDisable, setConfirmingDisable] = useState(false);
@@ -112,7 +114,14 @@ export function UserActionsMenu({
                 blocked: isLastAdmin,
               })
             : item("Enable user", "user-check", () => onChange({ is_active: true }))}
+          {item("Delete user account", "trash-2", onDelete, {
+            danger: true,
+            blocked: isLastAdmin || account.email === null,
+          })}
         </ul>
+        {account.email === null && (
+          <p className="users-actions-reason">Set an email before deleting this account.</p>
+        )}
         {isLastAdmin && (
           <p id={reasonId} className="users-actions-reason">
             {LAST_ADMIN_REASON}

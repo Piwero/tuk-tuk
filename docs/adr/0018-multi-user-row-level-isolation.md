@@ -93,8 +93,22 @@ account fields and never another user's data. An admin's own data is
 isolated like anyone else's. The last active admin cannot be demoted or
 disabled.
 
-Accounts are disabled, never hard-deleted. A disabled user cannot log in
-and is logged out immediately, and their rows stay where they are.
+Accounts may be disabled or permanently deleted. A disabled User cannot
+log in and is logged out immediately, and their rows stay where they are.
+
+Amendment (2026-11-27): an Admin can choose **Delete user account**, then
+re-enter that User's current email and confirm permanent deletion. The
+backend checks the email and refuses deletion of the last active Admin.
+Legacy accounts without an email must have one set first. One transaction
+erases every owned row, settings, credentials and invitations received by
+that User, then the account itself. Invitations sent to other people stay
+usable with their inviter reference removed. Other Users' data stays intact.
+Existing user foreign keys remain restrictive; the explicit child-first
+cleanup also erases durable creation receipts. Process caches are purged
+after commit. External provider resources, already-running external calls,
+sent email, client storage and existing backups are outside this deletion.
+Removing the last password-bearing User must not reopen public setup when
+Google sign-in accounts remain.
 
 On upgrade, all existing `"local"` data goes to user #1. That user is
 seeded as an admin from the current password hash and must complete their
@@ -157,8 +171,9 @@ anywhere on its network.
 
 ## What this does not add
 
-Workspaces, sharing, invites, assignees, @-mentions, email delivery, hard
-delete and PostgreSQL row-level security are all out of scope. ADR 0002's
+Workspaces, sharing, assignees, @-mentions and PostgreSQL row-level
+security remain out of scope. Invitations and email delivery were added by
+ADR 0021; permanent account deletion by the amendment above. ADR 0002's
 rule still holds for the collaboration features: an "Assigned to Me"
 Smart List, member permissions and @-mentions do not enter the domain
 model until a record decides collaboration.

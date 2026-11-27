@@ -160,9 +160,9 @@ class OwnedMixin:
     so a row created outside that filter fails the NOT NULL rather than
     landing on some User.
 
-    No ON DELETE rule, unlike every other foreign key (issue #508): no User
-    is ever deleted, and deleting one who still owns rows must be refused
-    rather than cascade their whole account away.
+    No ON DELETE rule: account deletion explicitly erases all owned rows
+    first, in one transaction. Accidental deletion of a populated User is
+    refused rather than cascading their whole account away.
     """
 
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -200,7 +200,7 @@ class UserSettings(Base):
 
     __tablename__ = "user_settings"
 
-    # No ON DELETE rule, like OwnedMixin.owner_id: no User is ever deleted.
+    # Like OwnedMixin.owner_id: account deletion removes this explicitly.
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     google_client_id: Mapped[str | None] = mapped_column(String(255), default=None)
     encrypted_google_client_secret: Mapped[str | None] = mapped_column(Text, default=None)

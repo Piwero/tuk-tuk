@@ -6,6 +6,7 @@ import {
   type AdminUserChange,
   ApiError,
   type CurrentUser,
+  deleteAdminUser,
   fetchAdminUsers,
   type Page,
   resetAdminUserPassword,
@@ -14,6 +15,7 @@ import {
 } from "../api";
 import { formatLastActive } from "../dates";
 import { ChangeEmailDialog } from "./ChangeEmailDialog";
+import { DeleteUserDialog } from "./DeleteUserDialog";
 import { InvitationsPanel } from "./InvitationsPanel";
 import { LoadError, SkeletonRows } from "./TaskViewState";
 import { NewUserDialog } from "./NewUserDialog";
@@ -164,6 +166,7 @@ export function UsersPanel({
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<AdminUser | null>(null);
   /** The account whose password is being reset, and whether it has been. */
   const [resetting, setResetting] = useState<{ account: AdminUser; reset: boolean } | null>(null);
   /** The account whose email is being changed (#586). */
@@ -334,6 +337,7 @@ export function UsersPanel({
                       onResetPassword={() => setResetting({ account, reset: false })}
                       onChangeEmail={() => setEditingEmail(account)}
                       onUnlinkGoogle={() => unlinkGoogle(account)}
+                      onDelete={() => setDeleting(account)}
                     />
                   }
                 />
@@ -341,6 +345,32 @@ export function UsersPanel({
             </tbody>
           </table>
           <InvitationsPanel />
+          {deleting !== null && (
+            <DeleteUserDialog
+              account={deleting}
+              onDelete={(email) =>
+                deleteAdminUser(deleting.id, email).then(() => {
+                  if (deleting.id === currentUser.id) {
+                    onAccessLostRef.current();
+                  } else {
+                    setList((current) =>
+                      current.kind === "loaded"
+                        ? {
+                            kind: "loaded",
+                            page: {
+                              ...current.page,
+                              total: current.page.total - 1,
+                              items: current.page.items.filter((item) => item.id !== deleting.id),
+                            },
+                          }
+                        : current,
+                    );
+                  }
+                })
+              }
+              onClose={() => setDeleting(null)}
+            />
+          )}
           {editingEmail !== null && (
             <ChangeEmailDialog
               account={editingEmail}
