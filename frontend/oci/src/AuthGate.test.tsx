@@ -406,7 +406,7 @@ describe("AuthGate pending forced step", () => {
       await screen.findByRole("heading", { name: "Choose a new password" }),
     ).toBeInTheDocument();
     expect(screen.getByText(/you signed in with a temporary password/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("New password")).toHaveFocus();
+    await waitFor(() => expect(screen.getByLabelText("New password")).toHaveFocus());
     expect(screen.getByLabelText("Confirm new password")).toBeInTheDocument();
     expect(screen.getByText("Signed in as tomas")).toBeInTheDocument();
     expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
@@ -664,7 +664,7 @@ describe("AuthGate first-run setup", () => {
       await screen.findByRole("heading", { name: "Create the admin account" }),
     ).toBeInTheDocument();
     expect(screen.getByText(/the first account manages the others/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Username")).toHaveFocus();
+    await waitFor(() => expect(screen.getByLabelText("Username")).toHaveFocus());
     expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
   });
 
