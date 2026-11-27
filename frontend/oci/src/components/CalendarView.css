@@ -513,9 +513,7 @@
 
   .time-columns {
     display: flex;
-    /* Columns size to their hour cells, not to this capped scroll box: a
-       stretched column stopped at 70vh, clipping today's wash and rule to a
-       stray block over the first hours (#597). */
+    /* Columns size to their hour cells, not to this capped scroll box (#597). */
     align-items: flex-start;
     overflow-y: auto;
     max-height: 70vh;
@@ -544,9 +542,7 @@
      hour cells and the time blocks, marking the band as de-emphasised. */
   .off-hours-band {
     position: absolute;
-    /* Clears the 2px inset accent rule on today's column so it stays visible
-       through the off-hours regions. */
-    left: 2px;
+    left: 0;
     right: 0;
     background: var(--calendar-offhours-tint);
     pointer-events: none;
@@ -563,14 +559,6 @@
     min-width: 0;
     position: relative;
     border-left: 1px solid var(--border-subtle);
-  }
-
-  /* Today's column: a faint accent wash plus a full-height accent rule down
-   * its leading edge (#198) — the tint alone would be colour-only, the rule
-   * and the now-line give it structure too. */
-  .day-column[data-today] {
-    background: var(--accent-soft);
-    box-shadow: inset 2px 0 0 var(--accent);
   }
 
   .hour-cell {
