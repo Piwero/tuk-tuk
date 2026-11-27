@@ -6,14 +6,14 @@ Connect an MCP-compatible AI client to your Tuk Tuk tasks, habits, focus stats a
 
 Read today's agenda, search and inspect tasks, list goals and focus stats. Create, schedule, reschedule and complete tasks; set priority or list; add tags or checklist items; check in a habit.
 
-Write tools use IDs returned by a read in the same server process. Task descriptions are sent to the AI client. See [ADR 0014](../../adr/0014-non-browser-clients-credential-write-boundary.md) for the write boundary.
+Write tools use IDs returned by an earlier read from the same client. Task descriptions are sent to the AI client. See [ADR 0014](../../adr/0014-non-browser-clients-credential-write-boundary.md) for the write boundary.
 
 ## Choose a connection
 
 | | Local (stdio) | Remote (Streamable HTTP) |
 |---|---|---|
-| Runs | On your computer, started by AI client | Kubernetes, next to the backend |
-| Setup | Install `tuk-mcp` and sign in with `tuk login` | Deploy chart and configure shared bearer token |
+| Runs | On your computer, started by AI client | Kubernetes, next to the backend, shared by every User |
+| Setup | Install `tuk-mcp` and sign in with `tuk login` | Create an MCP token in Settings and add the server to your client |
 | Reached by | Local process stdin/stdout | `POST /mcp` over tailnet |
 | Guide | [Package README](../../../mcp/oci/README.md#stdio-local) | [Package README](../../../mcp/oci/README.md#streamable-http-remote-kubernetes) |
 
@@ -66,11 +66,23 @@ See the [MCP package README](../../../mcp/oci/README.md) for remote HTTP registr
 
 ### Remote
 
-Deploy `mcp/chart` to your cluster. The server is exposed on the tailnet as `tuk-tuk-mcp`; clients need the tailnet URL and bearer token. Set `MCP_BEARER_TOKEN` in the client environment to the same value configured on the server. HTTP clients send it as `Authorization: Bearer <token>`; keep the token out of checked-in config. The package README has [Claude Code remote setup](../../../mcp/oci/README.md#register-a-tailnet-client), including an example header. For other clients, configure the same HTTP header in their MCP settings. See [self-hosting security notes](../../self-hosting/security.md#remote-mcp-server).
+One server, at one tailnet URL, serves every User; your Admin sets it up once
+([runbook](../../self-hosting/shared-mcp-server.md)). To connect:
+
+1. In **Settings → My account → API tokens**, choose **New token**, pick
+   **Used by: MCP server**, and name it after your client. Copy it: it is shown
+   once.
+2. Add `https://tuk-tuk-mcp.<tailnet>.ts.net/mcp` to your AI client with the
+   header `Authorization: Bearer <your MCP token>`. Keep the token out of
+   checked-in config. The package README has
+   [Claude Code remote setup](../../../mcp/oci/README.md#register-a-tailnet-client).
+
+Your device must be on the tailnet. Use one MCP token per client. See
+[self-hosting security notes](../../self-hosting/security.md#remote-mcp-server).
 
 ## Security
 
-Local mode uses your saved `tuk login` session. Remote mode stores your Tuk Tuk password in the pod and uses one shared bearer token for every client. Anyone with token access can read and change data using the available tools. Keep secrets out of checked-in config. Remote mode is tailnet-only; do not expose it publicly.
+Both modes act as you and see only your own data. Local mode uses your saved `tuk login` session. Remote mode uses your MCP token, which only the MCP server accepts; the server holds nobody's credentials and checks your token on every request. Revoke the token in **Settings → My account → API tokens** to cut that client off at once. Anyone with your MCP token on the tailnet can read and change your data using the available tools, so keep it out of checked-in config. Remote mode is tailnet-only; do not expose it publicly.
 
 See [Remote MCP server security](../../self-hosting/security.md#remote-mcp-server) and [ADR 0016](../../adr/0016-mcp-network-transport.md).
 

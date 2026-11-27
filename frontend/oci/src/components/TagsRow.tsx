@@ -18,7 +18,12 @@ type Choice = { kind: "tag"; tag: Tag } | { kind: "create"; name: string };
 /** The Task's Tags as chips; the popover adds one by prefix (the Quick-Add
  * `#` suggestion logic), offers to create a missing Tag, and a chip's
  * remove control untags the Task. */
-export function TagsRow({ task, allTags, onTaskChanged, onTagCreated }: TagsRowProps): JSX.Element {
+export function TagsRow({
+  task,
+  allTags,
+  onTaskChanged,
+  onTagCreated,
+}: TagsRowProps): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const id = useId();
@@ -72,7 +77,7 @@ export function TagsRow({ task, allTags, onTaskChanged, onTagCreated }: TagsRowP
     }
   }
 
-  const chips = (removable: boolean): JSX.Element => (
+  const chips = (removable: boolean): React.JSX.Element => (
     <span className="tags-row-chips">
       {task.tags.map((tag) => (
         <span key={tag.id} className="tags-row-chip">

@@ -1,5 +1,6 @@
 """Alembic environment. Runs migrations on a sync engine; the app passes the URL."""
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -14,6 +15,12 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+# The app sets sqlalchemy.url itself (app.db.run_migrations). Run from the
+# bare `alembic` CLI instead — e.g. to autogenerate a revision — there is
+# none in alembic.ini, so take the same DATABASE_URL the app would.
+if not config.get_main_option("sqlalchemy.url") and os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 
 def run_migrations_offline() -> None:

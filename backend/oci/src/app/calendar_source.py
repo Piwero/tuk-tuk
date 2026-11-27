@@ -12,6 +12,16 @@ from typing import Protocol
 
 
 @dataclass(frozen=True)
+class GoogleOAuthClient:
+    """A Google Cloud OAuth client. Each user brings their own (issue
+    #409), so every exchange and refresh names the one it is made with;
+    the source itself holds none."""
+
+    client_id: str
+    client_secret: str
+
+
+@dataclass(frozen=True)
 class ExchangedCredential:
     """What a completed OAuth authorization-code exchange yields."""
 
@@ -96,20 +106,23 @@ class TerminalCalendarSourceError(CalendarSourceError):
 
 
 class CalendarSource(Protocol):
-    def configure(self, client_id: str, client_secret: str) -> None:
-        """Replaces the OAuth client credentials in use, without
-        reconstructing the source (issue #117) — Settings can save new
-        Google credentials mid-process and have the very next request use
-        them, rather than requiring a restart."""
-        ...
-
-    async def exchange_code(self, code: str, redirect_uri: str) -> ExchangedCredential:
-        """Exchange a one-time authorization code for a refresh credential
+    async def exchange_code(
+        self,
+        oauth_client: GoogleOAuthClient,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
+    ) -> ExchangedCredential:
+        """Exchange a one-time authorization code (with the PKCE verifier
+        its consent was started with, issue #586) for a refresh credential
         and the identity (Google account id, email) it belongs to."""
         ...
 
-    async def refresh(self, refresh_token: str) -> RefreshedAccessToken:
-        """Mint a fresh access token from a stored refresh credential."""
+    async def refresh(
+        self, oauth_client: GoogleOAuthClient, refresh_token: str
+    ) -> RefreshedAccessToken:
+        """Mint a fresh access token from a stored refresh credential. A
+        refresh token is only valid for the OAuth client that minted it."""
         ...
 
     async def list_calendars(self, access_token: str) -> list[CalendarListEntry]:

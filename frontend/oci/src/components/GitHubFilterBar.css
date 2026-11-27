@@ -1,0 +1,20 @@
+@layer components {
+  /* Filter controls (#585): narrow the read in the browser. */
+  .github-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+  .github-filter,
+  .github-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .github-filter select {
+    max-width: 16rem;
+  }
+}

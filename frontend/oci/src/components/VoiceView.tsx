@@ -20,7 +20,7 @@ function onControl(event: PointerEvent<HTMLElement>): boolean {
 
 /** The Voice view of /assistant: push-to-talk over the app's one voice session. Opening it never
  * starts anything; the first press connects (and records nothing), later holds capture a turn. */
-export function VoiceView(): JSX.Element {
+export function VoiceView(): React.JSX.Element {
   const voice = useVoice();
   const { state, active, capturing } = voice;
   const held = useRef(false);

@@ -1,6 +1,6 @@
 import "./Sidebar.css";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 
 import {
   createFolder,
@@ -16,6 +16,7 @@ import {
   updateTask,
   SMART_LABELS,
   type Folder,
+  type RepositoryView,
   type SmartView,
   type Tag,
   type Task,
@@ -26,7 +27,7 @@ import { HINT_REGISTRY } from "../hintRegistry";
 import { loadCollapsedFolderIds, saveCollapsedFolderIds } from "../layoutPrefs";
 import { folderOpenCount, openCountLabel } from "../openCounts";
 import { appendOrder, byName, byOrder, planInsertBefore } from "../ordering";
-import { pathForContainer, pathForStaticView } from "../routes";
+import { pathForContainer, pathForRepositoryView, pathForStaticView } from "../routes";
 import { useHoverHint } from "../useHoverHint";
 import { APP_VERSION } from "../version";
 import { CreateMenu } from "./CreateMenu";
@@ -37,6 +38,7 @@ import { Icon, type IconName } from "./Icon";
 import { IconButton } from "./IconButton";
 import { ListForm, type ListFormValues } from "./ListForm";
 import { Logo } from "./Logo";
+import { RepositoryViewNameForm } from "./RepositoryViewNameForm";
 import { TagForm, type TagFormValues } from "./TagForm";
 
 /** Joins the id fragments of an accessible description together, dropping
@@ -70,6 +72,7 @@ type Editor =
   | { mode: "rename-folder"; folderId: number }
   | { mode: "create-tag" }
   | { mode: "edit-tag"; tagId: number }
+  | { mode: "create-repository-view" }
   | null;
 
 interface SidebarProps {
@@ -115,7 +118,16 @@ interface SidebarProps {
   /** Settings toggle (this feature): hides the Focus nav item entirely
    * when off, same contract as `standupEnabled` above. */
   focusEnabled: boolean;
-  settingsSelected: boolean;
+  /** The GitHub view over all Watched Repositories (#579). Always offered:
+   * with nothing watched it explains how to start. */
+  githubSelected: boolean;
+  onSelectGitHub: () => void;
+  /** The User's Repository Views (#580), nested under GitHub in this
+   * order, with "New view" to name another. */
+  repositoryViews: RepositoryView[];
+  selectedRepositoryViewId: number | null;
+  onSelectRepositoryView: (viewId: number) => void;
+  onCreateRepositoryView: (name: string) => Promise<void>;
   onSelect: (listId: number) => void;
   onSelectFolder: (folderId: number) => void;
   onSelectTag: (tagId: number) => void;
@@ -126,7 +138,6 @@ interface SidebarProps {
   onSelectStandup: () => void;
   onSelectAssistant: () => void;
   onSelectFocus: () => void;
-  onSelectSettings: () => void;
   onOpenPalette: () => void;
   /** Opens the Quick add dialog; the sidebar is always there, so capture is
    * reachable from every screen, including Habits and Focus. */
@@ -135,19 +146,12 @@ interface SidebarProps {
    * the main view its width back. */
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  /** The concrete theme on screen right now ("light"/"dark") and a handler
-   * that flips it — the nav-bar shortcut for Settings › Appearance. */
-  resolvedTheme: "light" | "dark";
-  onToggleTheme: () => void;
   onListsChanged: (update: (current: TaskList[]) => TaskList[]) => void;
   onFoldersChanged: (update: (current: Folder[]) => Folder[]) => void;
   onTagCreated: (tag: Tag) => void;
   onTagSaved: (tag: Tag) => void;
   onTagDeleted: (tagId: number) => void;
   onTaskMoved: (task: Task) => void;
-  /** Absent when the sidebar is rendered without AuthGate (most tests) —
-   * the log out control only appears once there is somewhere for it to go. */
-  onLogout?: () => void;
 }
 
 interface ListButtonProps {
@@ -166,7 +170,7 @@ function ListButton({
   collapsed,
   openCount,
   onSelect,
-}: ListButtonProps): JSX.Element {
+}: ListButtonProps): React.JSX.Element {
   // Collapsed, the row is only as wide as its glyph — so a List with neither a
   // color nor an emoji falls back to its initial rather than showing nothing.
   const bare = list.color === null && list.emoji === null;
@@ -253,7 +257,7 @@ function SmartListButton({
   count,
   countId,
   onSelect,
-}: SmartListButtonProps): JSX.Element {
+}: SmartListButtonProps): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   const hintKey = SMART_HINT_KEYS[view];
   const hintId = `smart-hint-${view}`;
@@ -304,7 +308,7 @@ function FolderNameButton({
   collapsed,
   openCount,
   onSelect,
-}: FolderNameButtonProps): JSX.Element {
+}: FolderNameButtonProps): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   return (
     <span className="icon-button-wrap">
@@ -338,7 +342,7 @@ interface TagButtonProps {
 /** Mirrors `ListButton`'s hint: `title` alone only ever reveals a Tag's
  * name on mouse hover, so a collapsed rail leaves keyboard users with
  * nothing (#264) — the popover rides alongside it rather than replacing it. */
-function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): JSX.Element {
+function TagButton({ tag, selected, collapsed, onSelect }: TagButtonProps): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   return (
     <span className="icon-button-wrap">
@@ -405,7 +409,7 @@ interface TopNavItemProps {
  * accessible name is carried by aria-label/title so the rail stays usable.
  * The active item is distinguished by an inset accent bar + weight, not by
  * colour alone; `aria-current` marks it for assistive tech. */
-function TopNavItem({ icon, label, href, selected, onClick }: TopNavItemProps): JSX.Element {
+function TopNavItem({ icon, label, href, selected, onClick }: TopNavItemProps): React.JSX.Element {
   const className = selected ? "top-nav-item selected" : "top-nav-item";
   const content = (
     <>
@@ -461,10 +465,15 @@ export function Sidebar({
   standupEnabled,
   focusSelected,
   focusEnabled,
+  githubSelected,
+  onSelectGitHub,
+  repositoryViews,
+  selectedRepositoryViewId,
+  onSelectRepositoryView,
+  onCreateRepositoryView,
   assistantSelected,
   assistantAvailable,
   onSelectAssistant,
-  settingsSelected,
   onSelect,
   onSelectFolder,
   onSelectTag,
@@ -474,32 +483,18 @@ export function Sidebar({
   onSelectHabits,
   onSelectStandup,
   onSelectFocus,
-  onSelectSettings,
   onOpenPalette,
   onQuickAdd,
   collapsed,
   onToggleCollapsed,
-  resolvedTheme,
-  onToggleTheme,
   onListsChanged,
   onFoldersChanged,
   onTagCreated,
   onTagSaved,
   onTagDeleted,
   onTaskMoved,
-  onLogout,
-}: SidebarProps): JSX.Element {
+}: SidebarProps): React.JSX.Element {
   const [editor, setEditor] = useState<Editor>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRoot = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    function dismiss(event: MouseEvent): void {
-      if (!menuRoot.current?.contains(event.target as Node)) setMenuOpen(false);
-    }
-    document.addEventListener("mousedown", dismiss);
-    return () => document.removeEventListener("mousedown", dismiss);
-  }, [menuOpen]);
   // Layout preference, not data — persisted per Folder in localStorage
   // (layoutPrefs), independent of selection. Default expanded.
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(loadCollapsedFolderIds);
@@ -784,7 +779,7 @@ export function Sidebar({
     }
   }
 
-  function renderListItem(list: TaskList): JSX.Element {
+  function renderListItem(list: TaskList): React.JSX.Element {
     if (editor?.mode === "edit-list" && editor.listId === list.id) {
       return (
         <li key={list.id}>
@@ -840,7 +835,7 @@ export function Sidebar({
     );
   }
 
-  function renderSmartList(view: SmartView): JSX.Element {
+  function renderSmartList(view: SmartView): React.JSX.Element {
     const count = smartOpenCounts[view];
     const countId = `smart-open-count-${view}`;
     return (
@@ -864,9 +859,8 @@ export function Sidebar({
   return (
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
       {/* Scrolls internally, independent of the rest of the app shell
-          (issue #159) — everything above the footer lives here so a long
-          list tree scrolls without carrying Settings/Log out (below, outside
-          this wrapper) along with it. */}
+          (issue #159). Dark mode, Settings and Log out live in the
+          top-right user menu (#473), so the sidebar has no footer. */}
       <div className="sidebar-scroll">
         <div className="sidebar-top">
           <div className="sidebar-brand" title={`tuk-tuk version ${APP_VERSION}`}>
@@ -938,6 +932,49 @@ export function Sidebar({
               selected={assistantSelected}
               onClick={onSelectAssistant}
             />
+          )}
+        </nav>
+        {/* Its own section so Repository Views can nest under it (#580). */}
+        <nav aria-label="GitHub" className="top-nav github-nav">
+          <TopNavItem
+            icon="git-pull-request"
+            label="GitHub"
+            href={pathForStaticView("github")}
+            selected={githubSelected}
+            onClick={onSelectGitHub}
+          />
+          <ul aria-label="Repository Views" className="repository-views">
+            {repositoryViews.map((repositoryView) => (
+              <li key={repositoryView.id}>
+                <TopNavItem
+                  icon="folder-git"
+                  label={repositoryView.name}
+                  href={pathForRepositoryView(repositoryView.id)}
+                  selected={selectedRepositoryViewId === repositoryView.id}
+                  onClick={() => onSelectRepositoryView(repositoryView.id)}
+                />
+              </li>
+            ))}
+          </ul>
+          {editor?.mode === "create-repository-view" ? (
+            <RepositoryViewNameForm
+              onSubmit={async (name) => {
+                await onCreateRepositoryView(name);
+                setEditor(null);
+              }}
+              onCancel={() => setEditor(null)}
+            />
+          ) : (
+            <button
+              type="button"
+              className="sidebar-add btn-quiet"
+              aria-label="New view"
+              title="New view"
+              onClick={() => setEditor({ mode: "create-repository-view" })}
+            >
+              <Icon name="plus" size={18} />
+              <span className="nav-label">New view</span>
+            </button>
           )}
         </nav>
         <div className="sidebar-search" role="search">
@@ -1222,72 +1259,6 @@ export function Sidebar({
             </ul>
           </section>
         )}
-      </div>
-      <div className="sidebar-footer">
-        <div
-          className="sidebar-app-menu"
-          ref={menuRoot}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              setMenuOpen(false);
-              menuRoot.current?.querySelector<HTMLButtonElement>("button")?.focus();
-            }
-          }}
-        >
-          <button
-            type="button"
-            className="sidebar-menu-trigger btn-quiet"
-            aria-label="App menu"
-            title="App menu"
-            aria-expanded={menuOpen}
-            aria-controls="sidebar-app-actions"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <Icon name="settings" size={18} />
-            <span className="nav-label">App menu</span>
-          </button>
-          {menuOpen && (
-            <div id="sidebar-app-actions" className="sidebar-app-menu-actions">
-              <button
-                type="button"
-                className="sidebar-theme-toggle btn-quiet"
-                aria-label={
-                  resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"
-                }
-                title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                aria-pressed={resolvedTheme === "dark"}
-                onClick={onToggleTheme}
-              >
-                <Icon name={resolvedTheme === "dark" ? "sun" : "moon"} size={18} />
-                <span className="nav-label">
-                  {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
-                </span>
-              </button>
-              <a
-                href={pathForStaticView("settings")}
-                className={settingsSelected ? "sidebar-settings selected" : "sidebar-settings"}
-                aria-label="Settings"
-                title="Settings"
-                onClick={(event) => handleNavAnchorClick(event, onSelectSettings)}
-              >
-                <Icon name="settings" size={18} />
-                <span className="nav-label">Settings</span>
-              </a>
-              {onLogout !== undefined && (
-                <button
-                  type="button"
-                  className="sidebar-logout btn-quiet"
-                  aria-label="Log out"
-                  title="Log out"
-                  onClick={onLogout}
-                >
-                  <Icon name="log-out" size={18} />
-                  <span className="nav-label">Log out</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
       </div>
     </aside>
   );

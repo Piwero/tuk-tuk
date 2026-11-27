@@ -40,7 +40,6 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.app_settings import google_configured, require_app_settings
 from app.calendar_source import (
     CalendarSource,
     TerminalCalendarSourceError,
@@ -54,6 +53,7 @@ from app.db import SessionDep
 from app.errors import APIError
 from app.event_cache import EventCache
 from app.models import GoogleAccount, GoogleCalendar, Task
+from app.user_settings import CurrentUserSettings, account_client, calendar_available
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
@@ -135,6 +135,7 @@ def _attendee_read(attendee: CalendarEventAttendee) -> EventAttendeeRead:
 async def read_events(
     request: Request,
     session: SessionDep,
+    user_settings: CurrentUserSettings,
     range_start: date | None = None,
     range_end: date | None = None,
     force: bool = False,
@@ -151,8 +152,7 @@ async def read_events(
         )
 
     settings: Settings = request.app.state.settings
-    app_settings = await require_app_settings(session)
-    if not google_configured(app_settings):
+    if not calendar_available(settings, user_settings):
         return EventsRead(events=[], failures=[])
 
     calendars = await _enabled_calendars(session)
@@ -177,6 +177,7 @@ async def read_events(
     calendar_source: CalendarSource = request.app.state.calendar_source
     event_cache: EventCache = request.app.state.event_cache
     assert settings.app_master_key is not None
+    owner_id = user_settings.user_id
     time_min = f"{range_start - timedelta(days=1)}T00:00:00Z"
     time_max = f"{range_end + timedelta(days=2)}T00:00:00Z"
 
@@ -186,7 +187,9 @@ async def read_events(
         account = accounts_by_id[account_id]
         cached_by_calendar = {
             calendar.id: (
-                None if force else event_cache.get(calendar.google_calendar_id, time_min, time_max)
+                None
+                if force
+                else event_cache.get(owner_id, calendar.google_calendar_id, time_min, time_max)
             )
             for calendar in account_calendars
         }
@@ -197,10 +200,18 @@ async def read_events(
             # cache window never re-hits Google at all, not even to refresh.
             access_token = None
             if any(entries is None for entries in cached_by_calendar.values()):
+                # Each account refreshes with the client that minted its
+                # token (issue #586); one whose client is gone is as good
+                # as revoked.
+                oauth_client = account_client(account, settings, user_settings)
+                if oauth_client is None:
+                    raise TerminalCalendarSourceError("Its OAuth client is no longer configured")
                 refresh_token = decrypt_credential(
                     account.encrypted_refresh_token, key=settings.app_master_key
                 )
-                access_token = (await calendar_source.refresh(refresh_token)).access_token
+                access_token = (
+                    await calendar_source.refresh(oauth_client, refresh_token)
+                ).access_token
             for calendar in account_calendars:
                 cached = cached_by_calendar[calendar.id]
                 if cached is None:
@@ -211,7 +222,9 @@ async def read_events(
                         time_min=time_min,
                         time_max=time_max,
                     )
-                    event_cache.set(calendar.google_calendar_id, time_min, time_max, entries)
+                    event_cache.set(
+                        owner_id, calendar.google_calendar_id, time_min, time_max, entries
+                    )
                 else:
                     entries = cached
                 for entry in entries:

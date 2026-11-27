@@ -1,16 +1,75 @@
 @layer components {
+  /* Reachable Save (#542): with Details open the form outgrew a phone and a
+   short desktop, and "Add task" sat at the far end of the scroll. This
+   panel alone is capped to the viewport at every width (other Modals keep
+   Modal.css's sizing), and only the body scrolls: the action footer is
+   outside the scroller, always on screen, and a focused detail can't
+   scroll in behind it. Nothing is pinned to the viewport, so the footer
+   can't land on the mobile tab bar. */
+  .modal:has(> .quick-add-dialog) {
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+  }
+
   .quick-add-dialog {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+    min-height: 0;
   }
 
-  .quick-add-dialog > label {
+  /* A scroller clips on both axes and the focus ring is a 3px box-shadow
+   outside the control: room inside for it, taken back outside so nothing
+   moves. */
+  .quick-add-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-1);
+    margin: calc(-1 * var(--space-1));
+  }
+
+  .quick-add-body > label,
+  .quick-add-details > label {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
     font-size: var(--text-sm);
     color: var(--text-secondary);
+  }
+
+  /* Title-first (#540): what the Task will be, readable while Details is
+   collapsed — the quiet destination plus a removable chip per field the
+   title's tokens, the caller or Assist have set. */
+  .quick-add-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    font-size: var(--text-sm);
+  }
+
+  .quick-add-destination {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-secondary);
+  }
+
+  .quick-add-details-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    align-self: flex-start;
+  }
+
+  .quick-add-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
   }
 
   .quick-add-dialog fieldset {
@@ -44,11 +103,53 @@
     font-size: var(--text-sm);
   }
 
+  /* Save feedback (#544): an invalid title is explained right under the
+   field it is about, and a failed save names itself with Retry beside it —
+   text carries the meaning, the danger color only reinforces it. */
+  .quick-add-field-error,
+  .quick-add-save-error p {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-danger);
+  }
+
+  .quick-add-field-error {
+    margin-top: calc(-1 * var(--space-2));
+  }
+
+  /* Session draft (#541): a reopened dialog says the text in it is the one
+   left unsent, quietly, right under the title it is about. */
+  .quick-add-draft-note {
+    margin: calc(-1 * var(--space-2)) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .quick-add-save-error {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius-md);
+    background: var(--danger-soft);
+  }
+
   .quick-add-dialog-actions {
+    flex: none;
     display: flex;
     justify-content: flex-end;
     gap: var(--space-2);
     margin-top: var(--space-2);
+  }
+
+  /* Discarding throws away what was typed: it sits apart from the
+   Cancel / Add task pair rather than next to either. */
+  .quick-add-dialog-actions .quick-add-discard {
+    margin-right: auto;
   }
 
   .quick-add-dialog-actions button[type="submit"] {
@@ -83,6 +184,19 @@
       min-height: var(--tap-target);
     }
 
+    /* Same square hit area for the collapsed summary's chips (#540): with
+     Details shut, a chip's remove button is the only touch path to undo a
+     `~list` / `!priority` / `#tag` / `@day` pick. */
+    .quick-add-dialog .quick-add-summary button {
+      min-width: var(--tap-target);
+      min-height: var(--tap-target);
+    }
+
+    .quick-add-dialog .quick-add-details-toggle,
+    .quick-add-dialog .quick-add-save-error button {
+      min-height: var(--tap-target);
+    }
+
     /* The suggestion dropdown's rows are the only touch path to a `#tag` /
      `~list` / `!priority` / `@date` pick — a 27px row in a list of them is
      a mis-pick waiting to happen. */
@@ -108,6 +222,15 @@
      centred on either cannot reach the other. */
     .quick-add-dialog-actions {
       justify-content: space-between;
+      /* The panel's bottom edge, where the footer now always sits, can
+       reach a phone's home indicator. */
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    /* With Discard draft present, let space-between spread all three; an
+     auto margin would pull Cancel back against Add task. */
+    .quick-add-dialog-actions .quick-add-discard {
+      margin-right: 0;
     }
   }
 }

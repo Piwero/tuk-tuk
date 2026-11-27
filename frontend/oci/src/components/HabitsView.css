@@ -19,7 +19,7 @@
   }
   .habits-view > button:hover,
   .other-habits > button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   /* The content column.
 
@@ -91,7 +91,7 @@
   }
   .habits-view .habit.complete {
     background: var(--success-soft);
-    border-color: var(--green-100);
+    border-color: var(--success-border);
   }
   /* Target met, said in words + a mark — not signalled by the card's green
  * wash alone (which fails for anyone who can't tell the two grounds
@@ -156,12 +156,12 @@
     transition: all var(--duration-fast) var(--ease-out);
   }
   .habit-check:hover {
-    border-color: var(--ink-400);
+    border-color: var(--border-hover);
   }
   .habit-check[aria-pressed="true"] {
     border-color: var(--success);
     background: var(--success);
-    color: var(--white);
+    color: var(--text-on-fill);
   }
   .habit-progress {
     font-variant-numeric: tabular-nums;
@@ -211,6 +211,21 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-md);
     background: var(--surface-card);
+    /* Lets a detail row measure the visible width, not the table's (#569). */
+    container-type: inline-size;
+  }
+  /* Weekly target, pause, skip and history rows span all eight columns. On
+   a phone the grid scrolls sideways and the table is wider than the
+   screen, so their content holds still at the visible width instead of
+   centring its buttons and notes past the edge (#569). */
+  .habits-week-grid td.habit-detail-cell {
+    text-align: left;
+  }
+  .habit-detail-cell > * {
+    position: sticky;
+    left: var(--space-2);
+    box-sizing: border-box;
+    max-width: calc(100cqi - 2 * var(--space-2));
   }
   .habits-week-grid {
     width: 100%;
@@ -251,6 +266,17 @@
     display: block;
     font-size: var(--text-sm);
   }
+  /* A fixed-width icon slot, so an emoji's own width (or none) never
+   shifts the name: every row's name starts at the same x. The colour dot
+   is a fixed 10px already and renders empty when the Habit has none. */
+  .habit-row-head .habit-icon {
+    flex: none;
+    width: 24px;
+    text-align: center;
+  }
+  .habit-row-head .color-dot {
+    margin-top: 5px;
+  }
   .habit-streak-count {
     display: inline-flex;
     align-items: center;
@@ -273,27 +299,148 @@
     color: var(--text-primary);
   }
   .habit-cell.state-done {
-    color: var(--white);
+    color: var(--text-on-fill);
   }
   .habit-cell.state-open-today {
     border: 2px solid var(--border-strong);
   }
+  /* Today, still open, says so on screen and names what a tap does: the
+   cell grows to fit two short lines rather than leaving it to the name. */
+  .habits-week-grid .habit-cell.state-open-today {
+    width: auto;
+    min-width: 32px;
+    padding: 0 var(--space-1);
+  }
+  .habit-cell-today-text {
+    display: flex;
+    flex-direction: column;
+    line-height: var(--leading-tight);
+    white-space: nowrap;
+    color: var(--text-secondary);
+  }
+  .habit-cell-today-action {
+    color: var(--text-accent);
+    font-weight: var(--weight-medium);
+  }
   .habit-cell.state-missed {
     border: 1px dashed var(--border-strong);
   }
-  .habits-week-grid .habit-cell.state-not-scheduled {
+  .habits-week-grid .habit-cell.state-unscheduled,
+  .habits-legend .habit-cell.state-unscheduled {
     background: transparent;
     border-color: var(--border-default);
     opacity: 0.5;
   }
-  .habits-week-grid .habit-cell.state-future {
+  .habits-week-grid .habit-cell.state-future,
+  .habits-legend .habit-cell.state-future {
     background: transparent;
     border: 1px dotted var(--border-default);
+  }
+  /* Before the Habit start: the shared dash (HabitHistory.css) on no fill.
+   Never the missed outline, never a success green: the Habit didn't exist
+   yet. */
+  .habits-week-grid .habit-cell.state-paused,
+  .habits-legend .habit-cell.state-paused,
+  .habits-week-grid .habit-cell.state-not-started,
+  .habits-legend .habit-cell.state-not-started {
+    background: transparent;
+    border: 1px solid transparent;
+  }
+  /* Paused (#559): the shared paused mark (HabitHistory.css) plus a pause
+   glyph. Neutral, never the missed outline, red or success green: a pause
+   is neither failure nor success. */
+  .habits-week-grid .habit-cell.state-paused,
+  .habits-legend .habit-cell.state-paused,
+  .habits-week-grid .habit-cell.state-skipped,
+  .habits-legend .habit-cell.state-skipped {
+    color: var(--text-tertiary);
+  }
+  /* Skipped (#564): no fill, a solid neutral outline and a skip glyph — on
+   purpose, so never the missed dashed outline, red or success green. */
+  .habits-week-grid .habit-cell.state-skipped,
+  .habits-legend .habit-cell.state-skipped {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+  }
+  /* The legend: one swatch per cell state, its meaning always in words. */
+  .habits-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin: 0 0 var(--space-4);
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .habits-legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .habits-legend .habits-legend-swatch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: var(--habit-legend-swatch);
+    height: var(--habit-legend-swatch);
+    border-radius: var(--radius-xs);
   }
   .habit-cell.today {
     box-shadow:
       0 0 0 2px var(--surface-card),
       0 0 0 3px var(--text-secondary);
+  }
+  /* On a phone the table was a 180px name column plus seven day columns,
+   about 520px: only three days showed and today's cell was cut off at the
+   edge. Here the whole table becomes one seven-column grid — rows flatten
+   with `display: contents`, so every cell is a grid item and each day
+   column keeps one width from the header down. Each Habit's name and each
+   detail row take a full line; the days share the width below. A column
+   holding today's "Not yet / Check in" grows to fit it (min-content). The
+   cells keep their own spoken names, so the table roles a browser may drop
+   for `display: contents` lose nothing a screen reader needs. */
+  @media (max-width: 720px) {
+    .habits-week-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(min-content, 1fr));
+    }
+    .habits-week-grid thead,
+    .habits-week-grid tbody,
+    .habits-week-grid tr {
+      display: contents;
+    }
+    .habits-week-grid th,
+    .habits-week-grid td {
+      padding: var(--space-1) 2px;
+    }
+    /* The days speak for themselves; the column header stays for screen
+       readers only. */
+    .habits-week-corner {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .habits-week-grid .habit-row-head {
+      grid-column: 1 / -1;
+      min-width: 0;
+      padding: var(--space-2) var(--space-2) 0;
+      border-bottom: none;
+    }
+    .habits-week-grid td[colspan] {
+      grid-column: 1 / -1;
+      padding: var(--space-1) var(--space-2) var(--space-2);
+    }
+    .habits-week-grid .habit-cell,
+    .habits-week-grid .habit-cell.state-open-today {
+      width: 100%;
+      max-width: 56px;
+      height: var(--tap-target);
+    }
   }
   .habits-long-history {
     display: flex;
@@ -310,5 +457,30 @@
     flex: none;
     width: 140px;
     color: var(--text-secondary);
+  }
+  /* On a phone a 140px name beside the strip left it ~200px, so the days
+   wrapped into three rows: the name goes above and the strip gets the
+   full width. */
+  @media (max-width: 720px) {
+    .habit-long-history-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+    }
+    .habit-long-history-row > .habit-name {
+      width: auto;
+    }
+  }
+  /* On touch each 12px day is padded out to the tap target (HabitHistory.css);
+   at 4px a side 21 days need 420px and the last few wrap onto a second
+   line. 2px a side fits them in one line at 390px; the hit area keeps its
+   44px height. */
+  @media (max-width: 720px) and (hover: none), (max-width: 720px) and (pointer: coarse) {
+    .habits-long-history .habit-strip button.heatmap-day {
+      padding-inline: 2px;
+    }
+    .habits-long-history .habit-strip button.heatmap-day.today::after {
+      inset-inline: 2px;
+    }
   }
 }

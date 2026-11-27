@@ -66,9 +66,9 @@ exactly the failure being looked for.
 | `overdue`    | Two tasks whose dates already passed            | The `find_tasks` tool — overdue work is *outside* the snapshot, so answering needs a tool call |
 | `packed`     | Meetings from 09:00 to 19:00 with no gap        | Saying "there is no room" instead of inventing one |
 
-The app is booted for real over a throwaway SQLite file and every seed goes
-in over the HTTP API, so a scenario can never construct a state a user
-couldn't. Google is faked — Events are seeded — because the alternative is
+The app is booted for real over a throwaway PostgreSQL database (Docker
+required) and every seed goes in over the HTTP API, so a scenario can never
+construct a state a user couldn't. Google is faked — Events are seeded — because the alternative is
 a suite only its author can run. **The provider is the only real thing**,
 which is the point.
 

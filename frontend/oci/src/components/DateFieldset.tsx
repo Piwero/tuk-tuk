@@ -10,7 +10,7 @@ interface DateFieldsetProps {
  *
  * Purely a draft editor — validating and saving belongs to the owner, which is
  * why the two callers can wrap it in a Save button or a whole create form. */
-export function DateFieldset({ draft, onChange }: DateFieldsetProps): JSX.Element {
+export function DateFieldset({ draft, onChange }: DateFieldsetProps): React.JSX.Element {
   return (
     <div className="date-editor">
       <label>

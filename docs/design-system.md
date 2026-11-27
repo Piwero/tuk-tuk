@@ -275,7 +275,8 @@ cannot reach, and the rail needs something to hide that isn't the mark.
   unarchive=`archive-restore`, history=`chart-column`, recurring=`repeat`,
   nav chevrons=`chevron-left/right`; folder row=`folder`; sidebar: Tasks=`list-checks`,
   Calendar=`calendar-days`, Habits=`repeat`, Focus=`timer`, Search=`search`,
-  Today=`sun`, Next 7 Days=`calendar-range`, All=`layers`, Inbox=`inbox`;
+  Today=`sun`, Next 7 Days=`calendar-range`, All=`layers`, Inbox=`inbox`,
+  GitHub=`git-pull-request`, Repository View=`folder-git`;
   Priority=`signal-low`/`signal-medium`/`signal-high` (Low/Medium/High —
   see `PriorityIndicator.tsx`; None has no glyph).
 
@@ -284,7 +285,10 @@ cannot reach, and the rail needs something to hide that isn't the mark.
 Top to bottom: wordmark → feature nav (Tasks / Calendar / Habits / Stand-up /
 Focus / Search, plus Assistant when available — a vertical list of labelled
 rows, readable rather than guessed from a glyph; the active one is told apart
-by an inset accent bar + weight, not colour alone; #194, #160) → inline query
+by an inset accent bar + weight, not colour alone; #194, #160) → GitHub
+section (its own `nav`: the GitHub view over every Watched Repository, then
+the Repository Views nested beneath it in their saved order, then a quiet
+"New view" add action that names one inline — #579, #580) → inline query
 box → Smart Lists → Inbox → Folders and Lists → Tags (a wrapped cloud of
 chips, each linking to its Tag view — #194) → bottom-pinned add actions (Add
 List, Add Folder). Collapsed, the sidebar is an icon-only rail with every
@@ -303,8 +307,9 @@ visible numeral is `aria-hidden`; the spoken form ("3 open tasks") is a
 count reaches assistive tech without colliding with the item's accessible
 name. Collapsed, the numeral steps aside with the rest of the row.
 
-Standup, Focus, Calendar, Habits, Search, and Settings are URL-addressable
-(`/standup`, `/focus`, etc. — #143); their sidebar nav items are real
+Standup, Focus, Calendar, Habits, Search, Settings, GitHub and each
+Repository View are URL-addressable (`/standup`, `/focus`, `/github`,
+`/github/views/:id`, etc. — #143, #580); their sidebar nav items are real
 anchors so cmd/ctrl-click, middle-click, and "copy link" work. List, Tag,
 and Folder views stay in-memory only.
 

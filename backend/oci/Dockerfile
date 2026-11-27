@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # ---- Base: python + uv + runtime deps (no project) ----
-FROM python:3.15-slim AS base
+# Keep this minor in step with the newest version in backend-ci.yml's
+# matrix. The slim image has no compiler, so every locked dependency
+# needs a wheel for this Python; 3.15 has none for httptools/uvloop (#507).
+FROM python:3.14-slim AS base
 
 # uv binary (exact pin; Dependabot bumps this)
 COPY --from=ghcr.io/astral-sh/uv:0.11.26 /uv /uvx /bin/

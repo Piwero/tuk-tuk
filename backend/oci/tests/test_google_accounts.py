@@ -6,19 +6,29 @@ state carried in that redirect's query string — no test reaches into the
 router's internals to fabricate a state token.
 """
 
-import sqlite3
-import time as time_module
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from itsdangerous import URLSafeTimedSerializer
 
 from app.config import Settings
+from app.google_identity import pkce_challenge
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeCalendarSource, FakeClock
+from tests.conftest import (
+    TEST_PASSWORD,
+    FakeCalendarSource,
+    FakeClock,
+    app_settings_row,
+    create_user_row,
+    log_in,
+    log_in_admin,
+    run_sql,
+)
 
 
 @contextmanager
@@ -33,12 +43,10 @@ def make_client(
         clock=fake_clock,
         calendar_source=fake_calendar_source,
     )
-    # Login needs the DB (the password hash and session key both live in
-    # `settings` now, ADR 0008), so it must happen only once the lifespan's
-    # startup — which bootstraps that row — has actually run.
+    # Signing in needs the DB (the User and the session key live there), so
+    # it must happen only once the lifespan's startup has actually run.
     with TestClient(app, follow_redirects=False) as test_client:
-        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(test_client)
         yield test_client
 
 
@@ -225,15 +233,13 @@ class TestCallback:
         assert response.status_code == 400
 
     def test_an_expired_state_is_rejected(
-        self, configured_client: TestClient, monkeypatch: pytest.MonkeyPatch
+        self, configured_client: TestClient, fake_clock: FakeClock
     ) -> None:
-        """A captured state token isn't valid indefinitely — see
-        _STATE_MAX_AGE_SECONDS in app.routers.v1.google."""
-        real_time = time_module.time
-        monkeypatch.setattr(time_module, "time", lambda: real_time() - 700)
+        """A captured state isn't valid indefinitely: a consent round trip
+        lasts ten minutes at most (app.oauth_transaction)."""
         connect_response = configured_client.get("/api/v1/google/connect")
         state, _ = state_from_connect_redirect(connect_response)
-        monkeypatch.undo()
+        fake_clock.advance(timedelta(minutes=11))
 
         response = configured_client.get(
             "/api/v1/google/callback", params={"code": "some-code", "state": state}
@@ -241,12 +247,98 @@ class TestCallback:
 
         assert response.status_code == 400
 
+    def test_the_code_is_exchanged_with_the_consents_pkce_verifier(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """Issue #586: a stolen authorization code is useless without the
+        verifier, which never left this browser's cookie."""
+        connect_response = configured_client.get("/api/v1/google/connect")
+        params = parse_qs(urlparse(connect_response.headers["location"]).query)
+        fake_calendar_source.register_code(
+            "pkce-code", google_account_id="g-1", email="me@example.com", refresh_token="rt"
+        )
+
+        configured_client.get(
+            "/api/v1/google/callback", params={"code": "pkce-code", "state": params["state"][0]}
+        )
+
+        assert params["code_challenge_method"] == ["S256"]
+        [verifier] = fake_calendar_source.exchanged_verifiers
+        assert verifier is not None
+        assert pkce_challenge(verifier) == params["code_challenge"][0]
+
+    def test_a_callback_without_the_browsers_consent_cookie_is_rejected(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        state, _ = state_from_connect_redirect(configured_client.get("/api/v1/google/connect"))
+        fake_calendar_source.register_code(
+            "a-code", google_account_id="g-1", email="someone@example.com", refresh_token="rt"
+        )
+        configured_client.cookies.delete("tuktuk_google_calendar_oauth", path="/api/v1/google")
+
+        response = configured_client.get(
+            "/api/v1/google/callback", params={"code": "a-code", "state": state}
+        )
+
+        assert response.status_code == 400
+        assert configured_client.get("/api/v1/google/accounts").json() == []
+
     def test_is_not_found_when_unconfigured(self, unconfigured_client: TestClient) -> None:
         response = unconfigured_client.get(
             "/api/v1/google/callback", params={"code": "x", "state": "y"}
         )
 
         assert response.status_code == 404
+
+    def test_a_state_started_by_another_user_links_nothing(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """The state names the User who started /connect: a consent the
+        admin began cannot be finished in Bea's session (login CSRF the
+        other way round: her Google account must not land on his link, nor
+        his on hers)."""
+        state, _ = state_from_connect_redirect(configured_client.get("/api/v1/google/connect"))
+        create_user_row(configured_client, "bea", "bea@example.com")
+        configured_client.cookies.clear()
+        log_in(configured_client, "bea", TEST_PASSWORD)
+        configured_client.put(
+            "/api/v1/google/credentials",
+            json={"client_id": "beas-client-id", "client_secret": "beas-secret"},
+        )
+        fake_calendar_source.register_code(
+            "a-code", google_account_id="g-1", email="someone@example.com", refresh_token="rt"
+        )
+
+        response = configured_client.get(
+            "/api/v1/google/callback", params={"code": "a-code", "state": state}
+        )
+
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "invalid_oauth_state"
+        assert configured_client.get("/api/v1/google/accounts").json() == []
+        configured_client.cookies.clear()
+        log_in(configured_client)
+        assert configured_client.get("/api/v1/google/accounts").json() == []
+
+    def test_a_state_naming_no_user_is_rejected(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """A state from before states named their User (one minted by an
+        older build, signed with the same key and salt) is not enough."""
+        session_key = app_settings_row(configured_client.app).session_key
+        state = URLSafeTimedSerializer(session_key, salt="google-oauth-state").dumps(
+            {"return_to": "http://localhost:5900"}
+        )
+        fake_calendar_source.register_code(
+            "a-code", google_account_id="g-1", email="someone@example.com", refresh_token="rt"
+        )
+
+        response = configured_client.get(
+            "/api/v1/google/callback", params={"code": "a-code", "state": state}
+        )
+
+        assert response.status_code == 400
+        assert configured_client.get("/api/v1/google/accounts").json() == []
 
 
 class TestAccountsAndDisconnect:
@@ -286,9 +378,7 @@ class TestAccountsAndDisconnect:
 
         configured_client.delete(f"/api/v1/google/accounts/{account_id}")
 
-        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-        rows = sqlite3.connect(db_path).execute("SELECT * FROM google_accounts").fetchall()
-        assert rows == []
+        assert run_sql(database_url, "SELECT * FROM google_accounts") == []
 
     def test_disconnecting_an_unknown_account_is_a_404(self, configured_client: TestClient) -> None:
         response = configured_client.delete("/api/v1/google/accounts/999")
@@ -326,12 +416,7 @@ class TestAccountsAndDisconnect:
             refresh_token="a-very-secret-refresh-token",
         )
 
-        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-        row = (
-            sqlite3.connect(db_path)
-            .execute("SELECT encrypted_refresh_token FROM google_accounts")
-            .fetchone()
-        )
+        [row] = run_sql(database_url, "SELECT encrypted_refresh_token FROM google_accounts")
         assert "a-very-secret-refresh-token" not in row[0]
 
     def test_is_not_found_when_unconfigured(self, unconfigured_client: TestClient) -> None:
@@ -368,10 +453,7 @@ class TestCredentialSurvivesSessionKeyRotation:
                 refresh_token="rt-1",
             )
 
-        db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-        connection = sqlite3.connect(db_path)
-        connection.execute("UPDATE settings SET session_key = 'rotated-signing-key'")
-        connection.commit()
+        run_sql(database_url, "UPDATE settings SET session_key = 'rotated-signing-key'")
 
         # A fresh app, as if the signing key were rotated — same database,
         # same master key.

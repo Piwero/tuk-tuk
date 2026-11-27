@@ -9,6 +9,12 @@ from the UI, and `GOOGLE_ENCRYPTION_KEY` is retired in favor of a single
 root `APP_MASTER_KEY`. The read-only scope and live-fetch decisions below
 are unaffected.
 
+Amended by [0021](0021-invite-only-google-sign-in.md): new connections use
+the deployment's shared OAuth client when one is configured, and each
+Google Account keeps refreshing with the client that minted its token. A
+Calendar connection never becomes a way to sign in. Read-only and live-fetch
+still hold.
+
 ## Context
 
 tuk-tuk's Calendar surfaces a user's Google Calendar Events alongside their

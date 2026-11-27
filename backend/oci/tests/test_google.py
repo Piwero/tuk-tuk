@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeClock
+from tests.conftest import FakeClock, log_in_admin
 
 
 @contextmanager
@@ -22,12 +22,10 @@ def make_client(
     database_url: str, fake_clock: FakeClock, **overrides: object
 ) -> Iterator[TestClient]:
     app = create_app(Settings(database_url=database_url, **overrides), clock=fake_clock)  # type: ignore[arg-type]
-    # Login needs the DB (the password hash and session key both live in
-    # `settings` now, ADR 0008), so it must happen only once the lifespan's
-    # startup — which bootstraps that row — has actually run.
+    # Signing in needs the DB (the User and the session key live there), so
+    # it must happen only once the lifespan's startup has actually run.
     with TestClient(app) as test_client:
-        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(test_client)
         yield test_client
 
 
@@ -59,6 +57,7 @@ class TestGoogleStatus:
             "configured": True,
             "client_id": "a-client-id",
             "client_secret_set": True,
+            "shared_client": False,
         }
 
     def test_reports_configured_false_when_credentials_are_absent(
@@ -71,6 +70,7 @@ class TestGoogleStatus:
             "configured": False,
             "client_id": None,
             "client_secret_set": False,
+            "shared_client": False,
         }
 
     def test_reports_the_client_id_but_never_the_client_secret_value(

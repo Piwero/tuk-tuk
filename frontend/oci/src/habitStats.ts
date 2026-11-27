@@ -2,7 +2,130 @@
  * the yearly heatmap and the card's recent-days strip both bucket a
  * HeatmapDay's intensity the same way. */
 
-import { recentScheduledDays } from "./habitFrequency";
+import { localDayOf } from "./dates";
+import { habitDueOn, recentScheduledDays } from "./habitFrequency";
+
+/** The Habit start (YYYY-MM-DD): the first day the Habit counts. A day before
+ * it reads as "not started", never as missed. The server's `eligible_from`
+ * decides once the stats land; until then the creation day in the browser's
+ * zone stands in. That is never earlier than the server's answer (an earlier
+ * real Check-in can only pull it back), so a loading screen can't show a miss
+ * the server wouldn't. Never after today. */
+function habitStart(
+  habit: { created_at: string },
+  stats: { eligible_from: string } | null | undefined,
+  today: string,
+): string {
+  const start = stats?.eligible_from ?? localDayOf(new Date(habit.created_at));
+  return start < today ? start : today;
+}
+
+/** What one of a Habit's days is. The week grid, the recent-days strip and
+ * the history panel all show days, so they all read them here. The names
+ * are the server's (app.habit_days `DayState`) in kebab case, since they
+ * double as CSS classes: `not_started` is "not-started", `open_today`
+ * "open-today". Keep the two lists in step. */
+export type DayState =
+  | "done"
+  | "partial"
+  | "open-today"
+  | "missed"
+  | "not-started"
+  | "unscheduled"
+  | "paused"
+  | "skipped"
+  | "future";
+
+/** Whether a pause covers the day: both ends inclusive, a null end
+ * open-ended — the server's rule (app.habit_days). */
+export function pauseCovers(
+  pause: { start_date: string; end_date: string | null },
+  day: string,
+): boolean {
+  return pause.start_date <= day && (pause.end_date === null || day <= pause.end_date);
+}
+
+/** The pause a Habit's card shows: the one covering today, else the next
+ * one to come. Past pauses are history only, read off the days. */
+export function currentOrNextPause<P extends { start_date: string; end_date: string | null }>(
+  habit: { pauses?: P[] },
+  today: string,
+): P | undefined {
+  return (habit.pauses ?? []).find((pause) => pause.end_date === null || pause.end_date >= today);
+}
+
+const SKIPPED: DayReading = { state: "skipped", level: 0, text: "skipped" };
+
+export interface DayReading {
+  state: DayState;
+  /** The heat-ramp fill (0..4). A partial day stays on 1-3, so only a met
+   * Target ever looks like one. */
+  level: number;
+  /** The words a screen reader hears for the day, after its date. */
+  text: string;
+}
+
+/** Reads one Habit's days as of `today`, with the Habit start worked out once
+ * for all of them. `value` is what the day holds (0 when it has no
+ * Check-in). The order decides overlaps: a recorded value always shows, a
+ * future day is inert, an off day is "not scheduled" even before the Habit
+ * start, and only then does the start turn an empty day "not started"
+ * instead of missed, a pause turns it "paused" and a skip "skipped" — the
+ * same order as the server's day rule (app.habit_days). A skip still to come
+ * reads "skipped" ahead of its day, so a planned skip shows. Today is
+ * graced, as in the server's Streak. */
+export function habitDayReader(
+  habit: {
+    created_at: string;
+    frequency: string;
+    target: number;
+    unit: string | null;
+    pauses?: { start_date: string; end_date: string | null }[];
+    skips?: string[];
+  },
+  stats: { eligible_from: string } | null | undefined,
+  today: string,
+): (day: string, value: number) => DayReading {
+  const start = habitStart(habit, stats, today);
+  return (day, value) => {
+    if (value >= habit.target) {
+      return { state: "done", level: 4, text: "checked in" };
+    }
+    if (value > 0) {
+      const unit = habit.unit === null ? "" : ` ${habit.unit}`;
+      return {
+        state: "partial",
+        level: Math.min(3, Math.max(1, heatLevel(value / habit.target))),
+        text: `in progress: ${value} of ${habit.target}${unit}`,
+      };
+    }
+    const scheduled = habitDueOn(habit.frequency, day);
+    const paused = (habit.pauses ?? []).some((pause) => pauseCovers(pause, day));
+    const skipped = (habit.skips ?? []).includes(day);
+    if (day > today) {
+      // A planned skip: the server's rule (HabitDays._skipped), start check
+      // included, though today is never before the Habit start.
+      return skipped && scheduled && !paused && day >= start
+        ? SKIPPED
+        : { state: "future", level: 0, text: "future" };
+    }
+    if (!scheduled) {
+      return { state: "unscheduled", level: 0, text: "not scheduled" };
+    }
+    if (day < start) {
+      return { state: "not-started", level: 0, text: "not started" };
+    }
+    if (paused) {
+      return { state: "paused", level: 0, text: "paused" };
+    }
+    if (skipped) {
+      return SKIPPED;
+    }
+    return day === today
+      ? { state: "open-today", level: 0, text: "not yet checked in" }
+      : { state: "missed", level: 0, text: "missed" };
+  };
+}
 
 /** How many of the Habit's most recent scheduled days the card's strip
  * shows — three weeks, enough to read a pattern (a slipping habit, a

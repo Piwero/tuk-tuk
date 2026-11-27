@@ -21,7 +21,7 @@
   .focus-timers > button:hover,
   .focus-timers-footer .hint-wrap > button:hover,
   .focus-view > button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   /* The content column.
 
@@ -54,6 +54,32 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-6);
+  }
+  .focus-accountability {
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+  .focus-accountability summary,
+  .focus-accountability a {
+    min-height: var(--tap-target);
+    padding-block: var(--space-3);
+    cursor: pointer;
+  }
+  .focus-accountability a {
+    display: inline-flex;
+    align-items: center;
+    color: var(--focus-accent);
+    text-decoration: underline;
+  }
+  .focus-accountability p {
+    margin-block: var(--space-3);
+  }
+  .focus-accountability summary:focus-visible,
+  .focus-accountability a:focus-visible {
+    outline: 3px solid var(--focus-accent);
+    outline-offset: var(--space-1);
   }
   /* The stage: one bordered room holding the clock, the Task and the decisions. */
   .focus-stage {
@@ -104,7 +130,7 @@
   }
   .focus-dial-track {
     fill: none;
-    stroke: var(--plum-100);
+    stroke: var(--focus-border);
     stroke-width: 6;
   }
   .focus-dial-progress {
@@ -129,6 +155,12 @@
     margin: 0;
     font-size: var(--text-sm);
     color: var(--text-secondary);
+  }
+  .focus-stage-step {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
   }
   .focus-stage-task strong {
     color: var(--focus-accent);
@@ -231,7 +263,7 @@
     transition: background var(--duration-fast) var(--ease-out);
   }
   .focus-actions > button:hover {
-    background: var(--plum-700);
+    background: var(--focus-accent-hover);
   }
   .focus-actions > button:disabled {
     background: var(--surface-hover);
@@ -473,7 +505,7 @@
     text-align: left;
   }
   .focus-today-task:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .focus-today-task[aria-pressed="true"] {
     border-color: var(--focus-accent);
@@ -516,7 +548,7 @@
     align-items: flex-end;
     height: 100%;
     border-radius: var(--radius-sm);
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .focus-strip li[aria-current="date"] {
     outline: 2px solid var(--focus-accent);

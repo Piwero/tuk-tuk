@@ -1,43 +1,54 @@
-"""First-run setup, login, session-probe, and change-password endpoints
-(ADR 0005, issue #83; ADR 0008, issues #115 and #116; lockout, issue #339)."""
+"""First-run setup, login, the signed-in User's account record, forced
+steps, change-password and logout (ADR 0005, ADR 0008, ADR 0018; issues
+#83, #115, #116, #339, #410)."""
 
-import secrets
 from datetime import UTC, datetime
 
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.app_settings import get_app_settings, require_app_settings
+from app.app_settings import require_app_settings
 from app.auth import password_hasher
+from app.current_user import CurrentUserDep
 from app.db import SessionDep
 from app.errors import APIError
 from app.login_throttle import LoginThrottle
-from app.models import AppSettings
-from app.session import Clock, delete_session_cookie, set_session_cookie
+from app.models import User
+from app.session import Clock, LoginMethod, delete_session_cookie, set_session_cookie
+from app.user_settings import user_settings_from_env
+from app.users import (
+    check_new_password,
+    clean_email,
+    clean_username,
+    clear_lockout,
+    create_user,
+    ensure_email_not_invited,
+    ensure_identity_free,
+    find_user_by_login,
+    install_has_password,
+    reporting_taken_identity,
+    same_email,
+    set_password,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
-# Lives here, next to the handlers that enforce it (issue #338), not in
-# Settings: making this operator-configurable would let a deployment set it
-# to 1, which is the state this constant exists to remove. Enforced only at
-# the two write points below — never at login, so a password set before
-# this minimum existed keeps logging in until its owner changes it.
-MIN_PASSWORD_LENGTH = 12
-
 # Consecutive wrong-password attempts (login or change-password's
-# current-password check, same counter) before login locks — not
-# operator-configurable, same reasoning as the password minimum above.
+# current-password check, same per-User counter) before login locks — not
+# operator-configurable, same reasoning as app.users.MIN_PASSWORD_LENGTH.
 LOCKOUT_THRESHOLD = 5
 
 
-def _locked_retry_after(app_settings: AppSettings, now: datetime) -> int | None:
-    """Seconds until `app_settings.login_locked_until`, or None if not
-    currently locked (null, or in the past). SQLite round-trips a
-    timezone-aware DateTime as naive, so it's normalized back to UTC
-    before comparing against `now` (also UTC, from app.session.Clock)."""
-    locked_until = app_settings.login_locked_until
+def _locked_retry_after(user: User, now: datetime) -> int | None:
+    """Seconds until `user.login_locked_until`, or None if not
+    currently locked (null, or in the past). Normalized to UTC before
+    comparing against `now` (also UTC, from app.session.Clock) — a no-op
+    for PostgreSQL's aware `timestamptz`, kept as a guard against any
+    naive value."""
+    locked_until = user.login_locked_until
     if locked_until is None:
         return None
     if locked_until.tzinfo is None:
@@ -57,30 +68,92 @@ def _too_many_attempts(retry_after: int) -> APIError:
 
 
 async def _record_failure(
-    session: AsyncSession, app_settings: AppSettings, clock: Clock, base_seconds: float
+    session: AsyncSession, user: User, clock: Clock, base_seconds: float
 ) -> None:
-    app_settings.login_failed_attempts += 1
-    if app_settings.login_failed_attempts >= LOCKOUT_THRESHOLD:
-        app_settings.login_locked_until = LoginThrottle.lock_until(
-            failure_count=app_settings.login_failed_attempts,
+    user.login_failed_attempts += 1
+    if user.login_failed_attempts >= LOCKOUT_THRESHOLD:
+        user.login_locked_until = LoginThrottle.lock_until(
+            failure_count=user.login_failed_attempts,
             now=clock(),
             base_seconds=base_seconds,
         )
     await session.commit()
 
 
-async def _record_success(session: AsyncSession, app_settings: AppSettings) -> None:
-    app_settings.login_failed_attempts = 0
-    app_settings.login_locked_until = None
+async def _record_success(session: AsyncSession, user: User) -> None:
+    clear_lockout(user)
     await session.commit()
 
 
-class LoginRequest(BaseModel):
-    password: str
+def _password_matches(user: User, password: str) -> bool:
+    if user.password_hash is None:
+        return False
+    try:
+        password_hasher.verify(user.password_hash, password)
+    except (VerificationError, InvalidHashError):
+        return False
+    return True
+
+
+async def confirm_password(
+    request: Request, session: AsyncSession, user: User, password: str
+) -> None:
+    """The signed-in User re-enters their password (to change it, or to
+    link Google, issue #586). Feeds the same per-User lockout as /login, so
+    a stolen session cannot brute-force the password here instead (issue
+    #339). A wrong password is 400 `invalid_current_password`, not 401, so
+    the frontend does not treat it as a lost session; a right one resets
+    the lockout, whatever the caller does next."""
+    settings = request.app.state.settings
+    clock = request.app.state.clock
+
+    retry_after = _locked_retry_after(user, clock())
+    if retry_after is not None:
+        raise _too_many_attempts(retry_after)
+
+    if not _password_matches(user, password):
+        await _record_failure(session, user, clock, settings.auth_login_delay_seconds)
+        raise APIError(400, "invalid_current_password", "Current password is incorrect")
+
+    await _record_success(session, user)
+
+
+def sign_in(
+    request: Request,
+    response: Response,
+    session_key: str,
+    user: User,
+    method: LoginMethod = "password",
+) -> None:
+    set_session_cookie(
+        response,
+        session_key,
+        request.app.state.settings,
+        request.app.state.clock,
+        user_id=user.id,
+        epoch=user.session_epoch,
+        method=method,
+    )
 
 
 class SetupRequest(BaseModel):
+    username: str
+    email: str
     password: str
+
+
+class LoginRequest(BaseModel):
+    login: str
+    password: str
+
+
+class CompleteRequest(BaseModel):
+    """A forced step's answer. `new_password` is always required;
+    `username` and `email` only when completing a profile."""
+
+    new_password: str
+    username: str | None = None
+    email: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -88,116 +161,240 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class MeResponse(BaseModel):
+    id: int
+    username: str
+    email: str | None
+    is_admin: bool
+    must_change_password: bool
+    must_complete_profile: bool
+    # Only on the User's own record: the admin list never carries it.
+    password_changed_at: datetime
+    # Issue #586: whether the User can sign in with a password at all, and
+    # the Google account they sign in with, if any.
+    has_password: bool
+    google_email: str | None
+
+
+class ProfileUpdate(BaseModel):
+    """Only the fields present change (issue #474)."""
+
+    username: str | None = None
+    email: str | None = None
+
+
+def _me(user: User) -> MeResponse:
+    return MeResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        is_admin=user.is_admin,
+        must_change_password=user.must_change_password,
+        must_complete_profile=user.must_complete_profile,
+        password_changed_at=user.password_changed_at,
+        has_password=user.has_password,
+        google_email=user.google_email,
+    )
+
+
 @router.post("/setup", status_code=204)
 async def setup(
     payload: SetupRequest, request: Request, response: Response, session: SessionDep
 ) -> None:
-    """Sets the initial password (ADR 0008). The settings row itself always
-    exists by the time any request reaches here — app.main's lifespan
-    bootstraps it before the app serves anything — but its password_hash
-    starts out unset, which is exactly what SessionAuthMiddleware gates
-    every other route on.
+    """Creates the first Admin on a fresh install and signs them in
+    (ADR 0018). Reachable only while no User can log in: once one can,
+    this is a 404 and accounts come from the admin API instead.
 
-    Rejects once a password already exists: this must never be replayable
-    to reset the password without a valid session — that's the
-    change-password flow (issue #116), reachable only once already logged
-    in.
+    An upgraded install whose seeded user #1 never had a password (the
+    single-user install ran with AUTH_DISABLED) completes that User here
+    instead of creating a second one, so their data stays theirs.
     """
-    app_settings = await require_app_settings(session)
-    if app_settings.password_hash is not None:
+    # Serializes concurrent first-run attempts on the settings row, so two
+    # browsers racing through setup cannot both create an Admin.
+    app_settings = await require_app_settings(session, for_update=True)
+    if await install_has_password(session):
         raise APIError(404, "not_found", "Setup has already been completed")
-    if len(payload.password) < MIN_PASSWORD_LENGTH:
-        raise APIError(
-            422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
-        )
 
-    app_settings.password_hash = password_hasher.hash(payload.password)
-    await session.commit()
+    username = clean_username(payload.username)
+    email = clean_email(payload.email)
+    check_new_password(payload.password)
+    password_hash = password_hasher.hash(payload.password)
 
-    set_session_cookie(
-        response, app_settings.session_key, request.app.state.settings, request.app.state.clock
-    )
+    seeded = await session.scalar(select(User).order_by(User.id).limit(1))
+    async with reporting_taken_identity():
+        if seeded is None:
+            # The first Admin also takes the one-time integration env import
+            # (ADR 0008), as user #1 did when the lifespan created it.
+            user = await create_user(
+                session,
+                User(
+                    username=username,
+                    email=email,
+                    password_hash=password_hash,
+                    is_admin=True,
+                    password_changed_at=request.app.state.clock(),
+                ),
+                user_settings_from_env(request.app.state.settings),
+            )
+        else:
+            await ensure_identity_free(session, username, email, except_user=seeded)
+            user = seeded
+            user.username, user.email, user.is_admin = username, email, True
+            user.must_complete_profile = user.must_change_password = False
+            set_password(user, password_hash, now=request.app.state.clock())
+        await session.commit()
+
+    sign_in(request, response, app_settings.session_key, user)
 
 
 @router.post("/login", status_code=204)
 async def login(
     payload: LoginRequest, request: Request, response: Response, session: SessionDep
 ) -> None:
-    """Rejects immediately while locked (issue #339) — no password
-    verification and no sleep, so a locked caller never holds a
-    connection open. On mismatch, escalates the persisted lock; on
-    success, clears it.
+    """Logs in by username or email, either ignoring case (ADR 0018).
+
+    An unknown login and a wrong password get the same 401, and only the
+    named User's lockout counts the failure. Rejects immediately while that
+    User is locked (issue #339) — no password verification and no sleep,
+    so a locked caller never holds a connection open. A disabled User with
+    the right password gets 403 `account_disabled`; a wrong password never
+    learns the account is disabled.
     """
     settings = request.app.state.settings
     clock = request.app.state.clock
 
-    app_settings = await get_app_settings(session)
-    if app_settings is None or app_settings.password_hash is None:
+    if not await install_has_password(session):
         raise APIError(404, "not_found", "Setup has not been completed")
+    invalid = APIError(401, "invalid_credentials", "Incorrect login or password")
 
-    retry_after = _locked_retry_after(app_settings, clock())
+    user = await find_user_by_login(session, payload.login.strip())
+    if user is None:
+        raise invalid
+
+    retry_after = _locked_retry_after(user, clock())
     if retry_after is not None:
         raise _too_many_attempts(retry_after)
 
-    try:
-        password_hasher.verify(app_settings.password_hash, payload.password)
-    except VerifyMismatchError:
-        await _record_failure(session, app_settings, clock, settings.auth_login_delay_seconds)
-        raise APIError(401, "invalid_credentials", "Incorrect password") from None
+    if not _password_matches(user, payload.password):
+        await _record_failure(session, user, clock, settings.auth_login_delay_seconds)
+        raise invalid
 
-    await _record_success(session, app_settings)
-    set_session_cookie(response, app_settings.session_key, settings, clock)
+    await _record_success(session, user)
+    if not user.is_active:
+        raise APIError(403, "account_disabled", "This account is disabled")
+
+    app_settings = await require_app_settings(session)
+    sign_in(request, response, app_settings.session_key, user)
+
+
+@router.get("/me")
+async def me(user: CurrentUserDep) -> MeResponse:
+    """The signed-in User's own account record, including any forced step
+    still pending — reachable while one is (app.middleware)."""
+    return _me(user)
+
+
+@router.patch("/me")
+async def update_me(
+    payload: ProfileUpdate, user: CurrentUserDep, session: SessionDep
+) -> MeResponse:
+    """The signed-in User changes their own username and/or email, under
+    the same rules as account creation: 422 `invalid_username` /
+    `invalid_email`, 409 `username_taken` / `email_taken` naming the field.
+    The session is untouched: neither field is a credential secret."""
+    username = clean_username(payload.username) if payload.username is not None else None
+    email = clean_email(payload.email) if payload.email is not None else None
+    # A linked Google identity was admitted for its email (issue #586):
+    # changing it is an Admin's deliberate reconciliation, never a profile
+    # edit.
+    changing_email = email is not None and not same_email(email, user.email)
+    if changing_email and user.google_subject is not None:
+        raise APIError(
+            409, "email_managed_by_admin", "Ask an admin to change the email of a Google account"
+        )
+    if changing_email and email is not None:
+        await ensure_email_not_invited(session, email)
+    await ensure_identity_free(
+        session, username or user.username, email or user.email, except_user=user
+    )
+    if username is not None:
+        user.username = username
+    if email is not None:
+        user.email = email
+    async with reporting_taken_identity():
+        await session.commit()
+    return _me(user)
+
+
+@router.post("/complete", status_code=204)
+async def complete(
+    payload: CompleteRequest,
+    request: Request,
+    response: Response,
+    user: CurrentUserDep,
+    session: SessionDep,
+) -> None:
+    """Completes the pending forced step: a profile to complete (username,
+    email and a new password, for the upgraded user #1) or a temporary
+    password to replace. Either way the new password must differ from the
+    current one, and setting it bumps the epoch: other sessions end, and
+    this one gets a fresh cookie.
+    """
+    if not (user.must_complete_profile or user.must_change_password):
+        raise APIError(409, "no_pending_step", "There is no step to complete")
+
+    if user.must_complete_profile:
+        if payload.username is None or payload.email is None:
+            raise APIError(
+                422, "profile_required", "Username and email are required to complete a profile"
+            )
+        username = clean_username(payload.username)
+        email = clean_email(payload.email)
+    check_new_password(payload.new_password)
+    if _password_matches(user, payload.new_password):
+        raise APIError(
+            422, "password_unchanged", "Choose a password different from the current one"
+        )
+    if user.must_complete_profile:
+        await ensure_identity_free(session, username, email, except_user=user)
+        await ensure_email_not_invited(session, email)
+        user.username, user.email = username, email
+
+    user.must_complete_profile = user.must_change_password = False
+    set_password(user, password_hasher.hash(payload.new_password), now=request.app.state.clock())
+    async with reporting_taken_identity():
+        await session.commit()
+
+    app_settings = await require_app_settings(session)
+    sign_in(request, response, app_settings.session_key, user)
 
 
 @router.post("/password", status_code=204)
 async def change_password(
-    payload: ChangePasswordRequest, request: Request, response: Response, session: SessionDep
+    payload: ChangePasswordRequest,
+    request: Request,
+    response: Response,
+    user: CurrentUserDep,
+    session: SessionDep,
 ) -> None:
-    """Changes the password and rotates the session signing key (ADR 0008),
-    which invalidates every outstanding session cookie — deliberately
-    including the one on this request, since a stale settings row could
-    otherwise be read mid-request. A fresh cookie signed with the new key is
-    issued below so the device making the change stays logged in; every
-    other device's cookie is rejected on its next request.
+    """Changes the signed-in User's password and bumps their session epoch
+    (ADR 0018), which logs out every other session of theirs and nobody
+    else's. A fresh cookie at the new epoch keeps this device logged in.
 
-    Reached only with a valid session (SessionAuthMiddleware; this path is
-    not in PUBLIC_PATHS), so the current password itself is what's being
-    checked here, not whether the caller is logged in. Feeds the same
-    persisted lockout as /login (issue #339's user story 19): a stolen
-    session must not let an attacker brute-force the password through
-    this endpoint instead.
+    Feeds the same per-User lockout as /login (issue #339's user story 19):
+    a stolen session must not let an attacker brute-force the password
+    through this endpoint instead. A wrong current password is 400, not
+    401, so the frontend does not treat it as a lost session.
     """
-    settings = request.app.state.settings
     clock = request.app.state.clock
+    await confirm_password(request, session, user, payload.current_password)
 
-    app_settings = await require_app_settings(session)
-    assert app_settings.password_hash is not None  # a session exists only once one is set
-
-    retry_after = _locked_retry_after(app_settings, clock())
-    if retry_after is not None:
-        raise _too_many_attempts(retry_after)
-
-    try:
-        password_hasher.verify(app_settings.password_hash, payload.current_password)
-    except VerifyMismatchError:
-        await _record_failure(session, app_settings, clock, settings.auth_login_delay_seconds)
-        raise APIError(400, "invalid_current_password", "Current password is incorrect") from None
-
-    # The current password was correct, so this resets the lockout
-    # regardless of what happens next — an empty new password shouldn't
-    # leave a prior bad-guess streak counted against a later, valid attempt.
-    await _record_success(session, app_settings)
-
-    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
-        raise APIError(
-            422, "invalid_password", f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
-        )
-
-    app_settings.password_hash = password_hasher.hash(payload.new_password)
-    app_settings.session_key = secrets.token_urlsafe(32)
+    check_new_password(payload.new_password)
+    set_password(user, password_hasher.hash(payload.new_password), now=clock())
     await session.commit()
 
-    set_session_cookie(response, app_settings.session_key, settings, request.app.state.clock)
+    app_settings = await require_app_settings(session)
+    sign_in(request, response, app_settings.session_key, user)
 
 
 @router.get("/session", status_code=204)
@@ -211,9 +408,9 @@ async def session_probe() -> None:
 
 @router.post("/logout", status_code=204)
 async def logout(request: Request, response: Response) -> None:
-    """Clears the session cookie. There is no server-side session store to
-    revoke (ADR 0005) — this is reached only with a currently-valid cookie
-    (SessionAuthMiddleware), and deleting it is the whole of "logging out".
+    """Clears this device's session cookie. There is no server-side session
+    store to revoke (ADR 0005); other devices stay signed in until the
+    User's epoch is bumped.
     """
     settings = request.app.state.settings
     delete_session_cookie(response, settings)

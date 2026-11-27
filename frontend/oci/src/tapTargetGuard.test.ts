@@ -286,6 +286,8 @@ const NON_INTERACTIVE_EXACT = new Set([
   ".modal",
   ".modal:focus",
   ".modal-backdrop",
+  // The Quick-Add panel, capped to the viewport around its scrolling body (#542).
+  ".modal:has(> .quick-add-dialog)",
   ".modal-header",
   ".modal-header h2",
   ".modal-header > .icon-button-wrap",
@@ -582,10 +584,25 @@ const QUICK_ADD_CONTROLS: { selector: string; what: string }[] = [
     selector: ".quick-add-dialog .date-actions button",
     what: "the Today / Tomorrow / Next Week / Clear date shortcuts",
   },
-  { selector: ".quick-add-dialog-actions button", what: "the Cancel and Add task commit pair" },
+  {
+    selector: ".quick-add-dialog-actions button",
+    what: "the Cancel / Add task pair and Discard draft (#541)",
+  },
   {
     selector: ".quick-add-dialog .quick-add-assist-chips button",
     what: "the Assist recurrence / reminder chips' remove buttons",
+  },
+  {
+    selector: ".quick-add-dialog .quick-add-details-toggle",
+    what: "the Details disclosure toggle (#540)",
+  },
+  {
+    selector: ".quick-add-dialog .quick-add-summary button",
+    what: "the collapsed summary's List / Priority / date / Tag chip remove buttons (#540)",
+  },
+  {
+    selector: ".quick-add-dialog .quick-add-save-error button",
+    what: "the Retry button beside a failed save's message (#544)",
   },
   {
     selector: ".quick-add-dialog .token-input-dropdown li",
@@ -662,9 +679,82 @@ describe("Quick-Add dialog is operable on touch (issue #288)", () => {
     expect(declaredValue(".modal-backdrop", "position")).toBe("fixed");
     expect(declaredValue(".modal-backdrop", "inset")).toBe("0");
     expect(declaredValue(".modal-backdrop", "overflow-y")).toBe("auto");
-    // Desktop never capped or scrolled the panel, and must not start.
+    // Desktop never capped or scrolled the panel, and must not start: every
+    // other Modal keeps its natural height there. Quick-Add alone caps its
+    // panel at every width (#542, below), through its own scoped selector.
     expect(declaredValue(".modal", "max-height", DESKTOP)).toBeNull();
     expect(declaredValue(".modal", "overflow-y", DESKTOP)).toBeNull();
+  });
+});
+
+/** Exactly `property`, not a longhand ending in it: `flex` must not match
+ * `inline-flex`'s neighbours or `bottom` `padding-bottom`, which
+ * `declaredValue`'s `\b` would. */
+function exactValue(selector: string, property: string, viewport: Viewport): string | null {
+  const matches = [
+    ...declarationsFor(selector, viewport).matchAll(
+      new RegExp(String.raw`(?:^|[;{\s])${property}\s*:\s*([^;]+);`, "g"),
+    ),
+  ];
+  const last = matches[matches.length - 1];
+  return last === undefined ? null : (last[1] as string).trim();
+}
+
+/** Reachable Save (#542). With Details open the form outgrew a phone (the
+ * panel scrolled) and a short desktop (the backdrop scrolled), and "Add task"
+ * sat at the far end of that scroll: off screen until every detail had been
+ * scrolled past, and a pointer aimed at it missed. Now the Quick-Add panel is
+ * capped to the viewport at every width and only its body scrolls; the action
+ * footer sits outside that scroller, so it is always on screen and a focused
+ * detail can never scroll in behind it (WCAG 2.4.11). A sticky footer was
+ * tried first and dropped: browsers stick it inside the scroller's padding,
+ * which left a strip of details showing below "Add task". jsdom has no
+ * layout, so as above this reads the CSS source; the browser pass on #542 is
+ * where the reachability itself was seen. */
+describe("Quick-Add keeps Save in reach at short and narrow viewports (issue #542)", () => {
+  const PANEL = ".modal:has(> .quick-add-dialog)";
+  const FORM = ".quick-add-dialog";
+  const BODY = ".quick-add-body";
+  const FOOTER = ".quick-add-dialog-actions";
+
+  it("caps the Quick-Add panel to the viewport on phones and desktops", () => {
+    for (const viewport of [PHONE, DESKTOP]) {
+      expect(exactValue(PANEL, "max-height", viewport)).toBe("100%");
+      expect(exactValue(PANEL, "display", viewport)).toBe("flex");
+      expect(exactValue(PANEL, "flex-direction", viewport)).toBe("column");
+      // The form is a flex item of the panel: without this it refuses to
+      // shrink below its content and the cap pushes the footer out again.
+      expect(exactValue(FORM, "min-height", viewport)).toBe("0");
+    }
+  });
+
+  it("scrolls the body and keeps the action footer out of the scroll", () => {
+    for (const viewport of [PHONE, DESKTOP]) {
+      expect(exactValue(BODY, "overflow-y", viewport)).toBe("auto");
+      expect(exactValue(BODY, "min-height", viewport)).toBe("0");
+      // The footer never shrinks, and never leaves the dialog for the
+      // viewport ("do not pin controls over the mobile tab bar").
+      expect(exactValue(FOOTER, "flex", viewport)).toBe("none");
+      expect(exactValue(FOOTER, "position", viewport)).toBeNull();
+    }
+  });
+
+  /** A scroller clips its overflow on both axes, and the 3px focus ring is a
+   * box-shadow outside the control: the full-width title and selects would
+   * lose its sides. The body gives it room inside and takes the room back
+   * outside, so the layout doesn't move. */
+  it("leaves room inside the scrolling body for the 3px focus ring", () => {
+    expect(tokens.get("--focus-ring")).toMatch(/\b3px\b/);
+    const padding = exactValue(BODY, "padding", DESKTOP);
+    expect(padding, "the scrolling body declares no padding").not.toBeNull();
+    expect(resolvePx(padding as string) ?? 0).toBeGreaterThanOrEqual(3);
+    expect(exactValue(BODY, "margin", DESKTOP)).toBe(`calc(-1 * ${padding as string})`);
+  });
+
+  it("pads the phone footer clear of the home indicator", () => {
+    expect(exactValue(FOOTER, "padding-bottom", PHONE) ?? "").toContain(
+      "env(safe-area-inset-bottom",
+    );
   });
 });
 
@@ -726,5 +816,155 @@ describe("Task detail sheet is operable on touch (issue #456)", () => {
   it("meets the 44px floor for the sheet's controls", () => {
     const offenders = findOffenders(TASK_SHEET_CONTROLS);
     expect(offenders, offenderMessage("the Task detail sheet", offenders)).toEqual([]);
+  });
+});
+
+/** The Now panel, its shortlist and timer-free work (#547–#555). Fixed list so
+ * deleting the sizing fails the guard. */
+const NOW_CONTROLS = [".now-panel button", ".now-step"];
+
+describe("Now panel is operable on touch (issue #555)", () => {
+  it("meets the 44px floor for every Now, shortlist and timer-free control", () => {
+    const offenders = findOffenders(NOW_CONTROLS);
+    expect(offenders, offenderMessage("the Now panel", offenders)).toEqual([]);
+  });
+
+  it("leaves the Now controls at their desktop size", () => {
+    expect(declaredSize(".now-panel button", DESKTOP)).toBeNull();
+  });
+
+  it("makes Start 5 min full width across the whole mobile breakpoint", () => {
+    expect(declaredValue(".now-start", "flex")).toBe("1 0 100%");
+    expect(declaredValue(".now-start", "flex", GRID_BAND)).toBe("1 0 100%");
+    expect(declaredValue(".now-start", "flex", DESKTOP)).toBeNull();
+  });
+
+  it("stacks shortlist row actions instead of scrolling the page", () => {
+    expect(declaredValue(".now-shortlist-row", "flex-wrap")).toBe("wrap");
+    expect(declaredValue(".now-shortlist-actions", "flex-wrap")).toBe("wrap");
+  });
+});
+
+/** ADHD Phase 3 surfaces (#557–#568), checked by #569. Fixed list so deleting
+ * the sizing fails the guard. The Calendar's resize handles are left out on
+ * purpose: they sit on a block edge and a 44px handle would cover a short
+ * block; the touch path is the block's Task detail form, sized here. */
+const PHASE3_CONTROLS = [
+  ".planned-work-form input",
+  ".settings-field select",
+  ".missed-reminder-task",
+  ".missed-reminder-dismiss",
+  ".quiet-hours-deferred-task",
+  ".delivered-reminder-dismiss",
+  ".habit-pause-actions button",
+  ".habit-pause-form input",
+];
+
+describe("ADHD Phase 3 controls on a phone (issue #569)", () => {
+  it("meets the 44px floor for plan, reminder, quiet hours and pause controls", () => {
+    const offenders = findOffenders(PHASE3_CONTROLS);
+    expect(offenders, offenderMessage("Phase 3 surfaces", offenders)).toEqual([]);
+  });
+
+  it("grows the settings checkboxes' hit area through their label", () => {
+    const padding = declaredValue(
+      '.settings-field label:has(> input[type="checkbox"])',
+      "padding-block",
+    );
+    expect(padding, "no padding declared on the checkbox label").not.toBeNull();
+    expect(18 + (resolvePx(padding as string) ?? 0) * 2).toBeGreaterThanOrEqual(TAP_TARGET);
+  });
+
+  it("makes Save plan and Remove plan full width", () => {
+    expect(declaredValue(".planned-work-actions button", "flex")).toBe("1 1 100%");
+    expect(declaredValue(".planned-work-actions button", "flex", DESKTOP)).toBeNull();
+  });
+
+  it("stacks the plan's fields inside the 16px gutters", () => {
+    expect(declaredValue(".planned-work-fields label", "flex")).toBe("1 1 100%");
+    // The Popover sits 4px from the screen edge with 4px of its own padding.
+    expect(declaredValue(".planned-work-form", "padding")).toBe("var(--space-2)");
+  });
+
+  it("fits pause, skip and weekly-target rows to the visible width of the Habits grid", () => {
+    // The grid scrolls sideways on a phone; its detail rows span all eight
+    // columns, so without this their buttons sat beyond the visible edge.
+    expect(declaredValue(".habits-week-scroll", "container-type", DESKTOP)).toBe("inline-size");
+    expect(declaredValue(".habit-detail-cell > *", "position", DESKTOP)).toBe("sticky");
+    expect(declaredValue(".habit-detail-cell > *", "max-width", DESKTOP)).toMatch(/cqi/);
+  });
+});
+
+/** The Habits week grid on a phone. As a table it was a 180px name column
+ * plus seven day columns, about 520px wide: on a 390px screen only three
+ * days showed and today's cell was cut off at the edge. On a phone each
+ * Habit's name takes its own line and the seven days share the width below
+ * it, so the whole week fits without scrolling sideways. */
+describe("Habits week grid fits a phone", () => {
+  it("lays the grid out as one seven-column grid on a phone, a table on desktop", () => {
+    expect(declaredValue(".habits-week-grid", "display")).toBe("grid");
+    expect(declaredValue(".habits-week-grid", "grid-template-columns")).toMatch(/repeat\(7,/);
+    expect(declaredValue(".habits-week-grid", "display", DESKTOP)).toBeNull();
+  });
+
+  it("flattens the rows so every day column lines up with its header", () => {
+    for (const part of [
+      ".habits-week-grid thead",
+      ".habits-week-grid tbody",
+      ".habits-week-grid tr",
+    ]) {
+      expect(declaredValue(part, "display"), part).toBe("contents");
+    }
+  });
+
+  it("gives each Habit's name, and each detail row, a full line of its own", () => {
+    expect(declaredValue(".habits-week-grid .habit-row-head", "grid-column")).toBe("1 / -1");
+    expect(declaredValue(".habits-week-grid .habit-row-head", "min-width")).toBe("0");
+    expect(declaredValue(".habits-week-grid td[colspan]", "grid-column")).toBe("1 / -1");
+  });
+
+  it("puts each Habit's name above its recent-days strip, not beside it", () => {
+    // Beside it, a 140px name left the strip ~200px: three wrapped rows.
+    expect(declaredValue(".habit-long-history-row", "flex-direction")).toBe("column");
+    expect(declaredValue(".habit-long-history-row > .habit-name", "width")).toBe("auto");
+    expect(declaredValue(".habit-long-history-row", "flex-direction", DESKTOP)).toBeNull();
+  });
+
+  it("fits the 21-day strip on one line at 390px", () => {
+    // 21 × (12px square + 2 × side padding) must fit the 359px row.
+    const padding = declaredValue(
+      ".habits-long-history .habit-strip button.heatmap-day",
+      "padding-inline",
+    );
+    expect(padding).not.toBeNull();
+    expect(21 * (12 + 2 * (resolvePx(padding as string) ?? 99))).toBeLessThanOrEqual(359);
+  });
+
+  it("rings today's strip square, not the padded touch area around it", () => {
+    // On touch the square is padded out to 44px; an inset box-shadow on the
+    // button drew a tall empty box over the whole hit area.
+    expect(declaredValue(".habit-strip button.heatmap-day.today", "box-shadow")).toBe("none");
+    const ring = declarationsFor(".habit-strip button.heatmap-day.today::after");
+    expect(ring).toMatch(/box-shadow:\s*inset/);
+    expect(ring).toMatch(/inset:\s*calc\(\(var\(--tap-target\) - 12px\) \/ 2\) var\(--space-1\)/);
+  });
+
+  it("keeps the day cells at the 44px floor", () => {
+    const offenders = findOffenders([".habits-week-grid .habit-cell"]);
+    expect(offenders, offenderMessage("the Habits week grid", offenders)).toEqual([]);
+  });
+});
+
+describe("Calendar resize handles show keyboard focus (issue #569)", () => {
+  it("draws the 3px focus ring, not only the faint grip", () => {
+    expect(declaredValue(".resize-handle:focus-visible", "box-shadow", DESKTOP)).toBe(
+      "var(--focus-ring)",
+    );
+  });
+
+  it("gives the planned block's title button a focus ring too", () => {
+    expect(declaredValue(".block-title-button:focus-visible", "box-shadow", DESKTOP)).toBe(
+      "var(--focus-ring)",
+    );
   });
 });

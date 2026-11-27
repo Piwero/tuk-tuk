@@ -9,6 +9,7 @@ export type StaticViewKind =
   | "focus-stats"
   | "calendar"
   | "goals"
+  | "github"
   | "habits"
   | "search"
   | "settings"
@@ -16,6 +17,9 @@ export type StaticViewKind =
 
 const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
   calendar: "/calendar/day",
+  // The GitHub view over all Watched Repositories (#579). A Repository
+  // View gets its own path beside it (#580).
+  github: "/github",
   goals: "/goals",
   habits: "/habits",
   standup: "/standup",
@@ -23,8 +27,19 @@ const STATIC_VIEW_PATHS: Record<StaticViewKind, string> = {
   focus: "/focus",
   "focus-stats": "/focus/stats",
   search: "/search",
-  settings: "/settings",
+  settings: "/settings/account",
   smart: "/all",
+};
+
+/** Settings' tabs (#474), each at its own URL. `/settings` alone is an alias
+ * for My account, so old bookmarks/links to it still resolve. Users is for
+ * Admins only; SettingsView resolves it to My account for anyone else. */
+export type SettingsTab = "account" | "users" | "github";
+
+const SETTINGS_TAB_PATHS: Record<SettingsTab, string> = {
+  account: "/settings/account",
+  users: "/settings/users",
+  github: "/settings/github",
 };
 
 /** The Calendar's per-mode URLs (issue: individual URIs for Month/Week/Day)
@@ -100,7 +115,42 @@ export function calendarModeForPath(pathname: string): CalendarMode | null {
   return match ?? null;
 }
 
+export function pathForSettingsTab(tab: SettingsTab): string {
+  return SETTINGS_TAB_PATHS[tab];
+}
+
+/** Reads the Settings tab out of a `/settings...` path, defaulting to My
+ * account for the bare `/settings` alias. Returns null for any other path. */
+export function settingsTabForPath(pathname: string): SettingsTab | null {
+  if (pathname === "/settings") {
+    return "account";
+  }
+  const match = (Object.keys(SETTINGS_TAB_PATHS) as SettingsTab[]).find(
+    (tab) => SETTINGS_TAB_PATHS[tab] === pathname,
+  );
+  return match ?? null;
+}
+
+/** A Repository View's own path (#580), beside the GitHub view's. */
+export function pathForRepositoryView(viewId: number): string {
+  return `/github/views/${viewId}`;
+}
+
+/** Reads the Repository View id out of a `/github/views/:id` path. Returns
+ * null for any other path. */
+export function repositoryViewForPath(pathname: string): number | null {
+  const match = /^\/github\/views\/([1-9]\d*)$/.exec(pathname);
+  if (!match || !Number.isSafeInteger(Number(match[1]))) return null;
+  return Number(match[1]);
+}
+
 export function staticViewKindForPath(pathname: string): StaticViewKind | null {
+  if (settingsTabForPath(pathname) !== null) {
+    return "settings";
+  }
+  if (repositoryViewForPath(pathname) !== null) {
+    return "github";
+  }
   if (calendarModeForPath(pathname) !== null) {
     return "calendar";
   }

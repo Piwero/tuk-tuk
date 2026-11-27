@@ -1,11 +1,11 @@
 """Folders collection endpoints."""
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.models import SORT_GAP, Folder, TaskList
+from app.models import SORT_GAP, Folder
 from app.schemas import FolderCreate, FolderRead, FolderUpdate, Page
 
 router = APIRouter(prefix="/api/v1/folders", tags=["folders"])
@@ -60,8 +60,5 @@ async def update_folder(folder_id: int, payload: FolderUpdate, session: SessionD
 async def delete_folder(folder_id: int, session: SessionDep) -> None:
     """Delete the Folder; its Lists survive, moved back to the top level."""
     folder = await get_folder_or_404(folder_id, session)
-    await session.execute(
-        update(TaskList).where(TaskList.folder_id == folder_id).values(folder_id=None)
-    )
     await session.delete(folder)
     await session.commit()

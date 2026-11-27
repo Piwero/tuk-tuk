@@ -1,6 +1,6 @@
 """Seeds a world, runs one turn against a real provider, scores it (#190).
 
-The app is booted for real, over a throwaway SQLite file, through the same
+The app is booted for real, over a throwaway PostgreSQL database, through the same
 `create_app` every test uses — and every seed goes in over the HTTP API,
 exactly as `tests/conftest.py` does, so a scenario can never construct a
 database state a user couldn't. Google is the ordinary `FakeCalendarSource`
@@ -11,20 +11,23 @@ author.
 The provider is the only thing here that is real, which is the point.
 """
 
-import tempfile
+import atexit
+import functools
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
 
+import psycopg
 from fastapi.testclient import TestClient
 
 from app.calendar_source import CalendarEventEntry, CalendarListEntry, ExchangedCredential
 from app.config import Settings
-from app.db import run_migrations
+from app.db import DatabaseUrl, run_migrations
 from app.main import create_app
 from evals.scenarios import MONDAY, TIME_ZONE, Result, Scenario, World
 
+_USERNAME = "eval"
 _PASSWORD = "eval-password"
 _REFRESH_TOKEN = "eval-refresh-token"
 _CALENDAR_ID = "eval-calendar"
@@ -74,34 +77,82 @@ class ProviderConfig:
     api_key: str
 
 
+@functools.cache
+def _postgres_server() -> str:
+    """One throwaway PostgreSQL server for the whole eval run (issue #407),
+    started on first use and stopped at exit — the same testcontainers setup
+    as tests/conftest.py. Returns a `postgresql+psycopg://user:pw@host:port`
+    authority with no database name."""
+    from testcontainers.postgres import PostgresContainer
+
+    container = PostgresContainer("postgres:16", driver=None).with_command(
+        "-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
+    )
+    container.start()
+    atexit.register(container.stop)
+    host = container.get_container_host_ip()
+    port = container.get_exposed_port(5432)
+    return f"postgresql+psycopg://{container.username}:{container.password}@{host}:{port}"
+
+
+def _fresh_database() -> str:
+    server = _postgres_server()
+    name = f"eval_{uuid.uuid4().hex}"
+    admin_url = DatabaseUrl(f"{server}/postgres").psycopg_url
+    with psycopg.connect(admin_url, autocommit=True) as connection:
+        connection.execute(f'CREATE DATABASE "{name}"')
+    return f"{server}/{name}"
+
+
 @contextmanager
 def booted_app(events: list[CalendarEventEntry]) -> Iterator[TestClient]:
-    """A real app on a throwaway database, logged in, with Google wired to
-    the seeded Events."""
+    """A real app on a throwaway database, logged in as its one Admin, with
+    Google wired to the seeded Events."""
+    import asyncio
+
     from argon2 import PasswordHasher
     from argon2.low_level import Type
 
+    from app.models import User
+    from app.users import create_user
+
     calendar_source = _EvalCalendarSource()
     calendar_source.events = events
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        db_path = Path(tmp_dir) / "evals.db"
-        run_migrations(f"sqlite:///{db_path}")
-        settings = Settings(
-            database_url=f"sqlite+aiosqlite:///{db_path}",
-            app_master_key="eval-master-key",
-            auth_password_hash=PasswordHasher(
-                time_cost=1, memory_cost=64, parallelism=1, type=Type.ID
-            ).hash(_PASSWORD),
-            auth_cookie_secure=False,
-            auth_login_delay_seconds=0.0,
-            google_client_id="eval-client-id",
-            google_client_secret="eval-client-secret",
+    database_url = _fresh_database()
+    run_migrations(database_url)
+    settings = Settings(
+        database_url=database_url,
+        app_master_key="eval-master-key",
+        auth_cookie_secure=False,
+        auth_login_delay_seconds=0.0,
+        google_client_id="eval-client-id",
+        google_client_secret="eval-client-secret",
+    )
+    app = create_app(settings, calendar_source=calendar_source)  # type: ignore[arg-type]
+    password_hash = PasswordHasher(time_cost=1, memory_cost=64, parallelism=1, type=Type.ID).hash(
+        _PASSWORD
+    )
+
+    async def _create_admin() -> None:
+        async with app.state.session_factory() as session:
+            await create_user(
+                session,
+                User(
+                    username=_USERNAME,
+                    email="eval@example.com",
+                    password_hash=password_hash,
+                    is_admin=True,
+                ),
+            )
+            await session.commit()
+
+    with TestClient(app, follow_redirects=False) as client:
+        asyncio.run(_create_admin())
+        response = client.post(
+            "/api/v1/auth/login", json={"login": _USERNAME, "password": _PASSWORD}
         )
-        app = create_app(settings, calendar_source=calendar_source)  # type: ignore[arg-type]
-        with TestClient(app, follow_redirects=False) as client:
-            response = client.post("/api/v1/auth/login", json={"password": _PASSWORD})
-            assert response.status_code == 204, response.text
-            yield client
+        assert response.status_code == 204, response.text
+        yield client
 
 
 def _seed_google(client: TestClient) -> None:

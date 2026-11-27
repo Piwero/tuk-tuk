@@ -20,12 +20,6 @@ defaults:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # 3.12 is the floor declared by requires-python; 3.14 is what the
-        # runtime image ships (backend/oci/Dockerfile).
-        python-version: ["3.12", "3.14"]
 
     steps:
       - uses: actions/checkout@v7
@@ -35,7 +29,11 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: backend/oci/uv.lock
-          python-version: ${{ matrix.python-version }}
+          # Only what the runtime image ships (FROM python:3.14-slim in
+          # backend/oci/Dockerfile): the backend runs nowhere else. Bump both
+          # together; the image job below fails if the base has no wheels for
+          # a locked dependency.
+          python-version: "3.14"
 
       - name: Install dependencies
         run: uv sync --locked
@@ -49,8 +47,10 @@ jobs:
       - name: Mypy
         run: uv run mypy src
 
+      # The suite starts its own PostgreSQL through testcontainers (#407),
+      # using the runner's Docker daemon — no service container needed.
       - name: Pytest
-        run: uv run pytest --cov=app --cov-report=xml
+        run: uv run pytest -n auto --cov=app --cov-report=xml
 
       - name: Upload coverage
         if: always()
@@ -60,36 +60,20 @@ jobs:
           path: backend/oci/coverage.xml
           if-no-files-found: ignore
 
-  postgres:
+  # Build the prod image so a broken base bump (e.g. a Dependabot Python
+  # bump with no wheels for a locked dependency, #507) fails the PR rather
+  # than the self-hosting install.
+  image:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: tuktuk
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build image (no push)
+        uses: docker/build-push-action@v7
         with:
-          enable-cache: true
-          cache-dependency-glob: backend/oci/uv.lock
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: uv sync --locked
-
-      - name: Pytest (PostgreSQL, opt-in job only)
-        run: uv run pytest tests/test_postgres.py -v
-        env:
-          TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/tuktuk
+          context: backend/oci
+          file: backend/oci/Dockerfile
+          target: prod
+          push: false
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image

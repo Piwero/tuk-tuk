@@ -38,8 +38,9 @@ export function taskVerbs(
       label: task.recurrence === null ? "Complete" : "Complete this occurrence",
       pickerHeading: null,
     },
-    // Opens Focus with the Task linked; the clock waits for Start (#449).
-    { id: "focus", label: "Focus", pickerHeading: null },
+    // Opens Focus with the Task linked; the clock waits for Start (#449), so
+    // the label says "Open", never "Start" (#539).
+    { id: "focus", label: "Open Focus", pickerHeading: null },
     { id: "pomo", label: "Start Pomo", pickerHeading: "Start which Pomo?" },
     { id: "reschedule", label: "Reschedule", pickerHeading: "Reschedule to…" },
     { id: "move", label: "Move to a List", pickerHeading: "Move to which List?" },

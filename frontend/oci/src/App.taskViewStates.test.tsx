@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -127,6 +127,9 @@ describe("Task view error state", () => {
     expect(screen.queryByRole("button", { name: /Open details/ })).not.toBeInTheDocument();
     const todayReads = (): number =>
       taskReads(api).filter((url) => url === "/api/v1/tasks?view=today&today=2026-07-03").length;
+    // Let the load settle (React 19 can leave a refetch effect pending) so the
+    // count below measures only what Retry sends.
+    await act(async () => {});
     const before = todayReads();
     expect(before).toBeGreaterThan(0);
 

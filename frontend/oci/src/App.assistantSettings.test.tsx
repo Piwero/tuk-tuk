@@ -21,9 +21,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByLabelText("Base URL")).toHaveValue("https://api.openai.com/v1");
     expect(screen.getByLabelText("Assistant model")).toHaveValue("gpt-4o-mini");
@@ -35,9 +35,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByText(/An API key is already saved/)).toBeInTheDocument();
     expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
@@ -48,9 +48,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.type(await screen.findByLabelText("Base URL"), "https://api.openai.com/v1");
     await user.type(screen.getByLabelText("Assistant model"), "gpt-4o-mini");
     await user.type(screen.getByLabelText("API key"), "sk-secret");
@@ -73,9 +73,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByRole("button", { name: "Test Assistant connection" }));
 
     expect(await screen.findByText(/The Assistant is available/)).toBeInTheDocument();
@@ -91,9 +91,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByRole("button", { name: "Test Assistant connection" }));
 
     expect(await screen.findByText(/The Assistant is unavailable/)).toBeInTheDocument();
@@ -108,9 +108,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.type(await screen.findByLabelText("Assistant model"), "-edited");
 
     expect(screen.getByRole("button", { name: "Test Assistant connection" })).toBeDisabled();
@@ -121,9 +121,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByLabelText("Base URL");
 
     expect(
@@ -141,9 +141,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByRole("button", { name: "Remove Assistant configuration" }));
 
     expect(await screen.findByLabelText("Base URL")).toHaveValue("");
@@ -159,9 +159,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(
       await screen.findByText(/Local — runs entirely on your own machine/),
@@ -173,7 +173,7 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     installFakeApi({});
     render(<App />);
 
-    await screen.findByRole("button", { name: "App menu" });
+    await screen.findByRole("button", { name: "Account menu" });
     expect(screen.queryByRole("link", { name: "Assistant" })).not.toBeInTheDocument();
   });
 
@@ -194,9 +194,9 @@ describe("The Assistant's settings (ADR 0009, issue #185)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.type(await screen.findByLabelText("API key"), "sk-secret");
     await user.click(screen.getByRole("button", { name: "Save Assistant settings" }));
 

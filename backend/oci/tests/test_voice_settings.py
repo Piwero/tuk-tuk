@@ -3,11 +3,10 @@ key and a write-only API secret, mirroring the Assistant/Google credential
 tests — round-trip, ciphertext-only at rest, never echoed, omitted keeps.
 """
 
-import sqlite3
-
 from fastapi.testclient import TestClient
 
 from app.crypto import decrypt_credential
+from tests.conftest import run_sql
 
 URL = "wss://tuktuk-abc123.livekit.cloud"
 PAYLOAD = {
@@ -18,13 +17,8 @@ PAYLOAD = {
 
 
 def stored_secret(database_url: str) -> str | None:
-    db_path = database_url.removeprefix("sqlite+aiosqlite:///")
-    row = (
-        sqlite3.connect(db_path)
-        .execute("SELECT encrypted_voice_livekit_api_secret FROM settings")
-        .fetchone()
-    )
-    return row[0] if row else None
+    rows = run_sql(database_url, "SELECT encrypted_voice_livekit_api_secret FROM user_settings")
+    return rows[0][0] if rows else None
 
 
 def test_fresh_install_is_unconfigured(client: TestClient) -> None:

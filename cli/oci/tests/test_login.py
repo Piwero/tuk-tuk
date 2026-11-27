@@ -27,7 +27,7 @@ def config_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def login_transport(cookie: str = "signed-session-token") -> httpx.MockTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v1/auth/login"
-        assert json.loads(request.content) == {"password": "s3cret"}
+        assert json.loads(request.content) == {"login": "ana", "password": "s3cret"}
         headers = {"set-cookie": f"tuktuk_session={cookie}; Path=/; HttpOnly"}
         return httpx.Response(204, headers=headers)
 
@@ -38,7 +38,10 @@ def read_session_file(config_dir: Path) -> str:
     return (config_dir / "tuk" / "session.json").read_text()
 
 
-def run_login(monkeypatch: pytest.MonkeyPatch, transport: httpx.BaseTransport) -> int:
+def run_login(
+    monkeypatch: pytest.MonkeyPatch, transport: httpx.BaseTransport, login: str = "ana"
+) -> int:
+    monkeypatch.setattr("builtins.input", lambda _prompt: login)
     monkeypatch.setattr("getpass.getpass", lambda _prompt: "s3cret")
     return main(["login", "--base-url", "http://x"], transport=transport)
 
@@ -50,6 +53,39 @@ def test_login_caches_session_cookie(
 
     assert json.loads(read_session_file(config_dir)) == {"session_cookie": "signed-session-token"}
     assert capsys.readouterr().out == "Logged in.\n"
+
+
+def test_login_asks_for_username_or_email_then_password(
+    config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The backend signs in a User by username or email (ADR 0018), so the
+    first prompt says both are accepted, and the password is never echoed."""
+    prompts: list[str] = []
+
+    def ask(prompt: str) -> str:
+        prompts.append(prompt)
+        return "ana"
+
+    def ask_secret(prompt: str) -> str:
+        prompts.append(prompt)
+        return "s3cret"
+
+    monkeypatch.setattr("builtins.input", ask)
+    monkeypatch.setattr("getpass.getpass", ask_secret)
+
+    assert main(["login", "--base-url", "http://x"], transport=login_transport()) == 0
+    assert prompts == ["Username or email: ", "Password: "]
+
+
+def test_login_sends_an_email_as_typed(config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: list[object] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(204, headers={"set-cookie": "tuktuk_session=c; Path=/"})
+
+    assert run_login(monkeypatch, httpx.MockTransport(handler), login="ana@example.com") == 0
+    assert sent == [{"login": "ana@example.com", "password": "s3cret"}]
 
 
 def test_login_session_file_is_owner_only(
@@ -95,7 +131,7 @@ def test_login_setup_required_points_at_web_app(
     assert run_login(monkeypatch, httpx.MockTransport(handler)) == 1
 
     err = capsys.readouterr().err
-    assert "web app" in err
+    assert "No Admin account yet — open the web app to create the first Admin." in err
 
 
 def test_login_wrong_password_does_not_point_at_setup(

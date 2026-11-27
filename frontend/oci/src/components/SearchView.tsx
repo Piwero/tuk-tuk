@@ -51,7 +51,7 @@ export function SearchView({
   onStateChange,
   onChanged,
   onSelect,
-}: SearchViewProps): JSX.Element {
+}: SearchViewProps): React.JSX.Element {
   // What the field shows, updated on every keystroke; `state.query` (what
   // actually drives the fetch) only follows once typing pauses, below.
   const [queryDraft, setQueryDraft] = useState(state.query);

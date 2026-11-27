@@ -14,6 +14,7 @@ import {
   fetchSectionSettings,
   type SectionSettings,
   fetchTags,
+  fetchTask,
   fetchTasks,
   fetchTasksByTag,
   deleteTask,
@@ -30,6 +31,8 @@ import {
   type Task,
   type TaskList,
   type TaskPatch,
+  type CurrentUser,
+  fetchCurrentUser,
 } from "./api";
 import { type CalendarMode } from "./calendar";
 import {
@@ -40,6 +43,8 @@ import {
   rescheduledToDay,
 } from "./dates";
 import { FocusRunProvider, useStartPomo } from "./focusRunContext";
+import { MissedReminders } from "./components/MissedReminders";
+import { DueReminderNotifier, ReminderDeliveryProvider } from "./reminderDelivery";
 import { groupTodayTasks, type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
@@ -57,10 +62,15 @@ import {
   containerForPath,
   pathForContainer,
   pathForCalendarMode,
+  pathForRepositoryView,
+  pathForSettingsTab,
   pathForSmartView,
   pathForStaticView,
+  repositoryViewForPath,
+  settingsTabForPath,
   smartViewForPath,
   staticViewKindForPath,
+  type SettingsTab,
   type StaticViewKind,
 } from "./routes";
 import { deriveOpenTaskCounts } from "./openCounts";
@@ -79,6 +89,8 @@ import { EventDetail } from "./components/EventDetail";
 import { FocusStatsView } from "./components/FocusStatsPanel";
 import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
+import { AllWatchedGitHubView, RepositoryViewPage } from "./components/RepositoryViewPage";
+import { useRepositoryViews } from "./useRepositoryViews";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { AssistantPage } from "./components/AssistantPage";
@@ -94,10 +106,12 @@ import { SearchView, type SearchState } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutHints, ShortcutsProvider } from "./components/ShortcutLayer";
 import { Sidebar } from "./components/Sidebar";
+import { UserMenu } from "./components/UserMenu";
 import { DayRail } from "./components/DayRail";
 import { FocusCard } from "./components/FocusCard";
 import { HabitsCard } from "./components/HabitsCard";
 import { HabitStrip } from "./components/HabitStrip";
+import { NowPanel } from "./components/NowPanel";
 import { useTodayHabits } from "./todayHabits";
 import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
@@ -105,6 +119,7 @@ import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 import { EmptyState, LoadError, SkeletonRows } from "./components/TaskViewState";
 import { ToastStack } from "./components/ToastStack";
+import { forgetOtherUsersDrafts } from "./quickAddDraft";
 
 /** What the main pane shows: one List, one Tag, one Folder (its Tasks across
  * every List it contains — #126), one computed Smart List, the Calendar /
@@ -117,13 +132,15 @@ type View =
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar"; mode: CalendarMode }
   | { kind: "goals" }
+  // `viewId`: one Repository View (#580); absent, every Watched Repository.
+  | { kind: "github"; viewId?: number }
   | { kind: "habits" }
   | { kind: "standup" }
   | { kind: "assistant" }
   | { kind: "focus"; task?: Task }
   | { kind: "focus-stats" }
   | { kind: "search"; search: SearchState }
-  | { kind: "settings" }
+  | { kind: "settings"; tab: SettingsTab }
   | null;
 
 /** A stable identity for a View, for use as an effect dependency: two Views
@@ -172,6 +189,7 @@ function staticViewKindOf(view: View): StaticViewKind | null {
   if (
     view?.kind === "calendar" ||
     view?.kind === "goals" ||
+    view?.kind === "github" ||
     view?.kind === "habits" ||
     view?.kind === "standup" ||
     view?.kind === "assistant" ||
@@ -201,6 +219,10 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
       return { kind: "smart", view: smartViewForPath(pathname) ?? "today" };
     case "goals":
       return { kind: "goals" };
+    case "github": {
+      const viewId = repositoryViewForPath(pathname);
+      return viewId === null ? { kind: "github" } : { kind: "github", viewId };
+    }
     case "habits":
       return { kind: "habits" };
     case "standup":
@@ -212,7 +234,7 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
     case "focus-stats":
       return { kind: "focus-stats" };
     case "settings":
-      return { kind: "settings" };
+      return { kind: "settings", tab: settingsTabForPath(pathname) ?? "account" };
   }
 }
 
@@ -222,6 +244,31 @@ interface AppProps {
    * caller that supplies it, so App's bootstrap and tests never need to
    * know authentication exists beyond forwarding this one callback. */
   onLogout?: () => void;
+  /** The signed-in account, from the gate's probe. App reads it itself
+   * when rendered on its own (as its tests do). */
+  user?: CurrentUser;
+}
+
+/** Who is signed in: the gate's answer when given, else read once; kept
+ * current by whatever re-reads or changes the record later (Settings). */
+function useCurrentUser(
+  given: CurrentUser | undefined,
+): [CurrentUser | null, (user: CurrentUser) => void] {
+  const [user, setUser] = useState<CurrentUser | null>(given ?? null);
+  useEffect(() => {
+    if (given !== undefined) return;
+    let live = true;
+    fetchCurrentUser().then(
+      (fetched) => {
+        if (live) setUser(fetched);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [given]);
+  return [user, setUser];
 }
 
 /** True at/below the phone breakpoint (720px, same as the stylesheet), live. */
@@ -242,9 +289,22 @@ function useNarrowViewport(): boolean {
   return narrow;
 }
 
-export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}): JSX.Element {
+export function App({
+  onLogout,
+  user: signedInUser,
+  voiceProvider = livekitProvider,
+}: AppProps = {}): React.JSX.Element {
+  const [currentUser, setCurrentUser] = useCurrentUser(signedInUser);
+  // A session can end without a log out (a 401 clears no storage), so the
+  // previous User's Quick-Add draft goes the moment this User is known (#541).
+  const currentUserId = currentUser?.id ?? null;
+  useEffect(() => {
+    if (currentUserId !== null) forgetOtherUsersDrafts(currentUserId);
+  }, [currentUserId]);
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const repositoryViews = useRepositoryViews();
+  const { reload: reloadRepositoryViews } = repositoryViews;
   const [tags, setTags] = useState<Tag[]>([]);
   // Resolved from the URL on the very first render (rather than in a mount
   // effect) so a direct load of a static path never runs a render with the
@@ -281,6 +341,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // Bumped after "Convert to task" (issue #111) so the Calendar force-reloads:
   // the converted Event disappears and the new Task appears immediately.
   const [calendarRefresh, setCalendarRefresh] = useState(0);
+  // Bumped when the detail panel changes a Task while the Calendar shows, so
+  // a plan edited with its date/time controls moves on the grid (#562).
+  const [calendarTaskChange, setCalendarTaskChange] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   // Whether the current Task view's Tasks have loaded (#441), keyed by what
   // was asked for, so a view that hasn't loaded yet is never shown as empty
@@ -301,6 +364,13 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // The last Task-saved confirmation (#544), written into a live region that
+  // is always mounted. `count` remounts the text so saving twice to the same
+  // List is announced twice.
+  const [savedAnnouncement, setSavedAnnouncement] = useState<{
+    text: string;
+    count: number;
+  } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // The command palette opened scoped to one Task (issue #205) — its verb
   // menu. Independent of `paletteOpen` (the jump surface); at most one is
@@ -383,7 +453,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has("googleConnected") || params.has("googleError")) {
-      setView({ kind: "settings" });
+      setView({ kind: "settings", tab: "account" });
       setGoogleOAuthError(params.has("googleError"));
       params.delete("googleConnected");
       params.delete("googleError");
@@ -400,7 +470,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // navigating within the app — that must never itself push or replace
   // history, since the browser already positioned it there.
   const lastSyncedKindRef = useRef<string | null>(
-    containerForPath(window.location.pathname)
+    containerForPath(window.location.pathname) ||
+      repositoryViewForPath(window.location.pathname) !== null
       ? window.location.pathname
       : staticViewKindForPath(window.location.pathname),
   );
@@ -447,10 +518,13 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // Container destinations and List modes each get a history entry.
   // Search edits stay within their view; Back/Forward never pushes.
   useEffect(() => {
+    // A Repository View (#580) has its own path, like a container.
     const containerPath =
       view && (view.kind === "list" || view.kind === "tag" || view.kind === "folder")
         ? pathForContainer(view)
-        : null;
+        : view?.kind === "github" && view.viewId !== undefined
+          ? pathForRepositoryView(view.viewId)
+          : null;
     const kind = containerPath ?? staticViewKindOf(view);
     if (suppressNextSyncRef.current) {
       suppressNextSyncRef.current = false;
@@ -465,6 +539,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       window.history.pushState(null, "", containerPath);
     } else if (kind === "calendar" && view?.kind === "calendar") {
       window.history.pushState(null, "", pathForCalendarMode(view.mode));
+    } else if (kind === "settings" && view?.kind === "settings") {
+      window.history.pushState(null, "", pathForSettingsTab(view.tab));
     } else if (kind === "smart" && view?.kind === "smart") {
       window.history[missingViewNotice ? "replaceState" : "pushState"](
         null,
@@ -490,6 +566,29 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     const path = pathForCalendarMode(view.mode);
     if (window.location.pathname !== path) {
       window.history.replaceState(null, "", path);
+    }
+  }, [view]);
+
+  // Settings' tabs (#474) are separate places, so switching tabs pushes a
+  // history entry. A redirect replaces instead: the bare /settings alias, or
+  // the Users URL for someone who is not an Admin (SettingsView decides that).
+  const replaceSettingsTabRef = useRef(false);
+  const showSettingsTab = useCallback(
+    (tab: SettingsTab, options: { replace?: boolean } = {}): void => {
+      replaceSettingsTabRef.current = options.replace ?? false;
+      setView({ kind: "settings", tab });
+    },
+    [],
+  );
+  useEffect(() => {
+    if (view?.kind !== "settings") {
+      return;
+    }
+    const replace = replaceSettingsTabRef.current || window.location.pathname === "/settings";
+    replaceSettingsTabRef.current = false;
+    const path = pathForSettingsTab(view.tab);
+    if (window.location.pathname !== path) {
+      window.history[replace ? "replaceState" : "pushState"](null, "", path);
     }
   }, [view]);
 
@@ -579,6 +678,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
       view?.kind === "goals" ||
+      view?.kind === "github" ||
       view?.kind === "habits" ||
       view?.kind === "standup" ||
       view?.kind === "assistant" ||
@@ -627,6 +727,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       view === null ||
       view.kind === "calendar" ||
       view.kind === "goals" ||
+      view.kind === "github" ||
       view.kind === "habits" ||
       view.kind === "standup" ||
       view.kind === "assistant" ||
@@ -968,6 +1069,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   /** Apply a server response, evicting the task if it left the current view. */
   function applyTaskChange(updated: Task): void {
     setCalendarTask((current) => (current?.id === updated.id ? updated : current));
+    if (view?.kind === "calendar") {
+      setCalendarTaskChange((current) => current + 1);
+    }
     reconcileOpenTask(updated);
     if (isComputedView) {
       changeTasksAndRecompute((current) =>
@@ -1061,8 +1165,21 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
     setCalendarTask(task);
   }
 
+  /** A delivered Reminder was clicked (issue #561): open its Task, read
+   * fresh, since it may not be loaded in the view on screen. A Task gone
+   * meanwhile opens nothing. */
+  function openRemindedTask(taskId: number): void {
+    fetchTask(taskId).then(openTaskDetail, () => {});
+  }
+
   function announceCreated(created: Task): void {
     const listName = lists.find((list) => list.id === created.list_id)?.name;
+    // Spoken confirmation (#544): the toast below only exists while shown,
+    // and a live region inserted with its text is announced unreliably.
+    setSavedAnnouncement((previous) => ({
+      text: listName === undefined ? "Task saved" : `Task saved to ${listName}`,
+      count: (previous?.count ?? 0) + 1,
+    }));
     // Issue #259: prose typed into Quick-Add with no `@` token that reads
     // like a date/time phrase ("dentist tuesday 3pm") saves as a plain,
     // undated title — Quick-Add deliberately does not parse it (CONTEXT.md:
@@ -1148,11 +1265,20 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
   // so the two surfaces never disagree about which destination is active.
   const calendarSelected = view?.kind === "calendar";
   const goalsSelected = view?.kind === "goals";
+  const githubSelected = view?.kind === "github" && view.viewId === undefined;
+  const selectedRepositoryViewId = view?.kind === "github" ? (view.viewId ?? null) : null;
+  const selectedRepositoryView =
+    repositoryViews.views?.find((v) => v.id === selectedRepositoryViewId) ?? null;
+  // Unwatching a repository in Settings drops it from every Repository View
+  // (#580), so opening one reads them afresh.
+  const openGitHubViewKey = view?.kind === "github" ? (view.viewId ?? 0) : null;
+  useEffect(() => {
+    if (openGitHubViewKey !== null) reloadRepositoryViews();
+  }, [openGitHubViewKey, reloadRepositoryViews]);
   const habitsSelected = view?.kind === "habits";
   const standupSelected = view?.kind === "standup";
   const assistantSelected = view?.kind === "assistant";
   const focusSelected = view?.kind === "focus" || view?.kind === "focus-stats";
-  const settingsSelected = view?.kind === "settings";
   const searchSelected = view?.kind === "search";
 
   // The List the open Task belongs to, shown as a breadcrumb in the mobile
@@ -1255,7 +1381,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       key: "view-settings",
       kind: "view" as const,
       label: "Settings",
-      run: () => switchView({ kind: "settings" }),
+      run: () => switchView({ kind: "settings", tab: "account" }),
     },
     ...lists
       .filter((list) => !list.is_archived)
@@ -1295,7 +1421,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
       refresh={refreshAfterVoiceWrite}
       available={voiceStatus}
     >
-      <FocusRunProvider>
+      <SessionProviders>
         <ShortcutsProvider>
           <ShellShortcuts
             onQuickAdd={() => setQuickAddOpen(true)}
@@ -1314,7 +1440,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               }
               actions={{
                 onComplete: completeTaskNow,
-                onStartFocus: (task) => switchView({ kind: "focus", task }),
+                onOpenFocus: (task) => switchView({ kind: "focus", task }),
                 onReschedule: (task, day) =>
                   patchTaskNow(
                     task.id,
@@ -1360,6 +1486,15 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               calendarEnabled={sectionSettings.calendar}
               goalsSelected={goalsSelected}
               goalsEnabled={sectionSettings.goals}
+              githubSelected={githubSelected}
+              onSelectGitHub={() => switchView({ kind: "github" })}
+              repositoryViews={repositoryViews.views ?? []}
+              selectedRepositoryViewId={selectedRepositoryViewId}
+              onSelectRepositoryView={(viewId) => switchView({ kind: "github", viewId })}
+              onCreateRepositoryView={async (name) => {
+                const created = await repositoryViews.create(name, []);
+                switchView({ kind: "github", viewId: created.id });
+              }}
               habitsSelected={habitsSelected}
               habitsEnabled={sectionSettings.habits}
               standupSelected={standupSelected}
@@ -1368,7 +1503,6 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               assistantAvailable={assistantAvailable}
               focusSelected={focusSelected}
               focusEnabled={sectionSettings.focus}
-              settingsSelected={settingsSelected}
               onSelect={(listId) => switchView({ kind: "list", id: listId })}
               onSelectFolder={(folderId) => switchView({ kind: "folder", id: folderId })}
               onSelectTag={(tagId) => switchView({ kind: "tag", id: tagId })}
@@ -1379,13 +1513,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
               onSelectStandup={() => switchView({ kind: "standup" })}
               onSelectAssistant={() => switchView({ kind: "assistant" })}
               onSelectFocus={() => switchView({ kind: "focus" })}
-              onSelectSettings={() => switchView({ kind: "settings" })}
               onQuickAdd={() => setQuickAddOpen(true)}
               collapsed={sidebarCollapsed}
               onToggleCollapsed={toggleSidebar}
-              resolvedTheme={resolveThemePreference(themePreference)}
-              onToggleTheme={toggleTheme}
-              onLogout={onLogout}
               onOpenPalette={() => setPaletteOpen(true)}
               onListsChanged={setLists}
               onFoldersChanged={setFolders}
@@ -1438,6 +1568,8 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                         "Calendar"
                       ) : view?.kind === "goals" ? (
                         "Goals"
+                      ) : view?.kind === "github" ? (
+                        (selectedRepositoryView?.name ?? "GitHub")
                       ) : view?.kind === "habits" ? (
                         "Habits"
                       ) : view?.kind === "standup" ? (
@@ -1522,10 +1654,28 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                         {completedMode ? "Open tasks" : "Completed"}
                       </button>
                     )}
+                    {currentUser !== null && (
+                      <UserMenu
+                        user={currentUser}
+                        onSelectTab={(tab) => switchView({ kind: "settings", tab })}
+                        darkMode={resolveThemePreference(themePreference) === "dark"}
+                        onToggleDarkMode={toggleTheme}
+                        onLogout={onLogout}
+                      />
+                    )}
                   </div>
                   {/* Full-width row under the header: only .view-controls takes the
                   right-hand column of .main-chrome on a phone. */}
+                  <MissedReminders onOpenTask={openRemindedTask} />
                   {showHabitStrip && <HabitStrip habits={todayHabits} />}
+                  {smartView === "today" && !completedMode && (
+                    <NowPanel
+                      tasks={openTasks}
+                      onTaskChanged={applyTaskChange}
+                      onComplete={completeTaskNow}
+                      onOpenFocus={() => switchView({ kind: "focus" })}
+                    />
+                  )}
                   {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
                     <>
                       <QuickAdd
@@ -1607,6 +1757,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                       lists={lists}
                       tags={tags}
                       defaultListId={selectedList?.id ?? null}
+                      userId={currentUser?.id ?? null}
                       onTagCreated={(tag) => setTags((current) => [...current, tag])}
                       onListCreated={(list) => setLists((current) => [...current, list])}
                       onCreated={addCreatedTask}
@@ -1627,6 +1778,9 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 )}
                 {view?.kind === "settings" ? (
                   <SettingsView
+                    tab={view.tab}
+                    onTabChange={showSettingsTab}
+                    onUserChange={setCurrentUser}
                     googleOAuthError={googleOAuthError}
                     themePreference={themePreference}
                     onThemeChange={chooseTheme}
@@ -1639,6 +1793,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     }}
                     onSelectEvent={setSelectedEvent}
                     refreshToken={calendarRefresh}
+                    taskChangeToken={calendarTaskChange}
                     lists={lists}
                     tags={tags}
                     onTagCreated={(tag) => setTags((current) => [...current, tag])}
@@ -1649,6 +1804,24 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                   />
                 ) : view?.kind === "goals" ? (
                   <GoalsView />
+                ) : view?.kind === "github" ? (
+                  view.viewId === undefined ? (
+                    <AllWatchedGitHubView
+                      onOpenSettings={() => switchView({ kind: "settings", tab: "github" })}
+                    />
+                  ) : selectedRepositoryView !== null ? (
+                    <RepositoryViewPage
+                      key={selectedRepositoryView.id}
+                      view={selectedRepositoryView}
+                      repositoryViews={repositoryViews}
+                      onOpenSettings={() => switchView({ kind: "settings", tab: "github" })}
+                      onDeleted={() => switchView({ kind: "github" })}
+                    />
+                  ) : repositoryViews.views === null ? (
+                    <p className="github-loading">Loading…</p>
+                  ) : (
+                    <p className="github-empty">This Repository View doesn’t exist.</p>
+                  )
                 ) : view?.kind === "habits" ? (
                   <HabitsView refreshToken={habitsRefresh} />
                 ) : view?.kind === "standup" ? (
@@ -1691,7 +1864,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                     onChanged={changeTasks}
                     onSelect={setSelectedTaskId}
                     onSelectList={(listId) => switchView({ kind: "list", id: listId })}
-                    onStartFocus={(task) => switchView({ kind: "focus", task })}
+                    onOpenFocus={(task) => switchView({ kind: "focus", task })}
                   />
                 ) : completedMode ? (
                   <CompletedView
@@ -1810,7 +1983,11 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 assistantAvailable={assistantAvailable}
                 assistantSelected={assistantSelected}
                 searchSelected={searchSelected}
-                settingsSelected={settingsSelected}
+                settingsTab={view?.kind === "settings" ? view.tab : null}
+                user={currentUser}
+                darkMode={resolveThemePreference(themePreference) === "dark"}
+                onToggleDarkMode={toggleTheme}
+                onLogout={onLogout}
                 onClose={closeMore}
                 onSelectSmart={(smart) => switchView({ kind: "smart", view: smart })}
                 onSelectList={(listId) => switchView({ kind: "list", id: listId })}
@@ -1821,7 +1998,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 onSelectStandup={() => switchView({ kind: "standup" })}
                 onSelectAssistant={() => switchView({ kind: "assistant" })}
                 onSelectSearch={() => switchView({ kind: "search", search: BLANK_SEARCH_STATE })}
-                onSelectSettings={() => switchView({ kind: "settings" })}
+                onSelectSettingsTab={(tab) => switchView({ kind: "settings", tab })}
               />
             )}
             {selectedTask !== null && (
@@ -1830,6 +2007,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
             {selectedTask !== null && (
               <TaskDetail
                 task={selectedTask}
+                assistantEnabled={sectionSettings.assistant}
                 allTags={tags}
                 listName={selectedTaskListName}
                 lists={lists}
@@ -1837,7 +2015,7 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
                 onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onClose={closeTaskDetail}
                 sheet={narrowViewport}
-                onStartFocus={
+                onOpenFocus={
                   sectionSettings.focus
                     ? (task) => {
                         closeTaskDetail();
@@ -1861,10 +2039,31 @@ export function App({ onLogout, voiceProvider = livekitProvider }: AppProps = {}
             too — the task views used to each own one and could only cover
             themselves (#191). */}
             <ToastStack entries={toasts.entries} onUndo={toasts.undo} onDismiss={toasts.dismiss} />
+            {/* Always mounted, so a Task-saved confirmation lands in a region
+            the screen reader already watches. No role="status": the toasts
+            own that role, and tests (and users) find them by it. */}
+            <div className="visually-hidden" aria-live="polite" aria-atomic="true">
+              {savedAnnouncement !== null && (
+                <span key={savedAnnouncement.count}>{savedAnnouncement.text}</span>
+              )}
+            </div>
           </div>
         </ShortcutsProvider>
-      </FocusRunProvider>
+        {/* After the shell (#569): its panels float bottom right, so they
+        come last in tab order instead of before the sidebar. */}
+        <DueReminderNotifier onOpenTask={openRemindedTask} />
+      </SessionProviders>
     </VoiceProvider>
+  );
+}
+
+/** Signed-in, app-wide state shared outside any one screen: the live focus
+ * run, and whether Reminders notify on this device (issue #557). */
+function SessionProviders({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <FocusRunProvider>
+      <ReminderDeliveryProvider>{children}</ReminderDeliveryProvider>
+    </FocusRunProvider>
   );
 }
 
@@ -1896,7 +2095,7 @@ function TaskPalette({
   onListCreated: (list: TaskList) => void;
   onCreated: (task: Task) => void;
   onClose: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const startPomo = useStartPomo();
   const actions: TaskActionHandlers = {
     ...verbs,

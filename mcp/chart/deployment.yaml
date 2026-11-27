@@ -4,9 +4,9 @@ metadata:
   name: mcp
   namespace: tuk-tuk
 spec:
-  # One replica: the Toolbox is not thread-safe, and its id allowlist and
-  # session cookie live in process memory (ADR 0016). The backend also
-  # throttles logins, so extra replicas would multiply re-logins. Don't raise.
+  # One replica: each client's read-before-write allowlist lives in this
+  # process's memory (ADR 0016, issue #525), so a second replica would refuse
+  # writes the first one's reads allowed. One pod serves every User. Don't raise.
   replicas: 1
   selector:
     matchLabels:
@@ -38,15 +38,30 @@ spec:
         runAsGroup: 1000
       containers:
         - name: mcp
-          image: ghcr.io/piwero/tuk-tuk/mcp:2.21.0 # {"$imagepolicy": "tuk-tuk:mcp"}
+          image: ghcr.io/piwero/tuk-tuk/mcp:3.8.4 # {"$imagepolicy": "tuk-tuk:mcp"}
           imagePullPolicy: Always
           ports:
             - containerPort: 8901
           envFrom:
             - configMapRef:
                 name: mcp-config
+            # The service key only (issue #525): this pod's server holds no
+            # User's credential. Each client brings its own MCP token.
+            # Optional only while the pre-#525 image is still pinned, so it
+            # keeps starting if this Secret syncs late; the new image refuses
+            # to start without MCP_SERVICE_KEY anyway. Make it required in
+            # the cleanup step.
+            - secretRef:
+                name: tuk-tuk-mcp-service
+                optional: true
+            # TRANSITIONAL, unread by images from #525 on: the pre-#525 image
+            # still pinned below until the next release needs TUK_API_TOKEN and
+            # MCP_BEARER_TOKEN from here, and a rollback needs them again.
+            # Removed, with the Secret, in the approved cleanup step of
+            # docs/self-hosting/shared-mcp-server.md.
             - secretRef:
                 name: tuk-tuk-mcp
+                optional: true
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

@@ -8,16 +8,15 @@ parent Task.
 
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from typing import Annotated
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
+from app.caller_zone import caller_zone_or_utc
 from app.db import SessionDep
-from app.errors import APIError, NotFoundError
+from app.errors import NotFoundError
 from app.goal_read import build_goal_read
 from app.models import (
-    DEFAULT_OWNER,
     CompletedOccurrence,
     Goal,
     StandupBullet,
@@ -42,9 +41,7 @@ router = APIRouter(prefix="/api/v1/stand-up", tags=["stand-up"])
 
 
 async def get_entry_by_date(day: date, session: SessionDep) -> StandupEntry | None:
-    result = await session.execute(
-        select(StandupEntry).where(StandupEntry.date == day, StandupEntry.owner == DEFAULT_OWNER)
-    )
+    result = await session.execute(select(StandupEntry).where(StandupEntry.date == day))
     return result.scalar_one_or_none()
 
 
@@ -80,20 +77,6 @@ def get_bullet_or_404(entry: StandupEntry, bullet_id: int) -> StandupBullet:
         if bullet.id == bullet_id:
             return bullet
     raise NotFoundError(f"Bullet {bullet_id} not found on stand-up entry {entry.id}")
-
-
-def resolve_zone(tz: str | None) -> tzinfo:
-    """The caller's IANA timezone (UTC when absent) — mirrors focus-stats."""
-    if tz is None:
-        return UTC
-    try:
-        return ZoneInfo(tz)
-    except (KeyError, ValueError):
-        raise APIError(
-            status_code=422,
-            code="validation_error",
-            message=f"Unknown IANA timezone {tz!r}",
-        ) from None
 
 
 def completed_on_day(completed_at: datetime, day: date, zone: tzinfo) -> bool:
@@ -161,7 +144,7 @@ async def read_today_suggestions(
     open in the Smart List with an occurrence completed today appears once
     (deduped by Task, open wins). Pure read — no dismissal/seen-state tracking.
     """
-    zone = resolve_zone(tz)
+    zone = caller_zone_or_utc(tz)
     rows = await session.scalars(select(Task).where(Task.completed.is_(False)))
     matches = [task for task in rows if in_smart_view(task, "today", day)]
     seen_ids = {task.id for task in matches}
@@ -188,7 +171,7 @@ async def read_yesterday_suggestions(
     section is viewed. Deduped by title, preserving first-seen order.
     """
     prior_day = day - timedelta(days=1)
-    completed = await tasks_completed_on(prior_day, session, resolve_zone(tz))
+    completed = await tasks_completed_on(prior_day, session, caller_zone_or_utc(tz))
     prior_entry = await get_entry_by_date(prior_day, session)
     prior_today_bullets = (
         [b.text for b in prior_entry.bullets if b.section == "today"]
@@ -224,7 +207,7 @@ async def read_entries(
     offset: int = Query(default=0, ge=0),
 ) -> Page[StandupEntrySummary]:
     """The history list — only dates with an actual persisted Entry, newest first."""
-    query = select(StandupEntry).where(StandupEntry.owner == DEFAULT_OWNER)
+    query = select(StandupEntry)
     total = await session.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = await session.scalars(
         query.order_by(StandupEntry.date.desc()).limit(limit).offset(offset)

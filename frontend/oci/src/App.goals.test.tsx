@@ -10,6 +10,10 @@ async function openGoals(): Promise<void> {
   const nav = await screen.findByRole("navigation", { name: "Views" });
   fireEvent.click(within(nav).getByRole("link", { name: "Goals" }));
   await screen.findByRole("heading", { name: "Goals" });
+  // The heading renders before the Goals load; wait out the skeleton too.
+  await waitFor(() => {
+    expect(screen.queryByRole("status", { name: "Loading goals" })).not.toBeInTheDocument();
+  });
 }
 
 /** Opens a Goal's overflow menu and returns the chosen item. */
@@ -417,7 +421,7 @@ describe("Goals", () => {
     fireEvent.click(await keyResultAction("Lines shipped", "Delete key result Lines shipped"));
 
     await waitFor(() => expect(api.goals[0]!.key_results).toHaveLength(0));
-    expect(screen.queryByText("Lines shipped")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Lines shipped")).not.toBeInTheDocument());
   });
 
   it("focusing a Goal unfocuses the previous one", async () => {
@@ -482,7 +486,7 @@ describe("Goals", () => {
     render(<App />);
     await openGoals();
 
-    expect(screen.getByText("Final score: 50%")).toBeInTheDocument();
+    expect(await screen.findByText("Final score: 50%")).toBeInTheDocument();
 
     const retro = screen.getByLabelText("Retro for Ship v1");
     fireEvent.change(retro, { target: { value: "Shipped late but shipped." } });
@@ -575,7 +579,7 @@ describe("Goals", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Show attached tasks" }));
 
     const list = await screen.findByRole("list", { name: "Tasks attached to Tasks done" });
-    expect(within(list).getByText("Write the migration")).toBeInTheDocument();
+    expect(await within(list).findByText("Write the migration")).toBeInTheDocument();
   });
 
   it("says so when a mutation fails rather than failing silently", async () => {

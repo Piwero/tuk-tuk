@@ -45,7 +45,7 @@
 
   .calendar-nav-buttons button:hover,
   .calendar-modes button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   .calendar-modes button[aria-pressed="true"] {
@@ -76,7 +76,7 @@
   }
 
   .calendar-refresh-button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   .calendar-refresh-button:disabled {
@@ -100,7 +100,7 @@
   }
 
   .unscheduled-toggle:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   /* Reuses .drawer-scrim's fixed/backdrop styling (App.css, inside its narrow
@@ -242,7 +242,7 @@
 
   .month-cell[data-outside] {
     color: var(--text-tertiary);
-    background: var(--ink-25);
+    background: var(--surface-tint);
   }
 
   /* Today's cell: a tinted background plus an inset accent ring, distinct from
@@ -371,12 +371,39 @@
     color: var(--text-accent);
   }
 
-  /* Events are read-only Google context: a dashed border and default cursor
-   * mark them as visually distinct from a draggable Task at a glance. */
+  /* Events are read-only Google context (#562): a solid neutral treatment,
+   * a default cursor and the "Event · read-only" text keep them apart from a
+   * draggable Task and from a dashed Planned work block. */
   .calendar-banner[data-kind="event"],
   .calendar-timed-entry[data-kind="event"] {
-    border-left-style: dashed;
+    background: var(--surface-soft);
+    border-left-color: var(--border-strong);
     cursor: default;
+  }
+
+  /* Planned work (#562): an accent-tinted ground and a dashed outline, plus
+   * its "Planned work" text — never mistaken for the Task's own schedule. */
+  .calendar-timed-entry[data-kind="planned"] {
+    background: var(--accent-soft);
+    outline: 1px dashed var(--accent);
+    outline-offset: -1px;
+  }
+
+  /* The kind line every Planned work block, Event and planned Task's due
+   * entry carries: meaning in text, not colour alone. */
+  .entry-kind {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: var(--space-1);
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  .time-block .entry-kind {
+    margin-left: 0;
+    flex: 0 0 auto;
   }
 
   /* Header, all-day lane and hour grid are drawn as one frame (#198): the
@@ -486,6 +513,8 @@
 
   .time-columns {
     display: flex;
+    /* Columns size to their hour cells, not to this capped scroll box (#597). */
+    align-items: flex-start;
     overflow-y: auto;
     max-height: 70vh;
     background: var(--surface-card);
@@ -513,9 +542,7 @@
      hour cells and the time blocks, marking the band as de-emphasised. */
   .off-hours-band {
     position: absolute;
-    /* Clears the 2px inset accent rule on today's column so it stays visible
-       through the off-hours regions. */
-    left: 2px;
+    left: 0;
     right: 0;
     background: var(--calendar-offhours-tint);
     pointer-events: none;
@@ -532,14 +559,6 @@
     min-width: 0;
     position: relative;
     border-left: 1px solid var(--border-subtle);
-  }
-
-  /* Today's column: a faint accent wash plus a full-height accent rule down
-   * its leading edge (#198) — the tint alone would be colour-only, the rule
-   * and the now-line give it structure too. */
-  .day-column[data-today] {
-    background: var(--accent-soft);
-    box-shadow: inset 2px 0 0 var(--accent);
   }
 
   .hour-cell {
@@ -576,11 +595,37 @@
     z-index: 3;
   }
 
-  /* Events are read-only Google context: no drag/resize affordance, marked
-   * with a dashed border so it never reads as a draggable Task. */
+  /* Events are read-only Google context: no drag/resize affordance, a solid
+   * neutral treatment and "Event · read-only" text (#562), so one never
+   * reads as a draggable Task or as a dashed Planned work block. */
   .time-block[data-kind="event"] {
-    border-left-style: dashed;
+    background: var(--surface-soft);
+    border-left-color: var(--border-strong);
     cursor: default;
+  }
+
+  /* Planned work (#562): accent-tinted ground, dashed outline, explicit
+   * "Planned work" text. Its List colour is deliberately not applied — the
+   * Task's own schedule block carries that. */
+  .time-block[data-kind="planned"] {
+    background: var(--accent-soft);
+    border: 1px dashed var(--accent);
+  }
+
+  /* The buffer kept free after a plan: an empty dashed outline under the
+   * block, flat like every surface (no hatching), behind it and never a
+   * drop or click target. The visible "Buffer after N min" text carries the
+   * meaning. */
+  .planned-buffer {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    border: 1px dashed var(--accent-border);
+    border-top: none;
+    border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+    background: transparent;
+    pointer-events: none;
+    z-index: 2;
   }
 
   /* A midnight-crossing Event's segments (issue #108): squaring off the
@@ -622,6 +667,25 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* A planned block's title is its keyboard entry point (#569): it reads as
+   the plain title, with the focus ring when tabbed to. */
+  .block-title-button {
+    min-width: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .block-title-button:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   .time-block .block-time {
@@ -717,8 +781,11 @@
     opacity: 0.6;
   }
 
+  /* The grip alone is a faint 3px bar; keyboard focus also gets the house
+   3px ring (#569). */
   .resize-handle:focus-visible {
     outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   .resize-handle-top {
@@ -762,18 +829,27 @@
     /* Title, prev/today/next, mode switch, refresh and the Unscheduled
      * toggle no longer fit one unbroken row at 390px — let the toolbar wrap
      * onto as many lines as it needs rather than pushing the page wider
-     * than the viewport, and let the title itself truncate if it's still
-     * the widest single piece. */
+     * than the viewport. Keep the date range on its own wrapping row. */
     .calendar-toolbar {
       flex-wrap: wrap;
     }
 
     .calendar-toolbar h2 {
       min-width: 0;
-      flex: 1 1 auto;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      flex: 1 0 100%;
+      white-space: normal;
+    }
+
+    .all-day-lane .calendar-banner {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .time-block .block-title {
+      flex: 1 1 0;
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     .unscheduled-toggle {
@@ -892,6 +968,43 @@
     background: var(--surface-hover);
   }
 
+  /* A card is also picked up by a press-and-hold (touchDrag.ts): the long
+   * press must not select its text or raise the browser's callout. */
+  .unscheduled-card {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  .unscheduled-card[data-carried] {
+    opacity: 0.4;
+  }
+
+  /* The carried card follows the finger, lifted off its point so the finger
+   * doesn't hide it. Never a hit-test target: the slot under the finger is. */
+  .touch-drag-ghost {
+    position: fixed;
+    z-index: calc(var(--z-modal) + 1);
+    max-width: 60vw;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-lg);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    transform: translate(-50%, calc(-100% - var(--space-4)));
+  }
+
+  .hour-cell[data-drop-over],
+  .all-day-cell[data-drop-over],
+  .month-cell[data-drop-over] {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+
   .calendar-nav-buttons,
   .calendar-modes {
     display: flex;
@@ -914,21 +1027,12 @@
 
   .calendar-nav-buttons button:hover,
   .calendar-modes button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   .month-cell:hover .month-cell-head button,
   .month-cell-head button:focus-visible {
     visibility: visible;
-  }
-
-  /* Events are read-only Google context: a dashed border and default cursor
- * mark them as visually distinct from a draggable Task at a glance. */
-
-  .calendar-banner[data-kind="event"],
-  .calendar-timed-entry[data-kind="event"] {
-    border-left-style: dashed;
-    cursor: default;
   }
 
   .week-day-header[data-today] .day-name,

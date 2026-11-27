@@ -20,9 +20,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect(await screen.findByLabelText("Ollama base URL")).toHaveValue("http://localhost:11434");
     expect(screen.getByLabelText("Model")).toHaveValue("qwen3:14b");
@@ -33,9 +33,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.type(await screen.findByLabelText("Ollama base URL"), "http://localhost:11434");
     await user.type(screen.getByLabelText("Model"), "qwen3:14b");
     await user.click(screen.getByRole("button", { name: "Save Assist settings" }));
@@ -54,9 +54,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByRole("button", { name: "Test connection" }));
 
     expect(
@@ -73,9 +73,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByRole("button", { name: "Test connection" }));
 
     expect(await screen.findByText(/Assist is unavailable/)).toBeInTheDocument();
@@ -89,9 +89,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     const modelInput = await screen.findByLabelText("Model");
     await user.type(modelInput, "-edited");
 
@@ -103,9 +103,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByLabelText("Ollama base URL");
 
     expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
@@ -119,9 +119,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.click(await screen.findByRole("button", { name: "Remove" }));
 
     expect(await screen.findByLabelText("Ollama base URL")).toHaveValue("");
@@ -138,11 +138,12 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
-    const select = await screen.findByLabelText("Model");
+    // The installed-models lookup lands after the field first renders.
+    const select = await screen.findByRole("combobox", { name: "Model" });
     expect(select.tagName).toBe("SELECT");
     expect(select).toHaveValue("qwen3:14b");
     expect(screen.getByRole("option", { name: "llama3:8b" })).toBeInTheDocument();
@@ -157,13 +158,13 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
-    const select = await screen.findByLabelText("Model");
+    const select = await screen.findByRole("combobox", { name: "Model" });
     expect(select).toHaveValue("custom:model");
-    expect(screen.getByRole("option", { name: "custom:model" })).toBeInTheDocument();
+    expect(await screen.findByRole("option", { name: "custom:model" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "llama3:8b" })).toBeInTheDocument();
   });
 
@@ -172,9 +173,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
 
     expect((await screen.findByLabelText("Model")).tagName).toBe("INPUT");
   });
@@ -184,9 +185,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await user.type(await screen.findByLabelText("Ollama base URL"), "http://localhost:11434");
     expect(screen.getByLabelText("Model").tagName).toBe("INPUT");
 
@@ -202,9 +203,9 @@ describe("Assist settings (ADR 0005)", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "App menu" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
 
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByLabelText("Ollama base URL");
 
     expect(screen.getByRole("button", { name: "Refresh models" })).toBeDisabled();

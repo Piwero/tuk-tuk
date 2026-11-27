@@ -55,7 +55,7 @@ function repeatDraftFrom(rule: string | null): RepeatDraft {
 
 /** The detail panel's Repeat row (#452): reads the stored rule (quietly when
  * unset) and opens a popover with quick presets and a custom rule editor. */
-export function RepeatRow({ task, onTaskChanged }: RepeatRowProps): JSX.Element {
+export function RepeatRow({ task, onTaskChanged }: RepeatRowProps): React.JSX.Element {
   const [draft, setDraft] = useState<RepeatDraft | null>(null);
 
   useEffect(() => {

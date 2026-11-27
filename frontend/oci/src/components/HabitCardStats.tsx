@@ -2,7 +2,7 @@ import "./HabitHistory.css";
 import "./HabitCardStats.css";
 import { type Habit, type HabitStats } from "../api";
 import { shortDayLabel } from "../dates";
-import { heatLevel, stripDays } from "../habitStats";
+import { habitDayReader, stripDays } from "../habitStats";
 import { useHoverHint } from "../useHoverHint";
 import { Hint } from "./Hint";
 import { Icon } from "./Icon";
@@ -21,27 +21,6 @@ interface HabitCardStatsProps {
   showStreak?: boolean;
 }
 
-/** A day cell's fill level plus its accessible status, read from the
- * HeatmapDay the server already computed (or its absence). */
-function dayStatus(
-  habit: Habit,
-  today: string,
-  day: string,
-  entry: { value: number; intensity: number } | undefined,
-): { level: number; text: string } {
-  const level = heatLevel(entry?.intensity ?? 0);
-  if (level >= 4) {
-    return { level, text: "checked in" };
-  }
-  if (level > 0) {
-    const unit = habit.unit === null ? "" : ` ${habit.unit}`;
-    return { level, text: `in progress: ${entry?.value ?? 0} of ${habit.target}${unit}` };
-  }
-  // Today is graced — the day isn't over, so it reads as pending, not missed
-  // (the same grace the server's Streak gives it).
-  return { level, text: day === today ? "not yet checked in" : "missed" };
-}
-
 /** The Streak and a strip of the Habit's most recent scheduled days —
  * checked in, missed, or (Numeric) partially filled toward the Target. Reuses
  * habitFrequency's due-day logic, so a non-daily Habit's off days never
@@ -56,12 +35,13 @@ export function HabitCardStats({
   today,
   onToggleDay,
   showStreak = true,
-}: HabitCardStatsProps): JSX.Element | null {
+}: HabitCardStatsProps): React.JSX.Element | null {
   if (stats === undefined) {
     return null;
   }
-  const entries = new Map(stats.heatmap.map((entry) => [entry.date, entry]));
+  const values = new Map(stats.heatmap.map((entry) => [entry.date, entry.value]));
   const days = stripDays(habit.frequency, today);
+  const read = habitDayReader(habit, stats, today);
 
   return (
     <div className="habit-card-stats">
@@ -75,8 +55,8 @@ export function HabitCardStats({
       )}
       <div className="habit-strip" role="group" aria-label={`Recent days for ${habit.name}`}>
         {days.map((day) => {
-          const { level, text } = dayStatus(habit, today, day, entries.get(day));
-          const className = `habit-strip-day heatmap-day level-${level}${day === today ? " today" : ""}`;
+          const { state, level, text } = read(day, values.get(day) ?? 0);
+          const className = `habit-strip-day heatmap-day level-${level}${state === "not-started" ? " not-started" : ""}${state === "paused" ? " paused" : ""}${state === "skipped" ? " skipped" : ""}${day === today ? " today" : ""}`;
           const label = `${shortDayLabel(day)}: ${text}`;
           return (
             <StripDay
@@ -84,7 +64,12 @@ export function HabitCardStats({
               className={className}
               label={label}
               level={level}
-              onToggle={onToggleDay === null ? null : () => onToggleDay(day)}
+              // A paused or skipped day refuses a Check-in, so it is a picture too.
+              onToggle={
+                onToggleDay === null || state === "paused" || state === "skipped"
+                  ? null
+                  : () => onToggleDay(day)
+              }
             />
           );
         })}
@@ -106,7 +91,7 @@ function StripDay({
   label: string;
   level: number;
   onToggle: (() => void) | null;
-}): JSX.Element {
+}): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   return (
     <span className="habit-strip-day-wrap">

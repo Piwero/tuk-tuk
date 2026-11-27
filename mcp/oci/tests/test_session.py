@@ -1,5 +1,6 @@
-"""PasswordSession through the Toolbox, with a mock backend: lazy login, one
-re-login and retry on `unauthorized`, no loop, and nothing on disk."""
+"""TokenSession through the Toolbox, with a mock backend: every request
+carries the bearer credential, nothing logs in, a rejected
+token is reported once without retrying, and nothing touches disk."""
 
 import json
 from pathlib import Path
@@ -8,27 +9,24 @@ import httpx
 import pytest
 from tuk_core.client import Client
 
-from tuk_mcp.session import FileSession, PasswordSession
+from tuk_mcp.session import FileSession, TokenSession
 from tuk_mcp.tools import Toolbox
+
+API_TOKEN = "tuk_pat_7_" + "ab" * 32
 
 
 class Backend:
-    """Accepts only the cookie of the latest login; `stale` makes it reject everything."""
+    """Accepts only the API token; `revoked` makes it reject that too."""
 
     def __init__(self) -> None:
-        self.logins = 0
-        self.valid = ""
-        self.stale = False
+        self.revoked = False
         self.requests: list[httpx.Request] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if request.url.path == "/api/v1/auth/login":
-            assert json.loads(request.content) == {"password": "hunter2"}
-            self.logins += 1
-            self.valid = f"cookie{self.logins}"
-            return httpx.Response(204, headers={"set-cookie": f"tuktuk_session={self.valid}"})
-        if self.stale or f"tuktuk_session={self.valid}" not in request.headers.get("cookie", ""):
+            raise AssertionError("an API token never logs in")
+        if self.revoked or request.headers.get("authorization") != f"Bearer {API_TOKEN}":
             return httpx.Response(401, json={"error": {"code": "unauthorized", "message": "no"}})
         return httpx.Response(200, json={"items": [], "total": 0, "limit": 20, "offset": 0})
 
@@ -38,7 +36,7 @@ def setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("TUK_CONFIG_DIR", str(tmp_path))
     backend = Backend()
     client = Client("http://x", transport=httpx.MockTransport(backend))
-    box = Toolbox(client, PasswordSession(client, "hunter2"))
+    box = Toolbox(client, TokenSession(API_TOKEN))
     return backend, box, tmp_path
 
 
@@ -46,48 +44,23 @@ def search(box: Toolbox) -> dict:
     return box.call("search_tasks", {"query": "x"})
 
 
-def test_logs_in_lazily_once_and_reuses_the_cookie(setup) -> None:
+def test_every_request_carries_the_token_and_no_cookie(setup) -> None:
     backend, box, _ = setup
-    assert backend.logins == 0
     assert "isError" not in search(box)
     assert "isError" not in search(box)
-    assert backend.logins == 1
+    assert backend.requests
+    for request in backend.requests:
+        assert request.headers["authorization"] == f"Bearer {API_TOKEN}"
+        assert "cookie" not in request.headers
 
 
-def test_expired_session_logs_in_once_and_retries_once(setup) -> None:
+def test_a_rejected_token_is_reported_once_without_retrying(setup) -> None:
     backend, box, _ = setup
-    search(box)
-    backend.valid = "revoked"
-    assert "isError" not in search(box)
-    assert backend.logins == 2
-    assert "isError" not in search(box)
-    assert backend.logins == 2
-
-
-def test_second_unauthorized_surfaces_without_looping(setup) -> None:
-    backend, box, _ = setup
-    search(box)
-    backend.stale = True
+    backend.revoked = True
     result = search(box)
     assert result["isError"]
-    assert "TUK_PASSWORD" in result["content"][0]["text"]
-    assert backend.logins == 2  # initial + exactly one re-login
-    assert len([r for r in backend.requests if r.url.path != "/api/v1/auth/login"]) == 3
-
-
-def test_fresh_login_that_is_rejected_does_not_login_again(setup) -> None:
-    backend, box, _ = setup
-    backend.stale = True
-    assert search(box)["isError"]
-    assert backend.logins == 1
-
-
-def test_refreshed_cookie_is_kept_in_memory(setup) -> None:
-    backend, box, _ = setup
-    session = box.session
-    session.cookie()
-    session.keep("reissued")
-    assert session.cookie() == "reissued"
+    assert "refused this MCP token" in result["content"][0]["text"]
+    assert len(backend.requests) == 1
 
 
 def test_never_reads_or_writes_a_session_file(setup) -> None:
@@ -96,13 +69,32 @@ def test_never_reads_or_writes_a_session_file(setup) -> None:
     (config / "tuk" / "session.json").write_text(json.dumps({"session_cookie": "ondisk"}))
     before = (config / "tuk" / "session.json").read_text()
     search(box)
-    box.session.keep("reissued")
-    backend.valid = "revoked"
+    box.keep("reissued")
     search(box)
     assert (config / "tuk" / "session.json").read_text() == before
     assert all("ondisk" not in r.headers.get("cookie", "") for r in backend.requests)
+    assert all(r.headers["authorization"] == f"Bearer {API_TOKEN}" for r in backend.requests)
     assert sorted(p.name for p in (config / "tuk").iterdir()) == ["session.json"]
 
 
 def test_file_session_never_retries() -> None:
     assert FileSession().renew() is None
+
+
+def test_an_install_with_no_admin_yet_points_at_the_web_app(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TUK_CONFIG_DIR", str(tmp_path))
+    transport = httpx.MockTransport(
+        lambda _request: httpx.Response(
+            401, json={"error": {"code": "setup_required", "message": "Initial setup is required"}}
+        )
+    )
+    box = Toolbox(Client("http://x", transport=transport), TokenSession(API_TOKEN))
+
+    result = search(box)
+
+    assert result["isError"]
+    assert result["content"][0]["text"] == (
+        "No Admin account yet — open the web app to create the first Admin."
+    )

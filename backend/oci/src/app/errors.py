@@ -13,12 +13,21 @@ class APIError(Exception):
     """Domain error carrying a stable machine-readable code."""
 
     def __init__(
-        self, status_code: int, code: str, message: str, *, retry_after: int | None = None
+        self,
+        status_code: int,
+        code: str,
+        message: str,
+        *,
+        retry_after: int | None = None,
+        details: Any = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
+        # Machine-readable specifics, served as `error.details` (issue #559's
+        # conflicting Check-in dates).
+        self.details = details
         # Seconds until a retry would succeed — carried as a `Retry-After`
         # header (issue #339's too_many_attempts), not in the error body.
         self.retry_after = retry_after
@@ -53,7 +62,9 @@ HTTP_STATUS_CODES = {
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(APIError)
     async def handle_api_error(request: Request, exc: APIError) -> JSONResponse:
-        return error_response(exc.status_code, exc.code, exc.message, retry_after=exc.retry_after)
+        return error_response(
+            exc.status_code, exc.code, exc.message, exc.details, retry_after=exc.retry_after
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:

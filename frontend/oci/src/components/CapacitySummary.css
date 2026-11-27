@@ -1,0 +1,19 @@
+@layer components {
+  /* Capacity summary (#563): quiet text near the day, no score or gauge. */
+  .capacity-summary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .capacity-summary p {
+    margin: 0;
+  }
+  .capacity-summary p:first-child {
+    color: var(--text-primary);
+  }
+}

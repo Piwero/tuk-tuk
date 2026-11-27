@@ -2,9 +2,11 @@
 (issue #109). ADR 0006 already commits Events to being fetched live and
 never persisted, only "cached briefly in process" — this is that cache: it
 absorbs rapid navigation (paging through months) so it doesn't hammer
-Google, without turning into a second source of truth. Keyed on the exact
-Google calendar and window requested, so it never serves one calendar's
-entries for another's, or a wider window's answer for a narrower one.
+Google, without turning into a second source of truth. Keyed on the user,
+the exact Google calendar and the window requested, so it never serves one
+user's entries to another (two users can both connect a calendar Google
+calls "primary", issue #409), one calendar's entries for another's, or a
+wider window's answer for a narrower one.
 
 Reuses the same injected Clock every other freshness/expiry decision in this
 app uses (see app.session.Clock), rather than wall-clock time directly, so
@@ -22,7 +24,8 @@ from app.session import Clock
 # exists for exactly the moments a user won't want to wait even this long.
 DEFAULT_TTL_SECONDS = 60.0
 
-_CacheKey = tuple[str, str, str]
+# (owner user id, Google calendar id, time_min, time_max)
+_CacheKey = tuple[int, str, str, str]
 
 
 @dataclass
@@ -37,21 +40,25 @@ class EventCache:
         self._ttl_seconds = ttl_seconds
         self._entries: dict[_CacheKey, _Entry] = {}
 
+    def forget_owner(self, owner_id: int) -> None:
+        self._entries = {key: entry for key, entry in self._entries.items() if key[0] != owner_id}
+
     def get(
-        self, google_calendar_id: str, time_min: str, time_max: str
+        self, owner_id: int, google_calendar_id: str, time_min: str, time_max: str
     ) -> list[CalendarEventEntry] | None:
-        entry = self._entries.get((google_calendar_id, time_min, time_max))
+        entry = self._entries.get((owner_id, google_calendar_id, time_min, time_max))
         if entry is None or entry.expires_at <= self._clock().timestamp():
             return None
         return entry.events
 
     def set(
         self,
+        owner_id: int,
         google_calendar_id: str,
         time_min: str,
         time_max: str,
         events: list[CalendarEventEntry],
     ) -> None:
-        self._entries[(google_calendar_id, time_min, time_max)] = _Entry(
+        self._entries[(owner_id, google_calendar_id, time_min, time_max)] = _Entry(
             expires_at=self._clock().timestamp() + self._ttl_seconds, events=events
         )

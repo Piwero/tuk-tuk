@@ -20,7 +20,7 @@ interface EventDetailProps {
  * the caller, exactly like QuickAddDialog: dismissing it changes nothing,
  * since nothing here writes anywhere — except "Convert to task" (issue
  * #111), which shows exactly what it will create before it ever does. */
-export function EventDetail({ event, onConverted }: EventDetailProps): JSX.Element {
+export function EventDetail({ event, onConverted }: EventDetailProps): React.JSX.Element {
   const [converting, setConverting] = useState(false);
 
   if (converting) {
@@ -100,7 +100,7 @@ interface ConvertPreviewProps {
 /** What "Convert to task" shows before it commits (issue #111): exactly the
  * Task it's about to create, so conversion is never a surprise. Cancelling
  * here has done nothing — the Task doesn't exist until Confirm. */
-function ConvertPreview({ event, onCancel, onConverted }: ConvertPreviewProps): JSX.Element {
+function ConvertPreview({ event, onCancel, onConverted }: ConvertPreviewProps): React.JSX.Element {
   const draft = draftTaskFromEvent(event);
   const { input } = draft;
 

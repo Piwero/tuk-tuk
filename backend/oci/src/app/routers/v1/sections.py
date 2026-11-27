@@ -2,11 +2,11 @@
 inside a List; the same rows serve as Kanban columns."""
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 
 from app.db import SessionDep
 from app.errors import NotFoundError
-from app.models import SORT_GAP, Section, Task, TaskList
+from app.models import SORT_GAP, Section, TaskList
 from app.schemas import Page, SectionCreate, SectionRead, SectionUpdate
 
 router = APIRouter(prefix="/api/v1/sections", tags=["sections"])
@@ -74,6 +74,5 @@ async def update_section(
 async def delete_section(section_id: int, session: SessionDep) -> None:
     """Delete the Section; its tasks stay in the List, ungrouped."""
     section = await get_section_or_404(section_id, session)
-    await session.execute(update(Task).where(Task.section_id == section_id).values(section_id=None))
     await session.delete(section)
     await session.commit()

@@ -7,14 +7,15 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
 | File                                        | Kind                          | Purpose                                                                               |
 | ------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------- |
 | `namespace.yaml`                            | Namespace                     | Creates the `tuk-tuk` namespace                                                       |
-| `configmap.yaml`                            | ConfigMap                     | Runtime config (`BACKEND_LOG_LEVEL`, `CORS_ORIGINS`, `DATABASE_URL`)                  |
-| `pvc.yaml`                                  | PersistentVolumeClaim         | Persistent volume for the SQLite database file (ADR 0004)                             |
+| `configmap.yaml`                            | ConfigMap                     | Runtime config (`BACKEND_LOG_LEVEL`, `CORS_ORIGINS`)                                  |
+| `pvc.yaml`                                  | PersistentVolumeClaim         | Holds the pre-PostgreSQL SQLite file from the cutover; no longer read                 |
 | `ghcr-onepassworditem.yaml`                 | OnePasswordItem               | Syncs the GHCR image-pull secret (`tuk-tuk-ghcr`)                                     |
 | `git-onepassworditem.yaml`                  | OnePasswordItem               | Syncs Git credentials for Flux image automation (`tuk-tuk-git-auth`)                  |
 | `auth-onepassworditem.yaml`                 | OnePasswordItem               | Syncs the backend auth secrets — session signing key + password hash (`tuk-tuk-auth`) |
 | `google-onepassworditem.yaml`               | OnePasswordItem               | Syncs the Google Calendar integration's secrets, if enabled (`tuk-tuk-google`)        |
-| `db-onepassworditem.yaml`                   | OnePasswordItem               | Syncs the external PostgreSQL `DATABASE_URL`, if used (`tuk-tuk-db`) — ADR 0013       |
-| `copy-db-job.yaml`                          | Job                           | One-off SQLite → PostgreSQL copy. **Not in `kustomization.yaml`** — applied by hand   |
+| `sso-onepassworditem.yaml`                  | OnePasswordItem               | Syncs the shared Google client and SMTP for invite-only Google sign-in (`tuk-tuk-sso`) |
+| `db-onepassworditem.yaml`                   | OnePasswordItem               | Syncs the PostgreSQL `DATABASE_URL` (`tuk-tuk-db`, required) — ADR 0017               |
+| `postgres-egress-service.yaml`              | Service (ExternalName)        | Tailnet egress to `postgres-supernova` as `postgres.tuk-tuk.svc.cluster.local`        |
 | `gitrepository.yaml`                        | GitRepository                 | Flux source used by image automation                                                  |
 | `imagerepository.yaml` / `imagepolicy.yaml` | ImageRepository / ImagePolicy | Scans GHCR for new semver backend images                                              |
 | `imageupdateautomation.yaml`                | ImageUpdateAutomation         | Commits image bumps back to `main` (covers both charts)                               |
@@ -49,19 +50,15 @@ the rest of this README with your own values in mind wherever it says
 ## Notes
 
 - **No init containers.** The app runs Alembic migrations itself at startup.
-  On SQLite there is no database service to wait for — the DB is a file on the
-  PVC (`/data/tuk_tuk.db`). On PostgreSQL there still isn't anything to wait
-  for: the app fails fast and names the unreachable host, and Kubernetes
-  provides the restart backoff.
-- **Single replica, `Recreate` strategy.** The SQLite volume is `ReadWriteOnce`
-  and the app is single-writer; the old pod must release the volume before the
-  new one starts. Don't scale this deployment — and note that moving to
-  PostgreSQL does *not* lift that restriction (see "Moving to PostgreSQL").
-- **`${TUK_TUK_STORAGE_CLASS}` storage class, not the cluster default.**
-  SQLite over NFS risks corruption (unreliable locking; WAL doesn't work over
-  NFS), so the database lives on node-local disk. The pod is pinned to the
-  volume's node, and deleting the PVC deletes the data — back up the SQLite
-  file if it matters.
+  There is nothing to wait for: if PostgreSQL is unreachable the app fails
+  fast and names the host, and Kubernetes provides the restart backoff.
+- **Single replica, `Recreate` strategy.** The app is single-writer (see
+  "Don't scale beyond one replica" below), and the leftover PVC is
+  `ReadWriteOnce`, so the old pod must release it before the new one starts.
+- **The PVC is a leftover.** `backend-data` holds the SQLite file as it was at
+  the PostgreSQL cutover (#417). The app no longer reads it, but it stays
+  mounted until it is removed on purpose: its reclaim policy is `Delete`, so
+  dropping `pvc.yaml` from the kustomization makes Flux delete the file.
 - **Auth secrets are provisioned ahead of the app that reads them.** The
   `tuk-tuk-auth` Secret (session signing key + password hash) is wired into
   the Deployment via `envFrom.secretRef` before anything in the backend
@@ -89,16 +86,26 @@ must also have `contents:write` on `Piwero/tuk-tuk` for image-bump pushes).
 vault you point `TUK_TUK_1PASSWORD_VAULT_ID` at before applying this chart,
 with two fields:
 
-| Field                | Value                                                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------- |
-| `SECRET_KEY`         | A long random value generated once, e.g. `openssl rand -base64 32`. This becomes the session signing key. |
-| `AUTH_PASSWORD_HASH` | The Argon2id hash from `mise run backend:hash-password` (see ADR 0005 / #82).                             |
+| Field                | Value                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_MASTER_KEY`     | A long random value generated once, e.g. `openssl rand -base64 32`. Encrypts the secrets Users save in Settings. Required to start. |
+| `AUTH_PASSWORD_HASH` | The Argon2id hash from `mise run backend:hash-password` (see ADR 0005 / #82).                                                       |
 
 The operator syncs these field labels directly as Secret keys, matching the
 env vars the backend actually reads (`app.config.Settings`). If your
 `tuk-tuk-auth` 1Password item still has a field named `ADMIN_PASSWORD_HASH`
 from before the auth gate landed, rename it to `AUTH_PASSWORD_HASH` — the app
-looks for that name and won't start without it.
+looks for that name and won't start without it. A leftover `SECRET_KEY`
+field is unread and can go.
+
+### Never rotate `APP_MASTER_KEY`
+
+Keep the key in `tuk-tuk-auth` unchanged across releases and restores. With
+a different key the backend still starts, but none of the secrets Users saved
+in Settings (GitHub Tokens among them) can be read any more, and the app does
+not flag them for reconnecting: each one has to be entered again by hand.
+[Security → The master key](../../docs/self-hosting/security.md#the-master-key)
+lists what it covers.
 
 ### `AUTH_PASSWORD_HASH` holds the hash, never the password
 
@@ -141,6 +148,25 @@ kubectl -n tuk-tuk exec deploy/backend -- printenv AUTH_PASSWORD_HASH
 
 It should begin `$argon2id$v=19$m=…`. Missing `$` separators or a plaintext
 value is the `500` waiting to happen.
+
+## Google sign-in and invitations (optional)
+
+`tuk-tuk-sso` (issue #586, ADR 0021) turns on invite-only Google sign-in,
+invitations, and Google Calendar without each User's own Google Cloud
+client. Like `tuk-tuk-google`, its `secretRef` is `optional: true`: without
+it the app keeps password sign-in only. Create a `tuk-tuk-sso` item in the
+same vault as `tuk-tuk-auth` with the fields listed in
+`sso-onepassworditem.yaml`, then restart the pod. The field labels must
+match `app.config.Settings` exactly (`GOOGLE_OAUTH_CLIENT_ID`,
+`GOOGLE_OAUTH_CLIENT_SECRET`, `SMTP_*`).
+
+These are not the migration-only `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`
+of `tuk-tuk-google`, which only ever seed user #1's own client. Connections
+made with a User's own client keep working with it after this is set.
+
+See [the self-hosting guide](../../docs/self-hosting/google-sign-in.md) for
+the Google Cloud and SMTP setup, and how to verify both before inviting
+anyone.
 
 ## Google Calendar integration (optional)
 
@@ -188,169 +214,36 @@ appeared):
 kubectl -n tuk-tuk rollout restart deployment/backend
 ```
 
-## Moving to PostgreSQL
+## Database
 
-Optional, and off by default. SQLite on the PVC stays fully supported — this
-section only matters if you'd rather your own PostgreSQL server handled the
-backups. See [ADR 0013](../../docs/adr/0013-optional-external-postgres.md) for
-why the connection lives in the environment rather than in Settings.
+PostgreSQL only ([ADR 0017](../../docs/adr/0017-postgres-only-tests-on-testcontainers.md)).
+Prod uses the shared `postgres-supernova` server on the tailnet, reached
+through `postgres-egress-service.yaml` as
+`postgres.tuk-tuk.svc.cluster.local:5432`.
 
-### Before you start: what happens to your data
+`DATABASE_URL` reaches the backend only from the `tuk-tuk-db` Secret, synced
+from the 1Password item of the same name, with a single field:
 
-**Nothing is deleted, and you can go back.** The copy reads the SQLite file
-and writes to PostgreSQL. The file is never modified, never moved, and stays
-on the PVC exactly as it was — it becomes a point-in-time backup from the
-moment you scaled the app down. Reverting is removing one field and
-restarting; the app finds the file untouched and picks up where it left off.
+| Field          | Value                                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | `postgresql+psycopg://tuk-tuk:<password>@postgres.tuk-tuk.svc.cluster.local:5432/tuk-tuk?sslmode=disable` |
 
-Three things make that guarantee weaker, all of them things you have to ask
-for explicitly:
+The Secret is required: without it the pod waits with the Secret named.
+The app also refuses to start on a non-`postgresql+psycopg://` URL.
 
-- **`--prune-orphans` writes to the source.** It deletes rows from the SQLite
-  file. It is the only operation in this whole process that touches your
-  original data, and it is not passed by default. Every row it deletes is
-  named in the report — read them before agreeing.
-- **`--force` deletes every row in the PostgreSQL target** before copying. It
-  exists so a failed attempt can be retried, not to merge two datasets. It
-  cannot touch SQLite.
-- **Deleting the PVC deletes the file.** `${TUK_TUK_STORAGE_CLASS}`'s reclaim policy is
-  `Delete`, so the fallback only exists as long as the PVC does. Keep it
-  until you're confident, and take a copy of the file if it matters.
-
-Everything you'd worry about losing comes across: Lists, Tasks, Folders,
-Sections, Tags, Check Items, Habits, Check-ins, Goals, Key Results, Focus
-Sessions, Timers, Stand-up entries, and Google account connections, with ids
-and relationships preserved exactly. You stay logged in, and connected Google
-accounts stay connected.
-
-The catch is that **going back only returns you to the moment you switched.**
-There is no tool to copy PostgreSQL to SQLite. Anything you add after the
-cutover exists only in PostgreSQL, so reverting a week later loses that week.
-Revert quickly if you're going to revert at all.
-
-### One-time setup
-
-Create a `tuk-tuk-db` item in the same vault as `tuk-tuk-auth` with one field:
-
-| Field          | Value                                                     |
-| -------------- | --------------------------------------------------------- |
-| `DATABASE_URL` | `postgresql+psycopg://user:password@host:5432/tuk_tuk` |
-
-The `+psycopg` suffix is required — `app.db` accepts only the `postgresql`
-and `postgresql+psycopg` schemes, and psycopg3 drives both the async app and
-sync Alembic from this one string. No quotes, no trailing whitespace; the
-operator copies the field verbatim.
-
-Creating this item does **not** switch anything. The Deployment loads it via
-`secretRef` with `optional: true`, and env vars are only read at boot, so
-nothing changes until a pod restarts. It's safe to create it and then stop.
-
-The reason this works as a switch at all is ordering: `envFrom` applies its
-sources in sequence and later ones win, and `tuk-tuk-db` is listed after
-`backend-config`. So `DATABASE_URL` here overrides the SQLite default in
-`configmap.yaml`. **Don't edit the ConfigMap** — leaving it pinned at the
-SQLite path is what keeps the copy job's source URL correct and makes
-reverting a one-field deletion.
-
-### Cutover
-
-Read this through before starting. Step 4 is the point of no easy return,
-and steps 2–3 are where you find out whether it'll work.
-
-1. **Test the connection from the running app.** Settings → Database → Test
-   connection. It reports whether the host is reachable, whether the
-   credentials work, the server version, and whether the target database is
-   empty. It saves nothing and switches nothing — the URL you paste is
-   discarded when the probe finishes. Do this before touching anything
-   running; a typo or a firewall rule is much cheaper to find here.
-
-2. **Scale the backend to zero** so nothing writes to the SQLite file while
-   it's being copied:
-
-   ```bash
-   kubectl -n tuk-tuk scale deployment/backend --replicas=0
-   kubectl -n tuk-tuk get pods -w
-   ```
-
-   Wait for the pod to fully terminate. The PVC is `ReadWriteOnce`, so the
-   copy Job will sit `Pending` until the volume is released — that's the
-   safety net, not a problem to work around.
-
-3. **Run the copy and read the report:**
-
-   ```bash
-   kubectl -n tuk-tuk apply -f backend/chart/copy-db-job.yaml
-   kubectl -n tuk-tuk logs -f job/copy-db
-   ```
-
-   It migrates the empty target to head automatically, copies every table in
-   foreign-key order preserving ids, reseeds the PostgreSQL sequences, then
-   verifies its own work by comparing per-table row counts and maximum ids.
-   The output ends in `SUCCESS` or `FAILURE`.
-
-   **If it refuses, stop and read why.** Two refusals are expected and both
-   are deliberate:
-
-   - *Orphaned rows in the source.* Rows pointing at rows that no longer
-     exist. PostgreSQL enforces foreign keys and SQLite didn't, so they
-     cannot be inserted. The tool lists them by table and id. To delete
-     them, `kubectl -n tuk-tuk delete job copy-db`, add `--prune-orphans`
-     to the `args` in `copy-db-job.yaml`, and re-apply. This modifies your
-     SQLite file — it's the one step that does.
-   - *Target already has data.* Something is already in that PostgreSQL
-     database. If it's a previous failed attempt, add `--force` the same
-     way; it deletes every row in the target first. If it's something
-     else, use a different database.
-
-   Do not proceed to step 4 on anything but `SUCCESS`.
-
-4. **Scale back up.** The pod re-reads its environment and now boots against
-   PostgreSQL:
-
-   ```bash
-   kubectl -n tuk-tuk scale deployment/backend --replicas=1
-   kubectl -n tuk-tuk logs -f deployment/backend
-   ```
-
-   If PostgreSQL is unreachable the app refuses to start and names the host
-   it couldn't reach. It never silently falls back to the SQLite file —
-   that would serve stale data and accept writes into a database you'd
-   stopped looking at.
-
-5. **Verify before trusting it.** Settings → Database should now report
-   PostgreSQL with your host and database name. Check your Lists, Tasks,
-   Habits, and Goals are all there, and that any connected Google account
-   still shows as connected. Then **create one new Task** — that's the check
-   that the sequence reseed worked, and it's the failure you'd otherwise
-   hit at the worst moment.
-
-6. **Clean up the Job** once you're satisfied:
-
-   ```bash
-   kubectl -n tuk-tuk delete job copy-db
-   ```
-
-Leave the PVC alone. It's your rollback.
-
-### Reverting
-
-Remove the `DATABASE_URL` field from the `tuk-tuk-db` 1Password item (or
-delete the item), let the operator sync, then restart:
+To change it, first try the new URL in Settings → Database → Test
+connection, which checks it and saves nothing. Then update the item and
+restart the backend:
 
 ```bash
 kubectl -n tuk-tuk rollout restart deployment/backend
 ```
 
-With the override gone, `backend-config`'s SQLite URL applies again and the
-app boots against the untouched file. Confirm in Settings → Database.
-
-Remember what this costs: the file is current as of the moment you scaled
-down in step 2, so anything created in PostgreSQL after the cutover is not
-in it. There's no tool to copy back.
+Backups are `postgres-supernova`'s job, not this chart's.
 
 ### Don't scale beyond one replica
 
-Moving off the PVC makes horizontal scaling look available. It isn't
+Being off the PVC makes horizontal scaling look available. It isn't
 supported, and the worst failure is silent: the login throttle counts
 consecutive failures in process memory, so N replicas behind a round-robin
 balancer weaken brute-force protection roughly N-fold with no error
@@ -363,11 +256,6 @@ unique constraint behind it. ADR 0013 records this as an explicit "no".
 ```bash
 kubectl apply -k backend/chart
 ```
-
-`copy-db-job.yaml` is deliberately not in `kustomization.yaml`, so neither
-this command nor Flux applies it. A Job is a one-shot and Flux reconciles
-continuously; a re-applied copy would run against what is by then the live
-database. Apply it by hand, once, as part of the cutover above.
 
 ## Customise
 

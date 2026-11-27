@@ -55,6 +55,21 @@ export type ThemePreference = "light" | "dark" | "system";
 const THEME_KEY = "tuktuk.theme";
 const THEME_VALUES: readonly ThemePreference[] = ["light", "dark", "system"];
 
+/** Log out (#473): drops what this browser holds for the person leaving —
+ * every tuk-tuk key but the theme, which belongs to the browser, and all of
+ * sessionStorage — so nothing of theirs is left for the next person. */
+export function clearSignedInData(): void {
+  try {
+    const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index));
+    for (const key of keys) {
+      if (key?.startsWith("tuktuk.") && key !== THEME_KEY) localStorage.removeItem(key);
+    }
+    sessionStorage.clear();
+  } catch {
+    // Storage unavailable: then nothing was kept in it either.
+  }
+}
+
 export function loadThemePreference(): ThemePreference {
   try {
     const raw = localStorage.getItem(THEME_KEY);

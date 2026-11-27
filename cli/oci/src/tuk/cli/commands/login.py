@@ -10,9 +10,10 @@ from ..errors import LOGIN_SETUP_CODES, SETUP_MESSAGE, lockout_message
 
 
 def cmd_login(client: Client, resolved_base_url: str) -> int:
+    login = input("Username or email: ")
     password = getpass.getpass("Password: ")
     try:
-        cookie = client.login(password)
+        cookie = client.login(login, password)
     except ClientError as exc:
         if exc.code in LOGIN_SETUP_CODES:
             print(SETUP_MESSAGE, file=sys.stderr)

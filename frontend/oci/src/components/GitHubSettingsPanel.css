@@ -1,0 +1,7 @@
+@layer components {
+  /* Settings › GitHub: Reconnect beside Remove on each GitHub Token. */
+  .github-token-actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+}

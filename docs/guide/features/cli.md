@@ -18,10 +18,11 @@ Needs [uv](https://docs.astral.sh/uv/getting-started/installation/) and the
    ```sh
    uv tool install --from ./cli/oci tuk
    ```
-2. Log in once with your app password:
+2. Log in once. It asks for your username (or email) and password:
    ```sh
    tuk login --base-url http://localhost:8080
    ```
+   The terminal app then acts as you and sees only your own data.
 
 `TUK_BASE_URL` overrides the saved URL for every command. Command-line `--base-url` takes precedence over the environment variable.
 

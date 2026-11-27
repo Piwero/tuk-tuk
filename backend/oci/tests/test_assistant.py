@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from tests.conftest import TEST_PASSWORD, FakeClock
+from tests.conftest import FakeClock, log_in_admin
 
 
 class _ModelsHandler(BaseHTTPRequestHandler):
@@ -88,8 +88,7 @@ def make_client(
 ) -> Iterator[TestClient]:
     app = create_app(Settings(database_url=database_url, **overrides), clock=fake_clock)  # type: ignore[arg-type]
     with TestClient(app) as test_client:
-        response = test_client.post("/api/v1/auth/login", json={"password": TEST_PASSWORD})
-        assert response.status_code == 204, response.text
+        log_in_admin(test_client)
         yield test_client
 
 
@@ -208,22 +207,12 @@ class TestAssistantConfig:
     def test_the_api_key_is_encrypted_at_rest(
         self, database_url: str, fake_clock: FakeClock
     ) -> None:
-        from app.app_settings import get_app_settings
         from app.crypto import decrypt_credential
+        from tests.conftest import user_settings_row
 
         with make_client(database_url, fake_clock) as client:
             client.put("/api/v1/assistant/config", json={"api_key": "sk-secret"})
-            app = client.app
-
-            async def _fetch() -> str | None:
-                async with app.state.session_factory() as session:
-                    row = await get_app_settings(session)
-                    assert row is not None
-                    return row.encrypted_assistant_api_key
-
-            import asyncio
-
-            encrypted = asyncio.run(_fetch())
+            encrypted = user_settings_row(client.app).encrypted_assistant_api_key  # type: ignore[arg-type]
 
         assert encrypted is not None
         assert encrypted != "sk-secret"

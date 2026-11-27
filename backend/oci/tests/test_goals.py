@@ -589,9 +589,9 @@ class TestSettledGoalsStayHonest:
 
 
 class TestDeletingAKeyResultDetachesItsTasks:
-    """SQLite does not enforce ON DELETE SET NULL without PRAGMA
-    foreign_keys=ON, and it recycles rowids — so a Task left pointing at a
-    deleted Key Result becomes a phantom count on the next one created."""
+    """A Task left pointing at a deleted Key Result would be a phantom count
+    on the Key Result (ADR 0012). Pinned whichever layer does the clearing —
+    the explicit detach or the enforced ON DELETE SET NULL."""
 
     def test_deleting_a_key_result_detaches_its_tasks(self, client: TestClient) -> None:
         goal = make_goal(client, "Ship v2")

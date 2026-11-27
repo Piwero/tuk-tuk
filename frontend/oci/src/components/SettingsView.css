@@ -25,6 +25,230 @@
     flex-direction: column;
     gap: var(--space-6);
   }
+  /* Settings tabs (#474): My account and, for Admins, Users. Links, not a
+   tablist, since each tab is its own URL. */
+  .settings-tabs {
+    display: flex;
+    gap: var(--space-1);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .settings-tabs a {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: -1px;
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    text-decoration: none;
+  }
+  .settings-tabs a:hover {
+    color: var(--text-primary);
+  }
+  .settings-tabs a[aria-current="page"] {
+    border-bottom-color: var(--accent);
+    color: var(--text-primary);
+  }
+  .settings-tabs a:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius-xs);
+  }
+  @media (max-width: 720px) {
+    .settings-tabs a {
+      min-height: var(--tap-target);
+    }
+
+    /* Time selects (Active hours, Planning window, Quiet hours) and the
+     checkboxes that turn them on (#569): the checkbox keeps its glyph and
+     its label carries the hit area. */
+    .settings-field select {
+      min-height: var(--tap-target);
+    }
+
+    .settings-field label:has(> input[type="checkbox"]) {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding-block: calc((var(--tap-target) - var(--checkbox-standard)) / 2);
+    }
+  }
+  /* Profile (#474): username and email side by side where there is room,
+   each with its own Save once edited. */
+  .profile-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-4);
+  }
+  .profile-field-row {
+    display: flex;
+    gap: var(--space-2);
+  }
+  .profile-field-row input {
+    flex: 1;
+    min-width: 0;
+  }
+  /* The Profile card's Password row (#475), under a divider. */
+  .password-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-default);
+  }
+  .password-row h3 {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .password-row p {
+    margin: var(--space-1) 0 0;
+  }
+  .change-password-form {
+    max-width: none;
+  }
+  .change-password-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+  }
+  /* API tokens (#476): one row per token under a divider; a new token's
+   value sits in place of its row until the page is left. */
+  .api-token-form {
+    margin-bottom: var(--space-4);
+  }
+  .api-token-kind {
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    border: 0;
+  }
+  .api-token-kind legend {
+    margin-bottom: var(--space-2);
+    padding: 0;
+  }
+  .api-token-kind-choice + .api-token-kind-choice {
+    margin-top: var(--space-2);
+  }
+  .api-token-kind-choice label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .api-token-kind-choice .settings-hint {
+    margin: 0 0 0 calc(var(--space-2) + 1em);
+  }
+  .api-tokens {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .api-token {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--border-default);
+  }
+  .api-token:first-child {
+    border-top: none;
+  }
+  .api-token h3 {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .api-token p {
+    margin: var(--space-1) 0 0;
+  }
+  .api-token code {
+    overflow-wrap: anywhere;
+  }
+  .api-token-new {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    padding: var(--space-4);
+    border-top: none;
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+  }
+  .api-token-new + .api-token {
+    border-top: none;
+  }
+  .api-token-new-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .api-token-badge {
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+  }
+  .api-token-value {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+  }
+  .api-token-value code {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-md);
+    user-select: all;
+  }
+  .api-token-load-error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .api-token-load-error p,
+  .api-token-error {
+    margin: 0;
+    color: var(--text-danger);
+    font-size: var(--text-sm);
+  }
+  .api-token-confirm-lead {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .api-token-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+  }
+  button.api-token-confirm-danger {
+    background: var(--danger);
+  }
+  button.api-token-confirm-danger:hover {
+    background: var(--danger-hover);
+  }
+  @media (hover: none), (pointer: coarse) {
+    .api-token button,
+    .api-token-form button,
+    .api-token-load-error button {
+      min-height: var(--tap-target);
+    }
+  }
   .settings-section {
     padding: var(--space-5) var(--space-6);
     border: 1px solid var(--border-default);
@@ -82,7 +306,7 @@
     height: 6px;
     margin-left: 6px;
     border-radius: var(--radius-full);
-    background: var(--ink-300);
+    background: var(--fill-muted);
   }
   .settings-toc-dot[data-state="on"] {
     background: var(--success);
@@ -311,7 +535,7 @@
     font-weight: var(--weight-medium);
   }
   .google-account > button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .google-account [role="alert"] {
     margin: 0;

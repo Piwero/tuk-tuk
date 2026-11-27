@@ -22,6 +22,14 @@ and "stdio transport, no listener, no network surface" (enforcement
 boundary). Stdio mode, the write principle and the no-delete rule are
 unaffected.
 
+**Amended by [0018](0018-multi-user-row-level-isolation.md)** for the
+single-user premise behind the credential decision. See "Amendment:
+multi-user credentials" below.
+
+**Amended again by issue #525** for the MCP server's HTTP mode: one shared
+server serves every User with their own MCP tokens. See "Amendment: one
+shared MCP server" below.
+
 ## Context
 
 tuk-tuk is reachable from two non-browser clients sharing `tuk-core`
@@ -213,6 +221,59 @@ typo into a silent write to the wrong List.
 - The CLI duplicates thin request models rather than importing the
   backend's schemas, so installing it never pulls in the database
   stack. That duplication is the accepted price of the decoupling.
+
+## Amendment: multi-user credentials (ADR 0018, issue #405)
+
+tuk-tuk is now multi-user, so "there is exactly one legitimate user" no
+longer holds. The credential decision is re-split by client:
+
+- **The CLI keeps the password and cookie flow.** `tuk login` prompts for
+  a username or email plus the password, posts them to the login
+  endpoint, and caches the signed session cookie in the Session file
+  exactly as before. A person at a terminal can type a password, and the
+  cookie now names that person's User, so the per-user isolation of ADR
+  0018 applies without any client change beyond the login prompt.
+- **The MCP server's HTTP mode authenticates with a personal API token.**
+  Each user can create named API tokens in Settings. The plaintext is
+  shown once, only a hash is stored, and each token can be revoked on its
+  own. The backend accepts `Authorization: Bearer <token>` with the same
+  checks as the cookie: an active user with no forced steps pending. The
+  MCP pod holds `TUK_API_TOKEN` in place of `TUK_PASSWORD`, so stealing
+  the pod's secret yields a credential that can be revoked, not the
+  user's password. A token acts strictly as its owner.
+  So that revoking a stolen token is always enough, a token is refused
+  (403 `token_not_allowed`) wherever it could: minting another token,
+  changing the password, completing a forced step, editing the profile,
+  and the whole admin API, even for an Admin's token. Listing tokens and
+  revoking one stay open to it. Changing the password does not end a
+  token; revoking it, disabling the user or a pending forced step does.
+- **Stdio mode is unchanged.** It runs on the user's own machine and
+  reuses the CLI's cached cookie.
+- **MCP pods are not created automatically.** One pod serves one user. The
+  admin deploys it with that user's token when the user asks, following
+  the runbook. Because a pod belongs to one user, ADR 0016's process-wide
+  write-id allowlist is still shared only among one user's clients.
+
+This takes up the upgrade path rejected above ("per-client API tokens
+now"), for the client that stopped running on a trusted machine and the
+premise that stopped holding. The write principle, the tool-list
+enforcement boundary, the no-delete rule and description egress are
+unchanged.
+
+## Amendment: one shared MCP server (issue #525)
+
+The HTTP-mode half of the multi-user amendment above is superseded; the
+CLI and stdio halves stand. The MCP pod no longer holds `TUK_API_TOKEN`,
+and pods are no longer deployed per User. One deployment serves every User.
+Each client sends its User's **MCP token**: an API token whose audience is
+the MCP server alone, which the API refuses. The server trades it, on every
+request, for a two-minute access credential acting as that User. Tokens and
+credentials are refused on the same routes as before
+(`token_not_allowed`), so a stolen one still cannot mint more, change the
+password or reach the admin API. The write-id allowlist is per MCP token.
+The write principle, the tool-list enforcement boundary, the no-delete rule
+and description egress are unchanged. The full record is
+[ADR 0016's amendment](0016-mcp-network-transport.md#amendment-one-shared-server-for-every-user-issue-525).
 
 ## What would justify revisiting this
 

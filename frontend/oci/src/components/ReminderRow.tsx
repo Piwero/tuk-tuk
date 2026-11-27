@@ -5,6 +5,7 @@ import { updateTask, type Task } from "../api";
 import { customOffset, reminderLabel, REMINDER_PRESETS, type OffsetUnit } from "../reminders";
 import { IconButton } from "./IconButton";
 import { Popover } from "./Popover";
+import { ReminderDeliveryNote } from "./ReminderDeliveryNote";
 
 interface ReminderRowProps {
   task: Task;
@@ -14,7 +15,7 @@ interface ReminderRowProps {
 /** Task detail's Reminder row (#453): chips with remove, and an add control
  * offering the presets and a custom offset. Reminders are relative to the
  * Task's date, so a dateless Task explains that instead. */
-export function ReminderRow({ task, onTaskChanged }: ReminderRowProps): JSX.Element {
+export function ReminderRow({ task, onTaskChanged }: ReminderRowProps): React.JSX.Element {
   const anchor = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState<{ amount: string; unit: OffsetUnit } | null>(null);
@@ -80,6 +81,7 @@ export function ReminderRow({ task, onTaskChanged }: ReminderRowProps): JSX.Elem
             aria-expanded={open}
             onClick={() => (open ? close() : setOpen(true))}
           />
+          {task.reminders.length > 0 && <ReminderDeliveryNote />}
           <Popover open={open} triggerRef={anchor} onClose={close}>
             {custom === null ? (
               <ul

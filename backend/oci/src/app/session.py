@@ -1,10 +1,14 @@
-"""Signed, stateless session cookie (ADR 0005): no server-side session
-store, so the issued-at time travels inside the signed payload itself and
-every request's cookie is independently verifiable.
+"""Signed, stateless session cookie (ADR 0005, ADR 0018): no server-side
+session store, so the User's id, their session epoch and the issued-at
+time travel inside the signed payload itself and every request's cookie is
+independently verifiable. Revocation bumps the User's epoch, which no
+longer matches the one in an older cookie (app.middleware).
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from itsdangerous import BadSignature, URLSafeSerializer
 from starlette.responses import Response
@@ -14,6 +18,11 @@ from app.config import Settings
 SESSION_COOKIE_NAME = "tuktuk_session"
 
 _SALT = "tuk-tuk-session"
+
+# How the session was signed in (issue #586). A Google session is never
+# asked to replace a temporary password: that step belongs to the next
+# password login (app.middleware.forced_step).
+LoginMethod = Literal["password", "google"]
 
 # Returns the current, timezone-aware UTC time. Injected everywhere the
 # session lifecycle needs "now", so tests can drive expiry and reissue
@@ -29,8 +38,28 @@ def _serializer(session_key: str) -> URLSafeSerializer:
     return URLSafeSerializer(session_key, salt=_SALT)
 
 
-def issue_session_token(session_key: str, issued_at: datetime) -> str:
-    token: str = _serializer(session_key).dumps({"iat": issued_at.timestamp()})
+@dataclass(frozen=True)
+class SessionClaims:
+    """What a verified session cookie says: who, at which epoch, since when."""
+
+    user_id: int
+    epoch: int
+    issued_at: datetime
+    method: LoginMethod = "password"
+
+
+def issue_session_token(
+    session_key: str,
+    *,
+    user_id: int,
+    epoch: int,
+    issued_at: datetime,
+    method: LoginMethod = "password",
+) -> str:
+    payload: dict[str, object] = {"uid": user_id, "ep": epoch, "iat": issued_at.timestamp()}
+    if method == "google":
+        payload["m"] = "google"
+    token: str = _serializer(session_key).dumps(payload)
     return token
 
 
@@ -39,9 +68,13 @@ def set_session_cookie(
     session_key: str,
     settings: Settings,
     clock: Clock,
+    *,
+    user_id: int,
+    epoch: int,
     issued_at: datetime | None = None,
+    method: LoginMethod = "password",
 ) -> None:
-    """Sign and attach the session cookie to `response`. Inaccessible to
+    """Sign and attach `user_id`'s session cookie, at `epoch`, to `response`. Inaccessible to
     JavaScript, sent only to this site, and `Secure` per configuration —
     Task notes render as Markdown, a more interesting scripting surface than
     most apps have, which makes JS-readability of the credential especially
@@ -56,7 +89,13 @@ def set_session_cookie(
     cross-site subresource requests and non-GET requests, which is what
     matters for CSRF.
     """
-    token = issue_session_token(session_key, issued_at or clock())
+    token = issue_session_token(
+        session_key,
+        user_id=user_id,
+        epoch=epoch,
+        issued_at=issued_at or clock(),
+        method=method,
+    )
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,
@@ -85,9 +124,10 @@ def delete_session_cookie(response: Response, settings: Settings) -> None:
 
 def verify_session_token(
     token: str | None, session_key: str, settings: Settings, clock: Clock
-) -> datetime | None:
-    """Return the token's issued-at time if it is validly signed and not
-    past the configured session lifetime, else None.
+) -> SessionClaims | None:
+    """Return the token's claims if it is validly signed, names a User and
+    an epoch, and is not past the configured session lifetime, else None.
+    A cookie from before ADR 0018 names no User, so it is rejected.
     """
     if not token:
         return None
@@ -95,13 +135,20 @@ def verify_session_token(
         payload = _serializer(session_key).loads(token)
     except BadSignature:
         return None
-    iat = payload.get("iat") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        return None
+    iat, user_id, epoch = payload.get("iat"), payload.get("uid"), payload.get("ep")
+    # A signed payload only ever holds what issue_session_token wrote, but
+    # each claim is still checked for its type before being trusted.
     if not isinstance(iat, int | float):
+        return None
+    if not isinstance(user_id, int) or not isinstance(epoch, int):
         return None
     issued_at = datetime.fromtimestamp(iat, tz=UTC)
     if clock() - issued_at > timedelta(days=settings.auth_session_lifetime_days):
         return None
-    return issued_at
+    method: LoginMethod = "google" if payload.get("m") == "google" else "password"
+    return SessionClaims(user_id=user_id, epoch=epoch, issued_at=issued_at, method=method)
 
 
 def needs_reissue(issued_at: datetime, settings: Settings, clock: Clock) -> bool:

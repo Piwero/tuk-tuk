@@ -81,15 +81,16 @@
 
   form button:hover,
   fieldset button:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   form button:active,
   fieldset button:active {
-    background: var(--ink-100);
+    background: var(--surface-hover);
   }
 
   button.btn-primary,
+  a.btn-primary,
   button.btn-secondary,
   button.btn-quiet,
   button.btn-focus {
@@ -107,11 +108,19 @@
     transition: background var(--duration-fast) var(--ease-out);
   }
 
-  button.btn-primary {
+  button.btn-primary,
+  a.btn-primary {
     background: var(--accent);
     color: var(--text-inverse);
   }
 
+  /* A full-page link that is the primary action, such as Connect Google
+   Calendar (#586), whose consent is a browser round trip, not a fetch. */
+  a.btn-primary {
+    text-decoration: none;
+  }
+
+  a.btn-primary:hover,
   button.btn-primary:where(:hover:not(:disabled)) {
     background: var(--accent-hover);
   }
@@ -123,7 +132,7 @@
   }
 
   button.btn-secondary:where(:hover:not(:disabled)) {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
 
   button.btn-quiet {
@@ -142,7 +151,7 @@
   }
 
   button.btn-focus:where(:hover:not(:disabled)) {
-    background: var(--plum-700);
+    background: var(--focus-accent-hover);
   }
 
   button.btn-primary:where(:disabled),
@@ -155,6 +164,7 @@
 
   @media (max-width: 720px), (hover: none), (pointer: coarse) {
     button.btn-primary,
+    a.btn-primary,
     button.btn-secondary,
     button.btn-quiet,
     button.btn-focus {

@@ -28,7 +28,7 @@ export function OverflowMenu({
   label: string;
   items: OverflowMenuItem[];
   className?: string;
-}): JSX.Element {
+}): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
 

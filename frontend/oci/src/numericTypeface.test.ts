@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import { readStylesheets } from "./test/stylesheets";
 
 /** Numeric metadata is set in the body face with tabular figures; monospace
- * is kept only for things the user types: Quick-Add sigil hints, keyboard
- * shortcut caps and code in Markdown (issue #432). jsdom applies no
+ * is kept only for things the user types, or pastes into another client:
+ * Quick-Add sigil hints, keyboard shortcut caps, code in Markdown (issue
+ * #432), a temporary password, which its recipient types at their next
+ * sign-in (#479, #480), and a new API token's value, which is pasted into a
+ * client (#476). jsdom applies no
  * stylesheet, so the claim is checked against the CSS source. */
 
 const css = readStylesheets().replace(/\/\*[\s\S]*?\*\//g, "");
@@ -23,11 +26,13 @@ function bodiesFor(selector: string): string {
 }
 
 describe("numeric metadata typeface (issue #432)", () => {
-  it("keeps monospace only on sigil hints, shortcut caps and Markdown code", () => {
+  it("keeps monospace only on sigil hints, shortcut caps, Markdown code and one-time secrets", () => {
     const mono = rules
       .filter((rule) => /font-family:\s*var\(--font-mono\)/.test(rule.body))
       .flatMap((rule) => rule.selectors);
     expect(mono.sort()).toEqual([
+      ".api-token-value code",
+      ".one-time-password-box code",
       ".quick-add-sigil-hint",
       ".shortcut-hint kbd",
       ".task-description code",

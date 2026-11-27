@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 from app.db import SessionDep
 from app.errors import NotFoundError
 from app.goal_read import build_goal_read, settle
-from app.models import Goal, Task
+from app.models import Goal
 from app.quarter import current_quarter
 from app.schemas import GoalCreate, GoalRead, GoalUpdate, Page
 
@@ -22,20 +22,6 @@ async def get_goal_or_404(goal_id: int, session: SessionDep) -> Goal:
     if goal is None:
         raise NotFoundError(f"Goal {goal_id} not found")
     return goal
-
-
-async def detach_tasks(key_result_ids: list[int], session: SessionDep) -> None:
-    """Explicitly clear Task.key_result_id rather than trusting ON DELETE SET
-    NULL: SQLite only enforces foreign keys with PRAGMA foreign_keys=ON, which
-    this app does not set, so a deleted Key Result would otherwise leave Tasks
-    pointing at a dead row — and SQLite recycles rowids, so the next Key Result
-    created would inherit them as a phantom count. Same pattern as Habit
-    deletion clearing source_habit_id."""
-    if not key_result_ids:
-        return
-    await session.execute(
-        update(Task).where(Task.key_result_id.in_(key_result_ids)).values(key_result_id=None)
-    )
 
 
 async def focus_goal_or_404(goal_id: int, session: SessionDep) -> Goal:
@@ -106,6 +92,5 @@ async def delete_goal(goal_id: int, session: SessionDep) -> None:
     """Delete the Goal and its Key Results (cascade). Tasks and Habits are
     left alone: losing a Goal never costs the user work."""
     goal = await get_goal_or_404(goal_id, session)
-    await detach_tasks([kr.id for kr in goal.key_results], session)
     await session.delete(goal)
     await session.commit()

@@ -5,6 +5,7 @@
     background: var(--surface-raised);
     padding: var(--space-6) var(--space-4);
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-4);
     align-content: start;
     /* Its own scroll region (issue #159): expanding the description editor
@@ -60,6 +61,7 @@
   }
   .task-detail-title form {
     flex: 1;
+    min-width: 0;
   }
   .task-detail-title input:not([type="checkbox"]) {
     width: 100%;
@@ -88,8 +90,16 @@
   .task-detail-header > button:hover {
     background: var(--surface-hover);
   }
+  @media (max-width: 360px) {
+    .task-detail .property-row {
+      grid-template-columns: minmax(0, 1fr);
+      overflow-wrap: anywhere;
+    }
+  }
   .task-description {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-wrap: anywhere;
     gap: var(--space-2);
     font-size: var(--text-md);
   }
@@ -107,7 +117,7 @@
     cursor: text;
   }
   .task-description-view:hover {
-    background: var(--ink-50);
+    background: var(--surface-soft);
   }
   .task-description-view > :first-child {
     margin-top: 0;
@@ -131,11 +141,11 @@
     appearance: none;
     border: 0;
     border-radius: 2px;
-    background: var(--ink-100);
+    background: var(--surface-track);
     overflow: hidden;
   }
   .check-items-progress progress::-webkit-progress-bar {
-    background: var(--ink-100);
+    background: var(--surface-track);
   }
   .check-items-progress progress::-webkit-progress-value {
     background: var(--accent);

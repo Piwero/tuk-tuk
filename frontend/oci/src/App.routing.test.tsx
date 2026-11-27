@@ -23,7 +23,7 @@ describe("List, Tag and Folder URLs", () => {
       expect(
         await screen.findByText("That List, Tag or Folder no longer exists."),
       ).toBeInTheDocument();
-      expect(window.location.pathname).toBe("/today");
+      await waitFor(() => expect(window.location.pathname).toBe("/today"));
     },
   );
 
@@ -42,7 +42,7 @@ describe("List, Tag and Folder URLs", () => {
         name: mode === "kanban" ? "Switch to list view" : "Open tasks",
       }),
     ).toBeInTheDocument();
-    expect(window.location.pathname).toBe(path);
+    await waitFor(() => expect(window.location.pathname).toBe(path));
   });
 
   it("links destinations and restores views and List modes with Back and Forward", async () => {
@@ -55,7 +55,7 @@ describe("List, Tag and Folder URLs", () => {
     const link = await screen.findByRole("link", { name: "Project" });
     expect(link).toHaveAttribute("href", `/lists/${list.id}`);
     expect(fireEvent.click(link, { ctrlKey: true })).toBe(true);
-    expect(window.location.pathname).toBe("/all");
+    await waitFor(() => expect(window.location.pathname).toBe("/all"));
     await user.click(link);
     await user.click(await screen.findByRole("button", { name: "Switch to kanban view" }));
     await waitFor(() => expect(window.location.pathname).toBe(`/lists/${list.id}/kanban`));
@@ -73,14 +73,14 @@ describe("List, Tag and Folder URLs", () => {
     await screen.findByRole("heading", { name: "#Work" });
     window.history.back();
     await screen.findByRole("button", { name: "Open tasks" });
-    expect(window.location.pathname).toBe(`/lists/${list.id}/completed`);
+    await waitFor(() => expect(window.location.pathname).toBe(`/lists/${list.id}/completed`));
     window.history.back();
     await screen.findByRole("button", { name: "Switch to list view" });
     window.history.back();
     await screen.findByRole("button", { name: "Switch to kanban view" });
     window.history.forward();
     await screen.findByRole("button", { name: "Switch to list view" });
-    expect(window.location.pathname).toBe(`/lists/${list.id}/kanban`);
+    await waitFor(() => expect(window.location.pathname).toBe(`/lists/${list.id}/kanban`));
   });
 
   it.each(["list", "tag", "folder"] as const)(
@@ -101,7 +101,7 @@ describe("List, Tag and Folder URLs", () => {
           level: 1,
         }),
       ).toBeInTheDocument();
-      expect(window.location.pathname).toBe(path);
+      await waitFor(() => expect(window.location.pathname).toBe(path));
       expect(push).not.toHaveBeenCalled();
     },
   );
@@ -115,7 +115,7 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Stand-up" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/standup");
+    await waitFor(() => expect(window.location.pathname).toBe("/standup"));
   });
 
   it("does not push a duplicate history entry for the URL that loaded the page", async () => {
@@ -143,7 +143,7 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/assistant");
+    await waitFor(() => expect(window.location.pathname).toBe("/assistant"));
   });
 
   it("falls back from /assistant to Today when the Assistant is unconfigured", async () => {
@@ -163,7 +163,7 @@ describe("Direct load of a static view's URL", () => {
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Link Task or Habit" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/focus");
+    await waitFor(() => expect(window.location.pathname).toBe("/focus"));
   });
 
   it("opens Focus statistics directly at /focus/stats", async () => {
@@ -173,7 +173,7 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Focus statistics" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/focus/stats");
+    await waitFor(() => expect(window.location.pathname).toBe("/focus/stats"));
   });
 
   it("opens Calendar directly at /calendar, normalizing to /calendar/day", async () => {
@@ -185,7 +185,7 @@ describe("Direct load of a static view's URL", () => {
     expect(
       await screen.findByRole("heading", { name: "Friday, July 3, 2026" }, { timeout: 10_000 }),
     ).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/calendar/day");
+    await waitFor(() => expect(window.location.pathname).toBe("/calendar/day"));
   });
 
   it("opens Calendar directly at /calendar/week", async () => {
@@ -198,7 +198,7 @@ describe("Direct load of a static view's URL", () => {
       await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" }, { timeout: 10_000 }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Week" })).toHaveAttribute("aria-pressed", "true");
-    expect(window.location.pathname).toBe("/calendar/week");
+    await waitFor(() => expect(window.location.pathname).toBe("/calendar/week"));
   });
 
   it("opens Calendar directly at /calendar/month", async () => {
@@ -211,7 +211,7 @@ describe("Direct load of a static view's URL", () => {
       await screen.findByRole("heading", { name: "July 2026" }, { timeout: 10_000 }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Month" })).toHaveAttribute("aria-pressed", "true");
-    expect(window.location.pathname).toBe("/calendar/month");
+    await waitFor(() => expect(window.location.pathname).toBe("/calendar/month"));
   });
 
   it("opens Habits directly at /habits", async () => {
@@ -221,17 +221,17 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Habits" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/habits");
+    await waitFor(() => expect(window.location.pathname).toBe("/habits"));
   });
 
-  it("opens Settings directly at /settings", async () => {
+  it("opens Settings directly at /settings/account", async () => {
     installFakeApi();
-    window.history.replaceState(null, "", "/settings");
+    window.history.replaceState(null, "", "/settings/account");
 
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/settings");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
   });
 
   it("opens a blank Search directly at /search", async () => {
@@ -242,7 +242,7 @@ describe("Direct load of a static view's URL", () => {
 
     expect(await screen.findByRole("heading", { name: "Search" })).toBeInTheDocument();
     expect(await screen.findByText("Type to search")).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/search");
+    await waitFor(() => expect(window.location.pathname).toBe("/search"));
   });
 
   it("redirects an unrecognized path to / and falls back to Today", async () => {
@@ -252,7 +252,7 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/today");
+    await waitFor(() => expect(window.location.pathname).toBe("/today"));
   });
 
   it("opens Today at the bare root URL and marks it current in navigation", async () => {
@@ -289,7 +289,7 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/today");
+    await waitFor(() => expect(window.location.pathname).toBe("/today"));
   });
 
   it("opens Next 7 Days directly at /next-7-days", async () => {
@@ -299,7 +299,7 @@ describe("Direct load of a static view's URL", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Next 7 Days" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/next-7-days");
+    await waitFor(() => expect(window.location.pathname).toBe("/next-7-days"));
   });
 
   it("opens All directly at /all", async () => {
@@ -312,7 +312,7 @@ describe("Direct load of a static view's URL", () => {
     expect(
       await screen.findByRole("button", { name: "Open details for Someday" }),
     ).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/all");
+    await waitFor(() => expect(window.location.pathname).toBe("/all"));
     expect(
       within(screen.getByRole("complementary", { name: "" })).getByRole("button", {
         name: "All",
@@ -335,7 +335,7 @@ describe("History push/replace while navigating in the app", () => {
     await user.click(within(nav).getByRole("link", { name: "Habits" }));
 
     await screen.findByRole("heading", { name: "Habits" });
-    expect(window.location.pathname).toBe("/habits");
+    await waitFor(() => expect(window.location.pathname).toBe("/habits"));
   });
 
   it("pushes a List URL when navigating away from a static view", async () => {
@@ -348,12 +348,12 @@ describe("History push/replace while navigating in the app", () => {
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Habits" }));
     await screen.findByRole("heading", { name: "Habits" });
-    expect(window.location.pathname).toBe("/habits");
+    await waitFor(() => expect(window.location.pathname).toBe("/habits"));
 
     await user.click(screen.getByRole("link", { name: "Groceries" }));
 
     await screen.findByRole("heading", { name: "Groceries" });
-    expect(window.location.pathname).toBe(`/lists/${groceries.id}`);
+    await waitFor(() => expect(window.location.pathname).toBe(`/lists/${groceries.id}`));
   });
 
   it("pushes /focus/stats from the timer screen, and Back returns to /focus", async () => {
@@ -368,7 +368,7 @@ describe("History push/replace while navigating in the app", () => {
 
     await user.click(screen.getByRole("link", { name: "Statistics" }));
     await screen.findByRole("heading", { name: "Focus statistics" });
-    expect(window.location.pathname).toBe("/focus/stats");
+    await waitFor(() => expect(window.location.pathname).toBe("/focus/stats"));
 
     window.history.back();
     await waitFor(() => expect(window.location.pathname).toBe("/focus"));
@@ -384,8 +384,8 @@ describe("History push/replace while navigating in the app", () => {
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Habits" }));
     await screen.findByRole("heading", { name: "Habits" });
-    await user.click(screen.getByRole("button", { name: "App menu" }));
-    await user.click(screen.getByRole("link", { name: "Settings" }));
+    await user.click(await screen.findByRole("button", { name: "Account menu" }));
+    await user.click(screen.getByRole("menuitem", { name: "My account" }));
     await screen.findByRole("heading", { name: "Settings" });
 
     window.history.back();
@@ -410,15 +410,15 @@ describe("History push/replace while navigating in the app", () => {
     const nav = screen.getByRole("navigation", { name: "Views" });
     await user.click(within(nav).getByRole("link", { name: "Calendar" }));
     await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
-    expect(window.location.pathname).toBe("/calendar/day");
+    await waitFor(() => expect(window.location.pathname).toBe("/calendar/day"));
 
     await user.click(screen.getByRole("button", { name: "Month" }));
     await screen.findByRole("heading", { name: "July 2026" });
-    expect(window.location.pathname).toBe("/calendar/month");
+    await waitFor(() => expect(window.location.pathname).toBe("/calendar/month"));
 
     await user.click(screen.getByRole("button", { name: "Week" }));
     await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
-    expect(window.location.pathname).toBe("/calendar/week");
+    await waitFor(() => expect(window.location.pathname).toBe("/calendar/week"));
 
     // A single Back leaves the Calendar entirely — mode toggles never added
     // history entries of their own.

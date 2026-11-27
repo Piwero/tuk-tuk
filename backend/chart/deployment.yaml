@@ -13,9 +13,9 @@ spec:
   # read-then-insert. Moving to PostgreSQL makes scaling *look* available.
   # It is not. Don't raise this.
   replicas: 1
-  # Recreate, not RollingUpdate: the SQLite PVC is ReadWriteOnce and the app
-  # is single-writer — the old pod must release the volume before the new one
-  # starts. Still correct on PostgreSQL, for the replicas: 1 reason above.
+  # Recreate, not RollingUpdate: the app is single-writer (the replicas: 1
+  # reason above), and the leftover PVC below is ReadWriteOnce — the old pod
+  # must release it before the new one starts.
   # No init containers: the app runs Alembic migrations itself on startup
   # (and fails fast, naming the host, if the database is unreachable — see
   # app.db.check_database_reachable), so there is nothing to wait for even
@@ -48,7 +48,7 @@ spec:
                       - amd64
       containers:
         - name: backend
-          image: ghcr.io/piwero/tuk-tuk/backend:2.21.0 # {"$imagepolicy": "tuk-tuk:backend"}
+          image: ghcr.io/piwero/tuk-tuk/backend:3.8.4 # {"$imagepolicy": "tuk-tuk:backend"}
           imagePullPolicy: Always
           ports:
             - containerPort: 8900
@@ -65,16 +65,21 @@ spec:
             - secretRef:
                 name: tuk-tuk-google
                 optional: true
-            # Also optional, and last on purpose: envFrom applies sources in
-            # order and later ones win, so a DATABASE_URL in this Secret
-            # overrides the SQLite default in backend-config. That override
-            # is the entire PostgreSQL switching mechanism (ADR 0013) — the
-            # ConfigMap stays pinned at the SQLite path, so reverting is
-            # removing the field here rather than editing config back.
-            # Absent until someone actually wants PostgreSQL, so it must
-            # never crash-loop the pod, exactly like tuk-tuk-google.
+            # The only source of DATABASE_URL (PostgreSQL only, ADR 0017).
+            # Required, like tuk-tuk-auth: without it the pod waits with the
+            # missing Secret named rather than starting with no database.
             - secretRef:
                 name: tuk-tuk-db
+            # Optional: the shared MCP server's service key (issue #525). Absent,
+            # the MCP token exchange is off and the rest of the app is unaffected.
+            - secretRef:
+                name: tuk-tuk-mcp-service
+                optional: true
+            # Optional: the shared Google client and SMTP for invite-only
+            # Google sign-in (issue #586, ADR 0021). Absent, sign-in stays
+            # password-only and there are no invitations.
+            - secretRef:
+                name: tuk-tuk-sso
                 optional: true
           readinessProbe:
             httpGet:
@@ -88,6 +93,10 @@ spec:
               port: 8900
             initialDelaySeconds: 15
             periodSeconds: 30
+          # No longer read by the app (PostgreSQL only, #407). The PVC is
+          # kept as the SQLite file's point-in-time copy from the cutover
+          # (#417) until it is removed on purpose — its reclaim policy is
+          # Delete, so dropping pvc.yaml destroys the file.
           volumeMounts:
             - name: data
               mountPath: /data
