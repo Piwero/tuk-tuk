@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.8.3](https://github.com/Piwero/tuk-tuk/compare/v3.8.2...v3.8.3) - 2026-11-27
+
+### Bug Fixes
+
+- Keep today's calendar grid neutral ([b54a029](https://github.com/Piwero/tuk-tuk/commit/b54a029dd2701dbb3433eb5b358738febcd6cccc))
+- Show three calendar days on mobile ([24caaec](https://github.com/Piwero/tuk-tuk/commit/24caaec5c19cefa09b376a0175dd758161331660))
+- Preserve mobile title wrapping and latest calendar data ([befc41f](https://github.com/Piwero/tuk-tuk/commit/befc41f8cb35dce4127e248e0c30836f809e992e))
+
 ## [3.8.2](https://github.com/Piwero/tuk-tuk/compare/v3.8.1...v3.8.2) - 2026-11-27
 
 ### Features
