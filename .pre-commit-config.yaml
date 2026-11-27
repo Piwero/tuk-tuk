@@ -4,7 +4,7 @@
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_language_version:
   python: python3.12
-  node: "20.11.1"
+  node: "24.11.0"
 
 repos:
   # ---- Generic hygiene ----

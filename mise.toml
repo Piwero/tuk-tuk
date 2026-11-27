@@ -1,6 +1,6 @@
 [tools]
 python = "3.12"
-node = "20"
+node = "24"
 uv = "latest"
 git-cliff = "2.13.1"
 
