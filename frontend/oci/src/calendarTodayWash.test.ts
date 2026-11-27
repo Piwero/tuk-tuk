@@ -21,6 +21,8 @@ describe("today's calendar column wash (issue #597)", () => {
     expect(banner).toMatch(/white-space:\s*normal/);
     expect(banner).toMatch(/overflow-wrap:\s*anywhere/);
     const title = cssRuleBody(mobile, ".time-block .block-title");
+    expect(title).toMatch(/flex:\s*1 1 0/);
+    expect(title).toMatch(/min-width:\s*0/);
     expect(title).toMatch(/white-space:\s*normal/);
     expect(title).toMatch(/overflow-wrap:\s*anywhere/);
     const heading = cssRuleBody(mobile, ".calendar-toolbar h2");

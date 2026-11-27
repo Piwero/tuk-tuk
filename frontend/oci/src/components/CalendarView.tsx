@@ -446,13 +446,16 @@ export function CalendarView({
     return () => window.removeEventListener("keydown", onKey);
   }, [unscheduledOpen]);
 
+  const loadGeneration = useRef(0);
   const load = useCallback(
     async (force = false): Promise<void> => {
+      const generation = ++loadGeneration.current;
       const [start, end] = rangeOf(mode, anchor, isNarrow);
       const [inWindow, undated] = await Promise.all([
         fetchCalendarTasks(start, end),
         fetchUnscheduledTasks(),
       ]);
+      if (generation !== loadGeneration.current) return;
       setTasks(inWindow.items);
       setUnscheduled(undated.items);
       // Google's own fetch, kept on its own endpoint rather than folded into
@@ -469,10 +472,12 @@ export function CalendarView({
       // client) blanks the Calendar's Events outright.
       await fetchCalendarEvents(start, end, force)
         .then((result) => {
+          if (generation !== loadGeneration.current) return;
           setEvents(result.events);
           setEventFailures(result.failures);
         })
         .catch(() => {
+          if (generation !== loadGeneration.current) return;
           setEvents([]);
           setEventFailures([]);
         });

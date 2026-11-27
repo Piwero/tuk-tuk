@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 import { pinCalendarClock } from "./test/calendar";
@@ -67,6 +67,44 @@ describe("The Calendar below the narrow breakpoint", () => {
     fireEvent(window, new Event("resize"));
     await screen.findByRole("heading", { name: "Jun 29 – Jul 5, 2026" });
     expect(document.querySelectorAll(".day-column")).toHaveLength(7);
+  });
+
+  it("ignores a delayed mobile range after widening to the full week", async () => {
+    installFakeApi({
+      tasks: [fakeTask("Wednesday task", { due_date: "2026-07-01", is_all_day: true })],
+    });
+    const fetchApi = globalThis.fetch;
+    let release: (() => void) | undefined;
+    const delayed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await fetchApi(input, init);
+      if (String(input).includes("range_start=2026-07-03&range_end=2026-07-05")) {
+        await delayed;
+      }
+      return response;
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("link", { name: "Calendar" }));
+    await screen.findByRole("heading", { name: "Friday, July 3, 2026" });
+    fireEvent.click(screen.getByRole("button", { name: "Week" }));
+    await screen.findByRole("heading", { name: "Jul 3 – Jul 5, 2026" });
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(fetchApi)
+          .mock.calls.some(([input]) => String(input).includes("range_end=2026-07-05")),
+      ).toBe(true),
+    );
+    setViewportWidth(WIDE_WIDTH);
+    fireEvent(window, new Event("resize"));
+    await screen.findByText("Wednesday task");
+    await act(async () => {
+      release?.();
+      await delayed;
+    });
+    expect(screen.getByText("Wednesday task")).toBeInTheDocument();
   });
 
   it("defaults to Day, same as any width", async () => {
