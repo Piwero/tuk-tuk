@@ -446,13 +446,16 @@ export function CalendarView({
     return () => window.removeEventListener("keydown", onKey);
   }, [unscheduledOpen]);
 
+  const loadGeneration = useRef(0);
   const load = useCallback(
     async (force = false): Promise<void> => {
-      const [start, end] = rangeOf(mode, anchor);
+      const generation = ++loadGeneration.current;
+      const [start, end] = rangeOf(mode, anchor, isNarrow);
       const [inWindow, undated] = await Promise.all([
         fetchCalendarTasks(start, end),
         fetchUnscheduledTasks(),
       ]);
+      if (generation !== loadGeneration.current) return;
       setTasks(inWindow.items);
       setUnscheduled(undated.items);
       // Google's own fetch, kept on its own endpoint rather than folded into
@@ -469,15 +472,17 @@ export function CalendarView({
       // client) blanks the Calendar's Events outright.
       await fetchCalendarEvents(start, end, force)
         .then((result) => {
+          if (generation !== loadGeneration.current) return;
           setEvents(result.events);
           setEventFailures(result.failures);
         })
         .catch(() => {
+          if (generation !== loadGeneration.current) return;
           setEvents([]);
           setEventFailures([]);
         });
     },
-    [mode, anchor],
+    [mode, anchor, isNarrow],
   );
 
   useEffect(() => {
@@ -1402,12 +1407,12 @@ export function CalendarView({
   return (
     <div className="calendar">
       <div className="calendar-toolbar">
-        <h2>{calendarTitle(mode, anchor)}</h2>
+        <h2>{calendarTitle(mode, anchor, isNarrow)}</h2>
         <div className="calendar-nav-buttons">
           <IconButton
             icon="chevron-left"
-            label={`Previous ${STEP_UNIT[mode]}`}
-            onClick={() => setAnchor(shiftAnchor(mode, anchor, -1))}
+            label={`Previous ${mode === "week" && isNarrow ? "3 days" : STEP_UNIT[mode]}`}
+            onClick={() => setAnchor(shiftAnchor(mode, anchor, -1, isNarrow))}
           />
           <Hint hintKey="calendar-today">
             <button
@@ -1421,8 +1426,8 @@ export function CalendarView({
           </Hint>
           <IconButton
             icon="chevron-right"
-            label={`Next ${STEP_UNIT[mode]}`}
-            onClick={() => setAnchor(shiftAnchor(mode, anchor, 1))}
+            label={`Next ${mode === "week" && isNarrow ? "3 days" : STEP_UNIT[mode]}`}
+            onClick={() => setAnchor(shiftAnchor(mode, anchor, 1, isNarrow))}
           />
         </div>
         <div className="calendar-modes">
@@ -1544,7 +1549,7 @@ export function CalendarView({
       <div className="calendar-body">
         {mode === "month"
           ? renderMonth()
-          : renderTimeGrid(mode === "week" ? weekDays(anchor) : [anchor])}
+          : renderTimeGrid(mode === "week" ? weekDays(anchor, isNarrow) : [anchor])}
         {/* Narrow-only backdrop (index.css hides it >720px): closes the
             Unscheduled panel on an outside tap, same pattern as the sidebar
             drawer's scrim. */}

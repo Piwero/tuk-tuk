@@ -1,14 +1,6 @@
 import { cssRuleBody, readStylesheets } from "./test/stylesheets";
 import { describe, expect, it } from "vitest";
 
-/** Today's column wash must span the whole day, not stop part-way down it.
- * `.time-columns` is the scroll box (a flex row capped at 70vh); flex items
- * stretch to that capped height by default, so the day columns ended at
- * 70vh while their 24 hour cells overflowed them — the accent wash and rule
- * on today's column read as a stray blue block over the first hours. jsdom
- * applies no stylesheet, so the layout claim is checked against the CSS
- * source, as contentColumn.test.ts does. */
-
 const css = readStylesheets().replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Every rule in every stylesheet, media-query rules included, with its
@@ -22,6 +14,21 @@ const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector = "", 
 const TOP_ALIGNED = /align-items:\s*(flex-)?start\b/;
 
 describe("today's calendar column wash (issue #597)", () => {
+  it("lets mobile all-day task titles wrap instead of disappearing beside the checkbox", () => {
+    const calendarCss = css.slice(css.indexOf(".calendar-toolbar {"));
+    const mobile = calendarCss.slice(calendarCss.indexOf("@media (max-width: 720px)"));
+    const banner = cssRuleBody(mobile, ".all-day-lane .calendar-banner");
+    expect(banner).toMatch(/white-space:\s*normal/);
+    expect(banner).toMatch(/overflow-wrap:\s*anywhere/);
+    const title = cssRuleBody(mobile, ".time-block .block-title");
+    expect(title).toMatch(/flex:\s*1 1 0/);
+    expect(title).toMatch(/min-width:\s*0/);
+    expect(title).toMatch(/white-space:\s*normal/);
+    expect(title).toMatch(/overflow-wrap:\s*anywhere/);
+    const heading = cssRuleBody(mobile, ".calendar-toolbar h2");
+    expect(heading).toMatch(/flex:\s*1 0 100%/);
+  });
+
   it("lets the day columns grow to their hour cells inside the capped scroll box", () => {
     const columns = cssRuleBody(css, ".time-columns");
     expect(columns).toMatch(/overflow-y:\s*auto/);
@@ -43,5 +50,15 @@ describe("today's calendar column wash (issue #597)", () => {
         (/align-self:\s*(stretch|normal)/.test(body) || /(^|[;\s])height:\s*100%/.test(body)),
     );
     expect(sized.map(({ selectors }) => selectors.join(", "))).toEqual([]);
+  });
+
+  it("keeps today's empty grid neutral and the default task fill distinct", () => {
+    const today = rules.filter(({ selectors }) =>
+      selectors.some((selector) => selector.startsWith(".day-column[data-today]")),
+    );
+    expect(today).toEqual([]);
+    expect(cssRuleBody(css, ".time-columns")).toMatch(/background:\s*var\(--surface-card\)/);
+    expect(cssRuleBody(css, ".time-block")).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(cssRuleBody(css, ".week-day-header[data-today]")).toMatch(/var\(--accent/);
   });
 });
