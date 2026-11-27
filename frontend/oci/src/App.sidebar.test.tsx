@@ -36,7 +36,7 @@ describe("Sidebar structure", () => {
     const nav = await screen.findByRole("navigation", { name: "Lists" });
     const workLists = await within(nav).findByRole("list", { name: "Lists in Work" });
     expect(within(workLists).getByRole("link", { name: "Backend" })).toBeInTheDocument();
-    expect(within(nav).getByRole("link", { name: "🛒 Groceries" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "🛒Groceries" })).toBeInTheDocument();
     const buttons = within(nav).getAllByRole("link", { name: /^(Inbox|Backend|🛒 Groceries)$/ });
     expect(buttons[0]).toHaveAccessibleName("Inbox");
   });
@@ -153,7 +153,7 @@ describe("List management", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     const nav = screen.getByRole("navigation", { name: "Lists" });
-    expect(await within(nav).findByRole("link", { name: "🛒 Groceries" })).toBeInTheDocument();
+    expect(await within(nav).findByRole("link", { name: "🛒Groceries" })).toBeInTheDocument();
     const post = api.requests.find((r) => r.method === "POST" && r.url === "/api/v1/lists");
     expect(post?.body).toEqual({ name: "Groceries", color: "#ff9800", emoji: "🛒" });
   });
@@ -194,8 +194,8 @@ describe("List management", () => {
     await user.type(nameInput, "Food");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByRole("link", { name: "🛒 Food" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "🛒 Groceries" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "🛒Food" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "🛒Groceries" })).not.toBeInTheDocument();
     const patch = api.requests.find(
       (r) => r.method === "PATCH" && r.url === `/api/v1/lists/${groceries.id}`,
     );
