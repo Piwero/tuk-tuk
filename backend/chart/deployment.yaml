@@ -48,7 +48,7 @@ spec:
                       - amd64
       containers:
         - name: backend
-          image: ghcr.io/piwero/tuk-tuk/backend:3.2.0 # {"$imagepolicy": "tuk-tuk:backend"}
+          image: ghcr.io/piwero/tuk-tuk/backend:3.8.4 # {"$imagepolicy": "tuk-tuk:backend"}
           imagePullPolicy: Always
           ports:
             - containerPort: 8900
@@ -74,6 +74,12 @@ spec:
             # the MCP token exchange is off and the rest of the app is unaffected.
             - secretRef:
                 name: tuk-tuk-mcp-service
+                optional: true
+            # Optional: the shared Google client and SMTP for invite-only
+            # Google sign-in (issue #586, ADR 0021). Absent, sign-in stays
+            # password-only and there are no invitations.
+            - secretRef:
+                name: tuk-tuk-sso
                 optional: true
           readinessProbe:
             httpGet:

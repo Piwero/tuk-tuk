@@ -14,7 +14,9 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
-async function openUsers(ui: JSX.Element = <App />): Promise<ReturnType<typeof userEvent.setup>> {
+async function openUsers(
+  ui: React.JSX.Element = <App />,
+): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
   render(ui);
   await user.click(await screen.findByRole("button", { name: "Account menu" }));
@@ -60,6 +62,85 @@ async function openRowMenu(
   );
   return screen.getByRole("menu", { name: `Actions for ${username}` });
 }
+
+describe("Deleting a user account", () => {
+  it("requires a second confirmation with the email and supports cancel", async () => {
+    const ines = fakeUser("ines");
+    const api = installFakeApi({ users: [FAKE_ADMIN, ines] });
+    const user = await openUsers();
+    const openDelete = async (): Promise<void> => {
+      await user.click(
+        within(await openRowMenu(user, "ines")).getByRole("menuitem", {
+          name: "Delete user account",
+        }),
+      );
+    };
+    await openDelete();
+    let dialog = screen.getByRole("dialog", { name: "Delete ines’s account?" });
+    expect(dialog).toHaveTextContent(/permanently/i);
+    const confirm = within(dialog).getByRole("button", { name: "Permanently delete account" });
+    expect(confirm).toBeDisabled();
+    await user.type(within(dialog).getByLabelText("Re-enter email"), "wrong@example.com");
+    expect(confirm).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(writes(api)).toEqual([]);
+    await openDelete();
+    dialog = screen.getByRole("dialog", { name: "Delete ines’s account?" });
+    expect(within(dialog).getByLabelText("Re-enter email")).toHaveValue("");
+    await user.type(within(dialog).getByLabelText("Re-enter email"), ines.email!);
+    await user.click(within(dialog).getByRole("button", { name: "Permanently delete account" }));
+    await waitFor(() => expect(listedNames()).toEqual(["admin"]));
+    expect(writes(api)).toEqual([
+      { url: `/api/v1/admin/users/${ines.id}`, body: { email: ines.email } },
+    ]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dialog and account after a failed deletion and allows retry", async () => {
+    const ines = fakeUser("ines");
+    installFakeApi({ users: [FAKE_ADMIN, ines] });
+    const passthrough = globalThis.fetch;
+    let fail = true;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (fail && init?.method === "DELETE" && String(input).includes("/api/v1/admin/users/")) {
+        return new Response(
+          JSON.stringify({ error: { code: "internal_error", message: "Unavailable" } }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+      return passthrough(input as string, init);
+    });
+    const user = await openUsers();
+    await user.click(
+      within(await openRowMenu(user, "ines")).getByRole("menuitem", {
+        name: "Delete user account",
+      }),
+    );
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Re-enter email"), "ines@example.com");
+    await user.click(within(dialog).getByRole("button", { name: "Permanently delete account" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Couldn’t delete the account",
+    );
+    expect(listedNames()).toEqual(["admin", "ines"]);
+    fail = false;
+    await user.click(within(dialog).getByRole("button", { name: "Permanently delete account" }));
+    await waitFor(() => expect(listedNames()).toEqual(["admin"]));
+  });
+
+  it("blocks deleting the last active admin", async () => {
+    installFakeApi();
+    const user = await openUsers();
+    const menu = await openRowMenu(user, "admin");
+    expect(within(menu).getByRole("menuitem", { name: "Delete user account" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+  });
+});
 
 describe("Changing a user's role", () => {
   it("makes a Member an admin and re-reads the list", async () => {
@@ -156,7 +237,7 @@ describe("Disabling and enabling a user", () => {
     ]);
   });
 
-  it("offers no way to delete an account", async () => {
+  it("offers deletion for active and disabled accounts", async () => {
     installFakeApi({
       users: [
         FAKE_ADMIN,
@@ -171,7 +252,7 @@ describe("Disabling and enabling a user", () => {
       const entries = within(menu)
         .getAllByRole("menuitem")
         .map((entry) => entry.textContent);
-      expect(entries).not.toContainEqual(expect.stringMatching(/delete|remove user/i));
+      expect(entries).toContain("Delete user account");
       await user.keyboard("{Escape}");
     }
     expect(screen.queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
@@ -290,13 +371,17 @@ describe("The row menu by keyboard", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(within(menu).getByRole("menuitem", { name: "Reset password" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
+    expect(within(menu).getByRole("menuitem", { name: "Change email" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
     expect(within(menu).getByRole("menuitem", { name: "Make admin" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
     expect(within(menu).getByRole("menuitem", { name: "Disable user" })).toHaveFocus();
     await user.keyboard("{ArrowDown}");
+    expect(within(menu).getByRole("menuitem", { name: "Delete user account" })).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
     expect(within(menu).getByRole("menuitem", { name: "Reset password" })).toHaveFocus();
     await user.keyboard("{ArrowUp}");
-    expect(within(menu).getByRole("menuitem", { name: "Disable user" })).toHaveFocus();
+    expect(within(menu).getByRole("menuitem", { name: "Delete user account" })).toHaveFocus();
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
@@ -308,6 +393,7 @@ describe("The row menu by keyboard", () => {
         name: "Reset password",
       }),
     ).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
     await user.keyboard("{ArrowDown}");
     await user.keyboard("{Enter}");
 
@@ -333,7 +419,7 @@ describe("Acting on your own row", () => {
     await waitFor(() => {
       expect(screen.queryByRole("link", { name: "Users" })).not.toBeInTheDocument();
     });
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(writes(api)).toEqual([
       { url: `/api/v1/admin/users/${FAKE_ADMIN.id}`, body: { is_admin: false } },

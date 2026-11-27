@@ -33,7 +33,13 @@ interface TabItemProps {
  * its names from colliding with the sidebar's same-named links, which render
  * at every width. Today is the exception that needs its own name, because
  * the sidebar's Today is a button too. */
-function TabItem({ icon, label, accessibleName, selected, onClick }: TabItemProps): JSX.Element {
+function TabItem({
+  icon,
+  label,
+  accessibleName,
+  selected,
+  onClick,
+}: TabItemProps): React.JSX.Element {
   return (
     <button
       type="button"
@@ -65,7 +71,7 @@ export function MobileTabBar({
   onQuickAdd,
   onSelectHabits,
   onToggleMore,
-}: MobileTabBarProps): JSX.Element {
+}: MobileTabBarProps): React.JSX.Element {
   return (
     <nav aria-label="Primary" className="mobile-tab-bar">
       <TabItem

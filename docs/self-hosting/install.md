@@ -27,8 +27,8 @@ From a terminal:
 The app builds on your own machine, so it runs on Intel/AMD and Apple Silicon (M1 to M4) alike.
 
 > **Back up `.env`.** The master key in it encrypts your saved Google and AI
-> credentials. If you lose it, you'll have to enter those again. Your tasks are
-> not affected. See [Security](security.md#the-master-key). Don't change
+> credentials and GitHub Tokens. If you lose it, you'll have to enter those
+> again. Your tasks are not affected. See [Security](security.md#the-master-key). Don't change
 > `POSTGRES_PASSWORD` later: the database keeps the one it was created with.
 
 ## Everyday commands
@@ -75,13 +75,59 @@ use it from your phone or laptop:
    `CORS_ORIGINS=["http://localhost:8080", "http://mybox:8080"]`, then start again.
 
 > **Use HTTPS for anything beyond your home network.** Over plain `http://`,
-> your password and session travel unencrypted. Put the app behind HTTPS (for
-> example `tailscale serve`, or a reverse proxy such as Caddy), then set
-> `AUTH_COOKIE_SECURE=true` in `.env`. Never expose it to the internet over plain http.
+> your password and session travel unencrypted. Put the app behind HTTPS (see
+> [Serve it over HTTPS](#serve-it-over-https)). Never expose it to the internet over plain http.
+
+## Serve it over HTTPS
+
+⏱ 10 min. Needed for Reminder notifications on any device other than the
+computer running Tuk Tuk, and for any use outside your home network.
+
+**Why:** browsers only show notifications to pages from a _secure context_:
+an `https://` address, or `http://localhost` on the same computer. At
+`http://mybox:8080` or `http://192.168.1.20:8080`, the browser hides the
+Notification feature entirely, and **Settings → Reminder notifications** shows
+it as unsupported. Everything else keeps working. Notifications only arrive
+while a Tuk Tuk tab is open; a closed tab or locked phone gets none, even
+over HTTPS.
+
+Pick one way to get an `https://` address:
+
+1. **Tailscale (easiest):** in the Tailscale admin console, under **DNS**,
+   turn on MagicDNS and **HTTPS Certificates**. Then, on the computer running
+   Tuk Tuk:
+   ```sh
+   tailscale serve --bg 8080
+   ```
+   The app is now at `https://<computer-name>.<tailnet>.ts.net`, with a real
+   certificate, reachable only from your own devices.
+2. **Your own domain:** run a reverse proxy such as [Caddy](https://caddyserver.com),
+   which gets and renews a certificate by itself. A whole `Caddyfile`:
+   ```
+   tuk.example.com {
+       reverse_proxy localhost:8080
+   }
+   ```
+   The domain must point at the machine, and ports 80 and 443 must reach it.
+
+Then, in `.env`:
+
+1. Set `AUTH_COOKIE_SECURE=true`, so the session cookie is only sent over HTTPS.
+2. Add the new `https://` address to `CORS_ORIGINS`, for example
+   `CORS_ORIGINS=["http://localhost:8080", "https://mybox.tailnet-name.ts.net"]`.
+3. Using Google Calendar? Add `https://<address>/api/v1/google/callback` as an
+   authorized redirect URI too (see below).
+
+Start the app again and open the `https://` address. **Settings → Reminder
+notifications** should now offer **Enable on this device**.
 
 ## Optional: connect Google Calendar
 
 ⏱ 15 min, one time. Shows your Google events next to your tasks, read-only.
+
+Running Tuk Tuk for several people? Set up [Google sign-in and
+invitations](google-sign-in.md) instead: one shared client for everyone,
+and nobody needs the steps below.
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a
    project and enable the **Google Calendar API**.
@@ -104,6 +150,21 @@ Each redirect address must also be listed in `CORS_ORIGINS` (see above).
 
 For hands-free Task and Habit changes, see [Set up the Voice Assistant](voice.md).
 It needs a free LiveKit Cloud project and a separately deployed agent.
+
+## Allow outbound hosts
+
+The app needs no inbound access from the internet. The backend makes outbound
+HTTPS calls (port 443) only for the features you turn on:
+
+| Feature | Hosts |
+| --- | --- |
+| [Google Calendar](#optional-connect-google-calendar) | `oauth2.googleapis.com`, `www.googleapis.com` |
+| [GitHub](../guide/features/github.md) | `api.github.com` |
+| AI assistant | The AI provider you set in Settings |
+
+If your firewall, proxy or Kubernetes NetworkPolicy limits outbound traffic,
+allow these hosts from the backend. Without `api.github.com`, adding a GitHub
+Token fails its check with GitHub, and the GitHub view can't load.
 
 ## Running on Kubernetes
 

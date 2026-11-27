@@ -13,7 +13,7 @@ import {
  * shortcuts. Every shortcut-driven feature registers here (via
  * `useRegisterShortcut`) rather than adding its own listener, so suppression
  * rules and the hint strip stay in one place. */
-export function ShortcutsProvider({ children }: { children: React.ReactNode }): JSX.Element {
+export function ShortcutsProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [shortcuts, setShortcuts] = useState<ShortcutSpec[]>([]);
   const shortcutsRef = useRef(shortcuts);
   shortcutsRef.current = shortcuts;
@@ -48,7 +48,7 @@ export function ShortcutsProvider({ children }: { children: React.ReactNode }): 
 /** The strip along the foot of the task list that advertises every registered
  * shortcut. Renders nothing when none are registered, and is hidden under a
  * coarse pointer (see index.css) where there is no keyboard to advertise. */
-export function ShortcutHints(): JSX.Element | null {
+export function ShortcutHints(): React.JSX.Element | null {
   const shortcuts = useShortcuts();
   if (shortcuts.length === 0) {
     return null;

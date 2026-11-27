@@ -49,7 +49,7 @@ from app.event_cache import EventCache
 from app.models import GoogleAccount, GoogleCalendar, Habit, Tag, Task, TaskList, UserSettings
 from app.routers.v1.tasks import in_smart_view
 from app.schemas import Priority
-from app.user_settings import google_configured, google_oauth_client
+from app.user_settings import account_client, calendar_available
 
 
 class WeekSnapshotTask(BaseModel):
@@ -121,9 +121,11 @@ async def _today_events(
     Google itself filters Events by the window it's given, so getting that
     window wrong in `time_zone` would silently leak yesterday's or
     tomorrow's evening Events into "today"."""
-    if not google_configured(user_settings) or request_settings.app_master_key is None:
+    if (
+        not calendar_available(request_settings, user_settings)
+        or request_settings.app_master_key is None
+    ):
         return []
-    oauth_client = google_oauth_client(user_settings, master_key=request_settings.app_master_key)
     owner_id = user_settings.user_id
     calendars = list(
         await session.scalars(
@@ -154,6 +156,10 @@ async def _today_events(
     events: list[WeekSnapshotEvent] = []
     for account_id, account_calendars in calendars_by_account.items():
         account = accounts_by_id[account_id]
+        # Each account refreshes with the client that minted its token.
+        oauth_client = account_client(account, request_settings, user_settings)
+        if oauth_client is None:
+            continue
         try:
             refresh_token = decrypt_credential(
                 account.encrypted_refresh_token, key=request_settings.app_master_key

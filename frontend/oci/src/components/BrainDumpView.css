@@ -1,0 +1,46 @@
+@layer components {
+  .brain-dump {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    min-width: 0;
+  }
+  .brain-dump article {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: var(--border-width) solid var(--border-default);
+    border-radius: var(--radius-md);
+    min-width: 0;
+  }
+  .brain-dump input,
+  .brain-dump textarea,
+  .brain-dump button {
+    min-height: var(--tap-target);
+    min-width: 0;
+    max-width: 100%;
+  }
+  .brain-dump textarea {
+    min-height: var(--capture-textarea-min-height);
+    width: 100%;
+  }
+  .brain-dump summary {
+    display: flex;
+    align-items: center;
+    min-height: var(--tap-target);
+    cursor: pointer;
+  }
+  .brain-dump pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: inherit;
+  }
+  .brain-dump p {
+    overflow-wrap: anywhere;
+  }
+  .brain-dump :focus-visible {
+    outline: var(--focus-outline-width) solid var(--accent);
+    outline-offset: var(--focus-outline-offset);
+  }
+}

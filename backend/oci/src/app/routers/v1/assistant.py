@@ -28,6 +28,7 @@ from app.assistant_chat import (
 )
 from app.assistant_provider import assistant_available
 from app.assistant_snapshot import build_week_snapshot
+from app.brain_dump import MAX_INPUT_CHARS, request_brain_dump
 from app.config import Settings
 from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
@@ -36,6 +37,34 @@ from app.schemas import reject_explicit_null
 from app.user_settings import CurrentUserSettings
 
 router = APIRouter(prefix="/api/v1/assistant", tags=["assistant"])
+
+
+class BrainDumpRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_INPUT_CHARS)
+
+
+@router.post("/brain-dump")
+async def assistant_brain_dump(
+    payload: BrainDumpRequest,
+    request: Request,
+    user_settings: CurrentUserSettings,
+) -> AssistantChatTurn:
+    if (
+        not user_settings.assistant_base_url
+        or not user_settings.assistant_model
+        or not user_settings.encrypted_assistant_api_key
+    ):
+        return fallback_turn()
+    try:
+        api_key = decrypt_credential(
+            user_settings.encrypted_assistant_api_key,
+            key=_require_master_key(request.app.state.settings),
+        )
+    except ValueError:
+        return fallback_turn()
+    return await request_brain_dump(
+        user_settings.assistant_base_url, user_settings.assistant_model, api_key, payload.text
+    )
 
 
 class AssistantStatus(BaseModel):

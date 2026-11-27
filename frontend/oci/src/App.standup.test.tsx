@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import process from "node:process";
 
 import { pickDate } from "./test/pickDate";
+import { cssRuleBody } from "./test/stylesheets";
 import { App } from "./App";
 import {
   fakeGoal,
@@ -571,16 +572,10 @@ describe("Stand-up bullet actions overlay the row (issue #429)", () => {
   // jsdom applies no stylesheet, so the layout claim is checked against the
   // CSS source, as contentColumn.test.ts does.
   const css = readFileSync(resolve(process.cwd(), "src/components/StandupView.css"), "utf8");
-  const rule = (selector: string): string => {
-    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = new RegExp(`(^|\\n)\\s*${escaped}\\s*\\{[^}]*\\}`).exec(css);
-    expect(match, `${selector} rule not found`).not.toBeNull();
-    return (match as RegExpExecArray)[0];
-  };
 
   it("takes the actions out of flow so the text spans the column", () => {
-    expect(rule(".standup-bullet")).toMatch(/position:\s*relative/);
-    expect(rule(".standup-bullet-actions")).toMatch(/position:\s*absolute/);
+    expect(cssRuleBody(css, ".standup-bullet")).toMatch(/position:\s*relative/);
+    expect(cssRuleBody(css, ".standup-bullet-actions")).toMatch(/position:\s*absolute/);
   });
 
   it("opens the actions on a touch long-press", async () => {

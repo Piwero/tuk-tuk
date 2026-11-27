@@ -14,6 +14,7 @@ import {
   fetchSectionSettings,
   type SectionSettings,
   fetchTags,
+  fetchTask,
   fetchTasks,
   fetchTasksByTag,
   deleteTask,
@@ -42,6 +43,8 @@ import {
   rescheduledToDay,
 } from "./dates";
 import { FocusRunProvider, useStartPomo } from "./focusRunContext";
+import { MissedReminders } from "./components/MissedReminders";
+import { DueReminderNotifier, ReminderDeliveryProvider } from "./reminderDelivery";
 import { groupTodayTasks, type GroupBy, type SortBy } from "./grouping";
 import {
   applyThemePreference,
@@ -59,9 +62,11 @@ import {
   containerForPath,
   pathForContainer,
   pathForCalendarMode,
+  pathForRepositoryView,
   pathForSettingsTab,
   pathForSmartView,
   pathForStaticView,
+  repositoryViewForPath,
   settingsTabForPath,
   smartViewForPath,
   staticViewKindForPath,
@@ -84,6 +89,8 @@ import { EventDetail } from "./components/EventDetail";
 import { FocusStatsView } from "./components/FocusStatsPanel";
 import { FocusView } from "./components/FocusView";
 import { FolderView, type FolderSortBy } from "./components/FolderView";
+import { AllWatchedGitHubView, RepositoryViewPage } from "./components/RepositoryViewPage";
+import { useRepositoryViews } from "./useRepositoryViews";
 import { GoalsView } from "./components/GoalsView";
 import { HabitsView } from "./components/HabitsView";
 import { AssistantPage } from "./components/AssistantPage";
@@ -104,6 +111,7 @@ import { DayRail } from "./components/DayRail";
 import { FocusCard } from "./components/FocusCard";
 import { HabitsCard } from "./components/HabitsCard";
 import { HabitStrip } from "./components/HabitStrip";
+import { NowPanel } from "./components/NowPanel";
 import { useTodayHabits } from "./todayHabits";
 import { FocusedGoalCard } from "./components/FocusedGoalCard";
 import { StandupView } from "./components/StandupView";
@@ -111,6 +119,7 @@ import { TaskDetail } from "./components/TaskDetail";
 import { TaskListView } from "./components/TaskListView";
 import { EmptyState, LoadError, SkeletonRows } from "./components/TaskViewState";
 import { ToastStack } from "./components/ToastStack";
+import { forgetOtherUsersDrafts } from "./quickAddDraft";
 
 /** What the main pane shows: one List, one Tag, one Folder (its Tasks across
  * every List it contains — #126), one computed Smart List, the Calendar /
@@ -123,6 +132,8 @@ type View =
   | { kind: "smart"; view: SmartView }
   | { kind: "calendar"; mode: CalendarMode }
   | { kind: "goals" }
+  // `viewId`: one Repository View (#580); absent, every Watched Repository.
+  | { kind: "github"; viewId?: number }
   | { kind: "habits" }
   | { kind: "standup" }
   | { kind: "assistant" }
@@ -178,6 +189,7 @@ function staticViewKindOf(view: View): StaticViewKind | null {
   if (
     view?.kind === "calendar" ||
     view?.kind === "goals" ||
+    view?.kind === "github" ||
     view?.kind === "habits" ||
     view?.kind === "standup" ||
     view?.kind === "assistant" ||
@@ -207,6 +219,10 @@ function viewForStaticKind(kind: StaticViewKind, pathname: string): View {
       return { kind: "smart", view: smartViewForPath(pathname) ?? "today" };
     case "goals":
       return { kind: "goals" };
+    case "github": {
+      const viewId = repositoryViewForPath(pathname);
+      return viewId === null ? { kind: "github" } : { kind: "github", viewId };
+    }
     case "habits":
       return { kind: "habits" };
     case "standup":
@@ -277,10 +293,18 @@ export function App({
   onLogout,
   user: signedInUser,
   voiceProvider = livekitProvider,
-}: AppProps = {}): JSX.Element {
+}: AppProps = {}): React.JSX.Element {
   const [currentUser, setCurrentUser] = useCurrentUser(signedInUser);
+  // A session can end without a log out (a 401 clears no storage), so the
+  // previous User's Quick-Add draft goes the moment this User is known (#541).
+  const currentUserId = currentUser?.id ?? null;
+  useEffect(() => {
+    if (currentUserId !== null) forgetOtherUsersDrafts(currentUserId);
+  }, [currentUserId]);
   const [lists, setLists] = useState<TaskList[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const repositoryViews = useRepositoryViews();
+  const { reload: reloadRepositoryViews } = repositoryViews;
   const [tags, setTags] = useState<Tag[]>([]);
   // Resolved from the URL on the very first render (rather than in a mount
   // effect) so a direct load of a static path never runs a render with the
@@ -317,6 +341,9 @@ export function App({
   // Bumped after "Convert to task" (issue #111) so the Calendar force-reloads:
   // the converted Event disappears and the new Task appears immediately.
   const [calendarRefresh, setCalendarRefresh] = useState(0);
+  // Bumped when the detail panel changes a Task while the Calendar shows, so
+  // a plan edited with its date/time controls moves on the grid (#562).
+  const [calendarTaskChange, setCalendarTaskChange] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   // Whether the current Task view's Tasks have loaded (#441), keyed by what
   // was asked for, so a view that hasn't loaded yet is never shown as empty
@@ -337,6 +364,13 @@ export function App({
   const [occurrences, setOccurrences] = useState<CompletedOccurrence[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // The last Task-saved confirmation (#544), written into a live region that
+  // is always mounted. `count` remounts the text so saving twice to the same
+  // List is announced twice.
+  const [savedAnnouncement, setSavedAnnouncement] = useState<{
+    text: string;
+    count: number;
+  } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // The command palette opened scoped to one Task (issue #205) — its verb
   // menu. Independent of `paletteOpen` (the jump surface); at most one is
@@ -436,7 +470,8 @@ export function App({
   // navigating within the app — that must never itself push or replace
   // history, since the browser already positioned it there.
   const lastSyncedKindRef = useRef<string | null>(
-    containerForPath(window.location.pathname)
+    containerForPath(window.location.pathname) ||
+      repositoryViewForPath(window.location.pathname) !== null
       ? window.location.pathname
       : staticViewKindForPath(window.location.pathname),
   );
@@ -483,10 +518,13 @@ export function App({
   // Container destinations and List modes each get a history entry.
   // Search edits stay within their view; Back/Forward never pushes.
   useEffect(() => {
+    // A Repository View (#580) has its own path, like a container.
     const containerPath =
       view && (view.kind === "list" || view.kind === "tag" || view.kind === "folder")
         ? pathForContainer(view)
-        : null;
+        : view?.kind === "github" && view.viewId !== undefined
+          ? pathForRepositoryView(view.viewId)
+          : null;
     const kind = containerPath ?? staticViewKindOf(view);
     if (suppressNextSyncRef.current) {
       suppressNextSyncRef.current = false;
@@ -640,6 +678,7 @@ export function App({
       view?.kind === "smart" ||
       view?.kind === "calendar" ||
       view?.kind === "goals" ||
+      view?.kind === "github" ||
       view?.kind === "habits" ||
       view?.kind === "standup" ||
       view?.kind === "assistant" ||
@@ -688,6 +727,7 @@ export function App({
       view === null ||
       view.kind === "calendar" ||
       view.kind === "goals" ||
+      view.kind === "github" ||
       view.kind === "habits" ||
       view.kind === "standup" ||
       view.kind === "assistant" ||
@@ -1029,6 +1069,9 @@ export function App({
   /** Apply a server response, evicting the task if it left the current view. */
   function applyTaskChange(updated: Task): void {
     setCalendarTask((current) => (current?.id === updated.id ? updated : current));
+    if (view?.kind === "calendar") {
+      setCalendarTaskChange((current) => current + 1);
+    }
     reconcileOpenTask(updated);
     if (isComputedView) {
       changeTasksAndRecompute((current) =>
@@ -1122,8 +1165,21 @@ export function App({
     setCalendarTask(task);
   }
 
+  /** A delivered Reminder was clicked (issue #561): open its Task, read
+   * fresh, since it may not be loaded in the view on screen. A Task gone
+   * meanwhile opens nothing. */
+  function openRemindedTask(taskId: number): void {
+    fetchTask(taskId).then(openTaskDetail, () => {});
+  }
+
   function announceCreated(created: Task): void {
     const listName = lists.find((list) => list.id === created.list_id)?.name;
+    // Spoken confirmation (#544): the toast below only exists while shown,
+    // and a live region inserted with its text is announced unreliably.
+    setSavedAnnouncement((previous) => ({
+      text: listName === undefined ? "Task saved" : `Task saved to ${listName}`,
+      count: (previous?.count ?? 0) + 1,
+    }));
     // Issue #259: prose typed into Quick-Add with no `@` token that reads
     // like a date/time phrase ("dentist tuesday 3pm") saves as a plain,
     // undated title — Quick-Add deliberately does not parse it (CONTEXT.md:
@@ -1209,6 +1265,16 @@ export function App({
   // so the two surfaces never disagree about which destination is active.
   const calendarSelected = view?.kind === "calendar";
   const goalsSelected = view?.kind === "goals";
+  const githubSelected = view?.kind === "github" && view.viewId === undefined;
+  const selectedRepositoryViewId = view?.kind === "github" ? (view.viewId ?? null) : null;
+  const selectedRepositoryView =
+    repositoryViews.views?.find((v) => v.id === selectedRepositoryViewId) ?? null;
+  // Unwatching a repository in Settings drops it from every Repository View
+  // (#580), so opening one reads them afresh.
+  const openGitHubViewKey = view?.kind === "github" ? (view.viewId ?? 0) : null;
+  useEffect(() => {
+    if (openGitHubViewKey !== null) reloadRepositoryViews();
+  }, [openGitHubViewKey, reloadRepositoryViews]);
   const habitsSelected = view?.kind === "habits";
   const standupSelected = view?.kind === "standup";
   const assistantSelected = view?.kind === "assistant";
@@ -1355,7 +1421,7 @@ export function App({
       refresh={refreshAfterVoiceWrite}
       available={voiceStatus}
     >
-      <FocusRunProvider>
+      <SessionProviders>
         <ShortcutsProvider>
           <ShellShortcuts
             onQuickAdd={() => setQuickAddOpen(true)}
@@ -1374,7 +1440,7 @@ export function App({
               }
               actions={{
                 onComplete: completeTaskNow,
-                onStartFocus: (task) => switchView({ kind: "focus", task }),
+                onOpenFocus: (task) => switchView({ kind: "focus", task }),
                 onReschedule: (task, day) =>
                   patchTaskNow(
                     task.id,
@@ -1420,6 +1486,15 @@ export function App({
               calendarEnabled={sectionSettings.calendar}
               goalsSelected={goalsSelected}
               goalsEnabled={sectionSettings.goals}
+              githubSelected={githubSelected}
+              onSelectGitHub={() => switchView({ kind: "github" })}
+              repositoryViews={repositoryViews.views ?? []}
+              selectedRepositoryViewId={selectedRepositoryViewId}
+              onSelectRepositoryView={(viewId) => switchView({ kind: "github", viewId })}
+              onCreateRepositoryView={async (name) => {
+                const created = await repositoryViews.create(name, []);
+                switchView({ kind: "github", viewId: created.id });
+              }}
               habitsSelected={habitsSelected}
               habitsEnabled={sectionSettings.habits}
               standupSelected={standupSelected}
@@ -1493,6 +1568,8 @@ export function App({
                         "Calendar"
                       ) : view?.kind === "goals" ? (
                         "Goals"
+                      ) : view?.kind === "github" ? (
+                        (selectedRepositoryView?.name ?? "GitHub")
                       ) : view?.kind === "habits" ? (
                         "Habits"
                       ) : view?.kind === "standup" ? (
@@ -1589,7 +1666,16 @@ export function App({
                   </div>
                   {/* Full-width row under the header: only .view-controls takes the
                   right-hand column of .main-chrome on a phone. */}
+                  <MissedReminders onOpenTask={openRemindedTask} />
                   {showHabitStrip && <HabitStrip habits={todayHabits} />}
+                  {smartView === "today" && !completedMode && (
+                    <NowPanel
+                      tasks={openTasks}
+                      onTaskChanged={applyTaskChange}
+                      onComplete={completeTaskNow}
+                      onOpenFocus={() => switchView({ kind: "focus" })}
+                    />
+                  )}
                   {selectedList !== null && selectedList.view_mode === "list" && !completedMode && (
                     <>
                       <QuickAdd
@@ -1671,6 +1757,7 @@ export function App({
                       lists={lists}
                       tags={tags}
                       defaultListId={selectedList?.id ?? null}
+                      userId={currentUser?.id ?? null}
                       onTagCreated={(tag) => setTags((current) => [...current, tag])}
                       onListCreated={(list) => setLists((current) => [...current, list])}
                       onCreated={addCreatedTask}
@@ -1706,6 +1793,7 @@ export function App({
                     }}
                     onSelectEvent={setSelectedEvent}
                     refreshToken={calendarRefresh}
+                    taskChangeToken={calendarTaskChange}
                     lists={lists}
                     tags={tags}
                     onTagCreated={(tag) => setTags((current) => [...current, tag])}
@@ -1716,6 +1804,24 @@ export function App({
                   />
                 ) : view?.kind === "goals" ? (
                   <GoalsView />
+                ) : view?.kind === "github" ? (
+                  view.viewId === undefined ? (
+                    <AllWatchedGitHubView
+                      onOpenSettings={() => switchView({ kind: "settings", tab: "github" })}
+                    />
+                  ) : selectedRepositoryView !== null ? (
+                    <RepositoryViewPage
+                      key={selectedRepositoryView.id}
+                      view={selectedRepositoryView}
+                      repositoryViews={repositoryViews}
+                      onOpenSettings={() => switchView({ kind: "settings", tab: "github" })}
+                      onDeleted={() => switchView({ kind: "github" })}
+                    />
+                  ) : repositoryViews.views === null ? (
+                    <p className="github-loading">Loading…</p>
+                  ) : (
+                    <p className="github-empty">This Repository View doesn’t exist.</p>
+                  )
                 ) : view?.kind === "habits" ? (
                   <HabitsView refreshToken={habitsRefresh} />
                 ) : view?.kind === "standup" ? (
@@ -1758,7 +1864,7 @@ export function App({
                     onChanged={changeTasks}
                     onSelect={setSelectedTaskId}
                     onSelectList={(listId) => switchView({ kind: "list", id: listId })}
-                    onStartFocus={(task) => switchView({ kind: "focus", task })}
+                    onOpenFocus={(task) => switchView({ kind: "focus", task })}
                   />
                 ) : completedMode ? (
                   <CompletedView
@@ -1901,6 +2007,7 @@ export function App({
             {selectedTask !== null && (
               <TaskDetail
                 task={selectedTask}
+                assistantEnabled={sectionSettings.assistant}
                 allTags={tags}
                 listName={selectedTaskListName}
                 lists={lists}
@@ -1908,7 +2015,7 @@ export function App({
                 onTagCreated={(tag) => setTags((current) => [...current, tag])}
                 onClose={closeTaskDetail}
                 sheet={narrowViewport}
-                onStartFocus={
+                onOpenFocus={
                   sectionSettings.focus
                     ? (task) => {
                         closeTaskDetail();
@@ -1932,10 +2039,31 @@ export function App({
             too — the task views used to each own one and could only cover
             themselves (#191). */}
             <ToastStack entries={toasts.entries} onUndo={toasts.undo} onDismiss={toasts.dismiss} />
+            {/* Always mounted, so a Task-saved confirmation lands in a region
+            the screen reader already watches. No role="status": the toasts
+            own that role, and tests (and users) find them by it. */}
+            <div className="visually-hidden" aria-live="polite" aria-atomic="true">
+              {savedAnnouncement !== null && (
+                <span key={savedAnnouncement.count}>{savedAnnouncement.text}</span>
+              )}
+            </div>
           </div>
         </ShortcutsProvider>
-      </FocusRunProvider>
+        {/* After the shell (#569): its panels float bottom right, so they
+        come last in tab order instead of before the sidebar. */}
+        <DueReminderNotifier onOpenTask={openRemindedTask} />
+      </SessionProviders>
     </VoiceProvider>
+  );
+}
+
+/** Signed-in, app-wide state shared outside any one screen: the live focus
+ * run, and whether Reminders notify on this device (issue #557). */
+function SessionProviders({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <FocusRunProvider>
+      <ReminderDeliveryProvider>{children}</ReminderDeliveryProvider>
+    </FocusRunProvider>
   );
 }
 
@@ -1967,7 +2095,7 @@ function TaskPalette({
   onListCreated: (list: TaskList) => void;
   onCreated: (task: Task) => void;
   onClose: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const startPomo = useStartPomo();
   const actions: TaskActionHandlers = {
     ...verbs,

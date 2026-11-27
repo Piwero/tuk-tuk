@@ -52,7 +52,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant_snapshot import WeekSnapshot
-from app.habit_stats import current_streak
+from app.habit_stats import current_streak, habit_days
 from app.models import CheckIn, Habit, Task, TaskList
 from app.name_phrase import resolve_name_phrase
 from app.routers.v1.tasks import in_range_window
@@ -422,7 +422,12 @@ def _completion_payload(model: str, messages: list[dict[str, Any]]) -> dict[str,
 
 
 async def _post_completion(
-    client: httpx.AsyncClient, api_key: str, payload: dict[str, Any], remaining_seconds: float
+    client: httpx.AsyncClient,
+    api_key: str,
+    payload: dict[str, Any],
+    remaining_seconds: float,
+    *,
+    max_response_bytes: int | None = None,
 ) -> dict[str, Any] | None:
     """One `/chat/completions` call, given the time left in the turn's
     budget. Returns the raw `message` object, or None on any failure —
@@ -468,6 +473,9 @@ async def _post_completion(
             response.text[:_ERROR_BODY_LOG_LIMIT],
         )
         return None
+    if max_response_bytes is not None and len(response.content) > max_response_bytes:
+        logger.warning("assistant: provider returned an oversized body")
+        return None
     try:
         body = response.json()
         message = body["choices"][0]["message"]
@@ -508,7 +516,7 @@ def _parse_date(value: object) -> date | None:
 async def _find_tasks(
     session: AsyncSession, arguments: dict[str, Any]
 ) -> tuple[dict[str, Any], set[int]]:
-    """The `find_tasks` tool: tasks whose scheduled window intersects
+    """The `find_tasks` tool: tasks whose scheduled window (or Planned work) intersects
     [range_start, range_end], outside the week the snapshot already
     covers. Reuses `in_range_window`, the same predicate the calendar's
     own range query runs in Python, rather than a second date dialect."""
@@ -560,11 +568,11 @@ async def _habit_status(
     habit = await session.scalar(select(Habit).where(Habit.name == habit_name, ~Habit.is_archived))
     if habit is None:
         return {"error": f"no habit named {habit_name!r}"}, set()
-    checked = {
-        row.date
+    values = {
+        row.date: row.value
         for row in await session.scalars(select(CheckIn).where(CheckIn.habit_id == habit.id))
     }
-    streak = current_streak(habit.frequency, checked, local_date)
+    streak = current_streak(habit_days(habit, values, local_date))
     return {"habit_name": habit.name, "current_streak": streak}, set()
 
 

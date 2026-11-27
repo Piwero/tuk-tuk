@@ -17,7 +17,7 @@ from app.db import SessionDep
 from app.errors import APIError
 from app.login_throttle import LoginThrottle
 from app.models import User
-from app.session import Clock, delete_session_cookie, set_session_cookie
+from app.session import Clock, LoginMethod, delete_session_cookie, set_session_cookie
 from app.user_settings import user_settings_from_env
 from app.users import (
     check_new_password,
@@ -25,10 +25,12 @@ from app.users import (
     clean_username,
     clear_lockout,
     create_user,
+    ensure_email_not_invited,
     ensure_identity_free,
     find_user_by_login,
     install_has_password,
     reporting_taken_identity,
+    same_email,
     set_password,
 )
 
@@ -93,7 +95,36 @@ def _password_matches(user: User, password: str) -> bool:
     return True
 
 
-def _sign_in(request: Request, response: Response, session_key: str, user: User) -> None:
+async def confirm_password(
+    request: Request, session: AsyncSession, user: User, password: str
+) -> None:
+    """The signed-in User re-enters their password (to change it, or to
+    link Google, issue #586). Feeds the same per-User lockout as /login, so
+    a stolen session cannot brute-force the password here instead (issue
+    #339). A wrong password is 400 `invalid_current_password`, not 401, so
+    the frontend does not treat it as a lost session; a right one resets
+    the lockout, whatever the caller does next."""
+    settings = request.app.state.settings
+    clock = request.app.state.clock
+
+    retry_after = _locked_retry_after(user, clock())
+    if retry_after is not None:
+        raise _too_many_attempts(retry_after)
+
+    if not _password_matches(user, password):
+        await _record_failure(session, user, clock, settings.auth_login_delay_seconds)
+        raise APIError(400, "invalid_current_password", "Current password is incorrect")
+
+    await _record_success(session, user)
+
+
+def sign_in(
+    request: Request,
+    response: Response,
+    session_key: str,
+    user: User,
+    method: LoginMethod = "password",
+) -> None:
     set_session_cookie(
         response,
         session_key,
@@ -101,6 +132,7 @@ def _sign_in(request: Request, response: Response, session_key: str, user: User)
         request.app.state.clock,
         user_id=user.id,
         epoch=user.session_epoch,
+        method=method,
     )
 
 
@@ -138,6 +170,10 @@ class MeResponse(BaseModel):
     must_complete_profile: bool
     # Only on the User's own record: the admin list never carries it.
     password_changed_at: datetime
+    # Issue #586: whether the User can sign in with a password at all, and
+    # the Google account they sign in with, if any.
+    has_password: bool
+    google_email: str | None
 
 
 class ProfileUpdate(BaseModel):
@@ -156,6 +192,8 @@ def _me(user: User) -> MeResponse:
         must_change_password=user.must_change_password,
         must_complete_profile=user.must_complete_profile,
         password_changed_at=user.password_changed_at,
+        has_password=user.has_password,
+        google_email=user.google_email,
     )
 
 
@@ -206,7 +244,7 @@ async def setup(
             set_password(user, password_hash, now=request.app.state.clock())
         await session.commit()
 
-    _sign_in(request, response, app_settings.session_key, user)
+    sign_in(request, response, app_settings.session_key, user)
 
 
 @router.post("/login", status_code=204)
@@ -246,7 +284,7 @@ async def login(
         raise APIError(403, "account_disabled", "This account is disabled")
 
     app_settings = await require_app_settings(session)
-    _sign_in(request, response, app_settings.session_key, user)
+    sign_in(request, response, app_settings.session_key, user)
 
 
 @router.get("/me")
@@ -266,6 +304,16 @@ async def update_me(
     The session is untouched: neither field is a credential secret."""
     username = clean_username(payload.username) if payload.username is not None else None
     email = clean_email(payload.email) if payload.email is not None else None
+    # A linked Google identity was admitted for its email (issue #586):
+    # changing it is an Admin's deliberate reconciliation, never a profile
+    # edit.
+    changing_email = email is not None and not same_email(email, user.email)
+    if changing_email and user.google_subject is not None:
+        raise APIError(
+            409, "email_managed_by_admin", "Ask an admin to change the email of a Google account"
+        )
+    if changing_email and email is not None:
+        await ensure_email_not_invited(session, email)
     await ensure_identity_free(
         session, username or user.username, email or user.email, except_user=user
     )
@@ -309,6 +357,7 @@ async def complete(
         )
     if user.must_complete_profile:
         await ensure_identity_free(session, username, email, except_user=user)
+        await ensure_email_not_invited(session, email)
         user.username, user.email = username, email
 
     user.must_complete_profile = user.must_change_password = False
@@ -317,7 +366,7 @@ async def complete(
         await session.commit()
 
     app_settings = await require_app_settings(session)
-    _sign_in(request, response, app_settings.session_key, user)
+    sign_in(request, response, app_settings.session_key, user)
 
 
 @router.post("/password", status_code=204)
@@ -337,28 +386,15 @@ async def change_password(
     through this endpoint instead. A wrong current password is 400, not
     401, so the frontend does not treat it as a lost session.
     """
-    settings = request.app.state.settings
     clock = request.app.state.clock
-
-    retry_after = _locked_retry_after(user, clock())
-    if retry_after is not None:
-        raise _too_many_attempts(retry_after)
-
-    if not _password_matches(user, payload.current_password):
-        await _record_failure(session, user, clock, settings.auth_login_delay_seconds)
-        raise APIError(400, "invalid_current_password", "Current password is incorrect")
-
-    # The current password was correct, so this resets the lockout
-    # regardless of what happens next — an empty new password shouldn't
-    # leave a prior bad-guess streak counted against a later, valid attempt.
-    await _record_success(session, user)
+    await confirm_password(request, session, user, payload.current_password)
 
     check_new_password(payload.new_password)
     set_password(user, password_hasher.hash(payload.new_password), now=clock())
     await session.commit()
 
     app_settings = await require_app_settings(session)
-    _sign_in(request, response, app_settings.session_key, user)
+    sign_in(request, response, app_settings.session_key, user)
 
 
 @router.get("/session", status_code=204)

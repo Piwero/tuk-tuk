@@ -19,7 +19,7 @@ interface LogoProps {
  * the app twice. Paints with `currentColor`, exactly like the Lucide subset
  * in Icon.tsx, so the light and dark themes re-point it from CSS and this
  * component never learns which theme is on. */
-export function Logo({ size = 21 }: LogoProps): JSX.Element {
+export function Logo({ size = 21 }: LogoProps): React.JSX.Element {
   return (
     <svg
       className="logo"

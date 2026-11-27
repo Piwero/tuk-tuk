@@ -96,7 +96,7 @@ describe("Task detail Check Items progress (#455)", () => {
   });
 });
 
-describe("Task detail Start focus (#455)", () => {
+describe("Task detail Open Focus (#455, #539)", () => {
   it("shows the time focused on this Task and opens Focus with it linked, clock idle", async () => {
     const report = fakeTask("Write report");
     const other = fakeTask("Other");
@@ -116,9 +116,9 @@ describe("Task detail Start focus (#455)", () => {
     render(<App />);
 
     const panel = await openDetail("Write report");
-    const start = await within(panel).findByRole("button", { name: /Start focus/ });
-    await waitFor(() => expect(start).toHaveTextContent("50 min focused"));
-    await user.click(start);
+    const openFocus = await within(panel).findByRole("button", { name: /^Open Focus/ });
+    await waitFor(() => expect(openFocus).toHaveTextContent("50 min focused"));
+    await user.click(openFocus);
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
     const main = within(screen.getByRole("main"));

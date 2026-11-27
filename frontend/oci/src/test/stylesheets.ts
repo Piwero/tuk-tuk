@@ -17,3 +17,16 @@ export function readStylesheets(): string {
     .map((name) => readFileSync(join(src, name), "utf8"))
     .join("\n");
 }
+
+/** The declarations of the first rule whose selector is exactly `selector`
+ * at the start of a line — `{` to `}`, without the selector. Throws when no
+ * such rule exists, so a renamed selector fails the guard instead of
+ * matching nothing. */
+export function cssRuleBody(css: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(css);
+  if (match === null) {
+    throw new Error(`${selector} rule not found`);
+  }
+  return match[1] ?? "";
+}

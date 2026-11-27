@@ -24,7 +24,10 @@ interface ChangePasswordDialogProps {
 /** Current password plus the new one twice (#475). The server bumps the
  * User's session epoch, signing out every other session of theirs, and
  * hands this one a fresh cookie, so this device stays signed in. */
-function ChangePasswordDialog({ onClose, onChanged }: ChangePasswordDialogProps): JSX.Element {
+function ChangePasswordDialog({
+  onClose,
+  onChanged,
+}: ChangePasswordDialogProps): React.JSX.Element {
   const [values, setValues] = useState<Record<PasswordFieldName, string>>({
     current: "",
     new: "",
@@ -81,7 +84,7 @@ function ChangePasswordDialog({ onClose, onChanged }: ChangePasswordDialogProps)
       });
   }
 
-  function field(name: PasswordFieldName, label: string, hint?: string): JSX.Element {
+  function field(name: PasswordFieldName, label: string, hint?: string): React.JSX.Element {
     const id = `change-password-${name}`;
     const invalid = error?.field === name;
     const describedBy = [hint !== undefined ? `${id}-hint` : null, invalid ? ERROR_ID : null]
@@ -149,7 +152,7 @@ interface PasswordRowProps {
 
 /** The Profile card's Password row (#475): when the password last changed,
  * and the dialog to change it. */
-export function PasswordRow({ user, onUserChange }: PasswordRowProps): JSX.Element {
+export function PasswordRow({ user, onUserChange }: PasswordRowProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [changed, setChanged] = useState(false);
 
@@ -158,6 +161,19 @@ export function PasswordRow({ user, onUserChange }: PasswordRowProps): JSX.Eleme
     setChanged(true);
     // Re-read the record so the row shows the server's time, not a guess.
     void fetchCurrentUser().then(onUserChange);
+  }
+
+  // Admitted by invitation, signing in with Google only (#586): there is no
+  // password to change. An Admin can give one for recovery.
+  if (!user.has_password) {
+    return (
+      <div className="password-row">
+        <div>
+          <h3>Password</h3>
+          <p className="settings-hint">None. You sign in with Google.</p>
+        </div>
+      </div>
+    );
   }
 
   return (

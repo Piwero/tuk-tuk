@@ -47,7 +47,7 @@ function frequencyDraftFrom(rule: string | undefined): FrequencyDraft {
   };
 }
 
-export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.Element {
+export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): React.JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
   const [type, setType] = useState<HabitType>(initial?.type ?? "boolean");
   const [target, setTarget] = useState(String(initial?.target ?? 1));
@@ -118,8 +118,8 @@ export function HabitForm({ initial, onSubmit, onCancel }: HabitFormProps): JSX.
           value={type}
           onChange={(event) => setType(event.target.value as HabitType)}
         >
-          <option value="boolean">Boolean</option>
-          <option value="numeric">Numeric</option>
+          <option value="boolean">Done / not yet</option>
+          <option value="numeric">Count</option>
         </select>
       </label>
       {type === "numeric" && (

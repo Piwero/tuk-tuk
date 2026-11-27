@@ -19,10 +19,11 @@ interface DateRowProps {
   onTaskChanged: (task: Task) => void;
 }
 
-/** Task detail's Date row (#453): reads relatively ("Today, 10:00–11:30")
+/** Task detail's Due date row (#453; labelled "Due date" since #558, to
+ * read apart from Planned work): reads relatively ("Today, 10:00–11:30")
  * and edits through the shared date panel — quick picks, a calendar, a
  * start/end time and Clear. Picking a day keeps a timed Task's times. */
-export function DateRow({ task, onTaskChanged }: DateRowProps): JSX.Element {
+export function DateRow({ task, onTaskChanged }: DateRowProps): React.JSX.Element {
   const [times, setTimes] = useState(() => timesOf(task));
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export function DateRow({ task, onTaskChanged }: DateRowProps): JSX.Element {
 
   return (
     <div className={isOverdue(task) ? "date-row overdue" : "date-row"}>
-      <PropertyRow label="Date" quiet={label === null} value={label ?? "No date"}>
+      <PropertyRow label="Due date" quiet={label === null} value={label ?? "No date"}>
         {(close) => (
           <DatePanel
             value={task.due_date === null ? "" : draft.dueDay}

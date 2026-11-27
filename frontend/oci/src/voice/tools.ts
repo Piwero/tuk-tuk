@@ -259,7 +259,7 @@ async function addCheckItemsRpc(
         const detail = `Landed: ${titles.slice(0, index).join(", ")}. Failed or not attempted: ${titles.slice(index).join(", ")}. ${error instanceof Error ? error.message : "Voice tool failed"}`;
         if (error instanceof ApiError && error.status === 401)
           throw new VoiceToolError(detail, true);
-        throw new Error(detail);
+        throw new Error(detail, { cause: error });
       }
       throw error instanceof ApiError && error.code === "not_found"
         ? new Error(`Task ${id} not found.`)

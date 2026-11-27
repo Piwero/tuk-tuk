@@ -37,12 +37,25 @@ from fastapi.testclient import TestClient
 from app.calendar_source import CalendarEventEntry, CalendarListEntry
 from app.config import Settings
 from app.main import create_app
+from app.reminder_delivery import DELIVERY_WINDOW
 from app.session import SESSION_COOKIE_NAME
-from tests.conftest import FakeCalendarSource, FakeClock, create_user_row, log_in
+from tests.conftest import (
+    FakeCalendarSource,
+    FakeClock,
+    FakeGitHubSource,
+    create_user_row,
+    fake_issue,
+    fake_pull_request,
+    log_in,
+    run_sql,
+)
 from tests.test_assistant_chat import StubChatProvider
 
 MARKER = "alice"
 TOKENS = "/api/v1/auth/me/tokens"
+ALICES_RUN = "alice-run"
+ALICES_WATCHED_REPO = 101
+ALICES_SPARE_REPO = 102
 
 
 @dataclass(frozen=True)
@@ -118,12 +131,19 @@ class AliceWorld(World):
     tag: int
     check_item: int
     habit: int
+    habit_pause: int
     key_result: int
     standup_entry: int
     bullet: int
     google_account: int
     google_calendar: int
+    github_token: int
+    watched_repository: int
+    repository_view: int
     api_token: int
+    reminder_delivery: int
+    reminder_lease: str
+    missed_reminder: dict[str, Any]
 
 
 type Request = Callable[[AliceWorld, World], tuple[str, str, dict[str, Any] | None]]
@@ -178,6 +198,12 @@ READS: dict[str, Read] = {
     "sections": Read(get(lambda a, me: "/api/v1/sections")),
     "sections of a list": Read(get(lambda a, me: f"/api/v1/sections?list_id={a.list}")),
     "tags": Read(get(lambda a, me: "/api/v1/tags")),
+    "github tokens": Read(get(lambda a, me: "/api/v1/github/tokens")),
+    "github repository picker": Read(get(lambda a, me: "/api/v1/github/repositories")),
+    "watched repositories": Read(get(lambda a, me: "/api/v1/github/watched-repositories")),
+    "github pull requests": Read(get(lambda a, me: "/api/v1/github/pull-requests")),
+    "github issues": Read(get(lambda a, me: "/api/v1/github/issues")),
+    "repository views": Read(get(lambda a, me: "/api/v1/github/views")),
     "tasks": Read(get(lambda a, me: "/api/v1/tasks")),
     "tasks of a list": Read(get(lambda a, me: f"/api/v1/tasks?list_id={a.list}")),
     "tasks with a tag": Read(get(lambda a, me: f"/api/v1/tasks?tag_id={a.tag}")),
@@ -212,6 +238,36 @@ READS: dict[str, Read] = {
         get(lambda a, me: f"/api/v1/focus-stats?start={a.today}&end={a.today}&tz=UTC")
     ),
     "timers": Read(get(lambda a, me: "/api/v1/timers")),
+    "now": Read(
+        get(lambda a, me: "/api/v1/now"),
+        rows=lambda body, a: [body["task_id"]] if body["task_id"] else [],
+    ),
+    "now resume note": Read(get(lambda a, me: "/api/v1/now/note")),
+    "now shortlist": Read(
+        get(lambda a, me: "/api/v1/now/shortlist"), rows=lambda body, a: list(body["task_ids"])
+    ),
+    "now toggle": Read(
+        get(lambda a, me: "/api/v1/settings/now"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
+    "gentle return toggle": Read(
+        get(lambda a, me: "/api/v1/settings/gentle-return"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
+    "reminder delivery ledger": Read(get(lambda a, me: "/api/v1/reminder-deliveries")),
+    "missed reminders": Read(get(lambda a, me: "/api/v1/reminder-deliveries/missed?tz=UTC")),
+    "reminder notifications toggle": Read(
+        get(lambda a, me: "/api/v1/settings/reminder-notifications"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
+    "quiet hours": Read(
+        get(lambda a, me: "/api/v1/settings/quiet-hours"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
+    "planning window": Read(
+        get(lambda a, me: "/api/v1/settings/planning-window"),
+        rows=lambda body, a: [body] if body["enabled"] else [],
+    ),
     "stand-up suggestions today": Read(
         get(lambda a, me: f"/api/v1/stand-up/suggestions/today?date={a.today}")
     ),
@@ -278,6 +334,7 @@ ITEM_PATCHES: dict[str, tuple[Callable[[AliceWorld], str], dict[str, Any]]] = {
     ),
     "focus session": (lambda a: f"/api/v1/focus-sessions/{a.focus_session}", {"note": "x"}),
     "timer": (lambda a: f"/api/v1/timers/{a.timer}", {"name": "x"}),
+    "repository view": (lambda a: f"/api/v1/github/views/{a.repository_view}", {"name": "x"}),
 }
 
 REACHES: dict[str, Reach] = {
@@ -291,7 +348,81 @@ REACHES |= {
     "PATCH inbox": Reach(
         lambda a, me: ("PATCH", f"/api/v1/lists/{a.inbox}", {"view_mode": "kanban"})
     ),
-    "habit stats": Reach(get(lambda a, me: f"/api/v1/habits/{a.habit}/stats?today={a.today}")),
+    "habit stats": Reach(
+        get(lambda a, me: f"/api/v1/habits/{a.habit}/stats?today={a.today}&tz=UTC")
+    ),
+    "pause a habit": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/habits/{a.habit}/pauses",
+            {
+                "start_date": str(a.today + timedelta(days=1)),
+                "end_date": str(a.today + timedelta(days=2)),
+            },
+        )
+    ),
+    "edit a habit pause": Reach(
+        lambda a, me: (
+            "PATCH",
+            f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}",
+            {"end_date": str(a.today + timedelta(days=20))},
+        )
+    ),
+    "resume a habit pause": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}/resume",
+            {"today": str(a.today)},
+        )
+    ),
+    "remove a habit pause": Reach(
+        lambda a, me: ("DELETE", f"/api/v1/habits/{a.habit}/pauses/{a.habit_pause}", None)
+    ),
+    "report a reminder shown": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/shown",
+            {"lease_token": a.reminder_lease},
+        )
+    ),
+    "report a reminder failed": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/failed",
+            {"lease_token": a.reminder_lease},
+        )
+    ),
+    "snooze a reminder": Reach(
+        lambda a, me: (
+            "POST",
+            f"/api/v1/reminder-deliveries/{a.reminder_delivery}/snooze",
+            {"minutes": 10},
+        )
+    ),
+    "dismiss a missed reminder": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/reminder-deliveries/missed/dismiss?tz=UTC",
+            a.missed_reminder,
+        )
+    ),
+    "snooze a missed reminder": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/reminder-deliveries/missed/snooze?tz=UTC",
+            {**a.missed_reminder, "minutes": 10},
+        )
+    ),
+    "skip a habit day": Reach(
+        lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=1)}", None)
+    ),
+    "remove a habit skip": Reach(
+        lambda a, me: (
+            "DELETE",
+            f"/api/v1/habits/{a.habit}/skips/{a.today + timedelta(days=3)}",
+            None,
+        )
+    ),
     "revoke api token": Reach(lambda a, me: ("DELETE", f"{TOKENS}/{a.api_token}", None)),
     "PUT check-in": Reach(
         lambda a, me: ("PUT", f"/api/v1/habits/{a.habit}/check-ins/{a.today}", {"value": 1})
@@ -329,11 +460,50 @@ REACHES |= {
     "DELETE google account": Reach(
         lambda a, me: ("DELETE", f"/api/v1/google/accounts/{a.google_account}", None)
     ),
+    "DELETE github token": Reach(
+        lambda a, me: ("DELETE", f"/api/v1/github/tokens/{a.github_token}", None)
+    ),
+    # Reconnect (issue #584), with Alice's own token as the replacement.
+    "PATCH github token": Reach(
+        lambda a, me: (
+            "PATCH",
+            f"/api/v1/github/tokens/{a.github_token}",
+            {"token": "github_pat_alice"},
+        )
+    ),
+    "github pull requests of a repository view": Reach(
+        get(lambda a, me: f"/api/v1/github/pull-requests?view={a.repository_view}")
+    ),
+    "github issues of a repository view": Reach(
+        get(lambda a, me: f"/api/v1/github/issues?view={a.repository_view}")
+    ),
+    "DELETE watched repository": Reach(
+        lambda a, me: (
+            "DELETE",
+            f"/api/v1/github/watched-repositories/{a.watched_repository}",
+            None,
+        )
+    ),
 }
 
 # Alice's ids named as the parent of, or a link from, one of the requester's
 # own rows.
 PARENTS: dict[str, Reach] = {
+    "repository view of a watched repository": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/github/views",
+            {"name": "x", "watched_repository_ids": [a.watched_repository]},
+        )
+    ),
+    # Alice's token can read alice/spare, which she does not yet watch.
+    "watched repository through a github token": Reach(
+        lambda a, me: (
+            "POST",
+            "/api/v1/github/watched-repositories",
+            {"github_token_id": a.github_token, "github_repo_id": ALICES_SPARE_REPO},
+        )
+    ),
     "section in a list": Reach(
         lambda a, me: ("POST", "/api/v1/sections", {"list_id": a.list, "name": "x"})
     ),
@@ -433,6 +603,17 @@ PARENTS: dict[str, Reach] = {
             {"habit_id": None, "task_id": a.task},
         )
     ),
+    "now on a task": Reach(lambda a, me: ("PUT", "/api/v1/now", {"task_id": a.task})),
+    "now shortlist of a task": Reach(
+        lambda a, me: ("PUT", "/api/v1/now/shortlist", {"task_ids": [a.task]})
+    ),
+    "check item ticked without auto-complete": Reach(
+        lambda a, me: (
+            "PATCH",
+            f"/api/v1/tasks/{a.task}/check-items/{a.check_item}?auto_complete=false",
+            {"done": True},
+        )
+    ),
     "timer relinked to a habit": Reach(
         lambda a, me: ("PATCH", f"/api/v1/timers/{me.timer}", {"habit_id": a.habit})
     ),
@@ -444,6 +625,11 @@ OWN_WRITES: dict[str, OwnWrite] = {
     ),
     "a tag named like another user's": OwnWrite(
         lambda a, me: ("POST", "/api/v1/tags", {"name": "alice tag"})
+    ),
+    # One GitHub Token per GitHub owner is per User: Bea may cover the same
+    # owner Alice does, with her own token.
+    "a github token for an owner another user covers": OwnWrite(
+        lambda a, me: ("POST", "/api/v1/github/tokens", {"token": "github_pat_alice"})
     ),
     "clearing completed tasks": OwnWrite(
         lambda a, me: ("DELETE", "/api/v1/tasks?completed=true", None)
@@ -469,6 +655,43 @@ OWN_WRITES: dict[str, OwnWrite] = {
             "PUT",
             "/api/v1/google/credentials",
             {"client_id": "client-b2", "client_secret": "secret-b2"},
+        )
+    ),
+    "choosing now": OwnWrite(lambda a, me: ("PUT", "/api/v1/now", {"task_id": me.task})),
+    "clearing now": OwnWrite(lambda a, me: ("PUT", "/api/v1/now", {"task_id": None})),
+    "discarding a resume note": OwnWrite(lambda a, me: ("PUT", "/api/v1/now/note", {"note": None})),
+    "a shortlist of my own": OwnWrite(
+        lambda a, me: ("PUT", "/api/v1/now/shortlist", {"task_ids": [me.task]})
+    ),
+    "turning now off": OwnWrite(lambda a, me: ("PUT", "/api/v1/settings/now", {"enabled": False})),
+    "turning gentle return off": OwnWrite(
+        lambda a, me: ("PUT", "/api/v1/settings/gentle-return", {"enabled": False})
+    ),
+    "claiming due reminders": OwnWrite(
+        lambda a, me: ("POST", "/api/v1/reminder-deliveries/claim?tz=UTC", None)
+    ),
+    "turning reminder notifications off": OwnWrite(
+        lambda a, me: ("PUT", "/api/v1/settings/reminder-notifications", {"enabled": False})
+    ),
+    "turning quiet hours off": OwnWrite(
+        lambda a, me: (
+            "PUT",
+            "/api/v1/settings/quiet-hours",
+            {"enabled": False, "start": "22:00", "end": "07:00"},
+        )
+    ),
+    "turning the planning window off": OwnWrite(
+        lambda a, me: (
+            "PUT",
+            "/api/v1/settings/planning-window",
+            {"enabled": False, "start": "09:00", "end": "17:00"},
+        )
+    ),
+    "a focus session reusing another user's run id": OwnWrite(
+        lambda a, me: (
+            "POST",
+            "/api/v1/focus-sessions",
+            {**focus_session(a.today), "client_run_id": ALICES_RUN},
         )
     ),
     "removing google credentials": OwnWrite(
@@ -520,8 +743,19 @@ def connect_google(
         email=f"{name}@gmail.com",
         refresh_token=refresh_token,
     )
-    callback = actor.request(
-        "GET", "/api/v1/google/callback?" + urlencode({"code": f"{name}-code", "state": state})
+    # The consent's browser-bound transaction cookie (issue #586) goes back
+    # with the callback, as the browser that started the consent would send it.
+    consent = redirect.cookies.get("tuktuk_google_calendar_oauth")
+    assert consent is not None
+    cookie = "; ".join(
+        part
+        for part in (actor.credentials.get("Cookie"), f"tuktuk_google_calendar_oauth={consent}")
+        if part
+    )
+    actor.client.cookies.clear()
+    callback = actor.client.get(
+        "/api/v1/google/callback?" + urlencode({"code": f"{name}-code", "state": state}),
+        headers={**actor.credentials, "Cookie": cookie},
     )
     assert "googleConnected=1" in callback.headers["location"], callback.headers
     calendar_source.register_calendars(
@@ -548,13 +782,42 @@ def connect_google(
 def build_alice(
     alice: Actor,
     calendar_source: FakeCalendarSource,
+    github_source: FakeGitHubSource,
     assistant: StubChatProvider,
     today: date,
     api_token: int,
+    clock: FakeClock,
 ) -> AliceWorld:
     """One of every resource type, each named so "alice" finds it.
     `api_token` is minted beforehand: only a password session can."""
+    now = clock.now
     google_account, google_calendar = connect_google(alice, calendar_source, MARKER, today)
+    github_source.register_token("github_pat_alice", owner_login=MARKER)
+    github_source.register_repositories(
+        "github_pat_alice",
+        [(ALICES_WATCHED_REPO, "alice/watched"), (ALICES_SPARE_REPO, "alice/spare")],
+    )
+    github_token = alice.ok("POST", "/api/v1/github/tokens", {"token": "github_pat_alice"})["id"]
+    watched_repository = alice.ok(
+        "POST",
+        "/api/v1/github/watched-repositories",
+        {"github_token_id": github_token, "github_repo_id": ALICES_WATCHED_REPO},
+    )["id"]
+    repository_view = alice.ok(
+        "POST",
+        "/api/v1/github/views",
+        {"name": "alice view", "watched_repository_ids": [watched_repository]},
+    )["id"]
+    github_source.register_pull_requests(
+        "github_pat_alice",
+        "alice/watched",
+        [fake_pull_request(1, "alice pull request", repository="alice/watched")],
+    )
+    github_source.register_issues(
+        "github_pat_alice",
+        "alice/watched",
+        [fake_issue(2, "alice github issue", repository="alice/watched")],
+    )
     alice.ok(
         "PUT",
         "/api/v1/assistant/config",
@@ -573,6 +836,12 @@ def build_alice(
     ][0]["id"]
     habit = alice.ok("POST", "/api/v1/habits", {"name": "alice habit"})["id"]
     alice.ok("PUT", f"/api/v1/habits/{habit}/check-ins/{today}", {"value": 1})
+    habit_pause = alice.ok(
+        "POST",
+        f"/api/v1/habits/{habit}/pauses",
+        {"start_date": str(today + timedelta(days=10)), "end_date": None},
+    )["id"]
+    alice.ok("PUT", f"/api/v1/habits/{habit}/skips/{today + timedelta(days=3)}")
     task = alice.ok(
         "POST",
         "/api/v1/tasks",
@@ -607,8 +876,51 @@ def build_alice(
         },
     )
     focus = alice.ok(
-        "POST", "/api/v1/focus-sessions", focus_session(today, note="alice focus", task_id=task)
+        "POST",
+        "/api/v1/focus-sessions",
+        {**focus_session(today, note="alice focus", task_id=task), "client_run_id": ALICES_RUN},
     )["id"]
+    shortlisted = alice.ok("POST", "/api/v1/tasks", {"title": "alice shortlisted"})["id"]
+    alice.ok("PUT", "/api/v1/settings/now", {"enabled": True})
+    alice.ok("PUT", "/api/v1/now", {"task_id": task})
+    alice.ok("PUT", "/api/v1/now/note", {"note": "alice resume note"})
+    alice.ok("PUT", "/api/v1/now/shortlist", {"task_ids": [shortlisted]})
+    alice.ok("PUT", "/api/v1/settings/gentle-return", {"enabled": True})
+    alice.ok("PUT", "/api/v1/settings/reminder-notifications", {"enabled": True})
+    alice.ok(
+        "PUT",
+        "/api/v1/settings/planning-window",
+        {"enabled": True, "start": "10:00", "end": "14:00"},
+    )
+    alice.ok(
+        "POST",
+        "/api/v1/tasks",
+        {"title": "alice reminder", "due_date": now.isoformat(), "reminders": ["PT0S"]},
+    )
+    [delivery] = alice.ok("POST", "/api/v1/reminder-deliveries/claim?tz=UTC")["items"]
+    alice.ok(
+        "POST",
+        "/api/v1/tasks",
+        {
+            "title": "alice missed reminder",
+            "due_date": now.isoformat(),
+            "reminders": ["PT0S"],
+        },
+    )
+    # Missed only once its window closes after the opt-in (#565).
+    clock.advance(DELIVERY_WINDOW)
+    [missed] = [
+        item
+        for item in alice.ok("GET", "/api/v1/reminder-deliveries/missed?tz=UTC")["items"]
+        if item["task_title"] == "alice missed reminder"
+    ]
+    # Hours away from now, so the band never holds Alice's own Reminders.
+    band = [f"{(clock.now + timedelta(hours=hours)).hour:02d}:00" for hours in (3, 4)]
+    alice.ok(
+        "PUT",
+        "/api/v1/settings/quiet-hours",
+        {"enabled": True, "start": band[0], "end": band[1]},
+    )
     timer = alice.ok(
         "POST", "/api/v1/timers", {"name": "alice timer", "mode": "stopwatch", "habit_id": habit}
     )["id"]
@@ -630,11 +942,18 @@ def build_alice(
         tag=tag,
         check_item=check_item,
         habit=habit,
+        habit_pause=habit_pause,
+        reminder_delivery=delivery["id"],
+        reminder_lease=delivery["lease_token"],
+        missed_reminder={k: missed[k] for k in ("task_id", "offset", "occurrence_due")},
         key_result=key_result,
         standup_entry=entry["id"],
         bullet=entry["bullets"][0]["id"],
         google_account=google_account,
         google_calendar=google_calendar,
+        github_token=github_token,
+        watched_repository=watched_repository,
+        repository_view=repository_view,
         api_token=api_token,
     )
 
@@ -684,11 +1003,15 @@ def pair(
     database_url: str,
     fake_clock: FakeClock,
     fake_calendar_source: FakeCalendarSource,
+    fake_github_source: FakeGitHubSource,
     assistant: StubChatProvider,
     sign_in: SignIn,
 ) -> Iterator[Pair]:
     app = create_app(
-        Settings(database_url=database_url), clock=fake_clock, calendar_source=fake_calendar_source
+        Settings(database_url=database_url),
+        clock=fake_clock,
+        calendar_source=fake_calendar_source,
+        github_source=fake_github_source,
     )
     with TestClient(app, follow_redirects=False) as client:
         create_user_row(app, "alice", "alice@example.com")
@@ -700,10 +1023,49 @@ def pair(
         yield Pair(
             alice=alice,
             bea=bea,
-            a=build_alice(alice, fake_calendar_source, assistant, today, alices_token),
+            a=build_alice(
+                alice,
+                fake_calendar_source,
+                fake_github_source,
+                assistant,
+                today,
+                alices_token,
+                fake_clock,
+            ),
             b=build_bea(bea, assistant, today),
             assistant=assistant,
         )
+
+
+def test_admin_deletes_populated_account_without_touching_other_user(
+    pair: Pair, database_url: str
+) -> None:
+    """Exercise deletion through HTTP against every resource in the isolation world."""
+    client = pair.alice.client
+    admin = create_user_row(client, "deleter", "deleter@example.com", is_admin=True)
+    alice_id = run_sql(database_url, "SELECT id FROM users WHERE username = 'alice'")[0][0]
+    beas_tasks = pair.bea.ok("GET", "/api/v1/tasks")
+    client.cookies.clear()
+    log_in(client, admin.username)
+    response = client.request(
+        "DELETE", f"/api/v1/admin/users/{alice_id}", json={"email": "alice@example.com"}
+    )
+    assert response.status_code == 204, response.text
+    assert pair.alice.request("GET", "/api/v1/tasks").status_code == 401
+    assert pair.bea.ok("GET", "/api/v1/tasks") == beas_tasks
+    # Storage inspection proves privacy erasure, not merely hidden resources.
+    tables = run_sql(
+        database_url,
+        "SELECT table_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND column_name = 'owner_id'",
+    )
+    for (table,) in tables:
+        assert run_sql(
+            database_url, f'SELECT count(*) FROM "{table}" WHERE owner_id = %s', [alice_id]
+        ) == [(0,)], table
+    assert run_sql(
+        database_url, "SELECT count(*) FROM user_settings WHERE user_id = %s", [alice_id]
+    ) == [(0,)]
 
 
 def seen(response: httpx.Response, probe: Read, assistant: StubChatProvider) -> str:
@@ -754,3 +1116,14 @@ def test_one_user_cannot_reach_another_users_rows(pair: Pair, probe: Probe) -> N
             assert probe.rows(response.json(), pair.a) != []
         else:
             assert MARKER in seen(response, probe, pair.assistant)
+
+
+def test_a_run_id_is_only_matched_among_the_users_own_sessions(pair: Pair) -> None:
+    """Retry-safe saves (#546) look a run up by `client_run_id`: Bea reusing
+    Alice's id records her own session rather than being handed Alice's."""
+    body = {**focus_session(pair.a.today, note="bea focus"), "client_run_id": ALICES_RUN}
+
+    response = pair.bea.request("POST", "/api/v1/focus-sessions", body)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["note"] == "bea focus"

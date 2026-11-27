@@ -29,6 +29,17 @@ export interface StoredRun {
   pauseStartedAtMs: number | null;
   /** The Task/Habit the run was started against. */
   link: FocusLink;
+  /** This run's identity, sent with its finish (#546): a retried or
+   * post-reload finish of the same run records one Focus Session. */
+  runId: string;
+}
+
+/** A fresh run identity: 128 random bits as hex. Not crypto.randomUUID,
+ * which only exists in secure contexts (a plain-http LAN install isn't). */
+export function newRunId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 const KEY = "tuktuk.focus.run";
@@ -57,6 +68,8 @@ export function loadStoredRun(): StoredRun | null {
       phase: run.phase === "break" ? "break" : "focus",
       breakMs: typeof run.breakMs === "number" ? run.breakMs : 0,
       longBreakMs: typeof run.longBreakMs === "number" ? run.longBreakMs : 0,
+      // A run stored before #546 has no identity: give it one now.
+      runId: typeof run.runId === "string" && run.runId !== "" ? run.runId : newRunId(),
     };
   } catch {
     return null;

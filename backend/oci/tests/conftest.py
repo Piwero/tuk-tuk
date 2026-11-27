@@ -30,13 +30,18 @@ os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://unused:unused@localh
 os.environ.setdefault("AUTH_LOGIN_DELAY_SECONDS", "0.001")
 
 import asyncio  # noqa: E402
+import base64  # noqa: E402
 import itertools  # noqa: E402
+import json  # noqa: E402
 from collections.abc import Iterator, Sequence  # noqa: E402
 from datetime import UTC, datetime, timedelta  # noqa: E402
+from email.message import EmailMessage  # noqa: E402
 from typing import Any  # noqa: E402
 
 import psycopg  # noqa: E402
 import pytest  # noqa: E402
+from cryptography.hazmat.primitives import hashes  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import padding, rsa  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from testcontainers.postgres import PostgresContainer  # noqa: E402
@@ -52,6 +57,25 @@ from app.calendar_source import (  # noqa: E402
 )
 from app.config import Settings  # noqa: E402
 from app.db import DatabaseUrl, run_migrations  # noqa: E402
+from app.github_source import (  # noqa: E402
+    GitHubCiStatus,
+    GitHubIssue,
+    GitHubLabel,
+    GitHubOwner,
+    GitHubOwnerKind,
+    GitHubPullRequest,
+    GitHubRepository,
+    GitHubReviewDecision,
+    GitHubTokenIdentity,
+    GitHubTokenType,
+    OpenIssues,
+    OpenPullRequests,
+    RepositoryIssues,
+    RepositoryPullRequests,
+    TerminalGitHubSourceError,
+)
+from app.google_identity import GoogleSignInError, pkce_challenge  # noqa: E402
+from app.mailer import MailDeliveryError  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import SEED_USER_ID, AppSettings, User, UserSettings  # noqa: E402
 from app.user_settings import user_settings_from_env  # noqa: E402
@@ -286,6 +310,7 @@ class FakeCalendarSource:
         # The OAuth client every exchange and refresh was made with — each
         # user's own (issue #409), recorded so a test can assert which one.
         self.exchanged_with: list[GoogleOAuthClient] = []
+        self.exchanged_verifiers: list[str | None] = []
         self.refreshed_with: list[GoogleOAuthClient] = []
         self._codes: dict[str, ExchangedCredential] = {}
         self._calendars: dict[str, list[CalendarListEntry]] = {}
@@ -306,9 +331,16 @@ class FakeCalendarSource:
         )
 
     async def exchange_code(
-        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str
+        self,
+        oauth_client: GoogleOAuthClient,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str | None = None,
     ) -> ExchangedCredential:
         self.exchanged_with.append(oauth_client)
+        # The PKCE verifier each exchange presented (issue #586), so a test
+        # can check it against the challenge the consent URL carried.
+        self.exchanged_verifiers.append(code_verifier)
         try:
             return self._codes[code]
         except KeyError:
@@ -379,14 +411,372 @@ def fake_calendar_source() -> FakeCalendarSource:
     return FakeCalendarSource()
 
 
+def fake_pull_request(
+    number: int,
+    title: str,
+    *,
+    repository: str = "octocat/dotfiles",
+    author: str | None = "hubot",
+    author_is_bot: bool = False,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
+    labels: list[tuple[str, str]] | None = None,
+    is_draft: bool = False,
+    review_decision: GitHubReviewDecision = "pending",
+    ci_status: GitHubCiStatus | None = None,
+    review_requested: bool = False,
+) -> GitHubPullRequest:
+    """An open Pull Request as the GitHub source reports it."""
+    created = created_at or datetime(2026, 11, 1, tzinfo=UTC)
+    return GitHubPullRequest(
+        number=number,
+        title=title,
+        url=f"https://github.com/{repository}/pull/{number}",
+        author_login=author,
+        author_is_bot=author_is_bot,
+        created_at=created,
+        updated_at=updated_at or created,
+        is_draft=is_draft,
+        labels=tuple(GitHubLabel(name=n, color=c) for n, c in labels or []),
+        review_decision=review_decision,
+        ci_status=ci_status,
+        review_requested=review_requested,
+    )
+
+
+def fake_issue(
+    number: int,
+    title: str,
+    *,
+    repository: str = "octocat/dotfiles",
+    author: str | None = "hubot",
+    author_is_bot: bool = False,
+    assignees: list[str] | None = None,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
+    labels: list[tuple[str, str]] | None = None,
+    comment_count: int = 0,
+) -> GitHubIssue:
+    """An open GitHub Issue as the GitHub source reports it."""
+    created = created_at or datetime(2026, 11, 1, tzinfo=UTC)
+    return GitHubIssue(
+        number=number,
+        title=title,
+        url=f"https://github.com/{repository}/issues/{number}",
+        author_login=author,
+        author_is_bot=author_is_bot,
+        created_at=created,
+        updated_at=updated_at or created,
+        assignees=tuple(assignees or []),
+        labels=tuple(GitHubLabel(name=n, color=c) for n, c in labels or []),
+        comment_count=comment_count,
+    )
+
+
+class FakeGitHubSource:
+    """A fake GitHubSource (spec #576), injected through the application
+    factory like FakeCalendarSource. Tests register what each token string
+    identifies as; a token never registered is one GitHub rejects (401),
+    exactly as GitHub answers a token it has never issued.
+    """
+
+    def __init__(self) -> None:
+        self._identities: dict[str, GitHubTokenIdentity] = {}
+        self._identify_errors: dict[str, Exception] = {}
+        self._repositories: dict[str, list[GitHubRepository]] = {}
+        self._repository_errors: dict[str, Exception] = {}
+        self._viewers: dict[str, str] = {}
+        # (token, `owner/name`) -> that repository's open Pull Requests.
+        self._pull_requests: dict[tuple[str, str], list[GitHubPullRequest]] = {}
+        self._pull_request_errors: dict[str, Exception] = {}
+        # (token, `owner/name`) -> that repository's open GitHub Issues.
+        self._issues: dict[tuple[str, str], list[GitHubIssue]] = {}
+        self._issue_errors: dict[str, Exception] = {}
+        self.identify_calls: list[str] = []
+        self.pull_request_calls: list[tuple[str, list[str]]] = []
+        self.issue_calls: list[tuple[str, list[str]]] = []
+
+    def register_token(
+        self,
+        token: str,
+        *,
+        owner_login: str | None,
+        owner_kind: GitHubOwnerKind = "user",
+        token_type: GitHubTokenType = "fine_grained",
+        expires_at: datetime | None = None,
+    ) -> None:
+        """What `token` identifies as. `owner_login=None` is a token whose
+        owner GitHub cannot tell yet, as for an organisation's token before
+        the organisation allows or approves it. Registering again replaces
+        the identity, so a test can let that owner become known."""
+        self._identities[token] = GitHubTokenIdentity(
+            owner=None if owner_login is None else GitHubOwner(login=owner_login, kind=owner_kind),
+            token_type=token_type,
+            expires_at=expires_at,
+        )
+
+    def register_identify_error(self, token: str, error: Exception) -> None:
+        """Every `identify_token` for this token raises `error` — a
+        Transient or Terminal GitHubSourceError."""
+        self._identify_errors[token] = error
+
+    def register_repositories(
+        self, token: str, repositories: list[tuple[int, str]], *, private: bool = True
+    ) -> None:
+        """What `list_accessible_repositories` returns for this token, as
+        (GitHub repository id, `owner/name`) pairs. Replaces any earlier
+        registration, so a test can change what a token reads."""
+        self._repositories[token] = [
+            GitHubRepository(github_id=github_id, full_name=full_name, private=private)
+            for github_id, full_name in repositories
+        ]
+
+    def register_repositories_error(self, token: str, error: Exception) -> None:
+        """Every `list_accessible_repositories` for this token raises
+        `error` — a Transient or Terminal GitHubSourceError."""
+        self._repository_errors[token] = error
+
+    async def list_accessible_repositories(self, token: str) -> list[GitHubRepository]:
+        error = self._repository_errors.get(token)
+        if error is not None:
+            raise error
+        if token not in self._identities:
+            raise TerminalGitHubSourceError("Bad credentials")
+        return list(self._repositories.get(token, []))
+
+    def register_viewer(self, token: str, login: str) -> None:
+        """The GitHub user `token` acts as. Defaults to the owner login it
+        was registered with, as for a User's personal token."""
+        self._viewers[token] = login
+
+    def register_pull_requests(
+        self, token: str, full_name: str, pull_requests: list[GitHubPullRequest]
+    ) -> None:
+        """The open Pull Requests GitHub holds for `full_name`, read
+        through `token`, in any order. Like GitHub, the fake returns the 100
+        most recently updated and the total count."""
+        self._pull_requests[(token, full_name)] = list(pull_requests)
+
+    def register_pull_requests_error(self, token: str, error: Exception) -> None:
+        """Every `list_open_pull_requests` for this token raises `error`."""
+        self._pull_request_errors[token] = error
+
+    def clear_pull_requests_error(self, token: str) -> None:
+        """GitHub answers `list_open_pull_requests` for this token again."""
+        self._pull_request_errors.pop(token, None)
+
+    async def list_open_pull_requests(
+        self, token: str, repositories: list[GitHubRepository]
+    ) -> OpenPullRequests:
+        self.pull_request_calls.append((token, [r.full_name for r in repositories]))
+        error = self._pull_request_errors.get(token)
+        if error is not None:
+            raise error
+        identity = self._identities.get(token)
+        if identity is None:
+            raise TerminalGitHubSourceError("Bad credentials")
+        results = []
+        for repo in repositories:
+            open_prs = sorted(
+                self._pull_requests.get((token, repo.full_name), []),
+                key=lambda pr: pr.updated_at,
+                reverse=True,
+            )
+            results.append(
+                RepositoryPullRequests(
+                    github_id=repo.github_id,
+                    full_name=repo.full_name,
+                    url=f"https://github.com/{repo.full_name}",
+                    total_count=len(open_prs),
+                    pull_requests=tuple(open_prs[:100]),
+                )
+            )
+        return OpenPullRequests(
+            viewer_login=self._viewers.get(
+                token, identity.owner.login if identity.owner else "viewer"
+            ),
+            repositories=tuple(results),
+        )
+
+    def register_issues(self, token: str, full_name: str, issues: list[GitHubIssue]) -> None:
+        """The open GitHub Issues GitHub holds for `full_name`, read through
+        `token`, in any order. Like GitHub, the fake returns the 100 most
+        recently updated and the total count."""
+        self._issues[(token, full_name)] = list(issues)
+
+    def register_issues_error(self, token: str, error: Exception) -> None:
+        """Every `list_open_issues` for this token raises `error`."""
+        self._issue_errors[token] = error
+
+    async def list_open_issues(
+        self, token: str, repositories: list[GitHubRepository]
+    ) -> OpenIssues:
+        self.issue_calls.append((token, [r.full_name for r in repositories]))
+        error = self._issue_errors.get(token)
+        if error is not None:
+            raise error
+        if token not in self._identities:
+            raise TerminalGitHubSourceError("Bad credentials")
+        results = []
+        for repo in repositories:
+            open_issues = sorted(
+                self._issues.get((token, repo.full_name), []),
+                key=lambda issue: issue.updated_at,
+                reverse=True,
+            )
+            results.append(
+                RepositoryIssues(
+                    github_id=repo.github_id,
+                    full_name=repo.full_name,
+                    url=f"https://github.com/{repo.full_name}",
+                    total_count=len(open_issues),
+                    issues=tuple(open_issues[:100]),
+                )
+            )
+        return OpenIssues(repositories=tuple(results))
+
+    async def identify_token(self, token: str) -> GitHubTokenIdentity:
+        self.identify_calls.append(token)
+        error = self._identify_errors.get(token)
+        if error is not None:
+            raise error
+        try:
+            return self._identities[token]
+        except KeyError:
+            raise TerminalGitHubSourceError("Bad credentials") from None
+
+
+@pytest.fixture
+def fake_github_source() -> FakeGitHubSource:
+    return FakeGitHubSource()
+
+
+class FakeMailer:
+    """A fake Mailer (issue #586): records each message it is handed, or
+    refuses them all while `failing` is set, as an unreachable or refusing
+    mail server would."""
+
+    def __init__(self) -> None:
+        self.sent: list[EmailMessage] = []
+        self.failing: str | None = None
+
+    async def send(self, message: EmailMessage) -> None:
+        if self.failing is not None:
+            raise MailDeliveryError(self.failing)
+        self.sent.append(message)
+
+
+@pytest.fixture
+def fake_mailer() -> FakeMailer:
+    return FakeMailer()
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+_GOOGLE_TEST_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+class FakeGoogleSignIn:
+    """A fake GoogleSignIn (issue #586) that behaves like Google's token
+    endpoint: an authorization code is registered with the PKCE challenge
+    and the claims Google would sign, and exchanging it with the wrong
+    verifier, or a second time, is refused. ID tokens are real RS256 JWTs
+    signed with a test key, so the app's own verification runs unchanged.
+    """
+
+    KID = "test-key"
+
+    def __init__(self, clock: "FakeClock") -> None:
+        self._clock = clock
+        self._codes: dict[str, tuple[str, dict[str, Any]]] = {}
+        self.exchanged_redirect_uris: list[str] = []
+
+    def sign(self, claims: dict[str, Any], *, key: Any = None, kid: str = KID) -> str:
+        header = _b64url(json.dumps({"alg": "RS256", "kid": kid, "typ": "JWT"}).encode())
+        payload = _b64url(json.dumps(claims).encode())
+        signature = (key or _GOOGLE_TEST_KEY).sign(
+            f"{header}.{payload}".encode(), padding.PKCS1v15(), hashes.SHA256()
+        )
+        return f"{header}.{payload}.{_b64url(signature)}"
+
+    def claims(
+        self,
+        *,
+        subject: str,
+        email: str,
+        nonce: str,
+        email_verified: bool = True,
+        audience: str = "shared-client-id",
+        **overrides: Any,
+    ) -> dict[str, Any]:
+        now = self._clock().timestamp()
+        return {
+            "iss": "https://accounts.google.com",
+            "aud": audience,
+            "sub": subject,
+            "email": email,
+            "email_verified": email_verified,
+            "nonce": nonce,
+            "iat": int(now),
+            "exp": int(now) + 3600,
+            **overrides,
+        }
+
+    def register_code(self, code: str, code_challenge: str, id_token: str) -> None:
+        self._codes[code] = (code_challenge, {"id_token": id_token})
+
+    async def exchange_code(
+        self, oauth_client: GoogleOAuthClient, code: str, redirect_uri: str, code_verifier: str
+    ) -> str:
+        self.exchanged_redirect_uris.append(redirect_uri)
+        registered = self._codes.pop(code, None)
+        if registered is None:
+            raise GoogleSignInError("invalid_grant")
+        challenge, body = registered
+        if pkce_challenge(code_verifier) != challenge:
+            raise GoogleSignInError("invalid_grant: code_verifier mismatch")
+        return str(body["id_token"])
+
+    async def signing_keys(self) -> list[dict[str, Any]]:
+        numbers = _GOOGLE_TEST_KEY.public_key().public_numbers()
+
+        def encode(value: int) -> str:
+            return _b64url(value.to_bytes((value.bit_length() + 7) // 8, "big"))
+
+        return [
+            {
+                "kty": "RSA",
+                "kid": self.KID,
+                "alg": "RS256",
+                "n": encode(numbers.n),
+                "e": encode(numbers.e),
+            }
+        ]
+
+
+@pytest.fixture
+def fake_google_sign_in(fake_clock: FakeClock) -> FakeGoogleSignIn:
+    return FakeGoogleSignIn(fake_clock)
+
+
 @pytest.fixture
 def unauthenticated_client(
-    database_url: str, fake_clock: FakeClock, fake_calendar_source: FakeCalendarSource
+    database_url: str,
+    fake_clock: FakeClock,
+    fake_calendar_source: FakeCalendarSource,
+    fake_github_source: FakeGitHubSource,
+    fake_mailer: FakeMailer,
 ) -> Iterator[TestClient]:
     """The app past first-run setup, with the test admin (TEST_USERNAME /
     TEST_PASSWORD) created, but not logged in."""
     app = create_app(
-        Settings(database_url=database_url), clock=fake_clock, calendar_source=fake_calendar_source
+        Settings(database_url=database_url),
+        clock=fake_clock,
+        calendar_source=fake_calendar_source,
+        github_source=fake_github_source,
+        mailer=fake_mailer,
     )
     with TestClient(app) as test_client:
         create_user_row(app, first_admin=True)

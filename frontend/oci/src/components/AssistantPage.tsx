@@ -2,6 +2,7 @@ import "./AssistantPage.css";
 import { useState } from "react";
 
 import { AssistantView } from "./AssistantView";
+import { BrainDumpView } from "./BrainDumpView";
 import { VoiceView } from "./VoiceView";
 
 type Mode = "text" | "voice";
@@ -16,7 +17,7 @@ export function AssistantPage({
 }: {
   textAvailable: boolean;
   voiceAvailable: boolean;
-}): JSX.Element {
+}): React.JSX.Element {
   const [chosen, setChosen] = useState<Mode | null>(null);
   const mode: Mode = chosen ?? (!textAvailable && voiceAvailable ? "voice" : "text");
   const tab = (id: Mode, name: string) => (
@@ -53,7 +54,10 @@ export function AssistantPage({
         hidden={mode !== "text"}
       >
         {textAvailable ? (
-          <AssistantView />
+          <>
+            <AssistantView />
+            <BrainDumpView />
+          </>
         ) : (
           <p className="assistant-unavailable">
             The text Assistant isn't available. Set it up in Settings, under Assistant.

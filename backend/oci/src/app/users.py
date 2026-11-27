@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import APIError
-from app.models import TaskList, User, UserSettings
+from app.models import Invitation, TaskList, User, UserSettings
 from app.ownership import acting_as
 
 INBOX_NAME = "Inbox"
@@ -84,10 +84,20 @@ async def find_user_by_login(session: AsyncSession, login: str) -> User | None:
 
 
 async def install_has_password(session: AsyncSession) -> bool:
-    """Whether anyone can log in yet. Until some User holds a password the
-    install is waiting on `/setup` (or, on an upgrade from before ADR 0008,
-    the one-time AUTH_PASSWORD_HASH import)."""
-    return bool(await session.scalar(select(exists().where(User.password_hash.is_not(None)))))
+    """Whether setup completed: a password or Google identity exists.
+
+    Google-only installs must never reopen public setup or import an env
+    password after their last password-bearing account is deleted.
+    """
+    return bool(
+        await session.scalar(
+            select(
+                exists().where(
+                    or_(User.password_hash.is_not(None), User.google_subject.is_not(None))
+                )
+            )
+        )
+    )
 
 
 async def first_admin(session: AsyncSession) -> User | None:
@@ -163,6 +173,12 @@ def clean_username(username: str) -> str:
     return username
 
 
+def same_email(a: str, b: str | None) -> bool:
+    """The app's email convention, as citext compares them: trimmed, case
+    ignored. No Gmail dot or plus-address folding (issue #586)."""
+    return b is not None and a.strip().lower() == b.strip().lower()
+
+
 def clean_email(email: str) -> str:
     email = email.strip()
     if not _EMAIL_PATTERN.match(email):
@@ -174,12 +190,42 @@ def _username_taken() -> APIError:
     return APIError(409, "username_taken", "That username is already taken")
 
 
-def _email_taken() -> APIError:
+def email_taken() -> APIError:
     return APIError(409, "email_taken", "That email is already in use")
 
 
-# The unique constraints migration 0035 gives users.username and users.email.
-_TAKEN_BY_CONSTRAINT = {"users_username_key": _username_taken, "users_email_key": _email_taken}
+async def email_in_use(session: AsyncSession, email: str) -> bool:
+    """Whether a User already has `email` (citext: case ignored)."""
+    return await session.scalar(select(User.id).where(User.email == email)) is not None
+
+
+async def ensure_email_not_invited(session: AsyncSession, email: str) -> None:
+    """409 `email_invited` while an invitation for `email` is still open
+    (not accepted, not canceled; issue #586): an Admin approved that address
+    for one person, so nobody else may take it, by a profile edit or a new
+    account, before they accept."""
+    open_invitation = await session.scalar(
+        select(Invitation.id).where(
+            Invitation.email == email,
+            Invitation.accepted_at.is_(None),
+            Invitation.canceled_at.is_(None),
+        )
+    )
+    if open_invitation is not None:
+        raise APIError(409, "email_invited", "That email has an open invitation")
+
+
+def google_identity_taken() -> APIError:
+    return APIError(409, "identity_in_use", "That Google account signs in to another account")
+
+
+# The unique constraints migration 0035 gives users.username and
+# users.email, and 0061 users.google_subject.
+_TAKEN_BY_CONSTRAINT = {
+    "users_username_key": _username_taken,
+    "users_email_key": email_taken,
+    "users_google_subject_key": google_identity_taken,
+}
 
 
 async def ensure_identity_free(
@@ -194,7 +240,7 @@ async def ensure_identity_free(
     if await session.scalar(others.where(User.username == username)) is not None:
         raise _username_taken()
     if email is not None and await session.scalar(others.where(User.email == email)) is not None:
-        raise _email_taken()
+        raise email_taken()
 
 
 @asynccontextmanager

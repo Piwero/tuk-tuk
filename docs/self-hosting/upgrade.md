@@ -34,7 +34,8 @@ This replaces everything in the database with the backup.
 3. Log in with the password that was set when the backup was taken.
 
 Use the same `.env` as when you took the backup. With a different master key,
-your saved Google and AI credentials can't be read and have to be entered again.
+your saved Google and AI credentials and GitHub Tokens can't be read and have
+to be entered again.
 
 ## Upgrade (2–5 min)
 

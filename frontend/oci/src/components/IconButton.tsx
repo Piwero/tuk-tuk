@@ -45,7 +45,7 @@ export function IconButton({
   disabled,
   buttonRef,
   ...rest
-}: IconButtonProps): JSX.Element {
+}: IconButtonProps): React.JSX.Element {
   const { open, handlers } = useHoverHint();
   const button = (
     <button

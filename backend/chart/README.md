@@ -13,6 +13,7 @@ Kustomize chart for the FastAPI backend. Targets the `tuk-tuk` namespace.
 | `git-onepassworditem.yaml`                  | OnePasswordItem               | Syncs Git credentials for Flux image automation (`tuk-tuk-git-auth`)                  |
 | `auth-onepassworditem.yaml`                 | OnePasswordItem               | Syncs the backend auth secrets — session signing key + password hash (`tuk-tuk-auth`) |
 | `google-onepassworditem.yaml`               | OnePasswordItem               | Syncs the Google Calendar integration's secrets, if enabled (`tuk-tuk-google`)        |
+| `sso-onepassworditem.yaml`                  | OnePasswordItem               | Syncs the shared Google client and SMTP for invite-only Google sign-in (`tuk-tuk-sso`) |
 | `db-onepassworditem.yaml`                   | OnePasswordItem               | Syncs the PostgreSQL `DATABASE_URL` (`tuk-tuk-db`, required) — ADR 0017               |
 | `postgres-egress-service.yaml`              | Service (ExternalName)        | Tailnet egress to `postgres-supernova` as `postgres.tuk-tuk.svc.cluster.local`        |
 | `gitrepository.yaml`                        | GitRepository                 | Flux source used by image automation                                                  |
@@ -85,16 +86,26 @@ must also have `contents:write` on `Piwero/tuk-tuk` for image-bump pushes).
 vault you point `TUK_TUK_1PASSWORD_VAULT_ID` at before applying this chart,
 with two fields:
 
-| Field                | Value                                                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------- |
-| `SECRET_KEY`         | A long random value generated once, e.g. `openssl rand -base64 32`. This becomes the session signing key. |
-| `AUTH_PASSWORD_HASH` | The Argon2id hash from `mise run backend:hash-password` (see ADR 0005 / #82).                             |
+| Field                | Value                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_MASTER_KEY`     | A long random value generated once, e.g. `openssl rand -base64 32`. Encrypts the secrets Users save in Settings. Required to start. |
+| `AUTH_PASSWORD_HASH` | The Argon2id hash from `mise run backend:hash-password` (see ADR 0005 / #82).                                                       |
 
 The operator syncs these field labels directly as Secret keys, matching the
 env vars the backend actually reads (`app.config.Settings`). If your
 `tuk-tuk-auth` 1Password item still has a field named `ADMIN_PASSWORD_HASH`
 from before the auth gate landed, rename it to `AUTH_PASSWORD_HASH` — the app
-looks for that name and won't start without it.
+looks for that name and won't start without it. A leftover `SECRET_KEY`
+field is unread and can go.
+
+### Never rotate `APP_MASTER_KEY`
+
+Keep the key in `tuk-tuk-auth` unchanged across releases and restores. With
+a different key the backend still starts, but none of the secrets Users saved
+in Settings (GitHub Tokens among them) can be read any more, and the app does
+not flag them for reconnecting: each one has to be entered again by hand.
+[Security → The master key](../../docs/self-hosting/security.md#the-master-key)
+lists what it covers.
 
 ### `AUTH_PASSWORD_HASH` holds the hash, never the password
 
@@ -137,6 +148,25 @@ kubectl -n tuk-tuk exec deploy/backend -- printenv AUTH_PASSWORD_HASH
 
 It should begin `$argon2id$v=19$m=…`. Missing `$` separators or a plaintext
 value is the `500` waiting to happen.
+
+## Google sign-in and invitations (optional)
+
+`tuk-tuk-sso` (issue #586, ADR 0021) turns on invite-only Google sign-in,
+invitations, and Google Calendar without each User's own Google Cloud
+client. Like `tuk-tuk-google`, its `secretRef` is `optional: true`: without
+it the app keeps password sign-in only. Create a `tuk-tuk-sso` item in the
+same vault as `tuk-tuk-auth` with the fields listed in
+`sso-onepassworditem.yaml`, then restart the pod. The field labels must
+match `app.config.Settings` exactly (`GOOGLE_OAUTH_CLIENT_ID`,
+`GOOGLE_OAUTH_CLIENT_SECRET`, `SMTP_*`).
+
+These are not the migration-only `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`
+of `tuk-tuk-google`, which only ever seed user #1's own client. Connections
+made with a User's own client keep working with it after this is set.
+
+See [the self-hosting guide](../../docs/self-hosting/google-sign-in.md) for
+the Google Cloud and SMTP setup, and how to verify both before inviting
+anyone.
 
 ## Google Calendar integration (optional)
 

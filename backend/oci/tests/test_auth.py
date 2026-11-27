@@ -341,6 +341,8 @@ class TestMe:
             "is_admin": True,
             "must_change_password": False,
             "must_complete_profile": False,
+            "has_password": True,
+            "google_email": None,
         }
 
     def test_is_rejected_without_a_session(self, unauthenticated_client: TestClient) -> None:

@@ -6,12 +6,17 @@ import {
   type AdminUserChange,
   ApiError,
   type CurrentUser,
+  deleteAdminUser,
   fetchAdminUsers,
   type Page,
   resetAdminUserPassword,
+  unlinkAdminUserGoogle,
   updateAdminUser,
 } from "../api";
 import { formatLastActive } from "../dates";
+import { ChangeEmailDialog } from "./ChangeEmailDialog";
+import { DeleteUserDialog } from "./DeleteUserDialog";
+import { InvitationsPanel } from "./InvitationsPanel";
 import { LoadError, SkeletonRows } from "./TaskViewState";
 import { NewUserDialog } from "./NewUserDialog";
 import { ResetPasswordDialog } from "./ResetPasswordDialog";
@@ -87,7 +92,7 @@ export function UserRow({
   isSelf: boolean;
   actions?: ReactNode;
   error?: string;
-}): JSX.Element {
+}): React.JSX.Element {
   const status = accountStatus(account);
   return (
     <tr className="users-row" data-status={STATUS_STATE[status]}>
@@ -105,6 +110,16 @@ export function UserRow({
               )}
             </span>{" "}
             {account.email !== null && <span className="users-email">{account.email}</span>}
+            {/* How the account signs in (#586), when it isn't just a password. */}
+            {account.google_email !== null ? (
+              <span className="users-sign-in">Google: {account.google_email}</span>
+            ) : (
+              !account.has_password && (
+                <span className="users-sign-in" data-state="warn">
+                  No way to sign in: reset their password
+                </span>
+              )
+            )}
           </span>
         </span>
         {error !== undefined && (
@@ -147,12 +162,15 @@ export function UsersPanel({
 }: {
   currentUser: CurrentUser;
   onAccessLost: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<AdminUser | null>(null);
   /** The account whose password is being reset, and whether it has been. */
   const [resetting, setResetting] = useState<{ account: AdminUser; reset: boolean } | null>(null);
+  /** The account whose email is being changed (#586). */
+  const [editingEmail, setEditingEmail] = useState<AdminUser | null>(null);
   /** What the last action on a row failed to do, by account id. */
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const onAccessLostRef = useRef(onAccessLost);
@@ -251,6 +269,18 @@ export function UsersPanel({
     );
   }
 
+  /** Removes an account's Google sign-in (#586); the list is re-read so the
+   * row shows how it signs in now. */
+  function unlinkGoogle(account: AdminUser): void {
+    clearRowError(account.id);
+    unlinkAdminUserGoogle(account.id).then(rereadQuietly, () =>
+      setRowErrors((errors) => ({
+        ...errors,
+        [account.id]: `Couldn’t remove Google sign-in from ${account.username}. Try again.`,
+      })),
+    );
+  }
+
   function closeReset(): void {
     if (resetting?.reset === true) rereadQuietly();
     setResetting(null);
@@ -305,12 +335,51 @@ export function UsersPanel({
                       isLastAdmin={isLastActiveAdmin(account, list.page.items)}
                       onChange={(change) => changeAccount(account, change)}
                       onResetPassword={() => setResetting({ account, reset: false })}
+                      onChangeEmail={() => setEditingEmail(account)}
+                      onUnlinkGoogle={() => unlinkGoogle(account)}
+                      onDelete={() => setDeleting(account)}
                     />
                   }
                 />
               ))}
             </tbody>
           </table>
+          <InvitationsPanel />
+          {deleting !== null && (
+            <DeleteUserDialog
+              account={deleting}
+              onDelete={(email) =>
+                deleteAdminUser(deleting.id, email).then(() => {
+                  if (deleting.id === currentUser.id) {
+                    onAccessLostRef.current();
+                  } else {
+                    setList((current) =>
+                      current.kind === "loaded"
+                        ? {
+                            kind: "loaded",
+                            page: {
+                              ...current.page,
+                              total: current.page.total - 1,
+                              items: current.page.items.filter((item) => item.id !== deleting.id),
+                            },
+                          }
+                        : current,
+                    );
+                  }
+                })
+              }
+              onClose={() => setDeleting(null)}
+            />
+          )}
+          {editingEmail !== null && (
+            <ChangeEmailDialog
+              account={editingEmail}
+              onSave={(email) =>
+                updateAdminUser(editingEmail.id, { email }).then(() => rereadQuietly())
+              }
+              onClose={() => setEditingEmail(null)}
+            />
+          )}
           {creating && (
             <NewUserDialog onClose={() => setCreating(false)} onCreated={rereadQuietly} />
           )}

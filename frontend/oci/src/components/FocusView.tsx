@@ -26,6 +26,7 @@ import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import { LinkSelect } from "./LinkSelect";
+import { ResumeNote } from "./ResumeNote";
 import { TimerForm } from "./TimerForm";
 
 function formatClock(ms: number): string {
@@ -60,7 +61,7 @@ interface FocusViewProps {
  * distraction-free — the countdown is the only thing on screen, alongside
  * Pause/Resume, Finish, and Cancel; the Timers presets and statistics/history
  * live behind a tap so nothing else competes with the clock (#162). */
-export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): JSX.Element {
+export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): React.JSX.Element {
   // The live run (ticking clock, pause/resume/finish/cancel) is shared with
   // the nav bar badge — this screen just supplies the pre-start
   // configuration and the Timers presets.
@@ -216,6 +217,13 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
   // Today's Tasks may not all be in the open-Tasks page; look in both.
   const knownTasks = [...tasks, ...todayTasks.filter((t) => !tasks.some((o) => o.id === t.id))];
   const stageTask = running !== null ? linkLabel(running.link, knownTasks, habits) : null;
+  // The linked Task's next open Check Item (#552), so the stage says what to do.
+  const stageStep =
+    running !== null && running.link.startsWith("task:")
+      ? knownTasks
+          .find((t) => `task:${t.id}` === running.link)
+          ?.check_items.find((item) => !item.done)
+      : undefined;
   const linkedName = linkLabel(link, knownTasks, habits);
   const today = localDayOf(new Date());
   const strip = statDays;
@@ -312,6 +320,7 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             Focusing on <strong>{stageTask}</strong>
           </p>
         )}
+        {stageStep !== undefined && <p className="focus-stage-step">Next: {stageStep.title}</p>}
         <div className="focus-timer">
           {pendingBreak !== null ? (
             <div className="focus-break-offer">
@@ -525,7 +534,8 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                   <button
                     type="button"
                     className="focus-primary btn-focus"
-                    onClick={() => void finish()}
+                    // A failed save keeps the run; tapping again retries it.
+                    onClick={() => void finish().catch(() => undefined)}
                   >
                     Finish
                   </button>
@@ -551,6 +561,8 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
                   </span>
                 </p>
               )}
+              {/* Offered, never required (#554): only while paused. */}
+              {running.phase !== "break" && running.pauseStartedAtMs !== null && <ResumeNote />}
             </>
           )}
         </div>
@@ -639,6 +651,22 @@ export function FocusView({ initialTask = null, onOpenStats }: FocusViewProps): 
             <Icon name="chart-column" size={16} />
             Statistics
           </a>
+          <details className="focus-accountability">
+            <summary>Work alongside someone (optional)</summary>
+            <p>
+              Focusmate is an external service. Opening it leaves Tuk Tuk. No Task details are sent
+              and no session is booked.
+            </p>
+            <p>Without video, work alongside someone you already know, or continue alone.</p>
+            <a
+              href="https://www.focusmate.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              referrerPolicy="no-referrer"
+            >
+              Open Focusmate (external, new tab)
+            </a>
+          </details>
         </aside>
       )}
     </div>

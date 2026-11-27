@@ -24,6 +24,9 @@ import { PRIORITY_LABELS } from "../grouping";
 import { formatFocusTotal } from "../focusTotals";
 import { appendOrder, planInsertBefore } from "../ordering";
 import { DateRow } from "./DateRow";
+import { CheckItemSuggestions } from "./CheckItemSuggestions";
+import { EstimateRow } from "./EstimateRow";
+import { PlannedWorkRow } from "./PlannedWorkRow";
 import { Hint } from "./Hint";
 import { IconButton } from "./IconButton";
 import { OverflowMenu } from "./OverflowMenu";
@@ -43,6 +46,7 @@ const SWIPE_DISMISS_THRESHOLD_PX = 60;
 
 interface TaskDetailProps {
   task: Task;
+  assistantEnabled?: boolean;
   allTags: Tag[];
   /** The List this Task belongs to — shown as a breadcrumb above the title
    * (issue #170) so the mobile sheet states where it was opened from,
@@ -62,7 +66,7 @@ interface TaskDetailProps {
   sheet?: boolean;
   /** Opens Focus with this Task linked, clock idle. Absent when Focus is
    * turned off, which hides the button. */
-  onStartFocus?: (task: Task) => void;
+  onOpenFocus?: (task: Task) => void;
   /** Deletes the Task (with undo); the caller closes the detail. */
   onDelete: (task: Task) => void;
 }
@@ -80,6 +84,7 @@ function taskCountKeyResults(goals: Goal[]): { goalTitle: string; id: number; na
 
 export function TaskDetail({
   task,
+  assistantEnabled = false,
   allTags,
   listName,
   lists,
@@ -87,9 +92,9 @@ export function TaskDetail({
   onTagCreated,
   onClose,
   sheet = false,
-  onStartFocus,
+  onOpenFocus,
   onDelete,
-}: TaskDetailProps): JSX.Element {
+}: TaskDetailProps): React.JSX.Element {
   const [title, setTitle] = useState(task.title);
   const [goals, setGoals] = useState<Goal[]>([]);
 
@@ -113,7 +118,7 @@ export function TaskDetail({
   const [focusedSeconds, setFocusedSeconds] = useState<number | null>(null);
 
   // Time already focused on this Task: the sum of its linked Focus Sessions.
-  const focusEnabled = onStartFocus !== undefined;
+  const focusEnabled = onOpenFocus !== undefined;
   useEffect(() => {
     if (!focusEnabled) {
       return;
@@ -516,6 +521,8 @@ export function TaskDetail({
           </div>
         </Hint>
         <DateRow task={task} onTaskChanged={onTaskChanged} />
+        <PlannedWorkRow task={task} onTaskChanged={onTaskChanged} />
+        <EstimateRow task={task} onTaskChanged={onTaskChanged} />
         <ReminderRow task={task} onTaskChanged={onTaskChanged} />
       </div>
       <div className="task-description">
@@ -565,6 +572,9 @@ export function TaskDetail({
           />
         )}
       </div>
+      {assistantEnabled && (
+        <CheckItemSuggestions key={task.id} task={task} onTaskChanged={onTaskChanged} />
+      )}
       <section className="check-items" aria-label="Check items section">
         {task.check_items.length > 0 && (
           <div className="check-items-progress">
@@ -648,9 +658,9 @@ export function TaskDetail({
         </form>
       </section>
       <div className="task-detail-footer">
-        {onStartFocus !== undefined && (
-          <button type="button" className="btn-focus" onClick={() => onStartFocus(task)}>
-            Start focus
+        {onOpenFocus !== undefined && (
+          <button type="button" className="btn-focus" onClick={() => onOpenFocus(task)}>
+            Open Focus
             {focusedSeconds !== null && focusedSeconds > 0 && (
               <span className="task-detail-focused">
                 {" · "}

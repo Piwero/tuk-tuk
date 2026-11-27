@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ApiError, login } from "../api";
+import { ApiError, fetchSignInProviders, login, startGoogleSignIn } from "../api";
+import { browserNavigation } from "../navigation";
 import { AuthBrand } from "./AuthBrand";
 
 /** Why the gate is showing sign-in without the person having tried yet:
@@ -8,6 +9,24 @@ import { AuthBrand } from "./AuthBrand";
 export type SignInNotice = "account-disabled";
 
 const DISABLED_MESSAGE = "This account is disabled. Contact your admin.";
+
+/** Why a Google sign-in came back without signing in (#586), by the code
+ * the backend's callback put in the URL. */
+const GOOGLE_ERRORS: Record<string, string> = {
+  not_recognized:
+    "That Google account doesn’t have access. Ask your admin for an invitation, or sign in with your password.",
+  account_disabled: DISABLED_MESSAGE,
+  google_email_unverified:
+    "Google hasn’t verified that account’s email, so it can’t be used to sign in.",
+  google_cancelled: "Signing in with Google was canceled.",
+};
+const GOOGLE_FAILED = "Signing in with Google didn’t complete. Try again.";
+
+/** The Google sign-in outcome the URL carries, if any. */
+function googleErrorFromUrl(): string | null {
+  const code = new URLSearchParams(window.location.search).get("signInError");
+  return code === null ? null : (GOOGLE_ERRORS[code] ?? GOOGLE_FAILED);
+}
 
 /** The three things a sign-in can be told (#468), by the backend's error
  * code. A wrong password and an unknown name share one message, so the
@@ -34,13 +53,14 @@ export function SignInScreen({
 }: {
   notice: SignInNotice | null;
   onSuccess: () => Promise<void>;
-}): JSX.Element {
+}): React.JSX.Element {
   const [loginName, setLoginName] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(
-    notice === "account-disabled" ? DISABLED_MESSAGE : null,
+    () => googleErrorFromUrl() ?? (notice === "account-disabled" ? DISABLED_MESSAGE : null),
   );
+  const [googleOffered, setGoogleOffered] = useState(false);
   const loginRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const [refocus, setRefocus] = useState(0);
@@ -48,6 +68,38 @@ export function SignInScreen({
   useEffect(() => {
     loginRef.current?.focus();
   }, []);
+
+  // The outcome is shown once; a reload shouldn't show it again.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("signInError")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    fetchSignInProviders().then(
+      (providers) => {
+        if (live) setGoogleOffered(providers.google);
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  function continueWithGoogle(): void {
+    setPending(true);
+    setError(null);
+    startGoogleSignIn().then(
+      (url) => browserNavigation.assign(url),
+      () => {
+        setError(GOOGLE_FAILED);
+        setPending(false);
+      },
+    );
+  }
 
   // After a failed attempt the fields come back enabled; put the person
   // back in the password field they need to retype.
@@ -117,6 +169,19 @@ export function SignInScreen({
         <button className="btn-primary" type="submit" disabled={pending}>
           {pending ? "Signing in…" : "Sign in"}
         </button>
+        {googleOffered && (
+          <>
+            <p className="auth-gate-divider">or</p>
+            <button
+              className="btn-secondary"
+              type="button"
+              disabled={pending}
+              onClick={continueWithGoogle}
+            >
+              Continue with Google
+            </button>
+          </>
+        )}
         <p className="auth-gate-footnote">Forgot your password? Ask your admin to reset it.</p>
         {/* Migration 0035 named the single pre-existing account "admin" (with
             no email), and nothing else would tell its owner so. */}

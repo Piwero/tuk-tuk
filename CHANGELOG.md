@@ -4,6 +4,192 @@ All notable changes to this project are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [3.8.4](https://github.com/Piwero/tuk-tuk/compare/v3.8.3...v3.8.4) - 2026-11-27
+
+_Maintenance release; no user-facing changes._
+
+## [3.8.3](https://github.com/Piwero/tuk-tuk/compare/v3.8.2...v3.8.3) - 2026-11-27
+
+### Bug Fixes
+
+- Keep today's calendar grid neutral ([b54a029](https://github.com/Piwero/tuk-tuk/commit/b54a029dd2701dbb3433eb5b358738febcd6cccc))
+- Show three calendar days on mobile ([24caaec](https://github.com/Piwero/tuk-tuk/commit/24caaec5c19cefa09b376a0175dd758161331660))
+- Preserve mobile title wrapping and latest calendar data ([befc41f](https://github.com/Piwero/tuk-tuk/commit/befc41f8cb35dce4127e248e0c30836f809e992e))
+
+## [3.8.2](https://github.com/Piwero/tuk-tuk/compare/v3.8.1...v3.8.2) - 2026-11-27
+
+### Features
+
+- Allow admins to delete user accounts ([5d650e4](https://github.com/Piwero/tuk-tuk/commit/5d650e406b1941964ac0b5f52764b76b89223b0c))
+
+## [3.8.1](https://github.com/Piwero/tuk-tuk/compare/v3.8.0...v3.8.1) - 2026-11-26
+
+### Features
+
+- **frontend:** Open and touch-drag Unscheduled tasks in the calendar ([6040b52](https://github.com/Piwero/tuk-tuk/commit/6040b523c0b2458a62205c6c99df4e53ac8dd98b))
+
+### Bug Fixes
+
+- **frontend:** Today's calendar column wash spans the whole day ([5d71186](https://github.com/Piwero/tuk-tuk/commit/5d7118625f9781c18e1463cf99fe64f197682393))
+- **frontend:** Keep a tapped Task row's actions hidden on phones ([d820e86](https://github.com/Piwero/tuk-tuk/commit/d820e865e789b9704c6764572abdc05f93e2d61c))
+- **frontend:** Fit the Habits week grid and recent-days strips on phones ([004e2f0](https://github.com/Piwero/tuk-tuk/commit/004e2f0877512e9f4c9c60871de592abecff16db))
+- **frontend:** Theme the date panel's days and tidy its layout ([55bd973](https://github.com/Piwero/tuk-tuk/commit/55bd973c5811bc770637c81df659d5e1ddeefe45))
+
+## [3.8.0](https://github.com/Piwero/tuk-tuk/compare/v3.7.0...v3.8.0) - 2026-11-26
+
+### Features
+
+- **backend:** Invite-only Google sign-in with optional Calendar onboarding (#586) ([c684c96](https://github.com/Piwero/tuk-tuk/commit/c684c9686b03901570ea722fc5d5235a309f6434))
+- **frontend:** Google sign-in, invitation acceptance and Admin invitations (#586) ([ec39f9e](https://github.com/Piwero/tuk-tuk/commit/ec39f9e5a1ee6f640055e8751ee2f47ffb8aec59))
+
+## [3.7.0](https://github.com/Piwero/tuk-tuk/compare/v3.6.0...v3.7.0) - 2026-11-26
+
+### Features
+
+- **github:** Add a GitHub Token through the API (#578) ([299fca3](https://github.com/Piwero/tuk-tuk/commit/299fca34da97acd1e546a1a23bcdfab889f07120))
+- **github:** Add and remove GitHub Tokens in a new Settings tab (#578) ([acc781d](https://github.com/Piwero/tuk-tuk/commit/acc781de79eedd12c650c6976fefdc9e8af13fcb))
+- **github:** Watched repositories picker API (#581) ([608e79d](https://github.com/Piwero/tuk-tuk/commit/608e79d93eb70fa8a4d4fad19e865754d6238d4b))
+- **github:** Watched repositories picker in Settings (#581) ([badc80b](https://github.com/Piwero/tuk-tuk/commit/badc80b45deb071d695e7906d59df39410395e2a))
+- **github:** List open Pull Requests of Watched Repositories through the API (#579) ([a980581](https://github.com/Piwero/tuk-tuk/commit/a98058115325ecc52cad224587f307ef4241189c))
+- **github:** GitHub view with a Pull Requests tab in the sidebar (#579) ([05e50da](https://github.com/Piwero/tuk-tuk/commit/05e50da2a376f51e164ff2cda423251d2294f455))
+- **github:** List open GitHub Issues of Watched Repositories through the API (#582) ([84fe24e](https://github.com/Piwero/tuk-tuk/commit/84fe24efdaf1db74b082511b6f4717daf3f52679))
+- **github:** GitHub Issues tab in the GitHub view (#582) ([f3bc817](https://github.com/Piwero/tuk-tuk/commit/f3bc81702c15c2ab517cc03e51c5e2a47d8911d2))
+- **github:** Filter the GitHub view by author and label (#585) ([ca96d30](https://github.com/Piwero/tuk-tuk/commit/ca96d308f5bec2d6695517fd4c8b508f6526fb53))
+- **github:** Filter GitHub Issues by assignee and hide drafts and bots (#585) ([952f0c8](https://github.com/Piwero/tuk-tuk/commit/952f0c8ca390160008255326be2ab4e0b24cc75b))
+- **github:** Keep Pull Request groups with filtered counts and say when filters empty a list (#585) ([b074098](https://github.com/Piwero/tuk-tuk/commit/b07409823043ffe1437401f3aae3fd0b9cd19b75))
+- **github:** Forget GitHub view filters on leaving the view (#585) ([11897ad](https://github.com/Piwero/tuk-tuk/commit/11897ad797d985db983982e86c874e1c49f1e3ca))
+- **github:** A GitHub Token GitHub rejects while reading needs reconnection, and Reconnect replaces it in place (#584) ([83b243d](https://github.com/Piwero/tuk-tuk/commit/83b243d2ecabaf3146df70c6e8135710633d0507))
+- **github:** Warn when a GitHub Token expires within 7 days (#584) ([f2131aa](https://github.com/Piwero/tuk-tuk/commit/f2131aa940879a4c609d35985d5b132aa15bcd2c))
+- **github:** Banner per failing or expiring GitHub Token in the GitHub view (#584) ([6bb0840](https://github.com/Piwero/tuk-tuk/commit/6bb0840e952b51552eb69df2145e6c22e4920634))
+- **github:** Reconnect a GitHub Token in Settings and warn there before it expires (#584) ([1925688](https://github.com/Piwero/tuk-tuk/commit/1925688de02b2bc0f45dd01f0a87d0615573682e))
+- **github:** Create, rename, reorder and delete Repository Views through the API (#580) ([3650103](https://github.com/Piwero/tuk-tuk/commit/3650103f653c83a9499ded828ea3ac7c4b05c800))
+- **github:** Read a Repository View's Pull Requests and GitHub Issues, isolated per User (#580) ([569d0ff](https://github.com/Piwero/tuk-tuk/commit/569d0ff6858ecbb4350aa2d542a3ecb3e2b554ec))
+- **github:** Repository Views under GitHub in the sidebar, each opening with its saved filters and tab (#580) ([b257105](https://github.com/Piwero/tuk-tuk/commit/b257105fb38a9838698af62487fb34c844d6647f))
+- **github:** Cache each GitHub Token's reads for 60 seconds, Refresh bypasses it (#583) ([1824890](https://github.com/Piwero/tuk-tuk/commit/1824890573829b8ca33462acfa35ecfc0bf7d69d))
+- **github:** A GitHub view read carries when its results were fetched from GitHub (#583) ([d597bd9](https://github.com/Piwero/tuk-tuk/commit/d597bd9b4e003c67971122fd917413a3d12d9d8f))
+- **github:** On a transient GitHub failure, serve a token's last result under 10 minutes old as stale (#583) ([d6601f6](https://github.com/Piwero/tuk-tuk/commit/d6601f64a599b810d936a5d6e5a4b1270ab9bc7b))
+- **github:** Never show a cached result for a GitHub Token GitHub has rejected (#583) ([7597426](https://github.com/Piwero/tuk-tuk/commit/75974269d50422c4b2b78a92692974d5e28f453a))
+- **github:** A repository watched within the minute is read from GitHub, not missed in the cache (#583) ([337fa0f](https://github.com/Piwero/tuk-tuk/commit/337fa0f875669fe01736fca9efe7e7db87468f54))
+- **github:** The GitHub view shows how long ago its data was fetched (#583) ([c7c9627](https://github.com/Piwero/tuk-tuk/commit/c7c96279830b01914095c475739c025ad1ab76d8))
+- **github:** Refresh in the GitHub view reads from GitHub now (#583) ([7e4e47f](https://github.com/Piwero/tuk-tuk/commit/7e4e47f06592ece6c4c2a55bc3eac5b2de64acaf))
+- **github:** A stale notice with Retry when GitHub can't be reached, and Retry for a token with nothing recent (#583) ([4a68233](https://github.com/Piwero/tuk-tuk/commit/4a6823305b1f69105d6962cd5151959cebb35c1c))
+
+### Bug Fixes
+
+- **frontend:** Age GitHub view rows from when they were opened (#579, #582) ([0cfc0b8](https://github.com/Piwero/tuk-tuk/commit/0cfc0b82b204d7b3d9770cfe9418c11e961d1f33))
+- **github:** Never guess a GitHub Token's owner (#578, #581) ([cb6e999](https://github.com/Piwero/tuk-tuk/commit/cb6e9994679e2dc8fd6b5179dfad73b22ca6c223))
+- **github:** Follow the documented standards in the GitHub UI and docs (#576) ([1132f3c](https://github.com/Piwero/tuk-tuk/commit/1132f3c5e99ca3a2ae691dba7ccf8e9b7c173663))
+- **backend:** Reconnect a GitHub Token GitHub accepts again (#584) ([b0ce933](https://github.com/Piwero/tuk-tuk/commit/b0ce9333262af56b51c89554216816e0181690b5))
+
+## [3.6.0](https://github.com/Piwero/tuk-tuk/compare/v3.5.0...v3.6.0) - 2026-11-26
+
+### Features
+
+- ADHD phase 4 assisted-start experiments (#577) ([a10c2aa](https://github.com/Piwero/tuk-tuk/commit/a10c2aa1d9abda86279efac750310e2a7fb54d69))
+
+## [3.5.0](https://github.com/Piwero/tuk-tuk/compare/v3.4.1...v3.5.0) - 2026-11-26
+
+### Features
+
+- **habits:** Pause a Habit for a date range (#559) ([4687461](https://github.com/Piwero/tuk-tuk/commit/4687461271853fd1f32dc59c617575893da3ed4f))
+- **habits:** Show paused Habits with Edit pause and Resume today (#559) ([d0d1ca8](https://github.com/Piwero/tuk-tuk/commit/d0d1ca87693d78972ff27af0f29dbe62554de5f5))
+- **backend:** Per-User reminder notifications setting (#557) ([54799c9](https://github.com/Piwero/tuk-tuk/commit/54799c929630cdb31c8c9f5676c4ef3bbc9e7219))
+- **frontend:** Opt-in Reminder notifications setup with honest limits (#557) ([1987d4c](https://github.com/Piwero/tuk-tuk/commit/1987d4c790c722551f200c09f2c19d8c20716fe3))
+- **tasks:** Planned work block on a Task, separate from the due date (#558) ([d3ff292](https://github.com/Piwero/tuk-tuk/commit/d3ff2923de0fa73af61b54b72f81296952d6c21f))
+- **frontend:** Planned work row in Task detail (#558) ([18b8dcf](https://github.com/Piwero/tuk-tuk/commit/18b8dcf276497ad5e45b6323cd225bbd148749a2))
+- **calendar:** Include Planned work in the Task range window (#562) ([74f6d9a](https://github.com/Piwero/tuk-tuk/commit/74f6d9a4d965434f9d9f8f4f6bf1300216589641))
+- **calendar:** Render Planned work as its own labelled Entry (#562) ([59842cc](https://github.com/Piwero/tuk-tuk/commit/59842cc48e7464bafab952f309e7fb00677f8b5b))
+- **backend:** Reminder delivery ledger with claim/lease for open tabs (#561) ([c345a62](https://github.com/Piwero/tuk-tuk/commit/c345a62ee6f9b3751937f5b480623fe0298ee571))
+- **frontend:** Show due Reminders as notifications in an open tab (#561) ([d95d04f](https://github.com/Piwero/tuk-tuk/commit/d95d04fba951ae0f4c685dd3d1a1cf520e4172ea))
+- **habits:** Skip one scheduled Habit day on purpose (#564) ([c143f52](https://github.com/Piwero/tuk-tuk/commit/c143f5245f9958eb851a8e9274facb63d8a85b90))
+- **habits:** Skip today or any scheduled day, and undo it (#564) ([bc3b67e](https://github.com/Piwero/tuk-tuk/commit/bc3b67e22b32cbb04eca76d114b6a88407031452))
+- **habits:** Weekly target under pause and skip for times-per-week Habits (#568) ([9d9d46b](https://github.com/Piwero/tuk-tuk/commit/9d9d46bc72b07557b44ea6e360578e9bd7dbddae))
+- **reminders:** Hold reminders during quiet hours (#567) ([8bb03e8](https://github.com/Piwero/tuk-tuk/commit/8bb03e8594b8b7ca0659a5d419c88b4c7ae40069))
+- **frontend:** Quiet hours settings and deferred state (#567) ([9e0f141](https://github.com/Piwero/tuk-tuk/commit/9e0f14174b1b691b07add20cb3027a0252e6a002))
+- **reminders:** Snooze a delivered reminder as a ledger override (#566) ([ecdbc3a](https://github.com/Piwero/tuk-tuk/commit/ecdbc3a82eb848904cad0dbb238f35961e8e9e10))
+- **reminders:** Offer snooze on delivered reminders with deadline-unchanged copy (#566) ([226d1e8](https://github.com/Piwero/tuk-tuk/commit/226d1e8cd5daabc6f49a4356cb6e825dc3d338bc))
+- **reminders:** List and dismiss missed reminders (#565) ([492abfe](https://github.com/Piwero/tuk-tuk/commit/492abfeb57b45bc35046705fcbc62a820607d71c))
+- **reminders:** Show missed reminders in-app instead of late alerts (#565) ([f624627](https://github.com/Piwero/tuk-tuk/commit/f6246274e2485e3ae11fb6d5fd478d25b531133e))
+- **settings:** Per-User planning window kept apart from Active hours (#563) ([dac40f0](https://github.com/Piwero/tuk-tuk/commit/dac40f01a7d78d347e165924abfda4d25f80fef6))
+- **frontend:** Capacity of a planning window, overlaps counted once (#563) ([8d2a9fb](https://github.com/Piwero/tuk-tuk/commit/8d2a9fb53b51d9ef042c6032b01d9ee4c1670f84))
+- **frontend:** Capacity summary for the planning window in the Day view (#563) ([3e92706](https://github.com/Piwero/tuk-tuk/commit/3e927060f4aafcbe4a3d4cd7f44f93ef30392358))
+- **reminders:** Offer snooze from the missed list (#566) ([fe61efc](https://github.com/Piwero/tuk-tuk/commit/fe61efc9ddc76c4b029b95ae6778e49326940a13))
+- **tasks:** Optional duration estimate for work planning (#563) ([2ef22b8](https://github.com/Piwero/tuk-tuk/commit/2ef22b8147f1ea76adcfa415f12e03e4701c840d))
+
+### Bug Fixes
+
+- **migrations:** Chain planned-work migration after habit pauses (#558) ([32fa058](https://github.com/Piwero/tuk-tuk/commit/32fa058cc8cd1e4f0654cf7b665f4aeb1f7d7e25))
+- **migrations:** Chain reminder deliveries after planned work (#561) ([9a99e0d](https://github.com/Piwero/tuk-tuk/commit/9a99e0dda98ce6b01ced6e0fcfc8683cc8a2609b))
+- **migrations:** Chain habit skips after reminder deliveries (#564) ([c0efe26](https://github.com/Piwero/tuk-tuk/commit/c0efe26491e4f57c50de529a61ca9e5f8d559e0f))
+- **migrations:** Chain planning window after quiet hours (#563) ([b6a9dff](https://github.com/Piwero/tuk-tuk/commit/b6a9dff6a8d1c11d4fada4330d2c46451f9a5671))
+- **frontend:** Close Phase 3 accessibility and phone layout gaps (#569) ([2d70773](https://github.com/Piwero/tuk-tuk/commit/2d70773a1f04cf0204b368ae803fd9797f107245))
+- **reminders:** Bound missed list by opt-in time (#565) ([1710a37](https://github.com/Piwero/tuk-tuk/commit/1710a37b16c741a0c3a02c38501ba45bd96ff096))
+- **reminders:** Per-device opt-in and honest background-tab copy (#557, #561) ([088340a](https://github.com/Piwero/tuk-tuk/commit/088340a6c19319b30af54c69e2c7e9d04fb93c48))
+- **frontend:** Flat Phase 3 marks and token sizes, guarded in CSS source (#562, #564, #566, #567) ([fc3f3ba](https://github.com/Piwero/tuk-tuk/commit/fc3f3ba942558344f6cdc3a0f267ab489ce5bff0))
+
+## [3.4.1](https://github.com/Piwero/tuk-tuk/compare/v3.4.0...v3.4.1) - 2026-11-25
+
+_Maintenance release; no user-facing changes._
+
+## [3.4.0](https://github.com/Piwero/tuk-tuk/compare/v3.3.0...v3.4.0) - 2026-11-25
+
+### Features
+
+- **backend:** Per-User gentle return setting (#548) ([0c3b085](https://github.com/Piwero/tuk-tuk/commit/0c3b08523edd88986a7a7449c7e0e726cbb61265))
+- **frontend:** Gentle return collapses earlier overdue Tasks in Today (#548) ([17d7ebd](https://github.com/Piwero/tuk-tuk/commit/17d7ebd293fd9e3ce2def656ba67030a75895259))
+- **backend:** Store one Now Task per User behind its own endpoint (#547) ([0a8bbdd](https://github.com/Piwero/tuk-tuk/commit/0a8bbddaec6c6297178e7bfa4710e3d9a6f68564))
+- **frontend:** Choose, replace and clear a Now Task in Today (#547) ([8f29d01](https://github.com/Piwero/tuk-tuk/commit/8f29d010edcde2da9ad5b40cf75de450a9ea4875))
+- **backend:** Retry-safe Focus Session create via client_run_id (#546) ([6cb4d20](https://github.com/Piwero/tuk-tuk/commit/6cb4d20a9603bdb2e4f3ba0010594af32ba6021b))
+- **frontend:** Send a per-run id so a retried Focus finish records once (#546) ([80d9c95](https://github.com/Piwero/tuk-tuk/commit/80d9c954bc0fdc54705d42543f5b34bdf1af2d57))
+- **backend:** Let a Check Item tick skip auto-completing its Task ([54429a6](https://github.com/Piwero/tuk-tuk/commit/54429a62f814079207daa22af13e413084088c2c))
+- **frontend:** Show and tick the next Check Item in Now ([26c8e09](https://github.com/Piwero/tuk-tuk/commit/26c8e09b3529be8a52cbf245859e5988799c7a64))
+- **frontend:** Offer deliberate Task completion in Now once every Check Item is done ([76920e0](https://github.com/Piwero/tuk-tuk/commit/76920e0ccecda6a27b1744ad268ad1ded3ee6e8d))
+- **backend:** Prune deleted, completed and advanced Now selections on read (#549) ([0312c5f](https://github.com/Piwero/tuk-tuk/commit/0312c5f17f36931fc876dc8d1a78c9fe968d6185))
+- **frontend:** Clear the Now panel when its Task is completed or advanced (#549) ([22f1bdb](https://github.com/Piwero/tuk-tuk/commit/22f1bdbc6eb0c94d10090246d6cba6f8b7a50917))
+- **now:** Work without timer from the Now panel (#553) ([698dc25](https://github.com/Piwero/tuk-tuk/commit/698dc252ff60705fe6af94cdb886fc0ef3255990))
+- **now:** Start 5 min begins a linked five-minute Pomo (#552) ([bf98bc3](https://github.com/Piwero/tuk-tuk/commit/bf98bc33b50d7571487c4f98640ddf7811cf7f9b))
+- **now:** Offer return or pause when Focus is already running (#552) ([df439f0](https://github.com/Piwero/tuk-tuk/commit/df439f024d6c5cdcccc865ba709258c50e20f5f3))
+- **now:** Store an optional resume note on the Now selection ([58058ef](https://github.com/Piwero/tuk-tuk/commit/58058ef0ab8b3da5d875bf635170f14518c12d43))
+- **now:** Offer an optional resume note while Focus is paused ([d7ddba6](https://github.com/Piwero/tuk-tuk/commit/d7ddba6cca2193583e4812c009e8407f9a900a8b))
+- **backend:** Ordered Now shortlist stored per User (#551) ([232b8de](https://github.com/Piwero/tuk-tuk/commit/232b8de39eda349453312ef81a712e05c3788a1b))
+- **frontend:** Ordered shortlist beside Now (#551) ([9b56b19](https://github.com/Piwero/tuk-tuk/commit/9b56b1971e7d4f4c689e9544e5759358c5471682))
+
+### Bug Fixes
+
+- **backend:** Renumber no-downgrade messages in 0043/0044 migrations ([dd3ae11](https://github.com/Piwero/tuk-tuk/commit/dd3ae11a3e634d784d07cf62f6cf6c470a39dfbb))
+- **now:** Meet the 44px tap-target floor across the mobile breakpoint ([1983f6c](https://github.com/Piwero/tuk-tuk/commit/1983f6c8f7f956028b99a1deb8e39d8041e532e7))
+- **now:** Keep keyboard focus in the shortlist after row actions ([01a213a](https://github.com/Piwero/tuk-tuk/commit/01a213a6615485612f25b55d13a5be926e811127))
+- **now:** Reject completed Tasks and keep shortlist snapshots on rewrite (#534) ([f3ee4e1](https://github.com/Piwero/tuk-tuk/commit/f3ee4e19fbc178643e0fc78cdecf8b894e5cb01f))
+- **now:** Announce the confirmed Now Task in the live region (#534) ([4c89987](https://github.com/Piwero/tuk-tuk/commit/4c89987a06a7edb7239b82f0c0f1e50869d6973a))
+
+## [3.3.0](https://github.com/Piwero/tuk-tuk/compare/v3.2.1...v3.3.0) - 2026-11-25
+
+### Features
+
+- **backend:** Expose the Habit start as eligible_from in Habit statistics ([d07489e](https://github.com/Piwero/tuk-tuk/commit/d07489ebc2d0c54c95bed66670e62539b0e327b2))
+- **frontend:** Send the browser time zone with Habit statistics reads ([2f8f7ea](https://github.com/Piwero/tuk-tuk/commit/2f8f7ea4ff76b32f2ce594b8c2b8f7a0be5edc0e))
+- **frontend:** Label Habit types in plain language ([61babf2](https://github.com/Piwero/tuk-tuk/commit/61babf2477290c1129342ca4664b37e38979b448))
+- **frontend:** Put the Quick-Add title first, with details behind a disclosure ([04d056c](https://github.com/Piwero/tuk-tuk/commit/04d056c196cec6e6bcf0e8bde6024609762c8911))
+- **frontend:** Show saving, validation and failed-save retry in Quick-Add ([a6503c3](https://github.com/Piwero/tuk-tuk/commit/a6503c390ead1e9a7f4d4de7c447b166c7bee35b))
+- **frontend:** Show days before the Habit start as not started, never missed ([fcc92d6](https://github.com/Piwero/tuk-tuk/commit/fcc92d688b788bf7c4c029d7f507d1854571d720))
+- **frontend:** Keep an unsent Quick-Add draft for the signed-in User ([f7b2149](https://github.com/Piwero/tuk-tuk/commit/f7b2149721801b9d4f2695d66b63faf217b4da97))
+
+### Bug Fixes
+
+- **frontend:** Scope task selection to its view in render, not an effect ([fdc020c](https://github.com/Piwero/tuk-tuk/commit/fdc020c80e15c8dd730f40864c4ae0479355507e))
+- **deps:** Finish the React 19 upgrade in frontend/oci ([72eb4ea](https://github.com/Piwero/tuk-tuk/commit/72eb4ea80dd95f6ec115ebb67ab946b50c845d71))
+- **frontend:** Label navigate-only Focus entry points "Open Focus" ([ac551f6](https://github.com/Piwero/tuk-tuk/commit/ac551f6526d11a9afdc6dc48d3c5c8d799d0de4c))
+- **frontend:** Keep Quick-Add's Save on screen at short and narrow viewports ([48efeea](https://github.com/Piwero/tuk-tuk/commit/48efeea78f29692899836ab9d33be9bc31ef1bb5))
+- **frontend:** Read Habit days with one rule and say today's state on screen ([04d4c9c](https://github.com/Piwero/tuk-tuk/commit/04d4c9cad27984f50c8cc7399f1fda053e034aeb))
+- **frontend:** Make a discarded Quick-Add draft undoable and forget others' drafts ([e3be99a](https://github.com/Piwero/tuk-tuk/commit/e3be99a111dc2e7c7c657945e396782d67205813))
+- **frontend:** Leave Quick-Add Details as it was after an Assist parse ([5c6aa44](https://github.com/Piwero/tuk-tuk/commit/5c6aa443111a0eb5ba44e9ca353ba27d757a0a7b))
+
+## [3.2.1](https://github.com/Piwero/tuk-tuk/compare/v3.2.0...v3.2.1) - 2026-11-21
+
+### Bug Fixes
+
+- **deps:** Bump backend packages flagged by Dependabot ([03bb721](https://github.com/Piwero/tuk-tuk/commit/03bb721b3d4a8576fcd20e272edcf861125c8b33))
+
 ## [3.2.0](https://github.com/Piwero/tuk-tuk/compare/v3.1.1...v3.2.0) - 2026-11-21
 
 ### Features

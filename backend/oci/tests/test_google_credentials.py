@@ -54,6 +54,7 @@ class TestSaveCredentials:
                 "configured": True,
                 "client_id": "a-client-id",
                 "client_secret_set": True,
+                "shared_client": False,
             }
             assert client.get("/api/v1/google/status").json()["configured"] is True
 
@@ -115,6 +116,7 @@ class TestSaveCredentials:
                 "configured": True,
                 "client_id": "new-client-id",
                 "client_secret_set": True,
+                "shared_client": False,
             }
             connect_and_authorize(
                 client,
@@ -213,6 +215,7 @@ class TestRemoveCredentials:
                 "configured": False,
                 "client_id": None,
                 "client_secret_set": False,
+                "shared_client": False,
             }
             assert client.get("/api/v1/google/connect").status_code == 404
 

@@ -5,7 +5,7 @@ import { MIN_PASSWORD_LENGTH } from "./rules";
 
 /** One line of the checklist: a tick once met, an empty ring until then,
  * with the state also spoken, since the glyph alone is decorative. */
-function Rule({ met, children }: { met: boolean; children: string }): JSX.Element {
+function Rule({ met, children }: { met: boolean; children: string }): React.JSX.Element {
   return (
     <li className="auth-gate-rule" data-met={met}>
       {met ? <Icon name="check" /> : <span className="auth-gate-rule-ring" aria-hidden="true" />}
@@ -37,7 +37,7 @@ export function NewPasswordFields({
   invalid: boolean;
   errorId: string;
   newPasswordRef?: Ref<HTMLInputElement>;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <>
       <label htmlFor="auth-gate-new-password">New password</label>

@@ -15,7 +15,7 @@ export function ForcedStepFrame({
   footer: string;
   onLogout: () => void;
   children?: ReactNode;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <div className="auth-gate">
       <div className="auth-gate-form">

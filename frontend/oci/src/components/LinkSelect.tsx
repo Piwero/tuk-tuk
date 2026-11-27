@@ -21,7 +21,7 @@ export function LinkSelect({
   habits,
   value,
   onChange,
-}: LinkSelectProps): JSX.Element {
+}: LinkSelectProps): React.JSX.Element {
   return (
     <label className={className}>
       {label}

@@ -7,16 +7,17 @@ anything a User owns: being an Admin grants no access to other Users' data.
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import password_hasher
-from app.current_user import require_admin
-from app.db import SessionDep
+from app.current_user import AdminDep, require_admin
+from app.db import Base, SessionDep
 from app.errors import APIError, NotFoundError
-from app.models import User
+from app.models import ApiToken, Invitation, OwnedMixin, User, UserSettings
+from app.ownership import acting_as
 from app.schemas import Page
 from app.users import (
     check_new_password,
@@ -24,8 +25,10 @@ from app.users import (
     clean_username,
     clear_lockout,
     create_user,
+    ensure_email_not_invited,
     ensure_identity_free,
     reporting_taken_identity,
+    same_email,
     set_password,
 )
 
@@ -52,6 +55,10 @@ class AdminUserRead(BaseModel):
     created_at: datetime
     # Null until the account's first authenticated request (issue #478).
     last_active_at: datetime | None
+    # How the account signs in (issue #586): with a password, with its
+    # linked Google account (shown by email), or both.
+    has_password: bool
+    google_email: str | None
 
 
 class AdminUserCreate(BaseModel):
@@ -65,10 +72,13 @@ class AdminUserCreate(BaseModel):
 
 
 class AdminUserUpdate(BaseModel):
-    """Only the fields present change."""
+    """Only the fields present change. `email` is an Admin's deliberate
+    reconciliation (issue #586): it never moves a linked Google identity,
+    which is matched by its Google account id alone."""
 
     is_active: bool | None = None
     is_admin: bool | None = None
+    email: str | None = None
 
 
 class AdminPasswordReset(BaseModel):
@@ -100,6 +110,7 @@ async def create_account(
     email = clean_email(payload.email)
     check_new_password(payload.temp_password)
     await ensure_identity_free(session, username, email)
+    await ensure_email_not_invited(session, email)
     async with reporting_taken_identity():
         user = await create_user(
             session,
@@ -137,18 +148,28 @@ async def _ensure_another_active_admin(session: AsyncSession, user: User) -> Non
 
 @router.patch("/{user_id}")
 async def update_account(
-    user_id: int, payload: AdminUserUpdate, session: SessionDep
+    user_id: int, payload: AdminUserUpdate, request: Request, session: SessionDep
 ) -> AdminUserRead:
-    """Disables, re-enables, promotes or demotes a User; a role change
-    takes effect on their next request. Disabling also bumps their session
-    epoch, so it logs them out at once and re-enabling them later does not
-    revive a session from before (ADR 0018). The last active Admin can be
-    neither demoted nor disabled."""
+    """Disables, re-enables, promotes or demotes a User, or changes their
+    email; a role change takes effect on their next request. The last
+    active Admin can be neither demoted nor disabled.
+
+    Disabling ends every way in at once (issue #586): it bumps the session
+    epoch, logging out every session (password or Google), and revokes
+    every API and MCP token, which also cuts off any MCP access credential
+    already handed out. Re-enabling restores neither: the User signs in
+    afresh and creates new tokens. Their data and encrypted Google
+    Calendar credentials stay as they are."""
     user = await _get_user_or_404(session, user_id)
     disabling = payload.is_active is False and user.is_active
     demoting = payload.is_admin is False and user.is_admin
     if user.is_admin and user.is_active and (disabling or demoting):
         await _ensure_another_active_admin(session, user)
+    email = clean_email(payload.email) if payload.email is not None else None
+    if email is not None and not same_email(email, user.email):
+        await ensure_identity_free(session, user.username, email, except_user=user)
+        await ensure_email_not_invited(session, email)
+        user.email = email
 
     if payload.is_admin is not None:
         user.is_admin = payload.is_admin
@@ -156,6 +177,101 @@ async def update_account(
         user.is_active = payload.is_active
     if disabling:
         user.session_epoch += 1
+        await _revoke_tokens(session, user.id, request.app.state.clock())
+    async with reporting_taken_identity():
+        await session.commit()
+    return AdminUserRead.model_validate(user)
+
+
+async def _revoke_tokens(session: AsyncSession, user_id: int, now: datetime) -> None:
+    """Revokes every live API and MCP token of `user_id`. A system path:
+    the Admin owns none of them, so it acts as their owner (app.ownership)."""
+    with acting_as(user_id):
+        await session.execute(
+            update(ApiToken)
+            .where(ApiToken.revoked_at.is_(None))
+            .values(revoked_at=now)
+            .execution_options(synchronize_session=False)
+        )
+
+
+class AdminUserDelete(BaseModel):
+    email: str
+
+
+@router.delete("/{user_id}", status_code=204)
+async def delete_account(
+    user_id: int, payload: AdminUserDelete, request: Request, session: SessionDep
+) -> Response:
+    """Permanently erases local account data, never external provider data.
+
+    Email confirmation is checked against the locked current account. A
+    missing legacy email must be set first; blank confirmation never works.
+    """
+    # Match the role-change guard's lock order before locking the target.
+    await session.scalars(
+        select(User.id).where(User.is_admin, User.is_active).order_by(User.id).with_for_update()
+    )
+    user = await session.scalar(
+        select(User)
+        .where(User.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if user is None:
+        raise NotFoundError(f"User {user_id} not found")
+    if not user.email or payload.email != user.email:
+        raise APIError(422, "email_confirmation_mismatch", "Re-enter the account email exactly")
+    if user.is_admin and user.is_active:
+        await _ensure_another_active_admin(session, user)
+
+    await session.execute(
+        delete(Invitation).where(
+            or_(Invitation.accepted_user_id == user_id, Invitation.email == user.email)
+        )
+    )
+    # Invitations to other people stay usable without retaining the deleted inviter.
+    await session.execute(
+        update(Invitation).where(Invitation.invited_by_id == user_id).values(invited_by_id=None)
+    )
+    owned_models = {
+        mapper.local_table: mapper.class_
+        for mapper in Base.registry.mappers
+        if issubclass(mapper.class_, OwnedMixin)
+    }
+    with acting_as(user_id):
+        # Child-first also covers receipt tombstones and independent history.
+        for table in reversed(Base.metadata.sorted_tables):
+            if table in owned_models:
+                await session.execute(delete(owned_models[table]))
+    await session.execute(delete(UserSettings).where(UserSettings.user_id == user_id))
+    await session.execute(delete(User).where(User.id == user_id))
+    await session.commit()
+    request.app.state.event_cache.forget_owner(user_id)
+    request.app.state.github_pull_request_cache.forget_owner(user_id)
+    request.app.state.github_issue_cache.forget_owner(user_id)
+    return Response(status_code=204)
+
+
+@router.delete("/{user_id}/google-identity")
+async def unlink_google(user_id: int, session: SessionDep, admin: AdminDep) -> AdminUserRead:
+    """Removes a User's Google login identity (issue #586), after the Admin
+    verified out of band that they lost that Google account. The User, and
+    everything they own, stay; their sessions end. They then sign in with
+    a password (an Admin's temporary one, if they have none) and link
+    their new Google account. 409 `google_not_linked` if there is none,
+    `cannot_unlink_self` for the acting Admin's own (another Admin recovers
+    them), and `last_admin` when it would leave the last active Admin with
+    no way to sign in."""
+    user = await _get_user_or_404(session, user_id)
+    if user.google_subject is None:
+        raise APIError(409, "google_not_linked", "This account has no Google sign-in")
+    if user.id == admin.id:
+        raise APIError(409, "cannot_unlink_self", "Another admin must remove your Google sign-in")
+    if user.is_admin and user.is_active and not user.has_password:
+        await _ensure_another_active_admin(session, user)
+    user.link_google(None, None, None)
+    user.session_epoch += 1
     await session.commit()
     return AdminUserRead.model_validate(user)
 

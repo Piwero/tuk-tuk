@@ -1,3 +1,5 @@
+import { browserTimeZone } from "./dates";
+
 /** Empty means same-origin: in dev the Vite server proxies /api to the backend
  * (see vite.config.ts), and a deployment behind a single ingress needs no host
  * either. Set VITE_API_BASE_URL only when the API lives on another origin. */
@@ -65,7 +67,7 @@ export interface Task {
   time_zone: string | null;
   /** Reminder offsets from the task's date: signed ISO-8601 durations
    * (iCalendar TRIGGER convention: "PT0S" at time, "-PT30M" 30 min before).
-   * Stored only — v1 delivers no notifications. */
+   * Delivered only to an open tab of a User who opted in (ADR 0019). */
   reminders: string[];
   /** Recurrence: iCalendar RRULE content (e.g. "FREQ=WEEKLY;BYDAY=MO,TH"),
    * anchored at the due date. Completing a recurring task advances its dates
@@ -78,9 +80,31 @@ export interface Task {
   source_google_event_id: string | null;
   /** The Key Result this Task's completion counts toward, if any (ADR 0012). */
   key_result_id: number | null;
+  /** Planned work (#558): reserved work time, separate from start/due —
+   * moving or removing it never changes the deadline. Null when unplanned;
+   * optional so older payloads without the field still read as unplanned. */
+  planned_work?: PlannedWorkRead | null;
+  /** Duration estimate in minutes (#563), only for work planning; null
+   * when the User gave none. Never inferred. */
+  estimate_minutes?: number | null;
   check_items: CheckItem[];
   tags: Tag[];
   created_at: string;
+}
+
+/** A planned work block as written: a start instant, a positive duration,
+ * the IANA timezone it was planned in, and an optional buffer after. Stays
+ * within one local day of that timezone. */
+export interface PlannedWork {
+  start: string;
+  duration_minutes: number;
+  time_zone: string;
+  buffer_minutes: number | null;
+}
+
+/** As read: plus its end instant (start + duration, elapsed). */
+export interface PlannedWorkRead extends PlannedWork {
+  end: string;
 }
 
 export interface Page<T> {
@@ -99,6 +123,9 @@ export class ApiError extends Error {
     public readonly code: string,
     message: string,
     public readonly status?: number,
+    /** The envelope's machine-readable specifics, when it carries any
+     * (a pause's conflicting Check-in dates, issue #559). */
+    public readonly details?: unknown,
   ) {
     super(message);
   }
@@ -134,7 +161,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         listener(body.error.code);
       }
     }
-    throw new ApiError(body.error.code, body.error.message, response.status);
+    throw new ApiError(body.error.code, body.error.message, response.status, body.error.details);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -158,6 +185,11 @@ export interface CurrentUser {
   /** When the password was last set, ISO-8601 (#475): on creation, an
    * admin's temporary password, or the User's own change. Never null. */
   password_changed_at: string;
+  /** Whether the User can sign in with a password at all (#586): false for
+   * someone admitted by invitation who signs in with Google only. */
+  has_password: boolean;
+  /** The Google account the User signs in with, if any (#586). */
+  google_email: string | null;
 }
 
 /** Who this browser is signed in as — the gate's probe. Reachable while a
@@ -235,6 +267,10 @@ export interface AdminUser {
   /** When the account was last served a signed-in request (#478), ISO-8601,
    * moved at most every few minutes; null if it never has been. */
   last_active_at: string | null;
+  /** How the account signs in (#586): with a password, and/or with the
+   * Google account shown by its email. */
+  has_password: boolean;
+  google_email: string | null;
 }
 
 /** The most accounts one admin users read returns (the backend's cap). */
@@ -262,10 +298,13 @@ export function createAdminUser(input: NewAdminUser): Promise<AdminUser> {
 }
 
 /** What an Admin may change on an account (#412); only the fields given
- * change. There is no delete: accounts are only ever disabled. */
+ * change. Permanent deletion uses its own email-confirmed endpoint. */
 export interface AdminUserChange {
   is_active?: boolean;
   is_admin?: boolean;
+  /** An Admin's deliberate email reconciliation (#586). It never moves a
+   * linked Google sign-in. */
+  email?: string;
 }
 
 /** Disables / enables an account or changes its role. Disabling ends its
@@ -278,6 +317,14 @@ export function updateAdminUser(id: number, change: AdminUserChange): Promise<Ad
   });
 }
 
+/** Permanently deletes an account and its data after email confirmation. */
+export function deleteAdminUser(id: number, email: string): Promise<void> {
+  return request(`/api/v1/admin/users/${id}`, {
+    method: "DELETE",
+    body: JSON.stringify({ email }),
+  });
+}
+
 /** Gives an account a new temporary password, generated in the browser
  * (#412, #480). Ends every session of that account, the acting Admin's own
  * included, and forces a new password at next sign-in. Rejects 422
@@ -287,6 +334,143 @@ export function resetAdminUserPassword(id: number, tempPassword: string): Promis
     method: "POST",
     body: JSON.stringify({ temp_password: tempPassword }),
   });
+}
+
+/** Removes an account's Google sign-in (#586), after the Admin verified out
+ * of band that its owner lost that Google account. Ends its sessions; the
+ * account and its data stay. Rejects 409 `google_not_linked`. */
+export function unlinkAdminUserGoogle(id: number): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${id}/google-identity`, { method: "DELETE" });
+}
+
+/** An invitation's lifecycle (#586): only a pending one can be accepted. */
+export type InvitationStatus = "pending" | "accepted" | "canceled" | "expired";
+
+/** What the app knows of emailing the link: never "delivered" — a mail
+ * server taking a message is no receipt it reached an inbox. */
+export type InvitationDelivery = "not_sent" | "sent" | "failed";
+
+export interface Invitation {
+  id: number;
+  email: string;
+  status: InvitationStatus;
+  delivery: InvitationDelivery;
+  /** Why the last delivery failed, safe to show. */
+  delivery_error: string | null;
+  sent_at: string | null;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  canceled_at: string | null;
+  accepted_user_id: number | null;
+}
+
+/** Whether invitations can be accepted (Google sign-in is configured) and
+ * emailed (SMTP is). */
+export interface InvitationAvailability {
+  google_sign_in: boolean;
+  email_delivery: boolean;
+}
+
+const INVITATIONS_PATH = "/api/v1/admin/invitations";
+
+export function fetchInvitations(): Promise<Page<Invitation>> {
+  return request(`${INVITATIONS_PATH}?limit=200`);
+}
+
+export function fetchInvitationAvailability(): Promise<InvitationAvailability> {
+  return request(`${INVITATIONS_PATH}/availability`);
+}
+
+/** Invites an email address and emails the link. Rejects 409
+ * `email_taken`, `invitation_exists` or `google_sign_in_unavailable`, 422
+ * `invalid_email`. A failed email still creates the invitation, with
+ * `delivery` "failed". */
+export function createInvitation(email: string): Promise<Invitation> {
+  return request(INVITATIONS_PATH, { method: "POST", body: JSON.stringify({ email }) });
+}
+
+/** Emails a pending invitation's existing link again. */
+export function retryInvitationDelivery(id: number): Promise<Invitation> {
+  return request(`${INVITATIONS_PATH}/${id}/send`, { method: "POST" });
+}
+
+/** A new link valid for seven days, invalidating earlier ones, emailed. */
+export function resendInvitation(id: number): Promise<Invitation> {
+  return request(`${INVITATIONS_PATH}/${id}/resend`, { method: "POST" });
+}
+
+export function cancelInvitation(id: number): Promise<Invitation> {
+  return request(`${INVITATIONS_PATH}/${id}/cancel`, { method: "POST" });
+}
+
+/** A pending invitation's link, to pass on another way. */
+export function fetchInvitationLink(id: number): Promise<{ url: string }> {
+  return request(`${INVITATIONS_PATH}/${id}/link`, { method: "POST" });
+}
+
+/** Sign-in methods offered besides a password (#586). */
+export interface SignInProviders {
+  google: boolean;
+}
+
+export function fetchSignInProviders(): Promise<SignInProviders> {
+  return request("/api/v1/auth/providers");
+}
+
+/** Where the browser goes next: Google's consent screen. */
+interface AuthorizationStart {
+  authorization_url: string;
+}
+
+/** Starts signing in with Google; resolves to Google's URL, which the
+ * caller navigates to. `next` is a path on this site to land on after. */
+export function startGoogleSignIn(next?: string): Promise<string> {
+  return request<AuthorizationStart>("/api/v1/auth/google/login", {
+    method: "POST",
+    body: JSON.stringify(next === undefined ? {} : { next }),
+  }).then((start) => start.authorization_url);
+}
+
+/** What an invitation link is for. Rejects 404 for an unknown or replaced
+ * link. */
+export function lookupInvitation(
+  token: string,
+): Promise<{ email: string; status: InvitationStatus }> {
+  return request("/api/v1/auth/invitations/lookup", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+/** Starts accepting an invitation with Google. Rejects 404 (unknown link)
+ * or 409 `invitation_unavailable`. */
+export function startInvitationSignIn(token: string): Promise<string> {
+  return request<AuthorizationStart>("/api/v1/auth/google/invitation", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  }).then((start) => start.authorization_url);
+}
+
+/** Accepts the invitation this browser verified with Google, as a new
+ * User named `username`, and signs them in. Rejects 422
+ * `invalid_username`, 409 `username_taken` / `invitation_unavailable` /
+ * `identity_in_use`, 400 `acceptance_not_started`. */
+export function acceptInvitation(username: string): Promise<void> {
+  return request("/api/v1/auth/invitations/accept", {
+    method: "POST",
+    body: JSON.stringify({ username }),
+  });
+}
+
+/** Starts linking Google to the signed-in account after confirming its
+ * password. Rejects 400 `invalid_current_password`, 429
+ * `too_many_attempts`, 409 `google_already_linked`. */
+export function startGoogleLink(password: string, next: string): Promise<string> {
+  return request<AuthorizationStart>("/api/v1/auth/google/link", {
+    method: "POST",
+    body: JSON.stringify({ password, next }),
+  }).then((start) => start.authorization_url);
 }
 
 /** Signs in by username or email (either ignoring case) and sets the
@@ -486,6 +670,22 @@ export function fetchAssistantConfig(): Promise<AssistantConfig> {
   return request("/api/v1/assistant/config");
 }
 
+export function suggestCheckItems(
+  taskId: number,
+  count: number,
+  instruction: string,
+  signal: AbortSignal,
+): Promise<{
+  message: string;
+  suggestions: Extract<AssistantSuggestion, { type: "add_check_items" }>[];
+}> {
+  return request("/api/v1/assistant/check-item-suggestions", {
+    method: "POST",
+    body: JSON.stringify({ task_id: taskId, count, instruction }),
+    signal,
+  });
+}
+
 /** Saves whichever fields are passed; an omitted field is left unchanged
  * server-side. `apiKey` is omitted (not sent empty) to keep whatever is
  * already stored — the same write-only convention as
@@ -637,6 +837,9 @@ export function postAssistantChat(input: {
 
 export interface GoogleStatus {
   configured: boolean;
+  /** The instance's shared Google client is set up (#586): Calendar can be
+   * connected without any Google Cloud setup of the User's own. */
+  shared_client: boolean;
   /** The client ID isn't sensitive — Settings shows it back for editing. */
   client_id: string | null;
   /** Whether a client secret is stored; the value itself never round-trips. */
@@ -697,6 +900,284 @@ export function fetchGoogleAccounts(): Promise<GoogleAccount[]> {
 
 export function disconnectGoogleAccount(accountId: number): Promise<void> {
   return request(`/api/v1/google/accounts/${accountId}`, { method: "DELETE" });
+}
+
+export type GitHubOwnerKind = "user" | "organization";
+
+/** Whether GitHub still accepts a GitHub Token (#584). */
+export type GitHubConnectionState = "connected" | "needs_reconnect";
+
+/** A GitHub Token (#578): a fine-grained personal access token, listed by
+ * the GitHub owner it grants access to. Its value is write-only: no
+ * response ever carries it. The owner is null until GitHub can tell it: a
+ * token an organisation hasn't yet allowed or approved reads nothing, so
+ * GitHub can't say whose it is (ADR 0020). */
+export interface GitHubToken {
+  id: number;
+  owner_login: string | null;
+  owner_kind: GitHubOwnerKind | null;
+  expires_at: string | null;
+  /** Expires within 7 days, or already has (#584). */
+  expires_soon: boolean;
+  connection_state: GitHubConnectionState;
+  created_at: string;
+}
+
+export function fetchGitHubTokens(): Promise<GitHubToken[]> {
+  return request("/api/v1/github/tokens");
+}
+
+export function createGitHubToken(token: string): Promise<GitHubToken> {
+  return request("/api/v1/github/tokens", { method: "POST", body: JSON.stringify({ token }) });
+}
+
+/** Reconnect (#584): replaces the token of an existing GitHub Token with
+ * a replacement for the same owner, keeping its Watched Repositories. */
+export function reconnectGitHubToken(tokenId: number, token: string): Promise<GitHubToken> {
+  return request(`/api/v1/github/tokens/${tokenId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function deleteGitHubToken(tokenId: number): Promise<void> {
+  return request(`/api/v1/github/tokens/${tokenId}`, { method: "DELETE" });
+}
+
+/** One repository the Watched Repositories picker offers (#581): readable
+ * through `github_token_id`, and already watched when
+ * `watched_repository_id` is set. Offered once even when several GitHub
+ * Tokens can read it. */
+export interface AccessibleRepository {
+  github_repo_id: number;
+  full_name: string;
+  private: boolean;
+  github_token_id: number;
+  watched_repository_id: number | null;
+}
+
+/** How one GitHub Token fared in the picker. A token GitHub accepted that
+ * reads no repositories usually belongs to an organisation that has not
+ * allowed or approved fine-grained tokens yet. */
+export interface RepositoryPickerToken {
+  id: number;
+  owner_login: string | null;
+  status: "ok" | "unavailable" | "needs_reconnect";
+  repository_count: number;
+}
+
+export interface RepositoryPicker {
+  repositories: AccessibleRepository[];
+  tokens: RepositoryPickerToken[];
+}
+
+/** A Watched Repository (#581), read through the GitHub Token it was
+ * picked with. */
+export interface WatchedRepository {
+  id: number;
+  github_token_id: number;
+  github_repo_id: number;
+  full_name: string;
+  private: boolean;
+  created_at: string;
+}
+
+export function fetchRepositoryPicker(): Promise<RepositoryPicker> {
+  return request("/api/v1/github/repositories");
+}
+
+export function fetchWatchedRepositories(): Promise<WatchedRepository[]> {
+  return request("/api/v1/github/watched-repositories");
+}
+
+export function watchRepository(
+  githubTokenId: number,
+  githubRepoId: number,
+): Promise<WatchedRepository> {
+  return request("/api/v1/github/watched-repositories", {
+    method: "POST",
+    body: JSON.stringify({ github_token_id: githubTokenId, github_repo_id: githubRepoId }),
+  });
+}
+
+export function unwatchRepository(watchedRepositoryId: number): Promise<void> {
+  return request(`/api/v1/github/watched-repositories/${watchedRepositoryId}`, {
+    method: "DELETE",
+  });
+}
+
+/** A Pull Request's relationship to the User (#579), worked out by the
+ * backend: a review requested from them outranks having written it. */
+export type PullRequestRelationship = "review_requested" | "mine" | "other";
+
+/** One open Pull Request in the GitHub view (#579). Read live from GitHub
+ * and never stored. `author` is null for a deleted GitHub account. */
+export interface GitHubPullRequest {
+  watched_repository_id: number;
+  /** `owner/name`. */
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  is_draft: boolean;
+  review_decision: "approved" | "changes_requested" | "pending";
+  /** Null when the repository runs no checks. */
+  ci_status: "pass" | "fail" | "pending" | null;
+  relationship: PullRequestRelationship;
+}
+
+/** How much of one Watched Repository a GitHub view read shows: at most
+ * 100 items, with `overflow_count` more at `overflow_url` on GitHub. */
+export interface GitHubRepositoryRead {
+  watched_repository_id: number;
+  full_name: string;
+  total_count: number;
+  overflow_count: number;
+  overflow_url: string;
+}
+
+/** How one GitHub Token fared in a GitHub view read. `stale`: GitHub
+ * couldn't be reached, so its items are its last result from under 10
+ * minutes ago (#583). */
+export interface GitHubTokenReadStatus {
+  id: number;
+  owner_login: string | null;
+  status: "ok" | "stale" | "unavailable" | "needs_reconnect";
+  expires_at: string | null;
+  /** Expires within 7 days, or already has (#584). */
+  expires_soon: boolean;
+}
+
+/** A GitHub view read (#579, #582): the items in the backend's order, how
+ * much of each Watched Repository they cover, and how each GitHub Token
+ * fared. */
+export interface GitHubViewRead<Item> {
+  items: Item[];
+  repositories: GitHubRepositoryRead[];
+  tokens: GitHubTokenReadStatus[];
+  /** When the oldest items shown were fetched from GitHub (#583). */
+  fetched_at: string;
+  /** Some token's items are a stale result: GitHub couldn't be reached. */
+  stale: boolean;
+}
+
+/** Open Pull Requests, grouped by relationship and most recently updated
+ * first within each group. */
+export type GitHubPullRequestsRead = GitHubViewRead<GitHubPullRequest>;
+
+/** Which Watched Repositories a GitHub view read covers, every one or
+ * only Repository View `viewId`'s (#580), and how it treats the backend's
+ * one-minute cache (#583): `refresh` reads from GitHub now, bypassing and
+ * replacing it. */
+export interface GitHubReadOptions {
+  viewId?: number;
+  refresh?: boolean;
+}
+
+function githubReadQuery({ viewId, refresh = false }: GitHubReadOptions): string {
+  const query = new URLSearchParams();
+  if (viewId !== undefined) query.set("view", String(viewId));
+  if (refresh) query.set("refresh", "true");
+  const text = query.toString();
+  return text === "" ? "" : `?${text}`;
+}
+
+/** The open Pull Requests of every Watched Repository, or of one
+ * Repository View's. */
+export function fetchGitHubPullRequests(
+  options: GitHubReadOptions = {},
+): Promise<GitHubPullRequestsRead> {
+  return request(`/api/v1/github/pull-requests${githubReadQuery(options)}`);
+}
+
+/** One open GitHub Issue in the GitHub view (#582) — never a Pull
+ * Request. Read live from GitHub and never stored. `author` is null for a
+ * deleted GitHub account. */
+export interface GitHubIssue {
+  watched_repository_id: number;
+  /** `owner/name`. */
+  repository: string;
+  number: number;
+  title: string;
+  url: string;
+  author: string | null;
+  author_is_bot: boolean;
+  /** GitHub logins. */
+  assignees: string[];
+  created_at: string;
+  updated_at: string;
+  labels: { name: string; color: string }[];
+  comment_count: number;
+}
+
+/** Open GitHub Issues, most recently updated first. */
+export type GitHubIssuesRead = GitHubViewRead<GitHubIssue>;
+
+/** The open GitHub Issues of every Watched Repository, or of one
+ * Repository View's. */
+export function fetchGitHubIssues(options: GitHubReadOptions = {}): Promise<GitHubIssuesRead> {
+  return request(`/api/v1/github/issues${githubReadQuery(options)}`);
+}
+
+/** A Repository View (#580): a named subset of the User's Watched
+ * Repositories, listed under GitHub in the sidebar by `sort_order`, with
+ * its saved filters and active tab. */
+export interface RepositoryView extends RepositoryViewSavedOptions {
+  id: number;
+  name: string;
+  sort_order: number;
+  watched_repository_ids: number[];
+}
+
+/** The GitHub view's tabs: Pull Requests (#579) and GitHub Issues (#582). */
+export type GitHubTab = "pull_requests" | "issues";
+
+/** What a Repository View remembers of how it was left (#580, #585): its
+ * author, label and assignee filters, hide drafts, hide bots and the
+ * active tab. */
+export interface RepositoryViewSavedOptions {
+  author: string | null;
+  label: string | null;
+  assignee: string | null;
+  hide_drafts: boolean;
+  hide_bots: boolean;
+  active_tab: GitHubTab;
+}
+
+export type RepositoryViewChanges = Partial<Omit<RepositoryView, "id">>;
+
+/** The User's Repository Views in sidebar order. */
+export function fetchRepositoryViews(): Promise<RepositoryView[]> {
+  return request("/api/v1/github/views");
+}
+
+export function createRepositoryView(
+  name: string,
+  watchedRepositoryIds: number[],
+): Promise<RepositoryView> {
+  return request("/api/v1/github/views", {
+    method: "POST",
+    body: JSON.stringify({ name, watched_repository_ids: watchedRepositoryIds }),
+  });
+}
+
+export function updateRepositoryView(
+  viewId: number,
+  changes: RepositoryViewChanges,
+): Promise<RepositoryView> {
+  return request(`/api/v1/github/views/${viewId}`, {
+    method: "PATCH",
+    body: JSON.stringify(changes),
+  });
+}
+
+export function deleteRepositoryView(viewId: number): Promise<void> {
+  return request(`/api/v1/github/views/${viewId}`, { method: "DELETE" });
 }
 
 export interface GoogleCalendar {
@@ -959,6 +1440,31 @@ export function deleteTag(tagId: number): Promise<void> {
   return request(`/api/v1/tags/${tagId}`, { method: "DELETE" });
 }
 
+export interface BrainDumpDraft {
+  type: "create_task";
+  title: string;
+  list_name: null;
+  tag_names: string[];
+  priority: Priority;
+  start_date: string | null;
+  due_date: string | null;
+  is_all_day: boolean;
+  time_zone: string | null;
+}
+
+export interface BrainDumpTurn {
+  message: string;
+  suggestions: BrainDumpDraft[];
+  discarded_count: number;
+}
+
+export function postBrainDump(text: string): Promise<BrainDumpTurn> {
+  return request("/api/v1/assistant/brain-dump", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+}
+
 export interface TaskCreateInput {
   title: string;
   description?: string;
@@ -982,6 +1488,13 @@ export interface TaskCreateInput {
 
 export function createTask(input: TaskCreateInput): Promise<Task> {
   return request("/api/v1/tasks", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function createTaskIdempotently(input: TaskCreateInput, requestId: string): Promise<Task> {
+  return request("/api/v1/tasks", {
+    method: "POST",
+    body: JSON.stringify({ ...input, create_request_id: requestId }),
+  });
 }
 
 /** Tasks whose scheduled days intersect the inclusive [start, end] day window
@@ -1111,6 +1624,8 @@ export interface TaskPatch {
   recurrence?: string | null;
   /** null detaches the Task from its Key Result. */
   key_result_id?: number | null;
+  /** Duration estimate in minutes (#563); null removes it. */
+  estimate_minutes?: number | null;
 }
 
 export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {
@@ -1120,15 +1635,25 @@ export function updateTask(taskId: number, patch: TaskPatch): Promise<Task> {
   });
 }
 
+/** Replaces a Task's planned work block whole (#558); null removes it.
+ * Kept apart from TaskPatch, which optimistic updates spread onto a Task:
+ * the written block has no `end` until the server computes it. */
+export function updatePlannedWork(taskId: number, plannedWork: PlannedWork | null): Promise<Task> {
+  return request(`/api/v1/tasks/${taskId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ planned_work: plannedWork }),
+  });
+}
+
 export function deleteTask(taskId: number): Promise<void> {
   return request(`/api/v1/tasks/${taskId}`, { method: "DELETE" });
 }
 
 /** Check Item mutations return the full parent Task (composition). */
-export function createCheckItem(taskId: number, title: string): Promise<Task> {
+export function createCheckItem(taskId: number, title: string, requestId?: string): Promise<Task> {
   return request(`/api/v1/tasks/${taskId}/check-items`, {
     method: "POST",
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, request_id: requestId }),
   });
 }
 
@@ -1143,8 +1668,11 @@ export function updateCheckItem(
   taskId: number,
   checkItemId: number,
   patch: CheckItemPatch,
+  options: { autoComplete?: boolean } = {},
 ): Promise<Task> {
-  return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}`, {
+  // autoComplete: false ticks without completing the parent Task (Now, #550).
+  const query = options.autoComplete === false ? "?auto_complete=false" : "";
+  return request(`/api/v1/tasks/${taskId}/check-items/${checkItemId}${query}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
@@ -1175,6 +1703,74 @@ export interface Habit {
   /** Archived Habits leave the today screen but keep their whole history. */
   is_archived: boolean;
   created_at: string;
+  /** The Habit's pauses, oldest first (issue #559). Optional on the wire
+   * only for an older server, which sends none. */
+  pauses?: HabitPause[];
+  /** The Habit's skipped days (YYYY-MM-DD), oldest first (issue #564).
+   * Optional on the wire only for an older server, which sends none. */
+  skips?: string[];
+}
+
+/** A Habit pause (issue #559): an explicit interval of local days, both
+ * ends inclusive, whose days are neither done nor missed. A null
+ * `end_date` is open-ended. */
+export interface HabitPause {
+  id: number;
+  habit_id: number;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface HabitPauseInput {
+  start_date: string;
+  end_date: string | null;
+}
+
+/** Pause a Habit. Refused (409 `pause_conflicts_with_check_ins`, with the
+ * dates in `error.details.dates`) when Check-ins fall inside the interval. */
+export function createHabitPause(habitId: number, input: HabitPauseInput): Promise<HabitPause> {
+  return request(`/api/v1/habits/${habitId}/pauses`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Edit pause: move either end, or a null end for open-ended. */
+export function updateHabitPause(
+  habitId: number,
+  pauseId: number,
+  input: HabitPauseInput,
+): Promise<HabitPause> {
+  return request(`/api/v1/habits/${habitId}/pauses/${pauseId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+/** Resume today: the pause ends yesterday (or goes, if it began today or
+ * later), so `today` is eligible again. Answers with the Habit. */
+export function resumeHabitPause(habitId: number, pauseId: number, today: string): Promise<Habit> {
+  return request(`/api/v1/habits/${habitId}/pauses/${pauseId}/resume`, {
+    method: "POST",
+    body: JSON.stringify({ today }),
+  });
+}
+
+/** Skip one scheduled day on purpose (issue #564): no Check-in, neither
+ * done nor missed. Refused on an unscheduled day (422
+ * `skip_not_scheduled`), a paused day (409 `habit_day_paused`) or a day
+ * holding a Check-in (409 `skip_conflicts_with_check_in`, the date in
+ * `error.details.dates`). */
+export function skipHabitDay(
+  habitId: number,
+  day: string,
+): Promise<{ habit_id: number; date: string }> {
+  return request(`/api/v1/habits/${habitId}/skips/${day}`, { method: "PUT" });
+}
+
+/** Undo a skip: the day is eligible again and accepts a Check-in. */
+export function unskipHabitDay(habitId: number, day: string): Promise<void> {
+  return request(`/api/v1/habits/${habitId}/skips/${day}`, { method: "DELETE" });
 }
 
 /** A Check-in — one day's progress on a Habit, keyed by (habit, date). */
@@ -1261,22 +1857,45 @@ export interface HeatmapDay {
   intensity: number;
 }
 
-/** The server-computed Habit statistics: the current Streak and one calendar
- * year of heatmap days (sparse — only days with Check-ins). */
+/** The server-computed Habit statistics: the current Streak, one calendar
+ * year of heatmap days (sparse — only days with Check-ins), and the Habit
+ * start `eligible_from` (YYYY-MM-DD, the caller's local day): days before it
+ * are not started, never missed. */
 export interface HabitStats {
   streak: number;
   heatmap: HeatmapDay[];
+  eligible_from: string;
+  /** The week holding `today` for an N-times-per-week Habit (issue #568);
+   * null (or absent, from an older server) for daily and weekday Habits. */
+  week?: HabitWeek | null;
 }
 
-/** Statistics as of `today` (the caller's local day); `year` picks which
- * calendar year the heatmap covers, defaulting to today's. */
+/** A times-per-week Habit's week, Monday to Sunday. A pause or skip inside it
+ * never lowers `target`; only a pause over the whole week (from the Habit
+ * start) sets `excluded`, and then it counts as neither met nor missed. */
+export interface HabitWeek {
+  start: string;
+  end: string;
+  target: number;
+  /** Days whose Check-in met the Habit's Target. */
+  done: number;
+  remaining: number;
+  paused_days: number;
+  skipped_days: number;
+  excluded: boolean;
+}
+
+/** Statistics as of `today` (the caller's local day), with the Habit start
+ * read in the browser's time zone; `year` picks which calendar year the
+ * heatmap covers, defaulting to today's. */
 export function fetchHabitStats(
   habitId: number,
   today: string,
   year?: number,
 ): Promise<HabitStats> {
+  const tz = encodeURIComponent(browserTimeZone());
   const scope = year === undefined ? "" : `&year=${year}`;
-  return request(`/api/v1/habits/${habitId}/stats?today=${today}${scope}`);
+  return request(`/api/v1/habits/${habitId}/stats?today=${today}&tz=${tz}${scope}`);
 }
 
 /** A Goal's status (ADR 0012); only "active" is exercised in this slice. */
@@ -1447,6 +2066,9 @@ export interface FocusSessionCreateInput {
   ended_at: string;
   pause_seconds?: number;
   note?: string;
+  /** The run's client-generated identity (#546): repeating a create with it
+   * returns the session already recorded instead of recording another. */
+  client_run_id?: string;
 }
 
 export function createFocusSession(input: FocusSessionCreateInput): Promise<FocusSession> {
@@ -1689,6 +2311,66 @@ export function fetchStandupSettings(): Promise<StandupSettings> {
   return request("/api/v1/settings/stand-up");
 }
 
+/** Now (issue #547): whether Today shows the Now panel. Off by default;
+ * turning it off never clears the stored selection. */
+export interface NowSettings {
+  enabled: boolean;
+}
+
+export function fetchNowSettings(): Promise<NowSettings> {
+  return request("/api/v1/settings/now");
+}
+
+export function updateNowSettings(enabled: boolean): Promise<NowSettings> {
+  return request("/api/v1/settings/now", { method: "PUT", body: JSON.stringify({ enabled }) });
+}
+
+/** The one Task the User chose as Now, stored per User on its own endpoint
+ * so writing it never touches another setting. Never changes the Task. */
+export interface NowSelection {
+  task_id: number | null;
+}
+
+export function fetchNowSelection(): Promise<NowSelection> {
+  return request("/api/v1/now");
+}
+
+export function updateNowSelection(taskId: number | null): Promise<NowSelection> {
+  return request("/api/v1/now", { method: "PUT", body: JSON.stringify({ task_id: taskId }) });
+}
+
+/** The optional resume note on the Now selection (issue #554): a short cue
+ * for picking the work back up. Null or blank discards it; the server
+ * clears it whenever the selection changes, is removed or is pruned. */
+export interface ResumeNote {
+  note: string | null;
+}
+
+export function fetchResumeNote(): Promise<ResumeNote> {
+  return request("/api/v1/now/note");
+}
+
+export function updateResumeNote(note: string | null): Promise<ResumeNote> {
+  return request("/api/v1/now/note", { method: "PUT", body: JSON.stringify({ note }) });
+}
+
+/** The Now shortlist (issue #551): ordered alternatives beside Now. The
+ * server dedupes, leaves out the Now Task and prunes finished entries. */
+export interface NowShortlist {
+  task_ids: number[];
+}
+
+export function fetchNowShortlist(): Promise<NowShortlist> {
+  return request("/api/v1/now/shortlist");
+}
+
+export function updateNowShortlist(taskIds: number[]): Promise<NowShortlist> {
+  return request("/api/v1/now/shortlist", {
+    method: "PUT",
+    body: JSON.stringify({ task_ids: taskIds }),
+  });
+}
+
 export function updateStandupSettings(enabled: boolean): Promise<StandupSettings> {
   return request("/api/v1/settings/stand-up", {
     method: "PUT",
@@ -1740,6 +2422,221 @@ export function updateActiveHoursSettings(
   return request("/api/v1/settings/active-hours", {
     method: "PUT",
     body: JSON.stringify(settings),
+  });
+}
+
+/** Planning window (issue #563): the band of each day the Calendar's
+ * capacity summary measures. The User's own choice, separate from Active
+ * hours (which only shapes the grid); off by default, 09:00–17:00 prefilled. */
+export interface PlanningWindowSettings {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export function fetchPlanningWindowSettings(): Promise<PlanningWindowSettings> {
+  return request("/api/v1/settings/planning-window");
+}
+
+export function updatePlanningWindowSettings(
+  settings: PlanningWindowSettings,
+): Promise<PlanningWindowSettings> {
+  return request("/api/v1/settings/planning-window", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** Gentle return (issue #548): when on, Today collapses every earlier overdue
+ * Task behind a counted disclosure. Chosen by the User, off by default;
+ * presentation only — no Task date changes. */
+export interface GentleReturnSettings {
+  enabled: boolean;
+}
+
+export function fetchGentleReturnSettings(): Promise<GentleReturnSettings> {
+  return request("/api/v1/settings/gentle-return");
+}
+
+export function updateGentleReturnSettings(
+  settings: GentleReturnSettings,
+): Promise<GentleReturnSettings> {
+  return request("/api/v1/settings/gentle-return", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** Reminder notifications (issue #557): the User's opt-in to Reminder
+ * delivery, off by default and private to them. Browser permission is per
+ * device and stays in the browser; it is never sent here. */
+export interface ReminderNotificationSettings {
+  enabled: boolean;
+}
+
+export function fetchReminderNotificationSettings(): Promise<ReminderNotificationSettings> {
+  return request("/api/v1/settings/reminder-notifications");
+}
+
+export function updateReminderNotificationSettings(
+  settings: ReminderNotificationSettings,
+): Promise<ReminderNotificationSettings> {
+  return request("/api/v1/settings/reminder-notifications", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** Reminder delivery (issue #561, ADR 0019): a lease on one Reminder of
+ * one Task occurrence that came due. The tab that claimed it shows it, then
+ * reports `shown` or `failed` with `lease_token`; an unreported lease
+ * expires and the server may hand it to another claim. */
+export interface ReminderClaim {
+  id: number;
+  task_id: number;
+  task_title: string;
+  /** The Reminder: an ISO-8601 offset from the Task's date. */
+  offset: string;
+  /** The Task occurrence's due date this Reminder belongs to. */
+  occurrence_due: string;
+  fire_at: string;
+  state: "claimed" | "shown" | "failed" | "snoozed";
+  attempt: number;
+  /** When a snoozed Reminder comes due again (issue #566); null if never
+   * snoozed. Optional for servers before #566. */
+  snoozed_until?: string | null;
+  lease_token: string;
+  lease_expires_at: string;
+}
+
+/** A ledger row as the server reports it, without a lease. */
+export type ReminderDeliveryRead = Omit<ReminderClaim, "lease_token" | "lease_expires_at">;
+
+/** Quiet hours (issue #567): a band of the day during which Reminder
+ * notifications are held and notify once when it ends. "HH:MM" labels on
+ * the tab's own wall clock; a start after the end wraps past midnight. A
+ * notification setting only: Active hours never change delivery. */
+export interface QuietHoursSettings {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export function fetchQuietHoursSettings(): Promise<QuietHoursSettings> {
+  return request("/api/v1/settings/quiet-hours");
+}
+
+export function updateQuietHoursSettings(
+  settings: QuietHoursSettings,
+): Promise<QuietHoursSettings> {
+  return request("/api/v1/settings/quiet-hours", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+/** A Reminder that fired inside Quiet hours and waits for `deliver_at`,
+ * the band's end (issue #567). */
+export interface HeldReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  fire_at: string;
+  deliver_at: string;
+}
+
+export interface ReminderClaimPage {
+  items: ReminderClaim[];
+  /** Held by Quiet hours right now (absent from an older server). */
+  held?: HeldReminder[];
+  /** When the Quiet hours band holding now ends; null outside it. */
+  quiet_until?: string | null;
+}
+
+/** Claims the Reminders due now that no other tab holds. `tz` anchors
+ * all-day Tasks and Quiet hours; nothing is claimed while the User's
+ * opt-in is off or while Quiet hours are on. */
+export function claimDueReminders(tz: string): Promise<ReminderClaimPage> {
+  return request(`/api/v1/reminder-deliveries/claim?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+  });
+}
+
+export function reportReminderDelivery(
+  claim: ReminderClaim,
+  outcome: "shown" | "failed",
+): Promise<unknown> {
+  return request(`/api/v1/reminder-deliveries/${claim.id}/${outcome}`, {
+    method: "POST",
+    body: JSON.stringify({ lease_token: claim.lease_token }),
+  });
+}
+
+/** Snoozes one delivered Reminder (issue #566): it comes due again
+ * `minutes` from now. Only the delivery ledger changes; the Task's dates
+ * and Reminder offsets stay as they are. 409 `reminder_stale` when the
+ * occurrence is gone (Task completed, redated, Reminder removed). */
+export function snoozeReminder(id: number, minutes: number): Promise<ReminderDeliveryRead> {
+  return request(`/api/v1/reminder-deliveries/${id}/snooze`, {
+    method: "POST",
+    body: JSON.stringify({ minutes }),
+  });
+}
+
+/** A Reminder whose delivery window closed unseen (issue #565): listed
+ * in-app, never replayed as a late notification. (`task_id`, `offset`,
+ * `occurrence_due`) names it for dismissal. */
+export interface MissedReminder {
+  task_id: number;
+  task_title: string;
+  offset: string;
+  /** The Task occurrence's due date this Reminder belongs to. */
+  occurrence_due: string;
+  fire_at: string;
+  /** The Task's, so the occurrence reads as the Task shows its date. */
+  is_all_day: boolean;
+  time_zone: string | null;
+  /** Its ledger row, when a tab ever claimed it: snoozed with
+   * `snoozeReminder`. Null for a Reminder no tab was open for, snoozed
+   * with `snoozeMissedReminder` instead (#566). */
+  delivery_id?: number | null;
+}
+
+/** The User's missed Reminders, newest first; empty while the opt-in is
+ * off. `tz` anchors all-day Tasks. */
+export function fetchMissedReminders(tz: string): Promise<{ items: MissedReminder[] }> {
+  return request(`/api/v1/reminder-deliveries/missed?tz=${encodeURIComponent(tz)}`);
+}
+
+/** Dismisses a missed Reminder: the ledger records it, so it never comes
+ * back or notifies. */
+export function dismissMissedReminder(missed: MissedReminder, tz: string): Promise<unknown> {
+  return request(`/api/v1/reminder-deliveries/missed/dismiss?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task_id: missed.task_id,
+      offset: missed.offset,
+      occurrence_due: missed.occurrence_due,
+    }),
+  });
+}
+
+/** Snoozes a missed Reminder no tab ever claimed (#566): the server
+ * creates its ledger row already snoozed, under the same key. Only the
+ * ledger changes, never the Task. */
+export function snoozeMissedReminder(
+  missed: MissedReminder,
+  minutes: number,
+  tz: string,
+): Promise<ReminderDeliveryRead> {
+  return request(`/api/v1/reminder-deliveries/missed/snooze?tz=${encodeURIComponent(tz)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      task_id: missed.task_id,
+      offset: missed.offset,
+      occurrence_due: missed.occurrence_due,
+      minutes,
+    }),
   });
 }
 

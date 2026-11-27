@@ -6,7 +6,11 @@ import {
   ApiError,
   disconnectGoogleAccount,
   fetchActiveHoursSettings,
+  fetchPlanningWindowSettings,
+  fetchGentleReturnSettings,
+  updateGentleReturnSettings,
   updateActiveHoursSettings,
+  updatePlanningWindowSettings,
   fetchDatabaseStatus,
   testDatabaseConnection,
   fetchAssistConfig,
@@ -20,6 +24,7 @@ import {
   fetchGoogleStatus,
   googleConnectUrl,
   refreshGoogleCalendars,
+  fetchNowSettings,
   fetchStandupSettings,
   fetchVoiceConfig,
   fetchSectionSettings,
@@ -32,11 +37,11 @@ import {
   saveGoogleCredentials,
   saveVoiceConfig,
   updateGoogleCalendar,
+  updateNowSettings,
   updateStandupSettings,
   updateSectionSettings,
   type AssistConfig,
   type AssistantConfig,
-  type ActiveHoursSettings,
   type CurrentUser,
   type DatabaseStatus,
   type DatabaseTestConnectionResult,
@@ -47,8 +52,10 @@ import {
   type VoiceConfig,
 } from "../api";
 import { timeMinutes } from "../calendar";
+import { clockLabels } from "../dates";
 import { type ThemePreference } from "../layoutPrefs";
 import { pathForSettingsTab, type SettingsTab } from "../routes";
+import { GitHubSettingsPanel } from "./GitHubSettingsPanel";
 import {
   DEFAULT_OVERLAY_SHORTCUT,
   formatOverlayShortcut,
@@ -61,6 +68,8 @@ import { notifyVoiceConfigChanged } from "../useVoiceAvailable";
 import { APP_VERSION } from "../version";
 import { Hint } from "./Hint";
 import { ProfileCard } from "./ProfileCard";
+import { QuietHoursSettings } from "./QuietHoursSettings";
+import { ReminderNotificationsSettings } from "./ReminderNotificationsSettings";
 import { ApiTokensCard } from "./ApiTokensCard";
 import { UsersPanel } from "./UsersPanel";
 
@@ -101,7 +110,7 @@ const THEME_OPTIONS: readonly { value: ThemePreference; label: string }[] = [
 function AppearanceSettings({
   themePreference,
   onThemeChange,
-}: Pick<SettingsViewProps, "themePreference" | "onThemeChange">): JSX.Element {
+}: Pick<SettingsViewProps, "themePreference" | "onThemeChange">): React.JSX.Element {
   return (
     <fieldset className="settings-appearance">
       <legend>Theme</legend>
@@ -140,7 +149,7 @@ interface GoogleAccountCalendarsProps {
 function GoogleAccountCalendars({
   account,
   onReconnectRequired,
-}: GoogleAccountCalendarsProps): JSX.Element {
+}: GoogleAccountCalendarsProps): React.JSX.Element {
   const [calendars, setCalendars] = useState<GoogleCalendar[] | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -268,7 +277,7 @@ interface GoogleCredentialsFormProps {
  * an explicit choice to overwrite it. Saving flips every connected account
  * to "needs_reconnect" server-side (a refresh token belongs to the OAuth
  * client that minted it), so `onSaved` re-fetches the account list too. */
-function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps): JSX.Element {
+function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps): React.JSX.Element {
   const [clientId, setClientId] = useState(status.client_id ?? "");
   const [clientSecret, setClientSecret] = useState("");
   const [overwriteSecret, setOverwriteSecret] = useState(!status.client_secret_set);
@@ -305,7 +314,13 @@ function GoogleCredentialsForm({ status, onSaved }: GoogleCredentialsFormProps):
 
   async function handleRemove(): Promise<void> {
     await removeGoogleIntegration();
-    onSaved({ configured: false, client_id: null, client_secret_set: false });
+    // With the instance's shared client (#586), Calendar stays available.
+    onSaved({
+      configured: status.shared_client,
+      shared_client: status.shared_client,
+      client_id: null,
+      client_secret_set: false,
+    });
   }
 
   return (
@@ -394,7 +409,7 @@ interface AssistConfigFormProps {
  * back to a free-text field whenever nothing's been fetched yet (no base URL
  * saved, or the list came back empty), so a blank Ollama never blocks typing
  * a model name ahead of getting it running. */
-function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): JSX.Element {
+function AssistConfigForm({ config, onSaved }: AssistConfigFormProps): React.JSX.Element {
   const [ollamaBaseUrl, setOllamaBaseUrl] = useState(config.ollama_base_url ?? "");
   const [model, setModel] = useState(config.model ?? "");
   const [pending, setPending] = useState(false);
@@ -619,7 +634,7 @@ interface AssistantConfigFormProps {
  *
  * "Remove" clears every field server-side, the only way back to the
  * unconfigured, invisible state once something is saved. */
-function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): JSX.Element {
+function AssistantConfigForm({ config, onSaved }: AssistantConfigFormProps): React.JSX.Element {
   const [baseUrl, setBaseUrl] = useState(config.base_url ?? "");
   const [model, setModel] = useState(config.model ?? "");
   const [apiKey, setApiKey] = useState("");
@@ -809,7 +824,7 @@ interface VoiceConfigFormProps {
  * key (a masked placeholder once saved, with an explicit choice to replace
  * it). Saving or removing tells the app shell to re-check availability so
  * the mic button appears or vanishes without a reload. */
-function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): JSX.Element {
+function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): React.JSX.Element {
   const [url, setUrl] = useState(config.livekit_url ?? "");
   const [apiKey, setApiKey] = useState(config.livekit_api_key ?? "");
   const [apiSecret, setApiSecret] = useState("");
@@ -940,32 +955,84 @@ function VoiceConfigForm({ config, onSaved }: VoiceConfigFormProps): JSX.Element
 }
 
 /** Half-hour labels "00:00" … "24:00" — the Active-hours grid (issue #210). */
-const HALF_HOUR_LABELS: string[] = Array.from({ length: 49 }, (_, index) => {
-  const minutes = index * 30;
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-});
+const HALF_HOUR_LABELS: string[] = clockLabels(30, { throughMidnight: true });
 
-/** Active hours (issue #210): the band of the day the Calendar renders at
- * double height. The selects only offer valid half-hour times, so the one
- * reachable invalid state is start ≥ end (which includes a band that would
- * wrap past midnight); that shows inline and isn't saved. */
-function ActiveHoursSettingsForm(): JSX.Element {
-  const [settings, setSettings] = useState<ActiveHoursSettings>({
+/** Gentle return (issue #548): the User chooses to have Today collapse every
+ * earlier overdue Task behind a counted disclosure. Nothing is rescheduled. */
+function GentleReturnSettingsForm(): React.JSX.Element {
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    void fetchGentleReturnSettings().then((settings) => setEnabled(settings.enabled));
+  }, []);
+
+  function toggle(): void {
+    const next = !enabled;
+    setEnabled(next);
+    void updateGentleReturnSettings({ enabled: next }).then((settings) =>
+      setEnabled(settings.enabled),
+    );
+  }
+
+  return (
+    <div className="settings-field">
+      <label>
+        <input type="checkbox" checked={enabled} onChange={toggle} />
+        Gentle return
+      </label>
+      <p className="settings-hint">
+        For coming back after time away. Today tucks earlier overdue Tasks behind a single counted
+        link, so you can pick one thing to start with. No dates change, and the full list is one
+        click away.
+      </p>
+    </div>
+  );
+}
+
+/** One band of one day on the half-hour grid, on or off: the shape Active
+ * hours and the Planning window share, each stored apart. The selects only
+ * offer valid half-hour times, so the one reachable invalid state is
+ * start ≥ end (which includes a band that would wrap past midnight); that
+ * shows inline and isn't saved. */
+interface DayBand {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+interface DayBandSettingsFormProps {
+  /** The checkbox label, which names the setting. */
+  label: string;
+  hint: React.ReactNode;
+  /** Shown while start ≥ end. */
+  invalidText: React.ReactNode;
+  load: () => Promise<DayBand>;
+  save: (band: DayBand) => Promise<DayBand>;
+}
+
+function DayBandSettingsForm({
+  label,
+  hint,
+  invalidText,
+  load,
+  save,
+}: DayBandSettingsFormProps): React.JSX.Element {
+  const [settings, setSettings] = useState<DayBand>({
     enabled: false,
     start: "09:00",
     end: "17:00",
   });
 
   useEffect(() => {
-    void fetchActiveHoursSettings().then(setSettings);
-  }, []);
+    void load().then(setSettings);
+  }, [load]);
 
   const invalid = timeMinutes(settings.start) >= timeMinutes(settings.end);
 
-  function apply(next: ActiveHoursSettings): void {
+  function apply(next: DayBand): void {
     setSettings(next);
     if (timeMinutes(next.start) < timeMinutes(next.end)) {
-      void updateActiveHoursSettings(next).then(setSettings);
+      void save(next).then(setSettings);
     }
   }
 
@@ -977,13 +1044,9 @@ function ActiveHoursSettingsForm(): JSX.Element {
           checked={settings.enabled}
           onChange={() => apply({ ...settings, enabled: !settings.enabled })}
         />
-        Active hours
+        {label}
       </label>
-      <p className="settings-hint">
-        Marks the part of the day you&rsquo;re usually active. The calendar&rsquo;s Week and Day
-        grids draw those hours at double height, so short tasks stay readable in place, and compress
-        the hours outside — dead time costs little scroll.
-      </p>
+      <p className="settings-hint">{hint}</p>
       <div className="settings-field-with-action">
         <label>
           Start
@@ -1012,12 +1075,54 @@ function ActiveHoursSettingsForm(): JSX.Element {
           </select>
         </label>
       </div>
-      {invalid && (
-        <p role="alert">
-          Active hours must start before they end, and can&rsquo;t wrap past midnight.
-        </p>
-      )}
+      {invalid && <p role="alert">{invalidText}</p>}
     </div>
+  );
+}
+
+/** Active hours (issue #210): the band of the day the Calendar renders at
+ * double height. */
+function ActiveHoursSettingsForm(): React.JSX.Element {
+  return (
+    <DayBandSettingsForm
+      label="Active hours"
+      hint={
+        <>
+          Marks the part of the day you&rsquo;re usually active. The calendar&rsquo;s Week and Day
+          grids draw those hours at double height, so short tasks stay readable in place, and
+          compress the hours outside — dead time costs little scroll.
+        </>
+      }
+      invalidText={
+        <>Active hours must start before they end, and can&rsquo;t wrap past midnight.</>
+      }
+      load={fetchActiveHoursSettings}
+      save={updateActiveHoursSettings}
+    />
+  );
+}
+
+/** Planning window (issue #563): the band of each day the Calendar's
+ * capacity summary measures. Its own setting, never copied from Active
+ * hours, so moving the grid's band leaves it where the User put it. */
+function PlanningWindowSettingsForm(): React.JSX.Element {
+  return (
+    <DayBandSettingsForm
+      label="Planning window"
+      hint={
+        <>
+          The part of the day you plan work into. The calendar&rsquo;s Day view says how much of it
+          is still free once Events and Planned work are counted. A Task&rsquo;s Estimate is
+          reported as not yet planned; Tasks without one stay listed as unknown, and nothing is
+          guessed.
+        </>
+      }
+      invalidText={
+        <>The planning window must start before it ends, and can&rsquo;t wrap past midnight.</>
+      }
+      load={fetchPlanningWindowSettings}
+      save={updatePlanningWindowSettings}
+    />
   );
 }
 
@@ -1035,7 +1140,7 @@ function databaseTestConnectionMessage(result: DatabaseTestConnectionResult): st
  * probe that never switches or saves anything — the connection-url field
  * is local component state only, cleared on every mount, and the probe
  * result is never fed back into anything persisted. */
-function DatabaseSettingsForm(): JSX.Element {
+function DatabaseSettingsForm(): React.JSX.Element {
   const [status, setStatus] = useState<DatabaseStatus | null>(null);
   const [connectionUrl, setConnectionUrl] = useState("");
   const [testing, setTesting] = useState(false);
@@ -1106,7 +1211,7 @@ export function SettingsView({
   onTabChange,
   onUserChange,
   ...accountProps
-}: SettingsViewProps): JSX.Element {
+}: SettingsViewProps): React.JSX.Element {
   const [user, setStoredUser] = useState<CurrentUser | null>(null);
   const reportUser = useRef(onUserChange);
   reportUser.current = onUserChange;
@@ -1137,7 +1242,7 @@ export function SettingsView({
     }
   }, [tab, user, onTabChange]);
 
-  function tabLink(target: SettingsTab, label: string): JSX.Element {
+  function tabLink(target: SettingsTab, label: string): React.JSX.Element {
     return (
       <a
         href={pathForSettingsTab(target)}
@@ -1158,10 +1263,13 @@ export function SettingsView({
     <div className="settings-view">
       <nav aria-label="Settings" className="settings-tabs">
         {tabLink("account", "My account")}
+        {tabLink("github", "GitHub")}
         {isAdmin && tabLink("users", "Users")}
       </nav>
       {tab === "account" ? (
         <MyAccountPanel {...accountProps} user={user} onUserChange={setUser} />
+      ) : tab === "github" ? (
+        <GitHubSettingsPanel />
       ) : (
         isAdmin && user !== null && <UsersPanel currentUser={user} onAccessLost={refreshUser} />
       )}
@@ -1183,13 +1291,15 @@ function MyAccountPanel({
   onThemeChange,
   user,
   onUserChange,
-}: MyAccountPanelProps): JSX.Element {
+}: MyAccountPanelProps): React.JSX.Element {
   const isAdmin = user?.is_admin === true;
   const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
   const [accounts, setAccounts] = useState<GoogleAccount[]>([]);
   // Enabled by default (issue #140) so the toggle doesn't flash off before
   // the real value loads — mirrors the App-level nav item's own default.
   const [standupEnabled, setStandupEnabled] = useState(true);
+  // Now (issue #547) is off by default, unlike the sections above.
+  const [nowEnabled, setNowEnabled] = useState(false);
   // Enabled by default (this feature), same reasoning as standupEnabled
   // above — mirrors the App-level nav items' own default.
   const [sectionSettings, setSectionSettings] = useState<SectionSettings>({
@@ -1215,6 +1325,10 @@ function MyAccountPanel({
   }, []);
 
   useEffect(() => {
+    void fetchNowSettings().then((settings) => setNowEnabled(settings.enabled));
+  }, []);
+
+  useEffect(() => {
     void fetchAssistConfig().then(setAssistConfig);
   }, []);
 
@@ -1225,6 +1339,11 @@ function MyAccountPanel({
   useEffect(() => {
     void fetchVoiceConfig().then(setVoiceConfig);
   }, []);
+
+  async function handleNowToggle(): Promise<void> {
+    const updated = await updateNowSettings(!nowEnabled);
+    setNowEnabled(updated.enabled);
+  }
 
   async function handleStandupToggle(): Promise<void> {
     const updated = await updateStandupSettings(!standupEnabled);
@@ -1257,7 +1376,12 @@ function MyAccountPanel({
       })
       .catch(() => {
         if (!cancelled) {
-          setGoogleStatus({ configured: false, client_id: null, client_secret_set: false });
+          setGoogleStatus({
+            configured: false,
+            shared_client: false,
+            client_id: null,
+            client_secret_set: false,
+          });
         }
       });
     return () => {
@@ -1309,6 +1433,10 @@ function MyAccountPanel({
         <a href="#settings-appearance">Appearance</a>
         <a href="#settings-features">Features</a>
         <a href="#settings-active-hours">Active hours</a>
+        <a href="#settings-planning-window">Planning window</a>
+        <a href="#settings-gentle-return">Gentle return</a>
+        <a href="#settings-reminder-notifications">Reminder notifications</a>
+        <a href="#settings-quiet-hours">Quiet hours</a>
         <a href="#settings-assist">
           Assist
           {assistConfig !== null && (
@@ -1447,6 +1575,19 @@ function MyAccountPanel({
                 <span className="settings-feature-desc">Daily review.</span>
               </span>
             </label>
+            <label>
+              <Hint hintKey="settings-feature-toggle">
+                <input
+                  type="checkbox"
+                  checked={nowEnabled}
+                  onChange={() => void handleNowToggle()}
+                />
+              </Hint>
+              <span>
+                <span className="settings-feature-name">Now</span>
+                <span className="settings-feature-desc">One Task to do next, in Today.</span>
+              </span>
+            </label>
           </div>
         </section>
         <section aria-label="Active hours" id="settings-active-hours" className="settings-section">
@@ -1454,6 +1595,36 @@ function MyAccountPanel({
             <h2>Active hours</h2>
           </div>
           <ActiveHoursSettingsForm />
+        </section>
+        <section
+          aria-label="Planning window"
+          id="settings-planning-window"
+          className="settings-section"
+        >
+          <div className="settings-section-head">
+            <h2>Planning window</h2>
+          </div>
+          <PlanningWindowSettingsForm />
+        </section>
+        <section
+          aria-label="Gentle return"
+          id="settings-gentle-return"
+          className="settings-section"
+        >
+          <div className="settings-section-head">
+            <h2>Gentle return</h2>
+          </div>
+          <GentleReturnSettingsForm />
+        </section>
+        <section
+          aria-label="Reminder notifications"
+          id="settings-reminder-notifications"
+          className="settings-section"
+        >
+          <ReminderNotificationsSettings />
+        </section>
+        <section aria-label="Quiet hours" id="settings-quiet-hours" className="settings-section">
+          <QuietHoursSettings />
         </section>
       </section>
       {showAiGroup && (
@@ -1576,10 +1747,14 @@ function MyAccountPanel({
                       : "Not set up"}
                 </span>
               </div>
-              <div className="settings-subsection">
-                <h3>Google API credentials</h3>
-                <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
-              </div>
+              {/* With the instance's shared client (#586) nobody needs their
+               * own; it stays manageable for anyone who already has one. */}
+              {(!googleStatus.shared_client || googleStatus.client_id !== null) && (
+                <div className="settings-subsection">
+                  <h3>Google API credentials</h3>
+                  <GoogleCredentialsForm status={googleStatus} onSaved={handleCredentialsSaved} />
+                </div>
+              )}
               {googleStatus.configured && (
                 <div className="settings-subsection">
                   {googleOAuthError && (

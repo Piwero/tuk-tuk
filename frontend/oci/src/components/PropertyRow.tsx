@@ -45,7 +45,7 @@ export function PropertyRow({
   disabled = false,
   onClose,
   children,
-}: PropertyRowProps): JSX.Element {
+}: PropertyRowProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const id = useId();
@@ -101,7 +101,7 @@ export function PropertyOptions<T>({
   options,
   selected,
   onSelect,
-}: PropertyOptionsProps<T>): JSX.Element {
+}: PropertyOptionsProps<T>): React.JSX.Element {
   const list = useRef<HTMLUListElement>(null);
   const selectedIndex = Math.max(
     0,

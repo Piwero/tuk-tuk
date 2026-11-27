@@ -22,6 +22,9 @@ ACCOUNT_FIELDS = {
     "must_complete_profile",
     "created_at",
     "last_active_at",
+    # How the account signs in (issue #586): booleans and an email, no secret.
+    "has_password",
+    "google_email",
 }
 NEW_USER = {"username": "cy", "email": "cy@example.com", "temp_password": TEMP_PASSWORD}
 
@@ -51,6 +54,7 @@ class TestNonAdmins:
             ("GET", USERS, None),
             ("POST", USERS, NEW_USER),
             ("PATCH", f"{USERS}/1", {"is_active": False}),
+            ("DELETE", f"{USERS}/1", {"email": TEST_EMAIL}),
             ("POST", f"{USERS}/1/reset-password", {"temp_password": TEMP_PASSWORD}),
         ],
     )
@@ -112,6 +116,8 @@ class TestCreatingAUser:
             "must_complete_profile": False,
             "created_at": None,
             "last_active_at": None,
+            "has_password": True,
+            "google_email": None,
         }
         client.cookies.clear()
         log_in(client, "cy@example.com", TEMP_PASSWORD)
@@ -167,6 +173,119 @@ class TestCreatingAUser:
 
         assert response.status_code == 422
         assert response.json()["error"]["code"] == code
+        assert client.get(USERS).json()["total"] == 1
+
+
+class TestDeletingAUser:
+    def test_requires_matching_email_before_deleting(self, client: TestClient) -> None:
+        bea, bea_client = signed_in_member(client)
+        path = f"{USERS}/{bea.id}"
+
+        for body in ({}, {"email": ""}, {"email": "wrong@example.com"}):
+            response = client.request("DELETE", path, json=body)
+            assert response.status_code == 422, response.text
+            assert bea_client.get("/api/v1/tasks").status_code == 200
+
+        response = client.request("DELETE", path, json={"email": "bea@example.com"})
+
+        assert response.status_code == 204, response.text
+        assert client.get(USERS).json()["total"] == 1
+        assert bea_client.get("/api/v1/tasks").status_code == 401
+        assert client.request("DELETE", path, json={"email": "bea@example.com"}).status_code == 404
+
+    def test_deleting_last_password_does_not_reopen_setup(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        bea, _ = signed_in_member(client)
+        run_sql(
+            database_url,
+            "UPDATE users SET is_admin = true, password_hash = NULL, "
+            "google_subject = 'bea-google', google_email = email WHERE id = %s",
+            [bea.id],
+        )
+
+        response = client.request("DELETE", f"{USERS}/1", json={"email": TEST_EMAIL})
+
+        assert response.status_code == 204, response.text
+        takeover = client.post(
+            "/api/v1/auth/setup",
+            json={
+                "username": "intruder",
+                "email": "intruder@example.com",
+                "password": TEMP_PASSWORD,
+            },
+        )
+        assert takeover.status_code == 404, takeover.text
+        assert takeover.json()["error"]["message"] == "Setup has already been completed"
+
+    def test_removes_invitations_and_receipts_but_preserves_other_peoples_links(
+        self, client: TestClient, database_url: str
+    ) -> None:
+        bea, bea_client = signed_in_member(client)
+        task = bea_client.post("/api/v1/tasks", json={"title": "private task"}).json()
+        run_sql(
+            database_url,
+            "INSERT INTO task_creations "
+            "(owner_id, request_id, task_id) VALUES (%s, 'private-request', %s)",
+            [bea.id, task["id"]],
+        )
+        run_sql(
+            database_url,
+            "INSERT INTO invitations "
+            "(email, token_hash, encrypted_token, invited_by_id, accepted_user_id, "
+            "expires_at, delivery_state, created_at, updated_at) VALUES "
+            "('bea@example.com', 'bea-token', 'secret', 1, %s, now(), 'not_sent', now(), now()), "
+            "('guest@example.com', 'guest-token', 'secret', %s, NULL, "
+            "now() + interval '1 day', 'not_sent', now(), now())",
+            [bea.id, bea.id],
+        )
+
+        response = client.request("DELETE", f"{USERS}/{bea.id}", json={"email": bea.email})
+
+        assert response.status_code == 204, response.text
+        assert run_sql(database_url, "SELECT email, invited_by_id FROM invitations") == [
+            ("guest@example.com", None)
+        ]
+        assert run_sql(
+            database_url, "SELECT count(*) FROM task_creations WHERE owner_id = %s", [bea.id]
+        ) == [(0,)]
+        assert (
+            client.post(USERS, json={**NEW_USER, "username": "bea", "email": bea.email}).status_code
+            == 201
+        )
+
+    @pytest.mark.parametrize("kind", ["api", "mcp"])
+    def test_erases_tokens_and_cached_integration_data(self, client: TestClient, kind: str) -> None:
+        bea, bea_client = signed_in_member(client)
+        token = bea_client.post("/api/v1/auth/me/tokens", json={"name": "client", "kind": kind})
+        assert token.status_code == 201, token.text
+        app = client.app
+        app.state.event_cache.set(bea.id, "primary", "start", "end", [])
+        app.state.event_cache.set(1, "primary", "start", "end", [])
+        caches = [app.state.github_pull_request_cache, app.state.github_issue_cache]
+        for cache in caches:
+            cache.store(bea.id, 100, frozenset(), [])
+            cache.store(1, 101, frozenset(), [])
+
+        response = client.request("DELETE", f"{USERS}/{bea.id}", json={"email": bea.email})
+
+        assert response.status_code == 204, response.text
+        assert app.state.event_cache.get(bea.id, "primary", "start", "end") is None
+        assert app.state.event_cache.get(1, "primary", "start", "end") == []
+        for cache in caches:
+            assert cache.stale(bea.id, 100) is None
+            assert cache.stale(1, 101) is not None
+        bea_client.cookies.clear()
+        refused = bea_client.get(
+            "/api/v1/tasks", headers={"Authorization": f"Bearer {token.json()['token']}"}
+        )
+        assert refused.status_code == 401, refused.text
+
+    def test_cannot_delete_last_active_admin(self, client: TestClient) -> None:
+        response = client.request("DELETE", f"{USERS}/1", json={"email": TEST_EMAIL})
+
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["code"] == "last_admin"
         assert client.get(USERS).json()["total"] == 1
 
 
@@ -341,4 +460,6 @@ class TestListingUsers:
             "must_complete_profile": False,
             "created_at": None,
             "last_active_at": None,
+            "has_password": True,
+            "google_email": None,
         }

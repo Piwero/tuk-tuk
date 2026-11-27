@@ -9,7 +9,7 @@ export function SkeletonRows({
 }: {
   count?: number;
   label?: string;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <div role="status" aria-label={label} aria-busy="true" className="skeleton-rows">
       {Array.from({ length: count }, (_, index) => (
@@ -36,7 +36,7 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
-}: EmptyStateProps): JSX.Element {
+}: EmptyStateProps): React.JSX.Element {
   return (
     <section className="empty-state" aria-labelledby="empty-state-title">
       <h2 id="empty-state-title">{title}</h2>
@@ -51,7 +51,13 @@ export function EmptyState({
 }
 
 /** A failed load (#441): says what failed, offers Retry. */
-export function LoadError({ what, onRetry }: { what: string; onRetry: () => void }): JSX.Element {
+export function LoadError({
+  what,
+  onRetry,
+}: {
+  what: string;
+  onRetry: () => void;
+}): React.JSX.Element {
   return (
     <div role="alert" className="load-error">
       <p className="load-error-title">Couldn’t load {what}</p>

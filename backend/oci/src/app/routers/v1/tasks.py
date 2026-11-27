@@ -6,7 +6,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, text
 
 from app.calendar_window import validate_range_pair
 from app.db import SessionDep
@@ -19,11 +19,20 @@ from app.models import (
     Section,
     Tag,
     Task,
+    TaskCreation,
     TaskList,
     utcnow,
 )
 from app.recurrence import advance_in_place, validate_recurrence
-from app.schemas import Page, Priority, TaskCreate, TaskRead, TaskUpdate, as_utc
+from app.schemas import (
+    Page,
+    PlannedWork,
+    Priority,
+    TaskCreate,
+    TaskRead,
+    TaskUpdate,
+    as_utc,
+)
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
@@ -94,6 +103,49 @@ def validate_schedule(
         raise invalid_schedule("A timed start+due duration must stay within one day")
 
 
+def invalid_planned_work(message: str) -> APIError:
+    return APIError(status_code=422, code="invalid_planned_work", message=message)
+
+
+def validate_planned_work(block: PlannedWork) -> None:
+    """The planned work invariants (issue #558): a positive duration, a
+    non-negative buffer, a known IANA timezone, and the block (buffer
+    included) kept within one local calendar day of that timezone — it may
+    end exactly at the next midnight, never past it. The duration is elapsed
+    time, so a block across a DST change keeps its real length.
+    """
+    if block.duration_minutes <= 0:
+        raise invalid_planned_work("Planned work needs a positive duration")
+    if block.buffer_minutes is not None and block.buffer_minutes < 0:
+        raise invalid_planned_work("A buffer after planned work cannot be negative")
+    try:
+        zone = ZoneInfo(block.time_zone)
+    except (KeyError, ValueError):
+        raise invalid_planned_work(f"Unknown IANA timezone {block.time_zone!r}") from None
+    start = as_utc(block.start).astimezone(zone)
+    length = timedelta(minutes=block.duration_minutes + (block.buffer_minutes or 0))
+    finish = (as_utc(block.start) + length).astimezone(zone)
+    next_day = start.date() + timedelta(days=1)
+    ends_at_midnight = finish.date() == next_day and finish.time() == time(0, 0)
+    if finish.date() != start.date() and not ends_at_midnight:
+        raise invalid_planned_work(
+            "Planned work must stay within one local day: it would run past midnight"
+        )
+
+
+def apply_planned_work(task: Task, block: PlannedWork | None) -> None:
+    """Replace the Task's planned work block whole, or remove it on None.
+    Touches only the plan: the Task's start/due dates stay as they are."""
+    if block is None:
+        task.clear_planned_work()
+        return
+    validate_planned_work(block)
+    task.planned_start = block.start
+    task.planned_duration_minutes = block.duration_minutes
+    task.planned_time_zone = block.time_zone
+    task.planned_buffer_minutes = block.buffer_minutes
+
+
 async def validate_key_result(session: SessionDep, key_result_id: int | None) -> None:
     """Key Results are only reachable nested under a Goal, so this flat id is
     the one place the Goal scoping is bypassable — check it at the boundary."""
@@ -133,6 +185,24 @@ async def resolve_tags(session: SessionDep, tag_ids: list[int]) -> list[Tag]:
 
 @router.post("", status_code=201)
 async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
+    request_id = str(payload.create_request_id) if payload.create_request_id is not None else None
+    if request_id is not None:
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"task:{request_id}"},
+        )
+        receipt = await session.scalar(
+            select(TaskCreation).where(TaskCreation.request_id == request_id)
+        )
+        if receipt is not None:
+            existing = await session.get(Task, receipt.task_id)
+            if existing is None:
+                raise APIError(
+                    status_code=409,
+                    code="accepted_task_deleted",
+                    message="Previously accepted Task was deleted; retry cannot recreate it",
+                )
+            return TaskRead.model_validate(existing)
     if payload.list_id is None:
         list_id = await session.scalar(select(TaskList.id).where(TaskList.is_inbox))
     else:
@@ -156,6 +226,7 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
     )
     task = Task(
         title=payload.title,
+        create_request_id=request_id,
         description=payload.description,
         list_id=list_id,
         section_id=payload.section_id,
@@ -174,6 +245,9 @@ async def create_task(payload: TaskCreate, session: SessionDep) -> TaskRead:
         tags=tags,
     )
     session.add(task)
+    if request_id is not None:
+        await session.flush()
+        session.add(TaskCreation(request_id=request_id, task_id=task.id))
     await session.commit()
     return TaskRead.model_validate(task)
 
@@ -324,10 +398,25 @@ def in_smart_view(task: Task, view: SmartView, today: date) -> bool:
     return first <= today + timedelta(days=6) and last >= today
 
 
+def planned_day(task: Task) -> date | None:
+    """The local calendar day a Task's Planned work occupies, read in the
+    timezone it was planned in, or None when unplanned. One day is enough:
+    the block and its buffer never run past that day's midnight (#558)."""
+    if task.planned_start is None or task.planned_time_zone is None:
+        return None
+    return as_utc(task.planned_start).astimezone(ZoneInfo(task.planned_time_zone)).date()
+
+
 def in_range_window(task: Task, range_start: date, range_end: date) -> bool:
-    """Calendar-window intersection: any scheduled day falls inside the
-    inclusive [range_start, range_end] span.
+    """Calendar-window intersection: any scheduled day, or the day of the
+    Task's Planned work (#562), falls inside the inclusive
+    [range_start, range_end] span. The Calendar renders the plan as its own
+    Entry, so a Task planned in the window is fetched even when its due date
+    is elsewhere or absent.
     """
+    planned = planned_day(task)
+    if planned is not None and range_start <= planned <= range_end:
+        return True
     window = schedule_days(task)
     if window is None:
         return False
@@ -385,6 +474,9 @@ async def update_task(task_id: int, payload: TaskUpdate, session: SessionDep) ->
     elif effective_due is None and task.recurrence is not None:
         # Clearing the date sweeps the recurrence with it: no dateless repeats.
         changes["recurrence"] = None
+    if "planned_work" in changes:
+        changes.pop("planned_work")
+        apply_planned_work(task, payload.planned_work)
     if "tag_ids" in changes:
         task.tags = await resolve_tags(session, changes.pop("tag_ids"))
     for field, value in changes.items():

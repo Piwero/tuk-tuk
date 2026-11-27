@@ -56,7 +56,7 @@ describe("Habit history", () => {
       api.requests.some(
         (r) =>
           r.method === "GET" &&
-          r.url === `/api/v1/habits/${habitId}/stats?today=2026-07-03&year=2026`,
+          r.url === `/api/v1/habits/${habitId}/stats?today=2026-07-03&tz=UTC&year=2026`,
       ),
     ).toBe(true);
   });
@@ -162,10 +162,69 @@ describe("Habit history", () => {
         api.requests.some(
           (r) =>
             r.method === "GET" &&
-            r.url === `/api/v1/habits/${habitId}/stats?today=2026-07-03&year=2025`,
+            r.url === `/api/v1/habits/${habitId}/stats?today=2026-07-03&tz=UTC&year=2025`,
         ),
       ).toBe(true),
     );
+  });
+
+  it("marks days before the Habit start as not started, and backfilling one moves the start back", async () => {
+    const api = installFakeApi({
+      habits: [fakeHabit("Meditate", { created_at: "2026-07-03T10:00:00Z" })],
+    });
+    const habitId = api.habits[0]?.id ?? 0;
+    render(<App />);
+
+    await openHistory("Meditate");
+
+    const before = await screen.findByRole("button", { name: "2026-07-01: not started" });
+    expect(before).toHaveClass("not-started");
+    expect(before).toBeEnabled();
+    expect(screen.getByRole("button", { name: "2026-07-02: not started" })).toBeInTheDocument();
+    // Today is the Habit start, so it is an ordinary open day.
+    expect(screen.getByRole("button", { name: "2026-07-03" })).not.toHaveClass("not-started");
+
+    fireEvent.click(before);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "2026-07-01" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      ),
+    );
+    expect(
+      api.requests.some(
+        (r) => r.method === "PUT" && r.url === `/api/v1/habits/${habitId}/check-ins/2026-07-01`,
+      ),
+    ).toBe(true);
+    // The days since the backfill count now; the days before it still don't.
+    expect(screen.getByRole("button", { name: "2026-07-02" })).not.toHaveClass("not-started");
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(await screen.findByRole("button", { name: "2026-06-30: not started" })).toBeEnabled();
+  });
+
+  it("explains the month grid's and the yearly heatmap's marks in words, without hover", async () => {
+    installFakeApi({ habits: [fakeHabit("Meditate", { created_at: "2026-07-03T10:00:00Z" })] });
+    render(<App />);
+
+    await openHistory("Meditate");
+
+    const key = await screen.findByRole("list", { name: "What the history shows" });
+    expect(key).toBeVisible();
+    expect(
+      within(key)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "Checked in",
+      "In progress",
+      "No Check-in",
+      "Not started: before the Habit began",
+      "Paused: not counted, neither done nor missed",
+      "Skipped: on purpose, not counted, neither done nor missed",
+    ]);
+    // What a heatmap square stands for is on screen, not only in its title.
+    expect(screen.getByText("2026: one square per day, from January 1")).toBeVisible();
   });
 
   it("keeps history reachable on archived Habits", async () => {

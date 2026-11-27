@@ -1,7 +1,8 @@
 """Pydantic request/response models and the shared pagination envelope."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -185,8 +186,44 @@ class SectionRead(BaseModel):
     sort_order: int
 
 
+class PlannedWork(BaseModel):
+    """A Task's planned work block (issue #558) as written: reserved work
+    time, never the deadline. Range and day-boundary rules are checked in
+    the router so they answer with the `invalid_planned_work` code."""
+
+    start: datetime
+    duration_minutes: int
+    time_zone: str = Field(max_length=64)
+    buffer_minutes: int | None = None
+
+    _normalize_start = field_validator("start")(normalize_to_utc)
+
+
+class PlannedWorkRead(PlannedWork):
+    """As read: the same block plus its `end` instant (start + duration,
+    elapsed time — so a block across a DST change keeps its real length).
+    The buffer runs after `end`."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def end(self) -> datetime:
+        return self.start + timedelta(minutes=self.duration_minutes)
+
+    @field_serializer("start", "end")
+    def serialize_instants(self, value: datetime) -> str:
+        return utc_z(value)
+
+
+# The longest duration estimate a Task takes: a week. A longer job is
+# several Tasks.
+MAX_ESTIMATE_MINUTES = 7 * 24 * 60
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
+    create_request_id: UUID | None = None
     description: str = ""
     list_id: int | None = None
     section_id: int | None = None
@@ -211,8 +248,10 @@ class TaskCreate(BaseModel):
 # PATCH fields: absent means "leave unchanged". An explicit null is rejected,
 # except section_id, where null moves the task out of its Section,
 # start_date / due_date / time_zone, where null clears the schedule,
-# recurrence, where null stops the task repeating, and key_result_id, where
-# null detaches the Task from its Key Result.
+# recurrence, where null stops the task repeating, key_result_id, where
+# null detaches the Task from its Key Result, planned_work, where null
+# removes the planned work block (an object replaces it whole), and
+# estimate_minutes, where null removes the estimate.
 # tag_ids replaces the task's whole tag set; reminders replaces the whole
 # reminder set ([] clears it).
 class TaskUpdate(BaseModel):
@@ -231,6 +270,9 @@ class TaskUpdate(BaseModel):
     reminders: list[str] | None = None
     recurrence: str | None = Field(default=None, max_length=255)
     key_result_id: int | None = None
+    planned_work: PlannedWork | None = None
+    # Duration estimate (issue #563): positive minutes, at most a week.
+    estimate_minutes: int | None = Field(default=None, gt=0, le=MAX_ESTIMATE_MINUTES)
 
     _reject_nulls = field_validator(
         "title",
@@ -248,6 +290,7 @@ class TaskUpdate(BaseModel):
 
 class CheckItemCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
+    request_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 # PATCH fields: absent means "leave unchanged"; an explicit JSON null is rejected.
@@ -319,6 +362,48 @@ class HabitUpdate(BaseModel):
     )(reject_explicit_null)
 
 
+class HabitPauseCreate(BaseModel):
+    """A pause's date interval, both ends inclusive local days; no
+    `end_date` (or null) is open-ended."""
+
+    start_date: date
+    end_date: date | None = None
+
+
+class HabitPauseUpdate(BaseModel):
+    """Edit pause: absent fields stay unchanged; `end_date` null makes the
+    pause open-ended."""
+
+    start_date: date | None = None
+    end_date: date | None = None
+
+    _reject_nulls = field_validator("start_date")(reject_explicit_null)
+
+
+class HabitPauseResume(BaseModel):
+    """Resume today: the caller's local day, which becomes eligible again."""
+
+    today: date
+
+
+class HabitPauseRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    habit_id: int
+    start_date: date
+    end_date: date | None
+
+
+class HabitSkipRead(BaseModel):
+    """A Habit skip (issue #564): one scheduled day explicitly not practised."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    habit_id: int
+    date: date
+
+
 class HabitRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -334,6 +419,19 @@ class HabitRead(BaseModel):
     frequency: str
     is_archived: bool
     created_at: datetime
+    # The Habit's pauses (issue #559), oldest first. New in this field, so
+    # an older client that ignores it reads the Habit as before.
+    pauses: list[HabitPauseRead] = []
+    # The Habit's skipped days (issue #564), oldest first; additive like
+    # `pauses`.
+    skips: list[date] = []
+
+    @field_validator("skips", mode="before")
+    @classmethod
+    def skip_dates(cls, value: object) -> object:
+        if isinstance(value, list):
+            return [getattr(item, "date", item) for item in value]
+        return value
 
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:
@@ -366,11 +464,33 @@ class HeatmapDay(BaseModel):
 
 
 class HabitStats(BaseModel):
-    """The server-computed Habit statistics: the current Streak and one
-    calendar year of heatmap days (sparse — only days with Check-ins)."""
+    """The server-computed Habit statistics: the current Streak, one
+    calendar year of heatmap days (sparse — only days with Check-ins), and
+    the Habit start (`eligible_from`, a local day): days before it are not
+    started, never missed."""
 
     streak: int
     heatmap: list[HeatmapDay]
+    eligible_from: date
+    # The week holding `today` for an N-times-per-week Habit (issue #568);
+    # null for daily and weekday Habits.
+    week: "HabitWeek | None" = None
+
+
+class HabitWeek(BaseModel):
+    """A times-per-week Habit's week, Monday to Sunday. A pause or skip inside
+    it never reduces `target`; `remaining` is the Target less the days done.
+    Only a pause covering the whole week (from the Habit start) sets
+    `excluded`: the week counts as neither met nor missed."""
+
+    start: date
+    end: date
+    target: int
+    done: int
+    remaining: int
+    paused_days: int
+    skipped_days: int
+    excluded: bool
 
 
 # The two Focus Session modes: a Pomo counts down, a Stopwatch counts up.
@@ -388,6 +508,9 @@ class FocusSessionCreate(BaseModel):
     ended_at: datetime
     pause_seconds: int = Field(default=0, ge=0)
     note: str = Field(default="", max_length=2000)
+    # The client's identity for the run (issue #546): repeating a create
+    # with the same id returns the session already recorded for it.
+    client_run_id: str | None = Field(default=None, min_length=1, max_length=64)
 
     _normalize_dates = field_validator("started_at", "ended_at")(normalize_to_utc)
 
@@ -589,6 +712,10 @@ class TaskRead(BaseModel):
     source_google_calendar_id: int | None
     source_google_event_id: str | None
     key_result_id: int | None
+    # Planned work (issue #558): reserved work time, separate from start/due.
+    planned_work: PlannedWorkRead | None = None
+    # Duration estimate (issue #563), in minutes; null when none was given.
+    estimate_minutes: int | None = None
     check_items: list[CheckItemRead]
     tags: list[TagRead]
     created_at: datetime

@@ -38,9 +38,18 @@ You can connect several Google accounts, such as work and personal.
 
 - **Click an event** to see its location, attendees and description.
   **Convert to task** turns it into a task you can tick off.
+- **Planned work** shows as its own dashed block labelled _Planned work_,
+  with its buffer drawn underneath. Drag it or its edges to change the plan,
+  or click it and use the **Planned work** row in the task. Moving it never
+  changes the due date. Events are labelled _Event · read-only_.
 - **Declined events are hidden.** Invites you haven't answered still show.
 - **Active hours:** **Settings → Active hours** makes your working hours
   taller and the rest of the day compact, so short tasks are easier to read.
+- **Planning window:** turn it on in **Settings → Planning window** and the Day
+  view says how much of that window is still free. It counts events and planned
+  work (with buffers) once, even when they overlap. All-day events are listed
+  but not counted. A task without planned work counts by its **Estimate** if
+  you gave one ("not yet planned"), and shows as "no estimate" otherwise.
 - If Google access expires, a **Reconnect** banner appears. Your tasks are not affected.
 - Events show in your own time zone. Tasks keep the time zone you scheduled them in.
 

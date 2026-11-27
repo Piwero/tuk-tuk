@@ -8,7 +8,7 @@ import { moveMenuFocus } from "./menuFocus";
 import { Popover } from "./Popover";
 
 /** The account's initial, the only avatar there is (#468: no uploads). */
-export function Avatar({ user }: { user: Pick<CurrentUser, "username"> }): JSX.Element {
+export function Avatar({ user }: { user: Pick<CurrentUser, "username"> }): React.JSX.Element {
   return (
     <span className="user-avatar" aria-hidden="true">
       {user.username.charAt(0).toUpperCase()}
@@ -18,7 +18,7 @@ export function Avatar({ user }: { user: Pick<CurrentUser, "username"> }): JSX.E
 
 /** Who is signed in: name, an Admin badge for admins, and email. Heads both
  * the desktop menu and the phone's More sheet. */
-export function AccountSummary({ user }: { user: CurrentUser }): JSX.Element {
+export function AccountSummary({ user }: { user: CurrentUser }): React.JSX.Element {
   return (
     <div className="user-summary">
       <Avatar user={user} />
@@ -48,7 +48,7 @@ export function UserMenu({
   onToggleDarkMode: () => void;
   /** Absent only when App is rendered without the gate (its tests). */
   onLogout?: () => void;
-}): JSX.Element {
+}): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
 

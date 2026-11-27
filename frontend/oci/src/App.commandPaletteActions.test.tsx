@@ -151,7 +151,7 @@ describe("acting on a Task from the command palette", () => {
         within(dialog)
           .getAllByRole("option")
           .map((o) => o.textContent),
-      ).toEqual(["Deep Work 50", "Quick 15", "Custom…"]),
+      ).toEqual(["Deep Work 50", "Quick 15", "Open Focus for a custom length"]),
     );
     const quick = within(dialog).getByRole("option", { name: "Quick 15" });
 
@@ -174,7 +174,7 @@ describe("acting on a Task from the command palette", () => {
     );
   });
 
-  it("offers the 25-minute default plus Custom… when no Pomo Timer is saved", async () => {
+  it("offers the 25-minute default plus a custom-length row when no Pomo Timer is saved", async () => {
     installFakeApi({ tasks: [fakeTask("Write report")] });
     render(<App />);
     const dialog = await openActions("Inbox", "Write report");
@@ -190,14 +190,14 @@ describe("acting on a Task from the command palette", () => {
     ).toBeInTheDocument();
   });
 
-  it("Custom… lands on the Focus view, where a one-off length is adjustable", async () => {
+  it("the custom-length row lands on the Focus view, where a one-off length is adjustable", async () => {
     const task = fakeTask("Write report");
     installFakeApi({ tasks: [task] });
     render(<App />);
     const dialog = await openActions("Inbox", "Write report");
 
     fireEvent.click(within(dialog).getByRole("option", { name: "Start Pomo" }));
-    fireEvent.click(within(dialog).getByRole("option", { name: "Custom…" }));
+    fireEvent.click(within(dialog).getByRole("option", { name: "Open Focus for a custom length" }));
 
     expect(await screen.findByRole("heading", { name: "Focus" })).toBeInTheDocument();
     // Linked and idle: the length is still the user's to set (#449).

@@ -31,7 +31,7 @@ export function PomoQuickStartMenu({
   position,
   origin,
   onClose,
-}: PomoQuickStartMenuProps): JSX.Element {
+}: PomoQuickStartMenuProps): React.JSX.Element {
   const startPomoForTask = useStartPomo();
   const [timers, setTimers] = useState<Timer[]>([]);
   const [customOpen, setCustomOpen] = useState(false);

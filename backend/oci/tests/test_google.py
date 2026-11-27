@@ -57,6 +57,7 @@ class TestGoogleStatus:
             "configured": True,
             "client_id": "a-client-id",
             "client_secret_set": True,
+            "shared_client": False,
         }
 
     def test_reports_configured_false_when_credentials_are_absent(
@@ -69,6 +70,7 @@ class TestGoogleStatus:
             "configured": False,
             "client_id": None,
             "client_secret_set": False,
+            "shared_client": False,
         }
 
     def test_reports_the_client_id_but_never_the_client_secret_value(

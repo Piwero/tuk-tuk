@@ -6,6 +6,7 @@ import { ApiError, type CurrentUser, fetchCurrentUser, logout, onUnauthorized } 
 import { ChangePasswordStep } from "./auth/ChangePasswordStep";
 import { CompleteProfileStep } from "./auth/CompleteProfileStep";
 import { ForcedStepFrame } from "./auth/ForcedStepFrame";
+import { InvitationScreen } from "./auth/InvitationScreen";
 import { SetupScreen } from "./auth/SetupScreen";
 import { type SignInNotice, SignInScreen } from "./auth/SignInScreen";
 import { clearSignedInData } from "./layoutPrefs";
@@ -18,6 +19,7 @@ import { pathForSmartView } from "./routes";
  * record rather than trusting client state. */
 export type GateState =
   | { kind: "checking" }
+  | { kind: "invitation" }
   | { kind: "needs-setup" }
   | { kind: "signed-out"; notice: SignInNotice | null }
   | { kind: "must-change-password"; user: CurrentUser }
@@ -25,6 +27,8 @@ export type GateState =
   | { kind: "signed-in"; user: CurrentUser };
 
 const SIGNED_OUT: GateState = { kind: "signed-out", notice: null };
+
+const INVITATION_PATH = "/invite";
 
 /** A profile to complete outranks a password to replace, as it does in the
  * backend's middleware: completing the profile sets a new password too. */
@@ -57,8 +61,12 @@ function stateForAuthCode(code: string | null): GateState {
  * and its whole test suite — never need to know authentication exists. */
 export function AuthGate({
   voiceProvider,
-}: { voiceProvider?: import("./voice/session").VoiceProvider } = {}): JSX.Element | null {
-  const [state, setState] = useState<GateState>({ kind: "checking" });
+}: { voiceProvider?: import("./voice/session").VoiceProvider } = {}): React.JSX.Element | null {
+  // An invitation link (#586) is answered before anything else, signed in
+  // or not: accepting it is how someone without an account gets one.
+  const [state, setState] = useState<GateState>(() =>
+    window.location.pathname === INVITATION_PATH ? { kind: "invitation" } : { kind: "checking" },
+  );
 
   const resolve = useCallback(
     (): Promise<void> =>
@@ -69,9 +77,11 @@ export function AuthGate({
     [],
   );
 
+  const startsOnInvitation = state.kind === "invitation";
+  const [probeOnMount] = useState(!startsOnInvitation);
   useEffect(() => {
-    void resolve();
-  }, [resolve]);
+    if (probeOnMount) void resolve();
+  }, [resolve, probeOnMount]);
 
   useEffect(() => onUnauthorized((code) => setState(stateForAuthCode(code))), []);
 
@@ -99,6 +109,8 @@ export function AuthGate({
   switch (state.kind) {
     case "checking":
       return null;
+    case "invitation":
+      return <InvitationScreen onDone={() => void landOnToday()} />;
     case "needs-setup":
       return <SetupScreen onSuccess={landOnToday} onAlreadySetUp={() => setState(SIGNED_OUT)} />;
     case "signed-out":

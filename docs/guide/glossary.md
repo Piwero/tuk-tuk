@@ -17,7 +17,8 @@
 | **Tag** | A coloured label you can add to any task. |
 | **Priority** | None, Low, Medium or High. |
 | **Checklist item** | A line inside a task with its own tick box. Not a separate task. |
-| **Reminder** | "30 minutes before" style alert on a task. Saved, not sent yet. |
+| **Reminder** | "30 minutes before" style alert on a task. Notifies once, only while a Tuk Tuk tab is open and you've turned on Reminder notifications on that device. |
+| **Quiet hours** | A time of day when reminders wait instead of notifying, then notify once when it ends. Separate from Active hours. |
 | **Quick-Add** | The one-line box that understands `#` `!` `~` `@`. |
 
 ## Calendar
@@ -26,7 +27,7 @@
 | --- | --- |
 | **Event** | A Google Calendar item. Read-only in Tuk Tuk. |
 | **Unscheduled** | Open tasks with no date, waiting to be placed on the calendar. |
-| **Active hours** | Your usual working hours, shown taller in Week/Day view. |
+| **Active hours** | Your usual working hours, shown taller in Week/Day view. Never changes when reminders notify. |
 
 ## Habits and focus
 

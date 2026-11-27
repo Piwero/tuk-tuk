@@ -6,12 +6,13 @@ mode, start/end, pause duration, optional note, and at most one link to a
 Task or Habit.
 """
 
-from datetime import UTC, date, datetime, tzinfo
-from zoneinfo import ZoneInfo
+from datetime import date, datetime
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
+from app.caller_zone import caller_zone_or_utc
 from app.db import SessionDep
 from app.errors import APIError, NotFoundError
 from app.focus_stats import daily_totals, linked_totals, session_day, weekly_totals
@@ -56,10 +57,29 @@ async def validate_link(session: SessionDep, task_id: int | None, habit_id: int 
         raise NotFoundError(f"Habit {habit_id} not found")
 
 
+async def find_run(session: SessionDep, client_run_id: str | None) -> FocusSession | None:
+    if client_run_id is None:
+        return None
+    return await session.scalar(
+        select(FocusSession).where(FocusSession.client_run_id == client_run_id)
+    )
+
+
+def already_recorded(existing: FocusSession, response: Response) -> FocusSessionRead:
+    """A retry of a run already saved: its first save, with 200."""
+    response.status_code = 200
+    return FocusSessionRead.model_validate(existing)
+
+
 @router.post("", status_code=201)
 async def create_focus_session(
-    payload: FocusSessionCreate, session: SessionDep
+    payload: FocusSessionCreate, session: SessionDep, response: Response
 ) -> FocusSessionRead:
+    """Record a finished session. Retry-safe (issue #546): a create carrying
+    the `client_run_id` of a run already recorded returns that session with
+    200 and records nothing — the first save wins, whatever the retry says."""
+    if (existing := await find_run(session, payload.client_run_id)) is not None:
+        return already_recorded(existing, response)
     validate_period(payload.started_at, payload.ended_at, payload.pause_seconds)
     await validate_link(session, payload.task_id, payload.habit_id)
     focus_session = FocusSession(
@@ -70,9 +90,17 @@ async def create_focus_session(
         ended_at=payload.ended_at,
         pause_seconds=payload.pause_seconds,
         note=payload.note,
+        client_run_id=payload.client_run_id,
     )
     session.add(focus_session)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # A concurrent retry of the same run committed first: return its row.
+        await session.rollback()
+        if (existing := await find_run(session, payload.client_run_id)) is None:
+            raise
+        return already_recorded(existing, response)
     return FocusSessionRead.model_validate(focus_session)
 
 
@@ -165,16 +193,7 @@ async def read_focus_stats(
             code="validation_error",
             message="start must not be after end",
         )
-    zone: tzinfo = UTC
-    if tz is not None:
-        try:
-            zone = ZoneInfo(tz)
-        except (KeyError, ValueError):
-            raise APIError(
-                status_code=422,
-                code="validation_error",
-                message=f"Unknown IANA timezone {tz!r}",
-            ) from None
+    zone = caller_zone_or_utc(tz)
     rows = (await session.scalars(select(FocusSession).order_by(FocusSession.id))).all()
     # Day membership needs the caller's timezone, which portable SQL can't
     # reach — the range filter runs in Python (like the Smart Lists).

@@ -202,7 +202,7 @@ describe("Tags on a task", () => {
     render(<App />);
 
     const tagsNav = await screen.findByRole("navigation", { name: "Tags" });
-    await user.click(within(tagsNav).getByRole("link", { name: "work" }));
+    await user.click(await within(tagsNav).findByRole("link", { name: "work" }));
     await screen.findByRole("heading", { name: "#work" });
     await user.click(screen.getByRole("button", { name: "Open details for Write report" }));
 

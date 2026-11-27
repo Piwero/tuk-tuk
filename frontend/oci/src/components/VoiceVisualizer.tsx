@@ -71,7 +71,7 @@ export function VoiceVisualizer({
 }: {
   state: VoiceState;
   size?: "sm" | "md" | "lg";
-}): JSX.Element {
+}): React.JSX.Element {
   const reduced = usePrefersReducedMotion();
   const themeMode = useThemeMode();
   if (reduced) {

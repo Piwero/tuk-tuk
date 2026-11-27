@@ -105,6 +105,25 @@ def test_0028_task_key_result_migration_preserves_existing_task_rows(
     ]
 
 
+def test_0048_planned_work_migration_leaves_existing_tasks_unplanned(
+    empty_database_url: str,
+) -> None:
+    """Issue #558: an existing Task survives the upgrade to head with every
+    planned work column null — no plan, and its dates untouched."""
+    config = alembic_config(empty_database_url)
+    command.upgrade(config, "0027")
+    run_sql(empty_database_url, SEED_LIST)
+    run_sql(empty_database_url, SEED_TASK)
+
+    command.upgrade(config, "head")
+
+    assert run_sql(
+        empty_database_url,
+        "SELECT title, due_date, planned_start, planned_duration_minutes, "
+        "planned_time_zone, planned_buffer_minutes FROM tasks WHERE id = 1",
+    ) == [("Write code", None, None, None, None, None)]
+
+
 def test_seed_migration_carries_sprint_goal_text_and_preserves_standup_snapshots(
     empty_database_url: str,
 ) -> None:
@@ -808,3 +827,98 @@ class TestDeleteRulesContract:
         built = {(table, column): PG_DELETE_RULES[rule] for table, column, rule in rows}
 
         assert built == self.declared_rules()
+
+
+class TestReminderOptInAtMigration:
+    """Review of #565: the missed list is bounded by when the User turned
+    Reminder notifications on. A User already opted in is bounded from the
+    upgrade, so no stored offset surfaces as missed after it."""
+
+    def test_an_opted_in_user_is_bounded_from_the_upgrade_and_others_never_were_on(
+        self, empty_database_url: str
+    ) -> None:
+        config = alembic_config(empty_database_url)
+        command.upgrade(config, "0055_planning_window")
+        run_sql(
+            empty_database_url,
+            "INSERT INTO users (username, email) VALUES ('ana', 'a@x.io'), ('ben', 'b@x.io')",
+        )
+        run_sql(
+            empty_database_url,
+            "INSERT INTO user_settings (user_id, reminder_notifications_enabled) "
+            "VALUES (1, true), (2, false)",
+        )
+
+        command.upgrade(config, "head")
+
+        assert run_sql(
+            empty_database_url,
+            "SELECT user_id, reminder_notifications_enabled_at > now() - interval '1 minute' "
+            "FROM user_settings ORDER BY user_id",
+        ) == [(1, True), (2, None)]
+
+
+class TestGoogleSsoMigration:
+    """Issue #586: rolling out invite-only Google sign-in keeps every
+    existing User, role, password, setting and Calendar connection as it
+    was. No Calendar connection becomes a login identity, and every one
+    keeps the client it was made with (its User's own)."""
+
+    def test_existing_accounts_and_connections_survive_unchanged(
+        self, empty_database_url: str
+    ) -> None:
+        config = alembic_config(empty_database_url)
+        command.upgrade(config, "0060_github")
+        run_sql(
+            empty_database_url,
+            "INSERT INTO users (id, username, email, password_hash, is_admin) VALUES "
+            "(1, 'ana', 'ana@example.com', 'hash-a', true), (2, 'ben', 'ben@example.com', "
+            "'hash-b', false)",
+        )
+        run_sql(
+            empty_database_url,
+            "INSERT INTO user_settings (user_id, google_client_id, "
+            "encrypted_google_client_secret) VALUES (1, 'own-id', 'own-secret'), (2, NULL, NULL)",
+        )
+        run_sql(
+            empty_database_url,
+            "INSERT INTO google_accounts (google_account_id, email, encrypted_refresh_token, "
+            "connection_state, owner_id, created_at, updated_at) VALUES ('g-ana', "
+            "'ana@example.com', 'refresh', 'connected', 1, now(), now())",
+        )
+
+        command.upgrade(config, "head")
+
+        assert run_sql(
+            empty_database_url,
+            "SELECT id, username, password_hash, is_admin, google_subject FROM users ORDER BY id",
+        ) == [(1, "ana", "hash-a", True, None), (2, "ben", "hash-b", False, None)]
+        assert run_sql(
+            empty_database_url,
+            "SELECT google_client_id, encrypted_google_client_secret FROM user_settings "
+            "WHERE user_id = 1",
+        ) == [("own-id", "own-secret")]
+        assert run_sql(
+            empty_database_url,
+            "SELECT google_account_id, encrypted_refresh_token, connection_state, "
+            "uses_shared_client FROM google_accounts",
+        ) == [("g-ana", "refresh", "connected", False)]
+        assert run_sql(empty_database_url, "SELECT count(*) FROM invitations") == [(0,)]
+
+    def test_a_google_login_identity_belongs_to_one_user_and_passwords_stay_optional(
+        self, empty_database_url: str
+    ) -> None:
+        run_migrations(empty_database_url)
+        run_sql(
+            empty_database_url,
+            "INSERT INTO users (username, email, google_subject) VALUES "
+            "('ana', 'ana@example.com', 'sub-1')",
+        )
+
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            run_sql(
+                empty_database_url,
+                "INSERT INTO users (username, email, google_subject) VALUES "
+                "('ben', 'ben@example.com', 'sub-1')",
+            )
+        assert run_sql(empty_database_url, "SELECT password_hash FROM users") == [(None,)]

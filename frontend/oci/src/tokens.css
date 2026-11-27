@@ -223,6 +223,10 @@
   --mobile-tab-bar-height: 56px; /* the mobile bottom tab bar (issue #170) */
   --mobile-quick-add-size: 56px; /* the mobile Quick-Add button (issue #287) */
   --control-height: 34px; /* inputs, buttons */
+  --border-width: 1px;
+  --focus-outline-width: 3px;
+  --focus-outline-offset: 2px;
+  --capture-textarea-min-height: 120px;
   /* Checkbox sizes. Every checkbox is --checkbox-standard; the Calendar's
      entries are the one exception, and take --checkbox-dense. A Month cell
      holds several one-line entries, so a standard box there would set each
@@ -231,6 +235,12 @@
      target can't be hit by a thumb. */
   --checkbox-standard: 18px;
   --checkbox-dense: 12px;
+  /* Habit day marks. The "not started" dash is one size in every view (week
+     grid, strip, month grid, heatmap), small enough for the 10px heatmap
+     square; a legend swatch is one day square at icon size. */
+  --habit-dash-width: 8px;
+  --habit-dash-height: 2px;
+  --habit-legend-swatch: 16px;
   /* Minimum touch hit area (#168). Applied under a coarse pointer and, since
      #286, at the mobile breakpoint too — a touch-capable device reporting
      `pointer: fine` needs the same floor. */

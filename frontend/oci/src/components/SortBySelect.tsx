@@ -19,7 +19,7 @@ interface SortBySelectProps {
  * than hidden inside the option's own label in different words. The helper
  * below (issue #260) is that single place — the underlying order always
  * exists, so a first-time user sees it explained there. */
-export function SortBySelect({ value, onChange }: SortBySelectProps): JSX.Element {
+export function SortBySelect({ value, onChange }: SortBySelectProps): React.JSX.Element {
   // `useId` rather than a fixed string: the All view and the List view can
   // both be mounted in the same document, and a duplicated id would be
   // invalid HTML and would point both selects at one hint.

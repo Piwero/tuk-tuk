@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -62,7 +62,7 @@ describe("User menu", () => {
     expect(screen.getByText("Admin")).toBeInTheDocument();
     await user.click(within(menu).getByRole("menuitem", { name: "Users" }));
 
-    expect(window.location.pathname).toBe("/settings/users");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/users"));
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
     expect(screen.queryByRole("menu", { name: "Account menu" })).not.toBeInTheDocument();
   });
@@ -85,7 +85,7 @@ describe("User menu", () => {
     const menu = await openAccountMenu(user);
     await user.click(within(menu).getByRole("menuitem", { name: "My account" }));
 
-    expect(window.location.pathname).toBe("/settings/account");
+    await waitFor(() => expect(window.location.pathname).toBe("/settings/account"));
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
   });
 

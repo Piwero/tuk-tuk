@@ -15,7 +15,8 @@ from app.calendar_source import GoogleOAuthClient
 from app.config import Settings
 from app.crypto import decrypt_credential, encrypt_credential
 from app.db import SessionDep
-from app.models import UserSettings
+from app.google_identity import shared_google_client
+from app.models import GoogleAccount, UserSettings
 from app.users import current_user_id
 
 
@@ -54,6 +55,39 @@ def google_oauth_client(user_settings: UserSettings, *, master_key: str) -> Goog
             user_settings.encrypted_google_client_secret, key=master_key
         ),
     )
+
+
+def calendar_available(settings: Settings, user_settings: UserSettings) -> bool:
+    """Whether this User can use Google Calendar at all: through the
+    deployment's shared client (issue #586) or their own (issue #117)."""
+    return shared_google_client(settings) is not None or google_configured(user_settings)
+
+
+def new_connection_client(
+    settings: Settings, user_settings: UserSettings
+) -> tuple[GoogleOAuthClient, bool]:
+    """The client a new Calendar connection is made with, and whether it is
+    the shared one: the shared client when configured (issue #586), else
+    the User's own. Only called once `calendar_available`."""
+    shared = shared_google_client(settings)
+    if shared is not None:
+        return shared, True
+    assert settings.app_master_key is not None
+    return google_oauth_client(user_settings, master_key=settings.app_master_key), False
+
+
+def account_client(
+    account: GoogleAccount, settings: Settings, user_settings: UserSettings
+) -> GoogleOAuthClient | None:
+    """The client `account`'s refresh token was minted by, which every
+    refresh must use, or None when that client is no longer configured (the
+    account then needs reconnecting)."""
+    if account.uses_shared_client:
+        return shared_google_client(settings)
+    if not google_configured(user_settings):
+        return None
+    assert settings.app_master_key is not None
+    return google_oauth_client(user_settings, master_key=settings.app_master_key)
 
 
 def voice_configured(user_settings: UserSettings) -> bool:

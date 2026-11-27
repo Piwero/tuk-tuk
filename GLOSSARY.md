@@ -2,17 +2,25 @@
 
 An all-in-one personal productivity app — task management, calendar, habits, and focus — with a clean, conventional HTTP API.
 
-One instance serves several Users, and each sees only their own data (ADR 0018). Nothing is shared between Users: there are no shared Lists, assignees or invites.
+One instance serves several Users, and each sees only their own data (ADR 0018). Nothing is shared between Users: there are no shared Lists or assignees. An Invitation admits a person to the instance; it never shares anything (ADR 0021).
 
 ## Accounts
 
 **User**:
-A person with their own account on the instance: a username, an email and a password. Everything a User creates belongs to them alone, and no other User can see it. A User is disabled rather than deleted, which ends their sessions and keeps their data.
+A person with their own account on the instance: a username, an email, and a password, a Google sign-in, or both. Everything a User creates belongs to them alone, and no other User can see it. Disabling a User ends their sessions, revokes their API tokens and keeps their data. Deleting a User permanently removes their account and all their local data, after an Admin confirms by re-entering their email.
 _Avoid_: Member, tenant (nothing is shared, so a User belongs to no group)
 
 **Admin**:
-A User who can also manage accounts: create Users with a temporary password, disable or re-enable them, reset their passwords, and grant or remove Admin. Only an Admin creates accounts; there is no sign-up. Being Admin grants no access to other Users' data.
+A User who can also manage accounts: invite people, create Users with a temporary password, disable or re-enable them, permanently delete their accounts and local data, reset their passwords, change their email, remove a lost Google sign-in, and grant or remove Admin. Only an Admin admits people; there is no sign-up. Being Admin grants no access to other Users' data.
 _Avoid_: Superuser, root
+
+**Invitation**:
+An Admin's offer of an account to one email address (ADR 0021): a single-use link, valid for seven days, emailed when SMTP is configured or copied by the Admin. Accepting it with a Google account whose verified email matches, and choosing a username, creates a regular User; nothing exists before then. Pending, accepted, expired or canceled; separately, emailed, not emailed yet, or failed to email. Resending gives a new link and voids the old one. Account admission only: it shares nothing.
+_Avoid_: Invite (as a collaboration feature), sign-up
+
+**Google sign-in**:
+A User's login identity at Google (ADR 0021): the Google account they sign in with, matched by Google's stable account id, never by email, and linked to one User at most. Set by accepting an Invitation, or linked by an existing User after confirming their password, with the same verified email. Only an Admin removes it, to recover a lost Google account. Never a Google Account (a Calendar connection), even for the same Google identity.
+_Avoid_: SSO account, Google Account (the Calendar connection)
 
 **API token**:
 A named, personal credential a User creates in Settings for a client that cannot log in with a password. Shown once when created, acts strictly as the User who created it, and can be revoked on its own without logging the User out anywhere else. Has one of two kinds, its audience: an API token proper (`tuk_pat_…`), which the API accepts, or an MCP token.
@@ -41,11 +49,13 @@ A user-created grouping of Lists in the sidebar. Folders contain only Lists, nev
 _Avoid_: Group, project group
 
 **Task**:
-The core unit of work: has a title, optional dates/reminders/recurrence, priority, tags, and completion state. A Task converted from an Event (issue #111) additionally carries that Event's calendar and Google event id as provenance — otherwise invisible, purely local state that hides the Event it came from and reappears if the Task is deleted — but is otherwise an ordinary Task in every way: draggable, taggable, prioritisable, completable, focusable.
+The core unit of work: has a title, optional dates/reminders/recurrence/Planned work, priority, tags, and completion state. A Task converted from an Event (issue #111) additionally carries that Event's calendar and Google event id as provenance — otherwise invisible, purely local state that hides the Event it came from and reappears if the Task is deleted — but is otherwise an ordinary Task in every way: draggable, taggable, prioritisable, completable, focusable.
 _Avoid_: Todo, item
 
 **Entry**:
-Anything occupying calendar space in the Calendar view (Month/Week/Day). A discriminated union of Task and Event (issue #107). The Calendar view's layout code (day-window membership, banner-vs-block classification, block spans, ordering) depends only on an entry's minimal time-shape — start, end, all-day flag, timezone — not on kind-specific fields, which is why an Event arm slotted in without changing any of that code. Mutating paths (create, move, resize, patch) always take a Task directly, never a bare Entry — the type system, not reviewer vigilance, keeps a write from ever targeting an Event, which has no such path. At equal start times an Event sorts before a Task: the immovable obligation reads first. A timed entry whose window spans more than one day is only reachable by an Event — the Task schedule invariant keeps a timed Task inside one calendar day — and renders as a clipped segment in each day's column it touches (issue #108) rather than collapsing into the all-day banner lane.
+Anything occupying calendar space in the Calendar view (Month/Week/Day). A discriminated union of Task, Planned work and Event (issues #107, #562). The Calendar view's layout code (day-window membership, banner-vs-block classification, block spans, ordering) depends only on an entry's minimal time-shape — start, end, all-day flag, timezone — not on kind-specific fields, which is why an Event arm slotted in without changing any of that code. Mutating paths (create, move, resize, patch) always take a Task directly, never a bare Entry — the type system, not reviewer vigilance, keeps a write from ever targeting an Event, which has no such path. At equal start times an Event sorts before a Task: the immovable obligation reads first. A timed entry whose window spans more than one day is only reachable by an Event — the Task schedule invariant keeps a timed Task inside one calendar day — and renders as a clipped segment in each day's column it touches (issue #108) rather than collapsing into the all-day banner lane.
+
+A Planned work Entry carries its Task, never an Event, and its only write path is the Task's own planned work PATCH: dragging or resizing the block changes the plan and nothing else, never the due date and never an Event, and the Task detail's Planned work row is its non-drag alternative. The range query brings a Task into the window when its schedule _or_ its Planned work day falls inside it, so a plan renders even when the due date is elsewhere or absent. It always reads as its own kind, in text and not only by colour: an accent-tinted, dashed block labelled _Planned work_, with its Buffer after drawn beneath it, while an Event keeps a solid neutral treatment labelled _Event · read-only_. When a Task has a plan, its own schedule Entry is named _Due date_, so a schedule and a plan that coincide are never two indistinguishable copies of one commitment; only the Task's own Entry offers completion. At equal start times an Event sorts first, then Planned work, then the Task's schedule.
 _Avoid_: Calendar item
 
 The Calendar shows plans, not history: both the grid and the Unscheduled rail read open Tasks only, so a Task completed from the Calendar leaves the view once its completion commits. A recurring Task is the exception that proves the rule — it comes back still open with its dates advanced (ADR 0003), so it stays in the view and moves to its next occurrence's day, which is only on screen when that day is inside the window currently shown.
@@ -53,11 +63,11 @@ The Calendar shows plans, not history: both the grid and the Unscheduled rail re
 Entries render in different timezones by kind, and this is deliberate, not a bug: a Task renders in whatever timezone it was scheduled in (a commitment the user made), while an Event renders in the **viewer's own** timezone, whatever timezone it was organised in (an artefact of whoever set it up). Rendering a Tokyo-organised meeting at its Tokyo hour would place it in the wrong row of the grid and cause a missed meeting. This asymmetry is the single most likely thing for a future reader to mistake for a bug — do not "fix" it into symmetry.
 
 **Active hours**:
-The band of the day the user marks as when they are usually active (issue #210). Inside it the Week/Day time grid renders at double height (96px/hour) so short tasks stay readable in place; outside it the grid compresses (24px/hour) so dead hours cost little scroll. A per-User setting stored server-side — it describes the User, not a device — disabled by default, prefilling 09:00–17:00 on first enable. The band is aligned to 30 minutes, must start strictly before it ends, and may not wrap past midnight: a wrapping band makes "the start of your day" ambiguous, and night-shift support (a movable day boundary) is out of scope. Degenerate bands (the whole day, or a single 30-minute band) are allowed. Only the Week and Day views are affected; Month has no time axis, and the all-day lane is untouched. See ADR 0010 for the piecewise time-axis invariant this rests on.
+The band of the day the user marks as when they are usually active (issue #210). Inside it the Week/Day time grid renders at double height (96px/hour) so short tasks stay readable in place; outside it the grid compresses (24px/hour) so dead hours cost little scroll. A per-User setting stored server-side — it describes the User, not a device — disabled by default, prefilling 09:00–17:00 on first enable. The band is aligned to 30 minutes, must start strictly before it ends, and may not wrap past midnight: a wrapping band makes "the start of your day" ambiguous, and night-shift support (a movable day boundary) is out of scope. Degenerate bands (the whole day, or a single 30-minute band) are allowed. Only the Week and Day views are affected; Month has no time axis, and the all-day lane is untouched. See ADR 0010 for the piecewise time-axis invariant this rests on. Active hours shapes the calendar layout only: it never decides when Reminders notify — that is Quiet hours, a separate setting.
 _Avoid_: Working hours (the band is about activity, not work), office hours, business hours
 
 **Check Item**:
-A lightweight line in a task's checklist — a title with its own done/undone state and optional reminder. Belongs to exactly one Task and is not a Task itself (no tags, priority, or list). The only nesting mechanism in v1.
+A lightweight line in a task's checklist — a title with its own done/undone state, nothing more. Belongs to exactly one Task and is not a Task itself (no tags, priority, list, dates or Reminders: a Reminder belongs to its Task). The only nesting mechanism in v1.
 _Avoid_: Subtask (a separate recursive-task concept, out of v1), checklist item
 
 **Smart List**:
@@ -88,13 +98,33 @@ A named, ordered sub-group inside a List. Sections subdivide the List view and A
 _Avoid_: Column, group
 
 **Reminder**:
-A relative offset from a Task's date (e.g. "9 hours before") at which the user should be notified. Tasks can have several. v1 stores and edits Reminders but does not deliver notifications.
-_Avoid_: Alarm, notification (the delivery mechanism, not the domain concept)
+A relative offset from a Task's date (e.g. "9 hours before") at which the User asks to be notified. Tasks can have several; Check Items have none. Its anchor is always the Task's own date, never its Planned work. Delivery is opt-in, under **Reminder notifications** (issue #557): off by default for every User, so offsets saved before delivery existed never start notifying on their own, and enabled per device with an explicit **Enable on this device** — the browser's permission prompt only ever follows that click. A device notifies only when the User's opt-in, that device's own enable flag and the browser's permission all hold; **Turn off on this device** clears only that device. Delivery is **foreground-only**: supported while a signed-in app tab is open on a supported browser served from a secure context (HTTPS or `localhost`). A tab in the background may still deliver, late or not at all, which is unsupported and not guaranteed; a closed browser or a locked device is unsupported, and tuk-tuk never claims the operating system displayed an alert. A Reminder notifies at most once per Task occurrence however many tabs are open (an open tab claims it from a per-User delivery ledger, ADR 0019; exactly-once display is not promised), and a completed, deleted or already-advanced occurrence never notifies. Reminders that fall due while no tab is open are shown in-app as missed reminders, never replayed as a burst of late alerts; only those due after the User last turned Reminder notifications on can be missed, so old offsets never surface. Snoozing delays one occurrence's alert without changing the Task's dates, from its in-app card or the missed list. Denied permission, an unsupported browser or a delivery failure leaves Tasks and Reminders fully usable.
+_Avoid_: Alarm, notification (the delivery, not the domain concept), push notification (background push is unsupported)
+
+**Quiet hours**:
+A per-User band of the day during which Reminder notifications are held back: a Reminder falling due inside it is deferred until the band ends and then notifies once, and stays visible in-app meanwhile. A notification setting, not Active hours — Active hours changes only the calendar grid and never delivery, and Quiet hours never changes the grid. Nothing bypasses it: there is no critical-alert exception. Off by default with a 22:00–07:00 prefill. Its start and end are "HH:MM" wall-clock times read in the claiming tab's local timezone (like an all-day Task's Reminder anchor); no zone is stored with the band, so tabs in different timezones may hold the same Reminder to different instants, and whichever claims first delivers it, once. The band the band **may wrap past midnight**: a start after the end, such as 22:00–07:00, ends the next day, because a night band is the main use. A start equal to its end is refused, since it could mean an empty band or the whole day. The start is inside the band and the end is not. A held Reminder keeps its own fire time; only its delivery moves, and its 5-minute delivery window is measured from the band's end, so a tab that is not open then misses it. Nothing at all is claimed while the band is on (ADR 0019).
+_Avoid_: Active hours (the calendar layout band), Do not disturb (the operating system's own setting)
+
+**Planned work**:
+An optional block of time a User reserves for working on a Task (issue #558): a start, a positive duration and the timezone it was planned in, plus an optional **Buffer after** — slack kept free after the block. At most one per Task, inside one local calendar day. It is not the Task's schedule: moving or removing it never moves or clears the Task's start or due date, and it is never a Reminder's anchor. Completing or advancing a recurring Task (ADR 0003) clears that occurrence's Planned work rather than carrying it to the next occurrence. On the Calendar it reads as a visibly labelled Planned work block, distinct from both Events and the Task's own schedule. Its duration is how long the block is, not the Task's **Estimate**; a new block's duration starts from the Estimate when the Task has one. The start is an instant and the duration is elapsed minutes, so a block across a DST change keeps its real length; the block plus its buffer may end exactly at the next local midnight, never past it. It needs no due date, and changing the Task's dates never moves it; completing a one-off Task keeps it, so a reopen finds it again. On the wire it is the Task's `planned_work` (`null` when unplanned; a read adds the computed `end`), written whole or removed with `null` on the Task PATCH; a client that never sends the field leaves it untouched.
+_Avoid_: Schedule (the Task's start/due dates), time block, appointment (an Event)
+
+**Estimate**:
+An optional duration on a Task, in positive whole minutes, of how long the User expects the work to take (issue #563). Used only for work planning: the Capacity summary reports it, and a new Planned work block starts from it. Never asked for or required in Quick-Add, set only in Task detail, and never inferred, from Focus statistics or anything else. Independent of Planned work: planning, moving or removing a block never changes it. On the wire it is the Task's `estimate_minutes` (`null` when none), set or removed with `null` on the Task PATCH.
+_Avoid_: Duration (the Task's start-to-due span), Planned work duration, effort points
+
+**Planning window**:
+The band of each day a User plans work into (issue #563), chosen by the User in Settings and measured by the capacity summary. A per-User server-side setting kept apart from Active hours: changing either never moves the other, and Active hours never stands in for it. Off by default, prefilling 09:00–17:00; same 30-minute grid, start strictly before end, no wrap past midnight (24:00 is the day's end).
+_Avoid_: Active hours (the calendar layout band), working hours
+
+**Capacity summary**:
+A few quiet sentences in the Calendar's Day view, shown only while the Planning window is on: the time still available in the window, the time Events take, the time Planned work takes with its Buffer after included, how much of the day's work is estimated but not yet planned, and how many of the day's open Tasks have no estimate. Occupied time is the union of timed Event intervals and Planned work plus buffers, clipped to the window, so overlapping time is counted once and the summary says so. All-day Events are named separately and never counted as busy time. A day Task with Planned work is measured by its block. One without Planned work but with an Estimate is known but unplanned: its minutes are reported, and take no available time, since they have no place in the window yet. One with neither stays counted as unknown, never guessed and never inferred from Focus statistics; Quick-Add never asks for an Estimate. No score, gauge or percentage.
+_Avoid_: Utilisation, load score
 
 ## Habits
 
 **Habit**:
-A recurring practice tracked by Check-ins rather than completion — either Boolean (done / not done) or Numeric (an amount toward a Target, e.g. 8 glasses of water).
+A recurring practice tracked by Check-ins rather than completion — either Boolean (done / not done) or Numeric (an amount toward a Target, e.g. 8 glasses of water). The app labels these types "Done / not yet" and "Count"; Boolean and Numeric stay the domain and API terms (`boolean` / `numeric`).
 
 **Target**:
 The amount a Numeric Habit's Check-ins count toward in one day. Boolean Habits have a Target of 1, so a single tap fills it. Not a Goal — a Goal is a separate entity with its own window and Key Results (ADR 0012).
@@ -105,7 +135,23 @@ The record of one day's progress on a Habit: a date stamp and, for Numeric habit
 _Avoid_: Completion, log
 
 **Streak**:
-The count of consecutive scheduled days a Habit has been checked in without a miss.
+The count of consecutive **eligible** scheduled days a Habit has been checked in without a miss. An eligible day is scheduled, on or after the Habit start, and neither paused nor skipped. Unscheduled, paused and skipped days are stepped over, never counted as done, so a Streak across a Pause or Skip is shorter than a perfect daily record of the same span. Today is graced until it ends.
+
+**Habit start**:
+The first local day a Habit can be missed: the User's calendar day when the Habit was created (read in their time zone), or the day of an earlier real Check-in when one exists, and never later than today. Days before it are **not started**: neither missed nor done, and never counted against the Habit, even when a Pause covers them. It is where eligibility begins; a Pause only removes days after it. The API calls it `eligible_from`.
+_Avoid_: Start date (no such field is stored), eligibility date
+
+**Pause**:
+An explicit date interval, optionally open-ended, during which a Habit is deliberately not practised (issue #559) — for travel or illness. Paused days are neither missed nor done: they create no Check-in and the Streak steps over them without counting them. **Resume today** ends an open pause yesterday, so today is eligible again; **Edit pause** changes its dates. A pause cannot cover a date that already has a Check-in — the conflicting dates are named and nothing is deleted — and a paused date accepts no Check-in until the pause is removed. For a times-per-week Habit, pausing a whole week excludes that week; a partial-week pause leaves the Weekly target unchanged. Settled Goal Scores are never rewritten by a later pause (ADR 0012). The app labels the state **Paused**.
+_Avoid_: Break, freeze, vacation
+
+**Skip**:
+One scheduled day a User explicitly marks as not practised on a Habit — a deliberate choice, unlike a missed day, which is a forgotten Check-in. Like a paused day it creates no Check-in, counts as neither success nor failure, is excluded from the Streak rather than rewarded, and cannot be placed on a date that already has a Check-in; a skipped day accepts no Check-in until the skip is removed. A skip never lowers a times-per-week Habit's weekly target, and skipping every day of a week does **not** exclude it the way a fully paused week is: only a Pause excludes a week (the spec, #535, names pause alone), so a User who means to set a whole week aside pauses it. The app labels the state **Skipped**.
+_Avoid_: Miss (an unplanned absence), excuse, rest day
+
+**Weekly target**:
+For an N-times-per-week Habit, the N days to check in on within one week, Monday to Sunday (issue #568). A day counts toward it when its Check-in meets the Habit's Target; a partial Numeric day does not. The app shows the current week's progress and what remains ("This week: 1 of 3 done, 2 to go"). Pauses and skips inside the week never lower it: when the week holds paused or skipped days the app says **Target unchanged**, and lowering it is the User's explicit frequency change. A week whose every day from the Habit start on is paused is **excluded**: not counted toward the target, neither met nor missed. Frequency keeps no history, so a change made during a pause reads every week, past ones included, with the new N. The Streak is still counted in days (unchanged by this). The API serves the week holding `today` as `week` on the Habit statistics, null for daily and weekday Habits.
+_Avoid_: Quota, weekly goal (a Goal is something else)
 
 ## Goals
 
@@ -146,6 +192,14 @@ _Avoid_: Copilot, agent. "AI assistant" as a generic label for the family — th
 The Assist feature that plans a day in conversation: the user describes what they need to do, and the Assistant reads the current week — Tasks, today's Events, List and Tag names, Habits — and answers with prose plus Suggestions to create Tasks, block them into time, and set priorities. Accepted individually; nothing is written until accepted. It plans Tasks *around* Events, never moving an Event (ADR 0006 keeps Google Calendar read-only). The only Assist feature that may be configured against a cloud provider, and the only one that is conversational at all — every other member is a single beat with no transcript. The conversation is ephemeral: held in the browser, sent whole each turn, gone on refresh.
 _Avoid_: Chat, bot, agent (it takes no actions), Copilot
 
+**Check Item Suggestions**:
+An optional, deliberate Assistant interaction for one selected Task: proposes a few concrete steps using only that Task's title, description, existing Check Items and the User's instruction. Temporary and editable, never saved until the User accepts the reviewed Suggestion. Duplicate titles require a deliberate choice; manual Check Item entry remains independent.
+_Avoid_: Subtask generator, automatic breakdown
+
+**Brain-dump Suggestions**:
+An optional, deliberate Assistant interaction that turns the User's supplied text and instruction into temporary, editable Task Suggestions. Each is reviewed and accepted separately; ordinary Task capture remains independent. No unrelated planning context or conversation is carried into it.
+_Avoid_: Automatic capture, bulk import
+
 **Voice Assistant**:
 The Assist feature you talk to (ADR 0015): a spoken session in the browser for organising Tasks, the day and Habits, in English or Spanish. The only Assist member that writes. Its tools follow the MCP server's principle (idempotent, non-destructive, Task-or-Habit scoped, no delete), and each turn's batch of writes is read back and applied only after a spoken yes. The agent (`voice-agent/`) runs on the User's own LiveKit Cloud project, one worker per User deployed by the Admin on request, but every tool call is relayed over LiveKit RPC to that User's open tab, which runs it with its own session cookie. So no backend is ever exposed and no tuk-tuk credential is held at LiveKit. Push-to-talk by default (continuous is opt-in). Sessions start from the Agenda plus the tab's timezone and date, end only when you end them or close the tab, show captions only, and persist nothing. Invisible until that User's own LiveKit credentials are set in Settings; Voice goes unavailable for the rest of the month once free inference credit runs out.
 _Avoid_: Voice mode (it is not the Assistant with a microphone), voice agent (the name of the deployable in `voice-agent/`, not the feature), Assistant without "Voice"
@@ -172,6 +226,24 @@ _Avoid_: Focus record, Pomodoro record, Timing
 A saved Focus Session preset (name + mode + duration) for recurring scenarios like "Reading".
 _Avoid_: Preset
 
+## Now
+
+**Now**:
+The one Task a User chose to do next, shown at the top of Today when the Now setting is on. Picking it changes nothing on the Task. It is saved with the occurrence it was picked for, so deleting, completing or advancing that Task (a recurring one advances in place, ADR 0003) clears it.
+_Avoid_: Current task, Focus task (Focus is the Focus Session feature)
+
+**Now shortlist**:
+A short, ordered list of alternative Tasks kept beside Now, with no cap. A Task appears at most once and never while it is the Now Task; entries are cleared by the same rule as Now.
+_Avoid_: Queue, Up next
+
+**Resume note**:
+A short free-text note on the Now selection saying where the User left off. It belongs to that selection and occurrence: choosing another Task, or the Task going stale, discards it.
+_Avoid_: Task note, Description (the Task's own text)
+
+**Gentle return**:
+A Today setting that collapses earlier overdue Tasks behind one counted disclosure, so returning after time away is not a wall of red. Presentation only: no Task dates change.
+_Avoid_: Auto-reschedule, Overdue Triage (the Assist feature that does propose new dates)
+
 ## Google Calendar
 
 **Google Account**:
@@ -185,6 +257,30 @@ _Avoid_: Calendar (ambiguous with the Calendar view itself)
 **Event**:
 One occurrence on a Google Calendar (issue #107), read live for the Calendar view's visible window and never persisted (ADR 0006) — an Entry arm alongside Task, but read-only: it cannot be dragged, resized, or completed, and offers no affordance suggesting otherwise beyond converting itself away (below). A recurring series always arrives already expanded into concrete Events, never as a rule tuk-tuk interprets itself. Declined Events (the authenticated user's own RSVP) are hidden; a pending invitation (needs-action) or a tentative response stays visible, since an unanswered invite must not be invisible. Disabling its owning Google Calendar removes its Events from the view. See the Entry glossary entry above for the deliberate viewer-timezone rendering asymmetry with Task. Unlike a Task, an Event may cross midnight (issue #108): in Week/Day it renders as one segment per day it touches, clipped at each day boundary, so it reads correctly on both the day it starts and the day it ends — the splitting is a Calendar-view rendering concern only, since the backend adapter and API pass the crossing through untouched. Clicking an Event opens a read-only detail popover (issue #110) — location, attendees, organiser, description, and which account/calendar it came from, plus a link out to Google Calendar for anything tuk-tuk can't show. This is the only home for the parts of an Event with no Task equivalent (the attendee list, the organiser, a video-call link buried in the description); dismissing it, like every other Event interaction, changes nothing. The popover's one write-adjacent affordance is "Convert to task" (issue #111): it turns the Event into a real Task — title, schedule, and description (with location and a link back) carried over, landing in the Inbox — after a preview the user must confirm. Only the clicked occurrence of a recurring series converts; the rest keep showing as Events, since a Task's single recurrence rule can't represent the cancellations and per-instance overrides a real Google series carries. A midnight-crossing Event clamps to the end of its start day (the Task schedule invariant isn't relaxed for this), with its true end kept in the description and shown before confirming. The Event then disappears from the Calendar — filtered out by matching the Task's provenance, since Google access stays read-only and nothing is ever written back — and reappears only if that Task is deleted.
 _Avoid_: Calendar item, meeting
+
+## GitHub
+
+tuk-tuk only ever reads GitHub (ADR 0020). Nothing read from GitHub is persisted: Pull Requests and GitHub Issues are fetched live and cached briefly in memory.
+
+**GitHub Token**:
+A fine-grained personal access token a User pasted in Settings → GitHub (issue #578), granting read-only access to one GitHub owner: the User themselves or one organisation. Listed by that owner's login and kind (user or organisation) and its expiry. GitHub names a token's owner nowhere, so it is learned from the repositories the token reads; until it reads one (an organisation's token before the organisation allows or approves fine-grained tokens) its owner is unknown and never guessed (ADR 0020). Checked with GitHub before it is saved; a classic token, or anything else that is not fine-grained, is refused. Stored encrypted with `APP_MASTER_KEY` and never returned by the API. A User holds at most one GitHub Token per known owner. Carries a `connection_state` of "connected" or "needs_reconnect": only a terminal failure (GitHub answers 401) flips it, never a transient one, and a later successful read flips it back. Reconnecting replaces the token in place for the same owner.
+_Avoid_: integration, GitHub connection, GitHub Account (there is no OAuth identity), API token (tuk-tuk's own credential), PAT
+
+**Watched Repository**:
+A GitHub repository a User chose, from those their GitHub Tokens can read, to appear in the GitHub view. Picked in Settings → GitHub (issue #581), where a repository two tokens can read is offered once. Read through the GitHub Token it was picked with, and unique per User by GitHub's repository id. Removing that GitHub Token removes it; the picker then offers it again through any other token that can still read it.
+_Avoid_: tracked repo, subscription
+
+**Repository View**:
+A named subset of a User's Watched Repositories with saved display options (author, label and assignee filters, hide drafts, hide bots, the active tab), listed under GitHub in the sidebar. The bare GitHub entry is the unsaved "all Watched Repositories" view. A Repository View left with no repositories remains, showing an empty state.
+_Avoid_: Dashboard, Filter (a different, user-defined feature), saved search
+
+**Pull Request**:
+An open pull request in a Watched Repository, read live from GitHub. Grouped by the User's relationship to it: review requested first, then their own, then others.
+_Avoid_: "PR" in prose, merge request
+
+**GitHub Issue**:
+An open issue in a Watched Repository, read live from GitHub. Never a Pull Request, although GitHub's own issue listing includes them. Always "GitHub Issue", so it never collides with tuk-tuk's own development issues.
+_Avoid_: Issue (bare), ticket
 
 ## Clients
 

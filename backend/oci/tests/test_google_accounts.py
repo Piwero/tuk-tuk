@@ -6,9 +6,9 @@ state carried in that redirect's query string — no test reaches into the
 router's internals to fabricate a state token.
 """
 
-import time as time_module
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from itsdangerous import URLSafeTimedSerializer
 
 from app.config import Settings
+from app.google_identity import pkce_challenge
 from app.main import create_app
 from tests.conftest import (
     TEST_PASSWORD,
@@ -232,21 +233,55 @@ class TestCallback:
         assert response.status_code == 400
 
     def test_an_expired_state_is_rejected(
-        self, configured_client: TestClient, monkeypatch: pytest.MonkeyPatch
+        self, configured_client: TestClient, fake_clock: FakeClock
     ) -> None:
-        """A captured state token isn't valid indefinitely — see
-        _STATE_MAX_AGE_SECONDS in app.routers.v1.google."""
-        real_time = time_module.time
-        monkeypatch.setattr(time_module, "time", lambda: real_time() - 700)
+        """A captured state isn't valid indefinitely: a consent round trip
+        lasts ten minutes at most (app.oauth_transaction)."""
         connect_response = configured_client.get("/api/v1/google/connect")
         state, _ = state_from_connect_redirect(connect_response)
-        monkeypatch.undo()
+        fake_clock.advance(timedelta(minutes=11))
 
         response = configured_client.get(
             "/api/v1/google/callback", params={"code": "some-code", "state": state}
         )
 
         assert response.status_code == 400
+
+    def test_the_code_is_exchanged_with_the_consents_pkce_verifier(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        """Issue #586: a stolen authorization code is useless without the
+        verifier, which never left this browser's cookie."""
+        connect_response = configured_client.get("/api/v1/google/connect")
+        params = parse_qs(urlparse(connect_response.headers["location"]).query)
+        fake_calendar_source.register_code(
+            "pkce-code", google_account_id="g-1", email="me@example.com", refresh_token="rt"
+        )
+
+        configured_client.get(
+            "/api/v1/google/callback", params={"code": "pkce-code", "state": params["state"][0]}
+        )
+
+        assert params["code_challenge_method"] == ["S256"]
+        [verifier] = fake_calendar_source.exchanged_verifiers
+        assert verifier is not None
+        assert pkce_challenge(verifier) == params["code_challenge"][0]
+
+    def test_a_callback_without_the_browsers_consent_cookie_is_rejected(
+        self, configured_client: TestClient, fake_calendar_source: FakeCalendarSource
+    ) -> None:
+        state, _ = state_from_connect_redirect(configured_client.get("/api/v1/google/connect"))
+        fake_calendar_source.register_code(
+            "a-code", google_account_id="g-1", email="someone@example.com", refresh_token="rt"
+        )
+        configured_client.cookies.delete("tuktuk_google_calendar_oauth", path="/api/v1/google")
+
+        response = configured_client.get(
+            "/api/v1/google/callback", params={"code": "a-code", "state": state}
+        )
+
+        assert response.status_code == 400
+        assert configured_client.get("/api/v1/google/accounts").json() == []
 
     def test_is_not_found_when_unconfigured(self, unconfigured_client: TestClient) -> None:
         response = unconfigured_client.get(

@@ -54,7 +54,7 @@ interface RowProps {
 
 /** Plain buttons: like the tab bar (#170) this is touch-first, and buttons
  * keep these names apart from the sidebar's same-named links. */
-function Row({ icon, label, selected, onClick, swatch }: RowProps): JSX.Element {
+function Row({ icon, label, selected, onClick, swatch }: RowProps): React.JSX.Element {
   return (
     <button
       type="button"
@@ -75,7 +75,7 @@ function Row({ icon, label, selected, onClick, swatch }: RowProps): JSX.Element 
  * opened from the tab bar's More tab, holding the destinations the bar has no
  * room for and the Lists / Folders / Tags tree. Mounted only while open;
  * every choice closes it. */
-export function MoreSheet(props: MoreSheetProps): JSX.Element {
+export function MoreSheet(props: MoreSheetProps): React.JSX.Element {
   const { lists, folders, tags, onClose } = props;
   const panel = useRef<HTMLDivElement>(null);
 
@@ -98,7 +98,7 @@ export function MoreSheet(props: MoreSheetProps): JSX.Element {
   const active = lists.filter((list) => !list.is_inbox && !list.is_archived);
   const archived = lists.filter((list) => !list.is_inbox && list.is_archived).sort(byOrder);
   const loose = active.filter((list) => list.folder_id === null).sort(byOrder);
-  const listRow = (list: TaskList): JSX.Element => (
+  const listRow = (list: TaskList): React.JSX.Element => (
     <li key={list.id}>
       <Row
         label={`${list.emoji ?? ""} ${list.name}`.trim()}

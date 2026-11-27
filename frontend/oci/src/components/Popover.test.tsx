@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Popover } from "./Popover";
 
-function Harness(): JSX.Element {
+function Harness(): React.JSX.Element {
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   return (

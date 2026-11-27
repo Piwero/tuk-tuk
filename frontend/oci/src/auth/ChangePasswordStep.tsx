@@ -39,7 +39,7 @@ export function ChangePasswordStep({
   onComplete,
 }: {
   onComplete: () => Promise<void>;
-}): JSX.Element {
+}): React.JSX.Element {
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false);

@@ -1,6 +1,6 @@
 import "./CalendarView.css";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createTag,
@@ -10,6 +10,7 @@ import {
   fetchCalendarTasks,
   fetchUnscheduledTasks,
   googleConnectUrl,
+  updatePlannedWork,
   updateTask,
   type Event,
   type EventFailure,
@@ -40,6 +41,10 @@ import {
   layoutDayColumns,
   minuteLabel,
   monthGridDays,
+  plannedBufferMinutes,
+  plannedEntries,
+  plannedMove,
+  plannedResize,
   rangeOf,
   resizePatch,
   shiftAnchor,
@@ -52,6 +57,7 @@ import {
   type CalendarMode,
   type Entry,
 } from "../calendar";
+import { CapacitySummary } from "./CapacitySummary";
 import { clearedSchedule, formatDate, fromDayIso, localDayOf } from "../dates";
 import { makeListChannel, makePriorityChannel, makeTagChannel } from "../captureChannels";
 import { parseQuickAdd, sameName } from "../quickAdd";
@@ -59,6 +65,7 @@ import { Hint } from "./Hint";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
 import { readDragPayload, startDrag } from "../dnd";
+import { useTouchDrag } from "../touchDrag";
 import { Modal } from "./Modal";
 import { PomoQuickStartMenu } from "./PomoQuickStartMenu";
 import { useTaskCompletion } from "../taskCompletion";
@@ -110,6 +117,9 @@ interface HourDrag {
  * commits it. */
 interface EdgeDrag {
   task: Task;
+  /** Which of the Task's blocks the edge belongs to: its schedule, or its
+   * Planned work (#562) — resizing a plan never touches the due date. */
+  target: EdgeTarget;
   edge: "start" | "end";
   day: string;
   baseMinute: number;
@@ -118,26 +128,59 @@ interface EdgeDrag {
   minute: number;
 }
 
-/** Banners first, then timed entries in wall-clock order; an Event sorts
- * before a Task at an equal time — the immovable obligation reads first. */
+type EdgeTarget = "schedule" | "plan";
+
+/** At an equal time an Event sorts first — the immovable obligation reads
+ * first — then a Task's Planned work, then the Task's own schedule. */
+const KIND_ORDER: Record<Entry["kind"], number> = { event: 0, planned: 1, task: 2 };
+
+/** Banners first, then timed entries in wall-clock order, then by kind. */
 function byKindThenTime(a: Entry, b: Entry): number {
   const shapeA = entryTimeShape(a);
   const shapeB = entryTimeShape(b);
   return (
     Number(isBanner(shapeB)) - Number(isBanner(shapeA)) ||
     (entryTime(shapeA) ?? "").localeCompare(entryTime(shapeB) ?? "") ||
-    Number(a.kind === "task") - Number(b.kind === "task")
+    KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
   );
 }
 
-/** A React list key unique across both Tasks and Events sharing one list. */
+/** A React list key unique across Tasks, plans and Events sharing one list. */
 function entryKey(entry: Entry): string {
-  return entry.kind === "task" ? `task-${entry.task.id}` : `event-${entry.event.id}`;
+  switch (entry.kind) {
+    case "task":
+      return `task-${entry.task.id}`;
+    case "planned":
+      return `planned-${entry.task.id}`;
+    case "event":
+      return `event-${entry.event.id}`;
+  }
 }
 
 /** The title text every entry renders, regardless of kind. */
 function entryTitle(entry: Entry): string {
-  return entry.kind === "task" ? entry.task.title : entry.event.title;
+  return entry.kind === "event" ? entry.event.title : entry.task.title;
+}
+
+/** The kind line an entry carries in text, so its meaning never rests on
+ * colour or outline alone (#562): a plan says it is Planned work, an Event
+ * says it is read-only, and a Task that also has a plan names its schedule
+ * as the Due date — never two indistinguishable copies of one commitment. */
+function EntryKindLabel({ entry }: { entry: Entry }): React.JSX.Element | null {
+  if (entry.kind === "planned") {
+    return (
+      <span className="entry-kind">
+        <Icon name="calendar-range" size={12} />
+        Planned work
+      </span>
+    );
+  }
+  if (entry.kind === "event") {
+    return <span className="entry-kind">Event · read-only</span>;
+  }
+  return (entry.task.planned_work ?? null) === null ? null : (
+    <span className="entry-kind">Due date</span>
+  );
 }
 
 /** The drag-source props a Task-backed row shares: it drags as its task. */
@@ -150,6 +193,39 @@ function taskDragProps(
   };
 }
 
+/** A day (and, on the time grid, an hour) a dragged Task can land on. */
+interface DropSlot {
+  day: string;
+  hour: number | null;
+}
+
+/** The attributes that mark an element as a drop slot, so a touch drag can
+ * find the slot under the finger (`slotAt`), plus the flag that lights it up
+ * while a carried Task hovers over it. */
+function dropSlotProps(
+  slot: DropSlot,
+  over: DropSlot | null,
+): { "data-drop-day": string; "data-drop-hour"?: number; "data-drop-over"?: boolean } {
+  return {
+    "data-drop-day": slot.day,
+    ...(slot.hour === null ? {} : { "data-drop-hour": slot.hour }),
+    ...(over !== null && over.day === slot.day && over.hour === slot.hour
+      ? { "data-drop-over": true }
+      : {}),
+  };
+}
+
+/** The drop slot at or around `element`, if any. */
+function slotAt(element: Element | null): DropSlot | null {
+  const slot = element?.closest<HTMLElement>("[data-drop-day]");
+  const day = slot?.dataset.dropDay;
+  if (slot === undefined || slot === null || day === undefined) {
+    return null;
+  }
+  const hour = slot.dataset.dropHour;
+  return { day, hour: hour === undefined ? null : Number(hour) };
+}
+
 /** The same drag-source props, for whichever kind of Entry a calendar row
  * renders: a Task drags as itself; an Event has nothing to drag — it's
  * read-only Google context, never a write target. The one place that
@@ -157,7 +233,17 @@ function taskDragProps(
 function entryDragProps(
   entry: Entry,
 ): Pick<React.HTMLAttributes<HTMLElement>, "draggable" | "onDragStart"> {
-  return entry.kind === "task" ? taskDragProps(entry.task) : {};
+  switch (entry.kind) {
+    case "task":
+      return taskDragProps(entry.task);
+    case "planned":
+      return {
+        draggable: true,
+        onDragStart: (event) => startDrag(event, { kind: "planned-work", id: entry.task.id }),
+      };
+    case "event":
+      return {};
+  }
 }
 
 /** Routes a click to whichever handler its entry kind takes — a Task opens
@@ -170,10 +256,12 @@ function selectEntry(
   onSelect?: (task: Task) => void,
   onSelectEvent?: (event: Event) => void,
 ): void {
-  if (entry.kind === "task") {
-    onSelect?.(entry.task);
-  } else {
+  // A plan opens its Task's detail too: the Planned work row there is the
+  // non-drag alternative to moving or resizing the block (#562).
+  if (entry.kind === "event") {
     onSelectEvent?.(entry.event);
+  } else {
+    onSelect?.(entry.task);
   }
 }
 
@@ -184,7 +272,7 @@ function handleEntryContextMenu(
   entry: Entry,
   onQuickStart?: (task: Task, position: { x: number; y: number }, origin: HTMLElement) => void,
 ): void {
-  if (entry.kind === "task") {
+  if (entry.kind !== "event") {
     event.preventDefault();
     onQuickStart?.(
       entry.task,
@@ -230,6 +318,12 @@ interface CalendarViewProps {
    * and the new Task appears immediately rather than on the next natural
    * refetch (a mode/anchor change, or the window regaining focus). */
   refreshToken?: number;
+  /** Bumped by the caller when a Task changed elsewhere — the detail panel
+   * opened from a block, say — so the window rereads its Tasks (Google's
+   * cache is left alone). This is how the Planned work row's date and time
+   * controls, the non-drag alternative to moving a plan (#562), show up on
+   * the grid at once. */
+  taskChangeToken?: number;
   /** Powers the same `#tag`/`~list`/`!priority` autosuggest as Quick Add
    * (issue triggering this: the calendar's inline draft input took plain
    * text only). Optional so a caller without Lists/Tags loaded yet still
@@ -257,6 +351,7 @@ export function CalendarView({
   onSelect,
   onSelectEvent,
   refreshToken,
+  taskChangeToken,
   lists = [],
   tags = [],
   onTagCreated,
@@ -264,7 +359,7 @@ export function CalendarView({
   initialMode = "day",
   onModeChange,
   undoQueue,
-}: CalendarViewProps): JSX.Element {
+}: CalendarViewProps): React.JSX.Element {
   const [mode, setMode] = useState<CalendarMode>(initialMode);
   useEffect(() => {
     onModeChange?.(mode);
@@ -351,13 +446,16 @@ export function CalendarView({
     return () => window.removeEventListener("keydown", onKey);
   }, [unscheduledOpen]);
 
+  const loadGeneration = useRef(0);
   const load = useCallback(
     async (force = false): Promise<void> => {
-      const [start, end] = rangeOf(mode, anchor);
+      const generation = ++loadGeneration.current;
+      const [start, end] = rangeOf(mode, anchor, isNarrow);
       const [inWindow, undated] = await Promise.all([
         fetchCalendarTasks(start, end),
         fetchUnscheduledTasks(),
       ]);
+      if (generation !== loadGeneration.current) return;
       setTasks(inWindow.items);
       setUnscheduled(undated.items);
       // Google's own fetch, kept on its own endpoint rather than folded into
@@ -374,15 +472,17 @@ export function CalendarView({
       // client) blanks the Calendar's Events outright.
       await fetchCalendarEvents(start, end, force)
         .then((result) => {
+          if (generation !== loadGeneration.current) return;
           setEvents(result.events);
           setEventFailures(result.failures);
         })
         .catch(() => {
+          if (generation !== loadGeneration.current) return;
           setEvents([]);
           setEventFailures([]);
         });
     },
-    [mode, anchor],
+    [mode, anchor, isNarrow],
   );
 
   useEffect(() => {
@@ -401,6 +501,17 @@ export function CalendarView({
     void load(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshToken]);
+
+  // A Task changed elsewhere: reread the window, skipping mount the same way.
+  const skipNextTaskChange = useRef(true);
+  useEffect(() => {
+    if (skipNextTaskChange.current) {
+      skipNextTaskChange.current = false;
+      return;
+    }
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskChangeToken]);
 
   // Exactly the moment a Calendar left open in a background tab is most
   // likely stale: the user just came back from Google Calendar or their
@@ -454,7 +565,22 @@ export function CalendarView({
 
   /** Commit a block edge's new minute: optimistic render, then PATCH. */
   const applyResize = useCallback(
-    async (task: Task, edge: "start" | "end", day: string, minute: number): Promise<void> => {
+    async (
+      task: Task,
+      target: EdgeTarget,
+      edge: "start" | "end",
+      day: string,
+      minute: number,
+    ): Promise<void> => {
+      if (target === "plan") {
+        const plan = task.planned_work ?? null;
+        const moved = plan === null ? null : plannedResize(plan, edge, day, minute);
+        if (moved !== null) {
+          await updatePlannedWork(task.id, moved);
+          void load();
+        }
+        return;
+      }
       const patch = resizePatch(task, edge, day, minute);
       if (patch === null) {
         return;
@@ -496,7 +622,7 @@ export function CalendarView({
     const onUp = (): void => {
       setEdgeDrag((current) => {
         if (current !== null && current.minute !== current.baseMinute) {
-          void applyResize(current.task, current.edge, current.day, current.minute);
+          void applyResize(current.task, current.target, current.edge, current.day, current.minute);
         }
         return null;
       });
@@ -516,13 +642,25 @@ export function CalendarView({
     };
   }, [resizing, applyResize, axis]);
 
+  /** The Task an edge handle resizes, and which of its blocks. */
+  function edgeOwner(entry: Entry): { task: Task; target: EdgeTarget } | null {
+    if (entry.kind === "event") {
+      return null;
+    }
+    return { task: entry.task, target: entry.kind === "planned" ? "plan" : "schedule" };
+  }
+
   function beginEdgeDrag(
     event: React.MouseEvent,
-    task: Task,
+    entry: Entry,
     edge: "start" | "end",
     day: string,
   ): void {
-    const span = blockMinutes(task);
+    const owner = edgeOwner(entry);
+    const span = blockMinutes(entryTimeShape(entry));
+    if (owner === null) {
+      return;
+    }
     if (span === null) {
       return;
     }
@@ -531,7 +669,7 @@ export function CalendarView({
     const [startMin, endMin] = span;
     const base = edge === "start" ? startMin : endMin;
     setEdgeDrag({
-      task,
+      ...owner,
       edge,
       day,
       baseMinute: base,
@@ -544,14 +682,15 @@ export function CalendarView({
   /** Keyboard resize on a focused handle: one snap step per arrow press. */
   function nudgeEdge(
     event: React.KeyboardEvent,
-    task: Task,
+    entry: Entry,
     edge: "start" | "end",
     day: string,
   ): void {
     const delta =
       event.key === "ArrowUp" ? -SNAP_MINUTES : event.key === "ArrowDown" ? SNAP_MINUTES : null;
-    const span = blockMinutes(task);
-    if (delta === null || span === null) {
+    const owner = edgeOwner(entry);
+    const span = blockMinutes(entryTimeShape(entry));
+    if (delta === null || span === null || owner === null) {
       return;
     }
     event.preventDefault();
@@ -559,7 +698,7 @@ export function CalendarView({
     const base = edge === "start" ? startMin : endMin;
     const minute = draggedEdgeMinute(edge, base, delta, edge === "start" ? endMin : startMin);
     if (minute !== base) {
-      void applyResize(task, edge, day, minute);
+      void applyResize(owner.task, owner.target, edge, day, minute);
     }
   }
 
@@ -689,6 +828,16 @@ export function CalendarView({
     hour: number | null,
   ): Promise<void> {
     const payload = readDragPayload(event);
+    if (payload?.kind === "planned-work") {
+      // Moving a plan changes only the plan, never the due date (#562).
+      const plan = tasks.find((candidate) => candidate.id === payload.id)?.planned_work ?? null;
+      const moved = plan === null ? null : plannedMove(plan, day, hour);
+      if (moved !== null) {
+        await updatePlannedWork(payload.id, moved);
+        void load();
+      }
+      return;
+    }
     if (payload === null || payload.kind !== "task") {
       return;
     }
@@ -696,10 +845,24 @@ export function CalendarView({
     if (task === undefined) {
       return;
     }
-    const patch: TaskPatch = dropPatch(task, day, hour);
+    await scheduleDropped(task, { day, hour });
+  }
+
+  async function scheduleDropped(task: Task, slot: DropSlot): Promise<void> {
+    const patch: TaskPatch = dropPatch(task, slot.day, slot.hour);
     await updateTask(task.id, patch);
     void load();
   }
+
+  /** The phone's way onto the grid: press and hold an Unscheduled card to
+   * pick it up — the sheet steps aside to uncover the grid — then release it
+   * over a slot. Lands exactly as the HTML5 drop on that slot would. */
+  const touchDrag = useTouchDrag<Task, DropSlot>({
+    resolveTarget: slotAt,
+    onPickUp: () => setUnscheduledOpen(false),
+    onDrop: (task, slot) => void scheduleDropped(task, slot),
+  });
+  const dropOver = touchDrag.carried?.target ?? null;
 
   /** The Unscheduled rail is also a drop target (issue #203): dropping a
    * scheduled Task-block onto it clears the Task's schedule, the mirror of
@@ -718,7 +881,11 @@ export function CalendarView({
     void load();
   }
 
-  const entries: Entry[] = [...tasks.map(taskEntry), ...events.map(eventEntry)];
+  const entries: Entry[] = [
+    ...tasks.map(taskEntry),
+    ...tasks.flatMap(plannedEntries),
+    ...events.map(eventEntry),
+  ];
 
   const listById = new Map(lists.map((list) => [list.id, list]));
 
@@ -753,7 +920,7 @@ export function CalendarView({
    * reason. Mousedown needs no guard: the hour cells that start a drag-create
    * are siblings of a block, not ancestors of it, so a press on a block never
    * reaches one. */
-  function entryCheckbox(entry: Entry): JSX.Element | null {
+  function entryCheckbox(entry: Entry): React.JSX.Element | null {
     if (entry.kind !== "task") {
       return null;
     }
@@ -785,7 +952,7 @@ export function CalendarView({
    * it). Reuses the app's one `.completed` class rather than a
    * calendar-specific copy of the same strike-through, so the Calendar and a
    * List row can't drift on what "done" looks like. */
-  function entryTitleNode(entry: Entry): JSX.Element {
+  function entryTitleNode(entry: Entry): React.JSX.Element {
     return <span className={entryTitleClass(entry, "entry-title")}>{entryTitle(entry)}</span>;
   }
 
@@ -806,7 +973,7 @@ export function CalendarView({
       : {};
   }
 
-  function renderMonth(): JSX.Element {
+  function renderMonth(): React.JSX.Element {
     const days = monthGridDays(anchor);
     const anchorMonth = anchor.slice(0, 7);
     // Read fresh rather than off the `now` state, which only ticks while a
@@ -832,6 +999,7 @@ export function CalendarView({
               onClick={() => openAllDayDraft(day)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => void handleDrop(event, day, null)}
+              {...dropSlotProps({ day, hour: null }, dropOver)}
             >
               <div className="month-cell-head">
                 <span>{Number(day.slice(8))}</span>
@@ -879,6 +1047,7 @@ export function CalendarView({
                     >
                       {entryCheckbox(entry)}
                       {entryTitleNode(entry)}
+                      <EntryKindLabel entry={entry} />
                     </div>
                   ) : (
                     <div
@@ -902,6 +1071,7 @@ export function CalendarView({
                       {entryCheckbox(entry)}
                       <span className="entry-time">{entryTime(entryTimeShape(entry))}</span>{" "}
                       {entryTitleNode(entry)}
+                      <EntryKindLabel entry={entry} />
                     </div>
                   ),
                 )}
@@ -916,7 +1086,7 @@ export function CalendarView({
     entry: Entry,
     day: string,
     placement?: { column: number; columnCount: number },
-  ): JSX.Element | null {
+  ): React.JSX.Element | null {
     const segment = blockSegment(entryTimeShape(entry), day);
     if (segment === null) {
       return null;
@@ -932,83 +1102,134 @@ export function CalendarView({
           }
         : null;
     const { continuesBefore, continuesAfter } = segment;
-    const task = entry.kind === "task" ? entry.task : null;
+    const owner = edgeOwner(entry);
     const pending =
-      edgeDrag !== null && task !== null && edgeDrag.task.id === task.id ? edgeDrag : null;
+      edgeDrag !== null &&
+      owner !== null &&
+      edgeDrag.task.id === owner.task.id &&
+      edgeDrag.target === owner.target
+        ? edgeDrag
+        : null;
     const startMin = pending?.edge === "start" ? pending.minute : segment.minutes[0];
     const endMin = pending?.edge === "end" ? pending.minute : segment.minutes[1];
     const start = minuteLabel(startMin);
     const end = minuteLabel(endMin);
     const title = entryTitle(entry);
-    const listColor = listColorProps(entry);
+    // A plan's handles say so, so a screen reader never hears two identical
+    // "Resize end of" controls for one Task's schedule and its plan.
+    const handleName = entry.kind === "planned" ? `planned work "${title}"` : `"${title}"`;
+    const buffer = entry.kind === "planned" ? (entry.plan.buffer_minutes ?? 0) : 0;
+    const listColor = entry.kind === "planned" ? {} : listColorProps(entry);
+    const bufferEnd = Math.min(endMin + buffer, 1440);
     return (
-      <div
-        key={`${entryKey(entry)}-${day}`}
-        className="time-block"
-        data-kind={entry.kind}
-        data-start={start}
-        data-end={end}
-        data-continues-before={continuesBefore || undefined}
-        data-continues-after={continuesAfter || undefined}
-        data-resizing={pending !== null || undefined}
-        {...completingProps(entry)}
-        data-list-color={listColor["data-list-color"]}
-        style={{
-          top: axis.minuteToY(startMin),
-          height: axis.blockHeight(startMin, endMin),
-          ...columnStyle,
-          ...listColor.style,
-        }}
-        {...entryDragProps(entry)}
-        onClick={() => selectEntry(entry, onSelect, onSelectEvent)}
-        onContextMenu={(event) =>
-          handleEntryContextMenu(event, entry, (task, position, origin) =>
-            setQuickStart({ task, position, origin }),
-          )
-        }
-      >
-        {task !== null && (
+      <Fragment key={`${entryKey(entry)}-${day}`}>
+        <div
+          className="time-block"
+          {...(entry.kind === "planned"
+            ? { role: "group", "aria-label": `Planned work: ${title}` }
+            : {})}
+          data-kind={entry.kind}
+          data-start={start}
+          data-end={end}
+          data-continues-before={continuesBefore || undefined}
+          data-continues-after={continuesAfter || undefined}
+          data-resizing={pending !== null || undefined}
+          {...completingProps(entry)}
+          data-list-color={listColor["data-list-color"]}
+          style={{
+            top: axis.minuteToY(startMin),
+            height: axis.blockHeight(startMin, endMin),
+            ...columnStyle,
+            ...listColor.style,
+          }}
+          {...entryDragProps(entry)}
+          onClick={() => selectEntry(entry, onSelect, onSelectEvent)}
+          onContextMenu={(event) =>
+            handleEntryContextMenu(event, entry, (task, position, origin) =>
+              setQuickStart({ task, position, origin }),
+            )
+          }
+        >
+          {owner !== null && (
+            <div
+              className="resize-handle resize-handle-top"
+              role="button"
+              tabIndex={0}
+              aria-label={`Resize start of ${handleName}`}
+              onMouseDown={(event) => beginEdgeDrag(event, entry, "start", day)}
+              onKeyDown={(event) => nudgeEdge(event, entry, "start", day)}
+              onClick={(event) => event.stopPropagation()}
+              onDragStart={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            />
+          )}
+          <span className="block-head">
+            {entryCheckbox(entry)}
+            {entry.kind === "planned" ? (
+              // The block itself only answers a click; this is the keyboard
+              // way into the plan's date and time controls (#569).
+              <button
+                type="button"
+                className={`${entryTitleClass(entry, "block-title")} block-title-button`}
+                aria-label={`Open planned work: ${title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  selectEntry(entry, onSelect, onSelectEvent);
+                }}
+              >
+                {title}
+              </button>
+            ) : (
+              <span className={entryTitleClass(entry, "block-title")}>{title}</span>
+            )}
+          </span>
+          <EntryKindLabel entry={entry} />
+          <span className="block-time">
+            {start}–{end}
+            {buffer > 0 && (
+              <>
+                {" · "}
+                <span className="block-buffer">Buffer after {buffer} min</span>
+              </>
+            )}
+          </span>
+          {owner !== null && (
+            <div
+              className="resize-handle resize-handle-bottom"
+              role="button"
+              tabIndex={0}
+              aria-label={`Resize end of ${handleName}`}
+              onMouseDown={(event) => beginEdgeDrag(event, entry, "end", day)}
+              onKeyDown={(event) => nudgeEdge(event, entry, "end", day)}
+              onClick={(event) => event.stopPropagation()}
+              onDragStart={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+            />
+          )}
+        </div>
+        {/* The buffer after a plan (#562): its own dashed outline under the
+        block, so it reads as slack kept free rather than more work. The
+        block's text already states it, so the strip is decorative. */}
+        {buffer > 0 && bufferEnd > endMin && (
           <div
-            className="resize-handle resize-handle-top"
-            role="button"
-            tabIndex={0}
-            aria-label={`Resize start of "${title}"`}
-            onMouseDown={(event) => beginEdgeDrag(event, task, "start", day)}
-            onKeyDown={(event) => nudgeEdge(event, task, "start", day)}
-            onClick={(event) => event.stopPropagation()}
-            onDragStart={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
+            className="planned-buffer"
+            aria-hidden="true"
+            style={{
+              top: axis.minuteToY(endMin),
+              height: axis.minuteToY(bufferEnd) - axis.minuteToY(endMin),
+              ...columnStyle,
             }}
           />
         )}
-        <span className="block-head">
-          {entryCheckbox(entry)}
-          <span className={entryTitleClass(entry, "block-title")}>{title}</span>
-        </span>
-        <span className="block-time">
-          {start}–{end}
-        </span>
-        {task !== null && (
-          <div
-            className="resize-handle resize-handle-bottom"
-            role="button"
-            tabIndex={0}
-            aria-label={`Resize end of "${title}"`}
-            onMouseDown={(event) => beginEdgeDrag(event, task, "end", day)}
-            onKeyDown={(event) => nudgeEdge(event, task, "end", day)}
-            onClick={(event) => event.stopPropagation()}
-            onDragStart={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-          />
-        )}
-      </div>
+      </Fragment>
     );
   }
 
-  function renderTimeGrid(days: string[]): JSX.Element {
+  function renderTimeGrid(days: string[]): React.JSX.Element {
     const firstDay = days[0] ?? anchor;
     const today = localDayOf(now);
     const nowMinute = now.getHours() * 60 + now.getMinutes();
@@ -1042,6 +1263,7 @@ export function CalendarView({
               onClick={() => openAllDayDraft(day)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => void handleDrop(event, day, null)}
+              {...dropSlotProps({ day, hour: null }, dropOver)}
             >
               {laneBanners(entries, day, firstDay).map((entry) => (
                 <div
@@ -1064,6 +1286,7 @@ export function CalendarView({
                 >
                   {entryCheckbox(entry)}
                   {entryTitleNode(entry)}
+                  <EntryKindLabel entry={entry} />
                 </div>
               ))}
             </div>
@@ -1126,6 +1349,7 @@ export function CalendarView({
                   }
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => void handleDrop(event, day, hour)}
+                  {...dropSlotProps({ day, hour }, dropOver)}
                 />
               ))}
               {(() => {
@@ -1135,9 +1359,19 @@ export function CalendarView({
                 const columns = layoutDayColumns(
                   timed.flatMap((entry) => {
                     const seg = blockSegment(entryTimeShape(entry), day);
+                    // A plan's buffer is kept free too, so it takes room in
+                    // the column layout alongside its block.
+                    const bufferEnd =
+                      entry.kind === "planned" ? plannedBufferMinutes(entry)?.[1] : undefined;
                     return seg === null
                       ? []
-                      : [{ key: entryKey(entry), start: seg.minutes[0], end: seg.minutes[1] }];
+                      : [
+                          {
+                            key: entryKey(entry),
+                            start: seg.minutes[0],
+                            end: bufferEnd ?? seg.minutes[1],
+                          },
+                        ];
                   }),
                 );
                 return timed.map((entry) => renderBlock(entry, day, columns.get(entryKey(entry))));
@@ -1173,12 +1407,12 @@ export function CalendarView({
   return (
     <div className="calendar">
       <div className="calendar-toolbar">
-        <h2>{calendarTitle(mode, anchor)}</h2>
+        <h2>{calendarTitle(mode, anchor, isNarrow)}</h2>
         <div className="calendar-nav-buttons">
           <IconButton
             icon="chevron-left"
-            label={`Previous ${STEP_UNIT[mode]}`}
-            onClick={() => setAnchor(shiftAnchor(mode, anchor, -1))}
+            label={`Previous ${mode === "week" && isNarrow ? "3 days" : STEP_UNIT[mode]}`}
+            onClick={() => setAnchor(shiftAnchor(mode, anchor, -1, isNarrow))}
           />
           <Hint hintKey="calendar-today">
             <button
@@ -1192,8 +1426,8 @@ export function CalendarView({
           </Hint>
           <IconButton
             icon="chevron-right"
-            label={`Next ${STEP_UNIT[mode]}`}
-            onClick={() => setAnchor(shiftAnchor(mode, anchor, 1))}
+            label={`Next ${mode === "week" && isNarrow ? "3 days" : STEP_UNIT[mode]}`}
+            onClick={() => setAnchor(shiftAnchor(mode, anchor, 1, isNarrow))}
           />
         </div>
         <div className="calendar-modes">
@@ -1251,6 +1485,7 @@ export function CalendarView({
           ))}
         </div>
       )}
+      {mode === "day" && <CapacitySummary day={anchor} events={events} dayTasks={tasks} />}
       {draft !== null && draftLabel !== null && (
         <Modal title={draftLabel} onClose={resetDraft}>
           <form className="calendar-draft" onSubmit={(event) => void submitDraft(event)}>
@@ -1314,7 +1549,7 @@ export function CalendarView({
       <div className="calendar-body">
         {mode === "month"
           ? renderMonth()
-          : renderTimeGrid(mode === "week" ? weekDays(anchor) : [anchor])}
+          : renderTimeGrid(mode === "week" ? weekDays(anchor, isNarrow) : [anchor])}
         {/* Narrow-only backdrop (index.css hides it >720px): closes the
             Unscheduled panel on an outside tap, same pattern as the sidebar
             drawer's scrim. */}
@@ -1359,6 +1594,14 @@ export function CalendarView({
                     className="unscheduled-card"
                     {...completingProps(taskEntry(task))}
                     {...taskDragProps(task)}
+                    {...touchDrag.sourceProps(task, taskDragProps(task).onDragStart)}
+                    data-carried={touchDrag.carried?.item.id === task.id || undefined}
+                    onClick={() => {
+                      // Out of the narrow-screen sheet's way, so the Task
+                      // detail panel isn't opened behind it.
+                      setUnscheduledOpen(false);
+                      onSelect?.(task);
+                    }}
                   >
                     {entryCheckbox(taskEntry(task))}
                     {entryTitleNode(taskEntry(task))}
@@ -1369,6 +1612,15 @@ export function CalendarView({
           )}
         </aside>
       </div>
+      {touchDrag.carried !== null && (
+        <div
+          className="touch-drag-ghost"
+          aria-hidden="true"
+          style={{ left: touchDrag.carried.x, top: touchDrag.carried.y }}
+        >
+          {touchDrag.carried.item.title}
+        </div>
+      )}
       {quickStart !== null && (
         <PomoQuickStartMenu
           task={quickStart.task}

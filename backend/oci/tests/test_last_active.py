@@ -141,4 +141,6 @@ class TestVisibility:
             "must_complete_profile",
             "created_at",
             "last_active_at",
+            "has_password",
+            "google_email",
         }
