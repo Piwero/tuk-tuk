@@ -40,6 +40,9 @@ class EventCache:
         self._ttl_seconds = ttl_seconds
         self._entries: dict[_CacheKey, _Entry] = {}
 
+    def forget_owner(self, owner_id: int) -> None:
+        self._entries = {key: entry for key, entry in self._entries.items() if key[0] != owner_id}
+
     def get(
         self, owner_id: int, google_calendar_id: str, time_min: str, time_max: str
     ) -> list[CalendarEventEntry] | None:

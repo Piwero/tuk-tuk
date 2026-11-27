@@ -298,7 +298,7 @@ export function createAdminUser(input: NewAdminUser): Promise<AdminUser> {
 }
 
 /** What an Admin may change on an account (#412); only the fields given
- * change. There is no delete: accounts are only ever disabled. */
+ * change. Permanent deletion uses its own email-confirmed endpoint. */
 export interface AdminUserChange {
   is_active?: boolean;
   is_admin?: boolean;
@@ -314,6 +314,14 @@ export function updateAdminUser(id: number, change: AdminUserChange): Promise<Ad
   return request(`/api/v1/admin/users/${id}`, {
     method: "PATCH",
     body: JSON.stringify(change),
+  });
+}
+
+/** Permanently deletes an account and its data after email confirmation. */
+export function deleteAdminUser(id: number, email: string): Promise<void> {
+  return request(`/api/v1/admin/users/${id}`, {
+    method: "DELETE",
+    body: JSON.stringify({ email }),
   });
 }
 
