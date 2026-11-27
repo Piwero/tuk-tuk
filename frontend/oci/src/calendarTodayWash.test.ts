@@ -14,6 +14,19 @@ const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector = "", 
 const TOP_ALIGNED = /align-items:\s*(flex-)?start\b/;
 
 describe("today's calendar column wash (issue #597)", () => {
+  it("lets mobile all-day task titles wrap instead of disappearing beside the checkbox", () => {
+    const calendarCss = css.slice(css.indexOf(".calendar-toolbar {"));
+    const mobile = calendarCss.slice(calendarCss.indexOf("@media (max-width: 720px)"));
+    const banner = cssRuleBody(mobile, ".all-day-lane .calendar-banner");
+    expect(banner).toMatch(/white-space:\s*normal/);
+    expect(banner).toMatch(/overflow-wrap:\s*anywhere/);
+    const title = cssRuleBody(mobile, ".time-block .block-title");
+    expect(title).toMatch(/white-space:\s*normal/);
+    expect(title).toMatch(/overflow-wrap:\s*anywhere/);
+    const heading = cssRuleBody(mobile, ".calendar-toolbar h2");
+    expect(heading).toMatch(/flex:\s*1 0 100%/);
+  });
+
   it("lets the day columns grow to their hour cells inside the capped scroll box", () => {
     const columns = cssRuleBody(css, ".time-columns");
     expect(columns).toMatch(/overflow-y:\s*auto/);

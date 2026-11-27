@@ -284,45 +284,48 @@ export function monthGridDays(anchorDay: string): string[] {
   return days;
 }
 
-/** The seven days of the Monday-aligned week containing the anchor day — the
- * same WKST=MO boundary Month's grid uses (startOfWeekDay), so Week agrees
- * with Month on which dates make up "this week" instead of rendering its own
- * rolling window. */
-export function weekDays(anchorDay: string): string[] {
-  const start = startOfWeekDay(anchorDay);
-  return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+/** Desktop Week uses the Monday-aligned week; narrow Week shows three
+ * consecutive days starting at the anchor so task titles remain readable. */
+export function weekDays(anchorDay: string, narrow = false): string[] {
+  const start = narrow ? anchorDay : startOfWeekDay(anchorDay);
+  return Array.from({ length: narrow ? 3 : 7 }, (_, index) => addDays(start, index));
 }
 
 /** The inclusive fetch window a view shows (the month view fetches its whole
  * visible grid, so window-edge spans render on the leading/trailing days). */
-export function rangeOf(mode: CalendarMode, anchorDay: string): [string, string] {
+export function rangeOf(mode: CalendarMode, anchorDay: string, narrow = false): [string, string] {
   if (mode === "month") {
     const grid = monthGridDays(anchorDay);
     return [grid[0] ?? anchorDay, grid[grid.length - 1] ?? anchorDay];
   }
   if (mode === "week") {
-    const days = weekDays(anchorDay);
+    const days = weekDays(anchorDay, narrow);
     return [days[0] ?? anchorDay, days[days.length - 1] ?? anchorDay];
   }
   return [anchorDay, anchorDay];
 }
 
 /** The previous/next anchor for a view (delta of -1 or 1). */
-export function shiftAnchor(mode: CalendarMode, anchorDay: string, delta: number): string {
+export function shiftAnchor(
+  mode: CalendarMode,
+  anchorDay: string,
+  delta: number,
+  narrow = false,
+): string {
   if (mode === "month") {
     const [year = 0, month = 1] = anchorDay.split("-").map(Number);
     return localDayOf(new Date(year, month - 1 + delta, 1));
   }
-  return addDays(anchorDay, mode === "week" ? 7 * delta : delta);
+  return addDays(anchorDay, mode === "week" ? (narrow ? 3 : 7) * delta : delta);
 }
 
 /** The toolbar title: "July 2026", "Jun 29 – Jul 5, 2026", "Friday, July 3, 2026". */
-export function calendarTitle(mode: CalendarMode, anchorDay: string): string {
+export function calendarTitle(mode: CalendarMode, anchorDay: string, narrow = false): string {
   if (mode === "month") {
     return formatDate(fromDayIso(anchorDay), "month");
   }
   if (mode === "week") {
-    const [start, end] = rangeOf("week", anchorDay);
+    const [start, end] = rangeOf("week", anchorDay, narrow);
     const year = fromDayIso(end).getFullYear();
     return `${formatDateRange(fromDayIso(start), fromDayIso(end))}, ${year}`;
   }

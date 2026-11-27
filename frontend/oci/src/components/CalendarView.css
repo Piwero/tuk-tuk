@@ -829,18 +829,25 @@
     /* Title, prev/today/next, mode switch, refresh and the Unscheduled
      * toggle no longer fit one unbroken row at 390px — let the toolbar wrap
      * onto as many lines as it needs rather than pushing the page wider
-     * than the viewport, and let the title itself truncate if it's still
-     * the widest single piece. */
+     * than the viewport. Keep the date range on its own wrapping row. */
     .calendar-toolbar {
       flex-wrap: wrap;
     }
 
     .calendar-toolbar h2 {
       min-width: 0;
-      flex: 1 1 auto;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      flex: 1 0 100%;
+      white-space: normal;
+    }
+
+    .all-day-lane .calendar-banner {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .time-block .block-title {
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     .unscheduled-toggle {
